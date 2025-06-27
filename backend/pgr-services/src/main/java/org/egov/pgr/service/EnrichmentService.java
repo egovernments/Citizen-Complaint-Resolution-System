@@ -4,14 +4,17 @@ import org.egov.common.contract.request.RequestInfo;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.repository.IdGenRepository;
 import org.egov.pgr.util.PGRUtils;
-import org.egov.pgr.web.models.*;
+import org.egov.pgr.web.models.AuditDetails;
 import org.egov.pgr.web.models.Idgen.IdResponse;
+import org.egov.pgr.web.models.RequestSearchCriteria;
+import org.egov.pgr.web.models.Service;
+import org.egov.pgr.web.models.ServiceRequest;
+import org.egov.pgr.web.models.Workflow;
 import org.egov.tracer.model.CustomException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -56,10 +59,9 @@ public class EnrichmentService {
 
         userService.callUserService(serviceRequest);
 
+        //AuditDetails auditDetails = utils.getAuditDetails(requestInfo.getUserInfo().getUuid(), service,true);
 
-        AuditDetails auditDetails = utils.getAuditDetails(requestInfo.getUserInfo().getUuid(), service,true);
-
-        service.setAuditDetails(auditDetails);
+        //service.setAuditDetails(auditDetails);
         service.setId(UUID.randomUUID().toString());
         service.getAddress().setId(UUID.randomUUID().toString());
         service.getAddress().setTenantId(tenantId);
@@ -72,13 +74,11 @@ public class EnrichmentService {
         }
 
         if(StringUtils.isEmpty(service.getAccountId()))
-            service.setAccountId(service.getCitizen().getUuid());
+            service.setAccountId(service.getUser().getUuid());
 
         List<String> customIds = getIdList(requestInfo,tenantId,config.getServiceRequestIdGenName(),config.getServiceRequestIdGenFormat(),1);
 
         service.setServiceRequestId(customIds.get(0));
-
-
     }
 
 

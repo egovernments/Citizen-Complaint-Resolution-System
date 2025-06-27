@@ -1,8 +1,7 @@
 package org.egov.pgr.web.models;
 
-import com.fasterxml.jackson.annotation.JsonValue;
-
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonValue;
 
 /**
  * status of the Property

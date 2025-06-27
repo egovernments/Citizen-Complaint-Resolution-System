@@ -2,18 +2,18 @@ package org.egov.pgr.web.models;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.annotations.ApiModel;
-import org.egov.pgr.annotation.CharacterConstraint;
-import org.hibernate.validator.constraints.SafeHtml;
-import org.springframework.validation.annotation.Validated;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import lombok.Builder;
+import org.egov.pgr.annotation.CharacterConstraint;
+import org.egov.tracer.annotations.CustomSafeHtml;
+import org.springframework.validation.annotation.Validated;
 
-import javax.validation.Valid;
-import javax.validation.constraints.Max;
-import javax.validation.constraints.Min;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 
 /**
@@ -21,7 +21,7 @@ import jakarta.validation.constraints.NotNull;
  */
 @ApiModel(description = "Instance of Service request raised for a particular service. As per extension propsed in the Service definition \"attributes\" carry the input values requried by metadata definition in the structure as described by the corresponding schema.  * Any one of 'address' or '(lat and lang)' or 'addressid' is mandatory ")
 @Validated
-//@javax.annotation.Generated(value = "org.egov.codegen.SpringBootCodegen", date = "2020-07-15T11:35:33.568+05:30")
+@jakarta.annotation.Generated(value = "org.egov.codegen.SpringBootCodegen", date = "2020-07-15T11:35:33.568+05:30")
 
 @Getter
 @Setter
@@ -33,37 +33,37 @@ public class Service   {
         @JsonProperty("active")
         private boolean active = true;
 
-        @JsonProperty("citizen")
-        private User citizen = null;
+        @JsonProperty("user")
+        private User user = null;
 
-        @SafeHtml
+        @CustomSafeHtml
         @JsonProperty("id")
         private String id = null;
 
         @NotNull
-        @SafeHtml
+        @CustomSafeHtml
         @JsonProperty("tenantId")
         private String tenantId = null;
 
         @NotNull
-        @SafeHtml
+        @CustomSafeHtml
         @JsonProperty("serviceCode")
         private String serviceCode = null;
 
-        @SafeHtml
+        @CustomSafeHtml
         @JsonProperty("serviceRequestId")
         private String serviceRequestId = null;
 
-        @SafeHtml
+        @CustomSafeHtml
         @JsonProperty("description")
         private String description = null;
 
-        @SafeHtml
+        @CustomSafeHtml
         @JsonProperty("accountId")
         private String accountId = null;
 
         @Max(5)
-        @Min(1)
+        @Min(0)
         @JsonProperty("rating")
         private Integer rating ;
 
@@ -71,12 +71,12 @@ public class Service   {
         @JsonProperty("additionalDetail")
         private Object additionalDetail = null;
 
-        @SafeHtml
+        @CustomSafeHtml
         @JsonProperty("applicationStatus")
         private String applicationStatus = null;
 
         @NotNull
-        @SafeHtml
+        @CustomSafeHtml
         @JsonProperty("source")
         private String source = null;
 
@@ -88,6 +88,7 @@ public class Service   {
         @JsonProperty("auditDetails")
         private AuditDetails auditDetails = null;
 
-
+        @JsonProperty("selfComplaint")
+        private Boolean selfComplaint;
 }
 

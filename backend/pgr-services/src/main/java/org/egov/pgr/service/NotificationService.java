@@ -6,16 +6,21 @@ import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.request.Role;
 import org.egov.common.contract.request.User;
-import org.egov.common.utils.MultiStateInstanceUtil;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.repository.ServiceRequestRepository;
 import org.egov.pgr.util.HRMSUtil;
 import org.egov.pgr.util.MDMSUtils;
 import org.egov.pgr.util.NotificationUtil;
-import org.egov.pgr.web.models.Notification.*;
-import org.egov.pgr.web.models.ServiceWrapper;
+import org.egov.pgr.web.models.Notification.Action;
+import org.egov.pgr.web.models.Notification.ActionItem;
+import org.egov.pgr.web.models.Notification.Event;
+import org.egov.pgr.web.models.Notification.EventRequest;
+import org.egov.pgr.web.models.Notification.Recepient;
+import org.egov.pgr.web.models.Notification.SMSRequest;
+import org.egov.pgr.web.models.Notification.Source;
 import org.egov.pgr.web.models.RequestInfoWrapper;
 import org.egov.pgr.web.models.ServiceRequest;
+import org.egov.pgr.web.models.ServiceWrapper;
 import org.egov.pgr.web.models.workflow.ProcessInstance;
 import org.egov.pgr.web.models.workflow.ProcessInstanceResponse;
 import org.egov.tracer.model.CustomException;
@@ -30,9 +35,47 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
-import static org.egov.pgr.util.PGRConstants.*;
+import static org.egov.pgr.util.PGRConstants.APPLY;
+import static org.egov.pgr.util.PGRConstants.ASSIGN;
+import static org.egov.pgr.util.PGRConstants.CITIZEN;
+import static org.egov.pgr.util.PGRConstants.CLOSED_AFTER_REJECTION;
+import static org.egov.pgr.util.PGRConstants.CLOSED_AFTER_RESOLUTION;
+import static org.egov.pgr.util.PGRConstants.COMMON_MODULE;
+import static org.egov.pgr.util.PGRConstants.DATE_PATTERN;
+import static org.egov.pgr.util.PGRConstants.DEPARTMENT;
+import static org.egov.pgr.util.PGRConstants.DESIGNATION;
+import static org.egov.pgr.util.PGRConstants.EMPLOYEE;
+import static org.egov.pgr.util.PGRConstants.HRMS_DEPARTMENT_JSONPATH;
+import static org.egov.pgr.util.PGRConstants.HRMS_DESIGNATION_JSONPATH;
+import static org.egov.pgr.util.PGRConstants.HRMS_EMP_NAME_JSONPATH;
+import static org.egov.pgr.util.PGRConstants.MDMS_DEPARTMENT_SEARCH;
+import static org.egov.pgr.util.PGRConstants.MDMS_SERVICEDEF_SEARCH;
+import static org.egov.pgr.util.PGRConstants.NOTIFICATION_ENABLE_FOR_STATUS;
+import static org.egov.pgr.util.PGRConstants.PENDINGATLME;
+import static org.egov.pgr.util.PGRConstants.PENDINGFORASSIGNMENT;
+import static org.egov.pgr.util.PGRConstants.PENDING_FOR_REASSIGNMENT;
+import static org.egov.pgr.util.PGRConstants.PGR_MODULE;
+import static org.egov.pgr.util.PGRConstants.PGR_WF_REOPEN;
+import static org.egov.pgr.util.PGRConstants.PGR_WF_RESOLVE;
+import static org.egov.pgr.util.PGRConstants.RATE;
+import static org.egov.pgr.util.PGRConstants.REASSIGN;
+import static org.egov.pgr.util.PGRConstants.REJECT;
+import static org.egov.pgr.util.PGRConstants.REJECTED;
+import static org.egov.pgr.util.PGRConstants.RESOLVED;
+import static org.egov.pgr.util.PGRConstants.USREVENTS_EVENT_NAME;
+import static org.egov.pgr.util.PGRConstants.USREVENTS_EVENT_POSTEDBY;
+import static org.egov.pgr.util.PGRConstants.USREVENTS_EVENT_TYPE;
 
 @Service
 @Slf4j
@@ -59,17 +102,12 @@ public class NotificationService {
     @Autowired
     private ObjectMapper mapper;
 
-    @Autowired
-    private MultiStateInstanceUtil centralInstanceUtil;
-
     public void process(ServiceRequest request, String topic) {
         try {
-            log.info("request for notification :" + request);
-            String tenantId = request.getService().getTenantId();
             ServiceWrapper serviceWrapper = ServiceWrapper.builder().service(request.getService()).workflow(request.getWorkflow()).build();
             String applicationStatus = request.getService().getApplicationStatus();
             String action = request.getWorkflow().getAction();
-
+            String tenantId = request.getService().getTenantId();
 
             if (!(NOTIFICATION_ENABLE_FOR_STATUS.contains(action+"_"+applicationStatus))) {
                 log.info("Notification Disabled For State :" + applicationStatus);
@@ -77,7 +115,7 @@ public class NotificationService {
             }
 
             Map<String, List<String>> finalMessage = getFinalMessage(request, topic, applicationStatus);
-            String citizenMobileNumber = request.getService().getCitizen().getMobileNumber();
+            String citizenMobileNumber = request.getService().getUser().getMobileNumber();
             String employeeMobileNumber = null;
 
             if(applicationStatus.equalsIgnoreCase(PENDINGFORASSIGNMENT) && action.equalsIgnoreCase(PGR_WF_REOPEN)) {
@@ -109,10 +147,10 @@ public class NotificationService {
                 employeeMobileNumber = fetchUserByUUID(request.getService().getAuditDetails().getCreatedBy(), request.getRequestInfo(), request.getService().getTenantId()).getMobileNumber();
             }
 
-            if(!StringUtils.isEmpty(finalMessage)) {
+            if(!StringUtils.isEmpty(finalMessage)){
                 if (config.getIsUserEventsNotificationEnabled() != null && config.getIsUserEventsNotificationEnabled()) {
-                    for (Map.Entry<String, List<String>> entry : finalMessage.entrySet()) {
-                        for (String msg : entry.getValue()) {
+                    for (Map.Entry<String,List<String>> entry : finalMessage.entrySet()) {
+                        for(String msg : entry.getValue()) {
                             EventRequest eventRequest = enrichEventRequest(request, msg);
                             if (eventRequest != null) {
                                 notificationUtil.sendEventNotification(tenantId, eventRequest);
@@ -122,19 +160,19 @@ public class NotificationService {
                 }
 
                 if (config.getIsSMSEnabled() != null && config.getIsSMSEnabled()) {
+                    for (Map.Entry<String,List<String>> entry : finalMessage.entrySet()) {
 
-                    for (Map.Entry<String, List<String>> entry : finalMessage.entrySet()) {
-
-                        if (entry.getKey().equalsIgnoreCase(CITIZEN)) {
-                            for (String msg : entry.getValue()) {
+                        if(entry.getKey().equalsIgnoreCase(CITIZEN)) {
+                            for(String msg : entry.getValue()) {
                                 List<SMSRequest> smsRequests = new ArrayList<>();
                                 smsRequests = enrichSmsRequest(citizenMobileNumber, msg);
                                 if (!CollectionUtils.isEmpty(smsRequests)) {
                                     notificationUtil.sendSMS(tenantId, smsRequests);
                                 }
                             }
-                        } else {
-                            for (String msg : entry.getValue()) {
+                        }
+                        else {
+                            for(String msg : entry.getValue()) {
                                 List<SMSRequest> smsRequests = new ArrayList<>();
                                 smsRequests = enrichSmsRequest(employeeMobileNumber, msg);
                                 if (!CollectionUtils.isEmpty(smsRequests)) {
@@ -143,11 +181,12 @@ public class NotificationService {
                             }
                         }
                     }
-
                 }
 
-
             }
+
+
+
 
         } catch (Exception ex) {
             log.error("Error occured while processing the record from topic : " + topic, ex);
@@ -190,11 +229,10 @@ public class NotificationService {
                 return null;
             }
 
-            if (defaultMessage.contains("{status}"))
+            if(defaultMessage.contains("{status}"))
                 defaultMessage = defaultMessage.replace("{status}", localisedStatus);
-
-
         }
+
         /**
          * SMS to citizens and employee both, when a complaint is assigned to an employee
          */
@@ -288,7 +326,6 @@ public class NotificationService {
 
             if (messageForCitizen.contains("{emp_designation}"))
                 messageForCitizen = messageForCitizen.replace("{emp_designation}",reassigneeDetails.get(DESIGNATION));
-
 
             if (messageForCitizen.contains("{emp_name}"))
                 messageForCitizen = messageForCitizen.replace("{emp_name}", fetchUserByUUID(request.getWorkflow().getAssignes().get(0), request.getRequestInfo(), request.getService().getTenantId()).getName());
@@ -517,7 +554,6 @@ public class NotificationService {
             messageForEmployee = messageForEmployee.replace("{download_link}", appLink);
         }
 
-
         message.put(CITIZEN, Arrays.asList(new String[] {messageForCitizen, defaultMessage}));
         message.put(EMPLOYEE, Arrays.asList(messageForEmployee));
 
@@ -663,7 +699,7 @@ public class NotificationService {
 
         String localisationMessageForPlaceholder =  notificationUtil.getLocalizationMessages(request.getService().getTenantId(), request.getRequestInfo(),COMMON_MODULE);
         //HRSMS CALL
-        StringBuilder url = hrmsUtils.getHRMSURI(request.getWorkflow().getAssignes(),request.getService().getTenantId());
+        StringBuilder url = hrmsUtils.getHRMSURI(request.getService().getTenantId(), request.getWorkflow().getAssignes());
         RequestInfoWrapper requestInfoWrapper = RequestInfoWrapper.builder().requestInfo(request.getRequestInfo()).build();
         Object response = serviceRequestRepository.fetchResult(url, requestInfoWrapper);
 
@@ -715,7 +751,7 @@ public class NotificationService {
 
     private EventRequest enrichEventRequest(ServiceRequest request, String finalMessage) {
         String tenantId = request.getService().getTenantId();
-        String mobileNumber = request.getService().getCitizen().getMobileNumber();
+        String mobileNumber = request.getService().getUser().getMobileNumber();
 
         Map<String, String> mapOfPhoneNoAndUUIDs = fetchUserUUIDs(mobileNumber, request.getRequestInfo(),tenantId);
 
@@ -737,8 +773,8 @@ public class NotificationService {
             String reopenUrl = config.getReopenLink();
             rateLink = rateUrl.replace("{application-id}", request.getService().getServiceRequestId());
             reopenLink = reopenUrl.replace("{application-id}", request.getService().getServiceRequestId());
-            rateLink = getUiAppHost(tenantId) + rateLink;
-            reopenLink = getUiAppHost(tenantId) + reopenLink;
+            rateLink = config.getUiAppHost() + rateLink;
+            reopenLink = config.getUiAppHost() + reopenLink;
             ActionItem rateItem = ActionItem.builder().actionUrl(rateLink).code(config.getRateCode()).build();
             ActionItem reopenItem = ActionItem.builder().actionUrl(reopenLink).code(config.getReopenCode()).build();
             items.add(rateItem);
@@ -805,12 +841,6 @@ public class NotificationService {
                 .roles(Collections.singletonList(role)).id(0L).build();
 
         return userInfo;
-    }
-
-    public String getUiAppHost(String tenantId)
-    {
-        String stateLevelTenantId = centralInstanceUtil.getStateLevelTenant(tenantId);
-        return config.getUiAppHostMap().get(stateLevelTenantId);
     }
 
 }

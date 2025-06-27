@@ -2,7 +2,11 @@ package org.egov.pgr.repository.rowmapper;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.egov.pgr.web.models.*;
+import org.egov.pgr.web.models.Address;
+import org.egov.pgr.web.models.AuditDetails;
+import org.egov.pgr.web.models.Boundary;
+import org.egov.pgr.web.models.GeoLocation;
+import org.egov.pgr.web.models.Service;
 import org.egov.tracer.model.CustomException;
 import org.postgresql.util.PGobject;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -52,6 +56,8 @@ public class PGRRowMapper implements ResultSetExtractor<List<Service>> {
                 String lastmodifiedby = rs.getString("ser_lastmodifiedby");
                 Long lastmodifiedtime = rs.getLong("ser_lastmodifiedtime");
                 Integer rating = rs.getInt("rating");
+                Boolean selfComplaint = rs.getBoolean("selfComplaint");
+
                 if(rs.wasNull()){rating = null;}
 
                 AuditDetails auditDetails = AuditDetails.builder().createdBy(createdby).createdTime(createdtime)
@@ -67,6 +73,7 @@ public class PGRRowMapper implements ResultSetExtractor<List<Service>> {
                         .tenantId(tenantId)
                         .rating(rating)
                         .auditDetails(auditDetails)
+                        .selfComplaint(selfComplaint)
                         .build();
 
                 JsonNode additionalDetails = getAdditionalDetail("ser_additionaldetails",rs);

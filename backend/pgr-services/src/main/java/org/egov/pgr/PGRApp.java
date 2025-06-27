@@ -16,7 +16,7 @@ import java.util.TimeZone;
 
 @SpringBootApplication
 @ComponentScan(basePackages = { "org.egov.pgr", "org.egov.pgr.web.controllers" , "org.egov.pgr.config"})
-@Import({TracerConfiguration.class, MultiStateInstanceUtil.class})
+@Import({ TracerConfiguration.class, MultiStateInstanceUtil.class })
 public class PGRApp {
 
         @Value("${app.timezone}")

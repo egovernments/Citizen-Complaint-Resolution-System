@@ -1,9 +1,7 @@
 package org.egov.pgr.util;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.Role;
-import org.egov.common.utils.MultiStateInstanceUtil;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.repository.ServiceRequestRepository;
 import org.egov.pgr.web.models.User;
@@ -20,7 +18,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 
 @Component
-@Slf4j
 public class UserUtils {
 
 
@@ -29,9 +26,6 @@ public class UserUtils {
     private ServiceRequestRepository serviceRequestRepository;
 
     private PGRConfiguration config;
-
-    @Autowired
-    private MultiStateInstanceUtil centralInstanceUtil;
 
     @Autowired
     public UserUtils(ObjectMapper mapper, ServiceRequestRepository serviceRequestRepository, PGRConfiguration config) {
@@ -111,10 +105,10 @@ public class UserUtils {
      * @param tenantId
      * @param userInfo
      */
-    public void addUserDefaultFields(String mobileNumber,String tenantId, User userInfo){
+    public void addUserDefaultFields(String mobileNumber,String tenantId, User userInfo, String userType){
         Role role = getCitizenRole(tenantId);
         userInfo.setRoles(Collections.singletonList(role));
-        userInfo.setType("CITIZEN");
+        userInfo.setType(userType);
         userInfo.setUserName(mobileNumber);
         userInfo.setTenantId(getStateLevelTenant(tenantId));
         userInfo.setActive(true);
@@ -134,9 +128,7 @@ public class UserUtils {
     }
 
     public String getStateLevelTenant(String tenantId){
-       /* return tenantId.split("\\.")[0];*/
-        log.info("tenantId"+ tenantId);
-        return centralInstanceUtil.getStateLevelTenant(tenantId);
+        return tenantId.split("\\.")[0];
     }
 
 

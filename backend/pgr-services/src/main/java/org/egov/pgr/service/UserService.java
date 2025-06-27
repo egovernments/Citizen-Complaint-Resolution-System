@@ -4,7 +4,10 @@ package org.egov.pgr.service;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.util.UserUtils;
-import org.egov.pgr.web.models.*;
+import org.egov.pgr.web.models.RequestSearchCriteria;
+import org.egov.pgr.web.models.ServiceRequest;
+import org.egov.pgr.web.models.ServiceWrapper;
+import org.egov.pgr.web.models.User;
 import org.egov.pgr.web.models.user.CreateUserRequest;
 import org.egov.pgr.web.models.user.UserDetailResponse;
 import org.egov.pgr.web.models.user.UserSearchRequest;
@@ -13,11 +16,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-
-import static org.egov.pgr.util.PGRConstants.USERTYPE_CITIZEN;
 
 @org.springframework.stereotype.Service
 public class UserService {
@@ -39,10 +45,12 @@ public class UserService {
      */
     public void callUserService(ServiceRequest request){
 
-        if(!StringUtils.isEmpty(request.getService().getAccountId()))
+        if(!StringUtils.isEmpty(request.getService().getAccountId())) {
             enrichUser(request);
-        else if(request.getService().getCitizen()!=null)
+        }
+        else if(request.getService().getUser()!=null) {
             upsertUser(request);
+        }
 
     }
 
@@ -53,15 +61,16 @@ public class UserService {
     public void enrichUsers(List<ServiceWrapper> serviceWrappers){
 
         Set<String> uuids = new HashSet<>();
-
+        if (CollectionUtils.isEmpty(serviceWrappers)) return;
+        String tenantId = serviceWrappers.get(0).getService().getTenantId();
         serviceWrappers.forEach(serviceWrapper -> {
             uuids.add(serviceWrapper.getService().getAccountId());
         });
 
-        Map<String, User> idToUserMap = searchBulkUser(new LinkedList<>(uuids));
+        Map<String, User> idToUserMap = searchBulkUser(tenantId, new LinkedList<>(uuids));
 
         serviceWrappers.forEach(serviceWrapper -> {
-            serviceWrapper.getService().setCitizen(idToUserMap.get(serviceWrapper.getService().getAccountId()));
+            serviceWrapper.getService().setUser(idToUserMap.get(serviceWrapper.getService().getAccountId()));
         });
 
     }
@@ -74,12 +83,13 @@ public class UserService {
      */
     private void upsertUser(ServiceRequest request){
 
-        User user = request.getService().getCitizen();
+        User user = request.getService().getUser();
         String tenantId = request.getService().getTenantId();
         User userServiceResponse = null;
 
         // Search on mobile number as user name
-        UserDetailResponse userDetailResponse = searchUser(userUtils.getStateLevelTenant(tenantId),null, user.getMobileNumber());
+        UserDetailResponse userDetailResponse = searchUser(userUtils.getStateLevelTenant(tenantId),null,
+                user.getMobileNumber(), request.getService().getUser().getType());
         if (!userDetailResponse.getUser().isEmpty()) {
             User userFromSearch = userDetailResponse.getUser().get(0);
             if(!user.getName().equalsIgnoreCase(userFromSearch.getName())){
@@ -88,13 +98,12 @@ public class UserService {
             else userServiceResponse = userDetailResponse.getUser().get(0);
         }
         else {
-            userServiceResponse = createUser(request.getRequestInfo(),tenantId,user);
+            userServiceResponse = createUser(request.getRequestInfo(),tenantId, user, request.getService().getUser().getType());
         }
 
         // Enrich the accountId
         request.getService().setAccountId(userServiceResponse.getUuid());
     }
-
 
     /**
      * Calls user search to fetch a user and enriches it in request
@@ -106,12 +115,13 @@ public class UserService {
         String accountId = request.getService().getAccountId();
         String tenantId = request.getService().getTenantId();
 
-        UserDetailResponse userDetailResponse = searchUser(userUtils.getStateLevelTenant(tenantId),accountId,null);
+        UserDetailResponse userDetailResponse = searchUser(userUtils.getStateLevelTenant(tenantId),accountId,
+                null, request.getService().getUser().getType());
 
         if(userDetailResponse.getUser().isEmpty())
             throw new CustomException("INVALID_ACCOUNTID","No user exist for the given accountId");
 
-        else request.getService().setCitizen(userDetailResponse.getUser().get(0));
+        else request.getService().setUser(userDetailResponse.getUser().get(0));
 
     }
 
@@ -120,11 +130,12 @@ public class UserService {
      * @param requestInfo
      * @param tenantId
      * @param userInfo
+     * @param userType
      * @return
      */
-    private User createUser(RequestInfo requestInfo,String tenantId, User userInfo) {
+    private User createUser(RequestInfo requestInfo,String tenantId, User userInfo, String userType) {
 
-        userUtils.addUserDefaultFields(userInfo.getMobileNumber(),tenantId, userInfo);
+        userUtils.addUserDefaultFields(userInfo.getMobileNumber(),tenantId, userInfo, userType);
         StringBuilder uri = new StringBuilder(config.getUserHost())
                 .append(config.getUserContextPath())
                 .append(config.getUserCreateEndpoint());
@@ -133,7 +144,6 @@ public class UserService {
         UserDetailResponse userDetailResponse = userUtils.userCall(new CreateUserRequest(requestInfo, userInfo), uri);
 
         return userDetailResponse.getUser().get(0);
-
     }
 
     /**
@@ -164,13 +174,14 @@ public class UserService {
      * @param stateLevelTenant
      * @param accountId
      * @param userName
+     * @param userType
      * @return
      */
-    private UserDetailResponse searchUser(String stateLevelTenant, String accountId, String userName){
+    private UserDetailResponse searchUser(String stateLevelTenant, String accountId, String userName, String userType){
 
         UserSearchRequest userSearchRequest =new UserSearchRequest();
         userSearchRequest.setActive(true);
-        userSearchRequest.setUserType(USERTYPE_CITIZEN);
+        userSearchRequest.setUserType(userType);
         userSearchRequest.setTenantId(stateLevelTenant);
 
         if(StringUtils.isEmpty(accountId) && StringUtils.isEmpty(userName))
@@ -184,19 +195,22 @@ public class UserService {
 
         StringBuilder uri = new StringBuilder(config.getUserHost()).append(config.getUserSearchEndpoint());
         return userUtils.userCall(userSearchRequest,uri);
-
     }
 
     /**
-     * calls the user search API based on the given list of user uuids
-     * @param uuids
-     * @return
+     * Searches for users based on their unique identifiers (UUIDs) within a specific tenant
+     * and returns a mapping of UUIDs to their corresponding user details.
+     *
+     * @param tenantId the ID of the tenant to which the users belong
+     * @param uuids a list of unique user identifiers to be searched
+     * @return a map where the keys are user UUIDs and the values are the corresponding User objects
+     * @throws CustomException if no users are found for the provided UUIDs
      */
-    private Map<String,User> searchBulkUser(List<String> uuids){
+    private Map<String,User> searchBulkUser(String tenantId, List<String> uuids){
 
         UserSearchRequest userSearchRequest =new UserSearchRequest();
         userSearchRequest.setActive(true);
-        userSearchRequest.setUserType(USERTYPE_CITIZEN);
+        userSearchRequest.setTenantId(tenantId);
 
 
         if(!CollectionUtils.isEmpty(uuids))
@@ -226,7 +240,6 @@ public class UserService {
 
         UserSearchRequest userSearchRequest =new UserSearchRequest();
         userSearchRequest.setActive(true);
-        userSearchRequest.setUserType(USERTYPE_CITIZEN);
         userSearchRequest.setTenantId(tenantId);
         userSearchRequest.setMobileNumber(mobileNumber);
 
@@ -237,13 +250,5 @@ public class UserService {
         Set<String> userIds = users.stream().map(User::getUuid).collect(Collectors.toSet());
         criteria.setUserIds(userIds);
     }
-
-
-
-
-
-
-
-
 
 }

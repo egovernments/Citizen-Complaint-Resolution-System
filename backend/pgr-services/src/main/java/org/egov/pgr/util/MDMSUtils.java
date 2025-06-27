@@ -1,7 +1,6 @@
 package org.egov.pgr.util;
 
 import org.egov.common.contract.request.RequestInfo;
-import org.egov.common.utils.MultiStateInstanceUtil;
 import org.egov.mdms.model.MasterDetail;
 import org.egov.mdms.model.MdmsCriteria;
 import org.egov.mdms.model.MdmsCriteriaReq;
@@ -12,7 +11,10 @@ import org.egov.pgr.web.models.ServiceRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedList;
+import java.util.List;
 
 import static org.egov.pgr.util.PGRConstants.MDMS_MODULE_NAME;
 import static org.egov.pgr.util.PGRConstants.MDMS_SERVICEDEF;
@@ -25,9 +27,6 @@ public class MDMSUtils {
     private PGRConfiguration config;
 
     private ServiceRequestRepository serviceRequestRepository;
-
-    @Autowired
-    private MultiStateInstanceUtil multiStateInstanceUtil;
 
     @Autowired
     public MDMSUtils(PGRConfiguration config, ServiceRequestRepository serviceRequestRepository) {
@@ -43,7 +42,7 @@ public class MDMSUtils {
     public Object mDMSCall(ServiceRequest request){
         RequestInfo requestInfo = request.getRequestInfo();
         String tenantId = request.getService().getTenantId();
-        MdmsCriteriaReq mdmsCriteriaReq = getMDMSRequest(requestInfo,multiStateInstanceUtil.getStateLevelTenant(tenantId));
+        MdmsCriteriaReq mdmsCriteriaReq = getMDMSRequest(requestInfo,tenantId);
         Object result = serviceRequestRepository.fetchResult(getMdmsSearchUrl(), mdmsCriteriaReq);
         return result;
     }

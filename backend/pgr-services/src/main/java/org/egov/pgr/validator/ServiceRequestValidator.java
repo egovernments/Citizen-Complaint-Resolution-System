@@ -2,19 +2,33 @@ package org.egov.pgr.validator;
 
 import com.jayway.jsonpath.JsonPath;
 import org.egov.common.contract.request.RequestInfo;
+import org.egov.common.exception.InvalidTenantIdException;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.repository.PGRRepository;
 import org.egov.pgr.util.HRMSUtil;
-import org.egov.pgr.web.models.*;
+import org.egov.pgr.web.models.RequestSearchCriteria;
+import org.egov.pgr.web.models.Service;
+import org.egov.pgr.web.models.ServiceRequest;
+import org.egov.pgr.web.models.ServiceWrapper;
+import org.egov.pgr.web.models.User;
 import org.egov.tracer.model.CustomException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
-import org.springframework.util.StringUtils;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
-import static org.egov.pgr.util.PGRConstants.*;
+import static org.egov.pgr.util.PGRConstants.INVALID_TENANT_ID_ERR_CODE;
+import static org.egov.pgr.util.PGRConstants.MDMS_DEPARTMENT_SEARCH;
+import static org.egov.pgr.util.PGRConstants.MDMS_SERVICEDEF_SEARCH;
+import static org.egov.pgr.util.PGRConstants.PGR_WF_REOPEN;
+import static org.egov.pgr.util.PGRConstants.USERTYPE_CITIZEN;
+import static org.egov.pgr.util.PGRConstants.USERTYPE_EMPLOYEE;
 
 @Component
 public class ServiceRequestValidator {
@@ -25,6 +39,12 @@ public class ServiceRequestValidator {
     private PGRRepository repository;
 
     private HRMSUtil hrmsUtil;
+
+    @Value("${enable.state.level.search:true}")
+    private Boolean enableStateLevelSearch;
+
+    @Value("${enable.usertype.employee:true}")
+    private Boolean enableEmployee;
 
     @Autowired
     public ServiceRequestValidator(PGRConfiguration config, PGRRepository repository, HRMSUtil hrmsUtil) {
@@ -44,7 +64,7 @@ public class ServiceRequestValidator {
         validateUserData(request,errorMap);
         validateSource(request.getService().getSource());
         validateMDMS(request, mdmsData);
-        if(config.getIsValidateDeptEnabled()) validateDepartment(request, mdmsData);
+        validateDepartment(request, mdmsData);
         if(!errorMap.isEmpty())
             throw new CustomException(errorMap);
     }
@@ -55,7 +75,7 @@ public class ServiceRequestValidator {
      * @param request The request to update complaint
      * @param mdmsData The master data for pgr
      */
-    public void validateUpdate(ServiceRequest request, Object mdmsData){
+    public void validateUpdate(ServiceRequest request, Object mdmsData) {
 
         String id = request.getService().getId();
         String tenantId = request.getService().getTenantId();
@@ -63,9 +83,15 @@ public class ServiceRequestValidator {
         validateMDMS(request, mdmsData);
         validateDepartment(request, mdmsData);
         validateReOpen(request);
-        RequestSearchCriteria criteria = RequestSearchCriteria.builder().ids(Collections.singleton(id)).tenantId(tenantId).build();
+        RequestSearchCriteria criteria = RequestSearchCriteria.builder().ids(Collections.singleton(id)).build();
         criteria.setIsPlainSearch(false);
-        List<ServiceWrapper> serviceWrappers = repository.getServiceWrappers(criteria);
+        criteria.setTenantId(tenantId);
+        List<ServiceWrapper> serviceWrappers = null;
+        try {
+            serviceWrappers = repository.getServiceWrappers(criteria);
+        } catch (InvalidTenantIdException e) {
+            throw new CustomException(INVALID_TENANT_ID_ERR_CODE, e.getMessage());
+        }
 
         if(CollectionUtils.isEmpty(serviceWrappers))
             throw new CustomException("INVALID_UPDATE","The record that you are trying to update does not exists");
@@ -94,14 +120,15 @@ public class ServiceRequestValidator {
             errorMap.put("INVALID_ACCOUNTID","The accountId is different from the user logged in");
         }*/
 
-        if(requestInfo.getUserInfo().getType().equalsIgnoreCase(USERTYPE_EMPLOYEE)){
-            User citizen = request.getService().getCitizen();
-            if(citizen == null)
-                errorMap.put("INVALID_REQUEST","Citizen object cannot be null");
-            else if(citizen.getMobileNumber()==null || citizen.getName()==null)
-                errorMap.put("INVALID_REQUEST","Name and Mobile Number is mandatory in citizen object");
-        }
+        if(requestInfo.getUserInfo().getType().equalsIgnoreCase(USERTYPE_CITIZEN)
+        || Boolean.TRUE.equals(enableEmployee && requestInfo.getUserInfo().getType().equalsIgnoreCase(USERTYPE_EMPLOYEE))){
+            User user = request.getService().getUser();
 
+            if(user == null)
+                errorMap.put("INVALID_REQUEST","User object cannot be null");
+            else if(user.getMobileNumber()==null || user.getName()==null)
+                errorMap.put("INVALID_REQUEST","Name and Mobile Number is mandatory in user object");
+        }
     }
 
 
@@ -139,12 +166,15 @@ public class ServiceRequestValidator {
     private void validateDepartment(ServiceRequest request, Object mdmsData){
 
         String serviceCode = request.getService().getServiceCode();
+        String tenantId = request.getService().getTenantId();
         List<String> assignes = request.getWorkflow().getAssignes();
+
+        List<String> hrmsAssignes = request.getWorkflow().getHrmsAssignees();
 
         if(CollectionUtils.isEmpty(assignes))
             return;
 
-        List<String> departments = hrmsUtil.getDepartment(assignes, request.getRequestInfo(),request.getService().getTenantId());
+        List<String> departments = hrmsUtil.getDepartment(tenantId, assignes, hrmsAssignes, request.getRequestInfo());
 
         String jsonPath = MDMS_DEPARTMENT_SEARCH.replace("{SERVICEDEF}",serviceCode);
 
@@ -229,9 +259,11 @@ public class ServiceRequestValidator {
         if(requestInfo.getUserInfo().getType().equalsIgnoreCase("EMPLOYEE" ) && criteria.isEmpty())
             throw new CustomException("INVALID_SEARCH","Search without params is not allowed");
 
-//        if(requestInfo.getUserInfo().getType().equalsIgnoreCase("EMPLOYEE") && criteria.getTenantId().split("\\.").length == config.getStateLevelTenantIdLength()){
-//            throw new CustomException("INVALID_SEARCH", "Employees cannot perform state level searches.");
-//        }
+        if(requestInfo.getUserInfo().getType().equalsIgnoreCase("EMPLOYEE")
+                && criteria.getTenantId().split("\\.").length == 1
+        && Boolean.TRUE.equals(!enableStateLevelSearch)){
+            throw new CustomException("INVALID_SEARCH", "Employees cannot perform state level searches.");
+        }
 
         String allowedParamStr = null;
 

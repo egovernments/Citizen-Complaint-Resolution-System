@@ -4,21 +4,23 @@ import com.jayway.jsonpath.JsonPath;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.egov.common.contract.request.RequestInfo;
-import org.egov.common.utils.MultiStateInstanceUtil;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.producer.Producer;
 import org.egov.pgr.repository.ServiceRequestRepository;
 import org.egov.pgr.web.models.Notification.EventRequest;
 import org.egov.pgr.web.models.Notification.SMSRequest;
-import org.json.JSONArray;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.*;
-import static org.egov.pgr.util.PGRConstants.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+
+import static org.egov.pgr.util.PGRConstants.NOTIFICATION_LOCALE;
 
 @Component
 @Slf4j
@@ -35,10 +37,6 @@ public class NotificationUtil {
 
     @Autowired
     private RestTemplate restTemplate;
-
-    @Autowired
-    private MultiStateInstanceUtil centralInstanceUtil;
-
 
     /**
      *
@@ -63,10 +61,9 @@ public class NotificationUtil {
      */
     public StringBuilder getUri(String tenantId, RequestInfo requestInfo, String module) {
 
-        /*if (config.getIsLocalizationStateLevel())
-            tenantId= centralInstanceUtil.getStateLevelTenant(tenantId);*/
-        tenantId= centralInstanceUtil.getStateLevelTenant(tenantId);
-        log.info("tenantId after calling central instance method :"+ tenantId);
+        if (config.getIsLocalizationStateLevel())
+            tenantId = tenantId.split("\\.")[0];
+
         String locale = NOTIFICATION_LOCALE;
         if (!StringUtils.isEmpty(requestInfo.getMsgId()) && requestInfo.getMsgId().split("|").length >= 2)
             locale = requestInfo.getMsgId().split("\\|")[1];
@@ -134,6 +131,7 @@ public class NotificationUtil {
 
     /**
      * Send the SMSRequest on the SMSNotification kafka topic
+     * @param tenantId the ID of the tenant
      * @param smsRequestList The list of SMSRequest to be sent
      */
     public void sendSMS(String tenantId, List<SMSRequest> smsRequestList) {
@@ -143,8 +141,8 @@ public class NotificationUtil {
                 return;
             }
             for (SMSRequest smsRequest : smsRequestList) {
-                producer.push(tenantId,config.getSmsNotifTopic(), smsRequest);
-                log.info("Messages: " + smsRequest.getMessage());
+                producer.push(tenantId, config.getSmsNotifTopic(), smsRequest);
+                log.info("Messages: {}", smsRequest.getMessage());
             }
         }
     }
@@ -152,10 +150,11 @@ public class NotificationUtil {
     /**
      * Pushes the event request to Kafka Queue.
      *
+     * @param tenantId the ID of the tenant
      * @param request EventRequest Object
      */
     public void sendEventNotification(String tenantId, EventRequest request) {
-        producer.push(tenantId,config.getSaveUserEventsTopic(), request);
+        producer.push(tenantId, config.getSaveUserEventsTopic(), request);
     }
 
     /**

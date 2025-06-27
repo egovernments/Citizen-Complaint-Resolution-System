@@ -19,12 +19,18 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.egov.pgr.util.PGRConstants.*;
+import static org.egov.pgr.util.PGRConstants.MDMS_DATA_JSONPATH;
+import static org.egov.pgr.util.PGRConstants.MDMS_DATA_SERVICE_CODE_KEYWORD;
+import static org.egov.pgr.util.PGRConstants.MDMS_DATA_SLA_KEYWORD;
+import static org.egov.pgr.util.PGRConstants.PGR_BUSINESSSERVICE;
 
 @Slf4j
 @Component
