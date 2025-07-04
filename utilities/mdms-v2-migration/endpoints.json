@@ -1,0 +1,15 @@
+{
+    "authToken": {
+        "oauth": "/user/oauth/token"
+    },
+    "mdmsv2": {
+        "schemaCreate": "/mdms-v2/schema/v1/_create",
+        "dataCreate": "/mdms-v2/v2/_create/"
+    },
+    "Localisation": {
+        "upsert": "/localization/messages/v1/_upsert",
+        "delete": "/localization/messages/v1/_delete",
+        "search": "/localization/messages/v1/_search",
+        "searchv2": "/localization/messages/v2/_search"
+    }
+}

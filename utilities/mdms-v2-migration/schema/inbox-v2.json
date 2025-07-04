@@ -1,0 +1,9 @@
+[
+    {
+      "tenantId": "pg",
+      "code": "INBOX.InboxQueryConfiguration",
+      "description": "  ",
+      "definition": {"type": "object", "title": "Generated schema for Root", "$schema": "http://json-schema.org/draft-07/schema#", "required": ["module", "index"], "x-unique": ["module", "index"], "properties": {"index": {"type": "string"}, "module": {"type": "string"}, "sortBy": {"type": "object", "required": ["path", "defaultOrder"], "properties": {"path": {"type": "string"}, "defaultOrder": {"type": "string"}}}, "sourceFilterPathList": {"type": "array", "items": {"type": "string"}}, "allowedSearchCriteria": {"type": "array", "items": {"type": "object", "required": ["name", "path", "isMandatory", "operator"], "properties": {"name": {"type": "string"}, "path": {"type": "string"}, "operator": {"type": "string"}, "isMandatory": {"type": "boolean"}, "isHashingRequired": {"type": "boolean"}}}}}, "x-ref-schema": [], "additionalProperties": false},
+      "isActive": true
+    }
+  ]

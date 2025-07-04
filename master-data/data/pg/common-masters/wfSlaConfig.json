@@ -1,0 +1,13 @@
+{
+  "tenantId": "pg",
+  "moduleName": "common-masters",
+  "wfSlaConfig": [
+    {
+      "id": 1,
+      "slotPercentage": 33,
+      "positiveSlabColor": "#4CAF50",
+      "negativeSlabColor": "#F44336",
+      "middleSlabColor": "#EEA73A"
+    }
+  ]
+}

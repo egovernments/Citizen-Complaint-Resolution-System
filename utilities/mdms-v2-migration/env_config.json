@@ -1,0 +1,15 @@
+{
+    "host": "https://pgr-demo.digit.org",
+    "localhost": "http://localhost:8083",
+    "stateCode": "pg",
+    "cityCode": "citya",
+    "auth_header": {
+      "authorization": "Basic ZWdvdi11c2VyLWNsaWVudDo="
+    },
+  "credentials": {
+      "username": "demo1",
+      "password": "eGov@123",
+      "userTenant": "pg",
+      "type": "EMPLOYEE"
+    }
+  }

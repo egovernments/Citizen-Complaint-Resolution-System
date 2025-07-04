@@ -1,0 +1,18 @@
+{
+  "tenantId": "pg",
+  "moduleName": "common-masters",
+  "CronJobAPIConfig": [
+    {
+      "jobName": "daily",
+      "active": "true",
+      "method": "POST",
+      "url": "http://egov-workflow-v2.core-dev:8080/egov-workflow-v2/egov-wf/auto/Incident/_escalate?tenantId=pg",
+      "payload": {
+        "RequestInfo": "{DEFAULT_REQUESTINFO}"
+      },
+      "header": {
+        "Content-Type": "application/json"
+      }
+    }
+  ]
+}

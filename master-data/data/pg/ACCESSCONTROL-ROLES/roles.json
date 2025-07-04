@@ -1,0 +1,106 @@
+{
+  "tenantId": "pg",
+  "moduleName": "ACCESSCONTROL-ROLES",
+  "roles": [
+    {
+      "code": "CITIZEN",
+      "name": "Citizen",
+      "description": "Citizen who can raise complaint"
+    },
+    {
+      "code": "EMPLOYEE",
+      "name": "Employee",
+      "description": "Default role for all employees"
+    },
+    {
+      "code": "SUPERUSER",
+      "name": "Super User",
+      "description": "System Administrator. Can change all master data and has access to all the system screens."
+    },
+    {
+      "code": "HRMS_ADMIN",
+      "name": "HRMS Admin",
+      "description": "HRMS Admin"
+    },
+    {
+      "code": "QA_AUTOMATION",
+      "name": "QA Automation",
+      "description": "QA Automation"
+    },
+    {
+      "code": "AUTO_ESCALATE",
+      "name": "Auto Escalation Employee",
+      "description": "Auto Escalation Employee"
+    },
+    {
+      "code": "SUPERVISOR",
+      "name": "Auto Escalation Supervisor",
+      "description": "Escalation to particular role"
+    },
+    {
+      "code": "SYSTEM",
+      "name": "System user",
+      "description": "System user role"
+    },
+    {
+      "code": "COMMON_EMPLOYEE",
+      "name": "Basic employee roles",
+      "description": "Basic employee roles"
+    },
+    {
+      "code": "INTERNAL_MICROSERVICE_ROLE",
+      "name": "Internal Microservice Role",
+      "description": "Internal role for plain access"
+    },
+    {
+      "code": "REINDEXING_ROLE",
+      "name": "Reindexing Role",
+      "description": "Role for reindexing for encrypted data access"
+    },
+    {
+      "code": "MDMS_ADMIN",
+      "name": "MDMS ADMIN",
+      "description": "MDMS User that can create and search schema"
+    },
+    {
+      "code": "LOC_ADMIN",
+      "name": "Localisation admin",
+      "description": "LOC_ADMIN"
+    },
+    {
+      "code": "COMPLAINANT",
+      "name": "Complainant",
+      "description": "One who will create complaints"
+    },
+    {
+      "code": "COMPLAINT_ASSESSOR",
+      "name": "Complaint Assessor",
+      "description": "One who will assess & assign complaints"
+    },
+    {
+      "code": "COMPLAINT_RESOLVER",
+      "name": "Complaint Resolver",
+      "description": "One who will resolve complaints"
+    },
+    {
+      "code": "TICKET_REPORT_VIEWER",
+      "name": "Report Viewer",
+      "description": "One who will view the reports of tickets"
+    },
+    {
+      "code": "GA",
+      "name": "Grivance Administrator",
+      "description": "System Administator for PGR. Can change PGR Master data only."
+    },
+    {
+      "code": "PGR-ADMIN",
+      "name": "PGR Administrator",
+      "description": "Admin role that has super access over the system"
+    },
+    {
+      "code": "PGR_LME",
+      "name": "PGR Last Mile Employee",
+      "description": "PGR Last mile employee to whom the request can be assigned"
+    }
+  ]
+}

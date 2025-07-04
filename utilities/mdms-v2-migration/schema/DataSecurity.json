@@ -1,0 +1,245 @@
+[
+  {
+    "tenantId": "pg",
+    "code": "DataSecurity.DecryptionABAC",
+    "description": "DataSecurity.DecryptionABAC",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Generated schema for Root",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "key",
+        "roleAttributeAccessList"
+      ],
+      "x-unique": [
+        "key"
+      ],
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "roleAttributeAccessList": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "roleCode",
+              "attributeAccessList"
+            ],
+            "properties": {
+              "roleCode": {
+                "type": "string"
+              },
+              "attributeAccessList": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "attribute",
+                    "accessType"
+                  ],
+                  "properties": {
+                    "attribute": {
+                      "type": "object",
+                      "required": [
+                        "jsonPath"
+                      ],
+                      "properties": {
+                        "jsonPath": {
+                          "type": "string"
+                        },
+                        "maskingTechnique": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "accessType": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "tenantId": "pg",
+    "code": "DataSecurity.EncryptionPolicy",
+    "description": "DataSecurity.EncryptionPolicy",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Generated schema for Root",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "key",
+        "attributeList"
+      ],
+      "x-unique": [
+        "key"
+      ],
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "attributeList": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "jsonPath",
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string"
+              },
+              "jsonPath": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "tenantId": "pg",
+    "code": "DataSecurity.MaskingPatterns",
+    "description": "DataSecurity.MaskingPatterns",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Generated schema for Root",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "patternId",
+        "pattern"
+      ],
+      "x-unique": [
+        "patternId"
+      ],
+      "properties": {
+        "pattern": {
+          "type": "string"
+        },
+        "patternId": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "tenantId": "pg",
+    "code": "DataSecurity.SecurityPolicy",
+    "description": "DataSecurity.SecurityPolicy",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Generated schema for Root",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "model",
+        "uniqueIdentifier",
+        "attributes",
+        "roleBasedDecryptionPolicy"
+      ],
+      "x-unique": [
+        "model"
+      ],
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "attributes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "jsonPath",
+              "patternId",
+              "defaultVisibility"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "jsonPath": {
+                "type": "string"
+              },
+              "patternId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "defaultVisibility": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "uniqueIdentifier": {
+          "type": "object",
+          "required": [
+            "name",
+            "jsonPath"
+          ],
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "jsonPath": {
+              "type": "string"
+            }
+          }
+        },
+        "roleBasedDecryptionPolicy": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "roles",
+              "attributeAccessList"
+            ],
+            "properties": {
+              "roles": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "attributeAccessList": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "attribute",
+                    "firstLevelVisibility",
+                    "secondLevelVisibility"
+                  ],
+                  "properties": {
+                    "attribute": {
+                      "type": "string"
+                    },
+                    "firstLevelVisibility": {
+                      "type": "string"
+                    },
+                    "secondLevelVisibility": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+]

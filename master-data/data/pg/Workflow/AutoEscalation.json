@@ -1,0 +1,94 @@
+{
+    "tenantId": "pg",
+    "moduleName": "Workflow",
+    "AutoEscalation": [
+      {
+        "id": "INCIDENT_LOW_RESOLVED",
+        "state": "RESOLVED",
+        "topic": "im-auto-escalation",
+        "action": "CLOSE",
+        "active": "true",
+        "module": "im-services",
+        "stateSLA": 3.0,
+        "businessSLA": null,
+        "businessService": "Incident_Low"
+      },
+      {
+        "id": "INCIDENT_HIGH_RESOLVED",
+        "state": "RESOLVED",
+        "topic": "im-auto-escalation",
+        "action": "CLOSE",
+        "active": "true",
+        "module": "im-services",
+        "stateSLA": 3.0,
+        "businessSLA": null,
+        "businessService": "Incident_High"
+      },
+      {
+        "id": "INCIDENT_MEDIUM_RESOLVED",
+        "state": "RESOLVED",
+        "topic": "im-auto-escalation",
+        "action": "CLOSE",
+        "active": "true",
+        "module": "im-services",
+        "stateSLA": 3.0,
+        "businessSLA": null,
+        "businessService": "Incident_Medium"
+      },
+      {
+        "id": "INCIDENT_MEDIUM_REJECTED",
+        "state": "REJECTED",
+        "topic": "im-auto-escalation",
+        "action": "CLOSE",
+        "active": "true",
+        "module": "im-services",
+        "stateSLA": 3.0,
+        "businessSLA": null,
+        "businessService": "Incident_Medium"
+      },
+      {
+        "id": "INCIDENT_HIGH_REJECTED",
+        "state": "REJECTED",
+        "topic": "im-auto-escalation",
+        "action": "CLOSE",
+        "active": "true",
+        "module": "im-services",
+        "stateSLA": 3.0,
+        "businessSLA": null,
+        "businessService": "Incident_High"
+      },
+      {
+        "id": "INCIDENT_LOW_REJECTED",
+        "state": "REJECTED",
+        "topic": "im-auto-escalation",
+        "action": "CLOSE",
+        "active": "true",
+        "module": "im-services",
+        "stateSLA": 3.0,
+        "businessSLA": null,
+        "businessService": "Incident_Low"
+      },
+      {
+        "id": "INCIDENT_REJECTED",
+        "state": "REJECTED",
+        "topic": "im-auto-escalation",
+        "action": "CLOSE",
+        "active": "true",
+        "module": "im-services",
+        "stateSLA": 3.0,
+        "businessSLA": null,
+        "businessService": "Incident"
+      },
+      {
+        "id": "INCIDENT_RESOLVED",
+        "state": "RESOLVED",
+        "topic": "im-auto-escalation",
+        "action": "CLOSE",
+        "active": "true",
+        "module": "im-services",
+        "stateSLA": 3.0,
+        "businessSLA": null,
+        "businessService": "Incident"
+      }
+    ]
+  }

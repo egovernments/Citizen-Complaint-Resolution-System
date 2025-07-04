@@ -1,0 +1,264 @@
+[
+  {
+    "tenantId": "pg",
+    "code": "Workflow.AutoEscalation",
+    "description": "Workflow.AutoEscalation",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Generated schema for Root",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "businessService",
+        "module",
+        "state",
+        "action",
+        "active",
+        "stateSLA",
+        "topic"
+      ],
+      "x-unique": [
+        "businessService"
+      ],
+      "properties": {
+        "state": {
+          "type": "string"
+        },
+        "topic": {
+          "type": "string"
+        },
+        "action": {
+          "type": "string"
+        },
+        "active": {
+          "type": "string"
+        },
+        "module": {
+          "type": "string"
+        },
+        "stateSLA": {
+          "type": "number"
+        },
+        "businessSLA": {
+          "type": "number"
+        },
+        "businessService": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "tenantId": "pg",
+    "code": "Workflow.AutoEscalationStatesToIgnore",
+    "description": "Workflow.AutoEscalationStatesToIgnore",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Generated schema for Root",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "businessService",
+        "module",
+        "state"
+      ],
+      "x-unique": [
+        "businessService"
+      ],
+      "properties": {
+        "state": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "module": {
+          "type": "string"
+        },
+        "businessService": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "tenantId": "pg",
+    "code": "Workflow.BusinessService",
+    "description": "Workflow.BusinessService",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Generated schema for Root",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "tenantId",
+        "uuid",
+        "businessService",
+        "getUri",
+        "postUri",
+        "states"
+      ],
+      "x-unique": [
+        "businessService"
+      ],
+      "properties": {
+        "uuid": {
+          "type": "string"
+        },
+        "getUri": {
+          "type": "string"
+        },
+        "states": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "businessServiceId",
+              "state",
+              "applicableNextStates",
+              "applicableActions",
+              "docUploadRequired",
+              "UpdateAllowed",
+              "isTerminateState",
+              "isStartState",
+              "uuid",
+              "tenantId",
+              "actions"
+            ],
+            "properties": {
+              "uuid": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "actions": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "stateId",
+                    "action",
+                    "nextStateId",
+                    "roles",
+                    "tenantId",
+                    "uuid"
+                  ],
+                  "properties": {
+                    "uuid": {
+                      "type": "string"
+                    },
+                    "roles": {
+                      "type": "string"
+                    },
+                    "action": {
+                      "type": "string"
+                    },
+                    "stateId": {
+                      "type": "string"
+                    },
+                    "tenantId": {
+                      "type": "string"
+                    },
+                    "nextStateId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "tenantId": {
+                "type": "string"
+              },
+              "isStartState": {
+                "type": "string"
+              },
+              "UpdateAllowed": {
+                "type": "string"
+              },
+              "isTerminateState": {
+                "type": "string"
+              },
+              "applicableActions": {
+                "type": "string"
+              },
+              "businessServiceId": {
+                "type": "string"
+              },
+              "docUploadRequired": {
+                "type": "string"
+              },
+              "applicableNextStates": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "postUri": {
+          "type": "string"
+        },
+        "tenantId": {
+          "type": "string"
+        },
+        "businessService": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "tenantId": "pg",
+    "code": "Workflow.BusinessServiceConfig",
+    "description": "Workflow.BusinessServiceConfig",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Generated schema for Root",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "code",
+        "isStateLevel"
+      ],
+      "x-unique": [
+        "code"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "isStateLevel": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  {
+    "tenantId": "pg",
+    "code": "Workflow.BusinessServiceMasterConfig",
+    "description": "Workflow.BusinessServiceMasterConfig",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Generated schema for Root",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "businessService",
+        "active",
+        "isStatelevel"
+      ],
+      "x-unique": [
+        "businessService"
+      ],
+      "properties": {
+        "active": {
+          "type": "string"
+        },
+        "isStatelevel": {
+          "type": "string"
+        },
+        "businessService": {
+          "type": "string"
+        }
+      }
+    }
+  }
+]
