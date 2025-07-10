@@ -25,6 +25,13 @@ config:
         dockerfile: "build/maven/Dockerfile"
       - work-dir: "backend/pgr-services/src/main/resources/db"
         image-name: "pgr-services-db"
+  - name: "builds/Citizen-Complaint-Resolution-System/utilities/default-data-handler"
+    build:
+      - work-dir: "utilities/default-data-handler"
+        image-name: "default-data-handler"
+        dockerfile: "build/maven/Dockerfile"
+      - work-dir: "utilities/default-data-handler/src/main/resources/db"
+        image-name: "default-data-handler-db"
   - name: builds/Citizen-Complaint-Resolution-System/frontend/micro-ui/digit-ui
     build:
       - work-dir: frontend/micro-ui/
