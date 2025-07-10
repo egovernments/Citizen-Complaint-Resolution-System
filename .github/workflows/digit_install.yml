@@ -296,7 +296,7 @@ jobs:
             # Verify installation
           helmfile --version
       - name: digit deployment
-        run: helmfile -f digit-helmfile.yaml apply --include-needs=true
+        run: helmfile -f digit-helmfile.yaml -e env apply --include-needs=true
         working-directory: Devops/deploy-as-code
       - name: Displaying the Loadbalancer ID
         run: |
@@ -405,7 +405,7 @@ jobs:
   #         helm plugin install https://github.com/databus23/helm-diff
 
   #     - name: digit deployment
-  #       run: helmfile -f digit-helmfile.yaml apply
+  #       run: helmfile -f digit-helmfile.yaml -e env apply
   #       working-directory: deploy-as-code
   #     - name: Displaying the Loadbalancer ID
   #       run: |
