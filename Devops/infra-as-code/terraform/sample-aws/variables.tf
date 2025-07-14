@@ -32,7 +32,6 @@ variable "kubernetes_version" {
 variable "instance_types" {
   description = "Arry of instance types for SPOT instances"
   default = ["m5a.xlarge"]
-  
 }
 
 variable "min_worker_nodes" {
@@ -48,6 +47,16 @@ variable "desired_worker_nodes" {
 variable "max_worker_nodes" {
   description = "eGov recommended below worker node counts as default for max nodes"
   default = "5" #REPLACE IF NEEDED
+}
+
+variable "db_version" {
+  description = "kubernetes version"
+  default = "1.31"
+}
+
+variable "db_instance_types" {
+  description = "Arry of instance types for SPOT instances"
+  default = ["m5a.xlarge"]
 }
 
 
