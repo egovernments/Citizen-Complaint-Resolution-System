@@ -49,13 +49,13 @@ variable "max_worker_nodes" {
 }
 
 variable "db_version" {
-  description = "kubernetes version"
-  default = "1.31"
+  description = "postgres version"
+  default = "15.8"
 }
 
 variable "db_instance_types" {
-  description = "Arry of instance types for SPOT instances"
-  default = ["m5a.xlarge"]
+  description = "Instance type for RDS instance"
+  default = "db.t4g.medium"
 }
 
 variable "db_name" {
