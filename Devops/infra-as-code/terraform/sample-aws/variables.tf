@@ -53,7 +53,7 @@ variable "db_version" {
   default = "15.8"
 }
 
-variable "db_instance_types" {
+variable "db_instance_type" {
   description = "Instance type for RDS instance"
   default = "db.t4g.medium"
 }
