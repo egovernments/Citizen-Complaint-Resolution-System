@@ -13,7 +13,6 @@ variable "vpc_cidr_block" {
   default = "192.168.0.0/16"
 }
 
-
 variable "network_availability_zones" {
   description = "Configure availability zones configuration for VPC. Leave as default for India. Recommendation is to have subnets in at least two availability zones"
   default = ["ap-south-1a", "ap-south-1b"] #REPLACE IF NEEDED
@@ -58,7 +57,6 @@ variable "db_instance_types" {
   description = "Arry of instance types for SPOT instances"
   default = ["m5a.xlarge"]
 }
-
 
 variable "db_name" {
   description = "RDS DB name. Make sure there are no hyphens or other special characters in the DB name. Else, DB creation will fail"
