@@ -1,0 +1,56 @@
+[
+    {
+        "code": "AN_UNHANDLED_EXCEPTION_OCCURRED_ON_THE_SERVER",
+        "message": "An unexpected server error occurred, please try again later.",
+        "module": "rainmaker-abg",
+        "locale": "en_IN"
+    },
+    {
+        "code": "TEST",
+        "message": "test message",
+        "module": "rainmaker-abg",
+        "locale": "en_IN"
+    },
+    {
+        "code": "WBH_BULK_BROWSE_FILES",
+        "message": "bulk upload files",
+        "module": "rainmaker-abg",
+        "locale": "en_IN"
+    },
+    {
+        "code": "WBH_BULK_UPLOAD",
+        "message": "Upload",
+        "module": "rainmaker-abg",
+        "locale": "en_IN"
+    },
+    {
+        "code": "WBH_BULK_UPLOAD_HEADER",
+        "message": "Bulk Upload",
+        "module": "rainmaker-abg",
+        "locale": "en_IN"
+    },
+    {
+        "code": "WBH_BULK_UPLOAD_SUBMIT",
+        "message": "Submit",
+        "module": "rainmaker-abg",
+        "locale": "en_IN"
+    },
+    {
+        "code": "WBH_INFO",
+        "message": "Info",
+        "module": "rainmaker-abg",
+        "locale": "en_IN"
+    },
+    {
+        "code": "WBH_INFO_MESSAGE",
+        "message": "Below is the list of localizations data. Please add or modify as needed",
+        "module": "rainmaker-abg",
+        "locale": "en_IN"
+    },
+    {
+        "code": "test",
+        "message": "test",
+        "module": "rainmaker-abg",
+        "locale": "en_IN"
+    }
+]

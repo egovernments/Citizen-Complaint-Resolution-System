@@ -30,6 +30,12 @@
         "locale": "en_IN"
     },
     {
+        "code": "ASSIGN_SUCCESSFULLY",
+        "message": "Assigned Successfully",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
         "code": "COMMON_BOTTOM_NAVIGATION_COMPLAINTS",
         "message": "Citizen Complaint Resolution System",
         "module": "rainmaker-pgr",
@@ -553,7 +559,7 @@
     },
     {
         "code": "CS_ADDCOMPLAINT_CITY_MOHALLA_TEXT",
-        "message": "Choose the locality/mohalla of the complaint from the list given below.",
+        "message": "Choose the locality of the complaint from the list given below.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -2191,7 +2197,7 @@
     },
     {
         "code": "CS_COMPLAINT_POSTALCODE__DETAILS",
-        "message": "Poastal Code",
+        "message": "Postal Code",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -2317,13 +2323,13 @@
     },
     {
         "code": "CS_CREATECOMPLAINT_MOHALLA",
-        "message": "Locality/Mohalla",
+        "message": "Locality",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
     {
         "code": "CS_CREATECOMPLAINT_MOHALLA_PLACEHOLDER",
-        "message": "Choose Locality/Mohalla",
+        "message": "Choose Locality",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -3428,6 +3434,12 @@
     {
         "code": "ES_SORT_BUTTON",
         "message": "SORT",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "FAILED_TO_UPDATE_COMPLAINT",
+        "message": "Failed to update the complaint, please try again later.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -5011,7 +5023,7 @@
     },
     {
         "code": "PT_PROPERTY_DETAILS_MOHALLA",
-        "message": "Locality/Mohalla",
+        "message": "Locality",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -5322,8 +5334,20 @@
         "locale": "en_IN"
     },
     {
+        "code": "REASSIGN_SUCCESSFULLY",
+        "message": "Re-assigned Successfully",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
         "code": "REJECT",
         "message": "Reject",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "REJECT_SUCCESSFULLY",
+        "message": "Rejected Successfully",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -5366,6 +5390,12 @@
     {
         "code": "RESOLVE",
         "message": "Resolve",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "RESOLVE_SUCCESSFULLY",
+        "message": "Resolved Successfully",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
