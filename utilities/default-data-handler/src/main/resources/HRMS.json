@@ -49,6 +49,11 @@
             "code": "HRMS_ADMIN",
             "name": "HRMS Admin",
             "tenantId": "{tenantid}"
+          },
+          {
+            "code": "WORKFLOW_ADMIN",
+            "name": "Workflow Admin",
+            "tenantId": "{tenantid}"
           }
         ]
       }
@@ -88,6 +93,11 @@
         {
           "code": "HRMS_ADMIN",
           "name": "HRMS Admin",
+          "tenantId": "{tenantid}"
+        },
+        {
+          "code": "WORKFLOW_ADMIN",
+          "name": "Workflow Admin",
           "tenantId": "{tenantid}"
         }
       ],
