@@ -48,6 +48,42 @@ const ACTION_CONFIGS = [
     },
   },
   {
+    actionType: "REOPEN",
+    formConfig: {
+      label: {
+        heading: "CS_ACTION_ASSIGN",
+        cancel: "CS_COMMON_CANCEL",
+        submit: "CS_COMMON_SUBMIT",
+      },
+      form: [
+        {
+          body: [
+            {
+              type: "component",
+              isMandatory: false,
+              component: "PGRAssigneeComponent",
+              key: "SelectedAssignee",
+              label: "CS_COMMON_EMPLOYEE_NAME",
+              populators: { name: "SelectedAssignee" },
+            },
+            {
+              type: "textarea",
+              isMandatory: true,
+              key: "SelectedComments",
+              label: "CS_COMMON_EMPLOYEE_COMMENTS",
+              populators: {
+                name: "SelectedComments",
+                maxLength: 1000,
+                validation: { required: true },
+                error: "CORE_COMMON_REQUIRED_ERRMSG",
+              },
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     actionType: "REJECT",
     formConfig: {
       label: {
@@ -338,6 +374,41 @@ const PGRDetails = () => {
       : [];
   };
 
+  // Check if action button should be visible based on user roles
+  const shouldShowActionButton = () => {
+    const userRoles = userInfo?.info?.roles?.map((role) => role.code) || [];
+    
+    // Get current state from ProcessInstances[0]
+    const currentState = workflowData?.ProcessInstances?.[0]?.state;
+    
+    if (!currentState?.actions) {
+      return false;
+    }
+    
+    // Get all roles from current state actions
+    const allActionRoles = [];
+    currentState.actions.forEach(action => {
+      if (action.roles) {
+        allActionRoles.push(...action.roles);
+      }
+    });
+    
+    // Check if user has PGR_VIEWER role
+    const hasViewerRole = userRoles.includes("PGR_VIEWER");
+    
+    // Get user roles excluding PGR_VIEWER
+    const userNonViewerRoles = userRoles.filter(role => role !== "PGR_VIEWER");
+    
+    // Check if any non-viewer user role matches with action roles
+    const hasMatchingRole = userNonViewerRoles.some(userRole => 
+      allActionRoles.includes(userRole)
+    );
+  
+    
+    // Show button only if user has BOTH PGR_VIEWER AND other matching roles
+    return hasViewerRole && hasMatchingRole;
+  };
+
   // Display loader until required data loads
   if (isLoading || isMDMSLoading || isWorkflowLoading) return <Loader />;
 
@@ -430,34 +501,36 @@ const PGRDetails = () => {
       </div>
 
       {/* Footer Action Bar */}
-      <Footer
-      actionFields={[
-        <Button 
-          className="custom-class"
-          isSearchable 
-          onClick={function noRefCheck() {}}
-          menuStyles={{
-                  bottom: "40px",
-                }}
-          isDisabled={getNextActionOptions(workflowData, businessServiceData?.BusinessServices?.[0]).length === 0}
-          key="action-button"
-          label={t("ES_COMMON_TAKE_ACTION")}
-          onOptionSelect={(selected) => {
-            console.log("*** Log ===> selected", selected);
-            setSelectedAction(selected);
-            setOpenModal(true);
-          }}
-          options={getNextActionOptions(workflowData, businessServiceData?.BusinessServices?.[0])}
-          optionsKey="action"
-          type="actionButton"
-          />,
-      ]}
-      className=""
-      maxActionFieldsAllowed={5}
-      setactionFieldsToRight
-      sortActionFields
-      style={{}}
-      />
+      {shouldShowActionButton() && (
+        <Footer
+        actionFields={[
+          <Button 
+            className="custom-class"
+            isSearchable 
+            onClick={function noRefCheck() {}}
+            menuStyles={{
+                    bottom: "40px",
+                  }}
+            isDisabled={getNextActionOptions(workflowData, businessServiceData?.BusinessServices?.[0]).length === 0}
+            key="action-button"
+            label={t("ES_COMMON_TAKE_ACTION")}
+            onOptionSelect={(selected) => {
+              console.log("*** Log ===> selected", selected);
+              setSelectedAction(selected);
+              setOpenModal(true);
+            }}
+            options={getNextActionOptions(workflowData, businessServiceData?.BusinessServices?.[0])}
+            optionsKey="action"
+            type="actionButton"
+            />,
+        ]}
+        className=""
+        maxActionFieldsAllowed={5}
+        setactionFieldsToRight
+        sortActionFields
+        style={{}}
+        />
+      )}
 
       {/* Toast Message */}
       {toast?.show && <Toast type={toast?.type} label={toast?.label} isDleteBtn onClose={handleToastClose} />}
