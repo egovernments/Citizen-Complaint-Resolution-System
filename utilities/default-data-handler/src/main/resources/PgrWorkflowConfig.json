@@ -273,7 +273,7 @@
               "tenantId": "{tenantid}",
               "currentState": "RESOLVED",
               "action": "RATE",
-              "nextState": "1118021a-e261-4b7b-96e2-aaecdbfbc584",
+              "nextState": "CLOSEDAFTERRESOLUTION",
               "roles": [
                 "CFC",
                 "CITIZEN"

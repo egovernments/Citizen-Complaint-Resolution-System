@@ -1909,5 +1909,33 @@
     "rolecode": "PGR_VIEWER",
     "tenantId": "{tenantid}",
     "actioncode": ""
+  },
+  {
+    "id": 1101,
+    "actionid": 1742,
+    "rolecode": "WORKFLOW_ADMIN",
+    "tenantId": "{tenantid}",
+    "actioncode": ""
+  },
+  {
+    "id": 1101,
+    "actionid": 1743,
+    "rolecode": "WORKFLOW_ADMIN",
+    "tenantId": "{tenantid}",
+    "actioncode": ""
+  },
+  {
+    "id": 1101,
+    "actionid": 1741,
+    "rolecode": "WORKFLOW_ADMIN",
+    "tenantId": "{tenantid}",
+    "actioncode": ""
+  },
+  {
+    "id": 1101,
+    "actionid": 1730,
+    "rolecode": "WORKFLOW_ADMIN",
+    "tenantId": "{tenantid}",
+    "actioncode": ""
   }
 ]
