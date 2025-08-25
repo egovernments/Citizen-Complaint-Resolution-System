@@ -1,35 +1,5 @@
 [
     {
-        "code": "ACCESSCONTROL_ROLES_ROLES_AIRPORT_AUTHORITY_APPROVER",
-        "message": "Airport Authority Approver",
-        "module": "rainmaker-hr",
-        "locale": "en_IN"
-    },
-    {
-        "code": "ACCESSCONTROL_ROLES_ROLES_CFC",
-        "message": "CFC",
-        "module": "rainmaker-hr",
-        "locale": "en_IN"
-    },
-    {
-        "code": "ACCESSCONTROL_ROLES_ROLES_CITY_ADMIN",
-        "message": "City Admin",
-        "module": "rainmaker-hr",
-        "locale": "en_IN"
-    },
-    {
-        "code": "ACCESSCONTROL_ROLES_ROLES_EMPLOYEE",
-        "message": "Employee",
-        "module": "rainmaker-hr",
-        "locale": "en_IN"
-    },
-    {
-        "code": "ACCESSCONTROL_ROLES_ROLES_FIRE_NOC_APPROVER",
-        "message": "FireNoc Approver",
-        "module": "rainmaker-hr",
-        "locale": "en_IN"
-    },
-    {
         "code": "ACCESSCONTROL_ROLES_ROLES_LOC_ADMIN",
         "message": "Localization Admin",
         "module": "rainmaker-hr",
@@ -42,14 +12,14 @@
         "locale": "en_IN"
     },
     {
-        "code": "ACCESSCONTROL_ROLES_ROLES_PT_CEMP",
-        "message": "Property Tax Counter Employee",
+        "code": "ACCESSCONTROL_ROLES_ROLES_PGR_VIEWER",
+        "message": "Complaints Viewer",
         "module": "rainmaker-hr",
         "locale": "en_IN"
     },
     {
-        "code": "ACCESSCONTROL_ROLES_ROLES_SUPERUSER",
-        "message": "Super User",
+        "code": "ACCESSCONTROL_ROLES_ROLES_PT_CEMP",
+        "message": "Property Tax Counter Employee",
         "module": "rainmaker-hr",
         "locale": "en_IN"
     },
@@ -84,8 +54,8 @@
         "locale": "en_IN"
     },
     {
-        "code": "ACCESSCONTROL_ROLES_ROLES_SYSTEM",
-        "message": "System",
+        "code": "ACCESSCONTROL_ROLES_ROLES_TICKET_REPORT_VIEWER",
+        "message": "Reports Viewer",
         "module": "rainmaker-hr",
         "locale": "en_IN"
     },
@@ -128,12 +98,6 @@
     {
         "code": "ACTIVATE EMPLOYEE",
         "message": "Activate Employee",
-        "module": "rainmaker-hr",
-        "locale": "en_IN"
-    },
-    {
-        "code": "ACTIVE_EMPLOYEES",
-        "message": "Active Employees",
         "module": "rainmaker-hr",
         "locale": "en_IN"
     },
@@ -218,30 +182,6 @@
     {
         "code": "CONTRACT",
         "message": "Contract",
-        "module": "rainmaker-hr",
-        "locale": "en_IN"
-    },
-    {
-        "code": "CORE_COMMON_APPLICANT_NAME_INVALID",
-        "message": "Please provide a valid name",
-        "module": "rainmaker-hr",
-        "locale": "en_IN"
-    },
-    {
-        "code": "CORE_COMMON_MOBILE_ERROR",
-        "message": "Please provide a valid mobile number",
-        "module": "rainmaker-hr",
-        "locale": "en_IN"
-    },
-    {
-        "code": "CORE_NO",
-        "message": "No",
-        "module": "rainmaker-hr",
-        "locale": "en_IN"
-    },
-    {
-        "code": "CORE_YES",
-        "message": "Yes",
         "module": "rainmaker-hr",
         "locale": "en_IN"
     },

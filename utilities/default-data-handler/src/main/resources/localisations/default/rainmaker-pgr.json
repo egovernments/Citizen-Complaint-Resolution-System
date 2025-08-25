@@ -1,5 +1,11 @@
 [
     {
+        "code": "ACCESSCONTROL_ROLES_ROLES_PGR_VIEWER",
+        "message": "Complaints Viewer",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
         "code": "ADMIN_Locality",
         "message": "Locality",
         "module": "rainmaker-pgr",
@@ -26,6 +32,12 @@
     {
         "code": "ASSIGNED_TO_ME",
         "message": "Assigned to Me",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "ASSIGN_SUCCESSFULLY",
+        "message": "Assigned Successfully",
         "module": "rainmaker-pgr",
         "locale": "default"
     },
@@ -553,7 +565,7 @@
     },
     {
         "code": "CS_ADDCOMPLAINT_CITY_MOHALLA_TEXT",
-        "message": "Choose the locality/mohalla of the complaint from the list given below.",
+        "message": "Choose the locality of the complaint from the list given below.",
         "module": "rainmaker-pgr",
         "locale": "default"
     },
@@ -2191,7 +2203,7 @@
     },
     {
         "code": "CS_COMPLAINT_POSTALCODE__DETAILS",
-        "message": "Poastal Code",
+        "message": "Postal Code",
         "module": "rainmaker-pgr",
         "locale": "default"
     },
@@ -2317,13 +2329,13 @@
     },
     {
         "code": "CS_CREATECOMPLAINT_MOHALLA",
-        "message": "Locality/Mohalla",
+        "message": "Locality",
         "module": "rainmaker-pgr",
         "locale": "default"
     },
     {
         "code": "CS_CREATECOMPLAINT_MOHALLA_PLACEHOLDER",
-        "message": "Choose Locality/Mohalla",
+        "message": "Choose Locality",
         "module": "rainmaker-pgr",
         "locale": "default"
     },
@@ -3428,6 +3440,12 @@
     {
         "code": "ES_SORT_BUTTON",
         "message": "SORT",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "FAILED_TO_UPDATE_COMPLAINT",
+        "message": "Failed to update the complaint, please try again later.",
         "module": "rainmaker-pgr",
         "locale": "default"
     },
@@ -5011,7 +5029,7 @@
     },
     {
         "code": "PT_PROPERTY_DETAILS_MOHALLA",
-        "message": "Locality/Mohalla",
+        "message": "Locality",
         "module": "rainmaker-pgr",
         "locale": "default"
     },
@@ -5322,8 +5340,26 @@
         "locale": "default"
     },
     {
+        "code": "REASSIGN_SUCCESSFULLY",
+        "message": "Re-assigned Successfully",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
         "code": "REJECT",
         "message": "Reject",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "REJECT_SUCCESSFULLY",
+        "message": "Rejected Successfully",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "REOPEN_SUCCESSFULLY",
+        "message": "Reopened Successfully",
         "module": "rainmaker-pgr",
         "locale": "default"
     },
@@ -5366,6 +5402,12 @@
     {
         "code": "RESOLVE",
         "message": "Resolve",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "RESOLVE_SUCCESSFULLY",
+        "message": "Resolved Successfully",
         "module": "rainmaker-pgr",
         "locale": "default"
     },
