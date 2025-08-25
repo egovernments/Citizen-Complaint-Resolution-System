@@ -13603,7 +13603,7 @@
     },
     {
         "code": "CORE_COMMON_MOBILE_ERROR",
-        "message": "Please provide a valid Mobile Numbe",
+        "message": "Please provide a valid mobile number",
         "module": "rainmaker-common",
         "locale": "default"
     },
@@ -15223,7 +15223,7 @@
     },
     {
         "code": "CS_COMMON_RATE",
-        "message": "RATE",
+        "message": "Rate",
         "module": "rainmaker-common",
         "locale": "default"
     },
@@ -15403,7 +15403,7 @@
     },
     {
         "code": "CS_FILE_APPLICATION_PROPERTY_LOCATION_CITY_MOHALLA_TEXT",
-        "message": "Choose the locality/mohalla of the Property from the list given below.",
+        "message": "Choose the locality of the Property from the list given below.",
         "module": "rainmaker-common",
         "locale": "default"
     },
@@ -18348,6 +18348,12 @@
         "locale": "default"
     },
     {
+        "code": "ERR_HRMS_INVALID_MOB_NO",
+        "message": "Invalid mobile number",
+        "module": "rainmaker-common",
+        "locale": "default"
+    },
+    {
         "code": "ERR_INVALID_AMOUNT",
         "message": "Invalid Amount",
         "module": "rainmaker-common",
@@ -20017,7 +20023,7 @@
     },
     {
         "code": "ES_NEW_APPLICATION_LOCATION_MOHALLA",
-        "message": "Locality/Mohalla",
+        "message": "Locality",
         "module": "rainmaker-common",
         "locale": "default"
     },
@@ -30211,7 +30217,7 @@
     },
     {
         "code": "MYCITY_CODE_LABEL",
-        "message": "Country",
+        "message": "City",
         "module": "rainmaker-common",
         "locale": "default"
     },
@@ -60697,7 +60703,7 @@
     },
     {
         "code": "PT_ACK_LOCALIZATION_LOCALITY_MOHALLA",
-        "message": "Locality/Mohalla:",
+        "message": "Locality:",
         "module": "rainmaker-common",
         "locale": "default"
     },
@@ -61501,7 +61507,7 @@
     },
     {
         "code": "PT_PROP_LOCALITY",
-        "message": "Locality/Mohalla:*",
+        "message": "Locality:*",
         "module": "rainmaker-common",
         "locale": "default"
     },

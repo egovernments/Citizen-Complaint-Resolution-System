@@ -1,5 +1,11 @@
 [
     {
+        "code": "ACCESSCONTROL_ROLES_ROLES_PGR_VIEWER",
+        "message": "Complaints Viewer",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
         "code": "ADMIN_Locality",
         "message": "Locality",
         "module": "rainmaker-pgr",
@@ -5348,6 +5354,12 @@
     {
         "code": "REJECT_SUCCESSFULLY",
         "message": "Rejected Successfully",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "REOPEN_SUCCESSFULLY",
+        "message": "Reopened Successfully",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
