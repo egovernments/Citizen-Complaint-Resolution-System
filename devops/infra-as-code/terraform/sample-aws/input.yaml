@@ -1,7 +1,7 @@
 # Replace with the name which you want to give to your EKS cluster
 # Cluster name can have only lowercase alphanumeric characters and hyphens
 # For example: "digit-demo"
-cluster_name: "pb-uat"
+cluster_name: "state-pb"
 
 # Name you want to give to your Database
 # DB name must contain only alphanumeric characters
@@ -15,7 +15,7 @@ db_username: "pgroneclick"
 domain_name: "pgroneclick.digit.org"
 
 # Replace with the name you want to give to your S3 bucket which is used to store the terraform state
-terraform_state_bucket_name: "pu-uat-state-s3-bucket"
+terraform_state_bucket_name: "state-pb-state-s3-bucket"
 
 public_ssh_key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCPNCcm20JXT0IxJ9UJVo4vM766dms04AA7/0rSMiLN2L6+ur1HK7n7OG3fqmHANmDKkYlJVz+YXaIEfwFZJ+2nS8/bYt8vxMO/NnNZA/pQIsPG0wiq4B8+rvENI/7ndd3EcHoaO9ONkbqHT1YW46KoeZ2PF7J0P7wgIDe4qG7HzeC4Fyt01jjTs3NLzq6sZXq5fUse1CHZ5rCpTfk8eC+up5ER99VSh8yKT7c32/g9JG3Svc0BlXDjE1aO19nmqtjvNQrnYQ0RWwyrWaLDGqy/9q23RCFie0TMKZz890zE5GPdPg4ksbJdhccvcJunGl+dSddIotp603lENfPXj1BF"
 
