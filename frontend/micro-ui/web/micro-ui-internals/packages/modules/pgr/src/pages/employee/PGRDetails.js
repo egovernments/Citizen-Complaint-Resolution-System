@@ -48,6 +48,42 @@ const ACTION_CONFIGS = [
     },
   },
   {
+    actionType: "REOPEN",
+    formConfig: {
+      label: {
+        heading: "CS_ACTION_ASSIGN",
+        cancel: "CS_COMMON_CANCEL",
+        submit: "CS_COMMON_SUBMIT",
+      },
+      form: [
+        {
+          body: [
+            {
+              type: "component",
+              isMandatory: false,
+              component: "PGRAssigneeComponent",
+              key: "SelectedAssignee",
+              label: "CS_COMMON_EMPLOYEE_NAME",
+              populators: { name: "SelectedAssignee" },
+            },
+            {
+              type: "textarea",
+              isMandatory: true,
+              key: "SelectedComments",
+              label: "CS_COMMON_EMPLOYEE_COMMENTS",
+              populators: {
+                name: "SelectedComments",
+                maxLength: 1000,
+                validation: { required: true },
+                error: "CORE_COMMON_REQUIRED_ERRMSG",
+              },
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     actionType: "REJECT",
     formConfig: {
       label: {
