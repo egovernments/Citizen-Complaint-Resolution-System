@@ -5,11 +5,11 @@ cluster_name: "state-pb"
 
 # Name you want to give to your Database
 # DB name must contain only alphanumeric characters
-db_name: "state-pbpgroneclickdb"
+db_name: "statepbpgroneclickdb"
 
 # Replace with DB username you want
 # DB user name must contain only alphanumeric characters
-db_username: "state-pb" 
+db_username: "statepb" 
 
 # Replace with Domain name you want for your web applications
 domain_name: "state-pbpgroneclick.digit.org"
