@@ -1853,5 +1853,61 @@
     "rolecode": "PGR_LME",
     "tenantId": "{tenantid}",
     "actioncode": ""
+  },
+  {
+    "id": 1101,
+    "actionid": 1531,
+    "rolecode": "PGR_VIEWER",
+    "tenantId": "{tenantid}",
+    "actioncode": ""
+  },
+  {
+    "id": 1101,
+    "actionid": 2564,
+    "rolecode": "PGR_VIEWER",
+    "tenantId": "{tenantid}",
+    "actioncode": ""
+  },
+  {
+    "id": 1101,
+    "actionid": 2557,
+    "rolecode": "PGR_VIEWER",
+    "tenantId": "{tenantid}",
+    "actioncode": ""
+  },
+  {
+    "id": 1101,
+    "actionid": 1743,
+    "rolecode": "PGR_VIEWER",
+    "tenantId": "{tenantid}",
+    "actioncode": ""
+  },
+  {
+    "id": 1101,
+    "actionid": 2009,
+    "rolecode": "PGR_VIEWER",
+    "tenantId": "{tenantid}",
+    "actioncode": ""
+  },
+  {
+    "id": 1101,
+    "actionid": 2008,
+    "rolecode": "PGR_VIEWER",
+    "tenantId": "{tenantid}",
+    "actioncode": ""
+  },
+  {
+    "id": 1101,
+    "actionid": 1429,
+    "rolecode": "PGR_VIEWER",
+    "tenantId": "{tenantid}",
+    "actioncode": ""
+  },
+  {
+    "id": 1101,
+    "actionid": 1730,
+    "rolecode": "PGR_VIEWER",
+    "tenantId": "{tenantid}",
+    "actioncode": ""
   }
 ]

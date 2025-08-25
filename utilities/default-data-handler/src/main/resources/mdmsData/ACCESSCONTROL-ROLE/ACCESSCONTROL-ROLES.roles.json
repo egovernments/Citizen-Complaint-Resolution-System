@@ -93,5 +93,10 @@
     "code": "WORKFLOW_ADMIN",
     "name": "WORKFLOW ADMIN",
     "description": "WORKFLOW User that can create and search Workflow"
+  },
+  {
+    "code": "PGR_VIEWER",
+    "name": "PGR Viewer role",
+    "description": " "
   }
 ]

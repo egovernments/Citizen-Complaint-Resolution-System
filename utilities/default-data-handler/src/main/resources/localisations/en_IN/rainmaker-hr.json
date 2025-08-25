@@ -229,7 +229,7 @@
     },
     {
         "code": "CORE_COMMON_MOBILE_ERROR",
-        "message": "Please provide a valid Mobile Number",
+        "message": "Please provide a valid mobile number",
         "module": "rainmaker-hr",
         "locale": "en_IN"
     },

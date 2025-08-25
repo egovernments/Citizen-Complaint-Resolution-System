@@ -94,7 +94,8 @@
               "nextState": "PENDINGATLME",
               "roles": [
                 "GRO",
-                "DGRO"
+                "DGRO",
+                "PGR_VIEWER"
               ],
               "active": true
             },
@@ -105,7 +106,8 @@
               "nextState": "REJECTED",
               "roles": [
                 "GRO",
-                "DGRO"
+                "DGRO",
+                "PGR_VIEWER"
               ],
               "active": true
             }
@@ -138,7 +140,8 @@
               "nextState": "REJECTED",
               "roles": [
                 "GRO",
-                "DGRO"
+                "DGRO",
+                "PGR_VIEWER"
               ],
               "active": true
             },
@@ -149,7 +152,8 @@
               "nextState": "PENDINGATLME",
               "roles": [
                 "GRO",
-                "DGRO"
+                "DGRO",
+                "PGR_VIEWER"
               ],
               "active": true
             }
@@ -171,7 +175,8 @@
               "action": "REASSIGN",
               "nextState": "PENDINGFORREASSIGNMENT",
               "roles": [
-                "PGR_LME"
+                "PGR_LME",
+                "PGR_VIEWER"
               ],
               "active": true
             },
@@ -191,7 +196,8 @@
               "action": "RESOLVE",
               "nextState": "RESOLVED",
               "roles": [
-                "PGR_LME"
+                "PGR_LME",
+                "PGR_VIEWER"
               ],
               "active": true
             },
@@ -234,8 +240,9 @@
               "nextState": "PENDINGFORASSIGNMENT",
               "roles": [
                 "CFC",
+                "CITIZEN",
                 "CSR",
-                "CITIZEN"
+                "PGR_VIEWER"
               ],
               "active": true
             },
@@ -280,8 +287,9 @@
               "nextState": "PENDINGFORASSIGNMENT",
               "roles": [
                 "CFC",
+                "CITIZEN",
                 "CSR",
-                "CITIZEN"
+                "PGR_VIEWER"
               ],
               "active": true
             },

@@ -124,6 +124,11 @@
             "name": "PGR Last Mile Employee",
             "code": "PGR_LME",
             "tenantId": "{tenantid}.citya"
+          },
+          {
+            "name": "PGR Viewer",
+            "code": "PGR_VIEWER",
+            "tenantId": "{tenantid}.citya"
           }
         ]
       }
@@ -138,6 +143,11 @@
         {
           "name": "PGR Last Mile Employee",
           "code": "PGR_LME",
+          "tenantId": "{tenantid}.citya"
+        },
+        {
+          "name": "PGR Viewer",
+          "code": "PGR_VIEWER",
           "tenantId": "{tenantid}.citya"
         }
       ],
@@ -174,7 +184,12 @@
             "name": "Customer Support Representative",
             "code": "CSR",
             "tenantId": "{tenantid}.citya"
-          }
+          },
+          {
+            "name": "PGR Viewer",
+            "code": "PGR_VIEWER",
+            "tenantId": "{tenantid}.citya"
+          } 
         ]
       }
     ],
@@ -188,6 +203,11 @@
         {
           "name": "Customer Support Representative",
           "code": "CSR",
+          "tenantId": "{tenantid}.citya"
+        },
+        {
+          "name": "PGR Viewer",
+          "code": "PGR_VIEWER",
           "tenantId": "{tenantid}.citya"
         }
       ],
@@ -224,6 +244,11 @@
             "name": "Grievance Routing Officer",
             "code": "GRO",
             "tenantId": "{tenantid}.citya"
+          },
+          {
+            "name": "PGR Viewer",
+            "code": "PGR_VIEWER",
+            "tenantId": "{tenantid}.citya"
           }
         ]
       }
@@ -238,6 +263,11 @@
         {
           "name": "Grievance Routing Officer",
           "code": "GRO",
+          "tenantId": "{tenantid}.citya"
+        },  
+        {
+          "name": "PGR Viewer",
+          "code": "PGR_VIEWER",
           "tenantId": "{tenantid}.citya"
         }
       ],
