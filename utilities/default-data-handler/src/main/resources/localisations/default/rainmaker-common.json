@@ -62478,6 +62478,12 @@
         "locale": "default"
     },
     {
+        "code": "ROWS_PER_PAGE",
+        "message": "Rows per page",
+        "module": "rainmaker-common",
+        "locale": "default"
+    },
+    {
         "code": "RT_ALL",
         "message": "All",
         "module": "rainmaker-common",
