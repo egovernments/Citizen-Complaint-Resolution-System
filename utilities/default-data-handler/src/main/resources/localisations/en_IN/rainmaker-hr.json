@@ -24,6 +24,12 @@
         "locale": "en_IN"
     },
     {
+        "code": "ACCESSCONTROL_ROLES_ROLES_REINDEXING_ROLE",
+        "message": "Reindexing Role",
+        "module": "rainmaker-hr",
+        "locale": "en_IN"
+    },
+    {
         "code": "ACCESSCONTROL_ROLES_ROLES_SW_APPROVER",
         "message": "SW Approver",
         "module": "rainmaker-hr",

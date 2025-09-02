@@ -7818,6 +7818,12 @@
         "locale": "default"
     },
     {
+        "code": "WORKBENCH_LABEL_SELECT",
+        "message": "Select",
+        "module": "rainmaker-workbench",
+        "locale": "default"
+    },
+    {
         "code": "WORKFLOW_AUTOESCALATIONSTATESTOIGNORE_BUSINESSSERVICE",
         "message": "businessService",
         "module": "rainmaker-workbench",

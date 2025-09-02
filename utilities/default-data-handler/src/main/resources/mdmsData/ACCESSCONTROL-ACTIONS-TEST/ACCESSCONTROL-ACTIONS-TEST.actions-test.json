@@ -1,5 +1,53 @@
 [
   {
+    "id": 2572,
+    "url": "/mdms-v2/v2/_create/RAINMAKER-PGR.UISchema",
+    "code": "null",
+    "name": "MDMS v2 create data2",
+    "path": "",
+    "enabled": true,
+    "displayName": "MDMS v2",
+    "orderNumber": 1,
+    "serviceCode": "MDMS v2",
+    "parentModule": ""
+  },
+  {
+    "id": 2571,
+    "url": "/mdms-v2/v2/_update/RAINMAKER-PGR.UISchema",
+    "code": "null",
+    "name": "MDMS v2 update data2",
+    "path": "",
+    "enabled": true,
+    "displayName": "MDMS v2",
+    "orderNumber": 1,
+    "serviceCode": "MDMS v2",
+    "parentModule": ""
+  },
+  {
+    "id": 2570,
+    "url": "/mdms-v2/v2/_create/RAINMAKER-PGR.ServiceDefs",
+    "code": "null",
+    "name": "MDMS v2 create data2",
+    "path": "",
+    "enabled": true,
+    "displayName": "MDMS v2",
+    "orderNumber": 1,
+    "serviceCode": "MDMS v2",
+    "parentModule": ""
+  },
+  {
+    "id": 2569,
+    "url": "/mdms-v2/v2/_update/RAINMAKER-PGR.ServiceDefs",
+    "code": "null",
+    "name": "MDMS v2 update data2",
+    "path": "",
+    "enabled": true,
+    "displayName": "MDMS v2",
+    "orderNumber": 1,
+    "serviceCode": "MDMS v2",
+    "parentModule": ""
+  },
+  {
     "id": 2553,
     "url": "url",
     "name": "Search Ticket",
