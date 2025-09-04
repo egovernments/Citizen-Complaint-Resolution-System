@@ -13,7 +13,7 @@
     },
     {
         "code": "ACCESSCONTROL_ROLES_ROLES_PGR_VIEWER",
-        "message": "Complaints Viewer",
+        "message": "Complaint Viewer",
         "module": "rainmaker-hr",
         "locale": "default"
     },

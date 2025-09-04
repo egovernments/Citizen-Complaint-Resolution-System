@@ -1,5 +1,4 @@
-[
-    {
+[{
         "code": "ACCESSCONTROL_ROLES_ROLES_PGR_VIEWER",
         "message": "Complaint Viewer",
         "module": "rainmaker-pgr",

@@ -186,6 +186,12 @@
         "locale": "default"
     },
     {
+        "code": "ACCESSCONTROL_ROLES_ROLES_WORKFLOW_ADMIN",
+        "message": "Workflow Admin",
+        "module": "rainmaker-workbench",
+        "locale": "default"
+    },
+    {
         "code": "ACTION_TEST_LOCALISATION",
         "message": "Localisation",
         "module": "rainmaker-workbench",
@@ -2533,7 +2539,7 @@
     },
     {
         "code": "P G R. Service Defs",
-        "message": "PGR Service Defs",
+        "message": "CCRS Service Defs",
         "module": "rainmaker-workbench",
         "locale": "default"
     },
@@ -7820,6 +7826,12 @@
     {
         "code": "WORKBENCH_LABEL_SELECT",
         "message": "Select",
+        "module": "rainmaker-workbench",
+        "locale": "default"
+    },
+    {
+        "code": "WORKBENCH_LABEL_VIEW_MORE",
+        "message": "View more",
         "module": "rainmaker-workbench",
         "locale": "default"
     },

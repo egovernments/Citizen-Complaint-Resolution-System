@@ -1,11 +1,5 @@
 [
     {
-        "code": "ACCESSCONTROL_ROLES_ROLES_PGR_VIEWER",
-        "message": "Complaint Viewer",
-        "module": "rainmaker-pgr",
-        "locale": "en_IN"
-    },
-    {
         "code": "ADMIN_Locality",
         "message": "Locality",
         "module": "rainmaker-pgr",
