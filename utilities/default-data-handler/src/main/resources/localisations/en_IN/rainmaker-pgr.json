@@ -1,11 +1,5 @@
 [
     {
-        "code": "ACCESSCONTROL_ROLES_ROLES_PGR_VIEWER",
-        "message": "Complaints Viewer",
-        "module": "rainmaker-pgr",
-        "locale": "en_IN"
-    },
-    {
         "code": "ADMIN_Locality",
         "message": "Locality",
         "module": "rainmaker-pgr",
@@ -2916,6 +2910,30 @@
         "locale": "en_IN"
     },
     {
+        "code": "DEPARTMENT_DEPT_1",
+        "message": "Street Lights",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "DEPARTMENT_DEPT_3",
+        "message": "Garbage",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "DEPT_1",
+        "message": "Street Lights",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "DEPT_3",
+        "message": "Garbage",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
         "code": "EMPLOYEE.ASSIGNMENT.TITLE",
         "message": "ASSIGNMENT DETAILS",
         "module": "rainmaker-pgr",
@@ -5354,6 +5372,12 @@
     {
         "code": "REJECT_SUCCESSFULLY",
         "message": "Rejected Successfully",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "REOPEN",
+        "message": "Re-Open",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },

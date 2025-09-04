@@ -13,13 +13,19 @@
     },
     {
         "code": "ACCESSCONTROL_ROLES_ROLES_PGR_VIEWER",
-        "message": "Complaints Viewer",
+        "message": "Complaint Viewer",
         "module": "rainmaker-hr",
         "locale": "default"
     },
     {
         "code": "ACCESSCONTROL_ROLES_ROLES_PT_CEMP",
         "message": "Property Tax Counter Employee",
+        "module": "rainmaker-hr",
+        "locale": "default"
+    },
+    {
+        "code": "ACCESSCONTROL_ROLES_ROLES_REINDEXING_ROLE",
+        "message": "Reindexing Role",
         "module": "rainmaker-hr",
         "locale": "default"
     },

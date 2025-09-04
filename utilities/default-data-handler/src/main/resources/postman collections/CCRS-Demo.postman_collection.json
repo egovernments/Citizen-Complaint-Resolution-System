@@ -1,11 +1,11 @@
 {
 	"info": {
-		"_postman_id": "25176544-3e26-454a-9c7b-314e18582154",
+		"_postman_id": "a399234a-78fe-4275-b2ae-5bae0b5f8556",
 		"name": "CCRS-Demo",
 		"description": "Mandatory Variables\n\n- url\n    \n- username\n    \n- password\n    \n- userTenant (specific for credentials)\n    \n- cityTenant\n    \n- stateTenant\n    \n\nWorkflow:\n\nEmployee Auth Token > MDMSv2 PGR Search > File upload > PGR Create > PGR Update (Assign) > PGR Update (Resolve) > PGR Search (final verification of resolved status)\n\nIf using filestore id, then the PGR Update request body needs to be updated with correct variable.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
 		"_exporter_id": "20639397",
-		"_collection_link": "https://egov-impl.postman.co/workspace/eGovernments~d979de3f-e9cc-4dbe-8bf9-9742e0a8cd78/collection/20639397-25176544-3e26-454a-9c7b-314e18582154?action=share&source=collection_link&creator=20639397"
+		"_collection_link": "https://egov-impl.postman.co/workspace/eGovernments~d979de3f-e9cc-4dbe-8bf9-9742e0a8cd78/collection/20639397-a399234a-78fe-4275-b2ae-5bae0b5f8556?action=share&source=collection_link&creator=20639397"
 	},
 	"item": [
 		{
@@ -63,7 +63,7 @@
 					},
 					{
 						"key": "authorization",
-						"value": "{{authorization}}"
+						"value": "Basic ZWdvdi11c2VyLWNsaWVudDo="
 					},
 					{
 						"key": "content-type",

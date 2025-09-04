@@ -967,13 +967,19 @@
     },
     {
         "code": "ACCESSCONTROL_ROLES_ROLES_PGR_ADMIN",
-        "message": "PGR Administrator",
+        "message": "CCRS Administrator",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
     {
         "code": "ACCESSCONTROL_ROLES_ROLES_PGR_LME",
-        "message": "PGR Last Mile Employee",
+        "message": "CCRS Last Mile Employee",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ACCESSCONTROL_ROLES_ROLES_PGR_VIEWER",
+        "message": "Complaint Viewer",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
@@ -2845,7 +2851,7 @@
     },
     {
         "code": "ACTION_TEST_MANAGE_PGR_SERVICE_DEF_MASTER",
-        "message": "PGR Service Def Master",
+        "message": "CCRS Service Def Master",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
@@ -62474,6 +62480,12 @@
     {
         "code": "RE_SUBMITTED",
         "message": "Re-Submitted",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ROWS_PER_PAGE",
+        "message": "Rows per page",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
