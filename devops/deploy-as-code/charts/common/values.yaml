@@ -160,9 +160,9 @@ extraEnv:
           configMapKeyRef:
             name: egov-config
             key: spring-datasource-tomcat-initialSize
-      - name: SERVER_TOMCAT_MAX_THREADS
       - name: OTEL_TRACES_EXPORTER
         value: "none"
+      - name: SERVER_TOMCAT_MAX_THREADS
       {{- if index .Values "server-tomcat-max-threads" }} 
         value: {{ index .Values "server-tomcat-max-threads" | quote }}    
       {{- else }}        
