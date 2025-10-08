@@ -1,36 +1,27 @@
-{{- /*
-Copyright VMware, Inc.
-SPDX-License-Identifier: APACHE-2.0
-*/}}
-
-{{- if .Values.networkPolicy.enabled }}
+{{- if and (.Values.networkPolicy.enabled) (eq .Values.networkPolicy.flavor "kubernetes") }}
 kind: NetworkPolicy
-apiVersion: {{ include "common.capabilities.networkPolicy.apiVersion" . }}
+apiVersion: {{ template "minio.networkPolicy.apiVersion" . }}
 metadata:
-  name: {{ include "common.names.fullname" . }}
-  namespace: {{ include "common.names.namespace" . | quote }}
-  labels: {{- include "common.labels.standard" ( dict "customLabels" .Values.commonLabels "context" $ ) | nindent 4 }}
-  {{- if .Values.commonAnnotations }}
-  annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
-  {{- end }}
+  name: {{ template "minio.fullname" . }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ template "minio.name" . }}
+    chart: {{ template "minio.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
 spec:
-  {{- $podLabels := include "common.tplvalues.merge" ( dict "values" ( list .Values.podLabels .Values.commonLabels ) "context" . ) }}
   podSelector:
-    matchLabels: {{- include "common.labels.matchLabels" ( dict "customLabels" $podLabels "context" $ ) | nindent 6 }}
+    matchLabels:
+      app: {{ template "minio.name" . }}
+      release: {{ .Release.Name }}
   ingress:
-    # Allow inbound connections
     - ports:
-        - port: {{ .Values.containerPorts.console }}
-        - port: {{ .Values.containerPorts.api }}
+        - port: {{ .Values.minioAPIPort }}
+        - port: {{ .Values.minioConsolePort }}
       {{- if not .Values.networkPolicy.allowExternal }}
       from:
         - podSelector:
             matchLabels:
-              {{ include "common.names.fullname" . }}-client: "true"
-        - podSelector:
-            matchLabels: {{- include "common.labels.matchLabels" ( dict "customLabels" $podLabels "context" $ ) | nindent 14 }}
-        {{- if .Values.networkPolicy.extraFromClauses }}
-        {{- toYaml .Values.networkPolicy.extraFromClauses | nindent 8 }}
-        {{- end }}
+              {{ template "minio.name" . }}-client: "true"
       {{- end }}
 {{- end }}

@@ -157,6 +157,9 @@ secrets:
   git-sync:
     name: git-creds
     namespace: egov
+  minio:
+    namespace: backbone
+    name: minio
   pgadmin:
     name: pgadmin
     namespace: backbone
