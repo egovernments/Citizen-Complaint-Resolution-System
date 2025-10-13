@@ -6,6 +6,7 @@ import useCreateComplaint from "./pgr/useCreateComplaint";
 import usePGRSearch from "./pgr/usePGRSearch";
 import usePGRUpdate from "./pgr/usePGRUpdate";
 import useServiceDefs from "./pgr/useServiceDefs";
+import useMobileValidation from "./pgr/useMobileValidation";
 
 const pgr = {
   useProjectSearch,
@@ -15,6 +16,7 @@ const pgr = {
   usePGRSearch,
   usePGRUpdate,
   useServiceDefs,
+  useMobileValidation,
 };
 
 
