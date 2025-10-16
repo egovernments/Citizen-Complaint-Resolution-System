@@ -41,6 +41,9 @@ const PGRSearchInbox = () => {
   // Used to detect route/location changes to trigger config reset
   const location = useLocation();
 
+  // Fetch mobile validation config from MDMS
+  const { validationRules, isLoading: isValidationLoading } = Digit.Hooks.pgr.useMobileValidation(tenantId);
+
   // Fetch MDMS config for inbox screen (RAINMAKER-PGR.SearchInboxConfig)
   const { data: mdmsData, isLoading } = Digit.Hooks.useCommonMDMS(
     Digit.ULBService.getStateId(),
@@ -56,7 +59,43 @@ const PGRSearchInbox = () => {
   );
 
   // Fallback to static config if MDMS is not available
-  const configs = mdmsData || PGRSearchInboxConfig();
+  let configs = mdmsData || PGRSearchInboxConfig();
+
+  // Inject mobile validation rules from MDMS into the search config
+  if (configs && validationRules && configs.sections?.search?.uiConfig?.fields) {
+    const { min, max } = getMinMaxValues();
+    configs = {
+      ...configs,
+      sections: {
+        ...configs.sections,
+        search: {
+          ...configs.sections.search,
+          uiConfig: {
+            ...configs.sections.search.uiConfig,
+            fields: configs.sections.search.uiConfig.fields.map((field) => {
+              if (field.label === "CS_COMMON_MOBILE_NO" && field.populators?.name === "mobileNumber") {
+                return {
+                  ...field,
+                  populators: {
+                    ...field.populators,
+                    validation: {
+                      minlength: validationRules.minLength,
+                      maxlength: validationRules.maxLength,
+                      min: min,
+                      max: max,
+                      pattern: validationRules.pattern,
+                    },
+                    error: validationRules.errorMessage || field.populators.error,
+                  },
+                };
+              }
+              return field;
+            }),
+          },
+        },
+      },
+    };
+  }
 
   // Fetch the list of service definitions (e.g., complaint types) for current tenant
   const serviceDefs = Digit.Hooks.pgr.useServiceDefs(tenantId, "PGR");
@@ -92,7 +131,7 @@ const PGRSearchInbox = () => {
   /**
    * Show loader until necessary data is available
    */
-  if (isLoading || !pageConfig || serviceDefs?.length === 0) {
+  if (isLoading || isValidationLoading || !pageConfig || serviceDefs?.length === 0) {
     return <Loader />;
   }
 
