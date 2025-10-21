@@ -19,11 +19,10 @@ pip install pandas requests openpyxl
 
 ## Setup
 
-1. **Download or clone** the repository containing:
- - `upload_localizations.py` – The main script  
- - `localizations_default.xlsx` – Sample Excel file with localization messages  
+1. Navigate to **Citizen-Complaint-Resolution-System/edit/localisation-script/utilities/default-data-handler/src/main/resources/localisations/scripts**:
+   - `upload_localizations.py` – The main script  
 
-2. **Ensure your Python environment** has all dependencies installed (see [Prerequisites](#prerequisites)).
+2. **Ensure your Python environment** has all dependencies installed (see [Prerequisites]).
 
 ---
 
@@ -49,7 +48,7 @@ Each sheet in the Excel file must contain the following columns:
 
 ## How to Run
 
-python3 upload_localizations.py <excel_file> <host> <tenant_id> <auth_token> [batch_size]
+python3 upload_localizations.py <excel_file_path> <host> <tenant_id> <auth_token> [batch_size]
 
 
 
