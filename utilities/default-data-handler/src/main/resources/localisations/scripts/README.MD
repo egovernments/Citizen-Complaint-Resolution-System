@@ -58,7 +58,7 @@ python3 upload_localizations.py <excel_file_path> <host> <tenant_id> <auth_token
 
 | Argument | Description |
 |-----------|--------------|
-| `<excel_file>` | Path to the Excel file containing localization messages |
+| `<excel_file_path>` | Path to the Excel file containing localization messages |
 | `<host>` | Host URL of your DIGIT environment (e.g., `https://pgr-demo.digit.org`) |
 | `<tenant_id>` | Tenant ID (e.g., `pg`, `ethopia`) |
 | `<auth_token>` | Authentication token to access the API |
