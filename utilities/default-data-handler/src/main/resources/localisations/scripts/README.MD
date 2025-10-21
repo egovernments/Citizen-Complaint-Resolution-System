@@ -1,6 +1,6 @@
 # Localization Uploader
 
-A Python script to upload localization messages from an Excel file to a DIGIT/UPYOG environment using the **_upsert API_**.
+A Python script to upload localization messages from an Excel file to a DIGIT environment using the **_upsert API_**.
 
 
 ---
