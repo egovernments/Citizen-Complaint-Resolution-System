@@ -97,9 +97,13 @@ public class StartupUserAndEmployeeInitializer {
         mdmsBulkLoader.loadAllMdmsData(defaultDataRequest.getTargetTenantId(), defaultDataRequest.getRequestInfo());
         dataHandlerService.createBoundaryDataFromFile(defaultDataRequest);
         localizationUtil.upsertLocalizationFromFile(defaultDataRequest);
-        dataHandlerService.createUserFromFile(tenantRequest);
-        dataHandlerService.createPgrWorkflowConfig(tenantRequest.getTenant().getCode());
-        dataHandlerService.createEmployeeFromFile(defaultDataRequest.getRequestInfo());
+
+        // Load user, employee, and workflow config data only if enabled
+        if (serviceConfig.isLoadUserEmployeeDataEnabled()) {
+            dataHandlerService.createUserFromFile(tenantRequest);
+            dataHandlerService.createPgrWorkflowConfig(tenantRequest.getTenant().getCode());
+            dataHandlerService.createEmployeeFromFile(defaultDataRequest.getRequestInfo());
+        }
     }
 }
 

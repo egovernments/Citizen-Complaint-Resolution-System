@@ -131,4 +131,7 @@ public class ServiceConfiguration {
 
     @Value("${scheduler.max.executions}")
     private String maxExecution;
+
+    @Value("${default.data.load.user.employee.enabled}")
+    private boolean loadUserEmployeeDataEnabled;
 }
