@@ -44,7 +44,7 @@ public class StartupUserAndEmployeeInitializer {
     private int executionCount = 0;
     private static final int MAX_EXECUTIONS = 4;
 
-    @Scheduled(initialDelay = 1 * 30 * 1000, fixedDelay = 1 * 30 * 1000) // 4 minutes
+    @Scheduled(initialDelay = 4 * 60 * 1000, fixedDelay = 4 * 60 * 1000) // 4 minutes
     public void runPeriodically() {
         if (executionCount >= MAX_EXECUTIONS) return;
 
