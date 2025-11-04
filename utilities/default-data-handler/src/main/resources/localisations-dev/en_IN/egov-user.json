@@ -1,0 +1,20 @@
+[
+    {
+        "code": "sms.login.otp.msg",
+        "message": "Dear Citizen, Your Login OTP is %s.\n\nEGOVS",
+        "module": "egov-user",
+        "locale": "en_IN"
+    },
+    {
+        "code": "sms.pwd.reset.otp.msg",
+        "message": "Dear Citizen, Your OTP for recovering password is %s.\n\nEGOVS",
+        "module": "egov-user",
+        "locale": "en_IN"
+    },
+    {
+        "code": "sms.register.otp.msg",
+        "message": "Dear Citizen, Your OTP to complete your mSeva Registration is %s.\n\nEGOVS",
+        "module": "egov-user",
+        "locale": "en_IN"
+    }
+]

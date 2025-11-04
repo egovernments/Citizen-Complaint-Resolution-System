@@ -132,6 +132,30 @@ public class ServiceConfiguration {
     @Value("${scheduler.max.executions}")
     private String maxExecution;
 
-    @Value("${default.data.load.user.employee.enabled}")
-    private boolean loadUserEmployeeDataEnabled;
+    @Value("${dev.enabled}")
+    private boolean devEnabled;
+
+    @Value("${default.mdms.data.path}")
+    private String defaultMdmsDataPath;
+
+    @Value("${default.user.data.file}")
+    private String defaultUserDataFile;
+
+    @Value("${default.employee.data.file}")
+    private String defaultEmployeeDataFile;
+
+    @Value("${dev.mdms.data.path}")
+    private String devMdmsDataPath;
+
+    @Value("${dev.user.data.file}")
+    private String devUserDataFile;
+
+    @Value("${dev.employee.data.file}")
+    private String devEmployeeDataFile;
+
+    @Value("${default.localization.data.path}")
+    private String defaultLocalizationDataPath;
+
+    @Value("${dev.localization.data.path}")
+    private String devLocalizationDataPath;
 }

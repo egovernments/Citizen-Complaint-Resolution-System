@@ -50,9 +50,9 @@ public class LocalizationUtil {
 		}
 	}
 
-	public void upsertLocalizationFromFile(DefaultDataRequest defaultDataRequest){
+	public void upsertLocalizationFromFile(DefaultDataRequest defaultDataRequest, String localizationPath){
 
-		List<Message> messageList = addMessagesFromFile(defaultDataRequest);
+		List<Message> messageList = addMessagesFromFile(defaultDataRequest, localizationPath);
 		defaultDataRequest.getRequestInfo().getUserInfo().setId(128L);
 
 		String tenantId = defaultDataRequest.getTargetTenantId();
@@ -88,14 +88,15 @@ public class LocalizationUtil {
 		}
 	}
 
-	public List addMessagesFromFile(DefaultDataRequest defaultDataRequest){
+	public List addMessagesFromFile(DefaultDataRequest defaultDataRequest, String localizationPath){
 		List<Message> messages = new ArrayList<>();
 		ObjectMapper objectMapper = new ObjectMapper();
 
 		try {
 			PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
 
-			Resource[] resources = resolver.getResources("classpath:localisations/*/*.json");
+			Resource[] resources = resolver.getResources(localizationPath);
+			log.info("Loading localization from path: {}", localizationPath);
 
 			for (Resource resource : resources) {
 				try (InputStream inputStream = resource.getInputStream()) {

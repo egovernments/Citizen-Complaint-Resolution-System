@@ -1,0 +1,14 @@
+[
+    {
+        "code": "hrms.employee.create.notification",
+        "message": "Hi $employeename, Welcome to mSeva. Your profile has been successfully set-up : Username - $username Password - $password, Thank you.",
+        "module": "egov-hrms",
+        "locale": "en_IN"
+    },
+    {
+        "code": "hrms.employee.reactivation.notification",
+        "message": "Dear <Employee Name>,\nYour profile with employee Username <Username>has been activated on <date>.",
+        "module": "egov-hrms",
+        "locale": "en_IN"
+    }
+]
