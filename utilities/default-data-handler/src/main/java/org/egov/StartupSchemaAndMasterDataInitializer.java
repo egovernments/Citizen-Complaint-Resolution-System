@@ -97,18 +97,38 @@ public class StartupSchemaAndMasterDataInitializer{
             defaultDataRequest.setTargetTenantId(tenantCode);
 //            Create Schema
             dataHandlerService.createMdmsSchemaFromFile(defaultDataRequest);
-            // Load mdms data
-            mdmsBulkLoader.loadAllMdmsData(defaultDataRequest.getTargetTenantId(), defaultDataRequest.getRequestInfo());
-            // create Boundary Data
-            dataHandlerService.createBoundaryDataFromFile(defaultDataRequest);
-            // upsert localization
-            localizationUtil.upsertLocalizationFromFile(defaultDataRequest);
-//            // create User
-//            dataHandlerService.createUserFromFile(tenantRequest);
+
+            // Load default MDMS data (always)
+            mdmsBulkLoader.loadAllMdmsData(defaultDataRequest.getTargetTenantId(),
+                    defaultDataRequest.getRequestInfo(),
+                    serviceConfig.getDefaultMdmsDataPath());
+
+            // Load default localization (always)
+            localizationUtil.upsertLocalizationFromFile(defaultDataRequest,
+                    serviceConfig.getDefaultLocalizationDataPath());
+
+            // Load boundary, localization, user, employee, and workflow config data only if enabled
+            if (serviceConfig.isDevEnabled()) {
+                // Load dev MDMS data
+                mdmsBulkLoader.loadAllMdmsData(defaultDataRequest.getTargetTenantId(),
+                        defaultDataRequest.getRequestInfo(),
+                        serviceConfig.getDevMdmsDataPath());
+
+                // Load dev localization
+                localizationUtil.upsertLocalizationFromFile(defaultDataRequest,
+                        serviceConfig.getDevLocalizationDataPath());
+
+//                // create Boundary Data
+//                dataHandlerService.createBoundaryDataFromFile(defaultDataRequest);
 //
-//            dataHandlerService.createPgrWorkflowConfig(tenantRequest.getTenant().getCode());
-//            // create Employee
-//            dataHandlerService.createEmployeeFromFile(defaultDataRequest.getRequestInfo());
+//                // create User from dev file
+//                dataHandlerService.createUserFromFile(tenantRequest, serviceConfig.getDevUserDataFile());
+//                // create PGR workflow config
+//                dataHandlerService.createPgrWorkflowConfig(tenantRequest.getTenant().getCode());
+//                // create Employee from dev file
+//                dataHandlerService.createEmployeeFromFile(defaultDataRequest.getRequestInfo(),
+//                        serviceConfig.getDevEmployeeDataFile());
+            }
 
 //            dataHandlerService.createTenantConfig(tenantRequest);
         }
