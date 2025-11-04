@@ -1,6 +1,6 @@
 [
   {
-    "tenantId": "{tenantid}.citya",
+    "tenantId": "{tenantid}",
     "employeeStatus": "EMPLOYED",
     "assignments": [
       {
@@ -18,22 +18,22 @@
         "hierarchy": "ADMIN",
         "boundaryType": "City",
         "boundary": "{tenantid}",
-        "tenantId": "{tenantid}.citya",
+        "tenantId": "{tenantid}",
         "roles": [
           {
             "code": "LOC_ADMIN",
             "name": "Localisation admin",
-            "tenantId": "{tenantid}.citya"
+            "tenantId": "{tenantid}"
           },
           {
             "code": "MDMS_ADMIN",
             "name": "MDMS ADMIN",
-            "tenantId": "{tenantid}.citya"
+            "tenantId": "{tenantid}"
           },
           {
             "code": "HRMS_ADMIN",
             "name": "HRMS Admin",
-            "tenantId": "{tenantid}.citya"
+            "tenantId": "{tenantid}"
           },
           {
             "code": "LOC_ADMIN",
@@ -68,17 +68,17 @@
         {
           "code": "LOC_ADMIN",
           "name": "Localisation admin",
-          "tenantId": "{tenantid}.citya"
+          "tenantId": "{tenantid}"
         },
         {
           "code": "MDMS_ADMIN",
           "name": "MDMS ADMIN",
-          "tenantId": "{tenantid}.citya"
+          "tenantId": "{tenantid}"
         },
         {
           "code": "HRMS_ADMIN",
           "name": "HRMS Admin",
-          "tenantId": "{tenantid}.citya"
+          "tenantId": "{tenantid}"
         },
         {
           "code": "LOC_ADMIN",
@@ -103,7 +103,7 @@
       ],
       "password": "eGov@123",
       "otpReference": "12345",
-      "tenantId": "{tenantid}.citya"
+      "tenantId": "{tenantid}"
     },
     "serviceHistory": [],
     "education": [],
