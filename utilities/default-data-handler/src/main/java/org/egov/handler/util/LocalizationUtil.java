@@ -88,7 +88,7 @@ public class LocalizationUtil {
 		}
 	}
 
-	public List addMessagesFromFile(DefaultDataRequest defaultDataRequest, String localizationPath){
+	public List<Message> addMessagesFromFile(DefaultDataRequest defaultDataRequest, String localizationPath){
 		List<Message> messages = new ArrayList<>();
 		ObjectMapper objectMapper = new ObjectMapper();
 
