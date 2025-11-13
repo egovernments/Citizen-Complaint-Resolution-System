@@ -1,0 +1,181 @@
+name: Tenant Template
+description: Schema for validating tenant (state/city) data
+
+sheets:
+  - name: Tenants
+    description: State and city information
+    columns:
+      - name: Tenant Code
+        type: string
+        required: true
+        pattern: "^[a-z]+(\\.{1}[a-z]+)*$"
+        description: Lowercase letters with dots (e.g., pg, pg.citya)
+
+      - name: Tenant Name
+        type: string
+        required: true
+        min_length: 2
+        max_length: 100
+
+      - name: Tenant Type
+        type: string
+        required: true
+        enum: [State, CITY]
+
+      - name: Email
+        type: email
+        required: true
+        pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+
+      - name: Contact Number
+        type: string
+        required: true
+        pattern: "^[0-9-]+$"
+
+      - name: Helpline Number
+        type: string
+        required: false
+        pattern: "^[0-9-]+$"
+
+      - name: Address
+        type: string
+        required: true
+        min_length: 5
+
+      - name: Domain URL
+        type: url
+        required: true
+        pattern: "^https?://.+"
+
+      - name: Logo URL
+        type: url
+        required: true
+
+      - name: Image ID
+        type: string
+        required: false
+
+      - name: Description
+        type: string
+        required: false
+
+      - name: Twitter URL
+        type: url
+        required: false
+
+      - name: Facebook URL
+        type: url
+        required: false
+
+      - name: Office Timings Weekday
+        type: string
+        required: true
+
+      - name: Office Timings Saturday
+        type: string
+        required: false
+
+      - name: Pincode (comma separated)
+        type: string
+        required: false
+        pattern: "^[0-9,]+$"
+
+      - name: City Code
+        type: integer
+        required: true
+        min_value: 1
+
+      - name: City Name
+        type: string
+        required: true
+
+      - name: City ULB Grade
+        type: string
+        required: true
+        enum: [Municipal Corporation, Municipal Council, Nagar Panchayat]
+
+      - name: City District Code
+        type: string
+        required: false
+
+      - name: City District Name
+        type: string
+        required: false
+
+      - name: City District Tenant Code
+        type: string
+        required: true
+
+      - name: City DDR Name
+        type: string
+        required: false
+
+      - name: City Latitude
+        type: float
+        required: true
+        min_value: -90
+        max_value: 90
+
+      - name: City Longitude
+        type: float
+        required: true
+        min_value: -180
+        max_value: 180
+
+      - name: City Region Name
+        type: string
+        required: false
+
+      - name: City Block Code
+        type: string
+        required: false
+
+      - name: City Local Name
+        type: string
+        required: false
+
+      - name: City Shape File Location
+        type: string
+        required: false
+
+      - name: City Captcha
+        type: string
+        required: false
+
+  - name: City_Modules
+    description: Module configuration for cities
+    columns:
+      - name: Module Code
+        type: string
+        required: true
+        enum: [PGR, HRMS, Workbench, TL, PT, WS, SW, FSM, BPA, OBPS]
+
+      - name: Module Name
+        type: string
+        required: true
+
+      - name: Order
+        type: integer
+        required: true
+        min_value: 1
+
+      - name: Active
+        type: boolean
+        required: true
+        enum: [TRUE, FALSE, True, False, true, false]
+
+      - name: Enabled Tenant Codes (comma separated)
+        type: string
+        required: true
+        pattern: "^[a-z.]+([,]{1}[a-z.]+)*$"
+
+validation_rules:
+  - rule: unique_codes
+    description: Tenant Code must be unique across all rows
+    columns: [Tenant Code]
+
+  - rule: state_before_cities
+    description: State tenant should be listed before city tenants
+
+  - rule: city_codes_hierarchy
+    description: City tenant codes should follow pattern state.city (e.g., pg.citya)
