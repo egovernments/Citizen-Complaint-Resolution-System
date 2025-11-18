@@ -5,31 +5,31 @@ sheets:
   - name: Tenants
     description: State and city information
     columns:
-      - name: Tenant Code
+      - name: Tenant Code*
         type: string
         required: true
         pattern: '^[a-z]+(\.{1}[a-z]+)*$'
         description: Lowercase code; state or state.city (e.g., pg, pg.citya)
 
-      - name: Tenant Name
+      - name: Tenant Name*
         type: string
         required: true
         min_length: 2
         max_length: 100
 
-      - name: Tenant Type
+      - name: Tenant Type*
         type: string
         required: true
         enum: [State, CITY]
 
-      - name: Email
+      - name: Email*
         type: email
         required: true
         pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
 
       - name: Contact Number
         type: string
-        required: true
+        required: false
         pattern: "^[0-9-]+$"
 
       - name: Helpline Number
@@ -39,21 +39,21 @@ sheets:
 
       - name: Address
         type: string
-        required: true
+        required: false
         min_length: 5
 
-      - name: Domain URL
+      - name: Domain URL*
         type: url
         required: true
         pattern: "^https?://.+"
 
       - name: Logo URL
         type: url
-        required: true
-
-      - name: Image ID
-        type: string
         required: false
+
+      - name: Image ID*
+        type: string
+        required: true
 
       - name: Description
         type: string
@@ -67,7 +67,7 @@ sheets:
         type: url
         required: false
 
-      - name: Office Timings Weekday
+      - name: Office Timings Weekday*
         type: string
         required: true
 
@@ -80,103 +80,99 @@ sheets:
         required: false
         pattern: "^[0-9,]+$"
 
-      - name: City Code
+      - name: City Code*
         type: integer
         required: true
         min_value: 1
 
-      - name: City Name
+      - name: City Name*
         type: string
         required: true
 
-      - name: City ULB Grade
+      - name: City ULB Grade*
         type: string
         required: true
         enum: [Municipal Corporation, Municipal Council, Nagar Panchayat]
 
-      - name: City District Code
-        type: string
-        required: false
-
-      - name: City District Name
-        type: string
-        required: false
-
-      - name: City District Tenant Code
+      - name: City District Code*
         type: string
         required: true
 
-      - name: City DDR Name
+      - name: City District Name*
         type: string
-        required: false
+        required: true
 
-      - name: City Latitude
+      - name: City District Tenant Code*
+        type: string
+        required: true
+
+      - name: City DDR Name*
+        type: string
+        required: true
+
+      - name: City Latitude*
         type: float
         required: true
         min_value: -90
         max_value: 90
 
-      - name: City Longitude
+      - name: City Longitude*
         type: float
         required: true
         min_value: -180
         max_value: 180
 
-      - name: City Region Name
+      - name: City Region Name*
         type: string
-        required: false
+        required: true
 
-      - name: City Block Code
+      - name: City Local Name*
         type: string
-        required: false
+        required: true
 
-      - name: City Local Name
+      - name: City Shape File Location*
         type: string
-        required: false
+        required: true
 
-      - name: City Shape File Location
+      - name: City Captcha*
         type: string
-        required: false
-
-      - name: City Captcha
-        type: string
-        required: false
+        required: true
 
   - name: City_Modules
     description: Module configuration for cities
     columns:
-      - name: Module Code
+      - name: Module Code*
         type: string
         required: true
         enum: [PGR, HRMS, Workbench, TL, PT, WS, SW, FSM, BPA, OBPS]
 
-      - name: Module Name
+      - name: Module Name*
         type: string
         required: true
 
-      - name: Order
+      - name: Order*
         type: integer
         required: true
         min_value: 1
 
-      - name: Enabled Tenant Codes
+      - name: Enabled Tenant Codes*
         type: string
         required: true
         reference:
           template: SELF
           sheet: Tenants
-          column: Tenant Code
+          column: Tenant Code*
         description: Must match a Tenant Codes from Tenants tab
 
   - name: Departments
     description: Government departments that handle complaints
     columns:
-      - name: Department Code
+      - name: Department Code*
         type: string
         required: true
         pattern: "^[A-Z0-9_]+$"
 
-      - name: Department Name
+      - name: Department Name*
         type: string
         required: true
         min_length: 2
@@ -185,24 +181,24 @@ sheets:
   - name: Designations
     description: Job titles and positions within departments
     columns:
-      - name: Designation Code
+      - name: Designation Code*
         type: string
         required: true
         pattern: "^[A-Z0-9_]+$"
 
-      - name: Designation Name
+      - name: Designation Name*
         type: string
         required: true
         min_length: 2
         max_length: 100
 
-      - name: Department Code
+      - name: Department Code*
         type: string
         required: true
         reference:
           template: SELF
           sheet: Departments
-          column: Department Code
+          column: Department Code*
         description: Must match a Department Code from Departments tab
 
 
@@ -212,186 +208,76 @@ sheets:
         max_length: 500
 
   - name: ComplaintTypes
-    description: complaint types handled by departments
+    description: Hierarchical complaint types with parent types and sub-types
     columns:
-      - name: Complaint Name
+      - name: Complaint Type*
+        type: string
+        required: false
+        pattern: "^[A-Za-z0-9_ ]+$"
+        description: Parent complaint category (required for first row of each type, empty for sub-types)
+
+      - name: " Complaint Type Code"
+        type: string
+        required: false
+        pattern: "^[A-Za-z0-9_]+$"
+        description: Code for parent category (required for first row of each type, empty for sub-types)
+
+      - name: Complaint Sub Type*
         type: string
         required: true
         pattern: "^[A-Za-z0-9_ ]+$"
+        description: Specific complaint sub-type name
 
-      - name: Service Code
+      - name: Complaint Sub Type Code
         type: string
-        required: true
+        required: false
         pattern: "^[A-Za-z0-9_]+$"
-        min_length: 2
-        max_length: 100
+        description: Auto-generated service code - leave empty, system will create
 
-      - name: Category/Menu Path
+      - name: Department Code*
         type: string
-        required: true
-
-      - name: Department Code
-        type: string
-        required: true
+        required: false
         reference:
           template: SELF
           sheet: Departments
-          column: Department Code
-        description: Must match a Department Code from Departments tab
+          column: Department Code*
+        description: Must match a Department Code from Departments tab (required for first row of each type)
 
-      - name: SLA Hours
-        type: string
-        required: true
-        pattern: "^[A-Z0-9_]+$"
-      
-      - name: DescriptionKeywords (comma separated)
+      - name: SLA Hours*
+        type: float
+        required: false
+        min_value: 1
+        description: Service level hours for resolution (required for first row of each type)
+
+      - name: DescriptionKeywords (comma separated)*
         type: string
         required: false
+        description: Comma-separated keywords for search (required for first row of each type)
 
       - name: Priority
-        type: string
-        required: true
-
-  - name: Hierarchy_Definition
-    description: Geographic hierarchy levels definition
-    max_rows: 1
-    columns:
-      - name: City Code
-        type: string
-        required: true
-        pattern: "^[a-z.]+$"
-        reference:
-          template: SELF
-          sheet: Tenants
-          column: Tenant Code
-        description: Must match a Tenant Codes from Tenants tab
-
-      - name: Hierarchy Type
-        type: string
-        required: true
-        enum: [ADMIN, REVENUE]
-
-      - name: Level 1
-        type: string
-        required: true
-        description: Top level (e.g., City)
-
-      - name: Level 2
-        type: string
+        type: float
         required: false
-
-      - name: Level 3
-        type: string
-        required: false
-
-      - name: Level 4
-        type: string
-        required: false
-
-      - name: Level 5
-        type: string
-        required: false
-
-  - name: Boundary_Entities
-    description: Individual boundary entities with coordinates
-    columns:
-      - name: Tenant ID
-        type: string
-        required: true
-        reference:
-          template: SELF
-          sheet: Tenants
-          column: Tenant Code
-        description: Must match a Tenant Codes from Tenants tab
-
-      - name: Boundary Code
-        type: string
-        required: true
-        pattern: "^[A-Z0-9_]+$"
-        description: Unique boundary identifier
-
-      - name: Polygon Coordinates (JSON)
-        type: json_array
-        required: true
-        description: JSON array of coordinates [[lon,lat],[lon,lat],...]
-
-      - name: Description
-        type: string
-        required: false
-
-  - name: Boundary_Relationships
-    description: Parent-child relationships between boundaries
-    columns:
-      - name: Tenant ID
-        type: string
-        required: true
-        reference:
-          template: SELF
-          sheet: Tenants
-          column: Tenant Code
-        description: Must match a Tenant Codes from Tenants tab
-
-      - name: Boundary Code
-        type: string
-        required: true
-        reference:
-          template: SELF
-          sheet: Boundary_Entities
-          column: Boundary Code
-
-      - name: Hierarchy Type
-        type: string
-        required: true
-        reference:
-          template: SELF
-          sheet: Hierarchy_Definition
-          column: Hierarchy Type
-
-      - name: Boundary Type
-        type: string
-        required: true
-        reference:
-          template: SELF
-          sheet: Hierarchy_Definition
-          column: Level 1, Level 2, Level 3, Level 4, Level 5
-        description: Must match one of the levels defined for the given Hierarchy Type
-
-      - name: Parent
-        type: string
-        required: false
-        reference:
-          template: SELF
-          sheet: Boundary_Entities
-          column: Boundary Code
-        description: Parent boundary code (empty for top level)
+        min_value: 1
+        description: Priority level (optional)
 
   - name: Localization
-    description: Multi-language translations in wide format
+    description: Auto-generated translations - Module and Locale determined by Code pattern
     columns:
-      - name: Module
-        type: string
-        required: true
-        pattern: "^[a-z-]+$"
-
       - name: Code
         type: string
         required: true
-        pattern: "^[A-Z_/]+$"
-
+        description: Auto-generated code (SERVICEDFS.* = rainmaker-pgr, COMMON_MASTERS_* = rainmaker-common, TENANT_TENANTS_* = rainmaker-dss)
 
       - name: Message
         type: string
         required: true
-
-      - name: Locale
-        type: string
-        required: true
+        description: Display text for the code
 
 validation_rules:
   - rule: unique_codes
     description: Tenant Code must be unique across all rows
     sheet: Tenants
-    columns: [Tenant Code]
+    columns: [Tenant Code*]
 
   - rule: state_before_cities
     description: State tenant should be listed before city tenants
@@ -404,36 +290,23 @@ validation_rules:
   - rule: unique_department_codes
     description: Department Code must be unique
     sheet: Departments
-    columns: [Department Code]
+    columns: [Department Code*]
 
   - rule: unique_designation_codes
     description: Designation Code must be unique
     sheet: Designations
-    columns: [Designation Code]
+    columns: [Designation Code*]
 
   - rule: foreign_key_designation_department
     description: Designation.Department Code must exist in Departments.Department Code
     sheet: Designations
-    column: Department Code
+    column: Department Code*
     references:
       sheet: Departments
-      column: Department Code
+      column: Department Code*
 
-  - rule: unique_boundary_codes
-    description: Boundary codes must be unique within Boundary_Entities
-    sheet: Boundary_Entities
-    columns: [Boundary Code]
-
-  - rule: parent_child_integrity
-    description: Parent codes must exist in Boundary_Entities
-    sheet: Boundary_Relationships
-
-  - rule: no_circular_references
-    description: Boundary relationships should not create circular references
-    sheet: Boundary_Relationships
-
-  - rule: unique_localization_codes_per_module
-    description: Localization Code must be unique within each Module
+  - rule: unique_localization_codes
+    description: Localization Code must be unique
     sheet: Localization
     columns: [Code]
 
