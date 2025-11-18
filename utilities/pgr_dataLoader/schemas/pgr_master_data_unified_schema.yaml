@@ -5,19 +5,19 @@ sheets:
   - name: Tenants
     description: State and city information
     columns:
-      - name: Tenant Code*
+      - name: Code*
         type: string
         required: true
         pattern: '^[a-z]+(\.{1}[a-z]+)*$'
         description: Lowercase code; state or state.city (e.g., pg, pg.citya)
 
-      - name: Tenant Name*
+      - name: Name*
         type: string
         required: true
         min_length: 2
         max_length: 100
 
-      - name: Tenant Type*
+      - name: Type*
         type: string
         required: true
         enum: [State, CITY]
@@ -141,12 +141,12 @@ sheets:
   - name: City_Modules
     description: Module configuration for cities
     columns:
-      - name: Module Code*
+      - name: Code*
         type: string
         required: true
         enum: [PGR, HRMS, Workbench, TL, PT, WS, SW, FSM, BPA, OBPS]
 
-      - name: Module Name*
+      - name: Name*
         type: string
         required: true
 
@@ -167,12 +167,12 @@ sheets:
   - name: Departments
     description: Government departments that handle complaints
     columns:
-      - name: Department Code*
+      - name: Code*
         type: string
         required: true
         pattern: "^[A-Z0-9_]+$"
 
-      - name: Department Name*
+      - name: Name*
         type: string
         required: true
         min_length: 2
@@ -181,18 +181,18 @@ sheets:
   - name: Designations
     description: Job titles and positions within departments
     columns:
-      - name: Designation Code*
+      - name: Code*
         type: string
         required: true
         pattern: "^[A-Z0-9_]+$"
 
-      - name: Designation Name*
+      - name: Name*
         type: string
         required: true
         min_length: 2
         max_length: 100
 
-      - name: Department Code*
+      - name: Code*
         type: string
         required: true
         reference:
@@ -210,29 +210,17 @@ sheets:
   - name: ComplaintTypes
     description: Hierarchical complaint types with parent types and sub-types
     columns:
-      - name: Complaint Type*
+      - name: Type*
         type: string
         required: false
         pattern: "^[A-Za-z0-9_ ]+$"
         description: Parent complaint category (required for first row of each type, empty for sub-types)
 
-      - name: " Complaint Type Code"
-        type: string
-        required: false
-        pattern: "^[A-Za-z0-9_]+$"
-        description: Code for parent category (required for first row of each type, empty for sub-types)
-
-      - name: Complaint Sub Type*
+      - name: Sub Type*
         type: string
         required: true
         pattern: "^[A-Za-z0-9_ ]+$"
         description: Specific complaint sub-type name
-
-      - name: Complaint Sub Type Code
-        type: string
-        required: false
-        pattern: "^[A-Za-z0-9_]+$"
-        description: Auto-generated service code - leave empty, system will create
 
       - name: Department Code*
         type: string
@@ -260,24 +248,11 @@ sheets:
         min_value: 1
         description: Priority level (optional)
 
-  - name: Localization
-    description: Auto-generated translations - Module and Locale determined by Code pattern
-    columns:
-      - name: Code
-        type: string
-        required: true
-        description: Auto-generated code (SERVICEDFS.* = rainmaker-pgr, COMMON_MASTERS_* = rainmaker-common, TENANT_TENANTS_* = rainmaker-dss)
-
-      - name: Message
-        type: string
-        required: true
-        description: Display text for the code
-
 validation_rules:
   - rule: unique_codes
     description: Tenant Code must be unique across all rows
     sheet: Tenants
-    columns: [Tenant Code*]
+    columns: [Code*]
 
   - rule: state_before_cities
     description: State tenant should be listed before city tenants
@@ -290,23 +265,19 @@ validation_rules:
   - rule: unique_department_codes
     description: Department Code must be unique
     sheet: Departments
-    columns: [Department Code*]
+    columns: [Code*]
 
   - rule: unique_designation_codes
     description: Designation Code must be unique
     sheet: Designations
-    columns: [Designation Code*]
+    columns: [Code*]
 
   - rule: foreign_key_designation_department
     description: Designation.Department Code must exist in Departments.Department Code
     sheet: Designations
-    column: Department Code*
+    column: Code*
     references:
       sheet: Departments
-      column: Department Code*
+      column: Code*
 
-  - rule: unique_localization_codes
-    description: Localization Code must be unique
-    sheet: Localization
-    columns: [Code]
 
