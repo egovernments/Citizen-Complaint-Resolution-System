@@ -16,28 +16,5 @@
     "password": "eGov@123",
     "otpReference": "12345",
     "tenantId": "{tenantid}"
-  },
-  {
-    "userName": "ANONYMOUS",
-    "name": "demo111",
-    "gender": null,
-    "mobileNumber": "6307817430",
-    "active": true,
-    "type": "SYSTEM",
-    "roles": [
-      {
-        "name": "Anonymous User",
-        "code": "ANONYMOUS",
-        "tenantId": "{tenantid}"
-      },
-      {
-        "name": "Internal Microservice Role",
-        "code": "INTERNAL_MICROSERVICE_ROLE",
-        "tenantId": "{tenantid}"
-      }
-    ],
-    "password": "eGov@123",
-    "otpReference": "12345",
-    "tenantId": "{tenantid}"
   }
 ]

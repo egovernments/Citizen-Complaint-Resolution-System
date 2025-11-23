@@ -93,7 +93,7 @@ public class DataHandlerService {
 //        }
     }
 
-    public User createUserFromFile(TenantRequest tenantRequest) throws IOException {
+    public User createUserFromFile(TenantRequest tenantRequest, String userFilePath) throws IOException {
         String tenantCode = tenantRequest.getTenant().getCode();
         StringBuilder uri = new StringBuilder(serviceConfig.getUserHost())
                 .append(serviceConfig.getUserContextPath())
@@ -102,8 +102,8 @@ public class DataHandlerService {
         ArrayList<User> userList = new ArrayList<>();
 
         try {
-            log.info("Reading User.json for tenant: {}", tenantCode);
-            Resource resource = resourceLoader.getResource("classpath:User.json");
+            log.info("Reading User file from {} for tenant: {}", userFilePath, tenantCode);
+            Resource resource = resourceLoader.getResource(userFilePath);
             String rawJson = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
 
             rawJson = rawJson.replace("{tenantid}", tenantCode);
@@ -151,13 +151,14 @@ public class DataHandlerService {
     }
 
 
-    public void createEmployeeFromFile(RequestInfo requestInfo) throws IOException {
+    public void createEmployeeFromFile(RequestInfo requestInfo, String employeeFilePath) throws IOException {
         String uri = serviceConfig.getHrmsHost() + serviceConfig.getHrmsCreatePath();
         String userUpdateUrl = serviceConfig.getUserHost() +serviceConfig.getUserContextPath() + serviceConfig.getUserUpdateEndpoint();
         String tenantId = requestInfo.getUserInfo().getTenantId();
 
         try {
-            Resource resource = resourceLoader.getResource("classpath:HRMS.json");
+            log.info("Reading Employee file from {}", employeeFilePath);
+            Resource resource = resourceLoader.getResource(employeeFilePath);
             String rawJson = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
 
             // Replace placeholders with tenant ID

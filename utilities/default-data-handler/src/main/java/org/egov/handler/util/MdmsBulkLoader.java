@@ -27,12 +27,12 @@ public class MdmsBulkLoader {
     private final ServiceConfiguration serviceConfig;
 
 
-    public void loadAllMdmsData(String tenantId, RequestInfo requestInfo) {
+    public void loadAllMdmsData(String tenantId, RequestInfo requestInfo, String mdmsDataPath) {
         try {
             PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
 
-            // Match all files inside mdmsData/**.json
-            Resource[] resources = resolver.getResources("classpath:mdmsData/**/*.json");
+            // Match all files inside the specified path
+            Resource[] resources = resolver.getResources(mdmsDataPath);
 
             for (Resource resource : resources) {
                 String fileName = resource.getFilename();
