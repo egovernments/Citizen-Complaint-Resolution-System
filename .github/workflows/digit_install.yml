@@ -155,7 +155,7 @@ jobs:
       - name: Terraform Apply - remotestate
         id: apply
         run: terraform apply -no-color -input=false -auto-approve
-        continue-on-error: true
+        continue-on-error: false
         working-directory: devops/infra-as-code/terraform/sample-aws/remote-state
       - name: Terraform init - Infra creation
         id: init-Infra
