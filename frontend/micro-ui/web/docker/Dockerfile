@@ -1,19 +1,27 @@
-# FROM egovio/alpine-node-builder-14:yarn AS build
-FROM node:14-alpine AS build
-RUN apk update && apk upgrade
-RUN apk add --no-cache git>2.30.0 python3 make g++
+FROM node:14-alpine3.16 AS build
+RUN apk update
+RUN apk add --no-cache 'git>2.30.0'
 ARG WORK_DIR
 WORKDIR /app
-ENV NODE_OPTIONS "--max-old-space-size=8168"
-ENV PYTHON=/usr/bin/python3
+ENV NODE_OPTIONS="--max-old-space-size=8168"
 
 COPY ${WORK_DIR} .
 RUN ls -lah
 
-RUN cd web/ \
-    && chmod +x install-deps.sh \
-    && yarn install \
-    && yarn build:webpack 
+# Set working directory
+WORKDIR /app/web
+
+RUN chmod +x ./install-deps.sh
+RUN ./install-deps.sh
+
+# Increase timeout before install (recommended for GitHub Actions)
+RUN yarn config set network-timeout 600000
+
+# Install dependencies
+RUN yarn install
+
+# Build the project
+RUN yarn build:webpack
 
 FROM nginx:mainline-alpine
 #FROM ghcr.io/egovernments/nginx:mainline-alpine
