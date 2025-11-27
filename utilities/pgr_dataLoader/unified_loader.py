@@ -51,14 +51,311 @@ class UnifiedExcelReader:
     def __init__(self, excel_file: str):
         self.excel_file = excel_file
 
+    # ========================================================================
+    # NEW: TENANT MASTER READERS (PHASE 1)
+    # ========================================================================
+
+    def read_tenant_master_ulb_info(self):
+        """Read ULB Info from Tenant Master Excel
+
+        Returns:
+            tuple: (tenants_list, localization_list)
+        """
+        df = pd.read_excel(self.excel_file, sheet_name='ULB Info')
+
+        if len(df) == 0:
+            return [], []
+
+        tenants = []
+        localizations = []
+
+        for _, row in df.iterrows():
+            # Skip completely empty rows
+            if pd.isna(row.get('ULB Name*')) and pd.isna(row.get('ULB Code*')):
+                continue
+
+            ulb_code = str(row['ULB Code*']).strip().lower() if pd.notna(row.get('ULB Code*')) else None
+            ulb_name = str(row['ULB Name*']).strip() if pd.notna(row.get('ULB Name*')) else None
+
+            if not ulb_code or not ulb_name:
+                continue
+
+            # Determine tenant type based on code pattern
+            tenant_type = 'CITY' if '.' in ulb_code else 'State'
+
+            # Build city object
+            city = {
+                'code': ulb_code.split('.')[-1].upper() if '.' in ulb_code else ulb_code.upper(),
+                'name': row.get('City Name*', ulb_name),
+                'ulbGrade': row.get('ULB Grade*', 'Municipal Corporation'),
+                'districtCode': str(row['District Code*']) if pd.notna(row.get('District Code*')) else None,
+                'districtName': str(row['District Name*']) if pd.notna(row.get('District Name*')) else None,
+                'districtTenantCode': ulb_code,
+                'ddrName': str(row.get('Region Name', '')) if pd.notna(row.get('Region Name')) else None,
+                'latitude': float(row['Latitude']) if pd.notna(row.get('Latitude')) else 0.0,
+                'longitude': float(row['Longitude']) if pd.notna(row.get('Longitude')) else 0.0,
+                'regionName': str(row.get('Region Name', '')) if pd.notna(row.get('Region Name')) else None,
+                'localName': str(row.get('City Local Name', ulb_name)) if pd.notna(row.get('City Local Name')) else ulb_name,
+                'shapeFileLocation': str(row.get('GIS Location Link', '')) if pd.notna(row.get('GIS Location Link')) else None,
+                'captcha': 'true'
+            }
+
+            # Build tenant object
+            tenant = {
+                'code': ulb_code,
+                'name': ulb_name,
+                'type': tenant_type,
+                'emailId': str(row.get('Email Address', f'{ulb_code}@example.com')),
+                'contactNumber': str(row.get('Contact Number*', '')) if pd.notna(row.get('Contact Number*')) else None,
+                'address': str(row.get('Address*', '')) if pd.notna(row.get('Address*')) else None,
+                'domainUrl': str(row.get('ULB Website*', 'https://example.com')),
+                'logoId': str(row.get('Logo File Path*', '')) if pd.notna(row.get('Logo File Path*')) else None,
+                'imageId': str(row.get('Logo File Path*', 'default-logo.png')),
+                'description': f'{ulb_name} - {tenant_type}',
+                'twitterUrl': str(row.get('X/Twitter Link', '')) if pd.notna(row.get('X/Twitter Link')) else None,
+                'facebookUrl': str(row.get('Facebook Link', '')) if pd.notna(row.get('Facebook Link')) else None,
+                'OfficeTimings': {'Mon - Fri': '10:00 AM - 5:00 PM'},
+                'city': city
+            }
+
+            # Add helpline if present
+            if pd.notna(row.get('Call Center No')):
+                tenant['helpLineNumber'] = str(int(row['Call Center No']))
+
+            tenants.append(tenant)
+
+            # AUTO-GENERATE LOCALIZATION
+            loc_code = f"TENANT_TENANTS_{tenant['code'].upper().replace('.', '_')}"
+            localizations.append({
+                'code': loc_code,
+                'message': tenant['name'],
+                'module': 'rainmaker-common',
+                'locale': 'en_IN'
+            })
+
+        return tenants, localizations
+
+    def read_tenant_master_branding(self):
+        """Read State Branding Details from Tenant Master Excel
+
+        Returns:
+            list: Branding information records for MDMS upload
+        """
+        try:
+            df = pd.read_excel(self.excel_file, sheet_name='State Branding Deatils')
+
+            branding_list = []
+            for _, row in df.iterrows():
+                ulb_code = str(row.get('ULB Code', '')).strip().lower()
+                if ulb_code:
+                    branding_record = {
+                        'code': ulb_code,  # Tenant code
+                        'qrCodeUrl': str(row.get('QR Code URL', '')) if pd.notna(row.get('QR Code URL')) else None,
+                        'bannerUrl': str(row.get('Banner URL', '')) if pd.notna(row.get('Banner URL')) else None,
+                        'logoUrl': str(row.get('Logo URL', '')) if pd.notna(row.get('Logo URL')) else None,
+                        'logoUrlWhite': str(row.get('Logo URL (White)', '')) if pd.notna(row.get('Logo URL (White)')) else None,
+                        'stateLogo': str(row.get('State Logo', '')) if pd.notna(row.get('State Logo')) else None
+                    }
+                    branding_list.append(branding_record)
+
+            return branding_list
+        except Exception as e:
+            print(f"⚠️ Could not read branding sheet: {str(e)}")
+            return []
+
+    # ========================================================================
+    # NEW: COMMON MASTER READERS (PHASE 2)
+    # ========================================================================
+
+    def read_common_master_departments_designations(self, tenant_id: str):
+        """Read combined Department and Designation sheet from Common Master Excel
+        Auto-generates codes for departments and designations
+
+        Args:
+            tenant_id: Tenant ID for localization context
+
+        Returns:
+            tuple: (departments_list, designations_list, dept_localization, desig_localization, dept_name_to_code_mapping)
+        """
+        df = pd.read_excel(self.excel_file, sheet_name='Department And Desgination Mast')
+
+        departments = []
+        designations = []
+        dept_localizations = []
+        desig_localizations = []
+
+        dept_counter = {}
+        dept_name_to_code = {}  # Mapping for complaint types
+        desig_counter = 1
+
+        for _, row in df.iterrows():
+            dept_name = row.get('Department Name*')
+            desig_name = row.get('Designation Name*')
+
+            # Skip empty rows
+            if pd.isna(dept_name) or str(dept_name).strip() == '':
+                continue
+
+            dept_name = str(dept_name).strip()
+
+            # Auto-generate department code
+            if dept_name not in dept_counter:
+                dept_counter[dept_name] = len(dept_counter) + 1
+                dept_code = f"DEPT_{dept_counter[dept_name]}"
+
+                # Store mapping from name to code
+                dept_name_to_code[dept_name] = dept_code
+
+                # Add department
+                departments.append({
+                    'code': dept_code,
+                    'name': dept_name,
+                    'active': True
+                })
+
+                # Auto-generate department localization
+                loc_code = f"COMMON_MASTERS_DEPARTMENT_{dept_code}"
+                dept_localizations.append({
+                    'code': loc_code,
+                    'message': dept_name,
+                    'module': 'rainmaker-common',
+                    'locale': 'en_IN'
+                })
+            else:
+                dept_code = f"DEPT_{dept_counter[dept_name]}"
+
+            # Add designation if present
+            if pd.notna(desig_name) and str(desig_name).strip() != '':
+                desig_name = str(desig_name).strip()
+                desig_code = f"DESIG_{desig_counter:02d}"
+                desig_counter += 1
+
+                designations.append({
+                    'code': desig_code,
+                    'name': desig_name,
+                    'departmentCode': dept_code,
+                    'active': True,
+                    'description': f'{desig_name} - {dept_name}'
+                })
+
+                # Auto-generate designation localization
+                loc_code = f"COMMON_MASTERS_{desig_code}"
+                desig_localizations.append({
+                    'code': loc_code,
+                    'message': desig_name,
+                    'module': 'rainmaker-common',
+                    'locale': 'en_IN'
+                })
+
+        return departments, designations, dept_localizations, desig_localizations, dept_name_to_code
+
+    def read_common_master_complaint_types(self, tenant_id: str, dept_name_to_code: dict = None):
+        """Read Complaint Type Master from Common Master Excel
+        Auto-generates service codes and handles hierarchical structure
+
+        Args:
+            tenant_id: Tenant ID for context
+            dept_name_to_code: Dictionary mapping department names to codes
+
+        Returns:
+            tuple: (complaint_types_list, localization_list)
+        """
+        df = pd.read_excel(self.excel_file, sheet_name='Complaint Type Master')
+
+        complaint_types = []
+        localizations = []
+        current_parent = None
+        localized_parent_types = set()
+
+        # If no mapping provided, create empty dict
+        if dept_name_to_code is None:
+            dept_name_to_code = {}
+
+        for _, row in df.iterrows():
+            # Check if this is a parent row (has Complaint Type* filled)
+            if pd.notna(row.get('Complaint Type*')):
+                parent_type = str(row['Complaint Type*']).strip()
+
+                # Get department name and convert to code
+                dept_name = str(row['Department Name*']).strip() if pd.notna(row.get('Department Name*')) else None
+                dept_code = dept_name_to_code.get(dept_name, dept_name) if dept_name else None
+
+                current_parent = {
+                    'type': parent_type,
+                    'department': dept_code,
+                    'slaHours': int(float(row['Resolution Time (Hours)*'])) if pd.notna(row.get('Resolution Time (Hours)*')) else None,
+                    'keywords': str(row['Search Words (comma separated)*']).strip() if pd.notna(row.get('Search Words (comma separated)*')) else None,
+                    'priority': int(float(row['Priority'])) if pd.notna(row.get('Priority')) else None
+                }
+
+                # Auto-generate localization for parent type (only once)
+                if parent_type not in localized_parent_types:
+                    parent_type_code = ''.join(word.capitalize() for word in parent_type.split())
+                    loc_code = f"SERVICEDFS.{parent_type_code.upper()}"
+                    localizations.append({
+                        'code': loc_code,
+                        'message': parent_type,
+                        'module': 'rainmaker-pgr',
+                        'locale': 'en_IN'
+                    })
+                    localized_parent_types.add(parent_type)
+
+            # Every row should have a sub-type
+            if pd.notna(row.get('Complaint sub type*')) and str(row['Complaint sub type*']).strip() != '':
+                sub_type_name = str(row['Complaint sub type*']).strip()
+
+                # Auto-generate service code from sub-type name
+                service_code = ''.join(word.capitalize() for word in sub_type_name.split())
+
+                ct = {
+                    'serviceCode': service_code,
+                    'name': sub_type_name,
+                    'menuPath': current_parent['type'] if current_parent else sub_type_name,
+                    'active': True
+                }
+
+                # Add parent-level fields
+                if current_parent:
+                    if current_parent.get('department'):
+                        ct['department'] = current_parent['department']
+                    if current_parent.get('slaHours'):
+                        ct['slaHours'] = current_parent['slaHours']
+                    if current_parent.get('keywords'):
+                        ct['keywords'] = current_parent['keywords']
+                    if current_parent.get('priority'):
+                        ct['priority'] = current_parent['priority']
+
+                complaint_types.append(ct)
+
+                # Auto-generate localization for sub-type
+                loc_code = f"SERVICEDFS.{service_code.upper()}"
+                localizations.append({
+                    'code': loc_code,
+                    'message': sub_type_name,
+                    'module': 'rainmaker-pgr',
+                    'locale': 'en_IN'
+                })
+
+        return complaint_types, localizations
+
+    # ========================================================================
+    # ORIGINAL METHODS (KEPT FOR BACKWARD COMPATIBILITY)
+    # ========================================================================
+
     def read_tenants(self):
-        """Read tenant data from Tenants sheet with new column names"""
+        """Read tenant data from Tenants sheet with new column names
+
+        Returns:
+            tuple: (tenants_list, localization_list)
+        """
         df = pd.read_excel(self.excel_file, sheet_name='Tenants')
 
         if len(df) == 0:
-            return []
+            return [], []
 
         tenants = []
+        localizations = []
+
         for _, row in df.iterrows():
             # Parse pincodes
             pincodes = []
@@ -91,9 +388,9 @@ class UnifiedExcelReader:
 
             # Build tenant object
             tenant = {
-                'code': row['Tenant Code*'],
-                'name': row['Tenant Name*'],
-                'type': row['Tenant Type*'],
+                'code': row['Code*'],
+                'name': row['Name*'],
+                'type': row['Type*'],
                 'emailId': row['Email*'],
                 'contactNumber': row.get('Contact Number') if pd.notna(row.get('Contact Number')) else None,
                 'address': row.get('Address') if pd.notna(row.get('Address')) else None,
@@ -117,7 +414,16 @@ class UnifiedExcelReader:
 
             tenants.append(tenant)
 
-        return tenants
+            # AUTO-GENERATE LOCALIZATION
+            loc_code = f"TENANT_TENANTS_{tenant['code'].upper().replace('.', '_')}"
+            localizations.append({
+                'code': loc_code,
+                'message': tenant['name'],
+                'module': 'rainmaker-common',
+                'locale': 'en_IN'
+            })
+
+        return tenants, localizations
 
     def read_city_modules(self):
         """Read city module configuration with new column names"""
@@ -134,8 +440,8 @@ class UnifiedExcelReader:
                 tenant_codes = [{'code': code.strip()} for code in str(row['Enabled Tenant Codes*']).split(',')]
 
             module = {
-                'code': row['Module Code*'],
-                'module': row['Module Name*'],
+                'code': row['Code*'],
+                'module': row['Name*'],
                 'order': int(row['Order*']),
                 'active': True,  # Default to True (no Active column in Excel)
                 'tenants': tenant_codes
@@ -146,58 +452,108 @@ class UnifiedExcelReader:
         return modules
 
     def read_departments(self):
-        """Read departments with new column names"""
+        """Read departments with new column names
+
+        Returns:
+            tuple: (departments_list, localization_list)
+        """
         df = pd.read_excel(self.excel_file, sheet_name='Departments')
 
         departments = []
+        localizations = []
+
         for _, row in df.iterrows():
-            departments.append({
-                'code': row['Department Code*'],
-                'name': row['Department Name*'],
+            dept = {
+                'code': row['Code*'],
+                'name': row['Name*'],
                 'active': True,  # Default to True (no Active column in Excel)
+            }
+            departments.append(dept)
+
+            # AUTO-GENERATE LOCALIZATION
+            loc_code = f"COMMON_MASTERS_DEPARTMENT_{dept['code']}"
+            localizations.append({
+                'code': loc_code,
+                'message': dept['name'],
+                'module': 'rainmaker-common',
+                'locale': 'en_IN'
             })
 
-        return departments
+        return departments, localizations
 
     def read_designations(self):
-        """Read designations with new column names"""
+        """Read designations with new column names
+
+        Returns:
+            tuple: (designations_list, localization_list)
+        """
         df = pd.read_excel(self.excel_file, sheet_name='Designations')
 
         designations = []
+        localizations = []
+
         for _, row in df.iterrows():
-            designations.append({
-                'code': row['Designation Code*'],
-                'name': row['Designation Name*'],
+            desig = {
+                'code': row['Code*'],
+                'name': row['Name*'],
                 'departmentCode': row['Department Code*'],
                 'active': True,  # Default to True (no Active column in Excel)
                 'description': row.get('Description', '')
+            }
+            designations.append(desig)
+
+            # AUTO-GENERATE LOCALIZATION
+            loc_code = f"COMMON_MASTERS_{desig['code']}"
+            localizations.append({
+                'code': loc_code,
+                'message': desig['name'],
+                'module': 'rainmaker-common',
+                'locale': 'en_IN'
             })
 
-        return designations
+        return designations, localizations
 
     def read_complaint_types(self):
-        """Read hierarchical complaint types - Parent Type → Sub Types structure"""
+        """Read hierarchical complaint types - Parent Type → Sub Types structure
+
+        Returns:
+            tuple: (complaint_types_list, localization_list)
+        """
         df = pd.read_excel(self.excel_file, sheet_name='ComplaintTypes')
 
         complaint_types = []
+        localizations = []
         current_parent = None
+        localized_parent_types = set()  # Track which parent types we've already added
 
         for _, row in df.iterrows():
-            # Check if this is a parent row (has Complaint Type filled)
-            if pd.notna(row.get('Complaint Type*')):
+            # Check if this is a parent row (has Type* filled)
+            if pd.notna(row.get('Type*')):
                 # This is a new parent category
+                parent_type = row['Type*']
                 current_parent = {
-                    'type': row['Complaint Type*'],
-                    'typeCode': row.get(' Complaint Type Code') if pd.notna(row.get(' Complaint Type Code')) else None,
+                    'type': parent_type,
                     'department': row.get('Department Code*') if pd.notna(row.get('Department Code*')) else None,
                     'slaHours': int(row['SLA Hours*']) if pd.notna(row.get('SLA Hours*')) else None,
                     'keywords': row.get('DescriptionKeywords (comma separated)*') if pd.notna(row.get('DescriptionKeywords (comma separated)*')) else None,
                     'priority': int(row.get('Priority')) if pd.notna(row.get('Priority')) else None
                 }
 
+                # AUTO-GENERATE LOCALIZATION FOR PARENT TYPE (only once per unique type)
+                if parent_type not in localized_parent_types:
+                    parent_type_code = ''.join(word.capitalize() for word in parent_type.split())
+                    loc_code = f"SERVICEDFS.{parent_type_code.upper()}"
+                    localizations.append({
+                        'code': loc_code,
+                        'message': parent_type,
+                        'module': 'rainmaker-pgr',
+                        'locale': 'en_IN'
+                    })
+                    localized_parent_types.add(parent_type)
+
             # Every row has a sub-type
-            if pd.notna(row.get('Complaint Sub Type*')):
-                sub_type_name = row['Complaint Sub Type*']
+            if pd.notna(row.get('Sub Type*')):
+                sub_type_name = row['Sub Type*']
 
                 # Auto-generate service code from sub-type name
                 # Convert "Streetlight not working" → "StreetlightNotWorking"
@@ -223,7 +579,16 @@ class UnifiedExcelReader:
 
                 complaint_types.append(ct)
 
-        return complaint_types
+                # AUTO-GENERATE LOCALIZATION FOR SUB-TYPE
+                loc_code = f"SERVICEDFS.{service_code.upper()}"
+                localizations.append({
+                    'code': loc_code,
+                    'message': sub_type_name,
+                    'module': 'rainmaker-pgr',
+                    'locale': 'en_IN'
+                })
+
+        return complaint_types, localizations
 
     def read_employees(self):
         """Read employee data from Employee sheet (with embedded jurisdiction data)"""
@@ -581,15 +946,23 @@ class APIUploader:
             "permanentCity": None
         }
 
-    def create_mdms_data(self, schema_code: str, data_list: List[Dict], tenant: str):
-        """Generic function to create MDMS v2 data"""
+    def create_mdms_data(self, schema_code: str, data_list: List[Dict], tenant: str, sheet_name: str = None):
+        """Generic function to create MDMS v2 data
+
+        Args:
+            schema_code: MDMS schema code
+            data_list: List of data objects to upload
+            tenant: Tenant ID
+            sheet_name: Optional sheet name for error Excel generation
+        """
         url = f"{self.mdms_url}/mdms-v2/v2/_create/{{schema_code}}"
 
         results = {
             'created': 0,
             'exists': 0,
             'failed': 0,
-            'errors': []
+            'errors': [],
+            'failed_records': []  # Store full failed records for Excel export
         }
 
         print(f"\n[UPLOADING] {schema_code}")
@@ -624,35 +997,57 @@ class APIUploader:
             }
 
             headers = {'Content-Type': 'application/json'}
+            status_code = None
+            error_message = None
 
             try:
                 response = requests.post(url, json=payload, headers=headers)
+                status_code = response.status_code
                 response.raise_for_status()
                 print(f"   [OK] [{i}/{len(data_list)}] {unique_id}")
                 results['created'] += 1
 
             except requests.exceptions.HTTPError as e:
+                status_code = e.response.status_code if hasattr(e.response, 'status_code') else 500
                 error_text = e.response.text if hasattr(e.response, 'text') else str(e)
+                error_message = error_text[:500]
 
                 if 'already exists' in error_text.lower() or 'duplicate' in error_text.lower():
                     print(f"   [EXISTS] [{i}/{len(data_list)}] {unique_id}")
                     results['exists'] += 1
+                    # DON'T add to failed_records - already exists is not a failure!
                 else:
                     print(f"   [FAILED] [{i}/{len(data_list)}] {unique_id}")
-                    print(f"   ERROR: {error_text[:500]}")
+                    print(f"   ERROR: {error_message}")
                     results['failed'] += 1
                     results['errors'].append({
                         'id': unique_id,
-                        'error': error_text[:500]
+                        'error': error_message
                     })
 
+                    # Store full record for Excel export - ONLY TRUE FAILURES
+                    failed_record = data_obj.copy()
+                    failed_record['_STATUS'] = 'FAILED'
+                    failed_record['_STATUS_CODE'] = status_code
+                    failed_record['_ERROR_MESSAGE'] = error_message
+                    results['failed_records'].append(failed_record)
+
             except Exception as e:
-                print(f"   [ERROR] [{i}/{len(data_list)}] {unique_id} - {str(e)[:100]}")
+                error_message = str(e)[:200]
+                status_code = 404
+                print(f"   [ERROR] [{i}/{len(data_list)}] {unique_id} - {error_message[:100]}")
                 results['failed'] += 1
                 results['errors'].append({
                     'id': unique_id,
-                    'error': str(e)[:200]
+                    'error': error_message
                 })
+
+                # Store full record for Excel export
+                failed_record = data_obj.copy()
+                failed_record['_STATUS'] = 'FAILED'
+                failed_record['_STATUS_CODE'] = status_code
+                failed_record['_ERROR_MESSAGE'] = error_message
+                results['failed_records'].append(failed_record)
 
             time.sleep(0.1)
 
@@ -667,18 +1062,260 @@ class APIUploader:
             for err in results['errors'][:3]:
                 print(f"   - {err['id']}: {err['error'][:80]}")
 
+        # Generate error Excel if there are failures
+        if results['failed_records'] and sheet_name:
+            # Get reverse mapping if available
+            dept_mapping = getattr(self, '_dept_code_to_name', None)
+            error_file = self._generate_error_excel(results['failed_records'], schema_code, sheet_name, dept_mapping)
+            results['error_file'] = error_file
+
         print("="*60)
 
         return results
 
-    def create_localization_messages(self, localization_list: List[Dict], tenant: str):
+    def _generate_error_excel(self, failed_records: List[Dict], schema_code: str, sheet_name: str, dept_code_to_name: Dict = None) -> str:
+        """Append failed records to a single consolidated error Excel file
+
+        Args:
+            failed_records: List of failed data records with status info
+            schema_code: Schema code for naming
+            sheet_name: Sheet name for the error file
+            dept_code_to_name: Reverse mapping from department codes to names
+
+        Returns:
+            str: Path to the error Excel file
+        """
+        try:
+            import pandas as pd
+            from datetime import datetime
+            import os
+            from openpyxl import load_workbook
+
+            # Create errors directory if it doesn't exist
+            error_dir = 'errors'
+            os.makedirs(error_dir, exist_ok=True)
+
+            # Use a single consolidated filename
+            filename = f"{error_dir}/FAILED_RECORDS.xlsx"
+
+            # Transform records back to Excel template format
+            transformed_records = self._transform_to_excel_format(failed_records, schema_code, dept_code_to_name)
+
+            # Flatten nested structures into readable columns
+            flattened_records = []
+            for record in transformed_records:
+                flat_record = {}
+
+                for key, value in record.items():
+                    # Handle nested objects (like city, jurisdiction, etc.)
+                    if isinstance(value, dict):
+                        # Flatten nested dict with prefix
+                        for nested_key, nested_value in value.items():
+                            flat_record[f"{key}.{nested_key}"] = nested_value
+                    # Handle lists (like tenants in citymodule, roles, etc.)
+                    elif isinstance(value, list):
+                        if len(value) > 0:
+                            # For list of dicts (like tenants: [{'code': 'pg'}, {'code': 'pg.citya'}])
+                            if isinstance(value[0], dict):
+                                # Extract codes/names and join with comma
+                                codes = [item.get('code', item.get('name', str(item))) for item in value]
+                                flat_record[key] = ', '.join(str(c) for c in codes)
+                            else:
+                                # Simple list (like pincodes)
+                                flat_record[key] = ', '.join(str(v) for v in value)
+                        else:
+                            flat_record[key] = ''
+                    else:
+                        flat_record[key] = value
+
+                flattened_records.append(flat_record)
+
+            # Convert to DataFrame
+            df = pd.DataFrame(flattened_records)
+
+            # Define columns to exclude (internal/auto-generated fields only)
+            exclude_cols = [
+                'active', 'isActive', 'tenantId', 'uniqueIdentifier'
+            ]
+
+            # Remove excluded columns
+            cols_to_keep = [col for col in df.columns if col not in exclude_cols]
+            df = df[cols_to_keep]
+
+            # Reorder columns to put status columns at the END
+            status_cols = ['_STATUS', '_STATUS_CODE', '_ERROR_MESSAGE']
+            other_cols = [col for col in df.columns if col not in status_cols]
+            df = df[other_cols + status_cols]
+
+            # Check if file exists
+            if os.path.exists(filename):
+                # Append to existing file
+                with pd.ExcelWriter(filename, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+                    df.to_excel(writer, sheet_name=sheet_name, index=False)
+            else:
+                # Create new file
+                df.to_excel(filename, sheet_name=sheet_name, index=False)
+
+            # Apply sheet protection to error columns
+            self._protect_error_columns(filename, sheet_name, len(other_cols))
+
+            print(f"\n📊 ERROR REPORT UPDATED:")
+            print(f"   File: {filename}")
+            print(f"   Sheet: {sheet_name}")
+            print(f"   Failed Records: {len(failed_records)}")
+            print(f"   💡 Fix the errors and re-upload this file (Error columns are protected)")
+
+            return filename
+
+        except Exception as e:
+            print(f"\n⚠️  Could not generate error Excel: {str(e)}")
+            return None
+
+    def _transform_to_excel_format(self, records: List[Dict], schema_code: str, dept_code_to_name: Dict = None) -> List[Dict]:
+        """Transform API payload format back to Excel template format
+
+        Args:
+            records: List of records in API format
+            schema_code: Schema code to determine transformation rules
+            dept_code_to_name: Reverse mapping from department codes to names
+
+        Returns:
+            List of records in Excel template format
+        """
+        if dept_code_to_name is None:
+            dept_code_to_name = {}
+
+        transformed = []
+
+        # Handle Departments - rename 'code' and 'name' to match template
+        if 'Department' in schema_code:
+            for record in records:
+                excel_record = {
+                    'Department Name*': record.get('name', ''),
+                    '_STATUS': record.get('_STATUS'),
+                    '_STATUS_CODE': record.get('_STATUS_CODE'),
+                    '_ERROR_MESSAGE': record.get('_ERROR_MESSAGE')
+                }
+                transformed.append(excel_record)
+
+        # Handle Designations - show department name instead of code
+        elif 'Designation' in schema_code:
+            for record in records:
+                dept_code = record.get('departmentCode', '')
+                dept_name = dept_code_to_name.get(dept_code, dept_code)
+
+                excel_record = {
+                    'Department Name*': dept_name,
+                    'Designation Name*': record.get('name', ''),
+                    '_STATUS': record.get('_STATUS'),
+                    '_STATUS_CODE': record.get('_STATUS_CODE'),
+                    '_ERROR_MESSAGE': record.get('_ERROR_MESSAGE')
+                }
+                transformed.append(excel_record)
+
+        # Handle Complaint Types - show department name and extract complaint type/subtype
+        elif 'ServiceDefs' in schema_code:
+            for record in records:
+                dept_code = record.get('department', '')
+                dept_name = dept_code_to_name.get(dept_code, dept_code)
+
+                excel_record = {
+                    'Complaint Type*': record.get('menuPath', ''),
+                    'Complaint sub type*': record.get('name', ''),
+                    'Department Name*': dept_name,
+                    'Resolution Time (Hours)*': record.get('slaHours', ''),
+                    'Search Words (comma separated)*': record.get('keywords', ''),
+                    'Priority': record.get('priority', ''),
+                    '_STATUS': record.get('_STATUS'),
+                    '_STATUS_CODE': record.get('_STATUS_CODE'),
+                    '_ERROR_MESSAGE': record.get('_ERROR_MESSAGE')
+                }
+                transformed.append(excel_record)
+
+        # Default: return records as-is (ensuring status fields are preserved)
+        else:
+            # Make sure status fields are always included
+            for record in records:
+                excel_record = record.copy()
+                # Ensure status fields exist
+                if '_STATUS' not in excel_record:
+                    excel_record['_STATUS'] = record.get('_STATUS')
+                if '_STATUS_CODE' not in excel_record:
+                    excel_record['_STATUS_CODE'] = record.get('_STATUS_CODE')
+                if '_ERROR_MESSAGE' not in excel_record:
+                    excel_record['_ERROR_MESSAGE'] = record.get('_ERROR_MESSAGE')
+                transformed.append(excel_record)
+
+        return transformed
+
+    def _protect_error_columns(self, filename: str, sheet_name: str, data_col_count: int):
+        """Protect the error status columns (last 3 columns) in the Excel sheet
+
+        Args:
+            filename: Path to Excel file
+            sheet_name: Sheet name to protect
+            data_col_count: Number of data columns (non-error columns)
+        """
+        try:
+            from openpyxl import load_workbook
+            from openpyxl.styles import PatternFill, Font
+            from openpyxl.utils import get_column_letter
+
+            wb = load_workbook(filename)
+            ws = wb[sheet_name]
+
+            # Get total columns
+            total_cols = ws.max_column
+
+            # Error columns are the last 3 columns
+            error_col_start = data_col_count + 1  # +1 because Excel is 1-indexed
+
+            # Apply gray background and bold font to error column headers
+            gray_fill = PatternFill(start_color="D3D3D3", end_color="D3D3D3", fill_type="solid")
+            bold_font = Font(bold=True)
+
+            for col_idx in range(error_col_start, total_cols + 1):
+                col_letter = get_column_letter(col_idx)
+
+                # Style header
+                header_cell = ws[f'{col_letter}1']
+                header_cell.fill = gray_fill
+                header_cell.font = bold_font
+
+                # Lock all cells in error columns (data + header)
+                for row in range(1, ws.max_row + 1):
+                    cell = ws[f'{col_letter}{row}']
+                    cell.protection = cell.protection.copy(locked=True)
+
+            # Unlock all data columns so users can edit them
+            for col_idx in range(1, error_col_start):
+                col_letter = get_column_letter(col_idx)
+                for row in range(2, ws.max_row + 1):  # Skip header row
+                    cell = ws[f'{col_letter}{row}']
+                    cell.protection = cell.protection.copy(locked=False)
+
+            # Protect the sheet (allow users to edit unlocked cells only)
+            ws.protection.sheet = True
+            ws.protection.password = ''  # Empty password (no password)
+            ws.protection.selectLockedCells = True
+            ws.protection.selectUnlockedCells = True
+
+            wb.save(filename)
+
+        except Exception as e:
+            # Don't fail if protection doesn't work
+            print(f"   ⚠️  Could not apply sheet protection: {str(e)}")
+
+    def create_localization_messages(self, localization_list: List[Dict], tenant: str, sheet_name: str = 'Localization'):
         """Upload localization messages via localization service API"""
         url = f"{self.localization_url}/localization/messages/v1/_upsert"
 
         results = {
             'created': 0,
+            'exists': 0,
             'failed': 0,
-            'errors': []
+            'errors': [],
+            'failed_records': []
         }
 
         print(f"\n[UPLOADING] Localization Messages")
@@ -713,38 +1350,73 @@ class APIUploader:
             }
 
             headers = {'Content-Type': 'application/json'}
+            status_code = None
 
             try:
                 response = requests.post(url, json=payload, headers=headers)
+                status_code = response.status_code
                 response.raise_for_status()
                 print(f"   [OK] Locale: {locale} - {len(messages)} messages uploaded")
                 results['created'] += len(messages)
 
             except requests.exceptions.HTTPError as e:
+                status_code = e.response.status_code if hasattr(e.response, 'status_code') else 500
                 error_text = e.response.text if hasattr(e.response, 'text') else str(e)
-                print(f"   [FAILED] Locale: {locale}")
-                print(f"   ERROR: {error_text[:400]}")
-                results['failed'] += len(messages)
-                results['errors'].append({
-                    'locale': locale,
-                    'count': len(messages),
-                    'error': error_text[:400]
-                })
+                error_message = error_text[:400]
+
+                # Check for duplicate/already exists errors
+                if ('duplicate' in error_text.lower() or
+                    'already exists' in error_text.lower() or
+                    'DUPLICATE_RECORDS' in error_text or
+                    'DuplicateMessageIdentityException' in error_text or
+                    'unique_message_entry' in error_text.lower()):
+                    print(f"   [EXISTS] Locale: {locale} - {len(messages)} messages already exist")
+                    results['exists'] += len(messages)
+                    # DON'T add to failed_records - already exists is not a failure!
+                else:
+                    # True failure
+                    print(f"   [FAILED] Locale: {locale}")
+                    print(f"   ERROR: {error_message}")
+                    results['failed'] += len(messages)
+                    results['errors'].append({
+                        'locale': locale,
+                        'count': len(messages),
+                        'error': error_message
+                    })
+
+                    # Store failed messages for Excel export - ONLY TRUE FAILURES
+                    for msg in messages:
+                        failed_record = msg.copy()
+                        failed_record['_STATUS'] = 'FAILED'
+                        failed_record['_STATUS_CODE'] = status_code
+                        failed_record['_ERROR_MESSAGE'] = error_message
+                        results['failed_records'].append(failed_record)
 
             except Exception as e:
-                print(f"   [ERROR] Locale: {locale} - {str(e)[:200]}")
+                error_message = str(e)[:200]
+                status_code = 0
+                print(f"   [ERROR] Locale: {locale} - {error_message}")
                 results['failed'] += len(messages)
                 results['errors'].append({
                     'locale': locale,
                     'count': len(messages),
-                    'error': str(e)[:200]
+                    'error': error_message
                 })
+
+                # Store failed messages for Excel export
+                for msg in messages:
+                    failed_record = msg.copy()
+                    failed_record['_STATUS'] = 'FAILED'
+                    failed_record['_STATUS_CODE'] = status_code
+                    failed_record['_ERROR_MESSAGE'] = error_message
+                    results['failed_records'].append(failed_record)
 
             time.sleep(0.2)
 
         # Summary
         print("="*60)
         print(f"[SUMMARY] Created: {results['created']}")
+        print(f"[SUMMARY] Already Exists: {results['exists']}")
         print(f"[SUMMARY] Failed: {results['failed']}")
 
         if results['errors']:
@@ -752,6 +1424,11 @@ class APIUploader:
             for err in results['errors']:
                 print(f"   - Locale: {err['locale']} ({err['count']} messages)")
                 print(f"     Error: {err['error'][:100]}")
+
+        # Generate error Excel if there are failures
+        if results['failed_records'] and sheet_name:
+            error_file = self._generate_error_excel(results['failed_records'], 'localization.messages', sheet_name)
+            results['error_file'] = error_file
 
         print("="*60)
 
