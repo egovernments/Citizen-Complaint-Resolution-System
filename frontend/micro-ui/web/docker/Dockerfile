@@ -1,27 +1,26 @@
-FROM node:14-alpine3.16 AS build
-RUN apk update
+FROM node:14-bullseye-slim AS build
 
-# install git, python3 and build tools (build-base provides gcc, g++ and make)
-RUN apk add --no-cache git python3 build-base
+# install git and ca-certificates only (no python2/build-essential needed if you use "sass")
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      git \
+      ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
-# Ensure python points to python3 and force node-gyp to use it
-RUN ln -sf /usr/bin/python3 /usr/bin/python
-ENV PYTHON=/usr/bin/python3
-RUN npm config set python /usr/bin/python3
+# ensure yarn exists (optional if your install-deps provides it)
+RUN npm install -g yarn
 
 ARG WORK_DIR
 WORKDIR /app
 ENV NODE_OPTIONS="--max-old-space-size=8168"
 
 COPY ${WORK_DIR} .
-RUN ls -lah
-
 WORKDIR /app/web
 
 RUN chmod +x ./install-deps.sh
 RUN ./install-deps.sh
 RUN yarn config set network-timeout 600000
-RUN yarn install
+RUN yarn install --frozen-lockfile
 RUN yarn build:webpack
 
 FROM nginx:mainline-alpine
