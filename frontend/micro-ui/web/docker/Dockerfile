@@ -1,13 +1,17 @@
 FROM node:14-alpine3.16 AS build
 RUN apk update
-RUN apk add --no-cache git>2.30.0 python3 make g++
+
+# install git, python3 and build tools (build-base provides gcc, g++ and make)
+RUN apk add --no-cache git python3 build-base
+
+# Ensure python points to python3 and force node-gyp to use it
+RUN ln -sf /usr/bin/python3 /usr/bin/python
+ENV PYTHON=/usr/bin/python3
+RUN npm config set python /usr/bin/python3
+
 ARG WORK_DIR
 WORKDIR /app
 ENV NODE_OPTIONS="--max-old-space-size=8168"
-
-# ✅ Force node-gyp to use python3
-ENV PYTHON=/usr/bin/python3
-RUN npm config set python /usr/bin/python3
 
 COPY ${WORK_DIR} .
 RUN ls -lah
