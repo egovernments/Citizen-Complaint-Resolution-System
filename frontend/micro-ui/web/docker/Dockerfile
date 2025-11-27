@@ -1,7 +1,7 @@
 FROM node:14-alpine3.16 AS build
 RUN apk update
-RUN apk add --no-cache 'git>2.30.0' python3 make g++
-RUN ln -sf /usr/bin/python3 /usr/bin/python
+RUN apk add --no-cache git>2.30.0 python2 make g++
+ENV PYTHON=/usr/bin/python2
 ARG WORK_DIR
 WORKDIR /app
 ENV NODE_OPTIONS="--max-old-space-size=8168"
