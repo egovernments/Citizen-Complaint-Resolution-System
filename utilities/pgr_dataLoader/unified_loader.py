@@ -52,51 +52,79 @@ class UnifiedExcelReader:
         self.excel_file = excel_file
 
     # ========================================================================
-    # NEW: TENANT MASTER READERS (PHASE 1)
+    # TENANT MASTER READERS (PHASE 1)
     # ========================================================================
 
-    def read_tenant_master_ulb_info(self):
-        """Read ULB Info from Tenant Master Excel
+    def read_tenant_info(self):
+        """Read Tenant Info sheet with ADMIN0/ADMIN1/ADMIN2 hierarchy
+        Transforms to API-compatible structure with auto-generated codes
 
         Returns:
             tuple: (tenants_list, localization_list)
         """
-        df = pd.read_excel(self.excel_file, sheet_name='ULB Info')
+        df = pd.read_excel(self.excel_file, sheet_name='Tenant Info')
 
         if len(df) == 0:
             return [], []
 
         tenants = []
         localizations = []
+        district_counter = {}  # For auto-generating district codes
+        region_counter = {}    # For auto-generating region codes
 
         for _, row in df.iterrows():
             # Skip completely empty rows
-            if pd.isna(row.get('ULB Name*')) and pd.isna(row.get('ULB Code*')):
+            if pd.isna(row.get('Tenant Display Name*')) and pd.isna(row.get('Tenant Code*\n(To be filled by ADMIN)')):
                 continue
 
-            ulb_code = str(row['ULB Code*']).strip().lower() if pd.notna(row.get('ULB Code*')) else None
-            ulb_name = str(row['ULB Name*']).strip() if pd.notna(row.get('ULB Name*')) else None
+            # Read tenant code (handle multi-line column name)
+            tenant_code_col = 'Tenant Code*\n(To be filled by ADMIN)'
+            ulb_code = str(row[tenant_code_col]).strip().lower() if pd.notna(row.get(tenant_code_col)) else ""
+            ulb_name = str(row['Tenant Display Name*']).strip() if pd.notna(row.get('Tenant Display Name*')) else ""
 
-            if not ulb_code or not ulb_name:
+            if not ulb_code or not ulb_name or ulb_code == 'nan':
                 continue
 
             # Determine tenant type based on code pattern
-            tenant_type = 'CITY' if '.' in ulb_code else 'State'
+            tenant_type = str(row.get('Tenant Type*', 'City')).strip()
+            if not tenant_type or tenant_type == 'nan':
+                tenant_type = 'CITY' if '.' in ulb_code else 'State'
 
-            # Build city object
+            # Extract ADMIN hierarchy
+            admin0 = str(row.get('ADMIN0 Name', '')) if pd.notna(row.get('ADMIN0 Name')) else ""
+            admin1 = str(row.get('ADMIN1 Name', '')) if pd.notna(row.get('ADMIN1 Name')) else ""
+            admin2 = str(row.get('ADMIN2 Name', '')) if pd.notna(row.get('ADMIN2 Name')) else ""
+            region_name = str(row.get('Administrative Region Name (Geographical entity to which the tenant belongs)', '')) if pd.notna(row.get('Administrative Region Name (Geographical entity to which the tenant belongs)')) else ""
+
+            # Auto-generate district code from ADMIN2
+            district_code = ""
+            if admin2:
+                if admin2 not in district_counter:
+                    district_counter[admin2] = len(district_counter) + 1
+                district_code = f"ADMIN2_{district_counter[admin2]:03d}"
+
+            # Auto-generate region code
+            region_code = ""
+            if region_name:
+                if region_name not in region_counter:
+                    region_counter[region_name] = len(region_counter) + 1
+                region_code = f"REGION_{region_counter[region_name]:03d}"
+
+            # Build city object with transformed fields
             city = {
                 'code': ulb_code.split('.')[-1].upper() if '.' in ulb_code else ulb_code.upper(),
-                'name': row.get('City Name*', ulb_name),
-                'ulbGrade': row.get('ULB Grade*', 'Municipal Corporation'),
-                'districtCode': str(row['District Code*']) if pd.notna(row.get('District Code*')) else None,
-                'districtName': str(row['District Name*']) if pd.notna(row.get('District Name*')) else None,
+                'name': ulb_name,
+                'ulbGrade': tenant_type,
+                'districtCode': district_code,  # Auto-generated from ADMIN2
+                'districtName': admin2,  # ADMIN2 → districtName
                 'districtTenantCode': ulb_code,
-                'ddrName': str(row.get('Region Name', '')) if pd.notna(row.get('Region Name')) else None,
+                'ddrName': region_name,  # Administrative Region
                 'latitude': float(row['Latitude']) if pd.notna(row.get('Latitude')) else 0.0,
                 'longitude': float(row['Longitude']) if pd.notna(row.get('Longitude')) else 0.0,
-                'regionName': str(row.get('Region Name', '')) if pd.notna(row.get('Region Name')) else None,
-                'localName': str(row.get('City Local Name', ulb_name)) if pd.notna(row.get('City Local Name')) else ulb_name,
-                'shapeFileLocation': str(row.get('GIS Location Link', '')) if pd.notna(row.get('GIS Location Link')) else None,
+                'regionName': region_name,  # Administrative Region
+                'regionCode': region_code,  # Auto-generated
+                'localName': ulb_name,  # Use tenant name as local name
+                'shapeFileLocation': "",
                 'captcha': 'true'
             }
 
@@ -105,22 +133,18 @@ class UnifiedExcelReader:
                 'code': ulb_code,
                 'name': ulb_name,
                 'type': tenant_type,
-                'emailId': str(row.get('Email Address', f'{ulb_code}@example.com')),
-                'contactNumber': str(row.get('Contact Number*', '')) if pd.notna(row.get('Contact Number*')) else None,
-                'address': str(row.get('Address*', '')) if pd.notna(row.get('Address*')) else None,
-                'domainUrl': str(row.get('ULB Website*', 'https://example.com')),
-                'logoId': str(row.get('Logo File Path*', '')) if pd.notna(row.get('Logo File Path*')) else None,
-                'imageId': str(row.get('Logo File Path*', 'default-logo.png')),
+                'emailId': "",  # Empty string for optional field
+                'contactNumber': "",  # Empty string for optional field
+                'address': str(row.get('Address', '')) if pd.notna(row.get('Address')) else "",
+                'domainUrl': str(row.get('Tenant Website', 'https://example.com')) if pd.notna(row.get('Tenant Website')) else "https://example.com",
+                'logoId': str(row.get('Logo File Path*', '')) if pd.notna(row.get('Logo File Path*')) else "",
+                'imageId': str(row.get('Logo File Path*', 'default-logo.png')) if pd.notna(row.get('Logo File Path*')) else "default-logo.png",
                 'description': f'{ulb_name} - {tenant_type}',
-                'twitterUrl': str(row.get('X/Twitter Link', '')) if pd.notna(row.get('X/Twitter Link')) else None,
-                'facebookUrl': str(row.get('Facebook Link', '')) if pd.notna(row.get('Facebook Link')) else None,
+                'twitterUrl': "",
+                'facebookUrl': "",
                 'OfficeTimings': {'Mon - Fri': '10:00 AM - 5:00 PM'},
                 'city': city
             }
-
-            # Add helpline if present
-            if pd.notna(row.get('Call Center No')):
-                tenant['helpLineNumber'] = str(int(row['Call Center No']))
 
             tenants.append(tenant)
 
@@ -135,39 +159,38 @@ class UnifiedExcelReader:
 
         return tenants, localizations
 
-    def read_tenant_master_branding(self):
-        """Read State Branding Details from Tenant Master Excel
+    def read_tenant_branding(self):
+        """Read Tenant Branding sheet
 
         Returns:
             list: Branding information records for MDMS upload
         """
         try:
-            df = pd.read_excel(self.excel_file, sheet_name='State Branding Deatils')
-
-            branding_list = []
-            for _, row in df.iterrows():
-                ulb_code = str(row.get('ULB Code', '')).strip().lower()
-                if ulb_code:
-                    branding_record = {
-                        'code': ulb_code,  # Tenant code
-                        'qrCodeUrl': str(row.get('QR Code URL', '')) if pd.notna(row.get('QR Code URL')) else None,
-                        'bannerUrl': str(row.get('Banner URL', '')) if pd.notna(row.get('Banner URL')) else None,
-                        'logoUrl': str(row.get('Logo URL', '')) if pd.notna(row.get('Logo URL')) else None,
-                        'logoUrlWhite': str(row.get('Logo URL (White)', '')) if pd.notna(row.get('Logo URL (White)')) else None,
-                        'stateLogo': str(row.get('State Logo', '')) if pd.notna(row.get('State Logo')) else None
-                    }
-                    branding_list.append(branding_record)
-
-            return branding_list
+            df = pd.read_excel(self.excel_file, sheet_name='Tenant Branding Deatils')
         except Exception as e:
-            print(f"⚠️ Could not read branding sheet: {str(e)}")
+            print(f"⚠️ Could not read 'Tenant Branding Deatils' sheet: {str(e)}")
             return []
 
+        branding_list = []
+        for _, row in df.iterrows():
+            tenant_code = str(row.get('Tenant Code', '')).strip().lower()
+            if tenant_code and tenant_code != 'nan':
+                branding_record = {
+                    'code': tenant_code,  # Tenant code
+                    'bannerUrl': str(row.get('Banner URL', '')) if pd.notna(row.get('Banner URL')) else "",
+                    'logoUrl': str(row.get('Logo URL', '')) if pd.notna(row.get('Logo URL')) else "",
+                    'logoUrlWhite': str(row.get('Logo URL (White)', '')) if pd.notna(row.get('Logo URL (White)')) else "",
+                    'stateLogo': str(row.get('State Logo', '')) if pd.notna(row.get('State Logo')) else ""
+                }
+                branding_list.append(branding_record)
+
+        return branding_list
+
     # ========================================================================
-    # NEW: COMMON MASTER READERS (PHASE 2)
+    # COMMON MASTER READERS (PHASE 2)
     # ========================================================================
 
-    def read_common_master_departments_designations(self, tenant_id: str):
+    def read_departments_designations(self, tenant_id: str):
         """Read combined Department and Designation sheet from Common Master Excel
         Auto-generates codes for departments and designations
 
@@ -249,7 +272,7 @@ class UnifiedExcelReader:
 
         return departments, designations, dept_localizations, desig_localizations, dept_name_to_code
 
-    def read_common_master_complaint_types(self, tenant_id: str, dept_name_to_code: dict = None):
+    def read_complaint_types(self, tenant_id: str, dept_name_to_code: dict = None):
         """Read Complaint Type Master from Common Master Excel
         Auto-generates service codes and handles hierarchical structure
 
@@ -339,256 +362,8 @@ class UnifiedExcelReader:
         return complaint_types, localizations
 
     # ========================================================================
-    # ORIGINAL METHODS (KEPT FOR BACKWARD COMPATIBILITY)
+    # OTHER UTILITY READERS (Employee, Boundary, Workflow, Localization)
     # ========================================================================
-
-    def read_tenants(self):
-        """Read tenant data from Tenants sheet with new column names
-
-        Returns:
-            tuple: (tenants_list, localization_list)
-        """
-        df = pd.read_excel(self.excel_file, sheet_name='Tenants')
-
-        if len(df) == 0:
-            return [], []
-
-        tenants = []
-        localizations = []
-
-        for _, row in df.iterrows():
-            # Parse pincodes
-            pincodes = []
-            if pd.notna(row.get('Pincode (comma separated)')):
-                pincodes = [int(p.strip()) for p in str(row['Pincode (comma separated)']).split(',')]
-
-            # Build office timings
-            office_timings = {}
-            if pd.notna(row.get('Office Timings Weekday*')):
-                office_timings['Mon - Fri'] = row['Office Timings Weekday*']
-            if pd.notna(row.get('Office Timings Saturday')):
-                office_timings['Sat'] = row['Office Timings Saturday']
-
-            # Build city object
-            city = {
-                'code': str(row['City Code*']),
-                'name': row['City Name*'],
-                'ulbGrade': row['City ULB Grade*'],
-                'districtCode': row['City District Code*'] if pd.notna(row.get('City District Code*')) else None,
-                'districtName': row['City District Name*'] if pd.notna(row.get('City District Name*')) else None,
-                'districtTenantCode': row['City District Tenant Code*'],
-                'ddrName': row['City DDR Name*'] if pd.notna(row.get('City DDR Name*')) else None,
-                'latitude': float(row['City Latitude*']),
-                'longitude': float(row['City Longitude*']),
-                'regionName': row['City Region Name*'] if pd.notna(row.get('City Region Name*')) else None,
-                'localName': row['City Local Name*'] if pd.notna(row.get('City Local Name*')) else None,
-                'shapeFileLocation': row['City Shape File Location*'] if pd.notna(row.get('City Shape File Location*')) else None,
-                'captcha': row['City Captcha*'] if pd.notna(row.get('City Captcha*')) else None
-            }
-
-            # Build tenant object
-            tenant = {
-                'code': row['Code*'],
-                'name': row['Name*'],
-                'type': row['Type*'],
-                'emailId': row['Email*'],
-                'contactNumber': row.get('Contact Number') if pd.notna(row.get('Contact Number')) else None,
-                'address': row.get('Address') if pd.notna(row.get('Address')) else None,
-                'domainUrl': row['Domain URL*'],
-                'logoId': row.get('Logo URL') if pd.notna(row.get('Logo URL')) else None,
-                'imageId': row['Image ID*'] if pd.notna(row.get('Image ID*')) else None,
-                'description': row.get('Description') if pd.notna(row.get('Description')) else None,
-                'twitterUrl': row.get('Twitter URL') if pd.notna(row.get('Twitter URL')) else None,
-                'facebookUrl': row.get('Facebook URL') if pd.notna(row.get('Facebook URL')) else None,
-                'OfficeTimings': office_timings,
-                'city': city
-            }
-
-            # Add helpline if present
-            if pd.notna(row.get('Helpline Number')):
-                tenant['helpLineNumber'] = row['Helpline Number']
-
-            # Add pincodes if present
-            if pincodes:
-                tenant['pincode'] = pincodes
-
-            tenants.append(tenant)
-
-            # AUTO-GENERATE LOCALIZATION
-            loc_code = f"TENANT_TENANTS_{tenant['code'].upper().replace('.', '_')}"
-            localizations.append({
-                'code': loc_code,
-                'message': tenant['name'],
-                'module': 'rainmaker-common',
-                'locale': 'en_IN'
-            })
-
-        return tenants, localizations
-
-    def read_city_modules(self):
-        """Read city module configuration with new column names"""
-        df = pd.read_excel(self.excel_file, sheet_name='City_Modules')
-
-        if len(df) == 0:
-            return []
-
-        modules = []
-        for _, row in df.iterrows():
-            # Parse tenant codes
-            tenant_codes = []
-            if pd.notna(row.get('Enabled Tenant Codes*')):
-                tenant_codes = [{'code': code.strip()} for code in str(row['Enabled Tenant Codes*']).split(',')]
-
-            module = {
-                'code': row['Code*'],
-                'module': row['Name*'],
-                'order': int(row['Order*']),
-                'active': True,  # Default to True (no Active column in Excel)
-                'tenants': tenant_codes
-            }
-
-            modules.append(module)
-
-        return modules
-
-    def read_departments(self):
-        """Read departments with new column names
-
-        Returns:
-            tuple: (departments_list, localization_list)
-        """
-        df = pd.read_excel(self.excel_file, sheet_name='Departments')
-
-        departments = []
-        localizations = []
-
-        for _, row in df.iterrows():
-            dept = {
-                'code': row['Code*'],
-                'name': row['Name*'],
-                'active': True,  # Default to True (no Active column in Excel)
-            }
-            departments.append(dept)
-
-            # AUTO-GENERATE LOCALIZATION
-            loc_code = f"COMMON_MASTERS_DEPARTMENT_{dept['code']}"
-            localizations.append({
-                'code': loc_code,
-                'message': dept['name'],
-                'module': 'rainmaker-common',
-                'locale': 'en_IN'
-            })
-
-        return departments, localizations
-
-    def read_designations(self):
-        """Read designations with new column names
-
-        Returns:
-            tuple: (designations_list, localization_list)
-        """
-        df = pd.read_excel(self.excel_file, sheet_name='Designations')
-
-        designations = []
-        localizations = []
-
-        for _, row in df.iterrows():
-            desig = {
-                'code': row['Code*'],
-                'name': row['Name*'],
-                'departmentCode': row['Department Code*'],
-                'active': True,  # Default to True (no Active column in Excel)
-                'description': row.get('Description', '')
-            }
-            designations.append(desig)
-
-            # AUTO-GENERATE LOCALIZATION
-            loc_code = f"COMMON_MASTERS_{desig['code']}"
-            localizations.append({
-                'code': loc_code,
-                'message': desig['name'],
-                'module': 'rainmaker-common',
-                'locale': 'en_IN'
-            })
-
-        return designations, localizations
-
-    def read_complaint_types(self):
-        """Read hierarchical complaint types - Parent Type → Sub Types structure
-
-        Returns:
-            tuple: (complaint_types_list, localization_list)
-        """
-        df = pd.read_excel(self.excel_file, sheet_name='ComplaintTypes')
-
-        complaint_types = []
-        localizations = []
-        current_parent = None
-        localized_parent_types = set()  # Track which parent types we've already added
-
-        for _, row in df.iterrows():
-            # Check if this is a parent row (has Type* filled)
-            if pd.notna(row.get('Type*')):
-                # This is a new parent category
-                parent_type = row['Type*']
-                current_parent = {
-                    'type': parent_type,
-                    'department': row.get('Department Code*') if pd.notna(row.get('Department Code*')) else None,
-                    'slaHours': int(row['SLA Hours*']) if pd.notna(row.get('SLA Hours*')) else None,
-                    'keywords': row.get('DescriptionKeywords (comma separated)*') if pd.notna(row.get('DescriptionKeywords (comma separated)*')) else None,
-                    'priority': int(row.get('Priority')) if pd.notna(row.get('Priority')) else None
-                }
-
-                # AUTO-GENERATE LOCALIZATION FOR PARENT TYPE (only once per unique type)
-                if parent_type not in localized_parent_types:
-                    parent_type_code = ''.join(word.capitalize() for word in parent_type.split())
-                    loc_code = f"SERVICEDFS.{parent_type_code.upper()}"
-                    localizations.append({
-                        'code': loc_code,
-                        'message': parent_type,
-                        'module': 'rainmaker-pgr',
-                        'locale': 'en_IN'
-                    })
-                    localized_parent_types.add(parent_type)
-
-            # Every row has a sub-type
-            if pd.notna(row.get('Sub Type*')):
-                sub_type_name = row['Sub Type*']
-
-                # Auto-generate service code from sub-type name
-                # Convert "Streetlight not working" → "StreetlightNotWorking"
-                service_code = ''.join(word.capitalize() for word in sub_type_name.split())
-
-                ct = {
-                    'serviceCode': service_code,
-                    'name': sub_type_name,
-                    'menuPath': current_parent['type'] if current_parent else sub_type_name,
-                    'active': True
-                }
-
-                # Add parent-level fields to first sub-type
-                if current_parent:
-                    if current_parent.get('department'):
-                        ct['department'] = current_parent['department']
-                    if current_parent.get('slaHours'):
-                        ct['slaHours'] = current_parent['slaHours']
-                    if current_parent.get('keywords'):
-                        ct['keywords'] = current_parent['keywords']
-                    if current_parent.get('priority'):
-                        ct['priority'] = current_parent['priority']
-
-                complaint_types.append(ct)
-
-                # AUTO-GENERATE LOCALIZATION FOR SUB-TYPE
-                loc_code = f"SERVICEDFS.{service_code.upper()}"
-                localizations.append({
-                    'code': loc_code,
-                    'message': sub_type_name,
-                    'module': 'rainmaker-pgr',
-                    'locale': 'en_IN'
-                })
-
-        return complaint_types, localizations
 
     def read_employees(self):
         """Read employee data from Employee sheet (with embedded jurisdiction data)"""

@@ -105,16 +105,18 @@ class MDMSValidator:
         """
         Convert Excel DataFrame to JSON structure matching MDMS schema
 
-        For two-phase templates:
-        - Tenant Master: ULB Info, State Branding Details
+        For two-phase templates (NEW FORMAT ONLY):
+        - Tenant Master: Tenant Info, Tenant Branding Deatils
         - Common Master: Department And Designation Mast, Complaint Type Master
         - Localization Master: localization sheet
         """
         # Convert DataFrame to list of dicts based on template type
         if template_type == 'tenant.master':
-            if sheet_name == 'ULB Info':
-                return self._parse_tenant_ulb_info(df)
-            elif sheet_name == 'State Branding Deatils':
+            # Tenant Info sheet
+            if sheet_name == 'Tenant Info':
+                return self._parse_tenant_info(df)
+            # Tenant Branding sheet
+            elif sheet_name == 'Tenant Branding Deatils':
                 return self._parse_tenant_branding(df)
         elif template_type == 'common.master':
             if sheet_name == 'Department And Desgination Mast':
@@ -127,220 +129,67 @@ class MDMSValidator:
 
         # Generic conversion
         return df.to_dict('records')
-    
-# Store for backup this validate indivaudel sheets functions
-    def _parse_tenants(self, df: pd.DataFrame) -> List[Dict]:
-        """Parse Tenants sheet to match MDMS schema structure (flat structure)"""
-        tenants = []
 
-        for _, row in df.iterrows():
-            # Parse pincodes
-            pincode_str = None
-            if pd.notna(row.get('Pincode (comma separated)')):
-                pincode_str = str(row['Pincode (comma separated)'])
+    # ========================================================================
+    # PARSER METHODS
+    # ========================================================================
 
-            tenant = {
-                'code': str(row['Code*']),
-                'name': str(row['Name*']),
-                'type': str(row['Type*']),
-                'email': str(row['Email*']),  
-                'domainUrl': str(row['Domain URL*']),
-                'imageId': str(row['Image ID*']) if pd.notna(row.get('Image ID*')) else '',
-                'officeTimingsWeekday': str(row['Office Timings Weekday*']),
-                'cityCode': int(row['City Code*']),
-                'cityName': str(row['City Name*']),
-                'cityUlbGrade': str(row['City ULB Grade*']),
-                'cityDistrictCode': str(row['City District Code*']) if pd.notna(row.get('City District Code*')) else '',
-                'cityDistrictName': str(row['City District Name*']) if pd.notna(row.get('City District Name*')) else '',
-                'cityDistrictTenantCode': str(row['City District Tenant Code*']),
-                'cityDdrName': str(row['City DDR Name*']) if pd.notna(row.get('City DDR Name*')) else '',
-                'cityLatitude': float(row['City Latitude*']),
-                'cityLongitude': float(row['City Longitude*']),
-                'cityRegionName': str(row['City Region Name*']) if pd.notna(row.get('City Region Name*')) else '',
-                'cityLocalName': str(row['City Local Name*']) if pd.notna(row.get('City Local Name*')) else '',
-                'cityShapeFileLocation': str(row['City Shape File Location*']) if pd.notna(row.get('City Shape File Location*')) else '',
-                'cityCaptcha': str(row['City Captcha*']) if pd.notna(row.get('City Captcha*')) else ''
-            }
+    def _parse_tenant_info(self, df: pd.DataFrame) -> List[Dict]:
+        """Parse Tenant Info sheet with ADMIN0/ADMIN1/ADMIN2 hierarchy
 
-            # Optional fields
-            if pd.notna(row.get('Contact Number')):
-                tenant['contactNumber'] = str(row['Contact Number'])
-            if pd.notna(row.get('Helpline Number')):
-                tenant['helplineNumber'] = str(row['Helpline Number'])
-            if pd.notna(row.get('Address')):
-                tenant['address'] = str(row['Address'])
-            if pd.notna(row.get('Logo URL')):
-                tenant['logoUrl'] = str(row['Logo URL'])
-            if pd.notna(row.get('Description')):
-                tenant['description'] = str(row['Description'])
-            if pd.notna(row.get('Twitter URL')):
-                tenant['twitterUrl'] = str(row['Twitter URL'])
-            if pd.notna(row.get('Facebook URL')):
-                tenant['facebookUrl'] = str(row['Facebook URL'])
-            if pd.notna(row.get('Office Timings Saturday')):
-                tenant['officeTimingsSaturday'] = str(row['Office Timings Saturday'])
-            if pincode_str:
-                tenant['pincode'] = pincode_str
-
-            tenants.append(tenant)
-
-        return tenants
-
-    def _parse_city_modules(self, df: pd.DataFrame) -> List[Dict]:
-        """Parse City_Modules sheet - match MDMS schema structure"""
-        modules = []
-
-        for _, row in df.iterrows():
-        
-            module = {
-                'code': str(row['Code*']),
-                'name': str(row['Name*']), 
-                'order': int(row['Order*']),
-                'enabledTenantCodes': str(row['Enabled Tenant Codes*']) 
-            }
-            modules.append(module)
-
-        return modules
-
-    def _parse_departments(self, df: pd.DataFrame) -> List[Dict]:
-        """Parse Departments sheet"""
-        departments = []
-
-        for _, row in df.iterrows():
-            dept = {
-                'code': str(row['Code*']),
-                'name': str(row['Name*'])
-            }
-            departments.append(dept)
-
-        return departments
-
-    def _parse_designations(self, df: pd.DataFrame) -> List[Dict]:
-        """Parse Designations sheet"""
-        designations = []
-
-        for _, row in df.iterrows():
-            desig = {
-                'code': str(row['Code*']),
-                'name': str(row['Name*']),
-                'departmentCode': str(row['Department Code*'])
-            }
-            if pd.notna(row.get('Description')):
-                desig['description'] = str(row['Description'])
-            designations.append(desig)
-
-        return designations
-
-    def _parse_complaint_types(self, df: pd.DataFrame) -> List[Dict]:
-        """Parse ComplaintTypes sheet - match MDMS schema structure"""
-        complaint_types = []
-        current_parent = None
-
-        for _, row in df.iterrows():
-            # Check if this is a parent row (has Type* filled)
-            if pd.notna(row.get('Type*')):
-                current_parent = {
-                    'type': str(row['Type*']),
-                    'departmentCode': str(row['Department Code*']) if pd.notna(row.get('Department Code*')) else None,
-                    'slaHours': float(row['SLA Hours*']) if pd.notna(row.get('SLA Hours*')) else None,
-                    'descriptionKeywords': str(row['DescriptionKeywords (comma separated)*']) if pd.notna(row.get('DescriptionKeywords (comma separated)*')) else None
-                }
-
-            # Every row MUST have a sub-type (required by schema)
-            if pd.notna(row.get('Sub Type*')):
-                ct = {
-                    'subType': str(row['Sub Type*'])  # Required field
-                }
-
-                # Add parent context if available
-                if current_parent:
-                    if current_parent.get('type'):
-                        ct['type'] = current_parent['type']
-                    if current_parent.get('departmentCode'):
-                        ct['departmentCode'] = current_parent['departmentCode']
-                    if current_parent.get('slaHours'):
-                        ct['slaHours'] = current_parent['slaHours']
-                    if current_parent.get('descriptionKeywords'):
-                        ct['descriptionKeywords'] = current_parent['descriptionKeywords']
-
-                # Add priority if specified
-                if pd.notna(row.get('Priority')):
-                    ct['priority'] = float(row['Priority'])
-
-                complaint_types.append(ct)
-
-        return complaint_types
-
-
-#  Function used to new approach
-    def _parse_tenant_ulb_info(self, df: pd.DataFrame) -> Dict:
-        """Parse ULB Info sheet from Tenant Master - returns single record per row"""
+        Supports ADMIN0/ADMIN1/ADMIN2 hierarchy
+        """
         records = []
 
         for _, row in df.iterrows():
             record = {}
 
+            # Handle multi-line column name for Tenant Code
+            tenant_code_col = 'Tenant Code*\n(To be filled by ADMIN)'
+
             # Required fields
-            if pd.notna(row.get('ULB Name*')):
-                record['ulbName'] = str(row['ULB Name*'])
-            if pd.notna(row.get('ULB Code*')):
-                record['ulbCode'] = str(row['ULB Code*'])
-            if pd.notna(row.get('ULB Grade*')):
-                record['ulbGrade'] = str(row['ULB Grade*'])
-            if pd.notna(row.get('City Name*')):
-                record['cityName'] = str(row['City Name*'])
-            if pd.notna(row.get('District Name*')):
-                record['districtName'] = str(row['District Name*'])
-            if pd.notna(row.get('District Code*')):
-                record['districtCode'] = str(row['District Code*'])
-            if pd.notna(row.get('Contact Number*')):
-                record['contactNumber'] = str(row['Contact Number*'])
-            if pd.notna(row.get('Address*')):
-                record['address'] = str(row['Address*'])
-            if pd.notna(row.get('ULB Website*')):
-                record['ulbWebsite'] = str(row['ULB Website*'])
+            if pd.notna(row.get('Tenant Display Name*')):
+                record['tenantDisplayName'] = str(row['Tenant Display Name*'])
+            if pd.notna(row.get(tenant_code_col)):
+                record['tenantCode'] = str(row[tenant_code_col])
+            if pd.notna(row.get('Tenant Type*')):
+                record['tenantType'] = str(row['Tenant Type*'])
             if pd.notna(row.get('Logo File Path*')):
                 record['logoFilePath'] = str(row['Logo File Path*'])
 
-            # Optional fields
-            if pd.notna(row.get('City Local Name')):
-                record['cityLocalName'] = str(row['City Local Name'])
-            if pd.notna(row.get('Region Name')):
-                record['regionName'] = str(row['Region Name'])
-            if pd.notna(row.get('Region Code')):
-                record['regionCode'] = str(row['Region Code'])
-            if pd.notna(row.get('Email Address')):
-                record['emailAddress'] = str(row['Email Address'])
+            # Optional ADMIN hierarchy fields
+            if pd.notna(row.get('Administrative Region Name (Geographical entity to which the tenant belongs)')):
+                record['administrativeRegion'] = str(row['Administrative Region Name (Geographical entity to which the tenant belongs)'])
+            if pd.notna(row.get('ADMIN0 Name')):
+                record['admin0Name'] = str(row['ADMIN0 Name'])
+            if pd.notna(row.get('ADMIN1 Name')):
+                record['admin1Name'] = str(row['ADMIN1 Name'])
+            if pd.notna(row.get('ADMIN2 Name')):
+                record['admin2Name'] = str(row['ADMIN2 Name'])
+
+            # Optional location/contact fields
+            if pd.notna(row.get('Address')):
+                record['address'] = str(row['Address'])
+            if pd.notna(row.get('Tenant Website')):
+                record['tenantWebsite'] = str(row['Tenant Website'])
             if pd.notna(row.get('Latitude')):
                 record['latitude'] = float(row['Latitude'])
             if pd.notna(row.get('Longitude')):
                 record['longitude'] = float(row['Longitude'])
-            if pd.notna(row.get('GIS Location Link')):
-                record['gisLocationLink'] = str(row['GIS Location Link'])
-            if pd.notna(row.get('Call Center No')):
-                record['callCenterNo'] = str(row['Call Center No'])
-            if pd.notna(row.get('Facebook Link')):
-                record['facebookLink'] = str(row['Facebook Link'])
-            if pd.notna(row.get('X/Twitter Link')):
-                record['twitterLink'] = str(row['X/Twitter Link'])
 
             records.append(record)
 
         return records
 
-    def _parse_tenant_branding(self, df: pd.DataFrame) -> Dict:
-        """Parse State Branding Details sheet from Tenant Master"""
+    def _parse_tenant_branding(self, df: pd.DataFrame) -> List[Dict]:
+        """Parse Tenant Branding Deatils sheet"""
         records = []
 
         for _, row in df.iterrows():
             record = {}
 
-            if pd.notna(row.get('ULB Name')):
-                record['ulbName'] = str(row['ULB Name'])
-            if pd.notna(row.get('ULB Code')):
-                record['ulbCode'] = str(row['ULB Code'])
-            if pd.notna(row.get('QR Code URL')):
-                record['qrCodeUrl'] = str(row['QR Code URL'])
+            if pd.notna(row.get('Tenant Code')):
+                record['tenantCode'] = str(row['Tenant Code'])
             if pd.notna(row.get('Banner URL')):
                 record['bannerUrl'] = str(row['Banner URL'])
             if pd.notna(row.get('Logo URL')):
@@ -602,8 +451,11 @@ class MDMSValidator:
             template_type = schema_code
 
             # Determine which sheets to read based on template type
+            # NEW FORMAT ONLY
             if template_type == 'tenant.master':
-                sheet_names = ['ULB Info', 'State Branding Deatils']
+                sheet_names = ['Tenant Info', 'Tenant Branding Deatils']
+                print(f"[INFO] Using new template format (Tenant Info + Tenant Branding)")
+
             elif template_type == 'common.master':
                 sheet_names = ['Department And Desgination Mast', 'Complaint Type Master']
             elif template_type == 'localization.master':
@@ -712,12 +564,13 @@ class MDMSValidator:
         # Set sheet-specific required fields (DO NOT copy from full schema)
         # Each sheet has its own set of required fields based on template type
         if template_type == 'tenant.master':
-            if sheet_name == 'ULB Info':
-                # ULB Info requires all tenant fields
-                ulb_required = ['ulbName', 'ulbCode', 'ulbGrade', 'cityName', 'districtName',
-                               'districtCode', 'contactNumber', 'address', 'ulbWebsite', 'logoFilePath']
-                sheet_schema['required'] = [f for f in ulb_required if f in sheet_fields]
-            elif sheet_name == 'State Branding Deatils':
+            # NEW FORMAT ONLY: Tenant Info sheet
+            if sheet_name == 'Tenant Info':
+                # Only 4 required fields for new format
+                tenant_required = ['tenantDisplayName', 'tenantCode', 'tenantType', 'logoFilePath']
+                sheet_schema['required'] = [f for f in tenant_required if f in sheet_fields]
+            # Branding sheet - no required fields
+            elif sheet_name == 'Tenant Branding Deatils':
                 # Branding sheet has no required fields (all optional)
                 sheet_schema['required'] = []
 
