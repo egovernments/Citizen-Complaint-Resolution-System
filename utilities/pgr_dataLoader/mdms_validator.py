@@ -63,11 +63,11 @@ class MDMSValidator:
                     "type": "EMPLOYEE",
                     "roles": [],
                     "active": True,
-                    "tenantId": tenant_id
+                    "tenantId": "pg"
                 }
             },
             "SchemaDefCriteria": {
-                "tenantId": tenant_id,
+                "tenantId": "pg",
                 "codes": [schema_code]
             }
         }

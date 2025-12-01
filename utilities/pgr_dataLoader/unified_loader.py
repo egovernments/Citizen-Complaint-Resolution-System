@@ -12,6 +12,9 @@ import requests
 import time
 from typing import Dict, List, Any
 from datetime import datetime
+from openpyxl import load_workbook
+from openpyxl.styles import PatternFill, Font
+from openpyxl.utils import get_column_letter
 
 warnings.filterwarnings('ignore')
 
@@ -56,90 +59,84 @@ class UnifiedExcelReader:
     # ========================================================================
 
     def read_tenant_info(self):
-        """Read Tenant Info sheet with ADMIN0/ADMIN1/ADMIN2 hierarchy
-        Transforms to API-compatible structure with auto-generated codes
-
-        Returns:
-            tuple: (tenants_list, localization_list)
         """
-        df = pd.read_excel(self.excel_file, sheet_name='Tenant Info')
+        Reads the NEW Tenant Master template.
+        Updated to match:
+        - Tenant Display Name*
+        - Tenant Code*
+        - Tenant Type*
+        - Logo File Path*
+        - Latitude, Longitude
+        - City Name
+        - District Name
+        - Address
+        - Tenant Website
+        """
 
-        if len(df) == 0:
-            return [], []
+        df = pd.read_excel(self.excel_file, sheet_name='Tenant Info')
 
         tenants = []
         localizations = []
         district_counter = {}  # For auto-generating district codes
-        region_counter = {}    # For auto-generating region codes
+        city_counter = {}   
 
         for _, row in df.iterrows():
-            # Skip completely empty rows
-            if pd.isna(row.get('Tenant Display Name*')) and pd.isna(row.get('Tenant Code*\n(To be filled by ADMIN)')):
+            
+            # Skip empty rows
+            if pd.isna(row.get('Tenant Display Name*')) or pd.isna(row.get('Tenant Code*\n(To be filled by ADMIN)')):
                 continue
 
-            # Read tenant code (handle multi-line column name)
+            tenant_name = str(row['Tenant Display Name*']).strip()
             tenant_code_col = 'Tenant Code*\n(To be filled by ADMIN)'
-            ulb_code = str(row[tenant_code_col]).strip().lower() if pd.notna(row.get(tenant_code_col)) else ""
-            ulb_name = str(row['Tenant Display Name*']).strip() if pd.notna(row.get('Tenant Display Name*')) else ""
+            tenant_code = str(row[tenant_code_col]).strip().lower()
 
-            if not ulb_code or not ulb_name or ulb_code == 'nan':
-                continue
+            tenant_type = str(row.get('Tenant Type*', '')).strip()
+            logo_path = str(row.get('Logo File Path*', '')).strip()
 
-            # Determine tenant type based on code pattern
-            tenant_type = str(row.get('Tenant Type*', 'City')).strip()
-            if not tenant_type or tenant_type == 'nan':
-                tenant_type = 'CITY' if '.' in ulb_code else 'State'
+            city_name = str(row.get('City Name', '')).strip()
+            district_name = str(row.get('District Name', '')).strip()
+            address = str(row.get('Address', '')).strip()
+            website = str(row.get('Tenant Website', '')).strip()
 
-            # Extract ADMIN hierarchy
-            admin0 = str(row.get('ADMIN0 Name', '')) if pd.notna(row.get('ADMIN0 Name')) else ""
-            admin1 = str(row.get('ADMIN1 Name', '')) if pd.notna(row.get('ADMIN1 Name')) else ""
-            admin2 = str(row.get('ADMIN2 Name', '')) if pd.notna(row.get('ADMIN2 Name')) else ""
-            region_name = str(row.get('Administrative Region Name (Geographical entity to which the tenant belongs)', '')) if pd.notna(row.get('Administrative Region Name (Geographical entity to which the tenant belongs)')) else ""
+            latitude = float(row['Latitude']) if pd.notna(row.get('Latitude')) else 0.0
+            longitude = float(row['Longitude']) if pd.notna(row.get('Longitude')) else 0.0
 
-            # Auto-generate district code from ADMIN2
+            # Build city object
             district_code = ""
-            if admin2:
-                if admin2 not in district_counter:
-                    district_counter[admin2] = len(district_counter) + 1
-                district_code = f"ADMIN2_{district_counter[admin2]:03d}"
-
-            # Auto-generate region code
-            region_code = ""
-            if region_name:
-                if region_name not in region_counter:
-                    region_counter[region_name] = len(region_counter) + 1
-                region_code = f"REGION_{region_counter[region_name]:03d}"
-
-            # Build city object with transformed fields
+            if district_name:
+                if district_name not in district_counter:
+                    district_counter[district_name] = len(district_counter) + 1
+                district_code = f"District_{district_counter[district_name]:03d}"
+            city_code = ""
+            if city_name:
+                if city_name not in city_counter:
+                    city_counter[city_name] = len(city_counter) + 1
+                city_code = f"City_{city_counter[city_name]:03d}"
+    
             city = {
-                'code': ulb_code.split('.')[-1].upper() if '.' in ulb_code else ulb_code.upper(),
-                'name': ulb_name,
-                'ulbGrade': tenant_type,
-                'districtCode': district_code,  # Auto-generated from ADMIN2
-                'districtName': admin2,  # ADMIN2 → districtName
-                'districtTenantCode': ulb_code,
-                'ddrName': region_name,  # Administrative Region
-                'latitude': float(row['Latitude']) if pd.notna(row.get('Latitude')) else 0.0,
-                'longitude': float(row['Longitude']) if pd.notna(row.get('Longitude')) else 0.0,
-                'regionName': region_name,  # Administrative Region
-                'regionCode': region_code,  # Auto-generated
-                'localName': ulb_name,  # Use tenant name as local name
-                'shapeFileLocation': "",
+               'code': city_code,
+                'name': city_name or tenant_name,
+                'districtName': district_name,
+                'districtTenantCode': district_code,
+                'ulbGrade':'',
+                'latitude': latitude,
+                'longitude': longitude,
+                'localName': tenant_name,
                 'captcha': 'true'
             }
 
-            # Build tenant object
+            # Tenant object
             tenant = {
-                'code': ulb_code,
-                'name': ulb_name,
+                'code': tenant_code,
+                'name': tenant_name,
                 'type': tenant_type,
-                'emailId': "",  # Empty string for optional field
-                'contactNumber': "",  # Empty string for optional field
-                'address': str(row.get('Address', '')) if pd.notna(row.get('Address')) else "",
-                'domainUrl': str(row.get('Tenant Website', 'https://example.com')) if pd.notna(row.get('Tenant Website')) else "https://example.com",
-                'logoId': str(row.get('Logo File Path*', '')) if pd.notna(row.get('Logo File Path*')) else "",
-                'imageId': str(row.get('Logo File Path*', 'default-logo.png')) if pd.notna(row.get('Logo File Path*')) else "default-logo.png",
-                'description': f'{ulb_name} - {tenant_type}',
+                'emailId': "",
+                'contactNumber': "",
+                'address': address,
+                'domainUrl': website or "https://example.com",
+                'logoId': logo_path,
+                'imageId': logo_path,
+                'description': tenant_name,
                 'twitterUrl': "",
                 'facebookUrl': "",
                 'OfficeTimings': {'Mon - Fri': '10:00 AM - 5:00 PM'},
@@ -148,18 +145,18 @@ class UnifiedExcelReader:
 
             tenants.append(tenant)
 
-            # AUTO-GENERATE LOCALIZATION
-            loc_code = f"TENANT_TENANTS_{tenant['code'].upper().replace('.', '_')}"
+            # Add localization
+            loc_code = f"TENANT_TENANTS_{tenant_code.upper().replace('.', '_')}"
             localizations.append({
-                'code': loc_code,
-                'message': tenant['name'],
-                'module': 'rainmaker-common',
-                'locale': 'en_IN'
+                "code": loc_code,
+                "message": tenant_name,
+                "module": "rainmaker-common",
+                "locale": "en_IN"
             })
-
         return tenants, localizations
 
-    def read_tenant_branding(self):
+
+    def read_tenant_branding(self, tenant_id: str):
         """Read Tenant Branding sheet
 
         Returns:
@@ -173,10 +170,8 @@ class UnifiedExcelReader:
 
         branding_list = []
         for _, row in df.iterrows():
-            tenant_code = str(row.get('Tenant Code', '')).strip().lower()
-            if tenant_code and tenant_code != 'nan':
                 branding_record = {
-                    'code': tenant_code,  # Tenant code
+                     'code':tenant_id,
                     'bannerUrl': str(row.get('Banner URL', '')) if pd.notna(row.get('Banner URL')) else "",
                     'logoUrl': str(row.get('Logo URL', '')) if pd.notna(row.get('Logo URL')) else "",
                     'logoUrlWhite': str(row.get('Logo URL (White)', '')) if pd.notna(row.get('Logo URL (White)')) else "",
@@ -256,7 +251,7 @@ class UnifiedExcelReader:
                 designations.append({
                     'code': desig_code,
                     'name': desig_name,
-                    'departmentCode': dept_code,
+                    'department': [dept_code],
                     'active': True,
                     'description': f'{desig_name} - {dept_name}'
                 })
@@ -683,6 +678,7 @@ class APIUploader:
         self.boundary_url = "http://localhost:8081"
         self.workflow_url = "http://localhost:8280"
         self.localization_url = "http://localhost:8087"
+        self.Datahandlerurl = "http://localhost:8012"
 
         self.auth_token = "2a57ee8c-410c-4023-a9d3-5111b4f6e304"
         self.user_info = {
@@ -720,133 +716,292 @@ class APIUploader:
             "tenantId": "pg",
             "permanentCity": None
         }
+         
 
-    def create_mdms_data(self, schema_code: str, data_list: List[Dict], tenant: str, sheet_name: str = None):
-        """Generic function to create MDMS v2 data
+    def search_mdms_data(self, schema_code: str, tenant: str) -> List[Dict]:
+        """Generic function to search MDMS v2 data
 
         Args:
             schema_code: MDMS schema code
-            data_list: List of data objects to upload
             tenant: Tenant ID
-            sheet_name: Optional sheet name for error Excel generation
-        """
-        url = f"{self.mdms_url}/mdms-v2/v2/_create/{{schema_code}}"
 
-        results = {
-            'created': 0,
-            'exists': 0,
-            'failed': 0,
-            'errors': [],
-            'failed_records': []  # Store full failed records for Excel export
+        Returns:
+            list: List of data objects retrieved
+        """
+        url = f"{self.mdms_url}/mdms-v2/v2/_search"
+
+        payload = {
+            "RequestInfo": {
+                "apiId": "asset-services",
+                "authToken": self.auth_token,
+                "userInfo": self.user_info,
+                "msgId": "search with from and to values"
+            },
+            "MdmsCriteria": {
+                "tenantId": tenant,
+                "schemaCode": schema_code
+            }
         }
 
-        print(f"\n[UPLOADING] {schema_code}")
-        print(f"   Tenant: {tenant}")
-        print(f"   Records: {len(data_list)}")
-        print(f"   API URL: {url}")
-        print("="*60)
+        headers = {'Content-Type': 'application/json'}
 
-        for i, data_obj in enumerate(data_list, 1):
-            unique_id = (
-                data_obj.get('code') or
-                data_obj.get('serviceCode') or
-                data_obj.get('userName') or
-                str(i)
-            )
+        try:
+            response = requests.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+            data = response.json()
 
-            payload = {
-                "RequestInfo": {
-                    "apiId": "Rainmaker",
-                    "authToken": self.auth_token,
-                    "userInfo": self.user_info,
-                    "msgId": "1695889012604|en_IN",
-                    "plainAccessRequest": {}
-                },
-                "Mdms": {
-                    "tenantId": tenant,
-                    "schemaCode": schema_code,
-                    "uniqueIdentifier": unique_id,
-                    "data": data_obj,
-                    "isActive": True
-                }
+            # Extract data list from response
+            # API returns: {"mdms": [{"id": "...", "data": {...}, ...}]}
+            mdms_records = data.get('mdms', [])
+            data_list = [record['data'] for record in mdms_records]
+            return data_list
+
+        except requests.exceptions.HTTPError as e:
+            print(f"HTTP Error during MDMS search for {schema_code}: {str(e)}")
+            return []
+        except Exception as e:
+            print(f"Error during MDMS search for {schema_code}: {str(e)}")
+            return []
+
+    def create_mdms_data(self, schema_code: str, data_list: List[Dict], tenant: str, 
+                        sheet_name: str = None, excel_file: str = None):
+            """
+            Upload MDMS data and write status directly into the uploaded Excel file
+            
+            Args:
+                schema_code: MDMS schema code
+                data_list: List of data objects to upload
+                tenant: Tenant ID
+                sheet_name: Excel sheet name to update with status
+                excel_file: Path to the uploaded Excel file
+            """
+            url = f"{self.mdms_url}/mdms-v2/v2/_create/{{schema_code}}"
+
+            results = {
+                'created': 0,
+                'exists': 0,
+                'failed': 0,
+                'errors': []
             }
 
-            headers = {'Content-Type': 'application/json'}
-            status_code = None
-            error_message = None
+            print(f"\n[UPLOADING] {schema_code}")
+            print(f"   Tenant: {tenant}")
+            print(f"   Records: {len(data_list)}")
+            print(f"   API URL: {url}")
+            print("="*60)
 
-            try:
-                response = requests.post(url, json=payload, headers=headers)
-                status_code = response.status_code
-                response.raise_for_status()
-                print(f"   [OK] [{i}/{len(data_list)}] {unique_id}")
-                results['created'] += 1
+            # Track row-by-row status for Excel update
+            row_statuses = []
 
-            except requests.exceptions.HTTPError as e:
-                status_code = e.response.status_code if hasattr(e.response, 'status_code') else 500
-                error_text = e.response.text if hasattr(e.response, 'text') else str(e)
-                error_message = error_text[:500]
+            for i, data_obj in enumerate(data_list, 1):
+                unique_id = (
+                    data_obj.get('code') or
+                    data_obj.get('serviceCode') or
+                    data_obj.get('userName') or
+                    str(i)
+                )
 
-                if 'already exists' in error_text.lower() or 'duplicate' in error_text.lower():
-                    print(f"   [EXISTS] [{i}/{len(data_list)}] {unique_id}")
-                    results['exists'] += 1
-                    # DON'T add to failed_records - already exists is not a failure!
-                else:
-                    print(f"   [FAILED] [{i}/{len(data_list)}] {unique_id}")
-                    print(f"   ERROR: {error_message}")
+                payload = {
+                    "RequestInfo": {
+                        "apiId": "Rainmaker",
+                        "authToken": self.auth_token,
+                        "userInfo": self.user_info,
+                        "msgId": "1695889012604|en_IN",
+                        "plainAccessRequest": {}
+                    },
+                    "Mdms": {
+                        "tenantId": tenant,
+                        "schemaCode": schema_code,
+                        "uniqueIdentifier": unique_id,
+                        "data": data_obj,
+                        "isActive": True
+                    }
+                }
+
+                headers = {'Content-Type': 'application/json'}
+                status = "SUCCESS"
+                status_code = 200
+                error_message = ""
+
+                try:
+                    response = requests.post(url, json=payload, headers=headers)
+                    status_code = response.status_code
+                    response.raise_for_status()
+                    print(f"   [OK] [{i}/{len(data_list)}] {unique_id}")
+                    results['created'] += 1
+
+                except requests.exceptions.HTTPError as e:
+                    status_code = e.response.status_code if hasattr(e.response, 'status_code') else 500
+                    error_text = e.response.text if hasattr(e.response, 'text') else str(e)
+                    error_message = error_text[:200]
+
+                    if 'already exists' in error_text.lower() or 'duplicate' in error_text.lower():
+                        print(f"   [EXISTS] [{i}/{len(data_list)}] {unique_id}")
+                        results['exists'] += 1
+                        status = "EXISTS"
+                    else:
+                        print(f"   [FAILED] [{i}/{len(data_list)}] {unique_id}")
+                        print(f"   ERROR: {error_message}")
+                        results['failed'] += 1
+                        results['errors'].append({'id': unique_id, 'error': error_message})
+                        status = "FAILED"
+
+                except Exception as e:
+                    error_message = str(e)[:200]
+                    status_code = 0
+                    status = "FAILED"
+                    print(f"   [ERROR] [{i}/{len(data_list)}] {unique_id} - {error_message[:100]}")
                     results['failed'] += 1
-                    results['errors'].append({
-                        'id': unique_id,
-                        'error': error_message
-                    })
+                    results['errors'].append({'id': unique_id, 'error': error_message})
 
-                    # Store full record for Excel export - ONLY TRUE FAILURES
-                    failed_record = data_obj.copy()
-                    failed_record['_STATUS'] = 'FAILED'
-                    failed_record['_STATUS_CODE'] = status_code
-                    failed_record['_ERROR_MESSAGE'] = error_message
-                    results['failed_records'].append(failed_record)
-
-            except Exception as e:
-                error_message = str(e)[:200]
-                status_code = 404
-                print(f"   [ERROR] [{i}/{len(data_list)}] {unique_id} - {error_message[:100]}")
-                results['failed'] += 1
-                results['errors'].append({
-                    'id': unique_id,
-                    'error': error_message
+                # Store status for this row
+                row_statuses.append({
+                    'row_index': i,  # 1-based index matching Excel data rows
+                    'status': status,
+                    'status_code': status_code,
+                    'error_message': error_message
                 })
 
-                # Store full record for Excel export
-                failed_record = data_obj.copy()
-                failed_record['_STATUS'] = 'FAILED'
-                failed_record['_STATUS_CODE'] = status_code
-                failed_record['_ERROR_MESSAGE'] = error_message
-                results['failed_records'].append(failed_record)
+                time.sleep(0.1)
 
-            time.sleep(0.1)
+            # Summary
+            print("="*60)
+            print(f"[SUMMARY] Created: {results['created']}")
+            print(f"[SUMMARY] Already Exists: {results['exists']}")
+            print(f"[SUMMARY] Failed: {results['failed']}")
+            print("="*60)
 
-        # Summary
-        print("="*60)
-        print(f"[SUMMARY] Created: {results['created']}")
-        print(f"[SUMMARY] Already Exists: {results['exists']}")
-        print(f"[SUMMARY] Failed: {results['failed']}")
+            # Write status columns directly into the uploaded Excel file
+            if excel_file and sheet_name and row_statuses:
+                self._write_status_to_excel(
+                    excel_file=excel_file,
+                    sheet_name=sheet_name,
+                    row_statuses=row_statuses,
+                    schema_code=schema_code
+                )
 
-        if results['errors']:
-            print(f"\n[ERRORS] Found {len(results['errors'])} error(s):")
-            for err in results['errors'][:3]:
-                print(f"   - {err['id']}: {err['error'][:80]}")
+            return results
 
-        # Generate error Excel if there are failures
-        if results['failed_records'] and sheet_name:
-            # Get reverse mapping if available
-            dept_mapping = getattr(self, '_dept_code_to_name', None)
-            error_file = self._generate_error_excel(results['failed_records'], schema_code, sheet_name, dept_mapping)
-            results['error_file'] = error_file
 
-        print("="*60)
 
-        return results
+    def _write_status_to_excel(self, excel_file: str, sheet_name: str, 
+                               row_statuses: List[Dict], schema_code: str):
+        """
+        Write / overwrite _STATUS, _STATUS_CODE, _ERROR_MESSAGE columns directly into uploaded Excel.
+        - If columns exist: overwrite in-place.
+        - If columns do not exist: create exactly one set of new columns at the right-most side.
+        - Does NOT use ws.append() (so it won't accidentally shift or insert rows).
+        Note: row_statuses[*]['row_index'] is expected to be the Excel row number you want to write to.
+        If your row_index is zero-based data-row index (0..n-1) change excel_row = header_row + 1 + row_index below.
+        """
+        try:
+            print(f"\n📝 Updating Excel file: {excel_file}")
+            print(f"   Sheet: {sheet_name}")
+            
+            wb = load_workbook(excel_file, data_only=False)
+            if sheet_name not in wb.sheetnames:
+                print(f"   ⚠️  Sheet '{sheet_name}' not found - skipping status update")
+                return
+            ws = wb[sheet_name]
+    
+            # --- Find header row and map existing headers (assume header in row 1) ---
+            header_row = 1
+            header_map = {}
+            for col in range(1, ws.max_column + 1):
+                value = ws.cell(row=header_row, column=col).value
+                if isinstance(value, str) and value.strip():
+                    header_map[value.strip()] = col
+    
+            # --- Determine/create columns in a safe, non-overlapping way ---
+            max_col = ws.max_column
+    
+            # We'll create new columns only if header missing; if we create one column,
+            # we update max_col so the next created column goes to max_col+1, etc.
+            def get_or_create_col(header_name):
+                nonlocal max_col
+                if header_name in header_map:
+                    return header_map[header_name]
+                else:
+                    # create new column at the right
+                    max_col += 1
+                    header_map[header_name] = max_col
+                    # set header cell (style later)
+                    ws.cell(row=header_row, column=max_col, value=header_name)
+                    return max_col
+    
+            status_col = get_or_create_col("_STATUS")
+            code_col = get_or_create_col("_STATUS_CODE")
+            error_col = get_or_create_col("_ERROR_MESSAGE")
+    
+            # --- Styles ---
+            header_fill = PatternFill(start_color="D3D3D3", end_color="D3D3D3", fill_type="solid")
+            header_font = Font(bold=True)
+            success_fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+            exists_fill = PatternFill(start_color="FFEB9C", end_color="FFEB9C", fill_type="solid")
+            failed_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+    
+            # Apply header styles (for newly created headers and to ensure consistent style)
+            for header, col_idx in [("_STATUS", status_col), ("_STATUS_CODE", code_col), ("_ERROR_MESSAGE", error_col)]:
+                hdr_cell = ws.cell(row=header_row, column=col_idx)
+                hdr_cell.fill = header_fill
+                hdr_cell.font = header_font
+    
+            # --- Write each row_status in-place (overwrite) ---
+            for row_status in row_statuses:
+                # === IMPORTANT: interpret row_index as Excel row number ===
+                # If your row_status['row_index'] is zero-based relative to data rows,
+                # change the next line to: excel_row = header_row + 1 + row_status['row_index']
+                excel_row = row_status['row_index']
+    
+                # Validate excel_row is integer and >= header_row+1
+                try:
+                    excel_row = int(excel_row)
+                except Exception:
+                    # skip invalid rows
+                    print(f"   ⚠️  Skipping invalid row_index: {row_status.get('row_index')}")
+                    continue
+                if excel_row <= header_row:
+                    # If user passes header or invalid small row, shift below header
+                    excel_row = header_row + 1
+    
+                status = row_status.get('status', '')
+                status_code = row_status.get('status_code', '')
+                error_msg = row_status.get('error_message', '')
+    
+                # Overwrite exact cells (openpyxl will create cell objects if row > current max)
+                status_cell = ws.cell(row=excel_row, column=status_col, value=status)
+                if status == "SUCCESS":
+                    status_cell.fill = success_fill
+                elif status == "EXISTS":
+                    status_cell.fill = exists_fill
+                elif status == "FAILED":
+                    status_cell.fill = failed_fill
+                else:
+                    status_cell.fill = PatternFill(fill_type=None)
+    
+                ws.cell(row=excel_row, column=code_col, value=status_code)
+                ws.cell(row=excel_row, column=error_col, value=error_msg)
+    
+            # --- Column widths only for newly added columns (or enforce widths always) ---
+            # If you prefer to always set widths, remove the conditional checks.
+            for col_idx, width in [(status_col, 15), (code_col, 15), (error_col, 50)]:
+                ws.column_dimensions[get_column_letter(col_idx)].width = width
+    
+            # --- Protect status columns (lock cells) ---
+            for r in range(1, ws.max_row + 1):
+                for c in (status_col, code_col, error_col):
+                    cell = ws.cell(row=r, column=c)
+                    cell.protection = cell.protection.copy(locked=True)
+    
+            # Save
+            wb.save(excel_file)
+            wb.close()
+            print(f"   ✅ Status columns updated successfully!")
+            print(f"   📊 Updated {len(row_statuses)} rows")
+    
+        except Exception as e:
+            print(f"   ⚠️  Could not update Excel: {str(e)}")
+
 
     def _generate_error_excel(self, failed_records: List[Dict], schema_code: str, sheet_name: str, dept_code_to_name: Dict = None) -> str:
         """Append failed records to a single consolidated error Excel file
@@ -1476,3 +1631,55 @@ class APIUploader:
         print("="*60)
 
         return results
+
+    def setup_default_data(self, targetTenantId: str, module: str,schemaCodes: list,onlySchemas: bool = False) -> dict:
+    
+        url = f"{self.Datahandlerurl}/default-data-handler/tenant/new"
+
+        payload = {
+            "RequestInfo": {
+                "apiId": "default-data-handler",
+                "ver": "1.0",
+                "ts": None,
+                "action": "create",
+                "msgId": "default-data-setup",
+                "authToken": self.auth_token,
+                "userInfo": self.user_info
+            },
+            "targetTenantId": targetTenantId
+        }
+
+        print("\n[DEFAULT DATA SETUP]")
+        print(f"   Target Tenant: {targetTenantId}")
+        print(f"   Module:        {module}")
+        print(f"   Schemas:       {schemaCodes}")
+        print(f"   Only Schemas:  {onlySchemas}")
+        print(f"   API URL:       {url}")
+        print("="*60)
+
+        try:
+            response = requests.post(url, json=payload, headers={"Content-Type": "application/json"})
+            response.raise_for_status()
+
+            result = response.json()
+
+            print(f"   [SUCCESS] Default data setup complete for {targetTenantId}")
+            print("="*60)
+
+            return {
+                "success": True,
+                "response": result
+            }
+
+        except requests.exceptions.HTTPError as e:
+            error_text = e.response.text if hasattr(e.response, "text") else str(e)
+            print(f"[FAILED] HTTP ERROR {e.response.status_code}")
+            print(error_text)
+            print("="*60)
+            return {"success": False, "error": error_text}
+
+        except Exception as e:
+            print(f"[ERROR] {str(e)}")
+            print("="*60)
+            return {"success": False, "error": str(e)}
+ 
