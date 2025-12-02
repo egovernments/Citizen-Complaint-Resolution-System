@@ -883,6 +883,9 @@ class APIUploader:
             return results
 
 
+    
+
+
 
     def _write_status_to_excel(self, excel_file: str, sheet_name: str, 
                                row_statuses: List[Dict], schema_code: str):
@@ -1365,7 +1368,14 @@ class APIUploader:
         return results
 
     def create_boundary_hierarchy(self, hierarchy_data: Dict):
-        """Create boundary hierarchy definition"""
+        """Create boundary hierarchy definition
+
+        Args:
+            hierarchy_data: Dict containing tenantId, hierarchyType, and boundaryHierarchy
+
+        Returns:
+            API response dict
+        """
         url = f"{self.boundary_url}/boundary-service/boundary-hierarchy-definition/_create"
 
         payload = {
@@ -1384,15 +1394,26 @@ class APIUploader:
         try:
             response = requests.post(url, json=payload, headers=headers)
             response.raise_for_status()
-            print(f"   [SUCCESS] Boundary hierarchy created")
+            print(f"\n✅ [SUCCESS] Boundary hierarchy created")
+            print(f"   Tenant: {hierarchy_data.get('tenantId')}")
+            print(f"   Hierarchy Type: {hierarchy_data.get('hierarchyType')}")
+            print(f"   Levels: {len(hierarchy_data.get('boundaryHierarchy', []))}")
             return response.json()
         except requests.exceptions.HTTPError as e:
             error_text = e.response.text if hasattr(e.response, 'text') else str(e)
-            print(f"   [ERROR] Failed: HTTP {e.response.status_code}")
-            print(f"   ERROR Details: {error_text[:500]}")
-            raise
+
+            # Check if hierarchy already exists
+            if 'already exists' in error_text.lower() or 'duplicate' in error_text.lower():
+                print(f"\n⚠️  [EXISTS] Boundary hierarchy already exists")
+                print(f"   Tenant: {hierarchy_data.get('tenantId')}")
+                print(f"   Hierarchy Type: {hierarchy_data.get('hierarchyType')}")
+                return {'success': True, 'exists': True}
+            else:
+                print(f"\n❌ [ERROR] Failed: HTTP {e.response.status_code}")
+                print(f"   ERROR Details: {error_text[:500]}")
+                raise
         except Exception as e:
-            print(f"   [ERROR] Failed: {str(e)}")
+            print(f"\n❌ [ERROR] Failed: {str(e)}")
             raise
 
     def create_boundary_entities(self, boundaries: List[Dict]):
@@ -1633,7 +1654,7 @@ class APIUploader:
         return results
 
     def setup_default_data(self, targetTenantId: str, module: str,schemaCodes: list,onlySchemas: bool = False) -> dict:
-    
+
         url = f"{self.Datahandlerurl}/default-data-handler/tenant/new"
 
         payload = {
@@ -1682,4 +1703,357 @@ class APIUploader:
             print(f"[ERROR] {str(e)}")
             print("="*60)
             return {"success": False, "error": str(e)}
+
+    # ========================================================================
+    # BOUNDARY MANAGEMENT METHODS
+    # ========================================================================
+
+    def search_boundary_hierarchies(self, tenant_id: str, limit: int = 100, offset: int = 0) -> List[Dict]:
+        """Search for existing boundary hierarchies
+
+        Args:
+            tenant_id: Tenant ID to search for
+            limit: Maximum number of results
+            offset: Offset for pagination
+
+        Returns:
+            List of boundary hierarchy definitions
+        """
+        url = f"{self.boundary_url}/boundary-service/boundary-hierarchy-definition/_search"
+
+        payload = {
+            "RequestInfo": {
+                "apiId": "Rainmaker",
+                "authToken": self.auth_token,
+                "userInfo": self.user_info,
+                "msgId": "1695889012604|en_IN",
+                "plainAccessRequest": {}
+            },
+            "BoundaryTypeHierarchySearchCriteria": {
+                "tenantId": tenant_id,
+                "limit": limit,
+                "offset": offset
+            }
+        }
+
+        headers = {'Content-Type': 'application/json'}
+
+        try:
+            response = requests.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+
+            hierarchies = data.get('BoundaryHierarchy', [])
+            print(f"\n✅ Found {len(hierarchies)} boundary hierarchy(ies) for tenant: {tenant_id}")
+
+            for h in hierarchies:
+                print(f"   • {h['hierarchyType']} ({len(h.get('boundaryHierarchy', []))} levels)")
+
+            return hierarchies
+
+        except requests.exceptions.HTTPError as e:
+            error_text = e.response.text if hasattr(e.response, 'text') else str(e)
+            print(f"❌ HTTP Error: {error_text[:200]}")
+            return []
+        except Exception as e:
+            print(f"❌ Error: {str(e)}")
+            return []
+
+    def generate_boundary_template(self, tenant_id: str, hierarchy_type: str, force_update: bool = True) -> Dict:
+        """Generate boundary template file
+
+        Args:
+            tenant_id: Tenant ID
+            hierarchy_type: Hierarchy type (e.g., 'ADMIN', 'REVENUE')
+            force_update: Force regeneration
+
+        Returns:
+            Dict with generation task details
+        """
+        boundary_mgmt_url = "http://localhost:8099"
+        url = f"{boundary_mgmt_url}/boundary-management/v1/_generate"
+
+        params = {
+            "tenantId": tenant_id,
+            "hierarchyType": hierarchy_type,
+            "forceUpdate": str(force_update).lower()
+        }
+
+        # Override userInfo tenantId to match the request tenant
+        user_info_copy = self.user_info.copy()
+        user_info_copy['tenantId'] = tenant_id
+
+        payload = {
+            "RequestInfo": {
+                "apiId": "Rainmaker",
+                "authToken": self.auth_token,
+                "userInfo": user_info_copy,
+                "msgId": f"{int(time.time() * 1000)}|en_IN",
+                "plainAccessRequest": {}
+            }
+        }
+
+        headers = {'Content-Type': 'application/json'}
+
+        try:
+            response = requests.post(url, json=payload, headers=headers, params=params)
+            response.raise_for_status()
+            data = response.json()
+
+            resource = data.get('ResourceDetails', [{}])[0]
+            print(f"\n✅ Template generation initiated")
+            print(f"   Task ID: {resource.get('id')}")
+            print(f"   Status: {resource.get('status')}")
+
+            return resource
+
+        except requests.exceptions.HTTPError as e:
+            error_text = e.response.text if hasattr(e.response, 'text') else str(e)
+            print(f"❌ HTTP Error: {error_text[:300]}")
+            return {}
+        except Exception as e:
+            print(f"❌ Error: {str(e)}")
+            return {}
+
+    def poll_boundary_template_status(self, tenant_id: str, hierarchy_type: str, max_attempts: int = 30, delay: int = 2) -> Dict:
+        """Poll for boundary template generation completion
+
+        Args:
+            tenant_id: Tenant ID
+            hierarchy_type: Hierarchy type
+            max_attempts: Maximum polling attempts
+            delay: Delay between attempts (seconds)
+
+        Returns:
+            Dict with fileStoreId when complete
+        """
+        boundary_mgmt_url = "http://localhost:8099"
+        url = f"{boundary_mgmt_url}/boundary-management/v1/_generate-search"
+
+        params = {
+            "tenantId": tenant_id,
+            "hierarchyType": hierarchy_type
+        }
+
+        # Override userInfo tenantId to match the request tenant
+        user_info_copy = self.user_info.copy()
+        user_info_copy['tenantId'] = tenant_id
+
+        payload = {
+            "RequestInfo": {
+                "apiId": "Rainmaker",
+                "authToken": self.auth_token,
+                "userInfo": user_info_copy,
+                "msgId": f"{int(time.time() * 1000)}|en_IN",
+                "plainAccessRequest": {}
+            }
+        }
+
+        headers = {'Content-Type': 'application/json'}
+
+        print(f"\n⏳ Polling for template generation (max {max_attempts} attempts)...")
+
+        for attempt in range(1, max_attempts + 1):
+            try:
+                response = requests.post(url, json=payload, headers=headers, params=params)
+                response.raise_for_status()
+                data = response.json()
+
+                resources = data.get('GeneratedResource', [])
+                if resources:
+                    resource = resources[0]
+                    status = resource.get('status')
+                    filestore_id = resource.get('fileStoreid')
+
+                    print(f"   Attempt {attempt}/{max_attempts}: Status = {status}")
+
+                    if status == 'completed' and filestore_id:
+                        print(f"\n✅ Template generation complete!")
+                        print(f"   FileStore ID: {filestore_id}")
+                        return resource
+                    elif status == 'failed':
+                        print(f"\n❌ Template generation failed")
+                        return resource
+
+                time.sleep(delay)
+
+            except Exception as e:
+                print(f"   Attempt {attempt}/{max_attempts}: Error - {str(e)[:100]}")
+                time.sleep(delay)
+
+        print(f"\n⚠️ Template generation timed out after {max_attempts} attempts")
+        return {}
+
+    def download_boundary_template(self, tenant_id: str, filestore_id: str, hierarchy_type: str = "ADMIN", output_path: str = None, return_url: bool = False):
+        """Download boundary template from filestore
+
+        Args:
+            tenant_id: Tenant ID
+            filestore_id: FileStore ID
+            hierarchy_type: Hierarchy type for filename (optional)
+            output_path: Path to save file (optional)
+            return_url: If True, return dict with both path and download URL
+
+        Returns:
+            Path to downloaded file OR dict with 'path' and 'url' if return_url=True
+        """
+        import os
+        filestore_url = "http://localhost:8009"
+        url = f"{filestore_url}/filestore/v1/files/url"
+
+        params = {
+            "tenantId": tenant_id,
+            "fileStoreIds": filestore_id
+        }
+
+        try:
+            response = requests.get(url, params=params)
+            response.raise_for_status()
+            data = response.json()
+
+            # Response format: { "fileStoreIds": [{"id": "xxx", "url": "s3://..."}] }
+            file_urls = data.get('fileStoreIds', [])
+            if not file_urls:
+                print("❌ No file URL found in response")
+                return None
+
+            file_url = file_urls[0].get('url')
+            if not file_url:
+                print("❌ Invalid file URL")
+                return None
+
+            print(f"\n📥 Downloading from S3...")
+
+            # Download the file
+            file_response = requests.get(file_url)
+            file_response.raise_for_status()
+
+            # Determine output path
+            if not output_path:
+                os.makedirs('templates/boundary', exist_ok=True)
+                output_path = f'templates/boundary/boundary_template_{tenant_id}_{hierarchy_type}.xlsx'
+
+            with open(output_path, 'wb') as f:
+                f.write(file_response.content)
+
+            print(f"✅ Template downloaded: {output_path}")
+            print(f"📊 File size: {len(file_response.content)} bytes")
+
+            if return_url:
+                return {
+                    'path': output_path,
+                    'url': file_url
+                }
+            return output_path
+
+        except Exception as e:
+            print(f"❌ Download error: {str(e)[:200]}")
+            return None
+
+    def upload_file_to_filestore(self, file_path: str, tenant_id: str, module: str = "HCM-ADMIN-CONSOLE") -> str:
+        """Upload file to filestore
+
+        Args:
+            file_path: Path to file to upload
+            tenant_id: Tenant ID
+            module: Module name
+
+        Returns:
+            FileStore ID of uploaded file
+        """
+        import os
+        filestore_url = "http://localhost:8009"
+        url = f"{filestore_url}/filestore/v1/files"
+
+        try:
+            with open(file_path, 'rb') as f:
+                files = {'file': (os.path.basename(file_path), f, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')}
+                data = {
+                    'tenantId': tenant_id,
+                    'module': module
+                }
+
+                print(f"\n📤 Uploading file: {os.path.basename(file_path)}")
+                response = requests.post(url, files=files, data=data)
+                response.raise_for_status()
+
+                result = response.json()
+                files_data = result.get('files', [])
+
+                if files_data:
+                    filestore_id = files_data[0].get('fileStoreId')
+                    print(f"✅ File uploaded successfully!")
+                    print(f"   FileStore ID: {filestore_id}")
+                    return filestore_id
+                else:
+                    print("❌ No filestore ID in response")
+                    return None
+
+        except Exception as e:
+            print(f"❌ Upload error: {str(e)[:200]}")
+            return None
+
+    def process_boundary_data(self, tenant_id: str, filestore_id: str, hierarchy_type: str, action: str = "create") -> Dict:
+        """Process uploaded boundary data
+
+        Args:
+            tenant_id: Tenant ID
+            filestore_id: FileStore ID of uploaded Excel
+            hierarchy_type: Hierarchy type
+            action: Action type (create/update)
+
+        Returns:
+            Dict with processing results
+        """
+        boundary_mgmt_url = "http://localhost:8099"
+        url = f"{boundary_mgmt_url}/boundary-management/v1/_process"
+
+        # Override userInfo tenantId to match the request tenant
+        user_info_copy = self.user_info.copy()
+        user_info_copy['tenantId'] = tenant_id
+
+        payload = {
+            "ResourceDetails": {
+                "tenantId": tenant_id,
+                "fileStoreId": filestore_id,
+                "hierarchyType": hierarchy_type,
+                "additionalDetails": {},
+                "action": action
+            },
+            "RequestInfo": {
+                "apiId": "Rainmaker",
+                "authToken": self.auth_token,
+                "userInfo": user_info_copy,
+                "msgId": f"{int(time.time() * 1000)}|en_IN",
+                "plainAccessRequest": {}
+            }
+        }
+
+        headers = {'Content-Type': 'application/json'}
+
+        try:
+            response = requests.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+
+            resource = data.get('ResourceDetails', {})
+            status = resource.get('status')
+            processed_id = resource.get('processedFileStoreId')
+
+            print(f"\n✅ Boundary data processing initiated")
+            print(f"   Status: {status}")
+            print(f"   Task ID: {resource.get('id')}")
+
+            if processed_id:
+                print(f"   Processed FileStore ID: {processed_id}")
+
+            return resource
+
+        except requests.exceptions.HTTPError as e:
+            error_text = e.response.text if hasattr(e.response, 'text') else str(e)
+            print(f"❌ HTTP Error: {error_text[:300]}")
+            return {}
+        except Exception as e:
+            print(f"❌ Error: {str(e)}")
+            return {}
  
