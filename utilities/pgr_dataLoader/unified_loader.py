@@ -729,6 +729,49 @@ class APIUploader:
         }
          
 
+    def _extract_error_message(self, error_text: str) -> str:
+        """Extract clean error message from API error response
+
+        Args:
+            error_text: Raw error response text (JSON)
+
+        Returns:
+            Cleaned error message string
+        """
+        try:
+            # Try to parse as JSON
+            error_json = json.loads(error_text)
+
+            # Look for Errors array in response
+            if isinstance(error_json, dict):
+                errors = error_json.get('Errors', [])
+                if errors and isinstance(errors, list) and len(errors) > 0:
+                    first_error = errors[0]
+                    if isinstance(first_error, dict):
+                        # Extract message and description
+                        message = first_error.get('message', '')
+                        description = first_error.get('description', '')
+                        code = first_error.get('code', '')
+
+                        # Build clean error message
+                        parts = []
+                        if message:
+                            parts.append(message)
+                        if description:
+                            parts.append(description)
+                        if code and not message:  # Only add code if no message
+                            parts.append(code)
+
+                        if parts:
+                            return ' - '.join(parts)
+
+            # If no structured error found, return truncated original text
+            return error_text[:200]
+
+        except (json.JSONDecodeError, Exception):
+            # If JSON parsing fails, return truncated original text
+            return error_text[:200]
+
     def search_mdms_data(self, schema_code: str, tenant: str) -> List[Dict]:
         """Generic function to search MDMS v2 data
 
@@ -842,16 +885,19 @@ class APIUploader:
                     results['created'] += 1
 
                 except requests.exceptions.HTTPError as e:
-                    status_code = e.response.status_code if hasattr(e.response, 'status_code') else 500
-                    error_text = e.response.text if hasattr(e.response, 'text') else str(e)
-                    error_message = error_text[:200]
+                    # Get status code - response.status_code is the correct attribute
+                    status_code = e.response.status_code if hasattr(e, 'response') and e.response is not None else 500
+                    error_text = e.response.text if hasattr(e, 'response') and e.response is not None else str(e)
+
+                    # Extract clean error message from API response
+                    error_message = self._extract_error_message(error_text) if error_text else str(e)[:200]
 
                     if 'already exists' in error_text.lower() or 'duplicate' in error_text.lower():
-                        print(f"   [EXISTS] [{i}/{len(data_list)}] {unique_id}")
+                        print(f"   [EXISTS] [{i}/{len(data_list)}] {unique_id} (HTTP {status_code})")
                         results['exists'] += 1
                         status = "EXISTS"
                     else:
-                        print(f"   [FAILED] [{i}/{len(data_list)}] {unique_id}")
+                        print(f"   [FAILED] [{i}/{len(data_list)}] {unique_id} (HTTP {status_code})")
                         print(f"   ERROR: {error_message}")
                         results['failed'] += 1
                         results['errors'].append({'id': unique_id, 'error': error_message})
@@ -962,26 +1008,26 @@ class APIUploader:
     
             # --- Write each row_status in-place (overwrite) ---
             for row_status in row_statuses:
-                # === IMPORTANT: interpret row_index as Excel row number ===
-                # If your row_status['row_index'] is zero-based relative to data rows,
-                # change the next line to: excel_row = header_row + 1 + row_status['row_index']
-                excel_row = row_status['row_index']
-    
-                # Validate excel_row is integer and >= header_row+1
+                # === IMPORTANT: row_index is 1-based data row index (1, 2, 3, ...) ===
+                # We need to convert it to actual Excel row number by adding header_row
+                # For example: row_index=1 (first data row) → Excel row 2 (header is row 1)
+                row_index = row_status['row_index']
+
+                # Validate row_index is integer
                 try:
-                    excel_row = int(excel_row)
+                    row_index = int(row_index)
                 except Exception:
                     # skip invalid rows
                     print(f"   ⚠️  Skipping invalid row_index: {row_status.get('row_index')}")
                     continue
-                if excel_row <= header_row:
-                    # If user passes header or invalid small row, shift below header
-                    excel_row = header_row + 1
-    
+
+                # Calculate actual Excel row: header_row + row_index
+                excel_row = header_row + row_index
+
                 status = row_status.get('status', '')
                 status_code = row_status.get('status_code', '')
                 error_msg = row_status.get('error_message', '')
-    
+
                 # Overwrite exact cells (openpyxl will create cell objects if row > current max)
                 status_cell = ws.cell(row=excel_row, column=status_col, value=status)
                 if status == "SUCCESS":
@@ -992,10 +1038,10 @@ class APIUploader:
                     status_cell.fill = failed_fill
                 else:
                     status_cell.fill = PatternFill(fill_type=None)
-    
+
                 ws.cell(row=excel_row, column=code_col, value=status_code)
                 ws.cell(row=excel_row, column=error_col, value=error_msg)
-    
+
             # --- Column widths only for newly added columns (or enforce widths always) ---
             # If you prefer to always set widths, remove the conditional checks.
             for col_idx, width in [(status_col, 15), (code_col, 15), (error_col, 50)]:
@@ -1304,9 +1350,11 @@ class APIUploader:
                 results['created'] += len(messages)
 
             except requests.exceptions.HTTPError as e:
-                status_code = e.response.status_code if hasattr(e.response, 'status_code') else 500
-                error_text = e.response.text if hasattr(e.response, 'text') else str(e)
-                error_message = error_text[:400]
+                status_code = e.response.status_code if hasattr(e, 'response') and e.response is not None else 500
+                error_text = e.response.text if hasattr(e, 'response') and e.response is not None else str(e)
+
+                # Extract clean error message from API response
+                error_message = self._extract_error_message(error_text) if error_text else str(e)[:200]
 
                 # Check for duplicate/already exists errors
                 if ('duplicate' in error_text.lower() or
@@ -1319,7 +1367,7 @@ class APIUploader:
                     # DON'T add to failed_records - already exists is not a failure!
                 else:
                     # True failure
-                    print(f"   [FAILED] Locale: {locale}")
+                    print(f"   [FAILED] Locale: {locale} (HTTP {status_code})")
                     print(f"   ERROR: {error_message}")
                     results['failed'] += len(messages)
                     results['errors'].append({
