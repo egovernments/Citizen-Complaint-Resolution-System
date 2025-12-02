@@ -248,5 +248,223 @@
         ]
       }
     }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "tenant.master",
+    "description": "Tenant Master Schema - Used for Excel validation in Jupyter notebooks. Defines tenant information with ADMIN hierarchy (State/City levels)",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "tenantDisplayName",
+        "tenantCode",
+        "tenantType",
+        "logoFilePath"
+      ],
+      "x-unique": [
+        "tenantCode"
+      ],
+      "properties": {
+        "tenantDisplayName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 200
+        },
+        "tenantCode": {
+          "type": "string",
+          "pattern": "^[A-Z]+\\.[A-Z]+$|^[A-Z]+$"
+        },
+        "tenantType": {
+          "type": "string",
+          "enum": [
+            "State",
+            "City"
+          ]
+        },
+        "logoFilePath": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "administrativeRegion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 200
+        },
+        "admin0Name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 100
+        },
+        "admin1Name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 100
+        },
+        "admin2Name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 100
+        },
+        "address": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 500
+        },
+        "tenantWebsite": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "latitude": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": -90,
+          "maximum": 90
+        },
+        "longitude": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": -180,
+          "maximum": 180
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "common.master",
+    "description": "Common Master Schema - Used for Excel validation in Jupyter notebooks. Validates department, designation, complaint types with SLA resolution times",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "departmentName",
+        "designationName",
+        "complaintType",
+        "complaintSubType",
+        "resolutionTimeHours"
+      ],
+      "x-unique": [
+        "complaintSubType"
+      ],
+      "properties": {
+        "departmentName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100,
+          "description": "Name of the government department"
+        },
+        "designationName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100,
+          "description": "Job title/position within the department"
+        },
+        "complaintType": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_ &-]+$",
+          "minLength": 2,
+          "maxLength": 100,
+          "description": "Parent complaint category"
+        },
+        "complaintSubType": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_ &-]+$",
+          "minLength": 2,
+          "maxLength": 100,
+          "description": "Specific complaint sub-type (must be unique)"
+        },
+        "resolutionTimeHours": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 720,
+          "description": "SLA hours for resolution"
+        },
+        "searchWords": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[A-Za-z0-9_, &-]*$",
+          "maxLength": 500,
+          "description": "Comma-separated keywords (optional)"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "localization.master",
+    "description": "Localization Master Schema - Used for Excel validation in Jupyter notebooks. Validates multi-language translation data with locale codes (e.g., en_IN, hi_IN, ta_IN)",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "module",
+        "code",
+        "locale"
+      ],
+      "x-unique": [
+        "code",
+        "locale"
+      ],
+      "properties": {
+        "module": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Module name (e.g., rainmaker-pgr, rainmaker-common)"
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Translation key (e.g., PGR_COMPLAINT_TYPE, CORE_COMMON_SAVE)"
+        },
+        "englishMessage": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 1000,
+          "description": "English translation message"
+        },
+        "locale": {
+          "type": "string",
+          "pattern": "^[a-z]{2}_[A-Z]{2}$",
+          "description": "Locale code in format: language_COUNTRY (e.g., en_IN, hi_IN, ta_IN)"
+        },
+        "translation": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 1000,
+          "description": "Translated message in the specified locale"
+        }
+      }
+    }
   }
 ]

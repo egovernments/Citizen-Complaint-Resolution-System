@@ -85,6 +85,8 @@ public class DataHandlerService {
             mdmsV2Util.createDefaultMdmsData(defaultMdmsDataRequest);
         }
 
+
+
 //        if (defaultDataRequest.getLocales() != null && defaultDataRequest.getModules() != null) {
 //            for (String locale : defaultDataRequest.getLocales()) {
 //                DefaultLocalizationDataRequest defaultLocalizationDataRequest = DefaultLocalizationDataRequest.builder().requestInfo(defaultDataRequest.getRequestInfo()).targetTenantId(defaultDataRequest.getTargetTenantId()).locale(locale).modules(defaultDataRequest.getModules()).build();
@@ -602,6 +604,88 @@ public class DataHandlerService {
     public void defaultEmployeeSetup(String tenantId, String emailId) {
         createDefaultEmployee(tenantId, emailId, RESOLVER, "Rakesh Kumar");
         createDefaultEmployee(tenantId, emailId, ASSIGNER, "John Smith");
+    }
+
+    /**
+     * Load production tenant data (mdmsData, localisations, and schema)
+     * This method loads production data for a new tenant
+     * Uses all default schemas automatically
+     * @param newTenantRequest - Request containing tenant information (no schema codes needed)
+     */
+    public void loadNewTenantProductionData(NewTenantRequest newTenantRequest) {
+        try {
+            String targetTenantId = newTenantRequest.getTargetTenantId();
+            RequestInfo requestInfo = newTenantRequest.getRequestInfo();
+
+            log.info("Loading production tenant data for new tenant: {}", targetTenantId);
+            
+            // Ensure UserInfo is present (create dummy if needed)
+            if (requestInfo.getUserInfo() == null) {
+                org.egov.common.contract.request.User dummyUser = new org.egov.common.contract.request.User();
+                dummyUser.setId(1L);
+                dummyUser.setUserName("system");
+                dummyUser.setTenantId(targetTenantId);
+                requestInfo.setUserInfo(dummyUser);
+                log.info("Created dummy user info for tenant: {}", targetTenantId);
+            } else {
+                requestInfo.getUserInfo().setTenantId(targetTenantId);
+            }
+            
+            // Create DefaultDataRequest with all default schemas
+            DefaultDataRequest defaultDataRequest = DefaultDataRequest.builder()
+                    .requestInfo(requestInfo)
+                    .targetTenantId(targetTenantId)
+                    .schemaCodes(serviceConfig.getDefaultMdmsSchemaList())
+                    .onlySchemas(Boolean.FALSE)
+                    .locales(serviceConfig.getDefaultLocalizationLocaleList())
+                    .modules(serviceConfig.getDefaultLocalizationModuleList())
+                    .build();
+            
+            log.info("Step 1: Creating MDMS schemas for tenant: {}", targetTenantId);
+            // 1. Create Schema from file
+            createMdmsSchemaFromFile(defaultDataRequest);
+            log.info("✓ Schemas created for new tenant: {}", targetTenantId);
+            
+            log.info("Step 2: Loading production MDMS data");
+            // 2. Load production MDMS data
+            mdmsBulkLoader.loadAllMdmsData(targetTenantId,
+                    requestInfo,
+                    serviceConfig.getDefaultMdmsDataPath());
+            log.info("✓ Production MDMS data loaded for new tenant: {}", targetTenantId);
+
+            log.info("Step 3: Loading production localization data");
+            // 3. Load production localization
+            localizationUtil.upsertLocalizationFromFile(defaultDataRequest,
+                    serviceConfig.getDefaultLocalizationDataPath());
+            log.info("✓ Production localization data loaded for new tenant: {}", targetTenantId);
+            
+            log.info("Step 4: Creating tenant config in Tenant Management System");
+            // 4. Create Tenant Configuration
+            Tenant newTenant = new Tenant();
+            newTenant.setCode(targetTenantId);
+            newTenant.setName(targetTenantId);
+            newTenant.setEmail("admin@" + targetTenantId + ".com");
+            
+            TenantRequest tenantRequest = TenantRequest.builder()
+                    .requestInfo(requestInfo)
+                    .tenant(newTenant)
+                    .build();
+            
+            try {
+                createTenantConfig(tenantRequest);
+                log.info("✓ Tenant config created: {}", targetTenantId);
+            } catch (Exception e) {
+                log.warn("Could not create tenant config (non-critical): {}", e.getMessage());
+            }
+            
+            log.info("========================================");
+            log.info("✓✓✓ Tenant {} created successfully", targetTenantId);
+            log.info("Loaded: Schemas + Production MDMS + Production Localization + Tenant Config");
+            log.info("========================================");
+        } catch (Exception e) {
+            log.error("Failed to load production tenant data for tenant: {}", newTenantRequest.getTargetTenantId(), e);
+            throw new CustomException("TENANT_CREATION_FAILED", "Failed to create new tenant with production data: " + e.getMessage());
+        }
     }
 
 }
