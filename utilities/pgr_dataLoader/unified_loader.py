@@ -10,13 +10,18 @@ import math
 import warnings
 import requests
 import time
+import os
 from typing import Dict, List, Any
 from datetime import datetime
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Font
 from openpyxl.utils import get_column_letter
+from dotenv import load_dotenv
 
 warnings.filterwarnings('ignore')
+
+# Load environment variables from .env file
+load_dotenv()
 
 
 # ============================================================================
@@ -677,14 +682,16 @@ class APIUploader:
     """
 
     def __init__(self):
-        # Hardcoded service URLs - DO NOT CHANGE
-        self.mdms_url = "http://localhost:8094"
-        self.boundary_url = "http://localhost:8081"
-        self.workflow_url = "http://localhost:8280"
-        self.localization_url = "http://localhost:8087"
-        self.Datahandlerurl = "http://localhost:8012"
+        # Load service URLs from environment variables with fallback defaults
+        self.mdms_url = os.getenv("MDMS_SERVICE_URL", "http://localhost:8094")
+        self.boundary_url = os.getenv("BOUNDARY_SERVICE_URL", "http://localhost:8081")
+        self.workflow_url = os.getenv("WORKFLOW_SERVICE_URL", "http://localhost:8280")
+        self.localization_url = os.getenv("LOCALIZATION_SERVICE_URL", "http://localhost:8087")
+        self.Datahandlerurl = os.getenv("DATA_HANDLER_SERVICE_URL", "http://localhost:8012")
+        self.filestore_url = os.getenv("FILESTORE_SERVICE_URL", "http://localhost:8009")
+        self.boundary_mgmt_url = os.getenv("BOUNDARY_MGMT_SERVICE_URL", "http://localhost:8099")
 
-        self.auth_token = "2a57ee8c-410c-4023-a9d3-5111b4f6e304"
+        self.auth_token = os.getenv("AUTH_TOKEN", "2a57ee8c-410c-4023-a9d3-5111b4f6e304")
         self.user_info = {
             "id": 595,
             "uuid": "1fda5623-448a-4a59-ad17-657986742d67",
@@ -1774,8 +1781,7 @@ class APIUploader:
         Returns:
             Dict with generation task details
         """
-        boundary_mgmt_url = "http://localhost:8099"
-        url = f"{boundary_mgmt_url}/boundary-management/v1/_generate"
+        url = f"{self.boundary_mgmt_url}/boundary-management/v1/_generate"
 
         params = {
             "tenantId": tenant_id,
@@ -1831,8 +1837,7 @@ class APIUploader:
         Returns:
             Dict with fileStoreId when complete
         """
-        boundary_mgmt_url = "http://localhost:8099"
-        url = f"{boundary_mgmt_url}/boundary-management/v1/_generate-search"
+        url = f"{self.boundary_mgmt_url}/boundary-management/v1/_generate-search"
 
         params = {
             "tenantId": tenant_id,
@@ -1902,8 +1907,7 @@ class APIUploader:
             Path to downloaded file OR dict with 'path' and 'url' if return_url=True
         """
         import os
-        filestore_url = "http://localhost:8009"
-        url = f"{filestore_url}/filestore/v1/files/url"
+        url = f"{self.filestore_url}/filestore/v1/files/url"
 
         params = {
             "tenantId": tenant_id,
@@ -1966,8 +1970,7 @@ class APIUploader:
             FileStore ID of uploaded file
         """
         import os
-        filestore_url = "http://localhost:8009"
-        url = f"{filestore_url}/filestore/v1/files"
+        url = f"{self.filestore_url}/filestore/v1/files"
 
         try:
             with open(file_path, 'rb') as f:
@@ -2009,8 +2012,7 @@ class APIUploader:
         Returns:
             Dict with processing results
         """
-        boundary_mgmt_url = "http://localhost:8099"
-        url = f"{boundary_mgmt_url}/boundary-management/v1/_process"
+        url = f"{self.boundary_mgmt_url}/boundary-management/v1/_process"
 
         # Override userInfo tenantId to match the request tenant
         user_info_copy = self.user_info.copy()

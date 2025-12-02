@@ -17,3 +17,6 @@ env/
 
 # Claude
 .claude/
+
+# Environment variables
+.env
