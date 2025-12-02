@@ -172,10 +172,11 @@ class UnifiedExcelReader:
         for _, row in df.iterrows():
                 branding_record = {
                      'code':tenant_id,
+                    'name':tenant_id,
                     'bannerUrl': str(row.get('Banner URL', '')) if pd.notna(row.get('Banner URL')) else "",
                     'logoUrl': str(row.get('Logo URL', '')) if pd.notna(row.get('Logo URL')) else "",
                     'logoUrlWhite': str(row.get('Logo URL (White)', '')) if pd.notna(row.get('Logo URL (White)')) else "",
-                    'stateLogo': str(row.get('State Logo', '')) if pd.notna(row.get('State Logo')) else ""
+                    'statelogo': str(row.get('State Logo', '')) if pd.notna(row.get('State Logo')) else ""
                 }
                 branding_list.append(branding_record)
 
@@ -303,7 +304,7 @@ class UnifiedExcelReader:
                     'department': dept_code,
                     'slaHours': int(float(row['Resolution Time (Hours)*'])) if pd.notna(row.get('Resolution Time (Hours)*')) else None,
                     'keywords': str(row['Search Words (comma separated)*']).strip() if pd.notna(row.get('Search Words (comma separated)*')) else None,
-                    'priority': int(float(row['Priority'])) if pd.notna(row.get('Priority')) else None
+                    'order': int(float(row['Priority'])) if pd.notna(row.get('Priority')) else None
                 }
 
                 # Auto-generate localization for parent type (only once)
@@ -325,10 +326,13 @@ class UnifiedExcelReader:
                 # Auto-generate service code from sub-type name
                 service_code = ''.join(word.capitalize() for word in sub_type_name.split())
 
+                menu_path_value = current_parent['type'] if current_parent else sub_type_name
+
                 ct = {
                     'serviceCode': service_code,
                     'name': sub_type_name,
-                    'menuPath': current_parent['type'] if current_parent else sub_type_name,
+                    'menuPath': menu_path_value,
+                    'menuPathName': menu_path_value,
                     'active': True
                 }
 
@@ -340,8 +344,8 @@ class UnifiedExcelReader:
                         ct['slaHours'] = current_parent['slaHours']
                     if current_parent.get('keywords'):
                         ct['keywords'] = current_parent['keywords']
-                    if current_parent.get('priority'):
-                        ct['priority'] = current_parent['priority']
+                    if current_parent.get('order'):
+                        ct['order'] = current_parent['order']
 
                 complaint_types.append(ct)
 

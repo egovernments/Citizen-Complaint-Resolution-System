@@ -67,7 +67,7 @@ class MDMSValidator:
                 }
             },
             "SchemaDefCriteria": {
-                "tenantId": "pg",
+                "tenantId": tenant_id,
                 "codes": [schema_code]
             }
         }
