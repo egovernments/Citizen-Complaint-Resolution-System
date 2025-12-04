@@ -436,6 +436,160 @@ class UnifiedExcelReader:
 
         return employees
 
+    def read_employees_bulk(self, tenant_id: str):
+        """Read employee data from simplified Employee Master sheet for bulk upload
+        Converts department/designation/role NAMES to CODES internally
+
+        Args:
+            tenant_id: Target tenant ID (e.g., 'pg.citya')
+
+        Returns:
+            list: List of employee objects ready for HRMS API
+        """
+        df = pd.read_excel(self.excel_file, sheet_name='Employee Master')
+
+        # Build name-to-code mappings by fetching from MDMS
+        from unified_loader import APIUploader
+        uploader = APIUploader()
+
+        # Fetch departments and create name->code mapping
+        departments = uploader.fetch_departments(tenant_id)
+        dept_name_to_code = {d.get('name'): d.get('code') for d in departments}
+
+        # Fetch designations and create name->code mapping
+        designations = uploader.fetch_designations(tenant_id)
+        desig_name_to_code = {d.get('name'): d.get('code') for d in designations}
+
+        # Fetch roles and create name->code mapping
+        roles_list = uploader.fetch_roles(tenant_id)
+        role_name_to_code = {r.get('name'): r.get('code') for r in roles_list}
+
+        employees = []
+        for idx, row in df.iterrows():
+            # Skip empty rows
+            if pd.isna(row.get('User Name*')):
+                continue
+
+            user_name = str(row['User Name*']).strip()
+
+            # Auto-generate employee code from user name
+            # Remove special characters, convert to uppercase, replace spaces with underscore
+            emp_code = ''.join(c if c.isalnum() or c.isspace() else '' for c in user_name)
+            emp_code = emp_code.upper().replace(' ', '_')
+            # If code is too long, truncate and add index
+            if len(emp_code) > 20:
+                emp_code = emp_code[:17] + f"_{idx}"
+
+            mobile = str(row['Mobile Number*']).strip()
+
+            # Get password (optional, defaults to eGov@123)
+            password = str(row.get('Password', 'eGov@123')).strip() if pd.notna(row.get('Password')) else 'eGov@123'
+
+            # Convert Excel dates to timestamps (milliseconds)
+            def excel_date_to_timestamp(excel_date):
+                """Convert Excel date to timestamp in milliseconds"""
+                if pd.isna(excel_date):
+                    return None
+                # If already a timestamp (number > 1000000000000), return as-is
+                if isinstance(excel_date, (int, float)) and excel_date > 1000000000000:
+                    return int(excel_date)
+                # If it's a pandas datetime, convert to timestamp
+                if isinstance(excel_date, pd.Timestamp):
+                    return int(excel_date.timestamp() * 1000)
+                # If it's a string date, parse it
+                if isinstance(excel_date, str):
+                    from datetime import datetime
+                    dt = pd.to_datetime(excel_date)
+                    return int(dt.timestamp() * 1000)
+                # Default: assume it's Excel serial date
+                try:
+                    dt = pd.to_datetime(excel_date, unit='D', origin='1899-12-30')
+                    return int(dt.timestamp() * 1000)
+                except:
+                    return int(excel_date)
+
+            # Parse dates from Excel
+            from_date = excel_date_to_timestamp(row.get('Assignment From Date*'))
+            if not from_date:
+                from_date = 1725494400000  # Default
+
+            appointment_date = excel_date_to_timestamp(row.get('Date of Appointment*'))
+            if not appointment_date:
+                appointment_date = 1718841600000  # Default
+
+            # Convert department NAME to CODE
+            dept_name = str(row.get('Department Name*', '')).strip()
+            department = dept_name_to_code.get(dept_name, dept_name)  # Fallback to name if not found
+
+            # Convert designation NAME to CODE
+            desig_name = str(row.get('Designation Name*', '')).strip()
+            designation = desig_name_to_code.get(desig_name, desig_name)  # Fallback to name if not found
+
+            # Parse role NAMES and convert to CODES
+            role_names_str = str(row.get('Role Names (comma separated)*', '')).strip()
+            role_names = [r.strip() for r in role_names_str.split(',') if r.strip()]
+            role_codes = [role_name_to_code.get(name, name) for name in role_names]  # Convert names to codes
+
+            # Build roles list for both user and jurisdiction
+            roles = []
+            for i, role_code in enumerate(role_codes):
+                # Get the original role name for this code
+                role_name = role_names[i] if i < len(role_names) else role_code
+
+                roles.append({
+                    'code': role_code,
+                    'name': role_name,
+                    'tenantId': tenant_id
+                })
+
+            # Get boundary info (defaults to City level)
+            hierarchy = str(row.get('Hierarchy Type', 'ADMIN')).strip()
+            boundary_type = str(row.get('Boundary Type', 'City')).strip()
+            boundary = str(row.get('Boundary Code', tenant_id.split('.')[0])).strip()
+
+            # Build employee object
+            emp = {
+                'tenantId': tenant_id,
+                'code': emp_code,
+                'employeeStatus': str(row.get('Employee Status', 'EMPLOYED')).strip(),
+                'employeeType': str(row.get('Employee Type', 'PERMANENT')).strip(),
+                'dateOfAppointment': appointment_date,
+                'assignments': [{
+                    'fromDate': from_date,
+                    'isCurrentAssignment': True,
+                    'department': department,
+                    'designation': designation
+                }],
+                'jurisdictions': [{
+                    'hierarchy': hierarchy,
+                    'boundaryType': boundary_type,
+                    'boundary': boundary,
+                    'tenantId': tenant_id,
+                    'roles': roles  # Same roles assigned to jurisdiction
+                }],
+                'user': {
+                    'name': user_name,
+                    'mobileNumber': mobile,
+                    'active': True,
+                    'type': 'EMPLOYEE',
+                    'tenantId': tenant_id,
+                    'roles': roles,  # Same roles assigned to user
+                    'password': password,  # Use password from Excel or default
+                    'otpReference': '12345'
+                },
+                'serviceHistory': [],
+                'education': [],
+                'tests': []
+            }
+
+            # Add optional gender if provided
+            if pd.notna(row.get('Gender')):
+                emp['user']['gender'] = str(row['Gender']).strip()
+
+            employees.append(emp)
+
+        return employees
+
     def read_boundary_hierarchy(self):
         """Read boundary hierarchy definition"""
         df = pd.read_excel(self.excel_file, sheet_name='Hierarchy_Definition')
@@ -690,6 +844,7 @@ class APIUploader:
         self.Datahandlerurl = os.getenv("DATA_HANDLER_SERVICE_URL", "http://localhost:8012")
         self.filestore_url = os.getenv("FILESTORE_SERVICE_URL", "http://localhost:8009")
         self.boundary_mgmt_url = os.getenv("BOUNDARY_MGMT_SERVICE_URL", "http://localhost:8099")
+        self.hrms_url = os.getenv("HRMS_SERVICE_URL", "http://localhost:8222")
 
         self.auth_token = os.getenv("AUTH_TOKEN", "2a57ee8c-410c-4023-a9d3-5111b4f6e304")
         self.user_info = {
@@ -772,29 +927,45 @@ class APIUploader:
             # If JSON parsing fails, return truncated original text
             return error_text[:200]
 
-    def search_mdms_data(self, schema_code: str, tenant: str) -> List[Dict]:
+    def search_mdms_data(self, schema_code: str, tenant: str, unique_identifiers: List[str] = None, limit: int = 100, offset: int = 0) -> List[Dict]:
         """Generic function to search MDMS v2 data
 
         Args:
-            schema_code: MDMS schema code
+            schema_code: MDMS schema code (e.g., 'common-masters.Department', 'tenant.tenants')
             tenant: Tenant ID
+            unique_identifiers: Optional list of unique identifiers to filter by
+            limit: Max number of records (default: 100)
+            offset: Pagination offset (default: 0)
 
         Returns:
             list: List of data objects retrieved
         """
         url = f"{self.mdms_url}/mdms-v2/v2/_search"
 
+        # Override userInfo tenantId to match the request tenant
+        user_info_copy = self.user_info.copy()
+        user_info_copy['tenantId'] = tenant
+
+        # Build criteria
+        criteria = {
+            "tenantId": tenant,
+            "schemaCode": schema_code,
+            "limit": limit,
+            "offset": offset
+        }
+
+        # Add unique identifiers if provided
+        if unique_identifiers:
+            criteria["uniqueIdentifiers"] = unique_identifiers
+
         payload = {
             "RequestInfo": {
-                "apiId": "asset-services",
+                "apiId": "Rainmaker",
                 "authToken": self.auth_token,
-                "userInfo": self.user_info,
-                "msgId": "search with from and to values"
+                "userInfo": user_info_copy,
+                "msgId": f"{int(time.time() * 1000)}|en_IN"
             },
-            "MdmsCriteria": {
-                "tenantId": tenant,
-                "schemaCode": schema_code
-            }
+            "MdmsCriteria": criteria
         }
 
         headers = {'Content-Type': 'application/json'}
@@ -1608,7 +1779,17 @@ class APIUploader:
         for i, tenant_id in enumerate(tenant_ids, 1):
             try:
                 # Step 1: Search for existing tenant data
+                # Override userInfo tenantId to match the request tenant
+                user_info_copy = self.user_info.copy()
+                user_info_copy['tenantId'] = state_tenant
+
                 search_payload = {
+                    "RequestInfo": {
+                        "apiId": "Rainmaker",
+                        "authToken": self.auth_token,
+                        "userInfo": user_info_copy,
+                        "msgId": f"{int(time.time() * 1000)}|en_IN"
+                    },
                     "MdmsCriteria": {
                         "tenantId": state_tenant,
                         "schemaCode": "tenant.tenants",
@@ -1654,12 +1835,16 @@ class APIUploader:
                 tenant_data['languages'] = existing_languages + [new_language]
 
                 # Step 4: Update tenant with new language
+                # Override userInfo tenantId to match the request tenant
+                user_info_update = self.user_info.copy()
+                user_info_update['tenantId'] = state_tenant
+
                 update_payload = {
                     "RequestInfo": {
                         "apiId": "asset-services",
                         "msgId": "update-language",
                         "authToken": self.auth_token,
-                        "userInfo": self.user_info
+                        "userInfo": user_info_update
                     },
                     "Mdms": {
                         "tenantId": state_tenant,
@@ -2110,4 +2295,782 @@ class APIUploader:
         except Exception as e:
             print(f"❌ Error: {str(e)}")
             return {}
- 
+
+    # ========================================================================
+    # HRMS EMPLOYEE METHODS
+    # ========================================================================
+
+    def fetch_departments(self, tenant: str) -> List[Dict]:
+        """Fetch all departments from MDMS
+
+        Args:
+            tenant: Tenant ID
+
+        Returns:
+            List of department objects with code and name
+        """
+        print(f"📥 Fetching departments from MDMS for tenant: {tenant}")
+        departments = self.search_mdms_data(schema_code='common-masters.Department', tenant=tenant)
+        print(f"   ✅ Found {len(departments)} department(s)")
+        return departments
+
+    def fetch_designations(self, tenant: str) -> List[Dict]:
+        """Fetch all designations from MDMS
+
+        Args:
+            tenant: Tenant ID
+
+        Returns:
+            List of designation objects with code and name
+        """
+        print(f"📥 Fetching designations from MDMS for tenant: {tenant}")
+        designations = self.search_mdms_data(schema_code='common-masters.Designation', tenant=tenant)
+        print(f"   ✅ Found {len(designations)} designation(s)")
+        return designations
+
+    def fetch_roles(self, tenant: str) -> List[Dict]:
+        """Fetch all roles from MDMS
+
+        Args:
+            tenant: Tenant ID
+
+        Returns:
+            List of role objects with code and name
+        """
+        try:
+            print(f"📥 Fetching roles from MDMS for tenant: {tenant}")
+
+            # Try to fetch from MDMS roles schema
+            roles = self.search_mdms_data(
+                schema_code='ACCESSCONTROL-ROLES.roles',
+                tenant=tenant,
+                limit=200
+            )
+
+            if roles and len(roles) > 0:
+                print(f"   ✅ Found {len(roles)} role(s) from MDMS")
+                return roles
+            else:
+                print(f"   ⚠️  No roles found in MDMS, using defaults")
+                # Return default PGR roles
+                return self._get_default_roles()
+
+        except Exception as e:
+            print(f"   ⚠️  Error fetching roles from MDMS: {str(e)[:150]}")
+            print(f"   ℹ️  Using default PGR roles")
+            return self._get_default_roles()
+
+    def _get_default_roles(self) -> List[Dict]:
+        """Get default roles based on default-data-handler HRMS.json
+
+        Returns:
+            List of default role objects commonly used in eGov systems
+        """
+        return [
+            # Report Viewer
+            {"code": "TICKET_REPORT_VIEWER", "name": "Report Viewer", "description": "One who will view the reports of tickets"},
+
+            # PGR Roles (from default-data-handler ACCESSCONTROL-ROLES.roles.json)
+            {"code": "PGR_LME", "name": "Complaint Resolver", "description": "One who will resolve complaints"},
+            {"code": "GRO", "name": "Complaint Assessor", "description": "One who will assess & assign complaints"},
+            {"code": "CSR", "name": "Complainant", "description": "One who will create complaints"},
+            {"code": "PGR_VIEWER", "name": "PGR Viewer role", "description": " "},
+
+            # Admin Roles
+            {"code": "LOC_ADMIN", "name": "Localisation admin", "description": "LOC_ADMIN"},
+            {"code": "MDMS_ADMIN", "name": "MDMS ADMIN", "description": "MDMS User that can create and search schema"},
+            {"code": "HRMS_ADMIN", "name": "HRMS Admin", "description": "HRMS Admin"},
+            {"code": "WORKFLOW_ADMIN", "name": "WORKFLOW ADMIN", "description": "WORKFLOW User that can create and search Workflow"},
+            {"code": "SUPERUSER", "name": "Super User", "description": "System Administrator. Can change all master data and has access to all the system screens."},
+
+            # Common Roles
+            {"code": "EMPLOYEE", "name": "Employee", "description": "Default role for all employees"},
+            {"code": "CITIZEN", "name": "Citizen", "description": "Citizen who can raise complaint"},
+            {"code": "ANONYMOUS", "name": "Anonymous User", "description": "Anonymous User to be used in case of no auth"},
+            {"code": "COMMON_EMPLOYEE", "name": "Basic employee roles", "description": "Basic employee roles"},
+
+            # System Roles
+            {"code": "REINDEXING_ROLE", "name": "Reindexing Role", "description": "Role for reindexing for encrypted data access"},
+            {"code": "INTERNAL_MICROSERVICE_ROLE", "name": "Internal Microservice Role", "description": "Internal role for plain access"},
+            {"code": "SYSTEM", "name": "System user", "description": "System user role"},
+            {"code": "QA_AUTOMATION", "name": "QA Automation", "description": "QA Automation"},
+
+            # Escalation Roles
+            {"code": "SUPERVISOR", "name": "Auto Escalation Supervisor", "description": "Escalation to particular role"},
+            {"code": "AUTO_ESCALATE", "name": "Auto Escalation Employee", "description": "Auto Escalation Employee"}
+        ]
+
+    def ensure_roles_in_mdms(self, tenant: str, auto_create: bool = True) -> bool:
+        """Ensure all required roles exist in MDMS, optionally creating them if missing
+
+        Args:
+            tenant: Tenant ID
+            auto_create: If True, automatically create missing roles in MDMS
+
+        Returns:
+            True if all roles exist or were created successfully, False otherwise
+        """
+        print(f"\n🔍 Checking roles in MDMS for tenant: {tenant}")
+
+        # Fetch existing roles from MDMS
+        try:
+            existing_roles = self.search_mdms_data(
+                schema_code='ACCESSCONTROL-ROLES.roles',
+                tenant=tenant,
+                limit=200
+            )
+            existing_codes = {role.get('code') for role in existing_roles if role.get('code')}
+            print(f"   ✅ Found {len(existing_codes)} existing roles in MDMS")
+        except Exception as e:
+            print(f"   ⚠️  Could not fetch existing roles: {str(e)[:150]}")
+            existing_codes = set()
+
+        # Get default roles that should exist
+        default_roles = self._get_default_roles()
+        required_codes = {role.get('code') for role in default_roles if role.get('code')}
+
+        # Find missing roles
+        missing_codes = required_codes - existing_codes
+
+        if not missing_codes:
+            print(f"   ✅ All {len(required_codes)} required roles already exist in MDMS")
+            return True
+
+        print(f"   ⚠️  Missing {len(missing_codes)} roles: {', '.join(sorted(missing_codes))}")
+
+        if not auto_create:
+            print(f"   ℹ️  Auto-create is disabled. Roles must be created manually.")
+            return False
+
+        # Create missing roles
+        print(f"\n📤 Creating {len(missing_codes)} missing roles in MDMS...")
+        created_count = 0
+        failed_roles = []
+
+        for role in default_roles:
+            role_code = role.get('code')
+            if role_code not in missing_codes:
+                continue
+
+            try:
+                # Prepare MDMS data structure
+                mdms_data = {
+                    "code": role.get('code'),
+                    "name": role.get('name'),
+                    "description": role.get('description', '')
+                }
+
+                # Create in MDMS
+                self.create_mdms_data(
+                    schema_code='ACCESSCONTROL-ROLES.roles',
+                    data=mdms_data,
+                    tenant=tenant,
+                    unique_identifier=role_code
+                )
+                created_count += 1
+                print(f"   ✅ Created role: {role_code} ({role.get('name')})")
+
+            except Exception as e:
+                error_msg = str(e)
+                # Check if it's a duplicate error (role was created between our check and now)
+                if 'DUPLICATE' in error_msg.upper() or 'already exists' in error_msg.lower():
+                    print(f"   ℹ️  Role already exists: {role_code}")
+                    created_count += 1
+                else:
+                    print(f"   ❌ Failed to create role {role_code}: {error_msg[:150]}")
+                    failed_roles.append(role_code)
+
+        if failed_roles:
+            print(f"\n⚠️  Failed to create {len(failed_roles)} roles: {', '.join(failed_roles)}")
+            return False
+
+        print(f"\n✅ Successfully ensured all {len(required_codes)} roles exist in MDMS ({created_count} created)")
+        return True
+
+    def fetch_boundaries(self, tenant: str, hierarchy_type: str = "ADMIN") -> List[Dict]:
+        """Fetch boundaries from boundary service v2
+
+        Args:
+            tenant: Tenant ID
+            hierarchy_type: Hierarchy type (default: ADMIN)
+
+        Returns:
+            List of boundary objects with code and type
+        """
+        url = f"{self.boundary_url}/boundary-service/boundary/_search"
+
+        # Override userInfo tenantId
+        user_info_copy = self.user_info.copy()
+        user_info_copy['tenantId'] = tenant
+
+        payload = {
+            "RequestInfo": {
+                "apiId": "Rainmaker",
+                "authToken": self.auth_token,
+                "userInfo": user_info_copy,
+                "msgId": f"{int(time.time() * 1000)}|en_IN"
+            },
+            "Boundary": {
+                "tenantId": tenant,
+                "hierarchyType": hierarchy_type,
+                "limit": 100,
+                "offset": 0
+            }
+        }
+
+        headers = {'Content-Type': 'application/json'}
+
+        try:
+            print(f"📥 Fetching boundaries from boundary service for tenant: {tenant}")
+            response = requests.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+
+            # Extract boundaries from response
+            # API returns: {"TenantBoundary": [{"hierarchyType": "...", "boundary": [...]}]}
+            tenant_boundaries = data.get('TenantBoundary', [])
+
+            boundaries = []
+            for tb in tenant_boundaries:
+                boundary_list = tb.get('boundary', {}).get('children', [])
+                for boundary in boundary_list:
+                    boundaries.append({
+                        'code': boundary.get('code', ''),
+                        'name': boundary.get('name', ''),
+                        'boundaryType': boundary.get('boundaryType', 'City'),
+                        'label': boundary.get('label', ''),
+                        'latitude': boundary.get('latitude'),
+                        'longitude': boundary.get('longitude')
+                    })
+
+            print(f"   ✅ Found {len(boundaries)} boundarie(s)")
+
+            # If no boundaries found, return default
+            if not boundaries:
+                boundaries = [{"code": tenant.split('.')[0], "name": tenant.split('.')[0], "boundaryType": "City"}]
+
+            return boundaries
+
+        except Exception as e:
+            print(f"   ⚠️  Could not fetch boundaries: {str(e)[:200]}")
+            # Return default boundary
+            return [{"code": tenant.split('.')[0], "name": tenant.split('.')[0], "boundaryType": "City"}]
+
+    def generate_employee_template(self, tenant: str, output_path: str = None) -> str:
+        """Generate dynamic Employee Master Excel template with dropdowns
+
+        Fetches all data from MDMS and creates pre-filled template with:
+        - Department dropdown (from MDMS)
+        - Designation dropdown (from MDMS)
+        - Role codes dropdown (from MDMS)
+        - Employee Status dropdown (EMPLOYED, SUSPENDED, etc.)
+        - Employee Type dropdown (PERMANENT, TEMPORARY, etc.)
+        - Gender dropdown (Male, Female, Other)
+        - Hierarchy Type dropdown (ADMIN, ADMIN1, etc.)
+        - Boundary Type dropdown (from boundaries)
+        - Boundary Code dropdown (from boundaries)
+
+        Args:
+            tenant: Tenant ID
+            output_path: Output file path (default: templates/Employee_Master_Dynamic.xlsx)
+
+        Returns:
+            Path to generated template
+        """
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment, Protection
+        from openpyxl.worksheet.datavalidation import DataValidation
+
+        print("\n" + "="*70)
+        print("   📋 GENERATING DYNAMIC EMPLOYEE TEMPLATE")
+        print("="*70)
+
+        # Fetch all data from MDMS
+        departments = self.fetch_departments(tenant)
+        designations = self.fetch_designations(tenant)
+        roles = self.fetch_roles(tenant)
+        boundaries = self.fetch_boundaries(tenant)
+
+        # Create workbook
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Employee Master"
+
+        # Create reference sheets for dropdowns
+        ref_dept = wb.create_sheet("Ref_Departments")
+        ref_desig = wb.create_sheet("Ref_Designations")
+        ref_roles = wb.create_sheet("Ref_Roles")
+        ref_boundaries = wb.create_sheet("Ref_Boundaries")
+
+        # Hide reference sheets
+        ref_dept.sheet_state = 'hidden'
+        ref_desig.sheet_state = 'hidden'
+        ref_roles.sheet_state = 'hidden'
+        ref_boundaries.sheet_state = 'hidden'
+
+        # Populate reference sheets
+        # Departments
+        ref_dept['A1'] = 'Department Code'
+        ref_dept['B1'] = 'Department Name'
+        for i, dept in enumerate(departments, 2):
+            ref_dept[f'A{i}'] = dept.get('code', '')
+            ref_dept[f'B{i}'] = dept.get('name', '')
+
+        # Designations
+        ref_desig['A1'] = 'Designation Code'
+        ref_desig['B1'] = 'Designation Name'
+        for i, desig in enumerate(designations, 2):
+            ref_desig[f'A{i}'] = desig.get('code', '')
+            ref_desig[f'B{i}'] = desig.get('name', '')
+
+        # Roles
+        ref_roles['A1'] = 'Role Code'
+        ref_roles['B1'] = 'Role Name'
+        for i, role in enumerate(roles, 2):
+            ref_roles[f'A{i}'] = role.get('code', '')
+            ref_roles[f'B{i}'] = role.get('name', '')
+
+        # Boundaries
+        ref_boundaries['A1'] = 'Boundary Code'
+        ref_boundaries['B1'] = 'Boundary Type'
+        for i, boundary in enumerate(boundaries, 2):
+            ref_boundaries[f'A{i}'] = boundary.get('code', '')
+            ref_boundaries[f'B{i}'] = boundary.get('boundaryType', 'City')
+
+        # Define headers (user only sees names, codes are handled internally)
+        headers = [
+            'User Name*',
+            'Mobile Number*',
+            'Password',
+            'Department Name*',
+            'Designation Name*',
+            'Role Names (comma separated)*',
+            'Employee Status',
+            'Employee Type',
+            'Gender',
+            'Hierarchy Type',
+            'Boundary Type',
+            'Boundary Code',
+            'Assignment From Date*',
+            'Date of Appointment*'
+        ]
+
+        # Write headers
+        header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+        header_font = Font(bold=True, color='FFFFFF')
+
+        for col_idx, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col_idx, value=header)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+            # Add comment to Role Names column
+            if header == 'Role Names (comma separated)*':
+                from openpyxl.comments import Comment
+                # Get list of available role names for the tooltip
+                available_roles = ', '.join([r.get('name', '') for r in roles[:10]])
+                if len(roles) > 10:
+                    available_roles += f', ... ({len(roles)} total roles)'
+
+                comment = Comment(
+                    f"💡 Enter comma-separated role names\n\n"
+                    f"Example: Employee,PGR Viewer,PGR Last Mile Employee\n\n"
+                    f"Available roles:\n{available_roles}\n\n"
+                    f"See 'Ref_Roles' sheet for complete list",
+                    "System"
+                )
+                cell.comment = comment
+
+        # Create data validations with dropdowns using NAMES (not codes)
+        # Department Name dropdown (Column D)
+        dept_names = ','.join([d.get('name', '') for d in departments[:50]])  # Excel limit
+        if len(departments) <= 50:
+            dv_dept = DataValidation(type="list", formula1=f'"{dept_names}"', allow_blank=True)
+        else:
+            dv_dept = DataValidation(type="list", formula1=f"Ref_Departments!$B$2:$B${len(departments)+1}", allow_blank=True)
+        dv_dept.error = 'Please select a valid department name'
+        dv_dept.errorTitle = 'Invalid Department'
+        ws.add_data_validation(dv_dept)
+        dv_dept.add(f'D2:D1000')
+
+        # Designation Name dropdown (Column E)
+        desig_names = ','.join([d.get('name', '') for d in designations[:50]])
+        if len(designations) <= 50:
+            dv_desig = DataValidation(type="list", formula1=f'"{desig_names}"', allow_blank=True)
+        else:
+            dv_desig = DataValidation(type="list", formula1=f"Ref_Designations!$B$2:$B${len(designations)+1}", allow_blank=True)
+        dv_desig.error = 'Please select a valid designation name'
+        dv_desig.errorTitle = 'Invalid Designation'
+        ws.add_data_validation(dv_desig)
+        dv_desig.add(f'E2:E1000')
+
+        # Employee Status dropdown (Column G)
+        dv_status = DataValidation(type="list", formula1='"EMPLOYED,SUSPENDED,RETIRED,TERMINATED"', allow_blank=True)
+        dv_status.error = 'Please select: EMPLOYED, SUSPENDED, RETIRED, or TERMINATED'
+        dv_status.errorTitle = 'Invalid Employee Status'
+        ws.add_data_validation(dv_status)
+        dv_status.add(f'G2:G1000')
+
+        # Employee Type dropdown (Column H)
+        dv_type = DataValidation(type="list", formula1='"PERMANENT,TEMPORARY,CONTRACT,DAILY_WAGE"', allow_blank=True)
+        dv_type.error = 'Please select: PERMANENT, TEMPORARY, CONTRACT, or DAILY_WAGE'
+        dv_type.errorTitle = 'Invalid Employee Type'
+        ws.add_data_validation(dv_type)
+        dv_type.add(f'H2:H1000')
+
+        # Gender dropdown (Column I)
+        dv_gender = DataValidation(type="list", formula1='"Male,Female,Other,Transgender"', allow_blank=True)
+        dv_gender.error = 'Please select: Male, Female, Other, or Transgender'
+        dv_gender.errorTitle = 'Invalid Gender'
+        ws.add_data_validation(dv_gender)
+        dv_gender.add(f'I2:I1000')
+
+        # Hierarchy Type dropdown (Column J)
+        dv_hierarchy = DataValidation(type="list", formula1='"ADMIN,ADMIN1,ADMIN2,REVENUE"', allow_blank=True)
+        dv_hierarchy.error = 'Please select: ADMIN, ADMIN1, ADMIN2, or REVENUE'
+        dv_hierarchy.errorTitle = 'Invalid Hierarchy Type'
+        ws.add_data_validation(dv_hierarchy)
+        dv_hierarchy.add(f'J2:J1000')
+
+        # Boundary Type dropdown (Column K)
+        boundary_types = ','.join(list(set([b.get('boundaryType', 'City') for b in boundaries])))
+        dv_boundary_type = DataValidation(type="list", formula1=f'"{boundary_types}"', allow_blank=True)
+        ws.add_data_validation(dv_boundary_type)
+        dv_boundary_type.add(f'K2:K1000')
+
+        # Boundary Code dropdown (Column L)
+        boundary_codes = ','.join([b.get('code', '') for b in boundaries[:50]])
+        if len(boundaries) <= 50:
+            dv_boundary = DataValidation(type="list", formula1=f'"{boundary_codes}"', allow_blank=True)
+        else:
+            dv_boundary = DataValidation(type="list", formula1=f"Ref_Boundaries!$A$2:$A${len(boundaries)+1}", allow_blank=True)
+        ws.add_data_validation(dv_boundary)
+        dv_boundary.add(f'L2:L1000')
+
+        # Set column widths
+        column_widths = {
+            'A': 20,  # User Name
+            'B': 15,  # Mobile Number
+            'C': 15,  # Password
+            'D': 25,  # Department Name
+            'E': 25,  # Designation Name
+            'F': 50,  # Role Names (comma-separated)
+            'G': 15,  # Employee Status
+            'H': 15,  # Employee Type
+            'I': 12,  # Gender
+            'J': 15,  # Hierarchy Type
+            'K': 15,  # Boundary Type
+            'L': 15,  # Boundary Code
+            'M': 25,  # Assignment From Date
+            'N': 25,  # Date of Appointment
+        }
+
+        for col_letter, width in column_widths.items():
+            ws.column_dimensions[col_letter].width = width
+
+        # Import datetime for date formatting
+        from datetime import datetime
+
+        # Add sample row with default values (using NAMES, not codes)
+        ws['A2'] = 'Sample Employee'
+        ws['B2'] = '9999999999'
+        ws['C2'] = 'eGov@123'
+        ws['D2'] = departments[0].get('name', 'Department 1') if departments else 'Department 1'
+        ws['E2'] = designations[0].get('name', 'Designation 01') if designations else 'Designation 01'
+        ws['F2'] = 'Employee,PGR Viewer'  # Role NAMES, not codes
+        ws['G2'] = 'EMPLOYED'
+        ws['H2'] = 'PERMANENT'
+        ws['I2'] = 'Male'
+        ws['J2'] = 'ADMIN'
+        ws['K2'] = 'City'
+        ws['L2'] = tenant.split('.')[0]
+
+        # Use actual Excel dates (not timestamps)
+        ws['M2'] = datetime(2024, 9, 5)  # Assignment From Date
+        ws['N2'] = datetime(2024, 6, 20)  # Date of Appointment
+
+        # Format date columns
+        from openpyxl.styles import numbers
+        for row in range(2, 1001):  # Format rows 2-1000
+            ws[f'M{row}'].number_format = numbers.FORMAT_DATE_XLSX14  # mm-dd-yy
+            ws[f'N{row}'].number_format = numbers.FORMAT_DATE_XLSX14
+
+        # Add instructions sheet
+        instructions = wb.create_sheet("Instructions", 0)
+        instructions['A1'] = "📋 EMPLOYEE MASTER TEMPLATE - INSTRUCTIONS"
+        instructions['A1'].font = Font(bold=True, size=14, color='0066cc')
+
+        instructions['A3'] = "✨ USER-FRIENDLY: Use NAMES everywhere! Codes are converted automatically."
+        instructions['A5'] = "📝 Required Fields (marked with *):"
+        instructions['A6'] = "  1. User Name* - Full name of the employee"
+        instructions['A7'] = "  2. Mobile Number* - 10-digit mobile number"
+        instructions['A8'] = "  3. Department Name* - Select from dropdown (e.g., 'Public Works')"
+        instructions['A9'] = "  4. Designation Name* - Select from dropdown (e.g., 'Assistant Engineer')"
+        instructions['A10'] = "  5. Role Names* - Type comma-separated role names (see 'README - Roles' sheet)"
+        instructions['A11'] = "  6. Assignment From Date* - Use Excel date picker (e.g., 09/05/2024)"
+        instructions['A12'] = "  7. Date of Appointment* - Use Excel date picker (e.g., 06/20/2024)"
+
+        instructions['A14'] = "🎯 HOW TO SELECT MULTIPLE ROLES:"
+        instructions['A15'] = "  1. Go to 'README - Roles' sheet"
+        instructions['A16'] = "  2. Find the roles you want from the list"
+        instructions['A17'] = "  3. Copy role names (NOT codes) - example: 'Employee,PGR Viewer,PGR Admin'"
+        instructions['A18'] = "  4. Paste into the 'Role Names' column in Employee Master sheet"
+        instructions['A19'] = "  "
+        instructions['A20'] = "  💡 TIP: You can copy multiple role names at once and join with commas"
+        instructions['A21'] = "  Example: Employee,PGR Viewer,PGR Last Mile Employee"
+
+        instructions['A23'] = "💡 Optional Fields (with dropdowns):"
+        instructions['A24'] = "  • Password - User password (default: eGov@123 if left blank)"
+        instructions['A25'] = "  • Employee Status - EMPLOYED, SUSPENDED, RETIRED, TERMINATED (default: EMPLOYED)"
+        instructions['A26'] = "  • Employee Type - PERMANENT, TEMPORARY, CONTRACT, DAILY_WAGE (default: PERMANENT)"
+        instructions['A27'] = "  • Gender - Male, Female, Other, Transgender"
+        instructions['A28'] = "  • Hierarchy Type - ADMIN, ADMIN1, ADMIN2, REVENUE (default: ADMIN)"
+        instructions['A29'] = "  • Boundary Type - Select from available boundaries (default: City)"
+        instructions['A30'] = "  • Boundary Code - Select from available boundaries (default: tenant code)"
+
+        instructions['A32'] = "⚠️  IMPORTANT NOTES:"
+        instructions['A33'] = "  1. USE NAMES NOT CODES - Department, Designation, and Role NAMES are used"
+        instructions['A34'] = "  2. Auto-Conversion - System converts names to codes when uploading"
+        instructions['A35'] = "  3. Employee Code - Auto-generated from User Name"
+        instructions['A36'] = "  4. Jurisdiction - Automatically created using Boundary + Roles"
+        instructions['A37'] = "  5. Roles - Same roles assigned to BOTH user and jurisdiction"
+        instructions['A38'] = "  6. All dropdowns pre-filled from MDMS"
+        instructions['A39'] = "  7. See 'README - Roles' sheet for complete list of available roles"
+        instructions['A40'] = "  8. Delete sample row before uploading real data"
+        instructions['A41'] = f"  9. Configured for tenant: {tenant}"
+
+        instructions.column_dimensions['A'].width = 80
+
+        # Create README - Roles sheet with all available roles
+        readme_roles = wb.create_sheet("README - Roles")
+        readme_roles['A1'] = "📚 AVAILABLE ROLES - Copy & Paste Role Names"
+        readme_roles['A1'].font = Font(bold=True, size=14, color='0066cc')
+        readme_roles['A2'] = f"Total Roles Available: {len(roles)}"
+        readme_roles['A2'].font = Font(bold=True, color='006600')
+
+        readme_roles['A4'] = "Instructions:"
+        readme_roles['A4'].font = Font(bold=True, size=12, color='cc6600')
+        readme_roles['A5'] = "  1. Find the roles you want to assign to the employee"
+        readme_roles['A6'] = "  2. Copy the ROLE NAME (Column B) - NOT the code!"
+        readme_roles['A7'] = "  3. For multiple roles, copy each name and join with commas"
+        readme_roles['A8'] = "  4. Paste into 'Role Names' column in Employee Master sheet"
+        readme_roles['A9'] = ""
+        readme_roles['A10'] = "Example: Employee,PGR Viewer,PGR Last Mile Employee"
+        readme_roles['A10'].font = Font(italic=True, color='0066cc')
+
+        # Headers for role list
+        readme_roles['A12'] = "Role Code"
+        readme_roles['B12'] = "Role Name (COPY THIS)"
+        readme_roles['C12'] = "Description"
+        readme_roles['A12'].font = Font(bold=True, color='FFFFFF')
+        readme_roles['B12'].font = Font(bold=True, color='FFFFFF')
+        readme_roles['C12'].font = Font(bold=True, color='FFFFFF')
+
+        from openpyxl.styles import PatternFill
+        header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+        readme_roles['A12'].fill = header_fill
+        readme_roles['B12'].fill = header_fill
+        readme_roles['C12'].fill = header_fill
+
+        # Populate all roles
+        row = 13
+        for role in sorted(roles, key=lambda x: x.get('name', '')):
+            readme_roles[f'A{row}'] = role.get('code', '')
+            readme_roles[f'B{row}'] = role.get('name', '')
+            readme_roles[f'C{row}'] = role.get('description', '')
+
+            # Highlight role name column for easy copying
+            readme_roles[f'B{row}'].font = Font(bold=True, color='006600')
+            row += 1
+
+        # Set column widths
+        readme_roles.column_dimensions['A'].width = 35
+        readme_roles.column_dimensions['B'].width = 45
+        readme_roles.column_dimensions['C'].width = 60
+
+        # Add note at bottom
+        readme_roles[f'A{row+2}'] = "💡 Common Role Combinations:"
+        readme_roles[f'A{row+2}'].font = Font(bold=True, size=11, color='cc6600')
+        readme_roles[f'A{row+3}'] = "  • Basic Employee: Employee"
+        readme_roles[f'A{row+4}'] = "  • PGR Complaint Resolver: PGR Last Mile Employee,PGR Viewer,Employee"
+        readme_roles[f'A{row+5}'] = "  • PGR Complaint Assessor: Grievance Routing Officer,PGR Viewer,Employee"
+        readme_roles[f'A{row+6}'] = "  • Admin User: HRMS Admin,MDMS ADMIN,Localisation admin,WORKFLOW ADMIN"
+
+        # Save file
+        if not output_path:
+            os.makedirs('templates', exist_ok=True)
+            output_path = f'templates/Employee_Master_Dynamic_{tenant}.xlsx'
+
+        # Delete old file if exists to ensure clean generation
+        if os.path.exists(output_path):
+            try:
+                os.remove(output_path)
+                print(f"\n🗑️  Deleted old template: {output_path}")
+            except Exception as e:
+                print(f"\n⚠️  Could not delete old file: {e}")
+
+        wb.save(output_path)
+
+        print("\n" + "="*70)
+        print("  ✅ DYNAMIC TEMPLATE GENERATED SUCCESSFULLY")
+        print("="*70)
+        print(f"\n📄 File: {output_path}")
+        print(f"\n📊 Statistics:")
+        print(f"   • Departments: {len(departments)}")
+        print(f"   • Designations: {len(designations)}")
+        print(f"   • Roles: {len(roles)}")
+        print(f"   • Boundaries: {len(boundaries)}")
+        print(f"   • Dropdowns: 8 (Department, Designation, Status, Type, Gender, Hierarchy, Boundary Type, Boundary Code)")
+        print("\n💡 Template includes:")
+        print("   ✓ Employee Master sheet - Main data entry sheet")
+        print("   ✓ Instructions sheet - Complete usage guide")
+        print("   ✓ README - Roles sheet - All available roles with copy-paste ready names")
+        print("   ✓ Hidden reference sheets (Departments, Designations, Roles, Boundaries)")
+        print("   ✓ All dropdowns pre-filled from MDMS")
+        print("   ✓ Sample row with default values")
+        print("   ✓ Data validation for all dropdown fields")
+        print("="*70)
+
+        return output_path
+
+    def create_employees(self, employee_list: List[Dict], tenant: str,
+                        sheet_name: str = None, excel_file: str = None):
+        """Bulk create employees via HRMS API
+
+        Args:
+            employee_list: List of employee objects
+            tenant: Tenant ID
+            sheet_name: Excel sheet name to update with status
+            excel_file: Path to the uploaded Excel file
+
+        Returns:
+            Dict with creation results
+        """
+        # STEP 1: Ensure all required roles exist in MDMS before creating employees
+        print(f"\n{'='*60}")
+        print(f"🔐 PRE-CHECK: Validating Roles in MDMS")
+        print(f"{'='*60}")
+
+        roles_ok = self.ensure_roles_in_mdms(tenant=tenant, auto_create=True)
+
+        if not roles_ok:
+            error_msg = "⚠️  Cannot proceed: Some required roles are missing from MDMS and could not be created."
+            print(f"\n{error_msg}")
+            print(f"   Please ensure roles are created in MDMS before creating employees.")
+            return {
+                'created': 0,
+                'exists': 0,
+                'failed': len(employee_list),
+                'errors': [error_msg]
+            }
+
+        # STEP 2: Proceed with employee creation
+        url = f"{self.hrms_url}/egov-hrms/employees/_create"
+
+        results = {
+            'created': 0,
+            'exists': 0,
+            'failed': 0,
+            'errors': []
+        }
+
+        print(f"\n{'='*60}")
+        print(f"[UPLOADING] HRMS Employees")
+        print(f"   Tenant: {tenant}")
+        print(f"   Records: {len(employee_list)}")
+        print(f"   API URL: {url}")
+        print("="*60)
+
+        # Track row-by-row status for Excel update
+        row_statuses = []
+
+        for i, employee in enumerate(employee_list, 1):
+            emp_code = employee.get('code', str(i))
+
+            # Override userInfo tenantId to match the request tenant
+            user_info_copy = self.user_info.copy()
+            user_info_copy['tenantId'] = tenant
+
+            payload = {
+                "RequestInfo": {
+                    "apiId": "Rainmaker",
+                    "ver": "1.0",
+                    "action": "_create",
+                    "msgId": f"{int(time.time() * 1000)}",
+                    "authToken": self.auth_token,
+                    "userInfo": user_info_copy
+                },
+                "Employees": [employee]
+            }
+
+            headers = {'Content-Type': 'application/json'}
+            status = "SUCCESS"
+            status_code = 200
+            error_message = ""
+
+            try:
+                response = requests.post(url, json=payload, headers=headers)
+                status_code = response.status_code
+                response.raise_for_status()
+                print(f"   [OK] [{i}/{len(employee_list)}] {emp_code}")
+                results['created'] += 1
+
+            except requests.exceptions.HTTPError as e:
+                status_code = e.response.status_code if hasattr(e, 'response') and e.response is not None else 500
+                error_text = e.response.text if hasattr(e, 'response') and e.response is not None else str(e)
+
+                # Extract clean error message from API response
+                error_message = self._extract_error_message(error_text) if error_text else str(e)[:200]
+
+                # Check for duplicate/already exists
+                if ('already exists' in error_text.lower() or
+                    'duplicate' in error_text.lower() or
+                    'user_username_unique_key' in error_text.lower() or
+                    'eg_user_username_key' in error_text.lower()):
+                    print(f"   [EXISTS] [{i}/{len(employee_list)}] {emp_code} (HTTP {status_code})")
+                    results['exists'] += 1
+                    status = "EXISTS"
+                else:
+                    print(f"   [FAILED] [{i}/{len(employee_list)}] {emp_code} (HTTP {status_code})")
+                    print(f"   ERROR: {error_message}")
+                    results['failed'] += 1
+                    results['errors'].append({'id': emp_code, 'error': error_message})
+                    status = "FAILED"
+
+            except Exception as e:
+                error_message = str(e)[:200]
+                status_code = 0
+                status = "FAILED"
+                print(f"   [ERROR] [{i}/{len(employee_list)}] {emp_code} - {error_message[:100]}")
+                results['failed'] += 1
+                results['errors'].append({'id': emp_code, 'error': error_message})
+
+            # Store status for this row
+            row_statuses.append({
+                'row_index': i,
+                'status': status,
+                'status_code': status_code,
+                'error_message': error_message
+            })
+
+            time.sleep(0.2)
+
+        # Summary
+        print("="*60)
+        print(f"[SUMMARY] Created: {results['created']}")
+        print(f"[SUMMARY] Already Exists: {results['exists']}")
+        print(f"[SUMMARY] Failed: {results['failed']}")
+        print("="*60)
+
+        # Write status columns directly into the uploaded Excel file
+        if excel_file and sheet_name and row_statuses:
+            self._write_status_to_excel(
+                excel_file=excel_file,
+                sheet_name=sheet_name,
+                row_statuses=row_statuses,
+                schema_code='hrms.employees'
+            )
+
+        return results
+
