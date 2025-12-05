@@ -24,6 +24,7 @@ import SelectAddress from "../../pgr/src/pages/citizen/Create/Steps/SelectAddres
 import SelectImages from "../../pgr/src/pages/citizen/Create/Steps/SelectImages"; 
 import CreatePGRFlow from "./pages/citizen/Create/FormExplorer";
 
+
 export const PGRReducers = getRootReducer;
 
 

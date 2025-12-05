@@ -71,6 +71,7 @@ const CreateComplaint = () => {
                   populators: {
                     ...field.populators,
                     componentInFront: validationRules.prefix,
+                    prefix:validationRules.prefix,
                     validation: {
                       required: true,
                       minlength: validationRules.minLength,

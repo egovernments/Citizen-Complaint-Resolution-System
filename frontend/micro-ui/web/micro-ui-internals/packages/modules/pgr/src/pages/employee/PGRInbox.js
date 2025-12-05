@@ -78,6 +78,7 @@ const PGRSearchInbox = () => {
                   ...field,
                   populators: {
                     ...field.populators,
+                    prefix: validationRules.prefix,
                     validation: {
                       minlength: validationRules.minLength,
                       maxlength: validationRules.maxLength,
@@ -103,7 +104,7 @@ const PGRSearchInbox = () => {
   /**
    * Preprocess config using translation and inject complaint types into the serviceCode dropdown
    */
-  const updatedConfig = useMemo(
+  var updatedConfig = useMemo(
     () =>
       Digit.Utils.preProcessMDMSConfigInboxSearch(
         t,
@@ -133,6 +134,46 @@ const PGRSearchInbox = () => {
    */
   if (isLoading || isValidationLoading || !pageConfig || serviceDefs?.length === 0) {
     return <Loader />;
+  }
+
+  console.log("*** Log ===> 1", configs);
+  console.log("*** Log ===> 11", updatedConfig);
+
+   // Inject mobile validation rules from MDMS into the search config
+  if (updatedConfig && validationRules && updatedConfig.sections?.search?.uiConfig?.fields) {
+    const { min, max } = getMinMaxValues();
+    updatedConfig = {
+      ...updatedConfig,
+      sections: {
+        ...updatedConfig.sections,
+        search: {
+          ...updatedConfig.sections.search,
+          uiConfig: {
+            ...updatedConfig.sections.search.uiConfig,
+            fields: updatedConfig.sections.search.uiConfig.fields.map((field) => {
+              if (field.label === "CS_COMMON_MOBILE_NO" && field.populators?.name === "mobileNumber") {
+                return {
+                  ...field,
+                  populators: {
+                    ...field.populators,
+                    prefix: validationRules.prefix,
+                    validation: {
+                      minlength: validationRules.minLength,
+                      maxlength: validationRules.maxLength,
+                      min: min,
+                      max: max,
+                      pattern: validationRules.pattern,
+                    },
+                    error: validationRules.errorMessage || field.populators.error,
+                  },
+                };
+              }
+              return field;
+            }),
+          },
+        },
+      },
+    };
   }
 
   return (
