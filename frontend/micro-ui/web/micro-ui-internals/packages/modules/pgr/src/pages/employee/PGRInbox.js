@@ -42,7 +42,7 @@ const PGRSearchInbox = () => {
   const location = useLocation();
 
   // Fetch mobile validation config from MDMS
-  const { validationRules, isLoading: isValidationLoading } = Digit.Hooks.pgr.useMobileValidation(tenantId);
+  const { validationRules, isLoading: isValidationLoading, getMinMaxValues } = Digit.Hooks.pgr.useMobileValidation(tenantId);
 
   // Fetch MDMS config for inbox screen (RAINMAKER-PGR.SearchInboxConfig)
   const { data: mdmsData, isLoading } = Digit.Hooks.useCommonMDMS(
