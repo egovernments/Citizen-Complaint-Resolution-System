@@ -1,5 +1,5 @@
 # FROM egovio/alpine-node-builder-14:yarn AS build
-FROM ghcr.io/egovernments/alpine-node-builder-14:yarn AS build
+FROM node:14-alpine AS build
 RUN apk update && apk upgrade
 RUN apk add --no-cache git>2.30.0
 ARG WORK_DIR
@@ -11,7 +11,7 @@ RUN ls -lah
 
 #RUN node web/envs.js
 RUN cd web/ \
-    && chmod +x install-deps.sh \
+    &&  ./install-deps.sh \
     && yarn install \
     && yarn build:webpack 
 
