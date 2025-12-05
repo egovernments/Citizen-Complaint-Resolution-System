@@ -34,7 +34,8 @@ const CloseIcon = () => (
 
 const PolygonIcon = ({ active }) => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M17 8L20 11L17 14L14 11L17 8ZM17 6L12 11L17 16L22 11L17 6ZM7 12L10 15L7 18L4 15L7 12ZM7 10L2 15L7 20L12 15L7 10ZM12 2L15 5L12 8L9 5L12 2ZM12 0L7 5L12 10L17 5L12 0Z" fill={active ? "#F47738" : "#505A5F"} />
+    <path d="M3 5H5V3C5 2.45 4.55 2 4 2C3.45 2 3 2.45 3 3V5ZM3 21C3 21.55 3.45 22 4 22C4.55 22 5 21.55 5 21H3V21ZM21 5C21 2.45 21.55 2 21 2C21.55 2 21 2.45 21 3V5H21ZM19 22H21C21.55 22 21 21.55 21 21V19H19V22ZM15 22H17V20H15V22ZM11 22H13V20H11V22ZM7 22H9V20H7V22ZM3 17H5V15H3V17ZM3 13H5V11H3V13ZM3 9H5V7H3V9ZM21 9H23V7H21V9ZM21 13H23V11H21V13ZM21 17H23V15H21V17ZM7 4H9V2H7V4ZM11 4H13V2H11V4ZM15 4H17V2H15V4Z" fill={active ? "#F47738" : "#505A5F"} />
+    <path d="M7 7H17V17H7V7Z" fill={active ? "#F47738" : "#505A5F"} opacity="0.3" />
   </svg>
 );
 
@@ -90,9 +91,11 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   const updateLocation = async (lat, lng) => {
     setCoords({ lat, lng });
     setMarkerPos([lat, lng]);
-    setAddress(t("CS_FETCHING_ADDRESS"));
-    setSearchQuery(t("CS_FETCHING_ADDRESS"));
+    setIsSearching(true);
+    setAddress("");
+    setSearchQuery("");
     await fetchAddress(lat, lng);
+    setIsSearching(false);
   };
 
   const handleMapClick = (e) => {
@@ -131,14 +134,18 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     debouncedFetchSuggestions(value);
   };
 
-  const handleSuggestionSelect = (suggestion) => {
+  const handleSuggestionSelect = async (suggestion) => {
     const lat = parseFloat(suggestion.lat);
     const lng = parseFloat(suggestion.lon);
 
     setSearchQuery(suggestion.display_name);
     setSuggestions([]); // Clear suggestions
 
-    updateLocation(lat, lng);
+    if (isPolygonMode) {
+      setCoords({ lat, lng });
+    } else {
+      await updateLocation(lat, lng);
+    }
 
     if (mapRef.current) {
       mapRef.current.leafletElement.setView([lat, lng], 15);
@@ -161,7 +168,11 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
         const latitude = parseFloat(lat);
         const longitude = parseFloat(lon);
 
-        updateLocation(latitude, longitude);
+        if (isPolygonMode) {
+          setCoords({ lat: latitude, lng: longitude });
+        } else {
+          await updateLocation(latitude, longitude);
+        }
         setSuggestions([]);
 
         if (mapRef.current) {
@@ -182,9 +193,13 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     if (navigator.geolocation) {
       setIsSearching(true);
       navigator.geolocation.getCurrentPosition(
-        (position) => {
+        async (position) => {
           const { latitude, longitude } = position.coords;
-          updateLocation(latitude, longitude);
+          if (isPolygonMode) {
+            setCoords({ lat: latitude, lng: longitude });
+          } else {
+            await updateLocation(latitude, longitude);
+          }
           if (mapRef.current) {
             mapRef.current.leafletElement.setView([latitude, longitude], 15);
           }
@@ -194,6 +209,11 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
           console.error("Error getting location:", error);
           setShowToast({ key: "error", label: t("CS_GEOLOCATION_ERROR") });
           setIsSearching(false);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
         }
       );
     } else {
@@ -216,11 +236,6 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   const togglePolygonMode = () => {
     setIsPolygonMode(!isPolygonMode);
     setPolygonPoints([]); // Clear points when toggling
-    if (!isPolygonMode) {
-      setMarkerPos(null); // Clear marker when entering polygon mode
-      setAddress("");
-      setSearchQuery("");
-    }
   };
 
   return (
@@ -297,7 +312,8 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
           )}
         </div>
 
-        {/* Search Bar Overlay */}
+        {/* Search Bar Overlay - Shows only when NOT in Polygon Mode */}
+
         <div style={{
           position: "absolute",
           top: "20px",
@@ -334,7 +350,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
             <input
               ref={searchInputRef}
               type="text"
-              placeholder={isPolygonMode ? t("CS_MODE_POLYGON_DRAWING") : t("CS_COMMON_SEARCH_PLACEHOLDER")}
+              placeholder={t("CS_COMMON_SEARCH_PLACEHOLDER")}
               value={searchQuery}
               onChange={handleInputChange}
               onKeyPress={(e) => {
@@ -343,7 +359,6 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
                   handleSearch(e);
                 }
               }}
-              disabled={isPolygonMode}
               style={{
                 border: "none",
                 outline: "none",
@@ -355,7 +370,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
               }}
             />
 
-            {searchQuery && !isPolygonMode && (
+            {searchQuery && (
               <div
                 onClick={clearSearch}
                 style={{
@@ -370,27 +385,10 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
                 <CloseIcon />
               </div>
             )}
-
-            <div style={{ width: "1px", height: "24px", backgroundColor: "#d6d5d4", margin: "0 8px" }}></div>
-
-            <div
-              onClick={togglePolygonMode}
-              style={{
-                cursor: "pointer",
-                padding: "8px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: isPolygonMode ? "#F47738" : "#505A5F"
-              }}
-              title={t("CS_TOGGLE_POLYGON_MODE")}
-            >
-              <PolygonIcon active={isPolygonMode} />
-            </div>
           </div>
 
           {/* Suggestions Dropdown */}
-          {suggestions.length > 0 && !isPolygonMode && (
+          {suggestions.length > 0 && (
             <div style={{
               position: "absolute",
               top: "100%",
@@ -426,6 +424,108 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
           )}
         </div>
 
+
+        {/* Polygon Points Table - Top Left, below Search Bar */}
+        {isPolygonMode && (
+          <div style={{
+            position: "absolute",
+            top: "80px",
+            left: "20px",
+            zIndex: 1001,
+            backgroundColor: "white",
+            borderRadius: "12px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+            padding: "16px",
+            width: "auto",
+            minWidth: "300px",
+            maxWidth: "400px",
+            maxHeight: "300px",
+            display: "flex",
+            flexDirection: "column"
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <div style={{ fontSize: "16px", fontWeight: "600", color: "#0B0C0C" }}>{t("Selected Locations")}</div>
+              {polygonPoints.length > 0 ? (
+                <div
+                  onClick={() => setPolygonPoints([])}
+                  style={{
+                    cursor: "pointer",
+                    color: "#B91E1E", // Red color for clear
+                    fontSize: "14px",
+                    fontWeight: "500"
+                  }}
+                >
+                  {t("Clear")}
+                </div>
+              ) : (
+                <div
+                  onClick={togglePolygonMode}
+                  style={{
+                    cursor: "pointer",
+                    color: "#505A5F",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center"
+                  }}
+                  title={t("CS_CLOSE_POLYGON_MODE")}
+                >
+                  <CloseIcon />
+                </div>
+              )}
+            </div>
+
+            {polygonPoints.length > 0 ? (
+              <div style={{ overflowY: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid #d6d5d4" }}>
+                      <th style={{ textAlign: "left", padding: "8px 4px", fontSize: "12px", color: "#505A5F", fontWeight: "600" }}>{t("Latitude")}</th>
+                      <th style={{ textAlign: "left", padding: "8px 4px", fontSize: "12px", color: "#505A5F", fontWeight: "600" }}>{t("Longitude")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {polygonPoints.map((point, index) => (
+                      <tr key={index} style={{ borderBottom: "1px solid #eee" }}>
+                        <td style={{ padding: "8px 4px", fontSize: "14px", color: "#0B0C0C" }}>{point[0].toFixed(5)}</td>
+                        <td style={{ padding: "8px 4px", fontSize: "14px", color: "#0B0C0C" }}>{point[1].toFixed(5)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div style={{ fontSize: "14px", color: "#505A5F", fontStyle: "italic" }}>
+                {t("Click on map to select points")}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Polygon Toggle Button */}
+        <div
+          onClick={togglePolygonMode}
+          style={{
+            position: "absolute",
+            bottom: "85px",
+            right: "20px",
+            zIndex: 1001,
+            backgroundColor: "white",
+            padding: "12px",
+            borderRadius: "50%",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            transition: "transform 0.2s"
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.1)"}
+          onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
+          title={t("CS_SELECT_AREA")}
+        >
+          <PolygonIcon active={isPolygonMode} />
+        </div>
+
         {/* Locate Me Button */}
         <div
           onClick={handleLocateMe}
@@ -453,19 +553,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
 
       </div>
 
-      {/* Polygon Coordinates Display */}
-      {isPolygonMode && polygonPoints.length > 0 && (
-        <div style={{ marginTop: "16px", padding: "16px", backgroundColor: "white", borderRadius: "12px", border: "1px solid #d6d5d4" }}>
-          <div style={{ fontSize: "14px", fontWeight: "600", marginBottom: "8px", color: "#0B0C0C" }}>{t("CS_POLYGON_POINTS")}</div>
-          <div style={{ maxHeight: "100px", overflowY: "auto" }}>
-            {polygonPoints.map((point, index) => (
-              <div key={index} style={{ fontSize: "12px", color: "#505A5F", marginBottom: "4px" }}>
-                {t("CS_POINT")} {index + 1}: {point[0].toFixed(6)}, {point[1].toFixed(6)}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+
 
       {showToast && (
         <Toast
