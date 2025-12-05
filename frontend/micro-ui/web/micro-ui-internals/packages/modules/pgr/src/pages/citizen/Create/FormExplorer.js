@@ -173,8 +173,12 @@ const FormExplorer = () => {
   const handleResponseForCreateComplaint = async (payload) => {
 
     await CreateComplaintMutation(payload, {
-      onError: async () => {
-        // setToast({ show: true, label: t("FAILED_TO_CREATE_COMPLAINT"), type: "error" });
+      onError: async (error, variables) => {
+        dispatch({
+          type: "CREATE_COMPLAINT",
+          payload: { responseInfo: { status: "failed" } },
+        });
+        history.push(`/digit-ui/citizen/pgr/response`);
       },
       onSuccess: async (responseData) => {
         dispatch({
@@ -187,10 +191,8 @@ const FormExplorer = () => {
           await client.refetchQueries(["complaintsList"]);
           history.push(`/digit-ui/citizen/pgr/response`);
 
-        }
-        if (responseData?.ResponseInfo?.Errors) {
-          // setToast({ show: true, label: t("FAILED_TO_CREATE_COMPLAINT"), type: "error" });
         } else {
+          history.push(`/digit-ui/citizen/pgr/response`);
         }
       },
     });
