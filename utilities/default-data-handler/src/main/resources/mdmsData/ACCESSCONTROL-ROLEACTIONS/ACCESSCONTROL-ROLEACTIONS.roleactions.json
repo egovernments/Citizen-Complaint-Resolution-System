@@ -2385,5 +2385,12 @@
     "rolecode": "WORKFLOW_ADMIN",
     "tenantId": "{tenantid}",
     "actioncode": ""
+  },
+    {
+    "rolecode": "MDMS_ADMIN",
+    "actionid": 15,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1731
   }
 ]
