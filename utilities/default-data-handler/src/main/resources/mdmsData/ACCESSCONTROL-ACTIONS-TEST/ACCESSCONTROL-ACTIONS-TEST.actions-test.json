@@ -2268,5 +2268,17 @@
     "queryParams": "fileStoreId=",
     "serviceCode": "PGR",
     "parentModule": "PGR"
+  },
+   {
+    "id": 15,
+    "name": "MDMS",
+    "url": "/mdms-v2/v2/_create/CRS-ADMIN-CONSOLE.adminSchema",
+    "displayName": "Create boundary-mamgement excel schema",
+    "orderNumber": 1,
+    "parentModule": "",
+    "enabled": true,
+    "serviceCode": "MDMS v2",
+    "code": "null",
+    "path": ""
   }
 ]
