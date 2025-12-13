@@ -835,54 +835,120 @@ class APIUploader:
     - Localization Service: :8087 (localization/translations)
     """
 
-    def __init__(self):
-        # Load service URLs from environment variables with fallback defaults
-        self.mdms_url = os.getenv("MDMS_SERVICE_URL", "http://localhost:8094")
-        self.boundary_url = os.getenv("BOUNDARY_SERVICE_URL", "http://localhost:8081")
-        self.workflow_url = os.getenv("WORKFLOW_SERVICE_URL", "http://localhost:8280")
-        self.localization_url = os.getenv("LOCALIZATION_SERVICE_URL", "http://localhost:8087")
-        self.Datahandlerurl = os.getenv("DATA_HANDLER_SERVICE_URL", "http://localhost:8012")
-        self.filestore_url = os.getenv("FILESTORE_SERVICE_URL", "http://localhost:8009")
-        self.boundary_mgmt_url = os.getenv("BOUNDARY_MGMT_SERVICE_URL", "http://localhost:8099")
-        self.hrms_url = os.getenv("HRMS_SERVICE_URL", "http://localhost:8222")
+    def __init__(self, base_url=None, username=None, password=None, user_type=None, tenant_id=None):
+        """Initialize APIUploader with gateway authentication
 
-        self.auth_token = os.getenv("AUTH_TOKEN", "2a57ee8c-410c-4023-a9d3-5111b4f6e304")
-        self.user_info = {
-            "id": 595,
-            "uuid": "1fda5623-448a-4a59-ad17-657986742d67",
-            "userName": "UNIFIED_DEV_USERR",
-            "name": "Unified dev user",
-            "mobileNumber": "8788788851",
-            "emailId": "",
-            "locale": None,
-            "type": "EMPLOYEE",
-            "roles": [
-                {
-                    "name": "Localisation admin",
-                    "code": "LOC_ADMIN",
-                    "tenantId": "pg"
-                },
-                {
-                    "name": "Employee",
-                    "code": "EMPLOYEE",
-                    "tenantId": "pg"
-                },
-                {
-                    "name": "MDMS Admin",
-                    "code": "MDMS_ADMIN",
-                    "tenantId": "pg"
-                },
-                {
-                    "name": "SUPER USER",
-                    "code": "SUPERUSER",
-                    "tenantId": "pg"
-                }
-            ],
-            "active": True,
-            "tenantId": "pg",
-            "permanentCity": None
-        }
-         
+        Args:
+            base_url: Gateway URL (e.g., https://unified-dev.digit.org)
+            username: Username for OAuth (e.g., DEV_SUPER_ADMIN)
+            password: Password for OAuth
+            user_type: EMPLOYEE or CITIZEN (default: EMPLOYEE)
+            tenant_id: Tenant ID (e.g., dev, pg)
+        """
+        # Base gateway URL - same for all services (must be provided)
+        if not base_url:
+            raise ValueError("base_url is required. Please provide gateway URL.")
+
+        self.base_url = base_url
+        if self.base_url.endswith('/'):
+            self.base_url = self.base_url[:-1]
+
+        # Service endpoints from .env (configurable)
+        mdms_v2_service = os.getenv("MDMS_V2_SERVICE", "/mdms-v2")
+        boundary_service = os.getenv("BOUNDARY_SERVICE", "/boundary-service")
+        boundary_mgmt_service = os.getenv("BOUNDARY_MGMT_SERVICE", "/boundary-management")
+        localization_service = os.getenv("LOCALIZATION_SERVICE", "/localization")
+        workflow_service = os.getenv("WORKFLOW_SERVICE", "/egov-workflow-v2")
+        filestore_service = os.getenv("FILESTORE_SERVICE", "/filestore")
+        hrms_service = os.getenv("HRMS_SERVICE", "/egov-hrms")
+        data_handler_service = os.getenv("DATA_HANDLER_SERVICE", "/default-data-handler")
+        auth_service = os.getenv("AUTH_SERVICE", "/user")
+
+        # Build full service URLs
+        self.mdms_url = f"{self.base_url}{mdms_v2_service}"
+        self.boundary_url = f"{self.base_url}{boundary_service}"
+        self.boundary_mgmt_url = f"{self.base_url}{boundary_mgmt_service}"
+        self.localization_url = f"{self.base_url}{localization_service}"
+        self.workflow_url = f"{self.base_url}{workflow_service}"
+        self.filestore_url = f"{self.base_url}{filestore_service}"
+        self.hrms_url = f"{self.base_url}{hrms_service}"
+        self.Datahandlerurl = f"{self.base_url}{data_handler_service}"
+        self.auth_url = f"{self.base_url}{auth_service}"
+
+        # OAuth credentials
+        self.username = username
+        self.password = password
+        self.user_type = user_type or "EMPLOYEE"
+        self.tenant_id = tenant_id or "dev"
+
+        # Auth tokens (populated by authenticate())
+        self.auth_token = None
+        self.user_info = None
+        self.authenticated = False
+
+        # Auto-authenticate if credentials provided
+        if self.username and self.password:
+            self.authenticate()
+
+
+    def authenticate(self):
+        """Authenticate using OAuth2 password grant and fetch user info"""
+        try:
+            # OAuth2 token endpoint
+            token_url = f"{self.auth_url}/oauth/token"
+
+            # Standard eGov OAuth2 credentials (hardcoded)
+            import base64
+            client_id = "egov-user-client"
+            client_secret = ""
+            credentials = f"{client_id}:{client_secret}"
+            encoded_credentials = base64.b64encode(credentials.encode()).decode()
+
+            headers = {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Authorization': f'Basic {encoded_credentials}'
+            }
+
+            data = {
+                'username': self.username,
+                'password': self.password,
+                'userType': self.user_type,
+                'tenantId': self.tenant_id,
+                'scope': 'read',
+                'grant_type': 'password'
+            }
+
+            response = requests.post(token_url, headers=headers, data=data, timeout=30)
+
+            if response.status_code == 200:
+                token_data = response.json()
+
+                # Extract access_token as authToken
+                self.auth_token = token_data.get('access_token')
+
+                # Extract UserRequest as userInfo
+                self.user_info = token_data.get('UserRequest', {})
+
+                if self.auth_token and self.user_info:
+                    self.authenticated = True
+                    print(f"✅ Authentication successful!")
+                    print(f"   User: {self.user_info.get('userName', 'Unknown')}")
+                    print(f"   Name: {self.user_info.get('name', 'Unknown')}")
+                    print(f"   Tenant: {self.user_info.get('tenantId', 'Unknown')}")
+                    print(f"   Token: {self.auth_token[:20]}...")
+                    return True
+                else:
+                    print(f"❌ Authentication response missing access_token or UserRequest")
+                    print(f"Response: {response.text[:200]}")
+                    return False
+            else:
+                print(f"❌ Authentication failed: {response.status_code}")
+                print(f"Response: {response.text}")
+                return False
+
+        except Exception as e:
+            print(f"❌ Authentication error: {str(e)}")
+            return False
 
     def _extract_error_message(self, error_text: str) -> str:
         """Extract clean error message from API error response
@@ -1688,9 +1754,9 @@ class APIUploader:
         "did": None,
         "key": None,
         "msgId": "search with from and to values",
-        "authToken": "das323223-21",
+        "authToken": self.auth_token,
         "correlationId": None,
-        "userInfo": {"id":30274,"uuid":"bd5f8ea6-a022-4e74-ac2c-edf3392c6fa4","userName":"MDMSADMIN","name":"MDMSADMIN","mobileNumber":"9035169726","emailId":None,"locale":None,"type":"EMPLOYEE","roles":[{"name":"Localisation admin","code":"LOC_ADMIN","tenantId":"pg"},{"name":"MDMS Admin","code":"MDMS_ADMIN","tenantId":"pg.citya"},{"name":"MDMS Admin","code":"MDMS_ADMIN","tenantId":"pg"}],"active":True,"tenantId":"pg","permanentCity":None}
+        "userInfo": self.user_info
     },
             'BoundaryRelationship': relationship
         }

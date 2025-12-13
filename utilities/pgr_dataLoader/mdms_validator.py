@@ -17,9 +17,22 @@ warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
 class MDMSValidator:
     """Validates Excel files against MDMS JSON schemas for two-phase templates"""
 
-    def __init__(self, mdms_url: str = "http://localhost:8094", auth_token: str = None):
-        self.mdms_url = mdms_url
-        self.auth_token = auth_token or "7c65fcc6-7bb1-43f8-a116-e62392d71576"
+    def __init__(self, base_url: str = None, auth_token: str = None, user_info: dict = None):
+        """Initialize MDMS Validator with gateway URL and authentication
+
+        Args:
+            base_url: Gateway URL (e.g., https://unified-dev.digit.org)
+            auth_token: OAuth access token
+            user_info: User info from OAuth response
+        """
+        if not base_url:
+            raise ValueError("base_url is required. Please provide gateway URL.")
+
+        # Build MDMS URL using gateway
+        self.base_url = base_url.rstrip('/')
+        self.mdms_url = f"{self.base_url}/mdms-v2"
+        self.auth_token = auth_token
+        self.user_info = user_info or {}
         self.loaded_data = {}  # Cache for loaded Excel data
         self.schemas_cache = {}  # Cache for fetched schemas
 
@@ -53,18 +66,7 @@ class MDMSValidator:
                 "apiId": "asset-services",
                 "msgId": "search schema",
                 "authToken": self.auth_token,
-                "userInfo": {
-                    "id": 1,
-                    "uuid": "uuid",
-                    "userName": "username",
-                    "name": "name",
-                    "mobileNumber": "1234567890",
-                    "emailId": "email@example.com",
-                    "type": "EMPLOYEE",
-                    "roles": [],
-                    "active": True,
-                    "tenantId": "pg"
-                }
+                "userInfo": self.user_info
             },
             "SchemaDefCriteria": {
                 "tenantId": tenant_id,
