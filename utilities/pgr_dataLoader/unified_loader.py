@@ -2622,6 +2622,122 @@ class APIUploader:
             # Return default boundary
             return [{"code": tenant.split('.')[0], "name": tenant.split('.')[0], "boundaryType": "City"}]
 
+    def fetch_gender_types(self, tenant: str) -> list:
+        """Fetch Gender types from MDMS
+
+        Args:
+            tenant: Tenant ID
+
+        Returns:
+            List of gender codes
+        """
+        try:
+            print(f"📥 Fetching Gender types from MDMS...")
+            gender_data = self.search_mdms_data(
+                schema_code='common-masters.GenderType',
+                tenant=tenant
+            )
+
+            genders = [g.get('code', '') for g in gender_data if g.get('active', True)]
+            print(f"   ✅ Found {len(genders)} gender type(s)")
+            return genders if genders else ['MALE', 'FEMALE', 'TRANSGENDER', 'OTHERS']
+
+        except Exception as e:
+            print(f"   ⚠️  Using default gender types: {str(e)[:100]}")
+            return ['MALE', 'FEMALE', 'TRANSGENDER', 'OTHERS']
+
+    def fetch_employee_status(self, tenant: str) -> list:
+        """Fetch Employee Status from MDMS
+
+        Args:
+            tenant: Tenant ID
+
+        Returns:
+            List of employee status codes
+        """
+        try:
+            print(f"📥 Fetching Employee Status from MDMS...")
+            status_data = self.search_mdms_data(
+                schema_code='egov-hrms.EmployeeStatus',
+                tenant=tenant
+            )
+
+            statuses = [s.get('code', '') for s in status_data if s.get('active', True)]
+            print(f"   ✅ Found {len(statuses)} employee status(es)")
+            return statuses if statuses else ['EMPLOYED', 'SUSPENDED', 'RETIRED', 'TERMINATED']
+
+        except Exception as e:
+            print(f"   ⚠️  Using default employee statuses: {str(e)[:100]}")
+            return ['EMPLOYED', 'SUSPENDED', 'RETIRED', 'TERMINATED']
+
+    def fetch_employee_types(self, tenant: str) -> list:
+        """Fetch Employee Types from MDMS
+
+        Args:
+            tenant: Tenant ID
+
+        Returns:
+            List of employee type codes
+        """
+        try:
+            print(f"📥 Fetching Employee Types from MDMS...")
+            type_data = self.search_mdms_data(
+                schema_code='egov-hrms.EmployeeType',
+                tenant=tenant
+            )
+
+            types = [t.get('code', '') for t in type_data if t.get('active', True)]
+            print(f"   ✅ Found {len(types)} employee type(s)")
+            return types if types else ['PERMANENT', 'TEMPORARY', 'CONTRACT', 'DAILYWAGES']
+
+        except Exception as e:
+            print(f"   ⚠️  Using default employee types: {str(e)[:100]}")
+            return ['PERMANENT', 'TEMPORARY', 'CONTRACT', 'DAILYWAGES']
+
+    def fetch_hierarchy_types(self, tenant: str) -> list:
+        """Fetch Hierarchy Types from Boundary Service
+
+        Args:
+            tenant: Tenant ID
+
+        Returns:
+            List of unique hierarchy type codes
+        """
+        try:
+            print(f"📥 Fetching Hierarchy Types from Boundary Service...")
+            url = f"{self.boundary_url}/boundary-hierarchy-definition/_search"
+
+            # Override userInfo tenantId
+            user_info_copy = self.user_info.copy()
+            user_info_copy['tenantId'] = tenant
+
+            payload = {
+                "RequestInfo": {
+                    "apiId": "Rainmaker",
+                    "authToken": self.auth_token,
+                    "userInfo": user_info_copy,
+                },
+                "BoundaryTypeHierarchySearchCriteria": {
+                    "tenantId": tenant
+                }
+            }
+
+            headers = {'Content-Type': 'application/json'}
+            response = requests.post(url, json=payload, headers=headers, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+
+            # Extract unique hierarchy types
+            hierarchy_definitions = data.get('BoundaryHierarchy', [])
+            hierarchy_types = list(set([h.get('hierarchyType', '') for h in hierarchy_definitions if h.get('hierarchyType')]))
+
+            print(f"   ✅ Found {len(hierarchy_types)} hierarchy type(s)")
+            return hierarchy_types if hierarchy_types else ['ADMIN', 'ADMIN1', 'ADMIN2', 'REVENUE']
+
+        except Exception as e:
+            print(f"   ⚠️  Using default hierarchy types: {str(e)[:100]}")
+            return ['ADMIN', 'ADMIN1', 'ADMIN2', 'REVENUE']
+
     def generate_employee_template(self, tenant: str, output_path: str = None) -> str:
         """Generate dynamic Employee Master Excel template with dropdowns
 
@@ -2651,11 +2767,15 @@ class APIUploader:
         print("   📋 GENERATING DYNAMIC EMPLOYEE TEMPLATE")
         print("="*70)
 
-        # Fetch all data from MDMS
+        # Fetch all data from MDMS and Boundary Service
         departments = self.fetch_departments(tenant)
         designations = self.fetch_designations(tenant)
         roles = self.fetch_roles(tenant)
         boundaries = self.fetch_boundaries(tenant)
+        genders = self.fetch_gender_types(tenant)
+        employee_statuses = self.fetch_employee_status(tenant)
+        employee_types = self.fetch_employee_types(tenant)
+        hierarchy_types = self.fetch_hierarchy_types(tenant)
 
         # Create workbook
         wb = Workbook()
@@ -2771,30 +2891,34 @@ class APIUploader:
         ws.add_data_validation(dv_desig)
         dv_desig.add(f'E2:E1000')
 
-        # Employee Status dropdown (Column G)
-        dv_status = DataValidation(type="list", formula1='"EMPLOYED,SUSPENDED,RETIRED,TERMINATED"', allow_blank=True)
-        dv_status.error = 'Please select: EMPLOYED, SUSPENDED, RETIRED, or TERMINATED'
+        # Employee Status dropdown (Column G) - Dynamic from MDMS
+        status_list = ','.join(employee_statuses)
+        dv_status = DataValidation(type="list", formula1=f'"{status_list}"', allow_blank=True)
+        dv_status.error = f'Please select from: {status_list}'
         dv_status.errorTitle = 'Invalid Employee Status'
         ws.add_data_validation(dv_status)
         dv_status.add(f'G2:G1000')
 
-        # Employee Type dropdown (Column H)
-        dv_type = DataValidation(type="list", formula1='"PERMANENT,TEMPORARY,CONTRACT,DAILY_WAGE"', allow_blank=True)
-        dv_type.error = 'Please select: PERMANENT, TEMPORARY, CONTRACT, or DAILY_WAGE'
+        # Employee Type dropdown (Column H) - Dynamic from MDMS
+        type_list = ','.join(employee_types)
+        dv_type = DataValidation(type="list", formula1=f'"{type_list}"', allow_blank=True)
+        dv_type.error = f'Please select from: {type_list}'
         dv_type.errorTitle = 'Invalid Employee Type'
         ws.add_data_validation(dv_type)
         dv_type.add(f'H2:H1000')
 
-        # Gender dropdown (Column I)
-        dv_gender = DataValidation(type="list", formula1='"Male,Female,Other,Transgender"', allow_blank=True)
-        dv_gender.error = 'Please select: Male, Female, Other, or Transgender'
+        # Gender dropdown (Column I) - Dynamic from MDMS
+        gender_list = ','.join(genders)
+        dv_gender = DataValidation(type="list", formula1=f'"{gender_list}"', allow_blank=True)
+        dv_gender.error = f'Please select from: {gender_list}'
         dv_gender.errorTitle = 'Invalid Gender'
         ws.add_data_validation(dv_gender)
         dv_gender.add(f'I2:I1000')
 
-        # Hierarchy Type dropdown (Column J)
-        dv_hierarchy = DataValidation(type="list", formula1='"ADMIN,ADMIN1,ADMIN2,REVENUE"', allow_blank=True)
-        dv_hierarchy.error = 'Please select: ADMIN, ADMIN1, ADMIN2, or REVENUE'
+        # Hierarchy Type dropdown (Column J) - Dynamic from Boundary Service
+        hierarchy_list = ','.join(hierarchy_types)
+        dv_hierarchy = DataValidation(type="list", formula1=f'"{hierarchy_list}"', allow_blank=True)
+        dv_hierarchy.error = f'Please select from: {hierarchy_list}'
         dv_hierarchy.errorTitle = 'Invalid Hierarchy Type'
         ws.add_data_validation(dv_hierarchy)
         dv_hierarchy.add(f'J2:J1000')
@@ -2838,17 +2962,17 @@ class APIUploader:
         # Import datetime for date formatting
         from datetime import datetime
 
-        # Add sample row with default values (using NAMES, not codes)
+        # Add sample row with default values (using dynamic data from MDMS)
         ws['A2'] = 'Sample Employee'
         ws['B2'] = '9999999999'
         ws['C2'] = 'eGov@123'
         ws['D2'] = departments[0].get('name', 'Department 1') if departments else 'Department 1'
         ws['E2'] = designations[0].get('name', 'Designation 01') if designations else 'Designation 01'
         ws['F2'] = 'Employee,PGR Viewer'  # Role NAMES, not codes
-        ws['G2'] = 'EMPLOYED'
-        ws['H2'] = 'PERMANENT'
-        ws['I2'] = 'Male'
-        ws['J2'] = 'ADMIN'
+        ws['G2'] = employee_statuses[0] if employee_statuses else 'EMPLOYED'
+        ws['H2'] = employee_types[0] if employee_types else 'PERMANENT'
+        ws['I2'] = genders[0] if genders else 'MALE'
+        ws['J2'] = hierarchy_types[0] if hierarchy_types else 'ADMIN'
         ws['K2'] = 'City'
         ws['L2'] = tenant.split('.')[0]
 
