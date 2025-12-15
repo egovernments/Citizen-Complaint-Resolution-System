@@ -6,6 +6,7 @@ import { Loader } from "@egovernments/digit-ui-react-components";
 import { convertEpochFormateToDate } from "../../utils";
 import TimelineWrapper from "../../components/TimeLineWrapper";
 import PGRWorkflowModal from "../../components/PGRWorkflowModal";
+import ComplaintLocationMap from "../../components/ComplaintLocationMap";
 import Urls from "../../utils/urls";
 
 // Action configurations used for handling different workflow actions like ASSIGN, REJECT, RESOLVE
@@ -479,6 +480,44 @@ const PGRDetails = () => {
                   // },
                 ],
               },
+              // Conditionally include location section only if coordinates exist
+              ...(pgrData?.ServiceWrappers[0]?.service?.address?.geoLocation?.latitude &&
+                  pgrData?.ServiceWrappers[0]?.service?.address?.geoLocation?.longitude
+                ? [{
+                    cardType: "primary",
+                    fieldPairs: [
+                      {
+                        inline: false,
+                        type: "custom",
+                        renderCustomContent: () => {
+                          const geoLocation = pgrData?.ServiceWrappers[0]?.service?.address?.geoLocation;
+                          const address = pgrData?.ServiceWrappers[0]?.service?.address;
+
+                          // Construct a readable address from API data
+                          const addressParts = [
+                            address?.buildingName,
+                            address?.street,
+                            address?.landmark,
+                            address?.locality?.name || address?.locality?.code,
+                            address?.pincode
+                          ].filter(Boolean);
+
+                          const addressString = addressParts.length > 0 ? addressParts.join(", ") : null;
+
+                          return (
+                            <ComplaintLocationMap
+                              latitude={geoLocation.latitude}
+                              longitude={geoLocation.longitude}
+                              address={addressString}
+                            />
+                          );
+                        },
+                      },
+                    ],
+                    header: t("CS_COMPLAINT_LOCATION"),
+                  }]
+                : []
+              ),
               {
                 cardType: "primary",
                 fieldPairs: [

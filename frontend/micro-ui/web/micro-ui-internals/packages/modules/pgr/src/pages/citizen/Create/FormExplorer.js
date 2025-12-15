@@ -37,7 +37,7 @@ const FormExplorer = () => {
   const client = useQueryClient();
   const match = useRouteMatch();
   const dispatch = useDispatch();
-  const tenantId = Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code
+  const tenantId = Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || Digit.ULBService.getCurrentTenantId()
 
 
   const { isLoading: isMDMSLoading, data: serviceDefs } = Digit.Hooks.useCustomMDMS(
@@ -80,10 +80,13 @@ const FormExplorer = () => {
     if (
       value &&
       typeof value === "object" &&
-      typeof value.lat === "number" &&
-      typeof value.lng === "number"
+      typeof value.latitude === "number" &&
+      typeof value.longitude === "number"
     ) {
-      return value;
+      return {
+        latitude: value.latitude,
+        longitude: value.longitude
+      };
     }
     return {};
   }
@@ -123,7 +126,7 @@ const FormExplorer = () => {
     return {
       service: {
         active: true,
-        tenantId: formData?.SelectAddress?.city?.code || "",
+        tenantId: formData?.SelectAddress?.city?.code || tenantId,
         serviceCode: getEffectiveServiceCode(formData?.SelectComplaintType, formData?.SelectSubComplaintType),
         description: formData?.description || "",
         applicationStatus: "CREATED",

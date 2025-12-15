@@ -41,8 +41,10 @@ const PolygonIcon = ({ active }) => (
 
 const GeoLocations = ({ t, config, onSelect, formData }) => {
   const { t: trans } = useTranslation();
-  const [coords, setCoords] = useState({ lat: 20.5937, lng: 78.9629 }); // Default center
-  const [markerPos, setMarkerPos] = useState(null);
+  // India's center coordinates
+  const INDIA_CENTER = { lat: 20.5937, lng: 78.9629 };
+  const [coords, setCoords] = useState(INDIA_CENTER);
+  const [markerPos, setMarkerPos] = useState([INDIA_CENTER.lat, INDIA_CENTER.lng]);
   const [searchQuery, setSearchQuery] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -52,15 +54,28 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   const [polygonPoints, setPolygonPoints] = useState([]);
   const mapRef = useRef(null);
   const searchInputRef = useRef(null);
+  const hasInitialized = useRef(false);
+
+  // Initialize with India center location on first load
+  useEffect(() => {
+    if (!hasInitialized.current && !formData?.[config.key]) {
+      hasInitialized.current = true;
+      // Fetch and display address for India's center
+      fetchAddress(INDIA_CENTER.lat, INDIA_CENTER.lng);
+    }
+  }, []);
 
   useEffect(() => {
     if (formData?.[config.key]) {
-      const { lat, lng } = formData[config.key];
+      const { lat, lng, address: savedAddress } = formData[config.key];
       if (lat && lng) {
         setCoords({ lat, lng });
         setMarkerPos([lat, lng]);
-        // Optionally fetch address if not present
-        if (!address) {
+        // Restore saved address if available
+        if (savedAddress) {
+          setAddress(savedAddress);
+          setSearchQuery(savedAddress);
+        } else if (!address) {
           fetchAddress(lat, lng);
         }
       }
@@ -92,8 +107,6 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     setCoords({ lat, lng });
     setMarkerPos([lat, lng]);
     setIsSearching(true);
-    setAddress("");
-    setSearchQuery("");
     await fetchAddress(lat, lng);
     setIsSearching(false);
   };
@@ -231,6 +244,13 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     setMarkerPos(null);
     setSuggestions([]);
     setPolygonPoints([]);
+    // Reset map to India center
+    setCoords(INDIA_CENTER);
+    if (mapRef.current) {
+      mapRef.current.leafletElement.setView([INDIA_CENTER.lat, INDIA_CENTER.lng], 5);
+    }
+    // Clear location from formData
+    onSelect(config.key, null);
   };
 
   const togglePolygonMode = () => {
@@ -259,7 +279,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
         }}>
           <Map
             ref={mapRef}
-            center={coords}
+            center={[coords.lat, coords.lng]}
             zoom={markerPos ? 15 : 5}
             style={{ height: "100%", width: "100%" }}
             onClick={handleMapClick}
