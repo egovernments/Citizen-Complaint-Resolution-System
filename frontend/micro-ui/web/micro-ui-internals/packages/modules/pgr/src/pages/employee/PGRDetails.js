@@ -2,12 +2,13 @@ import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useHistory, useParams } from "react-router-dom/cjs/react-router-dom.min";
 import { HeaderComponent, Button, Card, Footer, ActionBar, SummaryCard, Tag, Timeline, Toast, NoResultsFound } from "@egovernments/digit-ui-components";
-import { Loader } from "@egovernments/digit-ui-react-components";
+import { Loader, DisplayPhotos, ImageViewer } from "@egovernments/digit-ui-react-components";
 import { convertEpochFormateToDate } from "../../utils";
 import TimelineWrapper from "../../components/TimeLineWrapper";
 import PGRWorkflowModal from "../../components/PGRWorkflowModal";
 import ComplaintLocationMap from "../../components/ComplaintLocationMap";
 import Urls from "../../utils/urls";
+import ComplaintPhotos from "../../components/ComplaintPhotos";
 
 // Action configurations used for handling different workflow actions like ASSIGN, REJECT, RESOLVE
 // TO DO: Move this to MDMS for handling Action Modal properties
@@ -481,18 +482,24 @@ const PGRDetails = () => {
                     label: t("CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS_DESCRIPTION"),
                     value: pgrData?.ServiceWrappers[0].service?.description || "NA",
                   },
-                  // {
-                  //   inline: true,
-                  //   label: t("COMPLAINTS_COMPLAINANT_NAME"),
-                  //   value: pgrData?.ServiceWrappers[0].service?.user?.name || "NA",
-                  // },
-                  // {
-                  //   inline: true,
-                  //   label: t("COMPLAINTS_COMPLAINANT_CONTACT_NUMBER"),
-                  //   value: pgrData?.ServiceWrappers[0].service?.user?.mobileNumber || "NA",
-                  // },
                 ],
               },
+              ...(pgrData?.ServiceWrappers[0]?.workflow?.verificationDocuments?.length > 0
+                ? [{
+                  cardType: "primary",
+                  fieldPairs: [
+                    {
+                      inline: false,
+                      type: "custom",
+                      renderCustomContent: () => (
+                        <ComplaintPhotos t={t} serviceWrapper={pgrData?.ServiceWrappers[0]} />
+                      ),
+                    },
+                  ],
+                  header: t("CS_COMMON_ATTACHMENTS"),
+                }]
+                : []
+              ),
               // Conditionally include location section only if coordinates exist
               ...(pgrData?.ServiceWrappers[0]?.service?.address?.geoLocation?.latitude &&
                 pgrData?.ServiceWrappers[0]?.service?.address?.geoLocation?.longitude

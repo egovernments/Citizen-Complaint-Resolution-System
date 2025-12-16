@@ -21,59 +21,23 @@ import {
 } from "@egovernments/digit-ui-react-components";
 
 import TimeLine from "../../components/TimeLine";
+import ComplaintPhotos from "../../components/ComplaintPhotos";
 
-const WorkflowComponent = ({ complaintDetails, id, getWorkFlow, zoomImage }) => {
+const WorkflowComponent = ({ complaintDetails, id }) => {
   const tenantId = Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || complaintDetails.service.tenantId;
   let workFlowDetails = Digit.Hooks.useWorkflowDetails({ tenantId: tenantId, id, moduleCode: "PGR" });
- 
-  // const  ComplainClosingTime = (tenantId) =>
-  //   useQuery(
-  //     [tenantId, "PGR_COMPLAIN_IDLE_TIME"],
-  //     () =>
-  //       MdmsService.getDataByCriteria(
-  //         tenantId,
-  //         {
-  //           details: {
-  //             tenantId: tenantId,
-  //             moduleDetails: [
-  //               {
-  //                 moduleName: "RAINMAKER-PGR",
-  //                 masterDetails: [
-  //                   {
-  //                     name: "ComplainClosingTime",
-  //                   },
-  //                 ],
-  //               },
-  //             ],
-  //           },
-  //         },
-  //         "RAINMAKER-PGR"
-  //       ),
-  //     {
-  //       select: (data) =>
-  //        data[`RAINMAKER-PGR`].ComplainClosingTime?.[0]?.ComplainMaxIdleTime,
-  //     }
-  //   );
-  
 
-    const { isLoading: isMDMSLoading, data: cct } = Digit.Hooks.useCustomMDMS(
-      tenantId,
-      "RAINMAKER-PGR",
-      [{ name: "ComplainClosingTime" }],
-      {
-        cacheTime: Infinity,
-        select: (data) => data?.["RAINMAKER-PGR"]?.cct,
-      }
-    );
+  const { isLoading: isMDMSLoading, data: cct } = Digit.Hooks.useCustomMDMS(
+    tenantId,
+    "RAINMAKER-PGR",
+    [{ name: "ComplainClosingTime" }],
+    {
+      cacheTime: Infinity,
+      select: (data) => data?.["RAINMAKER-PGR"]?.cct,
+    }
+  );
 
-    console.log(`*** LOG ***`,cct);
-
-
-  // const { data: ComplainMaxIdleTime, isLoading: ComplainMaxIdleTimeLoading } = Digit.Hooks.pgr.useCustomMDMS.ComplainClosingTime(tenantId?.split(".")[0]);
-
-  useEffect(() => {
-    getWorkFlow(workFlowDetails.data);
-  }, [workFlowDetails.data]);
+  console.log(`*** LOG ***`, cct);
 
   useEffect(() => {
     workFlowDetails.revalidate();
@@ -87,9 +51,8 @@ const WorkflowComponent = ({ complaintDetails, id, getWorkFlow, zoomImage }) => 
         serviceRequestId={id}
         complaintWorkflow={complaintDetails.workflow}
         rating={complaintDetails.audit.rating}
-        zoomImage={zoomImage}
         complaintDetails={complaintDetails}
-        // ComplainMaxIdleTime={ComplainMaxIdleTime}
+      // ComplainMaxIdleTime={ComplainMaxIdleTime}
       />
     )
   );
@@ -102,72 +65,7 @@ const ComplaintDetailsPage = (props) => {
   let tenantId = Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || Digit.ULBService.getCurrentTenantId(); // ToDo: fetch from state
   const { isLoading, error, isError, complaintDetails, revalidate } = Digit.Hooks.pgr.useComplaintDetails({ tenantId, id });
 
-  const [imageShownBelowComplaintDetails, setImageToShowBelowComplaintDetails] = useState({});
-
-  const [imageZoom, setImageZoom] = useState(null);
-
-  const [comment, setComment] = useState("");
-
-  const [toast, setToast] = useState(false);
-
-  const [commentError, setCommentError] = useState(null);
-
-  const [disableComment, setDisableComment] = useState(true);
-
-  const [loader, setLoader] = useState(false);
-
-  useEffect(() => {
-    (async () => {
-      if (complaintDetails) {
-        setLoader(true);
-        await revalidate();
-        setLoader(false);
-      }
-    })();
-  }, []);
-
-  function zoomImage(imageSource, index) {
-    setImageZoom(imageSource);
-  }
-  function zoomImageWrapper(imageSource, index) {
-    zoomImage(imageShownBelowComplaintDetails?.fullImage[index]);
-  }
-
-  function onCloseImageZoom() {
-    setImageZoom(null);
-  }
-
-  const onWorkFlowChange = (data) => {
-    let timeline = data?.timeline;
-    timeline && timeline[0].timeLineActions?.filter((e) => e === "COMMENT").length ? setDisableComment(false) : setDisableComment(true);
-    if (timeline) {
-      const actionByCitizenOnComplaintCreation = timeline.find((e) => e?.performedAction === "APPLY");
-      const { thumbnailsToShow } = actionByCitizenOnComplaintCreation;
-      setImageToShowBelowComplaintDetails(thumbnailsToShow);
-    }
-  };
-
-  const submitComment = async () => {
-    let detailsToSend = { ...complaintDetails };
-    delete detailsToSend.audit;
-    delete detailsToSend.details;
-    detailsToSend.workflow = { action: "COMMENT", comments: comment };
-    let tenantId = Digit.ULBService.getCurrentTenantId();
-    try {
-      setCommentError(null);
-      const res = await Digit.PGRService.update(detailsToSend, tenantId);
-      if (res.ServiceWrappers.length) setComment("");
-      else throw true;
-    } catch (er) {
-      setCommentError(true);
-    }
-    setToast(true);
-    setTimeout(() => {
-      setToast(false);
-    }, 30000);
-  };
-
-  if (isLoading || loader) {
+  if (isLoading) {
     return <Loader />;
   }
 
@@ -180,10 +78,10 @@ const ComplaintDetailsPage = (props) => {
       <div className="complaint-summary">
         <Header>{t(`${LOCALIZATION_KEY.CS_HEADER}_COMPLAINT_SUMMARY`)}</Header>
 
-        {Object.keys(complaintDetails).length > 0 ? (
+        {complaintDetails && Object.keys(complaintDetails).length > 0 ? (
           <React.Fragment>
             <Card>
-              <CardSubHeader>{t(`SERVICEDEFS.${complaintDetails.audit.serviceCode.toUpperCase()}`)}</CardSubHeader>
+              <CardSubHeader style={{ marginBottom: "16px" }}>{t("CS_COMPLAINT_DETAILS_COMPLAINT_DETAILS")}</CardSubHeader>
               <StatusTable>
                 {Object.keys(complaintDetails.details).map((flag, index, arr) => (
                   <Row
@@ -198,28 +96,18 @@ const ComplaintDetailsPage = (props) => {
                   />
                 ))}
               </StatusTable>
-              {imageShownBelowComplaintDetails?.thumbs ? (
-                <DisplayPhotos srcs={imageShownBelowComplaintDetails?.thumbs} onClick={(source, index) => zoomImageWrapper(source, index)} />
-              ) : null}
-              {imageZoom ? <ImageViewer imageSrc={imageZoom} onClose={onCloseImageZoom} /> : null}
+              {complaintDetails?.workflow?.verificationDocuments?.length > 0 && (
+                <React.Fragment>
+                  <CardSubHeader>{t("CS_COMMON_ATTACHMENTS")}</CardSubHeader>
+                  <ComplaintPhotos serviceWrapper={complaintDetails} />
+                </React.Fragment>
+              )}
             </Card>
             <Card>
               {complaintDetails?.service && (
-                <WorkflowComponent getWorkFlow={onWorkFlowChange} complaintDetails={complaintDetails} id={id} zoomImage={zoomImage} />
+                <WorkflowComponent complaintDetails={complaintDetails} id={id} />
               )}
             </Card>
-            {/* <Card>
-      <CardSubHeader>{t(`${LOCALIZATION_KEY.CS_COMMON}_COMMENTS`)}</CardSubHeader>
-      <TextArea value={comment} onChange={(e) => setComment(e.target.value)} name="" />
-      <SubmitBar disabled={disableComment || comment.length < 1} onSubmit={submitComment} label={t("CS_PGR_SEND_COMMENT")} />
-    </Card> */}
-            {toast && (
-              <Toast
-                error={commentError}
-                label={!commentError ? t(`CS_COMPLAINT_COMMENT_SUCCESS`) : t(`CS_COMPLAINT_COMMENT_ERROR`)}
-                onClose={() => setToast(false)}
-              />
-            )}{" "}
           </React.Fragment>
         ) : (
           <Loader />
