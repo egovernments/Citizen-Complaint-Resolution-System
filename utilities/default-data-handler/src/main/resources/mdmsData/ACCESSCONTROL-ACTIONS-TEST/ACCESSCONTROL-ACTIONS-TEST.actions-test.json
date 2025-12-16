@@ -2,7 +2,7 @@
   {
     "id": 2631,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/ACCESSCONTROL-ACTIONS-TEST.actions-test",
+    "url": "/egov-mdms-service/v2/_update/ACCESSCONTROL-ACTIONS-TEST.actions-test",
     "displayName": "update ACCESSCONTROL-ACTIONS-TEST.actions-test",
     "orderNumber": 1,
     "parentModule": "",
@@ -14,7 +14,7 @@
   {
     "id": 2630,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/ACCESSCONTROL-ROLEACTIONS.roleactions",
+    "url": "/egov-mdms-service/v2/_update/ACCESSCONTROL-ROLEACTIONS.roleactions",
     "displayName": "update ACCESSCONTROL-ROLEACTIONS.roleactions",
     "orderNumber": 1,
     "parentModule": "",
@@ -26,7 +26,7 @@
   {
     "id": 2629,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/ACCESSCONTROL-ROLES.roles",
+    "url": "/egov-mdms-service/v2/_update/ACCESSCONTROL-ROLES.roles",
     "displayName": "update ACCESSCONTROL-ROLES.roles",
     "orderNumber": 1,
     "parentModule": "",
@@ -38,7 +38,7 @@
   {
     "id": 2628,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/DataSecurity.DecryptionABAC",
+    "url": "/egov-mdms-service/v2/_update/DataSecurity.DecryptionABAC",
     "displayName": "update DataSecurity.DecryptionABAC",
     "orderNumber": 1,
     "parentModule": "",
@@ -50,7 +50,7 @@
   {
     "id": 2627,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/DataSecurity.EncryptionPolicy",
+    "url": "/egov-mdms-service/v2/_update/DataSecurity.EncryptionPolicy",
     "displayName": "update DataSecurity.EncryptionPolicy",
     "orderNumber": 1,
     "parentModule": "",
@@ -62,7 +62,7 @@
   {
     "id": 2626,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/DataSecurity.MaskingPatterns",
+    "url": "/egov-mdms-service/v2/_update/DataSecurity.MaskingPatterns",
     "displayName": "update DataSecurity.MaskingPatterns",
     "orderNumber": 1,
     "parentModule": "",
@@ -74,7 +74,7 @@
   {
     "id": 2625,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/DataSecurity.SecurityPolicy",
+    "url": "/egov-mdms-service/v2/_update/DataSecurity.SecurityPolicy",
     "displayName": "update DataSecurity.SecurityPolicy",
     "orderNumber": 1,
     "parentModule": "",
@@ -86,7 +86,7 @@
   {
     "id": 2624,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/RAINMAKER-PGR.ServiceDefs",
+    "url": "/egov-mdms-service/v2/_update/RAINMAKER-PGR.ServiceDefs",
     "displayName": "update RAINMAKER-PGR.ServiceDefs",
     "orderNumber": 1,
     "parentModule": "",
@@ -98,7 +98,7 @@
   {
     "id": 2623,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/RAINMAKER-PGR.UIConstants",
+    "url": "/egov-mdms-service/v2/_update/RAINMAKER-PGR.UIConstants",
     "displayName": "update RAINMAKER-PGR.UIConstants",
     "orderNumber": 1,
     "parentModule": "",
@@ -110,7 +110,7 @@
   {
     "id": 2622,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/Workflow.AutoEscalation",
+    "url": "/egov-mdms-service/v2/_update/Workflow.AutoEscalation",
     "displayName": "update Workflow.AutoEscalation",
     "orderNumber": 1,
     "parentModule": "",
@@ -122,7 +122,7 @@
   {
     "id": 2621,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/Workflow.AutoEscalationStatesToIgnore",
+    "url": "/egov-mdms-service/v2/_update/Workflow.AutoEscalationStatesToIgnore",
     "displayName": "update Workflow.AutoEscalationStatesToIgnore",
     "orderNumber": 1,
     "parentModule": "",
@@ -134,7 +134,7 @@
   {
     "id": 2620,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/Workflow.BusinessService",
+    "url": "/egov-mdms-service/v2/_update/Workflow.BusinessService",
     "displayName": "update Workflow.BusinessService",
     "orderNumber": 1,
     "parentModule": "",
@@ -146,7 +146,7 @@
   {
     "id": 2619,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/Workflow.BusinessServiceConfig",
+    "url": "/egov-mdms-service/v2/_update/Workflow.BusinessServiceConfig",
     "displayName": "update Workflow.BusinessServiceConfig",
     "orderNumber": 1,
     "parentModule": "",
@@ -158,7 +158,7 @@
   {
     "id": 2618,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/Workflow.BusinessServiceMasterConfig",
+    "url": "/egov-mdms-service/v2/_update/Workflow.BusinessServiceMasterConfig",
     "displayName": "update Workflow.BusinessServiceMasterConfig",
     "orderNumber": 1,
     "parentModule": "",
@@ -170,7 +170,7 @@
   {
     "id": 2617,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/common-masters.GenderType",
+    "url": "/egov-mdms-service/v2/_update/common-masters.GenderType",
     "displayName": "update common-masters.GenderType",
     "orderNumber": 1,
     "parentModule": "",
@@ -182,7 +182,7 @@
   {
     "id": 2616,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/common-masters.IdFormat",
+    "url": "/egov-mdms-service/v2/_update/common-masters.IdFormat",
     "displayName": "update common-masters.IdFormat",
     "orderNumber": 1,
     "parentModule": "",
@@ -194,7 +194,7 @@
   {
     "id": 2615,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/common-masters.CronJobAPIConfig",
+    "url": "/egov-mdms-service/v2/_update/common-masters.CronJobAPIConfig",
     "displayName": "update common-masters.CronJobAPIConfig",
     "orderNumber": 1,
     "parentModule": "",
@@ -206,7 +206,7 @@
   {
     "id": 2614,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/common-masters.Department",
+    "url": "/egov-mdms-service/v2/_update/common-masters.Department",
     "displayName": "update common-masters.Department",
     "orderNumber": 1,
     "parentModule": "",
@@ -218,7 +218,7 @@
   {
     "id": 2613,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/common-masters.Designation",
+    "url": "/egov-mdms-service/v2/_update/common-masters.Designation",
     "displayName": "update common-masters.Designation",
     "orderNumber": 1,
     "parentModule": "",
@@ -230,7 +230,7 @@
   {
     "id": 2612,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/common-masters.wfSlaConfig",
+    "url": "/egov-mdms-service/v2/_update/common-masters.wfSlaConfig",
     "displayName": "update common-masters.wfSlaConfig",
     "orderNumber": 1,
     "parentModule": "",
@@ -242,7 +242,7 @@
   {
     "id": 2611,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/common-masters.StateInfo",
+    "url": "/egov-mdms-service/v2/_update/common-masters.StateInfo",
     "displayName": "update common-masters.StateInfo",
     "orderNumber": 1,
     "parentModule": "",
@@ -254,7 +254,7 @@
   {
     "id": 2610,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/common-masters.uiHomePage",
+    "url": "/egov-mdms-service/v2/_update/common-masters.uiHomePage",
     "displayName": "update common-masters.uiHomePage",
     "orderNumber": 1,
     "parentModule": "",
@@ -266,7 +266,7 @@
   {
     "id": 2609,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/egov-hrms.DeactivationReason",
+    "url": "/egov-mdms-service/v2/_update/egov-hrms.DeactivationReason",
     "displayName": "update egov-hrms.DeactivationReason",
     "orderNumber": 1,
     "parentModule": "",
@@ -278,7 +278,7 @@
   {
     "id": 2608,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/egov-hrms.Degree",
+    "url": "/egov-mdms-service/v2/_update/egov-hrms.Degree",
     "displayName": "update egov-hrms.Degree",
     "orderNumber": 1,
     "parentModule": "",
@@ -290,7 +290,7 @@
   {
     "id": 2607,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/egov-hrms.EmployeeStatus",
+    "url": "/egov-mdms-service/v2/_update/egov-hrms.EmployeeStatus",
     "displayName": "update egov-hrms.EmployeeStatus",
     "orderNumber": 1,
     "parentModule": "",
@@ -302,7 +302,7 @@
   {
     "id": 2606,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/egov-hrms.EmployeeType",
+    "url": "/egov-mdms-service/v2/_update/egov-hrms.EmployeeType",
     "displayName": "update egov-hrms.EmployeeType",
     "orderNumber": 1,
     "parentModule": "",
@@ -314,7 +314,7 @@
   {
     "id": 2605,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/egov-hrms.EmploymentTest",
+    "url": "/egov-mdms-service/v2/_update/egov-hrms.EmploymentTest",
     "displayName": "update egov-hrms.EmploymentTest",
     "orderNumber": 1,
     "parentModule": "",
@@ -326,7 +326,7 @@
   {
     "id": 2604,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/egov-hrms.Specalization",
+    "url": "/egov-mdms-service/v2/_update/egov-hrms.Specalization",
     "displayName": "update egov-hrms.Specalization",
     "orderNumber": 1,
     "parentModule": "",
@@ -338,7 +338,7 @@
   {
     "id": 2603,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/INBOX.InboxQueryConfiguration",
+    "url": "/egov-mdms-service/v2/_update/INBOX.InboxQueryConfiguration",
     "displayName": "update INBOX.InboxQueryConfiguration",
     "orderNumber": 1,
     "parentModule": "",
@@ -350,7 +350,7 @@
   {
     "id": 2602,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/tenant.citymodule",
+    "url": "/egov-mdms-service/v2/_update/tenant.citymodule",
     "displayName": "update tenant.citymodule",
     "orderNumber": 1,
     "parentModule": "",
@@ -362,7 +362,7 @@
   {
     "id": 2601,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/tenant.tenants",
+    "url": "/egov-mdms-service/v2/_update/tenant.tenants",
     "displayName": "update tenant.tenants",
     "orderNumber": 1,
     "parentModule": "",
@@ -374,7 +374,7 @@
   {
     "id": 2600,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/ACCESSCONTROL-ACTIONS-TEST.actions-test",
+    "url": "/egov-mdms-service/v2/_create/ACCESSCONTROL-ACTIONS-TEST.actions-test",
     "displayName": "create ACCESSCONTROL-ACTIONS-TEST.actions-test",
     "orderNumber": 1,
     "parentModule": "",
@@ -386,7 +386,7 @@
   {
     "id": 2599,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/ACCESSCONTROL-ROLEACTIONS.roleactions",
+    "url": "/egov-mdms-service/v2/_create/ACCESSCONTROL-ROLEACTIONS.roleactions",
     "displayName": "create ACCESSCONTROL-ROLEACTIONS.roleactions",
     "orderNumber": 1,
     "parentModule": "",
@@ -398,7 +398,7 @@
   {
     "id": 2598,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/ACCESSCONTROL-ROLES.roles",
+    "url": "/egov-mdms-service/v2/_create/ACCESSCONTROL-ROLES.roles",
     "displayName": "create ACCESSCONTROL-ROLES.roles",
     "orderNumber": 1,
     "parentModule": "",
@@ -410,7 +410,7 @@
   {
     "id": 2597,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/DataSecurity.DecryptionABAC",
+    "url": "/egov-mdms-service/v2/_create/DataSecurity.DecryptionABAC",
     "displayName": "create DataSecurity.DecryptionABAC",
     "orderNumber": 1,
     "parentModule": "",
@@ -422,7 +422,7 @@
   {
     "id": 2596,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/DataSecurity.EncryptionPolicy",
+    "url": "/egov-mdms-service/v2/_create/DataSecurity.EncryptionPolicy",
     "displayName": "create DataSecurity.EncryptionPolicy",
     "orderNumber": 1,
     "parentModule": "",
@@ -434,7 +434,7 @@
   {
     "id": 2595,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/DataSecurity.MaskingPatterns",
+    "url": "/egov-mdms-service/v2/_create/DataSecurity.MaskingPatterns",
     "displayName": "create DataSecurity.MaskingPatterns",
     "orderNumber": 1,
     "parentModule": "",
@@ -446,7 +446,7 @@
   {
     "id": 2594,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/DataSecurity.SecurityPolicy",
+    "url": "/egov-mdms-service/v2/_create/DataSecurity.SecurityPolicy",
     "displayName": "create DataSecurity.SecurityPolicy",
     "orderNumber": 1,
     "parentModule": "",
@@ -458,7 +458,7 @@
   {
     "id": 2593,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/RAINMAKER-PGR.ServiceDefs",
+    "url": "/egov-mdms-service/v2/_create/RAINMAKER-PGR.ServiceDefs",
     "displayName": "create RAINMAKER-PGR.ServiceDefs",
     "orderNumber": 1,
     "parentModule": "",
@@ -470,7 +470,7 @@
   {
     "id": 2592,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/RAINMAKER-PGR.UIConstants",
+    "url": "/egov-mdms-service/v2/_create/RAINMAKER-PGR.UIConstants",
     "displayName": "create RAINMAKER-PGR.UIConstants",
     "orderNumber": 1,
     "parentModule": "",
@@ -482,7 +482,7 @@
   {
     "id": 2591,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/Workflow.AutoEscalation",
+    "url": "/egov-mdms-service/v2/_create/Workflow.AutoEscalation",
     "displayName": "create Workflow.AutoEscalation",
     "orderNumber": 1,
     "parentModule": "",
@@ -494,7 +494,7 @@
   {
     "id": 2590,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/Workflow.AutoEscalationStatesToIgnore",
+    "url": "/egov-mdms-service/v2/_create/Workflow.AutoEscalationStatesToIgnore",
     "displayName": "create Workflow.AutoEscalationStatesToIgnore",
     "orderNumber": 1,
     "parentModule": "",
@@ -506,7 +506,7 @@
   {
     "id": 2589,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/Workflow.BusinessService",
+    "url": "/egov-mdms-service/v2/_create/Workflow.BusinessService",
     "displayName": "create Workflow.BusinessService",
     "orderNumber": 1,
     "parentModule": "",
@@ -518,7 +518,7 @@
   {
     "id": 2588,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/Workflow.BusinessServiceConfig",
+    "url": "/egov-mdms-service/v2/_create/Workflow.BusinessServiceConfig",
     "displayName": "create Workflow.BusinessServiceConfig",
     "orderNumber": 1,
     "parentModule": "",
@@ -530,7 +530,7 @@
   {
     "id": 2587,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/Workflow.BusinessServiceMasterConfig",
+    "url": "/egov-mdms-service/v2/_create/Workflow.BusinessServiceMasterConfig",
     "displayName": "create Workflow.BusinessServiceMasterConfig",
     "orderNumber": 1,
     "parentModule": "",
@@ -542,7 +542,7 @@
   {
     "id": 2586,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/common-masters.GenderType",
+    "url": "/egov-mdms-service/v2/_create/common-masters.GenderType",
     "displayName": "create common-masters.GenderType",
     "orderNumber": 1,
     "parentModule": "",
@@ -554,7 +554,7 @@
   {
     "id": 2585,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/common-masters.IdFormat",
+    "url": "/egov-mdms-service/v2/_create/common-masters.IdFormat",
     "displayName": "create common-masters.IdFormat",
     "orderNumber": 1,
     "parentModule": "",
@@ -566,7 +566,7 @@
   {
     "id": 2584,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/common-masters.CronJobAPIConfig",
+    "url": "/egov-mdms-service/v2/_create/common-masters.CronJobAPIConfig",
     "displayName": "create common-masters.CronJobAPIConfig",
     "orderNumber": 1,
     "parentModule": "",
@@ -578,7 +578,7 @@
   {
     "id": 2583,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/common-masters.Department",
+    "url": "/egov-mdms-service/v2/_create/common-masters.Department",
     "displayName": "create common-masters.Department",
     "orderNumber": 1,
     "parentModule": "",
@@ -590,7 +590,7 @@
   {
     "id": 2582,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/common-masters.Designation",
+    "url": "/egov-mdms-service/v2/_create/common-masters.Designation",
     "displayName": "MDMS v2",
     "orderNumber": 1,
     "parentModule": "",
@@ -602,7 +602,7 @@
   {
     "id": 2581,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/common-masters.wfSlaConfig",
+    "url": "/egov-mdms-service/v2/_create/common-masters.wfSlaConfig",
     "displayName": "create common-masters.wfSlaConfig",
     "orderNumber": 1,
     "parentModule": "",
@@ -614,7 +614,7 @@
   {
     "id": 2580,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/common-masters.StateInfo",
+    "url": "/egov-mdms-service/v2/_create/common-masters.StateInfo",
     "displayName": "create common-masters.StateInfo",
     "orderNumber": 1,
     "parentModule": "",
@@ -626,7 +626,7 @@
   {
     "id": 2579,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/common-masters.uiHomePage",
+    "url": "/egov-mdms-service/v2/_create/common-masters.uiHomePage",
     "displayName": "create common-masters.uiHomePage",
     "orderNumber": 1,
     "parentModule": "",
@@ -638,7 +638,7 @@
   {
     "id": 2578,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/egov-hrms.DeactivationReason",
+    "url": "/egov-mdms-service/v2/_create/egov-hrms.DeactivationReason",
     "displayName": "create egov-hrms.DeactivationReason",
     "orderNumber": 1,
     "parentModule": "",
@@ -650,7 +650,7 @@
   {
     "id": 2577,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/egov-hrms.Degree",
+    "url": "/egov-mdms-service/v2/_create/egov-hrms.Degree",
     "displayName": "create egov-hrms.Degree",
     "orderNumber": 1,
     "parentModule": "",
@@ -662,7 +662,7 @@
   {
     "id": 2576,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/egov-hrms.EmployeeStatus",
+    "url": "/egov-mdms-service/v2/_create/egov-hrms.EmployeeStatus",
     "displayName": "create egov-hrms.EmployeeStatus",
     "orderNumber": 1,
     "parentModule": "",
@@ -674,7 +674,7 @@
   {
     "id": 2575,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/egov-hrms.EmployeeType",
+    "url": "/egov-mdms-service/v2/_create/egov-hrms.EmployeeType",
     "displayName": "create egov-hrms.EmployeeType",
     "orderNumber": 1,
     "parentModule": "",
@@ -686,7 +686,7 @@
   {
     "id": 2574,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/egov-hrms.EmploymentTest",
+    "url": "/egov-mdms-service/v2/_create/egov-hrms.EmploymentTest",
     "displayName": "create egov-hrms.EmploymentTest",
     "orderNumber": 1,
     "parentModule": "",
@@ -698,7 +698,7 @@
   {
     "id": 2573,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/egov-hrms.Specalization",
+    "url": "/egov-mdms-service/v2/_create/egov-hrms.Specalization",
     "displayName": "create egov-hrms.Specalization",
     "orderNumber": 1,
     "parentModule": "",
@@ -710,7 +710,7 @@
   {
     "id": 2572,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/INBOX.InboxQueryConfiguration",
+    "url": "/egov-mdms-service/v2/_create/INBOX.InboxQueryConfiguration",
     "displayName": "create INBOX.InboxQueryConfiguration",
     "orderNumber": 1,
     "parentModule": "",
@@ -722,7 +722,7 @@
   {
     "id": 2571,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/tenant.citymodule",
+    "url": "/egov-mdms-service/v2/_create/tenant.citymodule",
     "displayName": "create tenant.citymodule",
     "orderNumber": 1,
     "parentModule": "",
@@ -734,7 +734,7 @@
   {
     "id": 2570,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/tenant.tenants",
+    "url": "/egov-mdms-service/v2/_create/tenant.tenants",
     "displayName": "create tenant.tenants",
     "orderNumber": 1,
     "parentModule": "",
@@ -1054,7 +1054,7 @@
   },
   {
     "id": 2513,
-    "url": "/mdms-v2/v2/_search",
+    "url": "/egov-mdms-service/v2/_search",
     "code": "null",
     "name": "MDMS v2 (search v2)",
     "path": "",
@@ -1066,7 +1066,7 @@
   },
   {
     "id": 2510,
-    "url": "/mdms-v2/schema/v1/_search",
+    "url": "/egov-mdms-service/schema/v1/_search",
     "code": "null",
     "name": "MDMS v2 Search",
     "path": "",
@@ -1078,7 +1078,7 @@
   },
   {
     "id": 2509,
-    "url": "/mdms-v2/schema/v1/_create",
+    "url": "/egov-mdms-service/schema/v1/_create",
     "code": "null",
     "name": "MDMS v2 create",
     "path": "",
@@ -2272,7 +2272,7 @@
    {
     "id": 15,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/CRS-ADMIN-CONSOLE.adminSchema",
+    "url": "/egov-mdms-service/v2/_create/CRS-ADMIN-CONSOLE.adminSchema",
     "displayName": "Create boundary-mamgement excel schema",
     "orderNumber": 1,
     "parentModule": "",
