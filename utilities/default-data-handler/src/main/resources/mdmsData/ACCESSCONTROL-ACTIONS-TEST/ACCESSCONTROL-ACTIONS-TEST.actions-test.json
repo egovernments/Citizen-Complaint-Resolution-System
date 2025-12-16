@@ -2269,7 +2269,7 @@
     "serviceCode": "PGR",
     "parentModule": "PGR"
   },
-   {
+  {
     "id": 15,
     "name": "MDMS",
     "url": "/mdms-v2/v2/_create/CRS-ADMIN-CONSOLE.adminSchema",
@@ -2281,7 +2281,7 @@
     "code": "null",
     "path": ""
   },
-    {
+  {
     "id": 16,
     "name": "MDMS",
     "url": "/default-data-handler/tenant/new",
@@ -2290,6 +2290,114 @@
     "parentModule": "",
     "enabled": true,
     "serviceCode": "Default Data Handler",
+    "code": "null",
+    "path": ""
+  },
+  {
+    "id": 17,
+    "name": "MDMS",
+    "url": "/mdms-v2/v2/_create/common-masters.Department",
+    "displayName": "create new department",
+    "orderNumber": 1,
+    "parentModule": "",
+    "enabled": true,
+    "serviceCode": "MDMS",
+    "code": "null",
+    "path": ""
+  },
+  {
+    "id": 18,
+    "name": "MDMS",
+    "url": "/mdms-v2/v2/_create/common-masters.Designation",
+    "displayName": "create new Designation",
+    "orderNumber": 1,
+    "parentModule": "",
+    "enabled": true,
+    "serviceCode": "MDMS",
+    "code": "null",
+    "path": ""
+  },
+  {
+    "id": 19,
+    "name": "MDMS",
+    "url": "/mdms-v2/v2/_create/RAINMAKER-PGR.ServiceDefs",
+    "displayName": "create new complaint type",
+    "orderNumber": 1,
+    "parentModule": "",
+    "enabled": true,
+    "serviceCode": "MDMS",
+    "code": "null",
+    "path": ""
+  },
+  {
+    "id": 20,
+    "name": "MDMS",
+    "url": "/mdms-v2/v2/_create/tenant.tenants",
+    "displayName": "create new tenant",
+    "orderNumber": 1,
+    "parentModule": "",
+    "enabled": true,
+    "serviceCode": "MDMS",
+    "code": "null",
+    "path": ""
+  },
+  {
+    "id": 21,
+    "name": "MDMS",
+    "url": "/mdms-v2/v2/_create/common-masters.StateInfo",
+    "displayName": "create new state info",
+    "orderNumber": 1,
+    "parentModule": "",
+    "enabled": true,
+    "serviceCode": "MDMS",
+    "code": "null",
+    "path": ""
+  },
+   {
+    "id": 22,
+    "name": "egov-bnd-mgmt",
+    "url": "/boundary-management/v1/_process",
+    "displayName": "Process Boundary Management Excel",
+    "orderNumber": 1,
+    "parentModule": "",
+    "enabled": true,
+    "serviceCode": "egov-bnd-mgmt",
+    "code": "null",
+    "path": ""
+  },
+   {
+    "id": 23,
+    "name": "egov-bnd-mgmt",
+    "url": "/boundary-management/v1/_generate",
+    "displayName": "Generate Boundary Management",
+    "orderNumber": 1,
+    "parentModule": "",
+    "enabled": true,
+    "serviceCode": "egov-bnd-mgmt",
+    "code": "null",
+    "path": ""
+  },
+   {
+    "id": 24,
+    "name": "egov-bnd-mgmt",
+    "url": "/boundary-management/v1/_generate-search",
+    "displayName": "Search Boundary Management Generation",
+    "orderNumber": 1,
+    "parentModule": "",
+    "enabled": true,
+    "serviceCode": "egov-bnd-mgmt",
+    "code": "null",
+    "path": ""
+  },
+   {
+    "id": 25,
+    "name": "egov-bnd-mgmt",
+    "url": "/boundary-management/v1/_process-search",
+    "displayName": "Search Boundary Management Process",
+    "orderNumber": 1,
+    "parentModule": "",
+    "enabled": true,
+    "serviceCode": "egov-bnd-mgmt",
     "code": "null",
     "path": ""
   }
