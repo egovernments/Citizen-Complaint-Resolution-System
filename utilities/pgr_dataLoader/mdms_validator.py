@@ -59,7 +59,7 @@ class MDMSValidator:
         if cache_key in self.schemas_cache:
             return self.schemas_cache[cache_key]
 
-        url = f"{self.mdms_url}/mdms-v2/schema/v1/_search"
+        url = f"{self.mdms_url}/schema/v1/_search"
 
         payload = {
             "RequestInfo": {
@@ -159,15 +159,11 @@ class MDMSValidator:
             if pd.notna(row.get('Logo File Path*')):
                 record['logoFilePath'] = str(row['Logo File Path*'])
 
-            # Optional ADMIN hierarchy fields
-            if pd.notna(row.get('Administrative Region Name (Geographical entity to which the tenant belongs)')):
-                record['administrativeRegion'] = str(row['Administrative Region Name (Geographical entity to which the tenant belongs)'])
-            if pd.notna(row.get('ADMIN0 Name')):
-                record['admin0Name'] = str(row['ADMIN0 Name'])
-            if pd.notna(row.get('ADMIN1 Name')):
-                record['admin1Name'] = str(row['ADMIN1 Name'])
-            if pd.notna(row.get('ADMIN2 Name')):
-                record['admin2Name'] = str(row['ADMIN2 Name'])
+            # Optional location fields
+            if pd.notna(row.get('City Name')):
+                record['cityName'] = str(row['City Name'])
+            if pd.notna(row.get('District Name')):
+                record['districtName'] = str(row['District Name'])
 
             # Optional location/contact fields
             if pd.notna(row.get('Address')):

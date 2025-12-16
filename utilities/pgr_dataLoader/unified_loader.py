@@ -546,6 +546,10 @@ class UnifiedExcelReader:
                 code = str(row['Code']).strip()
                 message = str(row['Message']).strip()
 
+                # Skip if code or message is empty after stripping
+                if not code or not message:
+                    continue
+
                 # Determine module and locale based on code pattern
                 if code.startswith('SERVICEDFS.'):
                     # Service definitions → rainmaker-pgr
@@ -761,7 +765,7 @@ class APIUploader:
         Returns:
             list: List of data objects retrieved
         """
-        url = f"{self.mdms_url}/mdms-v2/v2/_search"
+        url = f"{self.mdms_url}/v2/_search"
 
         # Override userInfo tenantId to match the request tenant
         user_info_copy = self.user_info.copy()
@@ -821,7 +825,7 @@ class APIUploader:
                 sheet_name: Excel sheet name to update with status
                 excel_file: Path to the uploaded Excel file
             """
-            url = f"{self.mdms_url}/mdms-v2/v2/_create/{{schema_code}}"
+            url = f"{self.mdms_url}/v2/_create/{{schema_code}}"
 
             results = {
                 'created': 0,
@@ -1290,7 +1294,7 @@ class APIUploader:
 
     def create_localization_messages(self, localization_list: List[Dict], tenant: str, sheet_name: str = 'Localization'):
         """Upload localization messages via localization service API"""
-        url = f"{self.localization_url}/localization/messages/v1/_upsert"
+        url = f"{self.localization_url}/messages/v1/_upsert"
 
         results = {
             'created': 0,
@@ -1427,7 +1431,7 @@ class APIUploader:
         Returns:
             API response dict
         """
-        url = f"{self.boundary_url}/boundary-service/boundary-hierarchy-definition/_create"
+        url = f"{self.boundary_url}/boundary-hierarchy-definition/_create"
 
         payload = {
             "RequestInfo": {
@@ -1480,8 +1484,8 @@ class APIUploader:
         Returns:
             Dict with results of update operations
         """
-        search_url = f"{self.mdms_url}/mdms-v2/v2/_search"
-        update_url = f"{self.mdms_url}/mdms-v2/v2/_update/tenant.tenants"
+        search_url = f"{self.mdms_url}/v2/_search"
+        update_url = f"{self.mdms_url}/v2/_update/tenant.tenants"
 
         results = {
             'updated': 0,
@@ -1682,7 +1686,7 @@ class APIUploader:
         Returns:
             List of boundary hierarchy definitions
         """
-        url = f"{self.boundary_url}/boundary-service/boundary-hierarchy-definition/_search"
+        url = f"{self.boundary_url}/boundary-hierarchy-definition/_search"
 
         payload = {
             "RequestInfo": {
@@ -1733,7 +1737,7 @@ class APIUploader:
         Returns:
             Dict with generation task details
         """
-        url = f"{self.boundary_mgmt_url}/boundary-management/v1/_generate"
+        url = f"{self.boundary_mgmt_url}/v1/_generate"
 
         params = {
             "tenantId": tenant_id,
@@ -1789,7 +1793,7 @@ class APIUploader:
         Returns:
             Dict with fileStoreId when complete
         """
-        url = f"{self.boundary_mgmt_url}/boundary-management/v1/_generate-search"
+        url = f"{self.boundary_mgmt_url}/v1/_generate-search"
 
         params = {
             "tenantId": tenant_id,
@@ -1964,7 +1968,7 @@ class APIUploader:
         Returns:
             Dict with processing results
         """
-        url = f"{self.boundary_mgmt_url}/boundary-management/v1/_process"
+        url = f"{self.boundary_mgmt_url}/v1/_process"
 
         # Override userInfo tenantId to match the request tenant
         user_info_copy = self.user_info.copy()
@@ -2216,7 +2220,7 @@ class APIUploader:
         Returns:
             List of boundary objects with code and type
         """
-        url = f"{self.boundary_url}/boundary-service/boundary/_search"
+        url = f"{self.boundary_url}/boundary/_search"
 
         # Override userInfo tenantId
         user_info_copy = self.user_info.copy()
