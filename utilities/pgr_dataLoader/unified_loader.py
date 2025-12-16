@@ -370,21 +370,21 @@ class UnifiedExcelReader:
     # ========================================================================
 
 
-    def read_employees_bulk(self, tenant_id: str):
+    def read_employees_bulk(self, tenant_id: str, uploader=None):
         """Read employee data from simplified Employee Master sheet for bulk upload
         Converts department/designation/role NAMES to CODES internally
 
         Args:
             tenant_id: Target tenant ID (e.g., 'pg.citya')
+            uploader: Authenticated APIUploader instance (required)
 
         Returns:
             list: List of employee objects ready for HRMS API
         """
-        df = pd.read_excel(self.excel_file, sheet_name='Employee Master')
+        if uploader is None:
+            raise ValueError("uploader parameter is required. Pass an authenticated APIUploader instance.")
 
-        # Build name-to-code mappings by fetching from MDMS
-        from unified_loader import APIUploader
-        uploader = APIUploader()
+        df = pd.read_excel(self.excel_file, sheet_name='Employee Master')
 
         # Fetch departments and create name->code mapping
         departments = uploader.fetch_departments(tenant_id)
