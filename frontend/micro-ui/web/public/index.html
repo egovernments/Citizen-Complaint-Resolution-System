@@ -7,16 +7,36 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap"
     rel="stylesheet" type="text/css" />
-    <link rel="stylesheet" href="https://unpkg.com/@egovernments/digit-ui-components-css@0.2.0-beta.14/dist/index.css" />
-    <link rel="stylesheet" href="https://unpkg.com/@egovernments/digit-ui-health-css@0.2.113/dist/index.css" />
-    <link rel="stylesheet" href="https://unpkg.com/@egovernments/digit-ui-css@1.8.37/dist/index.css" />
+  <link rel="stylesheet" href="https://unpkg.com/@egovernments/digit-ui-components-css@0.2.0-beta.14/dist/index.css" />
+  <link rel="stylesheet" href="https://unpkg.com/@egovernments/digit-ui-health-css@0.2.113/dist/index.css" />
+  <link rel="stylesheet" href="https://unpkg.com/@egovernments/digit-ui-css@1.8.37/dist/index.css" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#00bcd1" />
   <title>DIGIT</title>
   <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
-  <style>
 
+  <!-- <script src="https://egov-dev-assets.s3.ap-south-1.amazonaws.com/globalConfigsWorkbenchDev.js"></script> -->
+  <script>
+    // DOM Override for Profile Page
+    (function () {
+      setInterval(function () {
+        if (window.location.href.indexOf("/employee/user/profile") > -1) {
+          var mobileConfig = window.globalConfigs && window.globalConfigs.getConfig("CORE_MOBILE_CONFIGS");
+          if (mobileConfig && mobileConfig.mobilePrefix) {
+            var prefixEls = document.querySelectorAll(".digit-prefix");
+            prefixEls.forEach(function (el) {
+              if (el.innerText.trim() !== mobileConfig.mobilePrefix) {
+                el.innerText = mobileConfig.mobilePrefix;
+              }
+            });
+          }
+        }
+      }, 500);
+    })();
+  </script>
+
+  <style>
     .digit-inbox-search-composer-label-pair .digit-employee-select-wrap {
       margin-top: -0.5rem !important;
     }
@@ -64,7 +84,6 @@
       }
     }
   </style>
-  <!-- <script src="https://egov-dev-assets.s3.ap-south-1.amazonaws.com/globalConfigsWorkbenchDev.js"></script> -->
 </head>
 
 <body>

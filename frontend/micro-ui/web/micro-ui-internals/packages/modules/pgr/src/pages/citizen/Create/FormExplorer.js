@@ -158,9 +158,9 @@ const FormExplorer = () => {
       workflow: {
         action: "APPLY",
         verificationDocuments: Array.isArray(formData?.ComplaintImagesPoint)
-          ? formData.ComplaintImagesPoint.map((fileStoreId) => ({
+          ? formData.ComplaintImagesPoint.map((image) => ({
             documentType: "PHOTO",
-            fileStoreId,
+            fileStoreId: image,
             documentUid: "",
             additionalDetails: {},
           }))
@@ -320,10 +320,13 @@ const FormExplorer = () => {
 
   if (formData.GeoLocationsPoint?.pincode) {
     formData.postalCode = `${formData.GeoLocationsPoint.pincode}`;
-
   }
   else if (formData.postalCode) {
     formData.postalCode = `${formData.postalCode}`;
+  }
+
+  if (formData.landmark && typeof formData.landmark === "object") {
+    formData.landmark = "";
   }
 
 
