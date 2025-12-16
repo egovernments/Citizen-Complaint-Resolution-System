@@ -2280,5 +2280,17 @@
     "serviceCode": "MDMS v2",
     "code": "null",
     "path": ""
+  },
+    {
+    "id": 16,
+    "name": "MDMS",
+    "url": "/default-data-handler/tenant/new",
+    "displayName": "Create default data for new tenant",
+    "orderNumber": 1,
+    "parentModule": "",
+    "enabled": true,
+    "serviceCode": "Default Data Handler",
+    "code": "null",
+    "path": ""
   }
 ]

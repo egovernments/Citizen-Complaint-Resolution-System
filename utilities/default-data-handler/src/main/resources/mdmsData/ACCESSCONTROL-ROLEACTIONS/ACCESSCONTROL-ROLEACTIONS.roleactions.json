@@ -2386,11 +2386,18 @@
     "tenantId": "{tenantid}",
     "actioncode": ""
   },
-    {
+  {
     "rolecode": "MDMS_ADMIN",
     "actionid": 15,
     "actioncode": "",
     "tenantId": "{tenantid}",
     "id": 1731
+  },
+  {
+    "rolecode": "MDMS_ADMIN",
+    "actionid": 16,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1732
   }
 ]
