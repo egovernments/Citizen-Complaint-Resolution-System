@@ -40,7 +40,16 @@ class MDMSValidator:
         self.template_schemas = {
             'Tenant Master.xlsx': 'tenant.master',
             'Tenant_Master.xlsx': 'tenant.master',
+            'Common Master.xlsx': 'common.master',
+            'Common_Master.xlsx': 'common.master',
             'localization.xlsx': 'localization.master',
+        }
+
+        # For auto-detection, also check filename patterns
+        self.schema_patterns = {
+            'tenant': 'tenant.master',
+            'common': 'common.master',
+            'localization': 'localization.master',
         }
 
     def fetch_schema(self, tenant_id: str, schema_code: str) -> Dict:
@@ -269,9 +278,11 @@ class MDMSValidator:
             if pd.notna(row.get('Locale')):
                 record['locale'] = str(row['Locale'])
 
-            # Optional fields
-            if pd.notna(row.get('English_Message')):
-                record['englishMessage'] = str(row['English_Message'])
+            # Optional fields - support both 'Message' and 'English_Message' column names
+            english_msg = row.get('English_Message') or row.get('Message')
+            if pd.notna(english_msg):
+                record['englishMessage'] = str(english_msg)
+
             if pd.notna(row.get('Translation')):
                 record['translation'] = str(row['Translation'])
 
@@ -436,7 +447,17 @@ class MDMSValidator:
             # Auto-detect schema code from filename if not provided
             if not schema_code:
                 filename = excel_file.split('/')[-1]
+                # First try exact match
                 schema_code = self.template_schemas.get(filename)
+
+                # If no exact match, try pattern matching (for files like "localization (2).xlsx")
+                if not schema_code:
+                    filename_lower = filename.lower()
+                    for pattern, schema in self.schema_patterns.items():
+                        if pattern in filename_lower:
+                            schema_code = schema
+                            break
+
                 if not schema_code:
                     raise ValueError(f"Cannot auto-detect schema for file: {filename}")
 

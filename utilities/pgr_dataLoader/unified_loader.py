@@ -370,21 +370,21 @@ class UnifiedExcelReader:
     # ========================================================================
 
 
-    def read_employees_bulk(self, tenant_id: str):
+    def read_employees_bulk(self, tenant_id: str, uploader=None):
         """Read employee data from simplified Employee Master sheet for bulk upload
         Converts department/designation/role NAMES to CODES internally
 
         Args:
             tenant_id: Target tenant ID (e.g., 'pg.citya')
+            uploader: Authenticated APIUploader instance (required)
 
         Returns:
             list: List of employee objects ready for HRMS API
         """
-        df = pd.read_excel(self.excel_file, sheet_name='Employee Master')
+        if uploader is None:
+            raise ValueError("uploader parameter is required. Pass an authenticated APIUploader instance.")
 
-        # Build name-to-code mappings by fetching from MDMS
-        from unified_loader import APIUploader
-        uploader = APIUploader()
+        df = pd.read_excel(self.excel_file, sheet_name='Employee Master')
 
         # Fetch departments and create name->code mapping
         departments = uploader.fetch_departments(tenant_id)
@@ -1562,6 +1562,38 @@ class APIUploader:
                 user_info_update = self.user_info.copy()
                 user_info_update['tenantId'] = state_tenant
 
+                # Ensure uniqueIdentifier is present (required for update)
+                if 'uniqueIdentifier' not in tenant_data:
+                    tenant_data['uniqueIdentifier'] = tenant_id
+
+                # Clean all null values that cause NullPointerException on server
+                # Recursively remove all None/null values from nested structures
+                def clean_nulls(obj):
+                    """Recursively remove None values from dict/list structures"""
+                    if isinstance(obj, dict):
+                        return {k: clean_nulls(v) for k, v in obj.items() if v is not None}
+                    elif isinstance(obj, list):
+                        return [clean_nulls(item) for item in obj if item is not None]
+                    else:
+                        return obj
+
+                tenant_data = clean_nulls(tenant_data)
+
+                # Add required fields to city object as per schema
+                if 'city' in tenant_data:
+                    city_obj = tenant_data['city']
+                    # districtTenantCode is required in city object
+                    if 'districtTenantCode' not in city_obj:
+                        district_code = city_obj.get('districtCode', '0')
+                        city_obj['districtTenantCode'] = f"{state_tenant}.{district_code}"
+
+                    # Fix invalid ulbGrade enum values
+                    ulb_grade = city_obj.get('ulbGrade', '')
+                    if ulb_grade == 'ST':
+                        city_obj['ulbGrade'] = 'State'
+                    elif ulb_grade and ulb_grade not in ['MC Class I', 'MC Class II', 'State', 'Others']:
+                        city_obj['ulbGrade'] = 'Others'
+
                 update_payload = {
                     "RequestInfo": {
                         "apiId": "asset-services",
@@ -1572,10 +1604,11 @@ class APIUploader:
                     "Mdms": {
                         "tenantId": state_tenant,
                         "schemaCode": "tenant.tenants",
+                        "uniqueIdentifier": tenant_id,
                         "id": mdms_record['id'],
                         "data": tenant_data,
-                        "auditDetails": mdms_record['auditDetails'],
-                        "isActive": mdms_record['isActive']
+                        "auditDetails": mdms_record.get('auditDetails'),
+                        "isActive": mdms_record.get('isActive', True)
                     }
                 }
 

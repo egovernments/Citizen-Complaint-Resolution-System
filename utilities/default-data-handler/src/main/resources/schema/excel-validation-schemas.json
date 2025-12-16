@@ -1,7 +1,7 @@
 [
   {
     "tenantId": "{tenantid}",
-    "code": "tenant.master",
+    "code": "tenant.masterschemavalidation",
     "description": "Tenant Master Schema - Used for Excel validation in Jupyter notebooks. Defines tenant information with ADMIN hierarchy (State/City levels)",
     "isActive": true,
     "definition": {
@@ -101,7 +101,7 @@
   },
   {
     "tenantId": "{tenantid}",
-    "code": "common.master",
+    "code": "common.masterschemavalidation",
     "description": "Common Master Schema - Used for Excel validation in Jupyter notebooks. Validates department, designation, complaint types with SLA resolution times",
     "isActive": true,
     "definition": {
@@ -165,7 +165,7 @@
   },
   {
     "tenantId": "{tenantid}",
-    "code": "localization.master",
+    "code": "localization.masterschemavalidation",
     "description": "Localization Master Schema - Used for Excel validation in Jupyter notebooks. Validates multi-language translation data with locale codes (e.g., en_IN, hi_IN, ta_IN)",
     "isActive": true,
     "definition": {
