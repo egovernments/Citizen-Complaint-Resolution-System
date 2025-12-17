@@ -2356,7 +2356,7 @@
    {
     "id": 22,
     "name": "egov-bnd-mgmt",
-    "url": "/boundary-management/v1/_process",
+    "url": "/egov-bndry-mgmnt/v1/_process",
     "displayName": "Process Boundary Management Excel",
     "orderNumber": 1,
     "parentModule": "",
@@ -2368,7 +2368,7 @@
    {
     "id": 23,
     "name": "egov-bnd-mgmt",
-    "url": "/boundary-management/v1/_generate",
+    "url": "/egov-bndry-mgmnt/v1/_generate",
     "displayName": "Generate Boundary Management",
     "orderNumber": 1,
     "parentModule": "",
@@ -2380,7 +2380,7 @@
    {
     "id": 24,
     "name": "egov-bnd-mgmt",
-    "url": "/boundary-management/v1/_generate-search",
+    "url": "/egov-bndry-mgmnt/v1/_generate-search",
     "displayName": "Search Boundary Management Generation",
     "orderNumber": 1,
     "parentModule": "",
@@ -2392,7 +2392,7 @@
    {
     "id": 25,
     "name": "egov-bnd-mgmt",
-    "url": "/boundary-management/v1/_process-search",
+    "url": "/egov-bndry-mgmnt/v1/_process-search",
     "displayName": "Search Boundary Management Process",
     "orderNumber": 1,
     "parentModule": "",
