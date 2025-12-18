@@ -191,12 +191,14 @@ class UnifiedExcelReader:
     # COMMON MASTER READERS (PHASE 2)
     # ========================================================================
 
-    def read_departments_designations(self, tenant_id: str):
+    def read_departments_designations(self, tenant_id: str, uploader=None):
         """Read combined Department and Designation sheet from Common Master Excel
         Auto-generates codes for departments and designations
+        Fetches existing data from MDMS to continue numbering
 
         Args:
             tenant_id: Tenant ID for localization context
+            uploader: Authenticated APIUploader instance (optional, for fetching existing data)
 
         Returns:
             tuple: (departments_list, designations_list, dept_localization, desig_localization, dept_name_to_code_mapping)
@@ -212,6 +214,47 @@ class UnifiedExcelReader:
         dept_name_to_code = {}  # Mapping for complaint types
         desig_counter = 1
 
+        # Fetch existing departments and designations from MDMS to continue numbering
+        if uploader:
+            try:
+                existing_depts = uploader.fetch_departments(tenant_id)
+                existing_desigs = uploader.fetch_designations(tenant_id)
+
+                # Find max department counter
+                max_dept_num = 0
+                for dept in existing_depts:
+                    code = dept.get('code', '')
+                    if code.startswith('DEPT_'):
+                        try:
+                            num = int(code.split('_')[1])
+                            max_dept_num = max(max_dept_num, num)
+                        except (ValueError, IndexError):
+                            pass
+                    # Map existing dept names to codes
+                    dept_name_to_code[dept.get('name', '')] = code
+
+                # Find max designation counter
+                max_desig_num = 0
+                for desig in existing_desigs:
+                    code = desig.get('code', '')
+                    if code.startswith('DESIG_'):
+                        try:
+                            num = int(code.split('_')[1])
+                            max_desig_num = max(max_desig_num, num)
+                        except (ValueError, IndexError):
+                            pass
+
+                # Start counters from next available number
+                dept_start_counter = max_dept_num + 1
+                desig_counter = max_desig_num + 1
+
+            except Exception as e:
+                # If fetch fails, start from 1
+                dept_start_counter = 1
+                desig_counter = 1
+        else:
+            dept_start_counter = 1
+
         for _, row in df.iterrows():
             dept_name = row.get('Department Name*')
             desig_name = row.get('Designation Name*')
@@ -222,31 +265,36 @@ class UnifiedExcelReader:
 
             dept_name = str(dept_name).strip()
 
-            # Auto-generate department code
-            if dept_name not in dept_counter:
-                dept_counter[dept_name] = len(dept_counter) + 1
-                dept_code = f"DEPT_{dept_counter[dept_name]}"
-
-                # Store mapping from name to code
-                dept_name_to_code[dept_name] = dept_code
-
-                # Add department
-                departments.append({
-                    'code': dept_code,
-                    'name': dept_name,
-                    'active': True
-                })
-
-                # Auto-generate department localization
-                loc_code = f"COMMON_MASTERS_DEPARTMENT_{dept_code}"
-                dept_localizations.append({
-                    'code': loc_code,
-                    'message': dept_name,
-                    'module': 'rainmaker-common',
-                    'locale': 'en_IN'
-                })
+            # Check if department already exists in MDMS
+            if dept_name in dept_name_to_code:
+                dept_code = dept_name_to_code[dept_name]
             else:
-                dept_code = f"DEPT_{dept_counter[dept_name]}"
+                # Auto-generate department code with next available number
+                if dept_name not in dept_counter:
+                    dept_counter[dept_name] = dept_start_counter
+                    dept_start_counter += 1
+                    dept_code = f"DEPT_{dept_counter[dept_name]}"
+
+                    # Store mapping from name to code
+                    dept_name_to_code[dept_name] = dept_code
+
+                    # Add department
+                    departments.append({
+                        'code': dept_code,
+                        'name': dept_name,
+                        'active': True
+                    })
+
+                    # Auto-generate department localization
+                    loc_code = f"COMMON_MASTERS_DEPARTMENT_{dept_code}"
+                    dept_localizations.append({
+                        'code': loc_code,
+                        'message': dept_name,
+                        'module': 'rainmaker-common',
+                        'locale': 'en_IN'
+                    })
+                else:
+                    dept_code = f"DEPT_{dept_counter[dept_name]}"
 
             # Add designation if present
             if pd.notna(desig_name) and str(desig_name).strip() != '':
@@ -308,7 +356,7 @@ class UnifiedExcelReader:
                     'type': parent_type,
                     'department': dept_code,
                     'slaHours': int(float(row['Resolution Time (Hours)*'])) if pd.notna(row.get('Resolution Time (Hours)*')) else None,
-                    'keywords': str(row['Search Words (comma separated)*']).strip() if pd.notna(row.get('Search Words (comma separated)*')) else None,
+                    'keywords': str(row['Search Words (comma separated)*']).strip() if pd.notna(row.get('Search Words (comma separated)*')) else "",
                     'order': int(float(row['Priority'])) if pd.notna(row.get('Priority')) else None
                 }
 
@@ -347,8 +395,8 @@ class UnifiedExcelReader:
                         ct['department'] = current_parent['department']
                     if current_parent.get('slaHours'):
                         ct['slaHours'] = current_parent['slaHours']
-                    if current_parent.get('keywords'):
-                        ct['keywords'] = current_parent['keywords']
+                    # Always include keywords, use empty string if not provided
+                    ct['keywords'] = current_parent.get('keywords', "")
                     if current_parent.get('order'):
                         ct['order'] = current_parent['order']
 
@@ -613,9 +661,9 @@ class APIUploader:
             self.base_url = self.base_url[:-1]
 
         # Service endpoints from .env (configurable)
-        mdms_v2_service = os.getenv("MDMS_V2_SERVICE", "/mdms-v2")
+        mdms_v2_service = os.getenv("MDMS_V2_SERVICE", "/egov-mdms-service")
         boundary_service = os.getenv("BOUNDARY_SERVICE", "/boundary-service")
-        boundary_mgmt_service = os.getenv("BOUNDARY_MGMT_SERVICE", "/boundary-management")
+        boundary_mgmt_service = os.getenv("BOUNDARY_MGMT_SERVICE", "/egov-bndry-mgmnt")
         localization_service = os.getenv("LOCALIZATION_SERVICE", "/localization")
         workflow_service = os.getenv("WORKFLOW_SERVICE", "/egov-workflow-v2")
         filestore_service = os.getenv("FILESTORE_SERVICE", "/filestore")
@@ -825,7 +873,7 @@ class APIUploader:
                 sheet_name: Excel sheet name to update with status
                 excel_file: Path to the uploaded Excel file
             """
-            url = f"{self.mdms_url}/v2/_create/{{schema_code}}"
+            url = f"{self.mdms_url}/v2/_create/{schema_code}"
 
             results = {
                 'created': 0,
@@ -1319,85 +1367,98 @@ class APIUploader:
         print(f"\n   Found {len(by_locale)} locales: {', '.join(by_locale.keys())}")
         print("="*60)
 
-        # Upload each locale batch
+        # Upload each locale batch - split into smaller chunks to avoid 413 error
+        BATCH_SIZE = 500  # Upload 500 messages at a time
+
         for locale, messages in by_locale.items():
-            payload = {
-                "RequestInfo": {
-                    "apiId": "emp",
-                    "ver": "1.0",
-                    "action": "create",
-                    "msgId": f"{int(time.time() * 1000)}",
-                    "authToken": self.auth_token,
-                    "userInfo": self.user_info
-                },
-                "locale": locale,
-                "tenantId": tenant,
-                "messages": messages
-            }
+            total_messages = len(messages)
+            print(f"   📤 Locale: {locale} - Uploading {total_messages} messages in batches of {BATCH_SIZE}...")
 
-            headers = {'Content-Type': 'application/json'}
-            status_code = None
+            # Split into batches
+            for batch_idx in range(0, total_messages, BATCH_SIZE):
+                batch = messages[batch_idx:batch_idx + BATCH_SIZE]
+                batch_num = (batch_idx // BATCH_SIZE) + 1
+                total_batches = (total_messages + BATCH_SIZE - 1) // BATCH_SIZE
 
-            try:
-                response = requests.post(url, json=payload, headers=headers)
-                status_code = response.status_code
-                response.raise_for_status()
-                print(f"   [OK] Locale: {locale} - {len(messages)} messages uploaded")
-                results['created'] += len(messages)
+                payload = {
+                    "RequestInfo": {
+                        "apiId": "emp",
+                        "ver": "1.0",
+                        "action": "create",
+                        "msgId": f"{int(time.time() * 1000)}",
+                        "authToken": self.auth_token,
+                        "userInfo": self.user_info
+                    },
+                    "locale": locale,
+                    "tenantId": tenant,
+                    "messages": batch
+                }
 
-            except requests.exceptions.HTTPError as e:
-                status_code = e.response.status_code if hasattr(e, 'response') and e.response is not None else 500
-                error_text = e.response.text if hasattr(e, 'response') and e.response is not None else str(e)
+                headers = {'Content-Type': 'application/json'}
+                status_code = None
 
-                # Extract clean error message from API response
-                error_message = self._extract_error_message(error_text) if error_text else str(e)[:200]
+                try:
+                    response = requests.post(url, json=payload, headers=headers, timeout=120)
+                    status_code = response.status_code
+                    response.raise_for_status()
+                    print(f"      ✅ Batch {batch_num}/{total_batches}: {len(batch)} messages uploaded")
+                    results['created'] += len(batch)
 
-                # Check for duplicate/already exists errors
-                if ('duplicate' in error_text.lower() or
-                    'already exists' in error_text.lower() or
-                    'DUPLICATE_RECORDS' in error_text or
-                    'DuplicateMessageIdentityException' in error_text or
-                    'unique_message_entry' in error_text.lower()):
-                    print(f"   [EXISTS] Locale: {locale} - {len(messages)} messages already exist")
-                    results['exists'] += len(messages)
-                    # DON'T add to failed_records - already exists is not a failure!
-                else:
-                    # True failure
-                    print(f"   [FAILED] Locale: {locale} (HTTP {status_code})")
-                    print(f"   ERROR: {error_message}")
-                    results['failed'] += len(messages)
+                except requests.exceptions.HTTPError as e:
+                    status_code = e.response.status_code if hasattr(e, 'response') and e.response is not None else 500
+                    error_text = e.response.text if hasattr(e, 'response') and e.response is not None else str(e)
+
+                    # Extract clean error message from API response
+                    error_message = self._extract_error_message(error_text) if error_text else str(e)[:200]
+
+                    # Check for duplicate/already exists errors
+                    if ('duplicate' in error_text.lower() or
+                        'already exists' in error_text.lower() or
+                        'DUPLICATE_RECORDS' in error_text or
+                        'DuplicateMessageIdentityException' in error_text or
+                        'unique_message_entry' in error_text.lower()):
+                        print(f"      ⚠️ Batch {batch_num}/{total_batches}: {len(batch)} messages already exist")
+                        results['exists'] += len(batch)
+                        # DON'T add to failed_records - already exists is not a failure!
+                    else:
+                        # True failure
+                        print(f"      ❌ Batch {batch_num}/{total_batches} FAILED (HTTP {status_code})")
+                        print(f"         ERROR: {error_message}")
+                        results['failed'] += len(batch)
+                        results['errors'].append({
+                            'locale': locale,
+                            'batch': batch_num,
+                            'count': len(batch),
+                            'error': error_message
+                        })
+
+                        # Store failed messages for Excel export - ONLY TRUE FAILURES
+                        for msg in batch:
+                            failed_record = msg.copy()
+                            failed_record['_STATUS'] = 'FAILED'
+                            failed_record['_STATUS_CODE'] = status_code
+                            failed_record['_ERROR_MESSAGE'] = error_message
+                            results['failed_records'].append(failed_record)
+
+                except Exception as e:
+                    error_message = str(e)[:200]
+                    status_code = 0
+                    print(f"      ❌ Batch {batch_num}/{total_batches} ERROR: {error_message}")
+                    results['failed'] += len(batch)
                     results['errors'].append({
                         'locale': locale,
-                        'count': len(messages),
+                        'batch': batch_num,
+                        'count': len(batch),
                         'error': error_message
                     })
 
-                    # Store failed messages for Excel export - ONLY TRUE FAILURES
-                    for msg in messages:
+                    # Store failed messages for Excel export
+                    for msg in batch:
                         failed_record = msg.copy()
                         failed_record['_STATUS'] = 'FAILED'
                         failed_record['_STATUS_CODE'] = status_code
                         failed_record['_ERROR_MESSAGE'] = error_message
                         results['failed_records'].append(failed_record)
-
-            except Exception as e:
-                error_message = str(e)[:200]
-                status_code = 0
-                print(f"   [ERROR] Locale: {locale} - {error_message}")
-                results['failed'] += len(messages)
-                results['errors'].append({
-                    'locale': locale,
-                    'count': len(messages),
-                    'error': error_message
-                })
-
-                # Store failed messages for Excel export
-                for msg in messages:
-                    failed_record = msg.copy()
-                    failed_record['_STATUS'] = 'FAILED'
-                    failed_record['_STATUS_CODE'] = status_code
-                    failed_record['_ERROR_MESSAGE'] = error_message
-                    results['failed_records'].append(failed_record)
 
             time.sleep(0.2)
 
@@ -1443,11 +1504,13 @@ class APIUploader:
             },
             'BoundaryHierarchy': hierarchy_data
         }
+        print(payload)
 
         headers = {'Content-Type': 'application/json'}
 
         try:
             response = requests.post(url, json=payload, headers=headers)
+            print(response)
             response.raise_for_status()
             print(f"\n✅ [SUCCESS] Boundary hierarchy created")
             print(f"   Tenant: {hierarchy_data.get('tenantId')}")
@@ -1653,9 +1716,9 @@ class APIUploader:
 
         return results
 
-    def setup_default_data(self, targetTenantId: str, module: str,schemaCodes: list,onlySchemas: bool = False) -> dict:
+    def setup_default_data(self, targetTenantId: str, module: str, schemaCodes: list, onlySchemas: bool = False) -> dict:
 
-        url = f"{self.Datahandlerurl}/default-data-handler/tenant/new"
+        url = f"{self.Datahandlerurl}/tenant/new"
 
         payload = {
             "RequestInfo": {
@@ -1667,7 +1730,10 @@ class APIUploader:
                 "authToken": self.auth_token,
                 "userInfo": self.user_info
             },
-            "targetTenantId": targetTenantId
+            "targetTenantId": targetTenantId,
+            "module": module,
+            "schemaCodes": schemaCodes,
+            "onlySchemas": onlySchemas
         }
 
         print("\n[DEFAULT DATA SETUP]")
@@ -1679,7 +1745,9 @@ class APIUploader:
         print("="*60)
 
         try:
-            response = requests.post(url, json=payload, headers={"Content-Type": "application/json"})
+            # Tenant creation can take 5-10 minutes, use long timeout
+            print(f"   ⏳ This may take 5-10 minutes, please wait...")
+            response = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=600)
             response.raise_for_status()
 
             result = response.json()
@@ -1720,6 +1788,7 @@ class APIUploader:
             List of boundary hierarchy definitions
         """
         url = f"{self.boundary_url}/boundary-hierarchy-definition/_search"
+        print(url)
 
         payload = {
             "RequestInfo": {
@@ -1735,19 +1804,30 @@ class APIUploader:
                 "offset": offset
             }
         }
+        
 
         headers = {'Content-Type': 'application/json'}
 
         try:
             response = requests.post(url, json=payload, headers=headers)
+            print(response)
             response.raise_for_status()
             data = response.json()
 
+            # Debug: print raw response
+            print(f"\n📋 Raw response keys: {list(data.keys())}")
+            print(f"📋 Response data: {json.dumps(data, indent=2)[:500]}")
+
             hierarchies = data.get('BoundaryHierarchy', [])
+
+            if hierarchies is None:
+                print(f"\n⚠️ BoundaryHierarchy returned None (no hierarchies exist for {tenant_id})")
+                return []
+
             print(f"\n✅ Found {len(hierarchies)} boundary hierarchy(ies) for tenant: {tenant_id}")
 
             for h in hierarchies:
-                print(f"   • {h['hierarchyType']} ({len(h.get('boundaryHierarchy', []))} levels)")
+                print(f"   • {h.get('hierarchyType', 'UNKNOWN')} ({len(h.get('boundaryHierarchy', []))} levels)")
 
             return hierarchies
 
@@ -1757,6 +1837,8 @@ class APIUploader:
             return []
         except Exception as e:
             print(f"❌ Error: {str(e)}")
+            import traceback
+            print(f"📋 Traceback: {traceback.format_exc()[:300]}")
             return []
 
     def generate_boundary_template(self, tenant_id: str, hierarchy_type: str, force_update: bool = True) -> Dict:
@@ -1791,11 +1873,14 @@ class APIUploader:
                 "plainAccessRequest": {}
             }
         }
+        print(url)
+        print(payload)
 
         headers = {'Content-Type': 'application/json'}
 
         try:
             response = requests.post(url, json=payload, headers=headers, params=params)
+            print(response)
             response.raise_for_status()
             data = response.json()
 
@@ -1846,6 +1931,7 @@ class APIUploader:
                 "plainAccessRequest": {}
             }
         }
+        print(payload)
 
         headers = {'Content-Type': 'application/json'}
 
@@ -1854,6 +1940,7 @@ class APIUploader:
         for attempt in range(1, max_attempts + 1):
             try:
                 response = requests.post(url, json=payload, headers=headers, params=params)
+                print(response)
                 response.raise_for_status()
                 data = response.json()
 
@@ -1862,6 +1949,8 @@ class APIUploader:
                     resource = resources[0]
                     status = resource.get('status')
                     filestore_id = resource.get('fileStoreid')
+                    error_details = resource.get('error', 'No error details provided')
+                    additional_details = resource.get('additionalDetails', {})
 
                     print(f"   Attempt {attempt}/{max_attempts}: Status = {status}")
 
@@ -1871,6 +1960,11 @@ class APIUploader:
                         return resource
                     elif status == 'failed':
                         print(f"\n❌ Template generation failed")
+                        print(f"   Error: {error_details}")
+                        if additional_details:
+                            print(f"   Additional Details: {json.dumps(additional_details, indent=2)[:500]}")
+                        print(f"\n📋 Full resource response:")
+                        print(f"   {json.dumps(resource, indent=2)[:1000]}")
                         return resource
 
                 time.sleep(delay)
@@ -1896,7 +1990,7 @@ class APIUploader:
             Path to downloaded file OR dict with 'path' and 'url' if return_url=True
         """
         import os
-        url = f"{self.filestore_url}/filestore/v1/files/url"
+        url = f"{self.filestore_url}/v1/files/url"
 
         params = {
             "tenantId": tenant_id,
@@ -1959,7 +2053,7 @@ class APIUploader:
             FileStore ID of uploaded file
         """
         import os
-        url = f"{self.filestore_url}/filestore/v1/files"
+        url = f"{self.filestore_url}/v1/files"
 
         try:
             with open(file_path, 'rb') as f:
@@ -2025,9 +2119,12 @@ class APIUploader:
         }
 
         headers = {'Content-Type': 'application/json'}
+        print(url)
+        print(payload)
 
         try:
             response = requests.post(url, json=payload, headers=headers)
+            print(response)
             response.raise_for_status()
             data = response.json()
 
@@ -2396,6 +2493,7 @@ class APIUploader:
         try:
             print(f"📥 Fetching Hierarchy Types from Boundary Service...")
             url = f"{self.boundary_url}/boundary-hierarchy-definition/_search"
+            print(url)
 
             # Override userInfo tenantId
             user_info_copy = self.user_info.copy()
@@ -2411,9 +2509,11 @@ class APIUploader:
                     "tenantId": tenant
                 }
             }
+            print(payload)
 
             headers = {'Content-Type': 'application/json'}
             response = requests.post(url, json=payload, headers=headers, timeout=30)
+            print(response)
             response.raise_for_status()
             data = response.json()
 
@@ -2846,7 +2946,8 @@ class APIUploader:
             }
 
         # STEP 2: Proceed with employee creation
-        url = f"{self.hrms_url}/egov-hrms/employees/_create"
+        url = f"{self.hrms_url}/employees/_create"
+
 
         results = {
             'created': 0,
@@ -2883,6 +2984,7 @@ class APIUploader:
                 },
                 "Employees": [employee]
             }
+            print(payload)
 
             headers = {'Content-Type': 'application/json'}
             status = "SUCCESS"
@@ -2891,6 +2993,7 @@ class APIUploader:
 
             try:
                 response = requests.post(url, json=payload, headers=headers)
+                print(response)
                 status_code = response.status_code
                 response.raise_for_status()
                 print(f"   [OK] [{i}/{len(employee_list)}] {emp_code}")

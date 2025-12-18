@@ -30,7 +30,7 @@ class MDMSValidator:
 
         # Build MDMS URL using gateway
         self.base_url = base_url.rstrip('/')
-        self.mdms_url = f"{self.base_url}/mdms-v2"
+        self.mdms_url = f"{self.base_url}/egov-mdms-service"
         self.auth_token = auth_token
         self.user_info = user_info or {}
         self.loaded_data = {}  # Cache for loaded Excel data
@@ -38,18 +38,18 @@ class MDMSValidator:
 
         # Template mappings for two-phase workflow
         self.template_schemas = {
-            'Tenant Master.xlsx': 'tenant.master',
-            'Tenant_Master.xlsx': 'tenant.master',
-            'Common Master.xlsx': 'common.master',
-            'Common_Master.xlsx': 'common.master',
-            'localization.xlsx': 'localization.master',
+            'Tenant Master.xlsx': 'tenant.masterschemavalidation',
+            'Tenant_Master.xlsx': 'tenant.masterschemavalidation',
+            'Common Master.xlsx': 'common.masterschemavalidation',
+            'Common_Master.xlsx': 'common.mastmasterschemavalidationer',
+            'localization.xlsx': 'localization.masterschemavalidation',
         }
 
         # For auto-detection, also check filename patterns
         self.schema_patterns = {
-            'tenant': 'tenant.master',
-            'common': 'common.master',
-            'localization': 'localization.master',
+            'tenant': 'tenant.masterschemavalidation',
+            'common': 'common.masterschemavalidation',
+            'localization': 'localization.masterschemavalidation',
         }
 
     def fetch_schema(self, tenant_id: str, schema_code: str) -> Dict:
