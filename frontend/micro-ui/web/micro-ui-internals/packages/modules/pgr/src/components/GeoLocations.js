@@ -351,7 +351,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
               right: 0,
               bottom: 0,
               backgroundColor: "rgba(255,255,255,0.7)",
-              zIndex: 1000,
+              zIndex: 11,
               display: "flex",
               justifyContent: "center",
               alignItems: "center"
@@ -365,7 +365,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
             position: "absolute",
             top: "20px",
             left: "20px",
-            zIndex: 999,
+            zIndex: 10,
             width: "calc(100% - 40px)",
             maxWidth: "600px"
           }}>
@@ -447,7 +447,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
                 marginTop: "8px",
                 maxHeight: "200px",
                 overflowY: "auto",
-                zIndex: 1000
+                zIndex: 11
               }}>
                 {suggestions.map((suggestion, index) => (
                   <div
@@ -477,7 +477,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
               position: "absolute",
               top: "80px",
               left: "20px",
-              zIndex: 999,
+              zIndex: 10,
               backgroundColor: "white",
               borderRadius: "12px",
               boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
@@ -554,7 +554,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
               position: "absolute",
               bottom: "85px",
               right: "20px",
-              zIndex: 999,
+              zIndex: 10,
               backgroundColor: "white",
               padding: "12px",
               borderRadius: "50%",
@@ -579,7 +579,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
               position: "absolute",
               bottom: "30px",
               right: "20px",
-              zIndex: 999,
+              zIndex: 10,
               backgroundColor: "white",
               padding: "12px",
               borderRadius: "50%",
