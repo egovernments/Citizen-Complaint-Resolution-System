@@ -19,9 +19,9 @@ import { ComplaintsList } from "./pages/citizen/ComplaintsList";
 import ComplaintDetailsPage from "./pages/citizen/ComplaintDetails";
 import SelectRating from "./pages/citizen/Rating/SelectRating";
 import ResponseCitizen from "./pages/citizen/Response";
-import GeoLocations from "./components/GeoLocations"; 
-import SelectAddress from "../../pgr/src/pages/citizen/Create/Steps/SelectAddress"; 
-import SelectImages from "../../pgr/src/pages/citizen/Create/Steps/SelectImages"; 
+import GeoLocations from "./components/GeoLocations";
+import SelectAddress from "../../pgr/src/pages/citizen/Create/Steps/SelectAddress";
+import SelectImages from "../../pgr/src/pages/citizen/Create/Steps/SelectImages";
 import CreatePGRFlow from "./pages/citizen/Create/FormExplorer";
 
 
@@ -100,14 +100,14 @@ const componentsToRegister = {
   PGRCreateComplaint: CreateComplaint,
   PGRResponse: Response,
   PGRBreadCrumbs: BreadCrumbs,
-  PGRComplaintsList : ComplaintsList,
-  PGRComplaintDetailsPage : ComplaintDetailsPage,
-  PGRSelectRating : SelectRating,
-  PGRResponseCitzen : ResponseCitizen,
+  PGRComplaintsList: ComplaintsList,
+  PGRComplaintDetailsPage: ComplaintDetailsPage,
+  PGRSelectRating: SelectRating,
+  PGRResponseCitzen: ResponseCitizen,
   GeoLocations,
   SelectAddress,
   SelectImages,
-  CreatePGRFlow:CreatePGRFlow,
+  CreatePGRFlow: CreatePGRFlow,
 };
 
 export const initPGRComponents = () => {

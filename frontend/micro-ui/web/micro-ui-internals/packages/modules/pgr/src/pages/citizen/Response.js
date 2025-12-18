@@ -46,6 +46,13 @@ const TextPicker = ({ response }) => {
 const Response = (props) => {
   const { t } = useTranslation();
   const appState = useSelector((state) => state)["pgr"] || {};
+
+  React.useEffect(() => {
+    if (appState.complaints?.response?.ServiceWrappers?.length > 0) {
+      Digit.SessionStorage.del("PGR_MAP_LOCATION");
+    }
+  }, [appState]);
+
   return (
     <Card>
       <BannerPicker response={appState} />

@@ -41,8 +41,8 @@ const PolygonIcon = ({ active }) => (
 
 const GeoLocations = ({ t, config, onSelect, formData }) => {
   const { t: trans } = useTranslation();
-  // India's center coordinates
-  const INDIA_CENTER = { lat: 20.5937, lng: 78.9629 };
+  // Zero Mile Stone, Nagpur (Geographical Center of India)
+  const INDIA_CENTER = { lat: 21.1498, lng: 79.0806 };
   const [coords, setCoords] = useState(INDIA_CENTER);
   const [markerPos, setMarkerPos] = useState([INDIA_CENTER.lat, INDIA_CENTER.lng]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -56,12 +56,30 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   const searchInputRef = useRef(null);
   const hasInitialized = useRef(false);
 
-  // Initialize with India center location on first load
+  // Initialize with India center location on first load or from Session Storage
   useEffect(() => {
-    if (!hasInitialized.current && !formData?.[config.key]) {
-      hasInitialized.current = true;
-      // Fetch and display address for India's center
-      fetchAddress(INDIA_CENTER.lat, INDIA_CENTER.lng);
+    if (!hasInitialized.current) {
+      if (formData?.[config.key]) {
+        hasInitialized.current = true;
+        // Logic handled by second useEffect
+      } else {
+        const savedLocation = Digit.SessionStorage.get("PGR_MAP_LOCATION");
+        if (savedLocation) {
+          hasInitialized.current = true;
+          const { lat, lng, address: savedAddress } = savedLocation;
+          setCoords({ lat, lng });
+          setMarkerPos([lat, lng]);
+          setAddress(savedAddress);
+          setSearchQuery(savedAddress);
+          onSelect(config.key, savedLocation);
+        } else {
+          hasInitialized.current = true;
+          // Set default location immediately to ensure lat/lng is captured even if user clicks Next quickly
+          onSelect(config.key, { lat: INDIA_CENTER.lat, lng: INDIA_CENTER.lng });
+          // Fetch and display address for India's center
+          fetchAddress(INDIA_CENTER.lat, INDIA_CENTER.lng);
+        }
+      }
     }
   }, []);
 
@@ -92,10 +110,21 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
         setAddress(data.display_name);
         setSearchQuery(data.display_name); // Update search bar with fetched address
         // Extract pincode if available
-        const pincode = data.address?.postcode;
-        onSelect(config.key, { lat, lng, pincode, address: data.display_name });
+        let pincode = data.address?.postcode;
+        if (!pincode && data.display_name) {
+          // Fallback: Try to extract 6-digit pincode from display_name
+          const pincodeMatch = data.display_name.match(/\b\d{6}\b/);
+          if (pincodeMatch) {
+            pincode = pincodeMatch[0];
+          }
+        }
+        const locationData = { lat, lng, pincode, address: data.display_name };
+        Digit.SessionStorage.set("PGR_MAP_LOCATION", locationData);
+        onSelect(config.key, locationData);
       } else {
-        onSelect(config.key, { lat, lng });
+        const locationData = { lat, lng };
+        Digit.SessionStorage.set("PGR_MAP_LOCATION", locationData);
+        onSelect(config.key, locationData);
       }
     } catch (error) {
       console.error("Error fetching address:", error);
@@ -330,250 +359,247 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
               <Loader />
             </div>
           )}
-        </div>
 
-        {/* Search Bar Overlay - Shows only when NOT in Polygon Mode */}
-
-        <div style={{
-          position: "absolute",
-          top: "20px",
-          left: "20px",
-          zIndex: 1001,
-          width: "calc(100% - 40px)",
-          maxWidth: "600px"
-        }}>
+          {/* Search Bar Overlay - Shows only when NOT in Polygon Mode */}
           <div style={{
-            backgroundColor: "white",
-            borderRadius: "24px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-            display: "flex",
-            alignItems: "center",
-            padding: "4px 8px 4px 16px",
-            height: "48px",
-            width: "100%",
-            transition: "all 0.3s ease-in-out",
-            position: "relative"
+            position: "absolute",
+            top: "20px",
+            left: "20px",
+            zIndex: 999,
+            width: "calc(100% - 40px)",
+            maxWidth: "600px"
           }}>
-            <div
-              onClick={(e) => handleSearch(e)}
-              style={{
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                marginRight: "8px"
-              }}
-            >
-              <SearchIcon />
-            </div>
-
-            <input
-              ref={searchInputRef}
-              type="text"
-              placeholder={t("CS_COMMON_SEARCH_PLACEHOLDER")}
-              value={searchQuery}
-              onChange={handleInputChange}
-              onKeyPress={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  handleSearch(e);
-                }
-              }}
-              style={{
-                border: "none",
-                outline: "none",
-                width: "100%",
-                padding: "8px 0",
-                fontSize: "16px",
-                color: "#0B0C0C",
-                backgroundColor: "transparent"
-              }}
-            />
-
-            {searchQuery && (
+            <div style={{
+              backgroundColor: "white",
+              borderRadius: "24px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+              display: "flex",
+              alignItems: "center",
+              padding: "4px 8px 4px 16px",
+              height: "48px",
+              width: "100%",
+              transition: "all 0.3s ease-in-out",
+              position: "relative"
+            }}>
               <div
-                onClick={clearSearch}
+                onClick={(e) => handleSearch(e)}
                 style={{
                   cursor: "pointer",
-                  padding: "8px",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  color: "#505A5F"
+                  marginRight: "8px"
                 }}
               >
-                <CloseIcon />
+                <SearchIcon />
               </div>
-            )}
-          </div>
 
-          {/* Suggestions Dropdown */}
-          {suggestions.length > 0 && (
-            <div style={{
-              position: "absolute",
-              top: "100%",
-              left: 0,
-              right: 0,
-              backgroundColor: "white",
-              borderRadius: "8px",
-              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-              marginTop: "8px",
-              maxHeight: "200px",
-              overflowY: "auto",
-              zIndex: 1002
-            }}>
-              {suggestions.map((suggestion, index) => (
+              <input
+                ref={searchInputRef}
+                type="text"
+                placeholder={t("CS_COMMON_SEARCH_PLACEHOLDER")}
+                value={searchQuery}
+                onChange={handleInputChange}
+                onKeyPress={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleSearch(e);
+                  }
+                }}
+                style={{
+                  border: "none",
+                  outline: "none",
+                  width: "100%",
+                  padding: "8px 0",
+                  fontSize: "16px",
+                  color: "#0B0C0C",
+                  backgroundColor: "transparent"
+                }}
+              />
+
+              {searchQuery && (
                 <div
-                  key={index}
-                  onClick={() => handleSuggestionSelect(suggestion)}
-                  style={{
-                    padding: "12px 16px",
-                    cursor: "pointer",
-                    borderBottom: index < suggestions.length - 1 ? "1px solid #eee" : "none",
-                    fontSize: "14px",
-                    color: "#0B0C0C",
-                    transition: "background-color 0.2s"
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f5f5f5"}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "white"}
-                >
-                  {suggestion.display_name}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-
-        {/* Polygon Points Table - Top Left, below Search Bar */}
-        {isPolygonMode && (
-          <div style={{
-            position: "absolute",
-            top: "80px",
-            left: "20px",
-            zIndex: 1001,
-            backgroundColor: "white",
-            borderRadius: "12px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-            padding: "16px",
-            width: "auto",
-            minWidth: "300px",
-            maxWidth: "400px",
-            maxHeight: "300px",
-            display: "flex",
-            flexDirection: "column"
-          }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-              <div style={{ fontSize: "16px", fontWeight: "600", color: "#0B0C0C" }}>{t("Selected Locations")}</div>
-              {polygonPoints.length > 0 ? (
-                <div
-                  onClick={() => setPolygonPoints([])}
+                  onClick={clearSearch}
                   style={{
                     cursor: "pointer",
-                    color: "#B91E1E", // Red color for clear
-                    fontSize: "14px",
-                    fontWeight: "500"
-                  }}
-                >
-                  {t("Clear")}
-                </div>
-              ) : (
-                <div
-                  onClick={togglePolygonMode}
-                  style={{
-                    cursor: "pointer",
-                    color: "#505A5F",
+                    padding: "8px",
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "center"
+                    justifyContent: "center",
+                    color: "#505A5F"
                   }}
-                  title={t("CS_CLOSE_POLYGON_MODE")}
                 >
                   <CloseIcon />
                 </div>
               )}
             </div>
 
-            {polygonPoints.length > 0 ? (
-              <div style={{ overflowY: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr style={{ borderBottom: "1px solid #d6d5d4" }}>
-                      <th style={{ textAlign: "left", padding: "8px 4px", fontSize: "12px", color: "#505A5F", fontWeight: "600" }}>{t("Latitude")}</th>
-                      <th style={{ textAlign: "left", padding: "8px 4px", fontSize: "12px", color: "#505A5F", fontWeight: "600" }}>{t("Longitude")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {polygonPoints.map((point, index) => (
-                      <tr key={index} style={{ borderBottom: "1px solid #eee" }}>
-                        <td style={{ padding: "8px 4px", fontSize: "14px", color: "#0B0C0C" }}>{point[0].toFixed(5)}</td>
-                        <td style={{ padding: "8px 4px", fontSize: "14px", color: "#0B0C0C" }}>{point[1].toFixed(5)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div style={{ fontSize: "14px", color: "#505A5F", fontStyle: "italic" }}>
-                {t("Click on map to select points")}
+            {/* Suggestions Dropdown */}
+            {suggestions.length > 0 && (
+              <div style={{
+                position: "absolute",
+                top: "100%",
+                left: 0,
+                right: 0,
+                backgroundColor: "white",
+                borderRadius: "8px",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                marginTop: "8px",
+                maxHeight: "200px",
+                overflowY: "auto",
+                zIndex: 1000
+              }}>
+                {suggestions.map((suggestion, index) => (
+                  <div
+                    key={index}
+                    onClick={() => handleSuggestionSelect(suggestion)}
+                    style={{
+                      padding: "12px 16px",
+                      cursor: "pointer",
+                      borderBottom: index < suggestions.length - 1 ? "1px solid #eee" : "none",
+                      fontSize: "14px",
+                      color: "#0B0C0C",
+                      transition: "background-color 0.2s"
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f5f5f5"}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "white"}
+                  >
+                    {suggestion.display_name}
+                  </div>
+                ))}
               </div>
             )}
           </div>
-        )}
 
-        {/* Polygon Toggle Button */}
-        <div
-          onClick={togglePolygonMode}
-          style={{
-            position: "absolute",
-            bottom: "85px",
-            right: "20px",
-            zIndex: 1001,
-            backgroundColor: "white",
-            padding: "12px",
-            borderRadius: "50%",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            transition: "transform 0.2s"
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.1)"}
-          onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
-          title={t("CS_SELECT_AREA")}
-        >
-          <PolygonIcon active={isPolygonMode} />
-        </div>
+          {/* Polygon Points Table - Top Left, below Search Bar */}
+          {isPolygonMode && (
+            <div style={{
+              position: "absolute",
+              top: "80px",
+              left: "20px",
+              zIndex: 999,
+              backgroundColor: "white",
+              borderRadius: "12px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+              padding: "16px",
+              width: "auto",
+              minWidth: "300px",
+              maxWidth: "400px",
+              maxHeight: "300px",
+              display: "flex",
+              flexDirection: "column"
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                <div style={{ fontSize: "16px", fontWeight: "600", color: "#0B0C0C" }}>{t("Selected Locations")}</div>
+                {polygonPoints.length > 0 ? (
+                  <div
+                    onClick={() => setPolygonPoints([])}
+                    style={{
+                      cursor: "pointer",
+                      color: "#B91E1E", // Red color for clear
+                      fontSize: "14px",
+                      fontWeight: "500"
+                    }}
+                  >
+                    {t("Clear")}
+                  </div>
+                ) : (
+                  <div
+                    onClick={togglePolygonMode}
+                    style={{
+                      cursor: "pointer",
+                      color: "#505A5F",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center"
+                    }}
+                    title={t("CS_CLOSE_POLYGON_MODE")}
+                  >
+                    <CloseIcon />
+                  </div>
+                )}
+              </div>
 
-        {/* Locate Me Button */}
-        <div
-          onClick={handleLocateMe}
-          style={{
-            position: "absolute",
-            bottom: "30px",
-            right: "20px",
-            zIndex: 1001,
-            backgroundColor: "white",
-            padding: "12px",
-            borderRadius: "50%",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            transition: "transform 0.2s"
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.1)"}
-          onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
-          title={t("CS_LOCATE_ME")}
-        >
-          <LocateIcon />
+              {polygonPoints.length > 0 ? (
+                <div style={{ overflowY: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ borderBottom: "1px solid #d6d5d4" }}>
+                        <th style={{ textAlign: "left", padding: "8px 4px", fontSize: "12px", color: "#505A5F", fontWeight: "600" }}>{t("Latitude")}</th>
+                        <th style={{ textAlign: "left", padding: "8px 4px", fontSize: "12px", color: "#505A5F", fontWeight: "600" }}>{t("Longitude")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {polygonPoints.map((point, index) => (
+                        <tr key={index} style={{ borderBottom: "1px solid #eee" }}>
+                          <td style={{ padding: "8px 4px", fontSize: "14px", color: "#0B0C0C" }}>{point[0].toFixed(5)}</td>
+                          <td style={{ padding: "8px 4px", fontSize: "14px", color: "#0B0C0C" }}>{point[1].toFixed(5)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div style={{ fontSize: "14px", color: "#505A5F", fontStyle: "italic" }}>
+                  {t("Click on map to select points")}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Polygon Toggle Button */}
+          <div
+            onClick={togglePolygonMode}
+            style={{
+              position: "absolute",
+              bottom: "85px",
+              right: "20px",
+              zIndex: 999,
+              backgroundColor: "white",
+              padding: "12px",
+              borderRadius: "50%",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "transform 0.2s"
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.1)"}
+            onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
+            title={t("CS_SELECT_AREA")}
+          >
+            <PolygonIcon active={isPolygonMode} />
+          </div>
+
+          {/* Locate Me Button */}
+          <div
+            onClick={handleLocateMe}
+            style={{
+              position: "absolute",
+              bottom: "30px",
+              right: "20px",
+              zIndex: 999,
+              backgroundColor: "white",
+              padding: "12px",
+              borderRadius: "50%",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "transform 0.2s"
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.1)"}
+            onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
+            title={t("CS_LOCATE_ME")}
+          >
+            <LocateIcon />
+          </div>
+
         </div>
 
       </div>
-
-
 
       {showToast && (
         <Toast

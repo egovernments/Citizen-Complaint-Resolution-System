@@ -22,6 +22,7 @@ import {
 
 import TimeLine from "../../components/TimeLine";
 import ComplaintPhotos from "../../components/ComplaintPhotos";
+import ComplaintLocationMap from "../../components/ComplaintLocationMap";
 
 const WorkflowComponent = ({ complaintDetails, id }) => {
   const tenantId = Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || complaintDetails.service.tenantId;
@@ -73,6 +74,18 @@ const ComplaintDetailsPage = (props) => {
     return <h2>Error</h2>;
   }
 
+  const geoLocation = complaintDetails?.service?.address?.geoLocation;
+  const address = complaintDetails?.service?.address;
+  // Construct a readable address for the map
+  const displayAddress = [
+    address?.buildingName,
+    address?.street,
+    address?.landmark,
+    address?.locality?.name || address?.locality?.code,
+    address?.pincode
+  ].filter(Boolean).join(", ");
+
+
   return (
     <React.Fragment>
       <div className="complaint-summary">
@@ -103,6 +116,18 @@ const ComplaintDetailsPage = (props) => {
                 </React.Fragment>
               )}
             </Card>
+
+            {geoLocation?.latitude && geoLocation?.longitude && (
+              <Card>
+                <CardSubHeader style={{ marginBottom: "16px" }}>{t("CS_COMPLAINT_LOCATION")}</CardSubHeader>
+                <ComplaintLocationMap
+                  latitude={geoLocation.latitude}
+                  longitude={geoLocation.longitude}
+                  address={displayAddress}
+                />
+              </Card>
+            )}
+
             <Card>
               {complaintDetails?.service && (
                 <WorkflowComponent complaintDetails={complaintDetails} id={id} />
