@@ -126,7 +126,10 @@ env: |
   - name: DEFAULT_LOCALIZATION_MODULE_CREATE_LIST
     value: {{ index .Values "default-localization-module-list" | quote }}
   - name: DEV_ENABLED
-    value: "true"
+    valueFrom:
+      configMapKeyRef:
+        name: egov-config
+        key: dev-enabled
   - name: JAVA_OPTS
     value: {{ index .Values "heap" | quote }}
   - name: JAVA_ARGS
