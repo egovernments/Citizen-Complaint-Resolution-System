@@ -15,7 +15,7 @@ L.Icon.Default.mergeOptions({
 
 const NavigationIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M12 2L4.5 20.29L5.21 21L12 18L18.79 21L19.5 20.29L12 2Z" fill="white"/>
+    <path d="M12 2L4.5 20.29L5.21 21L12 18L18.79 21L19.5 20.29L12 2Z" fill="white" />
   </svg>
 );
 
@@ -158,59 +158,59 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
               )}
             </Marker>
           </Map>
-        </div>
 
-        {/* Open in Google Maps Button */}
-        <button
-          onClick={handleOpenInGoogleMaps}
-          style={{
+          {/* Open in Google Maps Button */}
+          <button
+            onClick={handleOpenInGoogleMaps}
+            style={{
+              position: "absolute",
+              bottom: "20px",
+              right: "20px",
+              zIndex: 999,
+              backgroundColor: "#4285F4",
+              color: "white",
+              padding: "12px 20px",
+              borderRadius: "8px",
+              border: "none",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              fontSize: "14px",
+              fontWeight: "500",
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = "#3367D6";
+              e.currentTarget.style.transform = "scale(1.05)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = "#4285F4";
+              e.currentTarget.style.transform = "scale(1)";
+            }}
+            title={t("CS_OPEN_IN_GOOGLE_MAPS")}
+          >
+            <NavigationIcon />
+            {t("CS_NAVIGATE")}
+          </button>
+
+          {/* Coordinates Info */}
+          <div style={{
             position: "absolute",
             bottom: "20px",
-            right: "20px",
-            zIndex: 1001,
-            backgroundColor: "#4285F4",
-            color: "white",
-            padding: "12px 20px",
+            left: "20px",
+            zIndex: 999,
+            backgroundColor: "white",
+            padding: "8px 12px",
             borderRadius: "8px",
-            border: "none",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            fontSize: "14px",
-            fontWeight: "500",
-            transition: "all 0.2s",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = "#3367D6";
-            e.currentTarget.style.transform = "scale(1.05)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = "#4285F4";
-            e.currentTarget.style.transform = "scale(1)";
-          }}
-          title={t("CS_OPEN_IN_GOOGLE_MAPS")}
-        >
-          <NavigationIcon />
-          {t("CS_NAVIGATE")}
-        </button>
-
-        {/* Coordinates Info */}
-        <div style={{
-          position: "absolute",
-          bottom: "20px",
-          left: "20px",
-          zIndex: 1001,
-          backgroundColor: "white",
-          padding: "8px 12px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-          fontSize: "12px",
-          color: "#505A5F"
-        }}>
-          <div><strong>Lat:</strong> {latitude.toFixed(6)}</div>
-          <div><strong>Lng:</strong> {longitude.toFixed(6)}</div>
+            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+            fontSize: "12px",
+            color: "#505A5F"
+          }}>
+            <div><strong>Lat:</strong> {latitude.toFixed(6)}</div>
+            <div><strong>Lng:</strong> {longitude.toFixed(6)}</div>
+          </div>
         </div>
       </div>
     </div>
