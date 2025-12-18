@@ -12,7 +12,7 @@ import { useQuery } from "react-query";
  */
 const useMobileValidation = (tenantId, validationName = "defaultMobileValidation") => {
   const reqCriteria = {
-    url: `/egov-mdms-service/v1/_search`,
+    url: `/${window?.globalConfigs?.getConfig?.("MDMS_V1_CONTEXT_PATH") || "egov-mdms-service"}/v1/_search`,
     params: {
       tenantId: tenantId,
     },
