@@ -117,7 +117,7 @@ const ComplaintDetailsPage = (props) => {
               )}
             </Card>
 
-            {geoLocation?.latitude && geoLocation?.longitude && (
+            {geoLocation?.latitude && geoLocation?.longitude ? (
               <Card>
                 <CardSubHeader style={{ marginBottom: "16px" }}>{t("CS_COMPLAINT_LOCATION")}</CardSubHeader>
                 <ComplaintLocationMap
@@ -126,7 +126,7 @@ const ComplaintDetailsPage = (props) => {
                   address={displayAddress}
                 />
               </Card>
-            )}
+            ) : null}
 
             <Card>
               {complaintDetails?.service && (
