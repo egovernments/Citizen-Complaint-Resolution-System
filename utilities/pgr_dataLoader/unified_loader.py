@@ -1510,7 +1510,7 @@ class APIUploader:
 
         try:
             response = requests.post(url, json=payload, headers=headers)
-            print(response)
+          
             response.raise_for_status()
             print(f"\n✅ [SUCCESS] Boundary hierarchy created")
             print(f"   Tenant: {hierarchy_data.get('tenantId')}")
@@ -1788,7 +1788,6 @@ class APIUploader:
             List of boundary hierarchy definitions
         """
         url = f"{self.boundary_url}/boundary-hierarchy-definition/_search"
-        print(url)
 
         payload = {
             "RequestInfo": {
@@ -1810,7 +1809,6 @@ class APIUploader:
 
         try:
             response = requests.post(url, json=payload, headers=headers)
-            print(response)
             response.raise_for_status()
             data = response.json()
 
@@ -1873,14 +1871,12 @@ class APIUploader:
                 "plainAccessRequest": {}
             }
         }
-        print(url)
-        print(payload)
+       
 
         headers = {'Content-Type': 'application/json'}
 
         try:
             response = requests.post(url, json=payload, headers=headers, params=params)
-            print(response)
             response.raise_for_status()
             data = response.json()
 
@@ -1940,7 +1936,7 @@ class APIUploader:
         for attempt in range(1, max_attempts + 1):
             try:
                 response = requests.post(url, json=payload, headers=headers, params=params)
-                print(response)
+               
                 response.raise_for_status()
                 data = response.json()
 
@@ -2119,12 +2115,11 @@ class APIUploader:
         }
 
         headers = {'Content-Type': 'application/json'}
-        print(url)
-        print(payload)
+    
 
         try:
             response = requests.post(url, json=payload, headers=headers)
-            print(response)
+      
             response.raise_for_status()
             data = response.json()
 
@@ -2493,7 +2488,7 @@ class APIUploader:
         try:
             print(f"📥 Fetching Hierarchy Types from Boundary Service...")
             url = f"{self.boundary_url}/boundary-hierarchy-definition/_search"
-            print(url)
+
 
             # Override userInfo tenantId
             user_info_copy = self.user_info.copy()
@@ -2513,7 +2508,7 @@ class APIUploader:
 
             headers = {'Content-Type': 'application/json'}
             response = requests.post(url, json=payload, headers=headers, timeout=30)
-            print(response)
+           
             response.raise_for_status()
             data = response.json()
 
@@ -2993,7 +2988,7 @@ class APIUploader:
 
             try:
                 response = requests.post(url, json=payload, headers=headers)
-                print(response)
+              
                 status_code = response.status_code
                 response.raise_for_status()
                 print(f"   [OK] [{i}/{len(employee_list)}] {emp_code}")
