@@ -1,0 +1,72 @@
+[
+  {
+    "tenantId": "{tenantid}",
+    "code": "ValidationConfigs.mobileNumberValidation",
+    "description": "ValidationConfigs.mobileNumberValidation",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Mobile Number Validation Configuration",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "validationName",
+        "rules"
+      ],
+      "x-unique": [
+        "validationName"
+      ],
+      "properties": {
+        "rules": {
+          "type": "object",
+          "required": [
+            "isActive",
+            "minLength",
+            "maxLength",
+            "prefix"
+          ],
+          "properties": {
+            "prefix": {
+              "type": "string",
+              "description": "Optional prefix to be applied before mobile number (e.g., '+91')"
+            },
+            "pattern": {
+              "type": "string",
+              "description": "Regex pattern that the mobile number must match (e.g., '^[6-9][0-9]{9}$')"
+            },
+            "isActive": {
+              "type": "boolean",
+              "description": "Whether this validation configuration is active"
+            },
+            "maxLength": {
+              "type": "integer",
+              "description": "Maximum allowed length of mobile number (excluding prefix)"
+            },
+            "minLength": {
+              "type": "integer",
+              "description": "Minimum allowed length of mobile number (excluding prefix)"
+            },
+            "errorMessage": {
+              "type": "string",
+              "description": "Custom error message to show when validation fails"
+            },
+            "allowedStartingDigits": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              },
+              "description": "List of allowed starting digits for mobile numbers (e.g., ['6','7','8','9'])"
+            }
+          },
+          "description": "Object containing mobile number validation properties",
+          "additionalProperties": false
+        },
+        "validationName": {
+          "type": "string",
+          "description": "Unique name for the validation configuration (e.g., 'mobileNumberValidation')"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+]

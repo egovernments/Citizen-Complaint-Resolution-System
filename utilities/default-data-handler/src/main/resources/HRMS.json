@@ -108,5 +108,115 @@
     "serviceHistory": [],
     "education": [],
     "tests": []
+  },
+  {
+    "tenantId": "{tenantid}.citya",
+    "employeeStatus": "EMPLOYED",
+    "assignments": [
+      {
+        "fromDate": 1725494400000,
+        "isCurrentAssignment": true,
+        "department": "DEPT_2",
+        "designation": "DESIG_04"
+      }
+    ],
+    "code": "ADMIN1",
+    "dateOfAppointment": 1718841600000,
+    "employeeType": "PERMANENT",
+    "jurisdictions": [
+      {
+        "hierarchy": "ADMIN",
+        "boundaryType": "City",
+        "boundary": "{tenantid}",
+        "tenantId": "{tenantid}",
+        "roles": [
+          {
+            "code": "LOC_ADMIN",
+            "name": "Localisation admin",
+            "tenantId": "{tenantid}"
+          },
+          {
+            "code": "MDMS_ADMIN",
+            "name": "MDMS ADMIN",
+            "tenantId": "{tenantid}"
+          },
+          {
+            "code": "HRMS_ADMIN",
+            "name": "HRMS Admin",
+            "tenantId": "{tenantid}"
+          },
+          {
+            "code": "LOC_ADMIN",
+            "name": "Localisation admin",
+            "tenantId": "{tenantid}"
+          },
+          {
+            "code": "MDMS_ADMIN",
+            "name": "MDMS ADMIN",
+            "tenantId": "{tenantid}"
+          },
+          {
+            "code": "HRMS_ADMIN",
+            "name": "HRMS Admin",
+            "tenantId": "{tenantid}"
+          },
+          {
+            "code": "WORKFLOW_ADMIN",
+            "name": "Workflow Admin",
+            "tenantId": "{tenantid}"
+          }
+        ]
+      }
+    ],
+    "user": {
+      "name": "ADMIN User 1",
+      "gender": null,
+      "mobileNumber": "9999999802",
+      "active": true,
+      "type": "EMPLOYEE",
+      "roles": [
+        {
+          "code": "LOC_ADMIN",
+          "name": "Localisation admin",
+          "tenantId": "{tenantid}"
+        },
+        {
+          "code": "MDMS_ADMIN",
+          "name": "MDMS ADMIN",
+          "tenantId": "{tenantid}"
+        },
+        {
+          "code": "HRMS_ADMIN",
+          "name": "HRMS Admin",
+          "tenantId": "{tenantid}"
+        },
+        {
+          "code": "LOC_ADMIN",
+          "name": "Localisation admin",
+          "tenantId": "{tenantid}"
+        },
+        {
+          "code": "MDMS_ADMIN",
+          "name": "MDMS ADMIN",
+          "tenantId": "{tenantid}"
+        },
+        {
+          "code": "HRMS_ADMIN",
+          "name": "HRMS Admin",
+          "tenantId": "{tenantid}"
+        },
+        {
+          "code": "WORKFLOW_ADMIN",
+          "name": "Workflow Admin",
+          "tenantId": "{tenantid}"
+        }
+      ],
+      "password": "eGov@123",
+      "otpReference": "12345",
+      "tenantId": "{tenantid}.citya"
+    },
+    "serviceHistory": [],
+    "education": [],
+    "tests": []
   }
 ]
