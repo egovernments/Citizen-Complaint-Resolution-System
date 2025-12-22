@@ -1504,7 +1504,7 @@ class APIUploader:
             },
             'BoundaryHierarchy': hierarchy_data
         }
-        print(payload)
+     
 
         headers = {'Content-Type': 'application/json'}
 
@@ -1927,7 +1927,7 @@ class APIUploader:
                 "plainAccessRequest": {}
             }
         }
-        print(payload)
+
 
         headers = {'Content-Type': 'application/json'}
 
@@ -2504,7 +2504,7 @@ class APIUploader:
                     "tenantId": tenant
                 }
             }
-            print(payload)
+
 
             headers = {'Content-Type': 'application/json'}
             response = requests.post(url, json=payload, headers=headers, timeout=30)
@@ -2979,7 +2979,7 @@ class APIUploader:
                 },
                 "Employees": [employee]
             }
-            print(payload)
+
 
             headers = {'Content-Type': 'application/json'}
             status = "SUCCESS"
