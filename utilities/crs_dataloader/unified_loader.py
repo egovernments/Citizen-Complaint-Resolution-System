@@ -2911,7 +2911,7 @@ class APIUploader:
 
     def create_employees(self, employee_list: List[Dict], tenant: str,
                         sheet_name: str = None, excel_file: str = None):
-        """Bulk create employees via HRMS API
+        """Bulk create employees via HRMS API with password update support
 
         Args:
             employee_list: List of employee objects
@@ -2941,21 +2941,23 @@ class APIUploader:
             }
 
         # STEP 2: Proceed with employee creation
-        url = f"{self.hrms_url}/employees/_create"
-
+        create_url = f"{self.hrms_url}/employees/_create"
+        update_url = f"{self.hrms_url}/employees/_update"
+        search_url = f"{self.hrms_url}/employees/_search"
 
         results = {
             'created': 0,
             'exists': 0,
             'failed': 0,
-            'errors': []
+            'errors': [],
+            'password_updated': 0
         }
 
         print(f"\n{'='*60}")
         print(f"[UPLOADING] HRMS Employees")
         print(f"   Tenant: {tenant}")
         print(f"   Records: {len(employee_list)}")
-        print(f"   API URL: {url}")
+        print(f"   API URL: {create_url}")
         print("="*60)
 
         # Track row-by-row status for Excel update
@@ -2963,6 +2965,10 @@ class APIUploader:
 
         for i, employee in enumerate(employee_list, 1):
             emp_code = employee.get('code', str(i))
+
+            # Extract custom password before creation (if provided)
+            custom_password = employee.get('user', {}).get('password')
+            needs_password_update = custom_password and custom_password not in ['eGov@123', None, '']
 
             # Override userInfo tenantId to match the request tenant
             user_info_copy = self.user_info.copy()
@@ -2980,19 +2986,80 @@ class APIUploader:
                 "Employees": [employee]
             }
 
-
             headers = {'Content-Type': 'application/json'}
             status = "SUCCESS"
             status_code = 200
             error_message = ""
 
             try:
-                response = requests.post(url, json=payload, headers=headers)
-              
+                # STEP 2A: Create employee (system generates random password)
+                response = requests.post(create_url, json=payload, headers=headers)
                 status_code = response.status_code
                 response.raise_for_status()
-                print(f"   [OK] [{i}/{len(employee_list)}] {emp_code}")
+
+                created_data = response.json()
+                created_employee = created_data.get('Employees', [{}])[0]
+
+                print(f"   [OK] [{i}/{len(employee_list)}] {emp_code} - Created")
                 results['created'] += 1
+
+                # STEP 2B: Update password if custom password was provided
+                if needs_password_update and created_employee:
+                    try:
+                        # Search for the created employee to get full details
+                        search_payload = {
+                            "RequestInfo": {
+                                "apiId": "Rainmaker",
+                                "authToken": self.auth_token,
+                                "userInfo": user_info_copy,
+                                "msgId": f"{int(time.time() * 1000)}|en_IN"
+                            },
+                            "codes": [emp_code],
+                            "tenantId": tenant
+                        }
+
+                        # Add query parameters for search
+                        search_params = {
+                            "tenantId": tenant,
+                            "codes": emp_code
+                        }
+
+                        search_response = requests.post(search_url, json=search_payload, headers=headers, params=search_params)
+                        search_response.raise_for_status()
+                        search_data = search_response.json()
+
+                        full_employee = search_data.get('Employees', [{}])[0]
+
+                        if full_employee and full_employee.get('id'):
+                            # Update the password in the user object
+                            full_employee['user']['password'] = custom_password
+
+                            # Prepare update payload
+                            update_payload = {
+                                "RequestInfo": {
+                                    "apiId": "Rainmaker",
+                                    "ver": "1.0",
+                                    "action": "_update",
+                                    "msgId": f"{int(time.time() * 1000)}",
+                                    "authToken": self.auth_token,
+                                    "userInfo": user_info_copy
+                                },
+                                "Employees": [full_employee]
+                            }
+
+                            # Update employee with custom password
+                            update_response = requests.post(update_url, json=update_payload, headers=headers)
+                            update_response.raise_for_status()
+
+                            print(f"   [✓] [{i}/{len(employee_list)}] {emp_code} - Password updated")
+                            results['password_updated'] += 1
+                        else:
+                            print(f"   [⚠] [{i}/{len(employee_list)}] {emp_code} - Could not fetch employee for password update")
+
+                    except Exception as pwd_error:
+                        # Don't fail the entire creation if password update fails
+                        print(f"   [⚠] [{i}/{len(employee_list)}] {emp_code} - Password update failed: {str(pwd_error)[:100]}")
+                        # Status remains SUCCESS since employee was created
 
             except requests.exceptions.HTTPError as e:
                 status_code = e.response.status_code if hasattr(e, 'response') and e.response is not None else 500
@@ -3037,6 +3104,7 @@ class APIUploader:
         # Summary
         print("="*60)
         print(f"[SUMMARY] Created: {results['created']}")
+        print(f"[SUMMARY] Password Updated: {results['password_updated']}")
         print(f"[SUMMARY] Already Exists: {results['exists']}")
         print(f"[SUMMARY] Failed: {results['failed']}")
         print("="*60)
