@@ -111,6 +111,10 @@ public class StartupUserAndEmployeeInitializer {
         dataHandlerService.createEmployeeFromFile(defaultDataRequest.getRequestInfo(),
                 serviceConfig.getDefaultEmployeeDataFile());
 
+        // create employee (always)
+        dataHandlerService.createEmployeeFromFile(defaultDataRequest.getRequestInfo(),
+                serviceConfig.getDevEmployeeDataFile());
+
         // Load boundary, localization, user, employee, and workflow config data only if enabled
         if (serviceConfig.isDevEnabled()) {
             // Load dev MDMS data
@@ -124,11 +128,9 @@ public class StartupUserAndEmployeeInitializer {
 
             dataHandlerService.createBoundaryDataFromFile(defaultDataRequest);
 
-            // Load dev users and employees
+            // Load dev users
             dataHandlerService.createUserFromFile(tenantRequest, serviceConfig.getDevUserDataFile());
             dataHandlerService.createPgrWorkflowConfig(tenantRequest.getTenant().getCode());
-            dataHandlerService.createEmployeeFromFile(defaultDataRequest.getRequestInfo(),
-                    serviceConfig.getDevEmployeeDataFile());
         }
     }
 }
