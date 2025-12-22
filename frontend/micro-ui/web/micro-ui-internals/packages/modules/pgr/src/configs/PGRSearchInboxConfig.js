@@ -67,15 +67,16 @@ const PGRSearchInboxConfig = () => {
                                 validation: { pattern: "PG-PGR-\d{4}-\d{2}-\d{2}-\d{6}", minlength: 2 }
                             },
                         },
-                        {
+                          {
                             label: "CS_COMMON_MOBILE_NO",
                             type: "text",
                             isMandatory: false,
                             disable: false,
                             populators: {
+                                // prefix:"+922",
                                 name: "mobileNumber",
-                                error: `PROJECT_PATTERN_ERR_MSG`,
-                                validation: { pattern: "^\+?[1-9]\d{0,2}[-.\s]?\(?\d{1,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}$", minlength: 2 }
+                                // error: `PROJECT_PATTERN_ERR_MSG`,
+                                // validation: { pattern: "^\+?[1-9]\d{0,2}[-.\s]?\(?\d{1,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}$", minlength: 2 }
                             },
                         },
                         {

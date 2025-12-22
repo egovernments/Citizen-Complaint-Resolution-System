@@ -7,21 +7,83 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap"
     rel="stylesheet" type="text/css" />
-    <link rel="stylesheet" href="https://unpkg.com/@egovernments/digit-ui-components-css@0.2.0-beta.14/dist/index.css" />
-    <link rel="stylesheet" href="https://unpkg.com/@egovernments/digit-ui-health-css@0.2.113/dist/index.css" />
-    <link rel="stylesheet" href="https://unpkg.com/@egovernments/digit-ui-css@1.8.37/dist/index.css" />
+  <link rel="stylesheet" href="https://unpkg.com/@egovernments/digit-ui-components-css@0.2.0-beta.14/dist/index.css" />
+  <link rel="stylesheet" href="https://unpkg.com/@egovernments/digit-ui-health-css@0.2.113/dist/index.css" />
+  <link rel="stylesheet" href="https://unpkg.com/@egovernments/digit-ui-css@1.8.37/dist/index.css" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#00bcd1" />
   <title>DIGIT</title>
   <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
-  <style>
 
+  <!-- <script src="https://egov-dev-assets.s3.ap-south-1.amazonaws.com/globalConfigsWorkbenchDev.js"></script> -->
+  <script>
+    // DOM Override for Profile Page
+    (function () {
+      setInterval(function () {
+        if (window.location.href.indexOf("/employee/user/profile") > -1) {
+          var mobileConfig = window.globalConfigs && window.globalConfigs.getConfig("CORE_MOBILE_CONFIGS");
+          if (mobileConfig && mobileConfig.mobilePrefix) {
+            var prefixEls = document.querySelectorAll(".digit-prefix");
+            prefixEls.forEach(function (el) {
+              if (el.innerText.trim() !== mobileConfig.mobilePrefix) {
+                el.innerText = mobileConfig.mobilePrefix;
+              }
+            });
+          }
+        }
+      }, 500);
+    })();
+  </script>
+
+  <style>
     .digit-inbox-search-composer-label-pair .digit-employee-select-wrap {
       margin-top: -0.5rem !important;
     }
+
+    /* Hide email login link on citizen login page */
+    div[style*="margin-top: -24px"][style*="margin-bottom: 1.5rem"] {
+      display: none !important;
+    }
+
+    /* Align label and input field horizontally on desktop - Only for user profile page */
+    @media (min-width: 768px) {
+      .user-profile .digit-label-field-pair {
+        display: flex !important;
+        align-items: center !important;
+        gap: 1rem !important;
+        padding-left: 1.5rem !important;
+      }
+
+      .user-profile .digit-label-field-pair .digit-card-label {
+        margin: 0 !important;
+        min-width: 150px !important;
+        flex-shrink: 0 !important;
+      }
+
+      /* Add padding to save button on desktop */
+      .user-profile button[style*="margin-top: 24px"] {
+        margin-left: 1.5rem !important;
+      }
+    }
+
+    /* Stack vertically on mobile - Only for user profile page */
+    @media (max-width: 767px) {
+      .user-profile .digit-label-field-pair {
+        display: block !important;
+        padding-left: 1rem !important;
+      }
+
+      .user-profile .digit-label-field-pair .digit-card-label {
+        margin-bottom: 0.5rem !important;
+      }
+
+      /* Add padding to save button on mobile */
+      .user-profile button[style*="margin-top: 24px"] {
+        margin-left: 1rem !important;
+      }
+    }
   </style>
-  <!-- <script src="https://egov-dev-assets.s3.ap-south-1.amazonaws.com/globalConfigsWorkbenchDev.js"></script> -->
 </head>
 
 <body>
