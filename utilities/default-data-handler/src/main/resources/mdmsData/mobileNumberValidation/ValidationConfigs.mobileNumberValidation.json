@@ -1,14 +1,16 @@
 [
   {
     "rules": {
-      "prefix": "+251",
-      "pattern": "^[79][0-9]{8}$",
+      "prefix": "+91",
+      "pattern": "^[6-9][0-9]{9}$",
       "isActive": true,
-      "maxLength": 9,
-      "minLength": 9,
-      "errorMessage": "Please enter a valid 9-digit mobile number starting with 7-9",
+      "maxLength": 10,
+      "minLength": 10,
+      "errorMessage": "Please enter a valid 10-digit mobile number starting with 6-9",
       "allowedStartingDigits": [
+        "6",
         "7",
+        "8",
         "9"
       ]
     },
