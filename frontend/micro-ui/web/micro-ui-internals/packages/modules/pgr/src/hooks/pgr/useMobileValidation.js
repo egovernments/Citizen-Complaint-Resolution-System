@@ -1,5 +1,3 @@
-import { useQuery } from "react-query";
-
 /**
  * Custom hook to fetch mobile number validation configuration from MDMS
  * Priority:
@@ -12,7 +10,7 @@ import { useQuery } from "react-query";
  */
 const useMobileValidation = (tenantId, validationName = "defaultMobileValidation") => {
   const reqCriteria = {
-    url: `/${window?.globalConfigs?.getConfig?.("MDMS_V1_CONTEXT_PATH") || "egov-mdms-service"}/v1/_search`,
+    url: `/${window?.globalConfigs?.getConfig?.("MDMS_V1_CONTEXT_PATH") || "mdms-v2"}/v1/_search`,
     params: {
       tenantId: tenantId,
     },
