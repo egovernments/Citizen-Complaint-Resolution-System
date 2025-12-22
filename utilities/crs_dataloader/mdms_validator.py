@@ -122,19 +122,19 @@ class MDMSValidator:
         - Localization Master: localization sheet
         """
         # Convert DataFrame to list of dicts based on template type
-        if template_type == 'tenant.master':
+        if template_type == 'tenant.masterschemavalidation':
             # Tenant Info sheet
             if sheet_name == 'Tenant Info':
                 return self._parse_tenant_info(df)
             # Tenant Branding sheet
             elif sheet_name == 'Tenant Branding Deatils':
                 return self._parse_tenant_branding(df)
-        elif template_type == 'common.master':
+        elif template_type == 'common.masterschemavalidation':
             if sheet_name == 'Department And Desgination Mast':
                 return self._parse_common_dept_desig(df)
             elif sheet_name == 'Complaint Type Master':
                 return self._parse_common_complaint_types(df)
-        elif template_type == 'localization.master':
+        elif template_type == 'localization.masterschemavalidation':
             if sheet_name == 'localization':
                 return self._parse_localization(df)
 
@@ -471,13 +471,13 @@ class MDMSValidator:
 
             # Determine which sheets to read based on template type
             # NEW FORMAT ONLY
-            if template_type == 'tenant.master':
+            if template_type in ['tenant.masterschemavalidation']:
                 sheet_names = ['Tenant Info', 'Tenant Branding Deatils']
                 print(f"[INFO] Using new template format (Tenant Info + Tenant Branding)")
 
-            elif template_type == 'common.master':
+            elif template_type in ['common.masterschemavalidation']:
                 sheet_names = ['Department And Desgination Mast', 'Complaint Type Master']
-            elif template_type == 'localization.master':
+            elif template_type in ['localization.masterschemavalidation']:
                 sheet_names = ['localization']
             else:
                 sheet_names = self._get_sheet_names_from_schema(schema)
