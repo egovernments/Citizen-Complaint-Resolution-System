@@ -1,0 +1,451 @@
+[
+  {
+    "tenantId": "{tenantid}",
+    "businessService": "NewTL",
+    "business": "tl-services",
+    "businessServiceSla": 172800000,
+    "states": [
+      {
+        "sla": null,
+        "state": null,
+        "applicationStatus": null,
+        "docUploadRequired": false,
+        "isStartState": true,
+        "isTerminateState": false,
+        "isStateUpdatable": true,
+        "actions": [
+          {
+            "action": "INITIATE",
+            "nextState": "INITIATED",
+            "roles": ["CITIZEN", "TL_CEMP"]
+          }
+        ]
+      },
+      {
+        "sla": null,
+        "state": "INITIATED",
+        "applicationStatus": "INITIATED",
+        "docUploadRequired": false,
+        "isStartState": true,
+        "isTerminateState": false,
+        "isStateUpdatable": true,
+        "actions": [
+          {
+            "action": "APPLY",
+            "nextState": "APPLIED",
+            "roles": ["CITIZEN", "TL_CEMP"]
+          },
+          {
+            "action": "INITIATE",
+            "nextState": "INITIATED",
+            "roles": ["CITIZEN", "TL_CEMP"]
+          }
+        ]
+      },
+      {
+        "sla": null,
+        "state": "APPLIED",
+        "applicationStatus": "APPLIED",
+        "docUploadRequired": false,
+        "isStartState": false,
+        "isTerminateState": false,
+        "isStateUpdatable": true,
+        "actions": [
+          {
+            "action": "FORWARD",
+            "nextState": "FIELDINSPECTION",
+            "roles": ["TL_DOC_VERIFIER"]
+          },
+          {
+            "action": "REJECT",
+            "nextState": "REJECTED",
+            "roles": ["TL_DOC_VERIFIER"]
+          }
+        ]
+      },
+      {
+        "sla": null,
+        "state": "REJECTED",
+        "applicationStatus": "REJECTED",
+        "docUploadRequired": false,
+        "isStartState": false,
+        "isTerminateState": true,
+        "isStateUpdatable": false,
+        "actions": null
+      },
+      {
+        "sla": 86400000,
+        "state": "FIELDINSPECTION",
+        "applicationStatus": "FIELDINSPECTION",
+        "docUploadRequired": false,
+        "isStartState": false,
+        "isTerminateState": false,
+        "isStateUpdatable": true,
+        "actions": [
+          {
+            "action": "SENDBACKTOCITIZEN",
+            "nextState": "CITIZENACTIONREQUIRED",
+            "roles": ["TL_FIELD_INSPECTOR"]
+          },
+          {
+            "action": "FORWARD",
+            "nextState": "PENDINGAPPROVAL",
+            "roles": ["TL_FIELD_INSPECTOR"]
+          },
+          {
+            "action": "REJECT",
+            "nextState": "REJECTED",
+            "roles": ["TL_FIELD_INSPECTOR"]
+          },
+          {
+            "action": "SENDBACK",
+            "nextState": "APPLIED",
+            "roles": ["TL_FIELD_INSPECTOR"]
+          }
+        ]
+      },
+      {
+        "sla": 43200000,
+        "state": "PENDINGAPPROVAL",
+        "applicationStatus": "PENDINGAPPROVAL",
+        "docUploadRequired": false,
+        "isStartState": false,
+        "isTerminateState": false,
+        "isStateUpdatable": false,
+        "actions": [
+          {
+            "action": "SENDBACK",
+            "nextState": "FIELDINSPECTION",
+            "roles": ["TL_APPROVER"]
+          },
+          {
+            "action": "APPROVE",
+            "nextState": "PENDINGPAYMENT",
+            "roles": ["TL_APPROVER"]
+          },
+          {
+            "action": "REJECT",
+            "nextState": "REJECTED",
+            "roles": ["TL_APPROVER"]
+          }
+        ]
+      },
+      {
+        "sla": 43200000,
+        "state": "PENDINGPAYMENT",
+        "applicationStatus": "PENDINGPAYMENT",
+        "docUploadRequired": false,
+        "isStartState": false,
+        "isTerminateState": false,
+        "isStateUpdatable": false,
+        "actions": [
+          {
+            "action": "ADHOC",
+            "nextState": "PENDINGPAYMENT",
+            "roles": ["TL_CEMP"]
+          },
+          {
+            "action": "PAY",
+            "nextState": "APPROVED",
+            "roles": ["CITIZEN", "TL_CEMP", "SYSTEM_PAYMENT"]
+          }
+        ]
+      },
+      {
+        "sla": null,
+        "state": "APPROVED",
+        "applicationStatus": "APPROVED",
+        "docUploadRequired": false,
+        "isStartState": false,
+        "isTerminateState": false,
+        "isStateUpdatable": false,
+        "actions": [
+          {
+            "action": "EXPIRE",
+            "nextState": "EXPIRED",
+            "roles": ["SYSTEM"]
+          },
+          {
+            "action": "CANCEL",
+            "nextState": "CANCELLED",
+            "roles": ["TL_APPROVER"]
+          }
+        ]
+      },
+      {
+        "sla": null,
+        "state": "CANCELLED",
+        "applicationStatus": "CANCELLED",
+        "docUploadRequired": false,
+        "isStartState": false,
+        "isTerminateState": true,
+        "isStateUpdatable": false,
+        "actions": null
+      },
+      {
+        "sla": null,
+        "state": "CITIZENACTIONREQUIRED",
+        "applicationStatus": "CITIZENACTIONREQUIRED",
+        "docUploadRequired": false,
+        "isStartState": false,
+        "isTerminateState": false,
+        "isStateUpdatable": true,
+        "actions": [
+          {
+            "action": "RESUBMIT",
+            "nextState": "FIELDINSPECTION",
+            "roles": ["TL_CEMP"]
+          },
+          {
+            "action": "FORWARD",
+            "nextState": "FIELDINSPECTION",
+            "roles": ["CITIZEN"]
+          }
+        ]
+      },
+      {
+        "sla": null,
+        "state": "EXPIRED",
+        "applicationStatus": "EXPIRED",
+        "docUploadRequired": false,
+        "isStartState": false,
+        "isTerminateState": true,
+        "isStateUpdatable": false,
+        "actions": null
+      }
+    ]
+  },
+  {
+    "tenantId": "{tenantid}",
+    "businessService": "EDITRENEWAL",
+    "business": "tl-services",
+    "businessServiceSla": 172800000,
+    "states": [
+      {
+        "sla": null,
+        "state": null,
+        "applicationStatus": null,
+        "docUploadRequired": false,
+        "isStartState": true,
+        "isTerminateState": false,
+        "actions": [
+          {
+            "action": "INITIATE",
+            "nextState": "INITIATED",
+            "roles": ["CITIZEN", "TL_CEMP"]
+          }
+        ]
+      },
+      {
+        "sla": null,
+        "state": "INITIATED",
+        "applicationStatus": "INITIATED",
+        "docUploadRequired": false,
+        "isStartState": true,
+        "isTerminateState": false,
+        "isStateUpdatable": true,
+        "actions": [
+          {
+            "action": "INITIATE",
+            "nextState": "INITIATED",
+            "roles": ["CITIZEN", "TL_CEMP"]
+          },
+          {
+            "action": "APPLY",
+            "nextState": "APPLIED",
+            "roles": ["CITIZEN", "TL_CEMP"]
+          }
+        ]
+      },
+      {
+        "sla": null,
+        "state": "APPLIED",
+        "applicationStatus": "APPLIED",
+        "docUploadRequired": false,
+        "isStartState": true,
+        "isTerminateState": false,
+        "isStateUpdatable": true,
+        "actions": [
+          {
+            "action": "FORWARD",
+            "nextState": "FIELDINSPECTION",
+            "roles": ["TL_DOC_VERIFIER"]
+          },
+          {
+            "action": "REJECT",
+            "nextState": "REJECTED",
+            "roles": ["TL_DOC_VERIFIER"]
+          }
+        ]
+      },
+      {
+        "sla": null,
+        "state": "REJECTED",
+        "applicationStatus": "REJECTED",
+        "docUploadRequired": false,
+        "isStartState": false,
+        "isTerminateState": true,
+        "isStateUpdatable": false,
+        "actions": null
+      },
+      {
+        "sla": null,
+        "state": "FIELDINSPECTION",
+        "applicationStatus": "FIELDINSPECTION",
+        "docUploadRequired": false,
+        "isStartState": false,
+        "isTerminateState": false,
+        "isStateUpdatable": true,
+        "actions": [
+          {
+            "action": "REJECT",
+            "nextState": "REJECTED",
+            "roles": ["TL_FIELD_INSPECTOR"]
+          },
+          {
+            "action": "FORWARD",
+            "nextState": "PENDINGAPPROVAL",
+            "roles": ["TL_FIELD_INSPECTOR"]
+          },
+          {
+            "action": "SENDBACK",
+            "nextState": "APPLIED",
+            "roles": ["TL_FIELD_INSPECTOR"]
+          }
+        ]
+      },
+      {
+        "sla": null,
+        "state": "PENDINGAPPROVAL",
+        "applicationStatus": "PENDINGAPPROVAL",
+        "docUploadRequired": false,
+        "isStartState": false,
+        "isTerminateState": false,
+        "isStateUpdatable": false,
+        "actions": [
+          {
+            "action": "REJECT",
+            "nextState": "REJECTED",
+            "roles": ["TL_APPROVER"]
+          },
+          {
+            "action": "APPROVE",
+            "nextState": "PENDINGPAYMENT",
+            "roles": ["TL_APPROVER"]
+          },
+          {
+            "action": "SENDBACK",
+            "nextState": "FIELDINSPECTION",
+            "roles": ["TL_APPROVER"]
+          }
+        ]
+      },
+      {
+        "sla": null,
+        "state": "PENDINGPAYMENT",
+        "applicationStatus": "PENDINGPAYMENT",
+        "docUploadRequired": false,
+        "isStartState": false,
+        "isTerminateState": false,
+        "isStateUpdatable": false,
+        "actions": [
+          {
+            "action": "PAY",
+            "nextState": "APPROVED",
+            "roles": ["CITIZEN", "TL_CEMP", "SYSTEM_PAYMENT"]
+          },
+          {
+            "action": "ADHOC",
+            "nextState": "PENDINGPAYMENT",
+            "roles": ["TL_CEMP"]
+          }
+        ]
+      },
+      {
+        "sla": null,
+        "state": "APPROVED",
+        "applicationStatus": "APPROVED",
+        "docUploadRequired": false,
+        "isStartState": false,
+        "isTerminateState": false,
+        "isStateUpdatable": false,
+        "actions": [
+          {
+            "action": "CANCEL",
+            "nextState": "CANCELLED",
+            "roles": ["CITIZEN", "TL_CEMP", "SYSTEM_PAYMENT"]
+          }
+        ]
+      },
+      {
+        "sla": null,
+        "state": "CANCELLED",
+        "applicationStatus": "CANCELLED",
+        "docUploadRequired": false,
+        "isStartState": false,
+        "isTerminateState": true,
+        "isStateUpdatable": false,
+        "actions": null
+      }
+    ]
+  },
+  {
+    "tenantId": "{tenantid}",
+    "businessService": "DIRECTRENEWAL",
+    "business": "tl-services",
+    "businessServiceSla": 172800000,
+    "states": [
+      {
+        "sla": null,
+        "state": null,
+        "applicationStatus": "APPLIED",
+        "docUploadRequired": false,
+        "isStartState": true,
+        "isTerminateState": false,
+        "actions": [
+          {
+            "action": "INITIATE",
+            "nextState": "PENDINGPAYMENT",
+            "roles": ["CITIZEN", "TL_CEMP"]
+          }
+        ]
+      },
+      {
+        "sla": null,
+        "state": "PENDINGPAYMENT",
+        "applicationStatus": "PENDINGPAYMENT",
+        "docUploadRequired": false,
+        "isStartState": true,
+        "isTerminateState": false,
+        "isStateUpdatable": true,
+        "actions": [
+          {
+            "action": "PAY",
+            "nextState": "APPROVED",
+            "roles": ["CITIZEN", "TL_CEMP", "SYSTEM_PAYMENT"]
+          }
+        ]
+      },
+      {
+        "sla": null,
+        "state": "APPROVED",
+        "applicationStatus": "APPROVED",
+        "docUploadRequired": false,
+        "isStartState": false,
+        "isTerminateState": true,
+        "isStateUpdatable": false,
+        "actions": null
+      },
+      {
+        "sla": null,
+        "state": "REJECTED",
+        "applicationStatus": "REJECTED",
+        "docUploadRequired": false,
+        "isStartState": false,
+        "isTerminateState": true,
+        "isStateUpdatable": false,
+        "actions": null
+      }
+    ]
+  }
+]

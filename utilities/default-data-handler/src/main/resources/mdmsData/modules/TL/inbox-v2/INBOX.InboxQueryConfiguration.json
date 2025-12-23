@@ -1,0 +1,70 @@
+[
+  {
+    "module": "tl-services",
+    "index": "pg-tl-inbox",
+    "allowedSearchCriteria": [
+      {
+        "name": "tenantId",
+        "path": "Data.tenantId.keyword",
+        "isMandatory": false,
+        "operator": "EQUAL"
+      },
+      {
+        "name": "status",
+        "path": "Data.currentProcessInstance.state.uuid.keyword",
+        "isMandatory": false
+      },
+      {
+        "name": "applicationType",
+        "path": "Data.applicationType.keyword",
+        "isMandatory": false
+      },
+      {
+        "name": "locality",
+        "path": "Data.tradeLicenseDetail.address.locality.code.keyword",
+        "isMandatory": false
+      },
+      {
+        "name": "assignee",
+        "path": "Data.currentProcessInstance.assignes.uuid.keyword",
+        "isMandatory": false
+      },
+      {
+        "name": "mobileNumber",
+        "path": "Data.mobileNumber.keyword",
+        "isMandatory": false,
+        "operator": "WILDCARD"
+      },
+      {
+        "name": "applicationNumber",
+        "path": "Data.applicationNumber.keyword",
+        "isMandatory": false,
+        "operator": "WILDCARD"
+      },
+      {
+        "name": "fromDate",
+        "path": "Data.auditDetails.createdTime",
+        "isMandatory": false,
+        "operator": "GTE"
+      },
+      {
+        "name": "toDate",
+        "path": "Data.auditDetails.createdTime",
+        "isMandatory": false,
+        "operator": "LTE"
+      }
+    ],
+    "sortBy": {
+      "path": "Data.@timestamp",
+      "defaultOrder": "ASC"
+    },
+    "sourceFilterPathList": [
+      "Data.currentProcessInstance",
+      "Data.auditDetails",
+      "Data.tradeLicenseDetail",
+      "Data.tenantId",
+      "Data.applicationNumber",
+      "Data.applicationDate"
+    ]
+  }
+]

@@ -1,0 +1,307 @@
+[
+  {
+    "tenantId": "{tenantid}.citya",
+    "employeeStatus": "EMPLOYED",
+    "assignments": [
+      {
+        "fromDate": 1725494400000,
+        "isCurrentAssignment": true,
+        "department": "TL_DEPT",
+        "designation": "DESIG_01"
+      }
+    ],
+    "code": "TL_DOC_VERIFIER",
+    "dateOfAppointment": 1718841600000,
+    "employeeType": "PERMANENT",
+    "jurisdictions": [
+      {
+        "hierarchy": "ADMIN",
+        "boundaryType": "City",
+        "boundary": "{tenantid}",
+        "tenantId": "{tenantid}.citya",
+        "roles": [
+          {
+            "code": "TL_DOC_VERIFIER",
+            "name": "TL Document Verifier",
+            "tenantId": "{tenantid}.citya"
+          },
+          {
+            "code": "EMPLOYEE",
+            "name": "Employee",
+            "tenantId": "{tenantid}.citya"
+          }
+        ]
+      }
+    ],
+    "user": {
+      "name": "TL Document Verifier",
+      "gender": null,
+      "mobileNumber": "9999999401",
+      "active": true,
+      "type": "EMPLOYEE",
+      "emailId": "tldocverifier@test.com",
+      "roles": [
+        {
+          "code": "TL_DOC_VERIFIER",
+          "name": "TL Document Verifier",
+          "tenantId": "{tenantid}.citya"
+        },
+        {
+          "code": "EMPLOYEE",
+          "name": "Employee",
+          "tenantId": "{tenantid}.citya"
+        }
+      ],
+      "password": "eGov@123",
+      "otpReference": "12345",
+      "tenantId": "{tenantid}.citya"
+    },
+    "serviceHistory": [],
+    "education": [],
+    "tests": []
+  },
+  {
+    "tenantId": "{tenantid}.citya",
+    "employeeStatus": "EMPLOYED",
+    "assignments": [
+      {
+        "fromDate": 1725494400000,
+        "isCurrentAssignment": true,
+        "department": "TL_DEPT",
+        "designation": "DESIG_01"
+      }
+    ],
+    "code": "TL_CREATOR",
+    "dateOfAppointment": 1718841600000,
+    "employeeType": "PERMANENT",
+    "jurisdictions": [
+      {
+        "hierarchy": "ADMIN",
+        "boundaryType": "City",
+        "boundary": "{tenantid}",
+        "tenantId": "{tenantid}.citya",
+        "roles": [
+          {
+            "code": "TL_CREATOR",
+            "name": "TL Creator",
+            "tenantId": "{tenantid}.citya"
+          },
+          {
+            "code": "EMPLOYEE",
+            "name": "Employee",
+            "tenantId": "{tenantid}.citya"
+          }
+        ]
+      }
+    ],
+    "user": {
+      "name": "TL Creator",
+      "gender": null,
+      "mobileNumber": "9999999402",
+      "active": true,
+      "type": "EMPLOYEE",
+      "emailId": "tlcreator@test.com",
+      "roles": [
+        {
+          "code": "TL_CREATOR",
+          "name": "TL Creator",
+          "tenantId": "{tenantid}.citya"
+        },
+        {
+          "code": "EMPLOYEE",
+          "name": "Employee",
+          "tenantId": "{tenantid}.citya"
+        }
+      ],
+      "password": "eGov@123",
+      "otpReference": "12345",
+      "tenantId": "{tenantid}.citya"
+    },
+    "serviceHistory": [],
+    "education": [],
+    "tests": []
+  },
+  {
+    "tenantId": "{tenantid}.citya",
+    "employeeStatus": "EMPLOYED",
+    "assignments": [
+      {
+        "fromDate": 1725494400000,
+        "isCurrentAssignment": true,
+        "department": "TL_DEPT",
+        "designation": "DESIG_01"
+      }
+    ],
+    "code": "TL_APPROVER",
+    "dateOfAppointment": 1718841600000,
+    "employeeType": "PERMANENT",
+    "jurisdictions": [
+      {
+        "hierarchy": "ADMIN",
+        "boundaryType": "City",
+        "boundary": "{tenantid}",
+        "tenantId": "{tenantid}.citya",
+        "roles": [
+          {
+            "code": "TL_APPROVER",
+            "name": "TL Approver",
+            "tenantId": "{tenantid}.citya"
+          },
+          {
+            "code": "EMPLOYEE",
+            "name": "Employee",
+            "tenantId": "{tenantid}.citya"
+          }
+        ]
+      }
+    ],
+    "user": {
+      "name": "TL Approver",
+      "gender": null,
+      "mobileNumber": "9999999403",
+      "active": true,
+      "type": "EMPLOYEE",
+      "emailId": "tlapprover@test.com",
+      "roles": [
+        {
+          "code": "TL_APPROVER",
+          "name": "TL Approver",
+          "tenantId": "{tenantid}.citya"
+        },
+        {
+          "code": "EMPLOYEE",
+          "name": "Employee",
+          "tenantId": "{tenantid}.citya"
+        }
+      ],
+      "password": "eGov@123",
+      "otpReference": "12345",
+      "tenantId": "{tenantid}.citya"
+    },
+    "serviceHistory": [],
+    "education": [],
+    "tests": []
+  },
+  {
+    "tenantId": "{tenantid}.citya",
+    "employeeStatus": "EMPLOYED",
+    "assignments": [
+      {
+        "fromDate": 1725494400000,
+        "isCurrentAssignment": true,
+        "department": "TL_DEPT",
+        "designation": "DESIG_01"
+      }
+    ],
+    "code": "TL_FIELD_INSPECTOR",
+    "dateOfAppointment": 1718841600000,
+    "employeeType": "PERMANENT",
+    "jurisdictions": [
+      {
+        "hierarchy": "ADMIN",
+        "boundaryType": "City",
+        "boundary": "{tenantid}",
+        "tenantId": "{tenantid}.citya",
+        "roles": [
+          {
+            "code": "TL_FIELD_INSPECTOR",
+            "name": "TL Field Inspector",
+            "tenantId": "{tenantid}.citya"
+          },
+          {
+            "code": "EMPLOYEE",
+            "name": "Employee",
+            "tenantId": "{tenantid}.citya"
+          }
+        ]
+      }
+    ],
+    "user": {
+      "name": "TL Field Inspector",
+      "gender": null,
+      "mobileNumber": "9999999404",
+      "active": true,
+      "type": "EMPLOYEE",
+      "emailId": "tlfieldinspector@test.com",
+      "roles": [
+        {
+          "code": "TL_FIELD_INSPECTOR",
+          "name": "TL Field Inspector",
+          "tenantId": "{tenantid}.citya"
+        },
+        {
+          "code": "EMPLOYEE",
+          "name": "Employee",
+          "tenantId": "{tenantid}.citya"
+        }
+      ],
+      "password": "eGov@123",
+      "otpReference": "12345",
+      "tenantId": "{tenantid}.citya"
+    },
+    "serviceHistory": [],
+    "education": [],
+    "tests": []
+  },
+  {
+    "tenantId": "{tenantid}.citya",
+    "employeeStatus": "EMPLOYED",
+    "assignments": [
+      {
+        "fromDate": 1725494400000,
+        "isCurrentAssignment": true,
+        "department": "TL_DEPT",
+        "designation": "DESIG_23"
+      }
+    ],
+    "code": "TL_CEMP",
+    "dateOfAppointment": 1718841600000,
+    "employeeType": "PERMANENT",
+    "jurisdictions": [
+      {
+        "hierarchy": "ADMIN",
+        "boundaryType": "City",
+        "boundary": "{tenantid}",
+        "tenantId": "{tenantid}.citya",
+        "roles": [
+          {
+            "code": "TL_CEMP",
+            "name": "TL Counter Employee",
+            "tenantId": "{tenantid}.citya"
+          },
+          {
+            "code": "EMPLOYEE",
+            "name": "Employee",
+            "tenantId": "{tenantid}.citya"
+          }
+        ]
+      }
+    ],
+    "user": {
+      "name": "TL Counter Employee",
+      "gender": null,
+      "mobileNumber": "9999999405",
+      "active": true,
+      "type": "EMPLOYEE",
+      "emailId": "tlcemp@test.com",
+      "roles": [
+        {
+          "code": "TL_CEMP",
+          "name": "TL Counter Employee",
+          "tenantId": "{tenantid}.citya"
+        },
+        {
+          "code": "EMPLOYEE",
+          "name": "Employee",
+          "tenantId": "{tenantid}.citya"
+        }
+      ],
+      "password": "eGov@123",
+      "otpReference": "12345",
+      "tenantId": "{tenantid}.citya"
+    },
+    "serviceHistory": [],
+    "education": [],
+    "tests": []
+  }
+]

@@ -1,0 +1,80 @@
+[
+  {
+    "rolecode": "TL_CREATOR",
+    "actionid": 3001,
+    "actioncode": "",
+    "tenantId": "{tenantid}"
+  },
+  {
+    "rolecode": "TL_CREATOR",
+    "actionid": 3003,
+    "actioncode": "",
+    "tenantId": "{tenantid}"
+  },
+  {
+    "rolecode": "TL_APPROVER",
+    "actionid": 3001,
+    "actioncode": "",
+    "tenantId": "{tenantid}"
+  },
+  {
+    "rolecode": "TL_APPROVER",
+    "actionid": 3002,
+    "actioncode": "",
+    "tenantId": "{tenantid}"
+  },
+  {
+    "rolecode": "TL_APPROVER",
+    "actionid": 3003,
+    "actioncode": "",
+    "tenantId": "{tenantid}"
+  },
+  {
+    "rolecode": "TL_DOC_VERIFIER",
+    "actionid": 3002,
+    "actioncode": "",
+    "tenantId": "{tenantid}"
+  },
+  {
+    "rolecode": "TL_DOC_VERIFIER",
+    "actionid": 3003,
+    "actioncode": "",
+    "tenantId": "{tenantid}"
+  },
+  {
+    "rolecode": "TL_FIELD_INSPECTOR",
+    "actionid": 3002,
+    "actioncode": "",
+    "tenantId": "{tenantid}"
+  },
+  {
+    "rolecode": "TL_FIELD_INSPECTOR",
+    "actionid": 3003,
+    "actioncode": "",
+    "tenantId": "{tenantid}"
+  },
+  {
+    "rolecode": "TL_CEMP",
+    "actionid": 3001,
+    "actioncode": "",
+    "tenantId": "{tenantid}"
+  },
+  {
+    "rolecode": "TL_CEMP",
+    "actionid": 3003,
+    "actioncode": "",
+    "tenantId": "{tenantid}"
+  },
+  {
+    "rolecode": "CITIZEN",
+    "actionid": 3001,
+    "actioncode": "",
+    "tenantId": "{tenantid}"
+  },
+  {
+    "rolecode": "CITIZEN",
+    "actionid": 3003,
+    "actioncode": "",
+    "tenantId": "{tenantid}"
+  }
+]

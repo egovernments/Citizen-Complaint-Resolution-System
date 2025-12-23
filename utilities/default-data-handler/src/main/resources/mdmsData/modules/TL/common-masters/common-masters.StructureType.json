@@ -1,0 +1,6 @@
+[
+  {"code": "MOVABLE.MOVVH", "active": true},
+  {"code": "MOVABLE.MOVTS", "active": true},
+  {"code": "IMMOVABLE.IMMWH", "active": true},
+  {"code": "IMMOVABLE.IMMSH", "active": true}
+]

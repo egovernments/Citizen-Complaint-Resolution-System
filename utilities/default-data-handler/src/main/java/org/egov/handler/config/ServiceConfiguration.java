@@ -131,4 +131,9 @@ public class ServiceConfiguration {
 
     @Value("${scheduler.max.executions}")
     private String maxExecution;
+
+    // Module Configuration
+    // Comma-separated list of enabled modules - loads common first, then all folders from each module
+    @Value("#{'${modules.enabled:}'.split(',')}")
+    private List<String> enabledModules;
 }

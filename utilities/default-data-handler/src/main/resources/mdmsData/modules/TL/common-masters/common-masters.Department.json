@@ -1,0 +1,14 @@
+[
+  {
+    "tenantId": "{tenantid}",
+    "code": "TL_DEPT",
+    "name": "Trade License Department",
+    "active": true
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "REVENUE",
+    "name": "Revenue Department",
+    "active": true
+  }
+]

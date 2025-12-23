@@ -1,0 +1,178 @@
+{
+  "RequestInfo": {
+    "apiId": "Rainmaker",
+    "ver": ".01"
+  },
+  "BusinessServices": [
+    {
+      "tenantId": "{tenantid}",
+      "businessService": "NewTL",
+      "business": "tl-services",
+      "businessServiceSla": 432000000,
+      "states": [
+        {
+          "sla": null,
+          "state": null,
+          "applicationStatus": "INITIATED",
+          "docUploadRequired": false,
+          "isStartState": true,
+          "isTerminateState": false,
+          "isStateUpdatable": true,
+          "actions": [
+            {
+              "action": "APPLY",
+              "nextState": "APPLIED",
+              "roles": ["CITIZEN", "TL_CEMP"]
+            }
+          ]
+        },
+        {
+          "sla": null,
+          "state": "APPLIED",
+          "applicationStatus": "APPLIED",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": false,
+          "isStateUpdatable": true,
+          "actions": [
+            {
+              "action": "FORWARD",
+              "nextState": "PENDINGVERIFICATION",
+              "roles": ["TL_DOC_VERIFIER"]
+            },
+            {
+              "action": "SENDBACKTOCITIZEN",
+              "nextState": "CITIZENACTIONREQUIRED",
+              "roles": ["TL_DOC_VERIFIER"]
+            },
+            {
+              "action": "REJECT",
+              "nextState": "REJECTED",
+              "roles": ["TL_DOC_VERIFIER"]
+            }
+          ]
+        },
+        {
+          "sla": null,
+          "state": "CITIZENACTIONREQUIRED",
+          "applicationStatus": "CITIZENACTIONREQUIRED",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": false,
+          "isStateUpdatable": true,
+          "actions": [
+            {
+              "action": "FORWARD",
+              "nextState": "APPLIED",
+              "roles": ["CITIZEN", "TL_CEMP"]
+            }
+          ]
+        },
+        {
+          "sla": null,
+          "state": "PENDINGVERIFICATION",
+          "applicationStatus": "PENDINGVERIFICATION",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": false,
+          "isStateUpdatable": true,
+          "actions": [
+            {
+              "action": "FORWARD",
+              "nextState": "FIELDINSPECTION",
+              "roles": ["TL_DOC_VERIFIER"]
+            },
+            {
+              "action": "SENDBACK",
+              "nextState": "APPLIED",
+              "roles": ["TL_DOC_VERIFIER"]
+            }
+          ]
+        },
+        {
+          "sla": null,
+          "state": "FIELDINSPECTION",
+          "applicationStatus": "FIELDINSPECTION",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": false,
+          "isStateUpdatable": true,
+          "actions": [
+            {
+              "action": "FORWARD",
+              "nextState": "PENDINGAPPROVAL",
+              "roles": ["TL_FIELD_INSPECTOR"]
+            },
+            {
+              "action": "SENDBACK",
+              "nextState": "PENDINGVERIFICATION",
+              "roles": ["TL_FIELD_INSPECTOR"]
+            }
+          ]
+        },
+        {
+          "sla": null,
+          "state": "PENDINGAPPROVAL",
+          "applicationStatus": "PENDINGAPPROVAL",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": false,
+          "isStateUpdatable": true,
+          "actions": [
+            {
+              "action": "APPROVE",
+              "nextState": "PENDINGPAYMENT",
+              "roles": ["TL_APPROVER"]
+            },
+            {
+              "action": "SENDBACK",
+              "nextState": "FIELDINSPECTION",
+              "roles": ["TL_APPROVER"]
+            },
+            {
+              "action": "REJECT",
+              "nextState": "REJECTED",
+              "roles": ["TL_APPROVER"]
+            }
+          ]
+        },
+        {
+          "sla": null,
+          "state": "PENDINGPAYMENT",
+          "applicationStatus": "PENDINGPAYMENT",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": false,
+          "isStateUpdatable": false,
+          "actions": [
+            {
+              "action": "PAY",
+              "nextState": "APPROVED",
+              "roles": ["CITIZEN", "TL_CEMP", "SYSTEM"]
+            }
+          ]
+        },
+        {
+          "sla": null,
+          "state": "APPROVED",
+          "applicationStatus": "APPROVED",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": true,
+          "isStateUpdatable": false,
+          "actions": null
+        },
+        {
+          "sla": null,
+          "state": "REJECTED",
+          "applicationStatus": "REJECTED",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": true,
+          "isStateUpdatable": false,
+          "actions": null
+        }
+      ]
+    }
+  ]
+}

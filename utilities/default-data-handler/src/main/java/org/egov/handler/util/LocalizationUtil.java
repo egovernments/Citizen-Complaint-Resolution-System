@@ -92,22 +92,85 @@ public class LocalizationUtil {
 		List<Message> messages = new ArrayList<>();
 		ObjectMapper objectMapper = new ObjectMapper();
 
+		// Load common localizations first (always loaded)
+		messages.addAll(loadCommonLocalizations(objectMapper));
+
+		// Load module-specific localizations for enabled modules
+		List<String> enabledModules = serviceConfig.getEnabledModules();
+		if (enabledModules != null && !enabledModules.isEmpty()) {
+			for (String module : enabledModules) {
+				messages.addAll(loadModuleLocalizations(objectMapper, module.trim()));
+			}
+		}
+
+		return messages;
+	}
+
+	/**
+	 * Load localizations for a specific module from localisations/modules/{MODULE}/ folder
+	 */
+	private List<Message> loadModuleLocalizations(ObjectMapper objectMapper, String moduleName) {
+		List<Message> messages = new ArrayList<>();
+
 		try {
 			PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
+			String pattern = "classpath:localisations/modules/" + moduleName + "/**/*.json";
 
-			Resource[] resources = resolver.getResources("classpath:localisations/*/*.json");
+			Resource[] resources = resolver.getResources(pattern);
+
+			if (resources.length == 0) {
+				log.warn("No localization files found for module: {} at path: {}", moduleName, pattern);
+				return messages;
+			}
+
+			log.info("Found {} localization files for module: {}", resources.length, moduleName);
 
 			for (Resource resource : resources) {
 				try (InputStream inputStream = resource.getInputStream()) {
 					List<Message> fileMessages = Arrays.asList(objectMapper.readValue(inputStream, Message[].class));
 					messages.addAll(fileMessages);
-					log.info("Loaded {} messages from {}", fileMessages.size(), resource.getFilename());
+					log.info("Loaded {} messages from {} for module {}", fileMessages.size(), resource.getFilename(), moduleName);
 				} catch (IOException e) {
 					log.error("Failed to read localization file {}: {}", resource.getFilename(), e.getMessage());
 				}
 			}
 		} catch (IOException e) {
-			log.error("Failed to scan localization directories: {}", e.getMessage());
+			log.error("Failed to scan localization directories for module {}: {}", moduleName, e.getMessage());
+		}
+
+		return messages;
+	}
+
+	/**
+	 * Load common localizations from localisations/common folder
+	 */
+	private List<Message> loadCommonLocalizations(ObjectMapper objectMapper) {
+		List<Message> messages = new ArrayList<>();
+
+		try {
+			PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
+			String pattern = "classpath:localisations/common/**/*.json";
+
+			Resource[] resources = resolver.getResources(pattern);
+
+			if (resources.length == 0) {
+				log.warn("No common localization files found at path: {}", pattern);
+				return messages;
+			}
+
+			log.info("Found {} common localization files", resources.length);
+
+			for (Resource resource : resources) {
+				try (InputStream inputStream = resource.getInputStream()) {
+					List<Message> fileMessages = Arrays.asList(objectMapper.readValue(inputStream, Message[].class));
+					messages.addAll(fileMessages);
+					log.info("Loaded {} common messages from {}", fileMessages.size(), resource.getFilename());
+				} catch (IOException e) {
+					log.error("Failed to read localization file {}: {}", resource.getFilename(), e.getMessage());
+				}
+			}
+		} catch (IOException e) {
+			log.error("Failed to scan common localization directories: {}", e.getMessage());
 		}
 
 		return messages;
