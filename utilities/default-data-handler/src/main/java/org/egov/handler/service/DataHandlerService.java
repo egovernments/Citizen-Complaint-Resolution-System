@@ -4,9 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.kafka.clients.producer.KafkaProducer;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.handler.config.ServiceConfiguration;
 import org.egov.handler.util.*;
@@ -659,8 +657,11 @@ public class DataHandlerService {
                     serviceConfig.getDefaultLocalizationDataPath());
             log.info("✓ Production localization data loaded for new tenant: {}", targetTenantId);
             
-            log.info("Step 4: Creating tenant config in Tenant Management System");
-            // 4. Create Tenant Configuration
+            // 4. Skip Tenant Config for root tenants (no parent to copy from)
+            log.info("Step 4: Skipping tenant config creation (root tenant - no parent to copy from)");
+
+            log.info("Step 5: Creating default users and employees");
+            // 5. Create Users and Employees
             Tenant newTenant = new Tenant();
             newTenant.setCode(targetTenantId);
             newTenant.setName(targetTenantId);
@@ -671,15 +672,6 @@ public class DataHandlerService {
                     .tenant(newTenant)
                     .build();
 
-            try {
-                createTenantConfig(tenantRequest);
-                log.info("✓ Tenant config created: {}", targetTenantId);
-            } catch (Exception e) {
-                log.warn("Could not create tenant config (non-critical): {}", e.getMessage());
-            }
-
-            log.info("Step 5: Creating default users and employees");
-            // 5. Create Users and Employees
             try {
                 // Create users from default User.json
                 User superUser = createUserFromFile(tenantRequest, serviceConfig.getDefaultUserDataFile());
