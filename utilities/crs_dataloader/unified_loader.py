@@ -1747,12 +1747,13 @@ class APIUploader:
         try:
             # Tenant creation can take 5-10 minutes, use long timeout
             print(f"   ⏳ This may take 5-10 minutes, please wait...")
-            response = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=600)
+            response = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=1200)
             response.raise_for_status()
 
             result = response.json()
 
             print(f"   [SUCCESS] Default data setup complete for {targetTenantId}")
+            print("Once the new tenant is created, please log in again using the new root tenant admin credentials.")
             print("="*60)
 
             return {
