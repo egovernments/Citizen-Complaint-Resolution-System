@@ -2,7 +2,7 @@
   {
     "tenantId": "{tenantid}",
     "schemaCode": "CRS-ADMIN-CONSOLE.adminSchema",
-    "uniqueIdentifier": "boundaryManagement",
+    "uniqueIdentifier": "CRS_BOUNDARY_DATA",
     "data": {
       "title": "CRS_BOUNDARY_DATA",
       "campaignType": "all",
