@@ -4,9 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.kafka.clients.producer.KafkaProducer;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.handler.config.ServiceConfiguration;
 import org.egov.handler.util.*;
@@ -659,28 +657,41 @@ public class DataHandlerService {
                     serviceConfig.getDefaultLocalizationDataPath());
             log.info("✓ Production localization data loaded for new tenant: {}", targetTenantId);
             
-            log.info("Step 4: Creating tenant config in Tenant Management System");
-            // 4. Create Tenant Configuration
+            // 4. Skip Tenant Config for root tenants (no parent to copy from)
+            log.info("Step 4: Skipping tenant config creation (root tenant - no parent to copy from)");
+
+            log.info("Step 5: Creating default users and employees");
+            // 5. Create Users and Employees
             Tenant newTenant = new Tenant();
             newTenant.setCode(targetTenantId);
             newTenant.setName(targetTenantId);
             newTenant.setEmail("admin@" + targetTenantId + ".com");
-            
+
             TenantRequest tenantRequest = TenantRequest.builder()
                     .requestInfo(requestInfo)
                     .tenant(newTenant)
                     .build();
-            
+
             try {
-                createTenantConfig(tenantRequest);
-                log.info("✓ Tenant config created: {}", targetTenantId);
+                // Create users from default User.json
+                User superUser = createUserFromFile(tenantRequest, serviceConfig.getDefaultUserDataFile());
+                if (superUser != null) {
+                    log.info("✓ Default users created for tenant: {}", targetTenantId);
+                } else {
+                    log.warn("No SUPERUSER found in created users");
+                }
+
+                // Create employees from default HRMS.json
+                createEmployeeFromFile(requestInfo, serviceConfig.getDefaultEmployeeDataFile());
+                log.info("✓ Default employees created for tenant: {}", targetTenantId);
+
             } catch (Exception e) {
-                log.warn("Could not create tenant config (non-critical): {}", e.getMessage());
+                log.error("Failed to create users/employees (non-critical): {}", e.getMessage());
             }
-            
+
             log.info("========================================");
             log.info("✓✓✓ Tenant {} created successfully", targetTenantId);
-            log.info("Loaded: Schemas + Production MDMS + Production Localization + Tenant Config");
+            log.info("Loaded: Schemas + Production MDMS + Production Localization + Tenant Config + Users + Employees");
             log.info("========================================");
         } catch (Exception e) {
             log.error("Failed to load production tenant data for tenant: {}", newTenantRequest.getTargetTenantId(), e);

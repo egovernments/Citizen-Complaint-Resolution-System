@@ -124,9 +124,10 @@ public class StartupUserAndEmployeeInitializer {
 
             dataHandlerService.createBoundaryDataFromFile(defaultDataRequest);
 
-            // Load dev users and employees
+            // Load dev users
             dataHandlerService.createUserFromFile(tenantRequest, serviceConfig.getDevUserDataFile());
             dataHandlerService.createPgrWorkflowConfig(tenantRequest.getTenant().getCode());
+            // create employee (dev)
             dataHandlerService.createEmployeeFromFile(defaultDataRequest.getRequestInfo(),
                     serviceConfig.getDevEmployeeDataFile());
         }

@@ -7,7 +7,7 @@ export const pinComplaintLocaton = {
       "component": "GeoLocations",
       "key": "GeoLocationsPoint",
       "withoutLabel": true,
-       "populators": {
+      "populators": {
         "name": "GeoLocationsPoint",
         "styles": {
           "maxWidth": "37.5rem",

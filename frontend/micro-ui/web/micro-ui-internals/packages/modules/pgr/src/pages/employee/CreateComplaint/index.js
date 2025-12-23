@@ -29,6 +29,9 @@ const CreateComplaint = () => {
   const CreateComplaintSession = Digit.Hooks.useSessionStorage("COMPLAINT_CREATE", {});
   const [sessionFormData, setSessionFormData, clearSessionFormData] = CreateComplaintSession;
 
+  // Fetch mobile validation config from MDMS
+  const { validationRules, isLoading: isValidationLoading, getMinMaxValues } = Digit.Hooks.pgr.useMobileValidation(tenantId);
+
   // Fetch MDMS config for Create Complaint screen (RAINMAKER-PGR.CreateComplaintConfig)
   const { data: mdmsData, isLoading } = Digit.Hooks.useCommonMDMS(
     Digit.ULBService.getStateId(),
@@ -45,15 +48,54 @@ const CreateComplaint = () => {
     //  const serviceDefs = Digit.Hooks.pgr.useServiceDefs(tenantId, "PGR");
 
   // Use MDMS config if available, otherwise fallback to local static config
-  const configs = mdmsData || CreateComplaintConfig?.CreateComplaintConfig?.[0];
+  let configs = mdmsData || CreateComplaintConfig?.CreateComplaintConfig?.[0];
   
    /**
     * Preprocess config using translation and inject complaint types into the serviceCode dropdown
+    * and inject mobile validation from MDMS
     */
+
+  // Inject mobile validation rules from MDMS into the config
+  if (configs && validationRules) {
+    const { min, max } = getMinMaxValues();
+    configs = {
+      ...configs,
+      form: configs.form.map((section) => {
+        if (section.head === "ES_CREATECOMPLAINT_PROVIDE_COMPLAINANT_DETAILS") {
+          return {
+            ...section,
+            body: section.body.map((field) => {
+              if (field.label === "COMPLAINTS_COMPLAINANT_CONTACT_NUMBER") {
+                return {
+                  ...field,
+                  populators: {
+                    ...field.populators,
+                    componentInFront: validationRules.prefix,
+                    prefix:validationRules.prefix,
+                    validation: {
+                      required: true,
+                      minlength: validationRules.minLength,
+                      maxlength: validationRules.maxLength,
+                      min: min,
+                      max: max,
+                      pattern: validationRules.pattern,
+                    },
+                    error: validationRules.errorMessage || "CORE_COMMON_MOBILE_ERROR",
+                  },
+                };
+              }
+              return field;
+            }),
+          };
+        }
+        return section;
+      }),
+    };
+  }
 
 
   // Show loader while fetching MDMS config
-  if (isLoading || !configs) {
+  if (isLoading || isValidationLoading || !configs) {
     return <Loader />;
   }
 

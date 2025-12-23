@@ -37,7 +37,7 @@ const FormExplorer = () => {
   const client = useQueryClient();
   const match = useRouteMatch();
   const dispatch = useDispatch();
-  const tenantId = Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code
+  const tenantId = Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || Digit.ULBService.getCurrentTenantId()
 
 
   const { isLoading: isMDMSLoading, data: serviceDefs } = Digit.Hooks.useCustomMDMS(
@@ -80,10 +80,13 @@ const FormExplorer = () => {
     if (
       value &&
       typeof value === "object" &&
-      typeof value.lat === "number" &&
-      typeof value.lng === "number"
+      typeof value.latitude === "number" &&
+      typeof value.longitude === "number"
     ) {
-      return value;
+      return {
+        latitude: value.latitude,
+        longitude: value.longitude
+      };
     }
     return {};
   }
@@ -123,7 +126,7 @@ const FormExplorer = () => {
     return {
       service: {
         active: true,
-        tenantId: formData?.SelectAddress?.city?.code || "",
+        tenantId: formData?.SelectAddress?.city?.code || tenantId,
         serviceCode: getEffectiveServiceCode(formData?.SelectComplaintType, formData?.SelectSubComplaintType),
         description: formData?.description || "",
         applicationStatus: "CREATED",
@@ -155,9 +158,9 @@ const FormExplorer = () => {
       workflow: {
         action: "APPLY",
         verificationDocuments: Array.isArray(formData?.ComplaintImagesPoint)
-          ? formData.ComplaintImagesPoint.map((fileStoreId) => ({
+          ? formData.ComplaintImagesPoint.map((image) => ({
             documentType: "PHOTO",
-            fileStoreId,
+            fileStoreId: image,
             documentUid: "",
             additionalDetails: {},
           }))
@@ -173,8 +176,12 @@ const FormExplorer = () => {
   const handleResponseForCreateComplaint = async (payload) => {
 
     await CreateComplaintMutation(payload, {
-      onError: async () => {
-        // setToast({ show: true, label: t("FAILED_TO_CREATE_COMPLAINT"), type: "error" });
+      onError: async (error, variables) => {
+        dispatch({
+          type: "CREATE_COMPLAINT",
+          payload: { responseInfo: { status: "failed" } },
+        });
+        history.push(`/digit-ui/citizen/pgr/response`);
       },
       onSuccess: async (responseData) => {
         dispatch({
@@ -187,10 +194,8 @@ const FormExplorer = () => {
           await client.refetchQueries(["complaintsList"]);
           history.push(`/digit-ui/citizen/pgr/response`);
 
-        }
-        if (responseData?.ResponseInfo?.Errors) {
-          // setToast({ show: true, label: t("FAILED_TO_CREATE_COMPLAINT"), type: "error" });
         } else {
+          history.push(`/digit-ui/citizen/pgr/response`);
         }
       },
     });
@@ -315,10 +320,13 @@ const FormExplorer = () => {
 
   if (formData.GeoLocationsPoint?.pincode) {
     formData.postalCode = `${formData.GeoLocationsPoint.pincode}`;
-
   }
   else if (formData.postalCode) {
     formData.postalCode = `${formData.postalCode}`;
+  }
+
+  if (formData.landmark && typeof formData.landmark === "object") {
+    formData.landmark = "";
   }
 
 
