@@ -2,11 +2,13 @@ import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useHistory, useParams } from "react-router-dom/cjs/react-router-dom.min";
 import { HeaderComponent, Button, Card, Footer, ActionBar, SummaryCard, Tag, Timeline, Toast, NoResultsFound } from "@egovernments/digit-ui-components";
-import { Loader } from "@egovernments/digit-ui-react-components";
+import { Loader, DisplayPhotos, ImageViewer } from "@egovernments/digit-ui-react-components";
 import { convertEpochFormateToDate } from "../../utils";
 import TimelineWrapper from "../../components/TimeLineWrapper";
 import PGRWorkflowModal from "../../components/PGRWorkflowModal";
+import ComplaintLocationMap from "../../components/ComplaintLocationMap";
 import Urls from "../../utils/urls";
+import ComplaintPhotos from "../../components/ComplaintPhotos";
 
 // Action configurations used for handling different workflow actions like ASSIGN, REJECT, RESOLVE
 // TO DO: Move this to MDMS for handling Action Modal properties
@@ -157,41 +159,41 @@ const ACTION_CONFIGS = [
     },
   },
   {
-  actionType: "REASSIGN",
-  formConfig: {
-    label: {
-      heading: "CS_ACTION_REASSIGN",
-      cancel: "CS_COMMON_CANCEL",
-      submit: "CS_COMMON_SUBMIT",
-    },
-    form: [
-      {
-        body: [
-          {
-            type: "component",
-            isMandatory: false,
-            component: "PGRAssigneeComponent",
-            key: "SelectedAssignee",
-            label: "CS_COMMON_EMPLOYEE_NAME",
-            populators: { name: "SelectedAssignee" },
-          },
-          {
-            type: "textarea",
-            isMandatory: true,
-            key: "SelectedComments",
-            label: "CS_COMMON_EMPLOYEE_COMMENTS",
-            populators: {
-              name: "SelectedComments",
-              maxLength: 1000,
-              validation: { required: true },
-              error: "CORE_COMMON_REQUIRED_ERRMSG",
-            },
-          },
-        ],
+    actionType: "REASSIGN",
+    formConfig: {
+      label: {
+        heading: "CS_ACTION_REASSIGN",
+        cancel: "CS_COMMON_CANCEL",
+        submit: "CS_COMMON_SUBMIT",
       },
-    ],
+      form: [
+        {
+          body: [
+            {
+              type: "component",
+              isMandatory: false,
+              component: "PGRAssigneeComponent",
+              key: "SelectedAssignee",
+              label: "CS_COMMON_EMPLOYEE_NAME",
+              populators: { name: "SelectedAssignee" },
+            },
+            {
+              type: "textarea",
+              isMandatory: true,
+              key: "SelectedComments",
+              label: "CS_COMMON_EMPLOYEE_COMMENTS",
+              populators: {
+                name: "SelectedComments",
+                maxLength: 1000,
+                validation: { required: true },
+                error: "CORE_COMMON_REQUIRED_ERRMSG",
+              },
+            },
+          ],
+        },
+      ],
+    },
   },
-},
 ];
 
 const PGRDetails = () => {
@@ -221,12 +223,18 @@ const PGRDetails = () => {
     { schemaCode: "SERVICE_DEFS_MASTER_DATA" }
   );
 
-  function getServiceNameByCode(serviceCode, services) {
-  if (!serviceCode || !Array.isArray(services)) return null;
+  function getServiceCategoryByCode(serviceCode, services) {
+    if (!serviceCode || !Array.isArray(services)) return null;
+    const match = services.find(item => item.serviceCode === serviceCode);
+    return match?.menuPath || null;
+  }
 
-  const match = services.find(item => item.serviceCode === serviceCode);
-  return match?.name || null;
-}
+  function getServiceNameByCode(serviceCode, services) {
+    if (!serviceCode || !Array.isArray(services)) return null;
+
+    const match = services.find(item => item.serviceCode === serviceCode);
+    return match?.name || null;
+  }
 
   // Fetch complaint details
   const { isLoading, isError, error, data: pgrData, revalidate: pgrSearchRevalidate } = Digit.Hooks.pgr.usePGRSearch({ serviceRequestId: id }, tenantId);
@@ -266,38 +274,38 @@ const PGRDetails = () => {
   const handleActionSubmit = (_data) => {
     const actionConfig = ACTION_CONFIGS.find((config) => config.actionType === selectedAction.action);
 
-  if (!actionConfig) return;
+    if (!actionConfig) return;
 
-  const missingFields = [];
+    const missingFields = [];
 
-  actionConfig.formConfig.form.forEach((section) => {
-    section.body.forEach((field) => {
-      if (field.isMandatory) {
-        const fieldKey = field.key;
-        const fieldValue = _data?.[fieldKey];
+    actionConfig.formConfig.form.forEach((section) => {
+      section.body.forEach((field) => {
+        if (field.isMandatory) {
+          const fieldKey = field.key;
+          const fieldValue = _data?.[fieldKey];
 
-        // For dropdowns or components, also check if selected value is valid object or string
-        const isEmpty =
-          fieldValue === undefined ||
-          fieldValue === null ||
-          (typeof fieldValue === "string" && fieldValue.trim() === "") ||
-          (typeof fieldValue === "object" && Object.keys(fieldValue).length === 0);
+          // For dropdowns or components, also check if selected value is valid object or string
+          const isEmpty =
+            fieldValue === undefined ||
+            fieldValue === null ||
+            (typeof fieldValue === "string" && fieldValue.trim() === "") ||
+            (typeof fieldValue === "object" && Object.keys(fieldValue).length === 0);
 
-        if (isEmpty) {
-          missingFields.push(t(field.label));
+          if (isEmpty) {
+            missingFields.push(t(field.label));
+          }
         }
-      }
+      });
     });
-  });
 
-  if (missingFields.length > 0) {
-    setToast({
-      show: true,
-      label: t("CS_COMMON_REQUIRED_FIELDS_MISSING") + ": " + missingFields.join(", "),
-      type: "error",
-    });
-    return;
-  }
+    if (missingFields.length > 0) {
+      setToast({
+        show: true,
+        label: t("CS_COMMON_REQUIRED_FIELDS_MISSING") + ": " + missingFields.join(", "),
+        type: "error",
+      });
+      return;
+    }
     const updateRequest = {
       service: { ...pgrData?.ServiceWrappers[0].service },
       workflow: {
@@ -351,6 +359,7 @@ const PGRDetails = () => {
             ...bodyItem.populators,
             roles,
             department,
+            props: { ...bodyItem.populators.props, department },
           },
         })),
       })),
@@ -365,26 +374,26 @@ const PGRDetails = () => {
     const userRoles = userInfo?.info?.roles?.map((role) => role.code) || [];
     return matchingState.actions
       ? matchingState.actions.filter((action) => action.roles.some((role) => userRoles.includes(role)))
-          .map((action) => ({
-            action: action.action,
-            roles: action.roles,
-            nextState: action.nextState,
-            uuid: action.uuid,
-          }))
+        .map((action) => ({
+          action: action.action,
+          roles: action.roles,
+          nextState: action.nextState,
+          uuid: action.uuid,
+        }))
       : [];
   };
 
   // Check if action button should be visible based on user roles
   const shouldShowActionButton = () => {
     const userRoles = userInfo?.info?.roles?.map((role) => role.code) || [];
-    
+
     // Get current state from ProcessInstances[0]
     const currentState = workflowData?.ProcessInstances?.[0]?.state;
-    
+
     if (!currentState?.actions) {
       return false;
     }
-    
+
     // Get all roles from current state actions
     const allActionRoles = [];
     currentState.actions.forEach(action => {
@@ -392,19 +401,19 @@ const PGRDetails = () => {
         allActionRoles.push(...action.roles);
       }
     });
-    
+
     // Check if user has PGR_VIEWER role
     const hasViewerRole = userRoles.includes("PGR_VIEWER");
-    
+
     // Get user roles excluding PGR_VIEWER
     const userNonViewerRoles = userRoles.filter(role => role !== "PGR_VIEWER");
-    
+
     // Check if any non-viewer user role matches with action roles
-    const hasMatchingRole = userNonViewerRoles.some(userRole => 
+    const hasMatchingRole = userNonViewerRoles.some(userRole =>
       allActionRoles.includes(userRole)
     );
-  
-    
+
+
     // Show button only if user has BOTH PGR_VIEWER AND other matching roles
     return hasViewerRole && hasMatchingRole;
   };
@@ -440,7 +449,13 @@ const PGRDetails = () => {
                     inline: true,
                     label: t("CS_COMPLAINT_DETAILS_COMPLAINT_TYPE"),
                     type: "text",
-                    value: t( getServiceNameByCode(pgrData?.ServiceWrappers[0].service?.serviceCode,serviceDefs) || "NA"),
+                    value: t(getServiceCategoryByCode(pgrData?.ServiceWrappers[0].service?.serviceCode, serviceDefs) || "NA"),
+                  },
+                  {
+                    inline: true,
+                    label: t("CS_COMPLAINT_DETAILS_COMPLAINT_SUBTYPE"),
+                    type: "text",
+                    value: t(getServiceNameByCode(pgrData?.ServiceWrappers[0].service?.serviceCode, serviceDefs) || "NA"),
                   },
                   {
                     inline: true,
@@ -467,18 +482,62 @@ const PGRDetails = () => {
                     label: t("CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS_DESCRIPTION"),
                     value: pgrData?.ServiceWrappers[0].service?.description || "NA",
                   },
-                  // {
-                  //   inline: true,
-                  //   label: t("COMPLAINTS_COMPLAINANT_NAME"),
-                  //   value: pgrData?.ServiceWrappers[0].service?.user?.name || "NA",
-                  // },
-                  // {
-                  //   inline: true,
-                  //   label: t("COMPLAINTS_COMPLAINANT_CONTACT_NUMBER"),
-                  //   value: pgrData?.ServiceWrappers[0].service?.user?.mobileNumber || "NA",
-                  // },
                 ],
               },
+              ...(pgrData?.ServiceWrappers[0]?.workflow?.verificationDocuments?.length > 0
+                ? [{
+                  cardType: "primary",
+                  fieldPairs: [
+                    {
+                      inline: false,
+                      type: "custom",
+                      renderCustomContent: () => (
+                        <ComplaintPhotos t={t} serviceWrapper={pgrData?.ServiceWrappers[0]} />
+                      ),
+                    },
+                  ],
+                  header: t("CS_COMMON_ATTACHMENTS"),
+                }]
+                : []
+              ),
+              // Conditionally include location section only if coordinates exist
+              ...(pgrData?.ServiceWrappers[0]?.service?.address?.geoLocation?.latitude &&
+                pgrData?.ServiceWrappers[0]?.service?.address?.geoLocation?.longitude
+                ? [{
+                  cardType: "primary",
+                  fieldPairs: [
+                    {
+                      inline: false,
+                      type: "custom",
+                      renderCustomContent: () => {
+                        const geoLocation = pgrData?.ServiceWrappers[0]?.service?.address?.geoLocation;
+                        const address = pgrData?.ServiceWrappers[0]?.service?.address;
+
+                        // Construct a readable address from API data
+                        const addressParts = [
+                          address?.buildingName,
+                          address?.street,
+                          address?.landmark,
+                          address?.locality?.name || address?.locality?.code,
+                          address?.pincode
+                        ].filter(Boolean);
+
+                        const addressString = addressParts.length > 0 ? addressParts.join(", ") : null;
+
+                        return (
+                          <ComplaintLocationMap
+                            latitude={geoLocation.latitude}
+                            longitude={geoLocation.longitude}
+                            address={addressString}
+                          />
+                        );
+                      },
+                    },
+                  ],
+                  header: t("CS_COMPLAINT_LOCATION"),
+                }]
+                : []
+              ),
               {
                 cardType: "primary",
                 fieldPairs: [
@@ -503,32 +562,32 @@ const PGRDetails = () => {
       {/* Footer Action Bar */}
       {shouldShowActionButton() && (
         <Footer
-        actionFields={[
-          <Button 
-            className="custom-class"
-            isSearchable 
-            onClick={function noRefCheck() {}}
-            menuStyles={{
-                    bottom: "40px",
-                  }}
-            isDisabled={getNextActionOptions(workflowData, businessServiceData?.BusinessServices?.[0]).length === 0}
-            key="action-button"
-            label={t("ES_COMMON_TAKE_ACTION")}
-            onOptionSelect={(selected) => {
-              console.log("*** Log ===> selected", selected);
-              setSelectedAction(selected);
-              setOpenModal(true);
-            }}
-            options={getNextActionOptions(workflowData, businessServiceData?.BusinessServices?.[0])}
-            optionsKey="action"
-            type="actionButton"
+          actionFields={[
+            <Button
+              className="custom-class"
+              isSearchable
+              onClick={function noRefCheck() { }}
+              menuStyles={{
+                bottom: "40px",
+              }}
+              isDisabled={getNextActionOptions(workflowData, businessServiceData?.BusinessServices?.[0]).length === 0}
+              key="action-button"
+              label={t("ES_COMMON_TAKE_ACTION")}
+              onOptionSelect={(selected) => {
+                console.log("*** Log ===> selected", selected);
+                setSelectedAction(selected);
+                setOpenModal(true);
+              }}
+              options={getNextActionOptions(workflowData, businessServiceData?.BusinessServices?.[0])}
+              optionsKey="action"
+              type="actionButton"
             />,
-        ]}
-        className=""
-        maxActionFieldsAllowed={5}
-        setactionFieldsToRight
-        sortActionFields
-        style={{}}
+          ]}
+          className=""
+          maxActionFieldsAllowed={5}
+          setactionFieldsToRight
+          sortActionFields
+          style={{}}
         />
       )}
 

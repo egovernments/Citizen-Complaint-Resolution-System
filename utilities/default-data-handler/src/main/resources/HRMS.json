@@ -10,7 +10,7 @@
         "designation": "DESIG_04"
       }
     ],
-    "code": "ADMIN",
+    "code": "SUPERADMIN",
     "dateOfAppointment": 1718841600000,
     "employeeType": "PERMANENT",
     "jurisdictions": [
@@ -59,9 +59,9 @@
       }
     ],
     "user": {
-      "name": "ADMIN User",
+      "name": "Super ADMIN User",
       "gender": null,
-      "mobileNumber": "9999999801",
+      "mobileNumber": "9999999991",
       "active": true,
       "type": "EMPLOYEE",
       "roles": [
@@ -120,7 +120,7 @@
         "designation": "DESIG_04"
       }
     ],
-    "code": "ADMIN1",
+    "code": "CITYADMIN",
     "dateOfAppointment": 1718841600000,
     "employeeType": "PERMANENT",
     "jurisdictions": [
@@ -169,9 +169,9 @@
       }
     ],
     "user": {
-      "name": "ADMIN User 1",
+      "name": "City ADMIN User",
       "gender": null,
-      "mobileNumber": "9999999802",
+      "mobileNumber": "9999999992",
       "active": true,
       "type": "EMPLOYEE",
       "roles": [

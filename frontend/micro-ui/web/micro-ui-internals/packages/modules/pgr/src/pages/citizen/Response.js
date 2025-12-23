@@ -20,7 +20,7 @@ const GetActionMessage = ({ action }) => {
 const BannerPicker = ({ response }) => {
   const { complaints } = response;
   const { t } = useTranslation();
-  if (complaints && complaints.response && complaints.response.responseInfo) {
+  if (complaints && complaints.response && complaints.response.responseInfo && complaints.response.ServiceWrappers && complaints.response.ServiceWrappers.length > 0) {
     return (
       <Banner
         message={GetActionMessage(complaints.response.ServiceWrappers[0].workflow)}
@@ -36,18 +36,26 @@ const BannerPicker = ({ response }) => {
 const TextPicker = ({ response }) => {
   const { complaints } = response;
   const { t } = useTranslation();
-  if (complaints && complaints.response && complaints.response.responseInfo) {
+  if (complaints && complaints.response && complaints.response.responseInfo && complaints.response.ServiceWrappers && complaints.response.ServiceWrappers.length > 0) {
     const { action } = complaints.response.ServiceWrappers[0].workflow;
     return action === "RATE" ? <CardText>{t("CS_COMMON_RATING_SUBMIT_TEXT")}</CardText> : <CardText>{t("CS_COMMON_TRACK_COMPLAINT_TEXT")}</CardText>;
   }
+  return null;
 };
 
 const Response = (props) => {
   const { t } = useTranslation();
-  const appState = useSelector((state) => state)["pgr"];
+  const appState = useSelector((state) => state)["pgr"] || {};
+
+  React.useEffect(() => {
+    if (appState.complaints?.response?.ServiceWrappers?.length > 0) {
+      Digit.SessionStorage.del("PGR_MAP_LOCATION");
+    }
+  }, [appState]);
+
   return (
     <Card>
-      {appState.complaints.response && <BannerPicker response={appState} />}
+      <BannerPicker response={appState} />
       {appState.complaints.response && <TextPicker response={appState} />}
       <Link to={`/${window?.contextPath}/citizen/all-services`}>
         <SubmitBar label={t("CORE_COMMON_GO_TO_HOME")} />

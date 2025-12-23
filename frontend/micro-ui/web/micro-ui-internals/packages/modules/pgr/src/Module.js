@@ -19,10 +19,11 @@ import { ComplaintsList } from "./pages/citizen/ComplaintsList";
 import ComplaintDetailsPage from "./pages/citizen/ComplaintDetails";
 import SelectRating from "./pages/citizen/Rating/SelectRating";
 import ResponseCitizen from "./pages/citizen/Response";
-import GeoLocations from "./components/GeoLocations"; 
-import SelectAddress from "../../pgr/src/pages/citizen/Create/Steps/SelectAddress"; 
-import SelectImages from "../../pgr/src/pages/citizen/Create/Steps/SelectImages"; 
+import GeoLocations from "./components/GeoLocations";
+import SelectAddress from "../../pgr/src/pages/citizen/Create/Steps/SelectAddress";
+import SelectImages from "../../pgr/src/pages/citizen/Create/Steps/SelectImages";
 import CreatePGRFlow from "./pages/citizen/Create/FormExplorer";
+
 
 export const PGRReducers = getRootReducer;
 
@@ -42,9 +43,11 @@ export const PGRModule = ({ stateCode, userType, tenants }) => {
     modulePrefix,
   });
   let user = Digit?.SessionStorage.get("User");
-  const { isLoading: isPGRInitializing } = Digit.Hooks.pgr.usePGRInitialization({
-    tenantId: tenantId,
-  });
+
+  // Only initialize boundary hierarchy for employee users (not needed for citizens)
+  const { isLoading: isPGRInitializing } = userType === "employee"
+    ? Digit.Hooks.pgr.usePGRInitialization({ tenantId: tenantId })
+    : { isLoading: false };
 
   Digit.SessionStorage.set("PGR_TENANTS", tenants);
 
@@ -97,14 +100,14 @@ const componentsToRegister = {
   PGRCreateComplaint: CreateComplaint,
   PGRResponse: Response,
   PGRBreadCrumbs: BreadCrumbs,
-  PGRComplaintsList : ComplaintsList,
-  PGRComplaintDetailsPage : ComplaintDetailsPage,
-  PGRSelectRating : SelectRating,
-  PGRResponseCitzen : ResponseCitizen,
+  PGRComplaintsList: ComplaintsList,
+  PGRComplaintDetailsPage: ComplaintDetailsPage,
+  PGRSelectRating: SelectRating,
+  PGRResponseCitzen: ResponseCitizen,
   GeoLocations,
   SelectAddress,
   SelectImages,
-  CreatePGRFlow:CreatePGRFlow,
+  CreatePGRFlow: CreatePGRFlow,
 };
 
 export const initPGRComponents = () => {

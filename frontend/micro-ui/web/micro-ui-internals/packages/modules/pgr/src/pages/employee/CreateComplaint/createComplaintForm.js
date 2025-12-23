@@ -172,11 +172,11 @@ const CreateComplaintForm = ({
             includeChildren: true,
           }
         });
-             // Add a small delay before setting the state
-      setTimeout(() => {
-        const formatedData = processLocalities(response.TenantBoundary[0].boundary);
-        setLocalitiesOptions(formatedData);
-      }, 300); // 300ms delay
+        // Add a small delay before setting the state
+        setTimeout(() => {
+          const formatedData = processLocalities(response.TenantBoundary[0].boundary);
+          setLocalitiesOptions(formatedData);
+        }, 300); // 300ms delay
       } catch (error) {
         console.error("Error fetching boundary data:", error);
       }
@@ -348,7 +348,7 @@ const CreateComplaintForm = ({
    */
   const sendDataToResponsePage = (message, description, info, responseId) => {
     history.push({
-      pathname: `/${window?.contextPath}/employee/pgr/complaint-failed`, // Redirect path
+      pathname: `/${window?.contextPath}/employee/pgr/complaint-success`, // Redirect path
       state: {
         message,
         description,
