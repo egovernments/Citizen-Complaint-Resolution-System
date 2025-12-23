@@ -28,15 +28,22 @@ public class MdmsBulkLoader {
 
     /**
      * Load MDMS data for all enabled modules from the modules folder structure
+     * Loading order:
+     * 1. Common data (mdmsData/common/) - Always loaded first
+     * 2. Module-specific data (mdmsData/modules/{MODULE}/) - Loaded for each enabled module
      * @param tenantId Target tenant ID
      * @param requestInfo Request info
      */
     public void loadAllMdmsData(String tenantId, RequestInfo requestInfo) {
+        // Step 1: Always load common MDMS data first
+        log.info("Loading common MDMS data...");
+        loadCommonMdmsData(tenantId, requestInfo);
+
+        // Step 2: Load module-specific data for enabled modules
         List<String> enabledModules = serviceConfig.getEnabledModules();
 
         if (enabledModules == null || enabledModules.isEmpty()) {
-            log.warn("No modules enabled. Loading from legacy mdmsData folder structure.");
-            loadLegacyMdmsData(tenantId, requestInfo);
+            log.warn("No modules enabled. Only common data loaded.");
             return;
         }
 
@@ -44,6 +51,34 @@ public class MdmsBulkLoader {
 
         for (String module : enabledModules) {
             loadModuleMdmsData(tenantId, requestInfo, module.trim());
+        }
+    }
+
+    /**
+     * Load common MDMS data from mdmsData/common folder
+     * This data is shared across all modules (roles, departments, designations, etc.)
+     */
+    public void loadCommonMdmsData(String tenantId, RequestInfo requestInfo) {
+        try {
+            PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
+            String pattern = "classpath:mdmsData/common/**/*.json";
+
+            Resource[] resources = resolver.getResources(pattern);
+
+            if (resources.length == 0) {
+                log.warn("No common MDMS data files found at path: {}", pattern);
+                return;
+            }
+
+            log.info("Found {} common MDMS data files", resources.length);
+
+            for (Resource resource : resources) {
+                processResource(tenantId, requestInfo, resource, "common");
+            }
+
+            log.info("Completed loading common MDMS data");
+        } catch (Exception e) {
+            log.error("Failed to load common MDMS data: {}", e.getMessage(), e);
         }
     }
 
