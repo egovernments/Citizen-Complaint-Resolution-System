@@ -1812,9 +1812,7 @@ class APIUploader:
             response.raise_for_status()
             data = response.json()
 
-            # Debug: print raw response
-            print(f"\n📋 Raw response keys: {list(data.keys())}")
-            print(f"📋 Response data: {json.dumps(data, indent=2)[:500]}")
+        
 
             hierarchies = data.get('BoundaryHierarchy', [])
 
