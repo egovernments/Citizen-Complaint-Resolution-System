@@ -2,39 +2,43 @@
   {
     "tenantId": "{tenantid}",
     "code": "CRS-ADMIN-CONSOLE.adminSchema",
-    "description": "Boundary Management Schema for managing boundary data with latitude, longitude, and boundary codes",
+    "description": "CRS Admin Console Schema for boundary management",
     "isActive": true,
     "definition": {
       "type": "object",
       "$schema": "http://json-schema.org/draft-07/schema#",
       "required": [
-        "CRS_BOUNDARY_CODE",
-        "CRS_LAT",
-        "CRS_LONG"
+        "title",
+        "campaignType"
       ],
       "x-unique": [
-        "CRS_BOUNDARY_CODE"
+        "title"
       ],
       "properties": {
-        "CRS_BOUNDARY_CODE": {
+        "title": {
           "type": "string",
-          "description": "Boundary Code",
           "minLength": 1,
           "maxLength": 200
         },
-        "CRS_LAT": {
-          "type": "number",
-          "description": "Latitude",
-          "minimum": -90,
-          "maximum": 90
+        "campaignType": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
         },
-        "CRS_LONG": {
-          "type": "number",
-          "description": "Longitude",
-          "minimum": -180,
-          "maximum": 180
+        "properties": {
+          "type": "object",
+          "properties": {
+            "numberProperties": {
+              "type": "array"
+            },
+            "stringProperties": {
+              "type": "array"
+            }
+          },
+          "additionalProperties": false
         }
       },
+      "x-ref-schema": [],
       "additionalProperties": false
     }
   }
