@@ -2483,5 +2483,12 @@
     "actioncode": "",
     "tenantId": "{tenantid}",
     "id": 1744
+  },
+  {
+    "rolecode": "MDMS_ADMIN",
+    "actionid": 26,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1745
   }
 ]
