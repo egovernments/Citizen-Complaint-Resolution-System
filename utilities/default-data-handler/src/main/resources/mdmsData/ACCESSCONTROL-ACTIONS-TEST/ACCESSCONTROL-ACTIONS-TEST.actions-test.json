@@ -2400,5 +2400,16 @@
     "serviceCode": "egov-bnd-mgmt",
     "code": "null",
     "path": ""
-  }
+  },  {
+    "id": 26,
+    "name": "MDMS",
+    "url": "/egov-mdms-service/v2/_search",
+    "displayName": "search",
+    "orderNumber": 1,
+    "parentModule": "",
+    "enabled": true,
+    "serviceCode": "MDMS",
+    "code": "null",
+    "path": ""
+  },
 ]
