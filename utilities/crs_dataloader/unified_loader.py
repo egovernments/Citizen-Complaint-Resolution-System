@@ -1650,12 +1650,21 @@ class APIUploader:
                         district_code = city_obj.get('districtCode', '0')
                         city_obj['districtTenantCode'] = f"{state_tenant}.{district_code}"
 
+                    # districtName is required
+                    if 'districtName' not in city_obj:
+                        city_obj['districtName'] = city_obj.get('name', 'District')
+
                     # Fix invalid ulbGrade enum values
                     ulb_grade = city_obj.get('ulbGrade', '')
                     if ulb_grade == 'ST':
                         city_obj['ulbGrade'] = 'State'
                     elif ulb_grade and ulb_grade not in ['MC Class I', 'MC Class II', 'State', 'Others']:
                         city_obj['ulbGrade'] = 'Others'
+
+                # Ensure imageId is present (required field)
+                if 'imageId' not in tenant_data:
+                    # Use logoId if available, otherwise use empty string
+                    tenant_data['imageId'] = tenant_data.get('logoId', '')
 
                 update_payload = {
                     "RequestInfo": {
