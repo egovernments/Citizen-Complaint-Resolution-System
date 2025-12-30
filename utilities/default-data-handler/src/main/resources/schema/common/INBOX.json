@@ -1,0 +1,61 @@
+[
+    {
+        "tenantId": "{tenantid}",
+        "code": "INBOX.InboxQueryConfiguration",
+        "description": "Inbox Query Configuration",
+        "definition": {
+            "type": "object",
+            "title": "Inbox Query Configuration",
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "required": ["module", "index"],
+            "x-unique": ["module"],
+            "properties": {
+                "module": {
+                    "type": "string"
+                },
+                "index": {
+                    "type": "string"
+                },
+                "allowedSearchCriteria": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string"
+                            },
+                            "path": {
+                                "type": "string"
+                            },
+                            "isMandatory": {
+                                "type": "boolean"
+                            },
+                            "operator": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "sortBy": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string"
+                        },
+                        "defaultOrder": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "sourceFilterPathList": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            },
+            "additionalProperties": true
+        },
+        "isActive": true
+    }
+]

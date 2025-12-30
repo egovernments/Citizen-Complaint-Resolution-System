@@ -3,6 +3,7 @@ package org.egov;
 import java.nio.charset.StandardCharsets;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import lombok.extern.slf4j.Slf4j;
 import org.egov.handler.util.LocalizationUtil;
 import org.egov.handler.util.MdmsBulkLoader;
 import org.egov.handler.web.models.User;
@@ -29,93 +30,99 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+/**
+ * First phase of startup initialization - Schema and Master Data loading.
+ *
+ * Runs once at 10s after startup to:
+ * 1. Create MDMS schemas for the default tenant
+ * 2. Load MDMS master data from files
+ * 3. Create boundary data
+ * 4. Load localizations
+ *
+ * The second phase (StartupUserAndEmployeeInitializer) runs later and provides
+ * fault tolerance by retrying all operations (APIs handle duplicates gracefully).
+ */
+@Slf4j
 @Component
-//@Profile("init")
 @RequiredArgsConstructor
-public class StartupSchemaAndMasterDataInitializer{
+public class StartupSchemaAndMasterDataInitializer {
 
     private final DataHandlerService dataHandlerService;
-
     private final ServiceConfiguration serviceConfig;
-
     private final ResourceLoader resourceLoader;
-
     private final ObjectMapper objectMapper;
-
     private final MdmsBulkLoader mdmsBulkLoader;
-
     private final LocalizationUtil localizationUtil;
 
     private final AtomicBoolean hasRun = new AtomicBoolean(false);
 
-    // Delay 1 minutes after app startup
-    @Scheduled(initialDelay =  1* 10 * 1000, fixedDelay = Long.MAX_VALUE)
+    // Delay 10 seconds after app startup
+    @Scheduled(initialDelay = 10 * 1000, fixedDelay = Long.MAX_VALUE)
     public void runOnceAfterStartup() {
         if (hasRun.get()) return;
+        hasRun.set(true);
 
-        System.out.println("[DEBUG] Delayed startup logic executing at: " + Instant.now());
+        log.info("[SCHEMA_INIT] Starting schema and master data initialization at: {}", Instant.now());
         try {
             executeStartupLogic();
-            hasRun.set(true);
+            log.info("[SCHEMA_INIT] Completed successfully");
         } catch (Exception e) {
-            System.err.println("StartupSchemaAndMasterDataInitializer failed: " + e.getMessage());
-            e.printStackTrace();
+            log.error("[SCHEMA_INIT] Failed: {}. Will be retried by StartupUserAndEmployeeInitializer.", e.getMessage(), e);
         }
     }
 
     public void executeStartupLogic() throws Exception {
-        System.out.println("[DEBUG] Startup logic executing at: " + Instant.now());
-        try {
-            String tenantCode = serviceConfig.getDefaultTenantId();
+        String tenantCode = serviceConfig.getDefaultTenantId();
+        log.info("[SCHEMA_INIT] Executing for tenant: {}", tenantCode);
 
-            Resource resource = resourceLoader.getResource("classpath:requestInfo.json");
-            Resource tenantJson = resourceLoader.getResource("classpath:tenant.json");
+        Resource resource = resourceLoader.getResource("classpath:requestInfo.json");
+        Resource tenantJson = resourceLoader.getResource("classpath:tenant.json");
 
-            String json = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
+        String json = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
+        String jsonTenant = StreamUtils.copyToString(tenantJson.getInputStream(), StandardCharsets.UTF_8);
 
-            String jsonTenant = StreamUtils.copyToString(tenantJson.getInputStream(), StandardCharsets.UTF_8);
+        json = json.replace("{tenantid}", tenantCode);
+        jsonTenant = jsonTenant.replace("{tenantid}", tenantCode);
 
-            json = json.replace("{tenantid}", tenantCode);
-            jsonTenant = jsonTenant.replace("{tenantid}", tenantCode);
+        Tenant tenant = objectMapper.readValue(jsonTenant, Tenant.class);
 
-            Tenant tenant = objectMapper.readValue(jsonTenant, Tenant.class);
+        JsonNode rootNode = objectMapper.readTree(json);
+        JsonNode requestInfoNode = rootNode.get("RequestInfo");
 
-            JsonNode rootNode = objectMapper.readTree(json);
-            JsonNode requestInfoNode = rootNode.get("RequestInfo");
-
-            if (requestInfoNode == null) {
-                throw new RuntimeException("Missing 'RequestInfo' node in JSON");
-            }
-            RequestInfo requestInfo = objectMapper.readValue(requestInfoNode.toString(), RequestInfo.class);
-
-            TenantRequest tenantRequest = TenantRequest.builder()
-                    .requestInfo(requestInfo)
-                    .tenant(tenant)
-                    .build();
-
-            DefaultDataRequest defaultDataRequest = DefaultDataRequest.builder().requestInfo(tenantRequest.getRequestInfo()).targetTenantId(tenantCode).schemaCodes(serviceConfig.getDefaultMdmsSchemaList()).onlySchemas(Boolean.FALSE).locales(serviceConfig.getDefaultLocalizationLocaleList()).modules(serviceConfig.getDefaultLocalizationModuleList()).build();
-            defaultDataRequest.setTargetTenantId(tenantCode);
-//            Create Schema
-            dataHandlerService.createMdmsSchemaFromFile(defaultDataRequest);
-            // Load mdms data
-            mdmsBulkLoader.loadAllMdmsData(defaultDataRequest.getTargetTenantId(), defaultDataRequest.getRequestInfo());
-            // create Boundary Data
-            dataHandlerService.createBoundaryDataFromFile(defaultDataRequest);
-            // upsert localization
-            localizationUtil.upsertLocalizationFromFile(defaultDataRequest);
-//            // create User
-//            dataHandlerService.createUserFromFile(tenantRequest);
-//
-//            dataHandlerService.createPgrWorkflowConfig(tenantRequest.getTenant().getCode());
-//            // create Employee
-//            dataHandlerService.createEmployeeFromFile(defaultDataRequest.getRequestInfo());
-
-//            dataHandlerService.createTenantConfig(tenantRequest);
+        if (requestInfoNode == null) {
+            throw new RuntimeException("Missing 'RequestInfo' node in JSON");
         }
-        catch (Exception e) {
-            System.err.println("StartupDataInitializer failed: " + e.getMessage());
-            e.printStackTrace();
-        }
+        RequestInfo requestInfo = objectMapper.readValue(requestInfoNode.toString(), RequestInfo.class);
 
+        TenantRequest tenantRequest = TenantRequest.builder()
+                .requestInfo(requestInfo)
+                .tenant(tenant)
+                .build();
+
+        DefaultDataRequest defaultDataRequest = DefaultDataRequest.builder()
+                .requestInfo(tenantRequest.getRequestInfo())
+                .targetTenantId(tenantCode)
+                .onlySchemas(Boolean.FALSE)
+                .locales(serviceConfig.getDefaultLocalizationLocaleList())
+                .modules(serviceConfig.getDefaultLocalizationModuleList())
+                .build();
+
+        // STEP 1: Create all schemas for target tenant (tenant schema loaded first)
+        log.info("[SCHEMA_INIT] Step 1: Creating schemas for tenant '{}'", tenantCode);
+        dataHandlerService.createMdmsSchemaFromFile(defaultDataRequest);
+
+        // STEP 2: Load all MDMS data for target tenant (tenant data loaded first from common)
+        log.info("[SCHEMA_INIT] Step 2: Loading MDMS data for tenant '{}'", tenantCode);
+        mdmsBulkLoader.loadAllMdmsData(defaultDataRequest.getTargetTenantId(), defaultDataRequest.getRequestInfo());
+
+        // STEP 3: Create Boundary Data
+        log.info("[SCHEMA_INIT] Step 3: Creating boundary data");
+        dataHandlerService.createBoundaryDataFromFile(defaultDataRequest);
+
+        // STEP 4: Upsert localization
+        log.info("[SCHEMA_INIT] Step 4: Loading localizations");
+        localizationUtil.upsertLocalizationFromFile(defaultDataRequest);
+
+        log.info("[SCHEMA_INIT] Completed all steps for tenant '{}'", tenantCode);
     }
 }

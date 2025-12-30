@@ -15,6 +15,11 @@
     "description": "System user role"
   },
   {
+    "code": "SYSTEM_PAYMENT",
+    "name": "System Payment",
+    "description": "System role for payment processing"
+  },
+  {
     "code": "SUPERUSER",
     "name": "Super User",
     "description": "System Administrator. Can change all master data and has access to all the system screens."

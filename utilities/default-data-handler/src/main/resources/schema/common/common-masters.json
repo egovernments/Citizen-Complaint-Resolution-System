@@ -604,5 +604,51 @@
             }
         },
         "isActive": true
+    },
+    {
+        "tenantId": "{tenantid}",
+        "code": "common-masters.DocumentType",
+        "description": "Document Type Master",
+        "definition": {
+            "type": "object",
+            "title": "Document Type",
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "required": ["code", "active"],
+            "x-unique": ["code"],
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "active": {
+                    "type": "boolean"
+                }
+            },
+            "x-ref-schema": [],
+            "additionalProperties": true
+        },
+        "isActive": true
+    },
+    {
+        "tenantId": "{tenantid}",
+        "code": "common-masters.UOM",
+        "description": "Unit of Measurement Master",
+        "definition": {
+            "type": "object",
+            "title": "UOM",
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "required": ["code", "active"],
+            "x-unique": ["code"],
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "active": {
+                    "type": "boolean"
+                }
+            },
+            "x-ref-schema": [],
+            "additionalProperties": true
+        },
+        "isActive": true
     }
 ]

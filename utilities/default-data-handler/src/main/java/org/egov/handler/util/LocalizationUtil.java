@@ -51,14 +51,30 @@ public class LocalizationUtil {
 	}
 
 	public void upsertLocalizationFromFile(DefaultDataRequest defaultDataRequest){
-
-		List<Message> messageList = addMessagesFromFile(defaultDataRequest);
 		defaultDataRequest.getRequestInfo().getUserInfo().setId(128L);
 
 		String tenantId = defaultDataRequest.getTargetTenantId();
 		RequestInfo requestInfo = defaultDataRequest.getRequestInfo();
 		String uri = serviceConfig.getUpsertLocalizationURI();
 
+		// Get list of enabled locales
+		List<String> enabledLocales = serviceConfig.getEnabledLocales();
+
+		// Load and upsert each locale separately
+		for (String locale : enabledLocales) {
+			List<Message> messageList = loadMessagesForLocale(locale.trim());
+
+			if (messageList.isEmpty()) {
+				log.warn("No messages found for locale: {}", locale);
+				continue;
+			}
+
+			log.info("Upserting {} messages for locale: {}", messageList.size(), locale);
+			upsertMessageBatch(messageList, tenantId, requestInfo, uri, locale);
+		}
+	}
+
+	private void upsertMessageBatch(List<Message> messageList, String tenantId, RequestInfo requestInfo, String uri, String locale) {
 		int batchSize = 100;
 		int totalMessages = messageList.size();
 
@@ -74,20 +90,110 @@ public class LocalizationUtil {
 						.build();
 				try {
 					restTemplate.postForObject(uri, createMessagesRequest, ResponseInfo.class);
-					log.info("Localization batch [{}-{}] upserted successfully for tenant: {}", i + 1, end, tenantId);
+					log.info("Localization batch [{}-{}] for locale {} upserted successfully for tenant: {}", i + 1, end, locale, tenantId);
 				} catch (Exception e) {
-					log.error("Failed to upsert localization batch [{}-{}] for tenant: {}. Skipping... Reason: {}",
-							i + 1, end, tenantId, e.getMessage());
-					// Continue with next batch
+					log.error("Failed to upsert localization batch [{}-{}] for locale {} tenant: {}. Skipping... Reason: {}",
+							i + 1, end, locale, tenantId, e.getMessage());
 				}
 			}
-			log.info("Localization data upserted successfully for tenant: {}", tenantId);
+			log.info("Localization data for locale {} upserted successfully for tenant: {}", locale, tenantId);
 		} catch (Exception e) {
-			log.error("Error creating Tenant localization data for {} : {}", tenantId, e.getMessage());
-//			throw new CustomException("TENANT", "Failed to create localization data for " + tenantId + " : " + e.getMessage());
+			log.error("Error creating localization data for locale {} tenant {}: {}", locale, tenantId, e.getMessage());
 		}
 	}
 
+	/**
+	 * Load messages for a specific locale from both common and module folders
+	 */
+	private List<Message> loadMessagesForLocale(String locale) {
+		List<Message> messages = new ArrayList<>();
+		ObjectMapper objectMapper = new ObjectMapper();
+
+		// Load common localizations for this locale
+		messages.addAll(loadCommonLocalizationsForLocale(objectMapper, locale));
+
+		// Load module-specific localizations for enabled modules and this locale
+		List<String> enabledModules = serviceConfig.getEnabledModules();
+		if (enabledModules != null && !enabledModules.isEmpty()) {
+			for (String module : enabledModules) {
+				messages.addAll(loadModuleLocalizationsForLocale(objectMapper, module.trim(), locale));
+			}
+		}
+
+		return messages;
+	}
+
+	/**
+	 * Load common localizations for a specific locale
+	 */
+	private List<Message> loadCommonLocalizationsForLocale(ObjectMapper objectMapper, String locale) {
+		List<Message> messages = new ArrayList<>();
+
+		try {
+			PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
+			String pattern = "classpath:localisations/common/" + locale + "/*.json";
+
+			Resource[] resources = resolver.getResources(pattern);
+
+			if (resources.length == 0) {
+				log.warn("No common localization files found for locale: {} at path: {}", locale, pattern);
+				return messages;
+			}
+
+			log.info("Found {} common localization files for locale: {}", resources.length, locale);
+
+			for (Resource resource : resources) {
+				try (InputStream inputStream = resource.getInputStream()) {
+					List<Message> fileMessages = Arrays.asList(objectMapper.readValue(inputStream, Message[].class));
+					messages.addAll(fileMessages);
+					log.info("Loaded {} common messages from {} for locale {}", fileMessages.size(), resource.getFilename(), locale);
+				} catch (IOException e) {
+					log.error("Failed to read localization file {}: {}", resource.getFilename(), e.getMessage());
+				}
+			}
+		} catch (IOException e) {
+			log.error("Failed to scan common localization directories for locale {}: {}", locale, e.getMessage());
+		}
+
+		return messages;
+	}
+
+	/**
+	 * Load module localizations for a specific locale
+	 */
+	private List<Message> loadModuleLocalizationsForLocale(ObjectMapper objectMapper, String moduleName, String locale) {
+		List<Message> messages = new ArrayList<>();
+
+		try {
+			PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
+			String pattern = "classpath:localisations/modules/" + moduleName + "/" + locale + "/*.json";
+
+			Resource[] resources = resolver.getResources(pattern);
+
+			if (resources.length == 0) {
+				log.warn("No localization files found for module: {} locale: {} at path: {}", moduleName, locale, pattern);
+				return messages;
+			}
+
+			log.info("Found {} localization files for module: {} locale: {}", resources.length, moduleName, locale);
+
+			for (Resource resource : resources) {
+				try (InputStream inputStream = resource.getInputStream()) {
+					List<Message> fileMessages = Arrays.asList(objectMapper.readValue(inputStream, Message[].class));
+					messages.addAll(fileMessages);
+					log.info("Loaded {} messages from {} for module {} locale {}", fileMessages.size(), resource.getFilename(), moduleName, locale);
+				} catch (IOException e) {
+					log.error("Failed to read localization file {}: {}", resource.getFilename(), e.getMessage());
+				}
+			}
+		} catch (IOException e) {
+			log.error("Failed to scan localization directories for module {} locale {}: {}", moduleName, locale, e.getMessage());
+		}
+
+		return messages;
+	}
+
+	@Deprecated
 	public List addMessagesFromFile(DefaultDataRequest defaultDataRequest){
 		List<Message> messages = new ArrayList<>();
 		ObjectMapper objectMapper = new ObjectMapper();

@@ -2,7 +2,7 @@
   {
     "city": {
       "code": "100",
-      "name": "State A",
+      "name": "State",
       "captcha": null,
       "ddrName": "",
       "latitude": 31.6339793,
@@ -10,13 +10,13 @@
       "localName": null,
       "longitude": 74.8722642,
       "regionName": null,
-      "districtCode": "STATEA",
+      "districtCode": "{tenantid}",
       "districtName": null,
       "shapeFileLocation": null,
-      "districtTenantCode": "statea"
+      "districtTenantCode": "{tenantid}"
     },
-    "code": "statea",
-    "name": "State A",
+    "code": "{tenantid}",
+    "name": "State",
     "type": "State",
     "logoId": "https://s3.ap-south-1.amazonaws.com/works-dev-asset/pg/logo.png",
     "address": "State A Municipal Corporation Address",

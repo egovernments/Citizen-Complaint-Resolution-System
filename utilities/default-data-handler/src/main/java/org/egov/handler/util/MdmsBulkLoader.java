@@ -57,12 +57,25 @@ public class MdmsBulkLoader {
     /**
      * Load common MDMS data from mdmsData/common folder
      * This data is shared across all modules (roles, departments, designations, etc.)
+     *
+     * IMPORTANT: Tenant data is loaded FIRST to ensure tenant is registered before
+     * other common data that may depend on tenant validation.
      */
     public void loadCommonMdmsData(String tenantId, RequestInfo requestInfo) {
         try {
             PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
-            String pattern = "classpath:mdmsData/common/**/*.json";
 
+            // Step 1: Load tenant data FIRST (tenant must exist before other data)
+            log.info("Loading tenant data first...");
+            String tenantPattern = "classpath:mdmsData/common/tenant/*.json";
+            Resource[] tenantResources = resolver.getResources(tenantPattern);
+            for (Resource resource : tenantResources) {
+                processResource(tenantId, requestInfo, resource, "common-tenant");
+            }
+            log.info("Loaded {} tenant data files", tenantResources.length);
+
+            // Step 2: Load all other common MDMS data (excluding tenant folder)
+            String pattern = "classpath:mdmsData/common/**/*.json";
             Resource[] resources = resolver.getResources(pattern);
 
             if (resources.length == 0) {
@@ -73,6 +86,11 @@ public class MdmsBulkLoader {
             log.info("Found {} common MDMS data files", resources.length);
 
             for (Resource resource : resources) {
+                // Skip tenant files (already loaded in Step 1)
+                String path = resource.getURL().getPath();
+                if (path.contains("/tenant/")) {
+                    continue;
+                }
                 processResource(tenantId, requestInfo, resource, "common");
             }
 

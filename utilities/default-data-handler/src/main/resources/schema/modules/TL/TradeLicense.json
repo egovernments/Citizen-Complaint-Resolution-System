@@ -180,6 +180,7 @@
     "isActive": true,
     "definition": {
       "$schema": "http://json-schema.org/draft-07/schema#",
+      "x-unique": ["renewalPeriod"],
       "type": "object",
       "properties": {
         "renewalPeriod": { "type": "integer" }
@@ -254,12 +255,11 @@
       "x-unique": ["code"],
       "type": "object",
       "properties": {
-        "name": { "type": "string" },
         "code": { "type": "string" },
         "active": { "type": "boolean" }
       },
       "additionalProperties": false,
-      "required": ["name", "code", "active"]
+      "required": ["code", "active"]
     }
   },
   {
@@ -294,6 +294,36 @@
       },
       "additionalProperties": false,
       "required": ["code", "active"]
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "TradeLicense.CommonFieldsConfig",
+    "description": "Common fields configuration for trade license UI",
+    "isActive": true,
+    "definition": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "x-unique": ["head"],
+      "type": "object",
+      "properties": {
+        "head": { "type": "string" },
+        "body": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string" },
+              "component": { "type": "string" },
+              "key": { "type": "string" },
+              "withoutLabel": { "type": "boolean" },
+              "hideInCitizen": { "type": "boolean" }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true,
+      "required": ["head", "body"]
     }
   }
 ]

@@ -1,6 +1,6 @@
 [
   {
-    "head": "",
+    "head": "TL_INFO_LABEL",
     "body": [
       {
         "type": "component",
@@ -434,7 +434,7 @@
     ]
   },
   {
-    "head": "",
+    "head": "TL_KNOW_YOUR_PROPERTY",
     "body": [
       {
         "type": "component",

@@ -71,67 +71,6 @@
         "designation": "DESIG_01"
       }
     ],
-    "code": "TL_CREATOR",
-    "dateOfAppointment": 1718841600000,
-    "employeeType": "PERMANENT",
-    "jurisdictions": [
-      {
-        "hierarchy": "ADMIN",
-        "boundaryType": "City",
-        "boundary": "{tenantid}",
-        "tenantId": "{tenantid}.citya",
-        "roles": [
-          {
-            "code": "TL_CREATOR",
-            "name": "TL Creator",
-            "tenantId": "{tenantid}.citya"
-          },
-          {
-            "code": "EMPLOYEE",
-            "name": "Employee",
-            "tenantId": "{tenantid}.citya"
-          }
-        ]
-      }
-    ],
-    "user": {
-      "name": "TL Creator",
-      "gender": null,
-      "mobileNumber": "9999999402",
-      "active": true,
-      "type": "EMPLOYEE",
-      "emailId": "tlcreator@test.com",
-      "roles": [
-        {
-          "code": "TL_CREATOR",
-          "name": "TL Creator",
-          "tenantId": "{tenantid}.citya"
-        },
-        {
-          "code": "EMPLOYEE",
-          "name": "Employee",
-          "tenantId": "{tenantid}.citya"
-        }
-      ],
-      "password": "eGov@123",
-      "otpReference": "12345",
-      "tenantId": "{tenantid}.citya"
-    },
-    "serviceHistory": [],
-    "education": [],
-    "tests": []
-  },
-  {
-    "tenantId": "{tenantid}.citya",
-    "employeeStatus": "EMPLOYED",
-    "assignments": [
-      {
-        "fromDate": 1725494400000,
-        "isCurrentAssignment": true,
-        "department": "TL_DEPT",
-        "designation": "DESIG_01"
-      }
-    ],
     "code": "TL_APPROVER",
     "dateOfAppointment": 1718841600000,
     "employeeType": "PERMANENT",
