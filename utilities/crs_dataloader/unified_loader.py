@@ -1534,196 +1534,141 @@ class APIUploader:
             print(f"\n❌ [ERROR] Failed: {str(e)}")
             raise
 
-    def update_tenant_language(self, tenant_ids: List[str], language_label: str, language_value: str, state_tenant: str = "pg"):
+    def update_stateinfo_language(self, language_label: str, language_value: str, state_tenant: str = "pg"):
         """
-        Update tenant data to add a new language
+        Update common-masters.StateInfo to add a new language to the state-level configuration
 
         Args:
-            tenant_ids: List of tenant IDs to update (e.g., ['pg.citya', 'pg.cityb'])
             language_label: Display name of language (e.g., 'हिंदी', 'ਪੰਜਾਬੀ')
             language_value: Locale code (e.g., 'hi_IN', 'pa_IN')
             state_tenant: State tenant ID (default: 'pg')
 
         Returns:
-            Dict with results of update operations
+            Dict with results of update operation
         """
         search_url = f"{self.mdms_url}/v2/_search"
-        update_url = f"{self.mdms_url}/v2/_update/tenant.tenants"
+        update_url = f"{self.mdms_url}/v2/_update/common-masters.StateInfo"
 
-        results = {
-            'updated': 0,
-            'failed': 0,
-            'skipped': 0,
-            'errors': []
+        result = {
+            'updated': False,
+            'error': None
         }
 
-        print(f"\n[UPDATING TENANT LANGUAGES]")
+        print(f"\n[UPDATING STATE INFO LANGUAGES]")
         print(f"   Adding: {language_label} ({language_value})")
-        print(f"   Tenants: {', '.join(tenant_ids)}")
+        print(f"   State Tenant: {state_tenant}")
         print("="*60)
 
-        for i, tenant_id in enumerate(tenant_ids, 1):
-            try:
-                # Step 1: Search for existing tenant data
-                # Override userInfo tenantId to match the request tenant
-                user_info_copy = self.user_info.copy()
-                user_info_copy['tenantId'] = state_tenant
+        try:
+            # Step 1: Search for existing StateInfo data (without uniqueIdentifier filter)
+            user_info_copy = self.user_info.copy()
+            user_info_copy['tenantId'] = state_tenant
 
-                search_payload = {
-                    "RequestInfo": {
-                        "apiId": "Rainmaker",
-                        "authToken": self.auth_token,
-                        "userInfo": user_info_copy,
-                        "msgId": f"{int(time.time() * 1000)}|en_IN"
-                    },
-                    "MdmsCriteria": {
-                        "tenantId": state_tenant,
-                        "schemaCode": "tenant.tenants",
-                        "uniqueIdentifiers": [tenant_id]
-                    }
+            search_payload = {
+                "RequestInfo": {
+                    "apiId": "Rainmaker",
+                    "authToken": self.auth_token,
+                    "userInfo": user_info_copy,
+                    "msgId": f"{int(time.time() * 1000)}|en_IN"
+                },
+                "MdmsCriteria": {
+                    "tenantId": state_tenant,
+                    "schemaCode": "common-masters.StateInfo"
+                    # Don't filter by uniqueIdentifiers - get all StateInfo records
                 }
+            }
 
-                headers = {'Content-Type': 'application/json'}
-                search_response = requests.post(search_url, json=search_payload, headers=headers)
-                search_response.raise_for_status()
-                search_data = search_response.json()
+            headers = {'Content-Type': 'application/json'}
+            search_response = requests.post(search_url, json=search_payload, headers=headers)
+            search_response.raise_for_status()
+            search_data = search_response.json()
 
-                # Check if tenant exists
-                if not search_data.get('mdms') or len(search_data['mdms']) == 0:
-                    print(f"   [SKIP] [{i}/{len(tenant_ids)}] {tenant_id} - Tenant not found")
-                    results['skipped'] += 1
-                    results['errors'].append({
-                        'tenant': tenant_id,
-                        'error': 'Tenant not found in database'
-                    })
-                    continue
+            # Check if StateInfo exists
+            if not search_data.get('mdms') or len(search_data['mdms']) == 0:
+                print(f"   [SKIP] StateInfo not found for tenant {state_tenant}")
+                result['error'] = 'StateInfo not found in database'
+                return result
 
-                mdms_record = search_data['mdms'][0]
-                tenant_data = mdms_record['data']
+            # Get the first StateInfo record (usually there's only one per state)
+            mdms_record = search_data['mdms'][0]
+    
 
-                # Step 2: Check if language already exists
-                existing_languages = tenant_data.get('languages', [])
-                language_exists = any(
-                    lang.get('value') == language_value
-                    for lang in existing_languages
-                )
+            mdms_record = search_data['mdms'][0]
+            stateinfo_data = mdms_record['data']
 
-                if language_exists:
-                    print(f"   [EXISTS] [{i}/{len(tenant_ids)}] {tenant_id} - Language already exists")
-                    results['skipped'] += 1
-                    continue
+            # Step 2: Check if language already exists
+            existing_languages = stateinfo_data.get('languages', [])
+            language_exists = any(
+                lang.get('value') == language_value
+                for lang in existing_languages
+            )
 
-                # Step 3: Add new language to the list
-                new_language = {
-                    "label": language_label,
-                    "value": language_value
+            if language_exists:
+                print(f"   [EXISTS] Language already exists in StateInfo")
+                result['updated'] = False
+                return result
+
+            # Step 3: Add new language to the list
+            new_language = {
+                "label": language_label,
+                "value": language_value
+            }
+            stateinfo_data['languages'] = existing_languages + [new_language]
+
+            # Step 4: Update StateInfo with new language
+            user_info_update = self.user_info.copy()
+            user_info_update['tenantId'] = state_tenant
+
+            # Get uniqueIdentifier from the existing record or use 'code' field
+            unique_id = mdms_record.get('uniqueIdentifier') or stateinfo_data.get('code', state_tenant)
+            print(f"   Using uniqueIdentifier: {unique_id}")
+
+            # Clean null values
+            def clean_nulls(obj):
+                if isinstance(obj, dict):
+                    return {k: clean_nulls(v) for k, v in obj.items() if v is not None}
+                elif isinstance(obj, list):
+                    return [clean_nulls(item) for item in obj if item is not None]
+                else:
+                    return obj
+
+            stateinfo_data = clean_nulls(stateinfo_data)
+
+            update_payload = {
+                "RequestInfo": {
+                    "apiId": "asset-services",
+                    "msgId": "update-stateinfo-language",
+                    "authToken": self.auth_token,
+                    "userInfo": user_info_update
+                },
+                "Mdms": {
+                    "tenantId": state_tenant,
+                    "schemaCode": "common-masters.StateInfo",
+                    "uniqueIdentifier": unique_id,
+                    "id": mdms_record['id'],
+                    "data": stateinfo_data,
+                    "auditDetails": mdms_record.get('auditDetails'),
+                    "isActive": mdms_record.get('isActive', True)
                 }
-                tenant_data['languages'] = existing_languages + [new_language]
+            }
 
-                # Step 4: Update tenant with new language
-                # Override userInfo tenantId to match the request tenant
-                user_info_update = self.user_info.copy()
-                user_info_update['tenantId'] = state_tenant
+            update_response = requests.post(update_url, json=update_payload, headers=headers)
+            update_response.raise_for_status()
 
-                # Ensure uniqueIdentifier is present (required for update)
-                if 'uniqueIdentifier' not in tenant_data:
-                    tenant_data['uniqueIdentifier'] = tenant_id
+            print(f"   [OK] StateInfo updated successfully with new language")
+            result['updated'] = True
 
-                # Clean all null values that cause NullPointerException on server
-                # Recursively remove all None/null values from nested structures
-                def clean_nulls(obj):
-                    """Recursively remove None values from dict/list structures"""
-                    if isinstance(obj, dict):
-                        return {k: clean_nulls(v) for k, v in obj.items() if v is not None}
-                    elif isinstance(obj, list):
-                        return [clean_nulls(item) for item in obj if item is not None]
-                    else:
-                        return obj
+        except requests.exceptions.HTTPError as e:
+            error_text = e.response.text if hasattr(e.response, 'text') else str(e)
+            print(f"   [FAILED] HTTP Error: {error_text[:200]}")
+            result['error'] = error_text[:200]
 
-                tenant_data = clean_nulls(tenant_data)
-
-                # Add required fields to city object as per schema
-                if 'city' in tenant_data:
-                    city_obj = tenant_data['city']
-                    # districtTenantCode is required in city object
-                    if 'districtTenantCode' not in city_obj:
-                        district_code = city_obj.get('districtCode', '0')
-                        city_obj['districtTenantCode'] = f"{state_tenant}.{district_code}"
-
-                    # districtName is required
-                    if 'districtName' not in city_obj:
-                        city_obj['districtName'] = city_obj.get('name', 'District')
-
-                    # Fix invalid ulbGrade enum values
-                    ulb_grade = city_obj.get('ulbGrade', '')
-                    if ulb_grade == 'ST':
-                        city_obj['ulbGrade'] = 'State'
-                    elif ulb_grade and ulb_grade not in ['MC Class I', 'MC Class II', 'State', 'Others']:
-                        city_obj['ulbGrade'] = 'Others'
-
-                # Ensure imageId is present (required field)
-                if 'imageId' not in tenant_data:
-                    # Use logoId if available, otherwise use empty string
-                    tenant_data['imageId'] = tenant_data.get('logoId', '')
-
-                update_payload = {
-                    "RequestInfo": {
-                        "apiId": "asset-services",
-                        "msgId": "update-language",
-                        "authToken": self.auth_token,
-                        "userInfo": user_info_update
-                    },
-                    "Mdms": {
-                        "tenantId": state_tenant,
-                        "schemaCode": "tenant.tenants",
-                        "uniqueIdentifier": tenant_id,
-                        "id": mdms_record['id'],
-                        "data": tenant_data,
-                        "auditDetails": mdms_record.get('auditDetails'),
-                        "isActive": mdms_record.get('isActive', True)
-                    }
-                }
-
-                update_response = requests.post(update_url, json=update_payload, headers=headers)
-                update_response.raise_for_status()
-
-                print(f"   [OK] [{i}/{len(tenant_ids)}] {tenant_id} - Language added successfully")
-                results['updated'] += 1
-
-            except requests.exceptions.HTTPError as e:
-                error_text = e.response.text if hasattr(e.response, 'text') else str(e)
-                print(f"   [FAILED] [{i}/{len(tenant_ids)}] {tenant_id}")
-                print(f"   ERROR: {error_text[:200]}")
-                results['failed'] += 1
-                results['errors'].append({
-                    'tenant': tenant_id,
-                    'error': error_text[:200]
-                })
-
-            except Exception as e:
-                print(f"   [ERROR] [{i}/{len(tenant_ids)}] {tenant_id} - {str(e)[:100]}")
-                results['failed'] += 1
-                results['errors'].append({
-                    'tenant': tenant_id,
-                    'error': str(e)[:200]
-                })
-
-            time.sleep(0.2)
-
-        # Summary
-        print("="*60)
-        print(f"[SUMMARY] Updated: {results['updated']}")
-        print(f"[SUMMARY] Skipped: {results['skipped']}")
-        print(f"[SUMMARY] Failed: {results['failed']}")
-
-        if results['errors']:
-            print(f"\n[ERRORS] Found {len(results['errors'])} error(s):")
-            for err in results['errors'][:5]:
-                print(f"   - {err['tenant']}: {err['error'][:80]}")
+        except Exception as e:
+            print(f"   [ERROR] {str(e)[:100]}")
+            result['error'] = str(e)[:200]
 
         print("="*60)
-
-        return results
+        return result
 
     def setup_default_data(self, targetTenantId: str, module: str, schemaCodes: list, onlySchemas: bool = False) -> dict:
 
