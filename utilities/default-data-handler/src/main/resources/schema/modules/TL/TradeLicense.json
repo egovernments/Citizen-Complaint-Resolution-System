@@ -1,0 +1,329 @@
+[
+  {
+    "tenantId": "{tenantid}",
+    "code": "TradeLicense.TradeType",
+    "description": "Trade types for license applications",
+    "isActive": true,
+    "definition": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "x-unique": ["code"],
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "code": { "type": "string" },
+        "uom": { "type": "string" },
+        "applicationDocument": { "type": "array" },
+        "verificationDocument": { "type": "array" },
+        "active": { "type": "boolean" },
+        "type": { "type": "string" },
+        "validityPeriod": { "type": ["integer", "null"] },
+        "restrictions": {
+          "type": "object",
+          "properties": {
+            "maxPlotArea": { "type": "integer" },
+            "maxBulidingheight": { "type": "integer" },
+            "maxFloors": { "type": "integer" }
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": ["code", "uom", "active", "type"]
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "TradeLicense.ApplicationType",
+    "description": "Application types for trade license",
+    "isActive": true,
+    "definition": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "x-unique": ["code"],
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "active": { "type": "boolean" }
+      },
+      "additionalProperties": false,
+      "required": ["code", "active"]
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "TradeLicense.AccessoriesCategory",
+    "description": "Accessories categories for trade license",
+    "isActive": true,
+    "definition": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "x-unique": ["code"],
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "uom": { "type": "string" },
+        "active": { "type": "boolean" }
+      },
+      "additionalProperties": false,
+      "required": ["code", "uom", "active"]
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "TradeLicense.CalculationType",
+    "description": "Calculation types for trade license fees",
+    "isActive": true,
+    "definition": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "x-unique": ["tradeType", "financialYear"],
+      "type": "object",
+      "properties": {
+        "tradeType": { "type": "string" },
+        "accessory": { "type": "string" },
+        "financialYear": { "type": "string" },
+        "active": { "type": "boolean" }
+      },
+      "additionalProperties": false,
+      "required": ["tradeType", "financialYear", "active"]
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "TradeLicense.Documents",
+    "description": "Document requirements for trade license",
+    "isActive": true,
+    "definition": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "x-unique": ["code"],
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "documentType": { "type": "string" },
+        "required": { "type": "boolean" },
+        "active": { "type": "boolean" },
+        "dropdownData": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "code": { "type": "string" },
+              "active": { "type": "boolean" }
+            },
+            "additionalProperties": false,
+            "required": ["code", "active"]
+          }
+        },
+        "description": { "type": "string" }
+      },
+      "additionalProperties": false,
+      "required": ["code", "documentType", "required", "active", "dropdownData", "description"]
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "TradeLicense.Penalty",
+    "description": "Penalty configuration for trade license",
+    "isActive": true,
+    "definition": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "x-unique": ["fromFY"],
+      "type": "object",
+      "properties": {
+        "rate": { "type": "integer" },
+        "minAmount": { "type": "number" },
+        "flatAmount": { "type": "number" },
+        "fromFY": { "type": "string" },
+        "startingDay": { "type": "string" }
+      },
+      "additionalProperties": false,
+      "required": ["rate", "minAmount", "flatAmount", "fromFY", "startingDay"]
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "TradeLicense.Rebate",
+    "description": "Rebate configuration for trade license",
+    "isActive": true,
+    "definition": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "x-unique": ["fromFY"],
+      "type": "object",
+      "properties": {
+        "rate": { "type": "integer" },
+        "maxAmount": { "type": "null" },
+        "flatAmount": { "type": "number" },
+        "fromFY": { "type": "string" },
+        "endingDay": { "type": "string" }
+      },
+      "additionalProperties": false,
+      "required": ["rate", "flatAmount", "fromFY", "endingDay"]
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "TradeLicense.ReminderPeriods",
+    "description": "Reminder periods for trade license renewal",
+    "isActive": true,
+    "definition": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "x-unique": ["tenantId"],
+      "type": "object",
+      "properties": {
+        "tenantId": { "type": "string" },
+        "reminderInterval": { "type": "integer" }
+      },
+      "additionalProperties": false,
+      "required": ["tenantId", "reminderInterval"]
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "TradeLicense.TradeRenewal",
+    "description": "Trade license renewal configuration",
+    "isActive": true,
+    "definition": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "x-unique": ["renewalPeriod"],
+      "type": "object",
+      "properties": {
+        "renewalPeriod": { "type": "integer" }
+      },
+      "additionalProperties": false,
+      "required": ["renewalPeriod"]
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "TradeLicense.documentObj",
+    "description": "Document object mapping for trade types",
+    "isActive": true,
+    "definition": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "x-unique": ["tradeType"],
+      "type": "object",
+      "properties": {
+        "allowedDocs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "documentType": { "type": "string" },
+              "applicationType": { "type": "array", "items": { "type": "string" } },
+              "required": { "type": "boolean" }
+            },
+            "additionalProperties": false,
+            "required": ["documentType", "applicationType", "required"]
+          }
+        },
+        "tradeType": { "type": "string" }
+      },
+      "additionalProperties": false,
+      "required": ["allowedDocs", "tradeType"]
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "BillingService.BusinessService",
+    "description": "Business service configuration for TL billing",
+    "isActive": true,
+    "definition": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "x-unique": ["code"],
+      "type": "object",
+      "properties": {
+        "businessService": { "type": "string" },
+        "code": { "type": "string" },
+        "collectionModesNotAllowed": { "type": "array", "items": { "type": "string" } },
+        "partPaymentAllowed": { "type": "boolean" },
+        "minAmountPayable": { "type": "integer" },
+        "isAdvanceAllowed": { "type": "boolean" },
+        "demandUpdateTime": { "type": "integer" },
+        "isVoucherCreationEnabled": { "type": "boolean" },
+        "isActive": { "type": "boolean" },
+        "type": { "type": "string" },
+        "billGineiURL": { "type": "string" },
+        "isBillAmendmentEnabled": { "type": "boolean" }
+      },
+      "additionalProperties": false,
+      "required": ["businessService", "code", "collectionModesNotAllowed", "partPaymentAllowed", "isAdvanceAllowed"]
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "common-masters.OwnerShipCategory",
+    "description": "Ownership categories",
+    "isActive": true,
+    "definition": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "x-unique": ["code"],
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "active": { "type": "boolean" }
+      },
+      "additionalProperties": false,
+      "required": ["code", "active"]
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "common-masters.OwnerType",
+    "description": "Owner types for special categories",
+    "isActive": true,
+    "definition": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "x-unique": ["code"],
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "active": { "type": "boolean" }
+      },
+      "additionalProperties": false,
+      "required": ["code", "active"]
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "common-masters.StructureType",
+    "description": "Structure types for trade license",
+    "isActive": true,
+    "definition": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "x-unique": ["code"],
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "active": { "type": "boolean" }
+      },
+      "additionalProperties": false,
+      "required": ["code", "active"]
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "TradeLicense.CommonFieldsConfig",
+    "description": "Common fields configuration for trade license UI",
+    "isActive": true,
+    "definition": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "x-unique": ["head"],
+      "type": "object",
+      "properties": {
+        "head": { "type": "string" },
+        "body": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string" },
+              "component": { "type": "string" },
+              "key": { "type": "string" },
+              "withoutLabel": { "type": "boolean" },
+              "hideInCitizen": { "type": "boolean" }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true,
+      "required": ["head", "body"]
+    }
+  }
+]

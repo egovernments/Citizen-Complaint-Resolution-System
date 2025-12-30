@@ -1,0 +1,47 @@
+[
+  {
+    "allowedDocs": [
+      {
+        "documentType": "IDENTIFICATIONPROOF",
+        "applicationType": ["NEW", "RENEWAL"],
+        "required": true
+      },
+      {
+        "documentType": "BUSINESSREGISTRATIONCERTIFICATE",
+        "applicationType": ["NEW", "RENEWAL"],
+        "required": true
+      }
+    ],
+    "tradeType": "RETAIL"
+  },
+  {
+    "allowedDocs": [
+      {
+        "documentType": "IDENTIFICATIONPROOF",
+        "applicationType": ["NEW", "RENEWAL"],
+        "required": true
+      },
+      {
+        "documentType": "BUSINESSREGISTRATIONCERTIFICATE",
+        "applicationType": ["NEW", "RENEWAL"],
+        "required": true
+      }
+    ],
+    "tradeType": "SERVICES"
+  },
+  {
+    "allowedDocs": [
+      {
+        "documentType": "IDENTIFICATIONPROOF",
+        "applicationType": ["NEW", "RENEWAL"],
+        "required": true
+      },
+      {
+        "documentType": "BUSINESSREGISTRATIONCERTIFICATE",
+        "applicationType": ["NEW", "RENEWAL"],
+        "required": true
+      }
+    ],
+    "tradeType": "MANUFACTURING"
+  }
+]

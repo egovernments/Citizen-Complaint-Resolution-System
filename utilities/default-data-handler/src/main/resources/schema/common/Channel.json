@@ -1,0 +1,33 @@
+[
+    {
+        "tenantId": "{tenantid}",
+        "code": "Channel.channelList",
+        "description": "Notification Channel Configuration",
+        "definition": {
+            "type": "object",
+            "title": "Channel Configuration",
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "required": ["businessService", "module", "action"],
+            "x-unique": ["businessService", "action"],
+            "properties": {
+                "businessService": {
+                    "type": "string"
+                },
+                "module": {
+                    "type": "string"
+                },
+                "action": {
+                    "type": "string"
+                },
+                "channelNames": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            },
+            "additionalProperties": true
+        },
+        "isActive": true
+    }
+]

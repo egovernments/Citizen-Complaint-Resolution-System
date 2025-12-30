@@ -34,9 +34,6 @@ public class ServiceConfiguration {
     @Value("${egov.mdms.host}${egov.mdms.data.search.endpoint}")
     private String mdmsDataSearchURI;
 
-    @Value("#{'${default.mdms.schema.create.list}'.split(',')}")
-    private List<String> defaultMdmsSchemaList;
-
     @Value("#{${mdms.schemacode.map}}")
     private Map<String, List<String>> mdmsSchemacodeMap;
 
@@ -131,4 +128,14 @@ public class ServiceConfiguration {
 
     @Value("${scheduler.max.executions}")
     private String maxExecution;
+
+    // Module Configuration
+    // Comma-separated list of enabled modules - loads common first, then all folders from each module
+    @Value("#{'${modules.enabled:}'.split(',')}")
+    private List<String> enabledModules;
+
+    // Locale Configuration
+    // Comma-separated list of enabled locales for localization loading
+    @Value("#{'${locales.enabled:en_IN}'.split(',')}")
+    private List<String> enabledLocales;
 }

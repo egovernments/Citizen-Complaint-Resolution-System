@@ -13,6 +13,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.util.StreamUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.handler.service.DataHandlerService;
 import org.egov.handler.web.models.DefaultDataRequest;
@@ -24,11 +25,19 @@ import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 
+/**
+ * Second phase of startup initialization.
+ *
+ * Runs periodically (every 4 minutes, up to 4 times) to provide fault tolerance.
+ * All operations are idempotent - duplicates are handled gracefully by the APIs.
+ *
+ * This ensures data is loaded even if:
+ * - External services weren't ready on first attempt
+ * - Network issues occurred
+ * - First initializer failed
+ */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class StartupUserAndEmployeeInitializer {
@@ -40,23 +49,26 @@ public class StartupUserAndEmployeeInitializer {
     private final MdmsBulkLoader mdmsBulkLoader;
     private final LocalizationUtil localizationUtil;
 
-    private final AtomicBoolean hasStarted = new AtomicBoolean(false);
     private int executionCount = 0;
     private static final int MAX_EXECUTIONS = 4;
 
-    @Scheduled(initialDelay = 4 * 60 * 1000, fixedDelay = 4 * 60 * 1000) // 4 minutes
+    /**
+     * Runs every 4 minutes for fault tolerance.
+     * Stops after MAX_EXECUTIONS attempts.
+     * All APIs handle duplicates gracefully (log and continue).
+     */
+    @Scheduled(initialDelay = 4 * 60 * 1000, fixedDelay = 4 * 60 * 1000)
     public void runPeriodically() {
         if (executionCount >= MAX_EXECUTIONS) return;
 
-        System.out.println("[DEBUG] Scheduled startup logic executing at: " + Instant.now());
+        executionCount++;
+        log.info("[INIT] Attempt {}/{} starting at: {}", executionCount, MAX_EXECUTIONS, Instant.now());
 
         try {
             executeStartupLogic();
-            executionCount++;
+            log.info("[INIT] Attempt {}/{} completed", executionCount, MAX_EXECUTIONS);
         } catch (Exception e) {
-            System.err.println("StartupSchemaAndMasterDataInitializer failed on attempt " + (executionCount + 1) + ": " + e.getMessage());
-            e.printStackTrace();
-            executionCount++; // Even on failure, count the attempt
+            log.error("[INIT] Attempt {}/{} failed: {}", executionCount, MAX_EXECUTIONS, e.getMessage(), e);
         }
     }
 
@@ -86,20 +98,27 @@ public class StartupUserAndEmployeeInitializer {
         DefaultDataRequest defaultDataRequest = DefaultDataRequest.builder()
                 .requestInfo(tenantRequest.getRequestInfo())
                 .targetTenantId(tenantCode)
-                .schemaCodes(serviceConfig.getDefaultMdmsSchemaList())
                 .onlySchemas(Boolean.FALSE)
                 .locales(serviceConfig.getDefaultLocalizationLocaleList())
                 .modules(serviceConfig.getDefaultLocalizationModuleList())
                 .build();
 
-        // Execute your logic
+        // Load schemas and data (idempotent - duplicates handled gracefully)
         dataHandlerService.createMdmsSchemaFromFile(defaultDataRequest);
         mdmsBulkLoader.loadAllMdmsData(defaultDataRequest.getTargetTenantId(), defaultDataRequest.getRequestInfo());
         dataHandlerService.createBoundaryDataFromFile(defaultDataRequest);
         localizationUtil.upsertLocalizationFromFile(defaultDataRequest);
+
+        // Create users (idempotent - duplicates logged and skipped)
         dataHandlerService.createUserFromFile(tenantRequest);
-        dataHandlerService.createPgrWorkflowConfig(tenantRequest.getTenant().getCode());
-        dataHandlerService.createEmployeeFromFile(defaultDataRequest.getRequestInfo());
+
+        // Create workflows for all enabled modules (idempotent)
+        dataHandlerService.createAllModuleWorkflowConfigs(tenantRequest.getTenant().getCode());
+
+        // Create employees for all enabled modules (idempotent)
+        dataHandlerService.createAllModuleEmployees(defaultDataRequest.getRequestInfo());
+
+        log.info("[INIT] All steps completed for tenant: {}", tenantCode);
     }
 }
 

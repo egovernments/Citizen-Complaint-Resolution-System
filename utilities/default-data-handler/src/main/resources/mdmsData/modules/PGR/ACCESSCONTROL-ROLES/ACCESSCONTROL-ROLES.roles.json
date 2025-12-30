@@ -1,0 +1,27 @@
+[
+  {
+    "code": "PGR_LME",
+    "name": "Complaint Resolver",
+    "description": "One who will resolve complaints"
+  },
+  {
+    "code": "GRO",
+    "name": "Complaint Assessor",
+    "description": "One who will assess & assign complaints"
+  },
+  {
+    "code": "CSR",
+    "name": "Complainant",
+    "description": "One who will create complaints"
+  },
+  {
+    "code": "PGR_VIEWER",
+    "name": "PGR Viewer role",
+    "description": "Role to view PGR data"
+  },
+  {
+    "code": "TICKET_REPORT_VIEWER",
+    "name": "Report Viewer",
+    "description": "One who will view the reports of tickets"
+  }
+]

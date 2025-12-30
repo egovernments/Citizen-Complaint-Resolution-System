@@ -18,12 +18,8 @@ import org.springframework.kafka.support.KafkaHeaders;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Objects;
-
-import static org.egov.handler.constants.UserConstants.ASSIGNER;
-import static org.egov.handler.constants.UserConstants.RESOLVER;
 
 @Slf4j
 @Component
@@ -68,10 +64,10 @@ public class TenantConsumer {
         if (Objects.isNull(tenantRequest.getTenant().getParentId())) {
             log.info("Configuring Tenant: {}", tenantRequest.getTenant().getCode());
 
-            DefaultDataRequest defaultDataRequest = DefaultDataRequest.builder().requestInfo(tenantRequest.getRequestInfo()).targetTenantId(tenantRequest.getTenant().getCode()).schemaCodes(serviceConfig.getDefaultMdmsSchemaList()).onlySchemas(Boolean.FALSE).locales(serviceConfig.getDefaultLocalizationLocaleList()).modules(serviceConfig.getDefaultLocalizationModuleList()).build();
+            // Schemas are auto-discovered from folder structure - no need for hardcoded list
+            DefaultDataRequest defaultDataRequest = DefaultDataRequest.builder().requestInfo(tenantRequest.getRequestInfo()).targetTenantId(tenantRequest.getTenant().getCode()).onlySchemas(Boolean.FALSE).locales(serviceConfig.getDefaultLocalizationLocaleList()).modules(serviceConfig.getDefaultLocalizationModuleList()).build();
 
             dataHandlerService.createDefaultData(defaultDataRequest);
-            dataHandlerService.createPgrWorkflowConfig(tenantRequest.getTenant().getCode());
             dataHandlerService.createTenantConfig(tenantRequest);
 
             userUtil.createUser(tenantRequest);
@@ -80,8 +76,11 @@ public class TenantConsumer {
             // Send welcome email after everything is set up
             dataHandlerService.triggerWelcomeEmail(tenantRequest);
 
-            // setup default employee
-            dataHandlerService.defaultEmployeeSetup(tenantRequest.getTenant().getCode(), tenantRequest.getTenant().getEmail());
+            // Create workflows for all enabled modules (not just PGR)
+            dataHandlerService.createAllModuleWorkflowConfigs(tenantRequest.getTenant().getCode());
+
+            // Create employees for all enabled modules (not just hardcoded 2)
+            dataHandlerService.createAllModuleEmployees(tenantRequest.getRequestInfo());
 
             // create default records in indexer
             elasticsearchUtil.createDefaultRecords(tenantRequest.getTenant().getCode());

@@ -1,0 +1,17 @@
+[
+  {
+    "code": "HOARDING",
+    "uom": "SQ_FT",
+    "active": true
+  },
+  {
+    "code": "BANNER",
+    "uom": "SQ_FT",
+    "active": true
+  },
+  {
+    "code": "SIGNBOARD",
+    "uom": "SQ_FT",
+    "active": true
+  }
+]

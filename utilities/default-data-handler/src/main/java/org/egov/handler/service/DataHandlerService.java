@@ -75,22 +75,34 @@ public class DataHandlerService {
     }
 
     public void createDefaultData(DefaultDataRequest defaultDataRequest) {
+        List<String> schemaCodes;
+
+        // Auto-discover schema codes if not provided
         if (defaultDataRequest.getSchemaCodes() != null) {
-            List<String> schemaCodes = new ArrayList<>(defaultDataRequest.getSchemaCodes());
-            if (schemaCodes.contains(TENANT_BOUNDARY_SCHEMA)) {
-                createTenantBoundarydata(defaultDataRequest.getRequestInfo(), defaultDataRequest.getTargetTenantId());
-                schemaCodes.remove(TENANT_BOUNDARY_SCHEMA);
+            schemaCodes = new ArrayList<>(defaultDataRequest.getSchemaCodes());
+        } else {
+            // Discover schema codes for all enabled modules
+            schemaCodes = discoverAllEnabledModuleSchemaCodes();
+            if (schemaCodes.isEmpty()) {
+                log.warn("No schema codes found for enabled modules. Skipping data copy.");
+                return;
             }
-            DefaultMdmsDataRequest defaultMdmsDataRequest = DefaultMdmsDataRequest.builder().requestInfo(defaultDataRequest.getRequestInfo()).targetTenantId(defaultDataRequest.getTargetTenantId()).schemaCodes(schemaCodes).onlySchemas(defaultDataRequest.getOnlySchemas()).defaultTenantId(serviceConfig.getDefaultTenantId()).build();
-            mdmsV2Util.createDefaultMdmsData(defaultMdmsDataRequest);
+            log.info("Auto-discovered {} schema codes for all enabled modules", schemaCodes.size());
         }
 
-//        if (defaultDataRequest.getLocales() != null && defaultDataRequest.getModules() != null) {
-//            for (String locale : defaultDataRequest.getLocales()) {
-//                DefaultLocalizationDataRequest defaultLocalizationDataRequest = DefaultLocalizationDataRequest.builder().requestInfo(defaultDataRequest.getRequestInfo()).targetTenantId(defaultDataRequest.getTargetTenantId()).locale(locale).modules(defaultDataRequest.getModules()).build();
-//                localizationUtil.upsertLocalizationFromFile(defaultLocalizationDataRequest);
-//            }
-//        }
+        if (schemaCodes.contains(TENANT_BOUNDARY_SCHEMA)) {
+            createTenantBoundarydata(defaultDataRequest.getRequestInfo(), defaultDataRequest.getTargetTenantId());
+            schemaCodes.remove(TENANT_BOUNDARY_SCHEMA);
+        }
+
+        DefaultMdmsDataRequest defaultMdmsDataRequest = DefaultMdmsDataRequest.builder()
+                .requestInfo(defaultDataRequest.getRequestInfo())
+                .targetTenantId(defaultDataRequest.getTargetTenantId())
+                .schemaCodes(schemaCodes)
+                .onlySchemas(defaultDataRequest.getOnlySchemas())
+                .defaultTenantId(serviceConfig.getDefaultTenantId())
+                .build();
+        mdmsV2Util.createDefaultMdmsData(defaultMdmsDataRequest);
     }
 
     public User createUserFromFile(TenantRequest tenantRequest) throws IOException {
@@ -220,47 +232,138 @@ public class DataHandlerService {
         }
     }
 
-
+    /**
+     * Create MDMS schemas from files
+     * Loading order (tenant schema loaded first for dependency):
+     * 1. Tenant schema (schema/common/tenant.json) - Must be first
+     * 2. Other common schemas (schema/common/*.json) - Shared across all modules
+     * 3. Module schemas (schema/modules/{MODULE}/*.json) - Loaded only if module enabled
+     * 4. Legacy schemas (schema/*.json) - For backward compatibility
+     */
     public void createMdmsSchemaFromFile(DefaultDataRequest defaultDataRequest) throws IOException {
-        try{
-            String mdmsSchemaCreateUri = serviceConfig.getMdmsSchemaCreateURI();
+        String tenantId = defaultDataRequest.getTargetTenantId();
+        RequestInfo requestInfo = defaultDataRequest.getRequestInfo();
 
-            String tenantId = defaultDataRequest.getTargetTenantId();
-            RequestInfo requestInfo = defaultDataRequest.getRequestInfo();
+        // Step 1: Load TENANT schema FIRST (required before other schemas)
+        log.info("Loading tenant schema first...");
+        loadSchemasFromPattern("classpath:schema/common/tenant.json", tenantId, requestInfo, "tenant");
 
-            Resource[] resources = new PathMatchingResourcePatternResolver()
-                    .getResources("classpath:schema/*.json");
+        // Step 2: Load other COMMON schemas (excluding tenant.json which is already loaded)
+        loadCommonSchemasExcludingTenant(tenantId, requestInfo);
+
+        // Step 3: Load MODULE-SPECIFIC schemas (only for enabled modules)
+        List<String> enabledModules = serviceConfig.getEnabledModules();
+        if (enabledModules != null && !enabledModules.isEmpty()) {
+            for (String module : enabledModules) {
+                String pattern = "classpath:schema/modules/" + module.trim() + "/*.json";
+                loadSchemasFromPattern(pattern, tenantId, requestInfo, module.trim());
+            }
+        }
+
+        // Step 4: Load LEGACY schemas (schema/*.json - for backward compatibility)
+        loadLegacySchemas(tenantId, requestInfo);
+    }
+
+    /**
+     * Load common schemas excluding tenant.json (which is loaded first separately)
+     */
+    private void loadCommonSchemasExcludingTenant(String tenantId, RequestInfo requestInfo) {
+        try {
+            PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
+            Resource[] resources = resolver.getResources("classpath:schema/common/*.json");
 
             for (Resource resource : resources) {
-                String rawJson = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
-
-                rawJson = rawJson.replace("{tenantid}", tenantId);
-
-                // Parse schema array from file
-                JsonNode schemaArray = new ObjectMapper().readTree(rawJson);
-                for (JsonNode schemaNode : schemaArray) {
-                    try {
-                        ObjectNode payload = objectMapper.createObjectNode();
-                        payload.set("RequestInfo", objectMapper.valueToTree(requestInfo));
-                        payload.set("SchemaDefinition", schemaNode);
-
-                        HttpHeaders headers = new HttpHeaders();
-                        headers.setContentType(MediaType.APPLICATION_JSON);
-                        HttpEntity<JsonNode> request = new HttpEntity<>(payload, headers);
-
-                        restTemplate.postForObject(mdmsSchemaCreateUri, request, Object.class);
-                        log.info("MDMS schema created successfully: {}", schemaNode.get("code").asText());
-                    } catch (Exception innerEx) {
-                        log.error("Failed to create schema: {} for tenant: {}. Skipping...",
-                                schemaNode.get("code"), tenantId, innerEx);
-                        // Continue with next schemaNode
-                    }
+                // Skip tenant.json (already loaded in Step 1)
+                if ("tenant.json".equals(resource.getFilename())) {
+                    continue;
                 }
+                processSchemaResource(resource, tenantId, requestInfo, "common");
+            }
+        } catch (IOException e) {
+            log.error("Failed to load common schemas: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Load schemas from a specific pattern
+     */
+    private void loadSchemasFromPattern(String pattern, String tenantId, RequestInfo requestInfo, String source) {
+        try {
+            PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
+            Resource[] resources = resolver.getResources(pattern);
+
+            if (resources.length == 0) {
+                log.info("No schema files found at pattern: {}", pattern);
+                return;
             }
 
+            log.info("Found {} schema files for {}", resources.length, source);
+
+            for (Resource resource : resources) {
+                processSchemaResource(resource, tenantId, requestInfo, source);
+            }
+        } catch (IOException e) {
+            log.error("Failed to scan schema directory for {}: {}", source, e.getMessage());
+        }
+    }
+
+    /**
+     * Load legacy schemas from schema/*.json (excluding common/ and modules/ folders)
+     */
+    private void loadLegacySchemas(String tenantId, RequestInfo requestInfo) {
+        try {
+            PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
+            Resource[] resources = resolver.getResources("classpath:schema/*.json");
+
+            for (Resource resource : resources) {
+                // Skip if this is inside common/ or modules/ folder
+                String path = resource.getURL().getPath();
+                if (path.contains("/common/") || path.contains("/modules/")) {
+                    continue;
+                }
+                processSchemaResource(resource, tenantId, requestInfo, "legacy");
+            }
+        } catch (IOException e) {
+            log.error("Failed to load legacy schemas: {}", e.getMessage());
+        }
+    }
+
+    /**yes
+     * Process a single schema resource file
+     */
+    private void processSchemaResource(Resource resource, String tenantId, RequestInfo requestInfo, String source) {
+        try {
+            String mdmsSchemaCreateUri = serviceConfig.getMdmsSchemaCreateURI();
+            String rawJson = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
+            rawJson = rawJson.replace("{tenantid}", tenantId);
+
+            // Parse schema array from file
+            JsonNode schemaArray = objectMapper.readTree(rawJson);
+
+            // Handle both array and single object formats
+            if (!schemaArray.isArray()) {
+                schemaArray = objectMapper.createArrayNode().add(schemaArray);
+            }
+
+            for (JsonNode schemaNode : schemaArray) {
+                try {
+                    ObjectNode payload = objectMapper.createObjectNode();
+                    payload.set("RequestInfo", objectMapper.valueToTree(requestInfo));
+                    payload.set("SchemaDefinition", schemaNode);
+
+                    HttpHeaders headers = new HttpHeaders();
+                    headers.setContentType(MediaType.APPLICATION_JSON);
+                    HttpEntity<JsonNode> request = new HttpEntity<>(payload, headers);
+
+                    restTemplate.postForObject(mdmsSchemaCreateUri, request, Object.class);
+                    log.info("[{}] Schema created: {}", source, schemaNode.get("code").asText());
+                } catch (Exception innerEx) {
+                    log.error("[{}] Failed to create schema: {} for tenant: {}. Skipping...",
+                            source, schemaNode.get("code"), tenantId);
+                }
+            }
         } catch (Exception e) {
-            log.error("Failed to create mdms schema for tenant: {}", defaultDataRequest.getTargetTenantId(), e);
-//            throw new CustomException("MDMS_SCHEMA_CREATE_FAILED", "Failed to create mdms schema: " + e.getMessage());
+            log.error("Error processing schema file {}: {}", resource.getFilename(), e.getMessage());
         }
     }
 
@@ -450,16 +553,17 @@ public class DataHandlerService {
     public DefaultDataRequest setupDefaultData(DataSetupRequest dataSetupRequest) {
         DefaultDataRequest defaultDataRequest = DefaultDataRequest.builder().requestInfo(dataSetupRequest.getRequestInfo()).targetTenantId(dataSetupRequest.getTargetTenantId()).onlySchemas(dataSetupRequest.getOnlySchemas()).build();
 
-        if (Objects.equals(dataSetupRequest.getModule(), "PGR")) {
-            createPgrWorkflowConfig(dataSetupRequest.getTargetTenantId());
+        // Create workflow for the specified module (module-aware, not just PGR)
+        if (dataSetupRequest.getModule() != null) {
+            createModuleWorkflowConfig(dataSetupRequest.getTargetTenantId(), dataSetupRequest.getModule());
         }
 
-        if (dataSetupRequest.getSchemaCodes() == null) {
-            if (Objects.equals(dataSetupRequest.getModule(), "PGR")) {
-                defaultDataRequest.setSchemaCodes(serviceConfig.getMdmsSchemacodeMap().get("PGR"));
-            }
-            if (Objects.equals(dataSetupRequest.getModule(), "HRMS")) {
-                defaultDataRequest.setSchemaCodes(serviceConfig.getMdmsSchemacodeMap().get("HRMS"));
+        // Get schema codes - auto-discover from schema files
+        if (dataSetupRequest.getSchemaCodes() == null && dataSetupRequest.getModule() != null) {
+            List<String> discoveredCodes = discoverSchemaCodesForModule(dataSetupRequest.getModule());
+            if (!discoveredCodes.isEmpty()) {
+                defaultDataRequest.setSchemaCodes(discoveredCodes);
+                log.info("Auto-discovered {} schema codes for module: {}", discoveredCodes.size(), dataSetupRequest.getModule());
             }
         } else {
             defaultDataRequest.setSchemaCodes(dataSetupRequest.getSchemaCodes());
@@ -485,6 +589,259 @@ public class DataHandlerService {
             log.error("Error reading or mapping JSON file: {}", e.getMessage());
 //            throw new CustomException("IO_EXCEPTION", "Error reading or mapping JSON file: " + e.getMessage());
         }
+    }
+
+    /**
+     * Create workflow configurations for all enabled modules
+     * Loads from workflow/modules/{MODULE}/*.json
+     */
+    public void createAllModuleWorkflowConfigs(String targetTenantId) {
+        List<String> enabledModules = serviceConfig.getEnabledModules();
+
+        if (enabledModules == null || enabledModules.isEmpty()) {
+            log.warn("No modules enabled for workflow config. Falling back to PGR workflow.");
+            createPgrWorkflowConfig(targetTenantId);
+            return;
+        }
+
+        log.info("Creating workflow configs for enabled modules: {}", enabledModules);
+
+        for (String module : enabledModules) {
+            createModuleWorkflowConfig(targetTenantId, module.trim());
+        }
+    }
+
+    /**
+     * Create workflow config for a specific module
+     */
+    public void createModuleWorkflowConfig(String targetTenantId, String moduleName) {
+        try {
+            PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
+            String pattern = "classpath:workflow/modules/" + moduleName + "/*.json";
+
+            Resource[] resources = resolver.getResources(pattern);
+
+            if (resources.length == 0) {
+                log.warn("No workflow config files found for module: {} at path: {}", moduleName, pattern);
+                return;
+            }
+
+            log.info("Found {} workflow config files for module: {}", resources.length, moduleName);
+
+            for (Resource resource : resources) {
+                try (InputStream inputStream = resource.getInputStream()) {
+                    String rawJson = StreamUtils.copyToString(inputStream, StandardCharsets.UTF_8);
+                    rawJson = rawJson.replace("{tenantid}", targetTenantId);
+
+                    BusinessServiceRequest businessServiceRequest = objectMapper.readValue(rawJson, BusinessServiceRequest.class);
+                    businessServiceRequest.getBusinessServices().forEach(service -> service.setTenantId(targetTenantId));
+                    workflowUtil.createWfConfig(businessServiceRequest);
+
+                    log.info("Created workflow config from {} for module: {}", resource.getFilename(), moduleName);
+                } catch (Exception e) {
+                    log.error("Failed to create workflow config from {} for module {}: {}",
+                            resource.getFilename(), moduleName, e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to load workflow configs for module {}: {}", moduleName, e.getMessage());
+        }
+    }
+
+    /**
+     * Create employees for all enabled modules
+     * Loads from employees/modules/{MODULE}/HRMS.json
+     */
+    public void createAllModuleEmployees(RequestInfo requestInfo) {
+        List<String> enabledModules = serviceConfig.getEnabledModules();
+
+        if (enabledModules == null || enabledModules.isEmpty()) {
+            log.warn("No modules enabled for employee creation. Falling back to legacy HRMS.json.");
+            try {
+                createEmployeeFromFile(requestInfo);
+            } catch (IOException e) {
+                log.error("Failed to create employees from legacy HRMS.json: {}", e.getMessage());
+            }
+            return;
+        }
+
+        log.info("Creating employees for enabled modules: {}", enabledModules);
+
+        for (String module : enabledModules) {
+            createModuleEmployees(requestInfo, module.trim());
+        }
+    }
+
+    /**
+     * Create employees for a specific module
+     */
+    public void createModuleEmployees(RequestInfo requestInfo, String moduleName) {
+        String uri = serviceConfig.getHrmsHost() + serviceConfig.getHrmsCreatePath();
+        String userUpdateUrl = serviceConfig.getUserHost() + serviceConfig.getUserContextPath() + serviceConfig.getUserUpdateEndpoint();
+        String tenantId = requestInfo.getUserInfo().getTenantId();
+
+        try {
+            PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
+            String pattern = "classpath:employees/modules/" + moduleName + "/*.json";
+
+            Resource[] resources = resolver.getResources(pattern);
+
+            if (resources.length == 0) {
+                log.warn("No employee files found for module: {} at path: {}", moduleName, pattern);
+                return;
+            }
+
+            log.info("Found {} employee files for module: {}", resources.length, moduleName);
+
+            for (Resource resource : resources) {
+                try {
+                    String rawJson = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
+                    rawJson = rawJson.replace("{tenantid}", tenantId);
+
+                    ArrayNode employeesArray = (ArrayNode) objectMapper.readTree(rawJson);
+
+                    for (JsonNode employeeNode : employeesArray) {
+                        try {
+                            ObjectNode payload = objectMapper.createObjectNode();
+                            payload.set("Employees", objectMapper.createArrayNode().add(employeeNode));
+                            payload.set("RequestInfo", objectMapper.valueToTree(requestInfo));
+
+                            HttpHeaders headers = new HttpHeaders();
+                            headers.setContentType(MediaType.APPLICATION_JSON);
+
+                            HttpEntity<JsonNode> entity = new HttpEntity<>(payload, headers);
+                            Object response = restTemplate.postForObject(uri, entity, Object.class);
+                            log.info("Employee created successfully for module {}: {}", moduleName,
+                                    employeeNode.has("code") ? employeeNode.get("code").asText() : "unknown");
+
+                            // Update password
+                            JsonNode responseJson = objectMapper.convertValue(response, JsonNode.class);
+                            JsonNode userNode = responseJson.at("/Employees/0/user");
+                            if (!userNode.isMissingNode()) {
+                                ObjectNode updatedUser = (ObjectNode) userNode.deepCopy();
+                                updatedUser.put("password", "eGov@123");
+
+                                ObjectNode updatePayload = objectMapper.createObjectNode();
+                                updatePayload.set("user", updatedUser);
+                                updatePayload.set("RequestInfo", objectMapper.valueToTree(requestInfo));
+
+                                HttpEntity<JsonNode> updateEntity = new HttpEntity<>(updatePayload, headers);
+                                restTemplate.postForObject(userUpdateUrl, updateEntity, Object.class);
+
+                                log.info("Password updated for user: {}", updatedUser.get("userName").asText());
+                            }
+                        } catch (Exception e) {
+                            log.error("Failed to create employee for module {}: {}", moduleName, e.getMessage());
+                        }
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to process employee file {} for module {}: {}",
+                            resource.getFilename(), moduleName, e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to load employee files for module {}: {}", moduleName, e.getMessage());
+        }
+    }
+
+    /**
+     * Discover schema codes for all enabled modules.
+     * Scans common schemas and all module-specific schemas for enabled modules.
+     * @return List of all schema codes found
+     */
+    public List<String> discoverAllEnabledModuleSchemaCodes() {
+        Set<String> allSchemaCodes = new LinkedHashSet<>(); // Use Set to avoid duplicates
+
+        try {
+            PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
+
+            // First, add common schemas (shared by all modules)
+            Resource[] commonResources = resolver.getResources("classpath:schema/common/*.json");
+            for (Resource resource : commonResources) {
+                allSchemaCodes.addAll(extractSchemaCodesFromFile(resource));
+            }
+            log.info("Discovered {} common schema codes", allSchemaCodes.size());
+
+            // Then add schema codes for each enabled module
+            List<String> enabledModules = serviceConfig.getEnabledModules();
+            if (enabledModules != null && !enabledModules.isEmpty()) {
+                for (String module : enabledModules) {
+                    String modulePattern = "classpath:schema/modules/" + module.trim() + "/*.json";
+                    Resource[] moduleResources = resolver.getResources(modulePattern);
+                    int beforeCount = allSchemaCodes.size();
+                    for (Resource resource : moduleResources) {
+                        allSchemaCodes.addAll(extractSchemaCodesFromFile(resource));
+                    }
+                    log.info("Discovered {} schema codes for module {}", allSchemaCodes.size() - beforeCount, module.trim());
+                }
+            }
+
+            log.info("Total discovered schema codes for all enabled modules: {}", allSchemaCodes.size());
+        } catch (Exception e) {
+            log.error("Failed to discover schema codes for enabled modules: {}", e.getMessage());
+        }
+
+        return new ArrayList<>(allSchemaCodes);
+    }
+
+    /**
+     * Discover schema codes from schema files for a given module.
+     * Scans both common schemas and module-specific schemas.
+     * @param moduleName The module name (e.g., "PGR", "TL")
+     * @return List of schema codes found in schema files
+     */
+    public List<String> discoverSchemaCodesForModule(String moduleName) {
+        List<String> schemaCodes = new ArrayList<>();
+
+        try {
+            PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
+
+            // Scan common schemas
+            Resource[] commonResources = resolver.getResources("classpath:schema/common/*.json");
+            for (Resource resource : commonResources) {
+                schemaCodes.addAll(extractSchemaCodesFromFile(resource));
+            }
+
+            // Scan module-specific schemas
+            String modulePattern = "classpath:schema/modules/" + moduleName + "/*.json";
+            Resource[] moduleResources = resolver.getResources(modulePattern);
+            for (Resource resource : moduleResources) {
+                schemaCodes.addAll(extractSchemaCodesFromFile(resource));
+            }
+
+            log.info("Discovered {} schema codes for module {} (common + module-specific)", schemaCodes.size(), moduleName);
+        } catch (Exception e) {
+            log.error("Failed to discover schema codes for module {}: {}", moduleName, e.getMessage());
+        }
+
+        return schemaCodes;
+    }
+
+    /**
+     * Extract schema codes from a single schema file
+     */
+    private List<String> extractSchemaCodesFromFile(Resource resource) {
+        List<String> codes = new ArrayList<>();
+
+        try {
+            String rawJson = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
+            JsonNode schemaArray = objectMapper.readTree(rawJson);
+
+            // Handle both array and single object formats
+            if (!schemaArray.isArray()) {
+                schemaArray = objectMapper.createArrayNode().add(schemaArray);
+            }
+
+            for (JsonNode schemaNode : schemaArray) {
+                if (schemaNode.has("code")) {
+                    codes.add(schemaNode.get("code").asText());
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Failed to extract schema codes from {}: {}", resource.getFilename(), e.getMessage());
+        }
+
+        return codes;
     }
 
     public void addMdmsData(DataSetupRequest dataSetupRequest) {
