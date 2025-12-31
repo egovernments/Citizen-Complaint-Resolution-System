@@ -1,0 +1,36 @@
+[
+  {
+
+      "title": "CRS_BOUNDARY_DATA",
+      "campaignType": "all",
+      "properties": {
+        "numberProperties": [
+          {
+            "name": "CRS_LAT",
+            "type": "number",
+            "isRequired": true,
+            "description": "Latitude",
+            "orderNumber": 2
+          },
+          {
+            "name": "CRS_LONG",
+            "type": "number",
+            "isRequired": true,
+            "description": "Longitude",
+            "orderNumber": 3
+          }
+        ],
+        "stringProperties": [
+          {
+            "name": "CRS_BOUNDARY_CODE",
+            "type": "string",
+            "isRequired": true,
+            "description": "Boundary Code",
+            "orderNumber": 1,
+            "freezeColumn": true
+          }
+        ]
+      }
+    
+  }
+]

@@ -4,9 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.kafka.clients.producer.KafkaProducer;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.handler.config.ServiceConfiguration;
 import org.egov.handler.util.*;
@@ -85,6 +83,8 @@ public class DataHandlerService {
             mdmsV2Util.createDefaultMdmsData(defaultMdmsDataRequest);
         }
 
+
+
 //        if (defaultDataRequest.getLocales() != null && defaultDataRequest.getModules() != null) {
 //            for (String locale : defaultDataRequest.getLocales()) {
 //                DefaultLocalizationDataRequest defaultLocalizationDataRequest = DefaultLocalizationDataRequest.builder().requestInfo(defaultDataRequest.getRequestInfo()).targetTenantId(defaultDataRequest.getTargetTenantId()).locale(locale).modules(defaultDataRequest.getModules()).build();
@@ -93,7 +93,7 @@ public class DataHandlerService {
 //        }
     }
 
-    public User createUserFromFile(TenantRequest tenantRequest) throws IOException {
+    public User createUserFromFile(TenantRequest tenantRequest, String userFilePath) throws IOException {
         String tenantCode = tenantRequest.getTenant().getCode();
         StringBuilder uri = new StringBuilder(serviceConfig.getUserHost())
                 .append(serviceConfig.getUserContextPath())
@@ -102,8 +102,8 @@ public class DataHandlerService {
         ArrayList<User> userList = new ArrayList<>();
 
         try {
-            log.info("Reading User.json for tenant: {}", tenantCode);
-            Resource resource = resourceLoader.getResource("classpath:User.json");
+            log.info("Reading User file from {} for tenant: {}", userFilePath, tenantCode);
+            Resource resource = resourceLoader.getResource(userFilePath);
             String rawJson = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
 
             rawJson = rawJson.replace("{tenantid}", tenantCode);
@@ -151,13 +151,14 @@ public class DataHandlerService {
     }
 
 
-    public void createEmployeeFromFile(RequestInfo requestInfo) throws IOException {
+    public void createEmployeeFromFile(RequestInfo requestInfo, String employeeFilePath) throws IOException {
         String uri = serviceConfig.getHrmsHost() + serviceConfig.getHrmsCreatePath();
         String userUpdateUrl = serviceConfig.getUserHost() +serviceConfig.getUserContextPath() + serviceConfig.getUserUpdateEndpoint();
         String tenantId = requestInfo.getUserInfo().getTenantId();
 
         try {
-            Resource resource = resourceLoader.getResource("classpath:HRMS.json");
+            log.info("Reading Employee file from {}", employeeFilePath);
+            Resource resource = resourceLoader.getResource(employeeFilePath);
             String rawJson = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
 
             // Replace placeholders with tenant ID
@@ -601,6 +602,101 @@ public class DataHandlerService {
     public void defaultEmployeeSetup(String tenantId, String emailId) {
         createDefaultEmployee(tenantId, emailId, RESOLVER, "Rakesh Kumar");
         createDefaultEmployee(tenantId, emailId, ASSIGNER, "John Smith");
+    }
+
+    /**
+     * Load production tenant data (mdmsData, localisations, and schema)
+     * This method loads production data for a new tenant
+     * Uses all default schemas automatically
+     * @param newTenantRequest - Request containing tenant information (no schema codes needed)
+     */
+    public void loadNewTenantProductionData(NewTenantRequest newTenantRequest) {
+        try {
+            String targetTenantId = newTenantRequest.getTargetTenantId();
+            RequestInfo requestInfo = newTenantRequest.getRequestInfo();
+
+            log.info("Loading production tenant data for new tenant: {}", targetTenantId);
+            
+            // Ensure UserInfo is present (create dummy if needed)
+            if (requestInfo.getUserInfo() == null) {
+                org.egov.common.contract.request.User dummyUser = new org.egov.common.contract.request.User();
+                dummyUser.setId(1L);
+                dummyUser.setUserName("system");
+                dummyUser.setTenantId(targetTenantId);
+                requestInfo.setUserInfo(dummyUser);
+                log.info("Created dummy user info for tenant: {}", targetTenantId);
+            } else {
+                requestInfo.getUserInfo().setTenantId(targetTenantId);
+            }
+            
+            // Create DefaultDataRequest with all default schemas
+            DefaultDataRequest defaultDataRequest = DefaultDataRequest.builder()
+                    .requestInfo(requestInfo)
+                    .targetTenantId(targetTenantId)
+                    .schemaCodes(serviceConfig.getDefaultMdmsSchemaList())
+                    .onlySchemas(Boolean.FALSE)
+                    .locales(serviceConfig.getDefaultLocalizationLocaleList())
+                    .modules(serviceConfig.getDefaultLocalizationModuleList())
+                    .build();
+            
+            log.info("Step 1: Creating MDMS schemas for tenant: {}", targetTenantId);
+            // 1. Create Schema from file
+            createMdmsSchemaFromFile(defaultDataRequest);
+            log.info("✓ Schemas created for new tenant: {}", targetTenantId);
+            
+            log.info("Step 2: Loading production MDMS data");
+            // 2. Load production MDMS data
+            mdmsBulkLoader.loadAllMdmsData(targetTenantId,
+                    requestInfo,
+                    serviceConfig.getDefaultMdmsDataPath());
+            log.info("✓ Production MDMS data loaded for new tenant: {}", targetTenantId);
+
+            log.info("Step 3: Loading production localization data");
+            // 3. Load production localization
+            localizationUtil.upsertLocalizationFromFile(defaultDataRequest,
+                    serviceConfig.getDefaultLocalizationDataPath());
+            log.info("✓ Production localization data loaded for new tenant: {}", targetTenantId);
+            
+            // 4. Skip Tenant Config for root tenants (no parent to copy from)
+            log.info("Step 4: Skipping tenant config creation (root tenant - no parent to copy from)");
+
+            log.info("Step 5: Creating default users and employees");
+            // 5. Create Users and Employees
+            Tenant newTenant = new Tenant();
+            newTenant.setCode(targetTenantId);
+            newTenant.setName(targetTenantId);
+            newTenant.setEmail("admin@" + targetTenantId + ".com");
+
+            TenantRequest tenantRequest = TenantRequest.builder()
+                    .requestInfo(requestInfo)
+                    .tenant(newTenant)
+                    .build();
+
+            try {
+                // Create users from default User.json
+                User superUser = createUserFromFile(tenantRequest, serviceConfig.getDefaultUserDataFile());
+                if (superUser != null) {
+                    log.info("✓ Default users created for tenant: {}", targetTenantId);
+                } else {
+                    log.warn("No SUPERUSER found in created users");
+                }
+
+                // Create employees from default HRMS.json
+                createEmployeeFromFile(requestInfo, serviceConfig.getDefaultEmployeeDataFile());
+                log.info("✓ Default employees created for tenant: {}", targetTenantId);
+
+            } catch (Exception e) {
+                log.error("Failed to create users/employees (non-critical): {}", e.getMessage());
+            }
+
+            log.info("========================================");
+            log.info("✓✓✓ Tenant {} created successfully", targetTenantId);
+            log.info("Loaded: Schemas + Production MDMS + Production Localization + Tenant Config + Users + Employees");
+            log.info("========================================");
+        } catch (Exception e) {
+            log.error("Failed to load production tenant data for tenant: {}", newTenantRequest.getTargetTenantId(), e);
+            throw new CustomException("TENANT_CREATION_FAILED", "Failed to create new tenant with production data: " + e.getMessage());
+        }
     }
 
 }

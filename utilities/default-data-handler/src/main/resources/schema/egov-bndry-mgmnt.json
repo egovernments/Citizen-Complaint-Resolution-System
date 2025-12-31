@@ -1,0 +1,45 @@
+[
+  {
+    "tenantId": "{tenantid}",
+    "code": "CRS-ADMIN-CONSOLE.adminSchema",
+    "description": "CRS Admin Console Schema for boundary management",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "title",
+        "campaignType"
+      ],
+      "x-unique": [
+        "title"
+      ],
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "campaignType": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "properties": {
+          "type": "object",
+          "properties": {
+            "numberProperties": {
+              "type": "array"
+            },
+            "stringProperties": {
+              "type": "array"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  }
+]

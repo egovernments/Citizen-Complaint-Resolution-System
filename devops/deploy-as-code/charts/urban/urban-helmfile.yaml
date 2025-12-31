@@ -31,4 +31,7 @@ releases:
     installed: true
     <<: *default
 
+  - name: egov-bndry-mgmnt # Replace with your desired namespace
+    installed: true
+    <<: *default
   # Frontend services end

@@ -1,0 +1,191 @@
+{
+	"info": {
+		"_postman_id": "7ac9fda5-1e09-4655-ab80-d2597ad5cba5",
+		"name": "Schema Creation",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "32666844",
+		"_collection_link": "https://alliance-6129.postman.co/workspace/pgr~18366946-e3e1-4b18-b713-2d4f012bd450/collection/32666844-7ac9fda5-1e09-4655-ab80-d2597ad5cba5?action=share&source=collection_link&creator=32666844"
+	},
+	"item": [
+		{
+			"name": "Tenant Master Schema",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"RequestInfo\": {\n    \"apiId\": \"asset-services\",\n    \"msgId\": \"create tenant master schema\",\n    \"authToken\": \"7c65fcc6-7bb1-43f8-a116-e62392d71576\",\n    \"userInfo\": {\n      \"id\": 30274,\n      \"uuid\": \"bd5f8ea6-a022-4e74-ac2c-edf3392c6fa4\",\n      \"userName\": \"MDMSADMIN\",\n      \"name\": \"MDMSADMIN\",\n      \"mobileNumber\": \"9035169726\",\n      \"type\": \"EMPLOYEE\",\n      \"roles\": [\n        {\n          \"name\": \"MDMS Admin\",\n          \"code\": \"MDMS_ADMIN\",\n          \"tenantId\": \"pg\"\n        }\n      ],\n      \"active\": true,\n      \"tenantId\": \"pg\"\n    }\n  },\n  \"SchemaDefinition\": {\n    \"tenantId\": \"pg\",\n    \"code\": \"tenant.master\",\n    \"description\": \"Tenant Master Schema for ULB Info and State Branding\",\n    \"isActive\": true,\n    \"definition\": {\n      \"type\": \"object\",\n      \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n      \"required\": [\n        \"ulbName\",\n        \"ulbCode\",\n        \"ulbGrade\",\n        \"cityName\",\n        \"districtName\",\n        \"districtCode\",\n        \"contactNumber\",\n        \"address\",\n        \"ulbWebsite\",\n        \"logoFilePath\"\n      ],\n      \"x-unique\": [\"ulbCode\"],\n      \"properties\": {\n        \"ulbName\": {\n          \"type\": \"string\",\n          \"minLength\": 2,\n          \"maxLength\": 100,\n          \"description\": \"Full name of the Urban Local Body\"\n        },\n        \"ulbCode\": {\n          \"type\": \"string\",\n          \"pattern\": \"^[a-z]+(\\\\.[a-z]+)*$\",\n          \"description\": \"Lowercase code; state or state.city (e.g., pg, pg.citya)\"\n        },\n        \"ulbGrade\": {\n          \"type\": \"string\",\n          \"enum\": [\n            \"Municipal Corporation\",\n            \"Municipal Council\",\n            \"Nagar Panchayat\",\n            \"City\",\n            \"State\"\n          ],\n          \"description\": \"Grade/type of ULB\"\n        },\n        \"cityName\": {\n          \"type\": \"string\",\n          \"minLength\": 2,\n          \"maxLength\": 100,\n          \"description\": \"Name of the city (can be same as ULB Name)\"\n        },\n        \"cityLocalName\": {\n          \"type\": [\"string\", \"null\"],\n          \"maxLength\": 100,\n          \"description\": \"Local language name of the city\"\n        },\n        \"districtName\": {\n          \"type\": \"string\",\n          \"minLength\": 2,\n          \"maxLength\": 100\n        },\n        \"districtCode\": {\n          \"type\": \"string\",\n          \"pattern\": \"^[A-Z0-9_]+$\"\n        },\n        \"regionName\": {\n          \"type\": [\"string\", \"null\"],\n          \"maxLength\": 100\n        },\n        \"regionCode\": {\n          \"type\": [\"string\", \"null\"],\n          \"pattern\": \"^[A-Z0-9_]+$\"\n        },\n        \"contactNumber\": {\n          \"type\": \"string\",\n          \"pattern\": \"^[0-9]{10,15}$\",\n          \"description\": \"Main contact number (10-15 digits)\"\n        },\n        \"address\": {\n          \"type\": \"string\",\n          \"minLength\": 5,\n          \"maxLength\": 500\n        },\n        \"ulbWebsite\": {\n          \"type\": \"string\",\n          \"pattern\": \"^https?://.+\",\n          \"description\": \"Official website URL\"\n        },\n        \"emailAddress\": {\n          \"type\": [\"string\", \"null\"],\n          \"pattern\": \"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\\\.[a-zA-Z]{2,}$\"\n        },\n        \"latitude\": {\n          \"type\": [\"number\", \"null\"],\n          \"minimum\": -90,\n          \"maximum\": 90\n        },\n        \"longitude\": {\n          \"type\": [\"number\", \"null\"],\n          \"minimum\": -180,\n          \"maximum\": 180\n        },\n        \"gisLocationLink\": {\n          \"type\": [\"string\", \"null\"]\n        },\n        \"callCenterNo\": {\n          \"type\": [\"string\", \"null\"],\n          \"pattern\": \"^[0-9]{10,15}$\"\n        },\n        \"facebookLink\": {\n          \"type\": [\"string\", \"null\"]\n        },\n        \"twitterLink\": {\n          \"type\": [\"string\", \"null\"]\n        },\n        \"logoFilePath\": {\n          \"type\": \"string\",\n          \"description\": \"Path or URL to logo file\"\n        },\n        \"qrCodeUrl\": {\n          \"type\": [\"string\", \"null\"],\n          \"description\": \"QR Code URL for branding\"\n        },\n        \"bannerUrl\": {\n          \"type\": [\"string\", \"null\"],\n          \"description\": \"Banner URL for branding\"\n        },\n        \"logoUrl\": {\n          \"type\": [\"string\", \"null\"],\n          \"description\": \"Logo URL for branding\"\n        },\n        \"logoUrlWhite\": {\n          \"type\": [\"string\", \"null\"],\n          \"description\": \"White Logo URL for branding\"\n        },\n        \"stateLogo\": {\n          \"type\": [\"string\", \"null\"],\n          \"description\": \"State Logo URL\"\n        }\n      }\n    }\n  }\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8094/mdms-v2/schema/v1/_create",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8094",
+					"path": [
+						"mdms-v2",
+						"schema",
+						"v1",
+						"_create"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "comman master schema",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"RequestInfo\": {\n    \"apiId\": \"asset-services\",\n    \"msgId\": \"create common master schema\",\n    \"authToken\": \"7c65fcc6-7bb1-43f8-a116-e62392d71576\",\n    \"userInfo\": {\n      \"id\": 30274,\n      \"uuid\": \"bd5f8ea6-a022-4e74-ac2c-edf3392c6fa4\",\n      \"userName\": \"MDMSADMIN\",\n      \"name\": \"MDMSADMIN\",\n      \"mobileNumber\": \"9035169726\",\n      \"type\": \"EMPLOYEE\",\n      \"roles\": [\n        {\n          \"name\": \"MDMS Admin\",\n          \"code\": \"MDMS_ADMIN\",\n          \"tenantId\": \"pg\"\n        }\n      ],\n      \"active\": true,\n      \"tenantId\": \"pg\"\n    }\n  },\n  \"SchemaDefinition\": {\n    \"tenantId\": \"pg\",\n    \"code\": \"common.master\",\n    \"description\": \"Common Master Schema for Departments, Designations, and Complaint Types\",\n    \"isActive\": true,\n    \"definition\": {\n      \"type\": \"object\",\n      \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n      \"required\": [\n        \"departmentName\",\n        \"designationName\",\n        \"complaintType\",\n        \"complaintSubType\",\n        \"resolutionTimeHours\",\n        \"searchWords\"\n      ],\n      \"x-unique\": [\"complaintSubType\"],\n      \"properties\": {\n        \"departmentName\": {\n          \"type\": \"string\",\n          \"minLength\": 2,\n          \"maxLength\": 100,\n          \"description\": \"Name of the government department (e.g., WATER DEPARTMENT, HEALTH DEPARTMENT)\"\n        },\n        \"designationName\": {\n          \"type\": \"string\",\n          \"minLength\": 2,\n          \"maxLength\": 100,\n          \"description\": \"Job title/position within the department (e.g., Engineer, Supervisor)\"\n        },\n        \"complaintType\": {\n          \"type\": \"string\",\n          \"pattern\": \"^[A-Za-z0-9_ &-]+$\",\n          \"minLength\": 2,\n          \"maxLength\": 100,\n          \"description\": \"Parent complaint category\"\n        },\n        \"complaintSubType\": {\n          \"type\": \"string\",\n          \"pattern\": \"^[A-Za-z0-9_ &-]+$\",\n          \"minLength\": 2,\n          \"maxLength\": 100,\n          \"description\": \"Specific complaint sub-type name (must be unique)\"\n        },\n        \"resolutionTimeHours\": {\n          \"type\": \"number\",\n          \"minimum\": 0.5,\n          \"maximum\": 720,\n          \"description\": \"SLA hours for resolution\"\n        },\n        \"searchWords\": {\n          \"type\": \"string\",\n          \"pattern\": \"^[A-Za-z0-9_, &-]+$\",\n          \"description\": \"Comma-separated keywords for search\"\n        },\n        \"priority\": {\n          \"type\": [\"integer\", \"null\"],\n          \"minimum\": 1,\n          \"maximum\": 10,\n          \"description\": \"Priority level (1=highest, 10=lowest)\"\n        }\n      }\n    }\n  }\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8094/mdms-v2/schema/v1/_create",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8094",
+					"path": [
+						"mdms-v2",
+						"schema",
+						"v1",
+						"_create"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "State Info Schema Creation",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"RequestInfo\": {\n      \"apiId\": \"asset-services\",\n      \"msgId\": \"search with from and to values\",\n      \"authToken\": \"7c65fcc6-7bb1-43f8-a116-e62392d71576\",\n      \"userInfo\": {\n        \"id\": 30274,\n        \"uuid\": \"bd5f8ea6-a022-4e74-ac2c-edf3392c6fa4\",\n        \"userName\": \"MDMSADMIN\",\n        \"name\": \"MDMSADMIN\",\n        \"mobileNumber\": \"9035169726\",\n        \"type\": \"EMPLOYEE\",\n        \"roles\": [\n          {\n            \"name\": \"MDMS Admin\",\n            \"code\": \"MDMS_ADMIN\",\n            \"tenantId\": \"pg\"\n          }\n        ],\n        \"active\": true,\n        \"tenantId\": \"pg\"\n      }\n    },\n    \"SchemaDefinition\": {\n      \"tenantId\": \"pg\",\n      \"code\": \"tenant.stateInfo\",\n      \"description\": \"tenant.stateInfo\",\n      \"isActive\": true,\n      \"definition\": {\n        \"type\": \"object\",\n        \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n        \"required\": [\"code\"],\n        \"x-unique\": [\"code\"],\n        \"properties\": {\n          \"code\": {\n            \"type\": \"string\",\n            \"pattern\": \"^[a-z]+(\\\\.[a-z]+)*$\"\n          },\n          \"qrCodeUrl\": {\n            \"type\": \"string\"\n          },\n          \"bannerUrl\": {\n            \"type\": \"string\"\n          },\n          \"logoUrl\": {\n            \"type\": \"string\"\n          },\n          \"logoUrlWhite\": {\n            \"type\": \"string\"\n          },\n          \"stateLogo\": {\n            \"type\": \"string\"\n          }\n        },\n        \"x-ref-schema\": [],\n        \"additionalProperties\": false\n      }\n    }\n  }",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8094/mdms-v2/schema/v1/_create",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8094",
+					"path": [
+						"mdms-v2",
+						"schema",
+						"v1",
+						"_create"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Complaint type Schema Creation",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"RequestInfo\": {\n      \"apiId\": \"asset-services\",\n      \"msgId\": \"search with from and to values\",\n      \"authToken\": \"7c65fcc6-7bb1-43f8-a116-e62392d71576\",\n      \"userInfo\": {\n        \"id\": 30274,\n        \"uuid\": \"bd5f8ea6-a022-4e74-ac2c-edf3392c6fa4\",\n        \"userName\": \"MDMSADMIN\",\n        \"name\": \"MDMSADMIN\",\n        \"mobileNumber\": \"9035169726\",\n        \"type\": \"EMPLOYEE\",\n        \"roles\": [\n          {\n            \"name\": \"MDMS Admin\",\n            \"code\": \"MDMS_ADMIN\",\n            \"tenantId\": \"pg\"\n          }\n        ],\n        \"active\": true,\n        \"tenantId\": \"pg\"\n      }\n    },\n    \"SchemaDefinition\": {\n      \"tenantId\": \"pg\",\n      \"code\": \"RAINMAKER-PGR.ServiceDefs\",\n      \"description\": \"RAINMAKER-PGR.ServiceDefs\",\n      \"isActive\": true,\n      \"definition\": {\n        \"type\": \"object\",\n        \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n        \"required\": [\n          \"serviceCode\",\n          \"name\",\n          \"menuPath\",\n          \"active\"\n        ],\n        \"x-unique\": [\"serviceCode\"],\n        \"properties\": {\n          \"serviceCode\": {\n            \"type\": \"string\"\n          },\n          \"name\": {\n            \"type\": \"string\"\n          },\n          \"menuPath\": {\n            \"type\": \"string\"\n          },\n          \"active\": {\n            \"type\": \"boolean\"\n          },\n          \"department\": {\n            \"type\": \"string\"\n          },\n          \"slaHours\": {\n            \"type\": \"integer\"\n          },\n          \"keywords\": {\n            \"type\": \"string\"\n          },\n          \"priority\": {\n            \"type\": \"number\"\n          }\n        },\n        \"x-ref-schema\": [],\n        \"additionalProperties\": false\n      }\n    }\n  }",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8094/mdms-v2/schema/v1/_create",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8094",
+					"path": [
+						"mdms-v2",
+						"schema",
+						"v1",
+						"_create"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Localization schema Creation",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"RequestInfo\": {\n      \"apiId\": \"asset-services\",\n      \"msgId\": \"create localization schema\",\n      \"authToken\": \"7c65fcc6-7bb1-43f8-a116-e62392d71576\",\n      \"userInfo\": {\n        \"id\": 30274,\n        \"uuid\": \"bd5f8ea6-a022-4e74-ac2c-edf3392c6fa4\",\n        \"userName\": \"MDMSADMIN\",\n        \"name\": \"MDMSADMIN\",\n        \"mobileNumber\": \"9035169726\",\n        \"type\": \"EMPLOYEE\",\n        \"roles\": [\n          {\n            \"name\": \"MDMS Admin\",\n            \"code\": \"MDMS_ADMIN\",\n            \"tenantId\": \"pg\"\n          }\n        ],\n        \"active\": true,\n        \"tenantId\": \"pg\"\n      }\n    },\n    \"SchemaDefinition\": {\n      \"tenantId\": \"pg\",\n      \"code\": \"localization.master\",\n      \"description\": \"Localization Master Schema for Multi-language Translations\",\n      \"isActive\": true,\n      \"definition\": {\n        \"type\": \"object\",\n        \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n        \"required\": [\n          \"module\",\n          \"code\",\n          \"locale\"\n        ],\n        \"x-unique\": [\n          \"code\",\n          \"locale\"\n        ],\n        \"properties\": {\n          \"module\": {\n            \"type\": \"string\",\n            \"minLength\": 1,\n            \"maxLength\": 100,\n            \"description\": \"Module name (e.g., rainmaker-pgr, rainmaker-common)\"\n          },\n          \"code\": {\n            \"type\": \"string\",\n            \"minLength\": 1,\n            \"maxLength\": 200,\n            \"description\": \"Translation key (e.g., PGR_COMPLAINT_TYPE, CORE_COMMON_SAVE)\"\n          },\n          \"englishMessage\": {\n            \"type\": [\"string\", \"null\"],\n            \"maxLength\": 1000,\n            \"description\": \"English translation message\"\n          },\n          \"locale\": {\n            \"type\": \"string\",\n            \"pattern\": \"^[a-z]{2}_[A-Z]{2}$\",\n            \"description\": \"Locale code in format: language_COUNTRY (e.g., en_IN, hi_IN, ta_IN)\"\n          },\n          \"translation\": {\n            \"type\": [\"string\", \"null\"],\n            \"maxLength\": 1000,\n            \"description\": \"Translated message in the specified locale\"\n          }\n        }\n      }\n    }\n  }",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8094/mdms-v2/schema/v1/_create",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8094",
+					"path": [
+						"mdms-v2",
+						"schema",
+						"v1",
+						"_create"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}

@@ -1,0 +1,58 @@
+# =============================================================================
+# CRS Data Loader - Dependencies
+# Compatible with Python 3.8+
+# Cross-platform: Windows, macOS, Linux
+# =============================================================================
+
+# Core Data Processing
+pandas>=2.0.0,<3.0.0
+openpyxl>=3.1.0,<4.0.0
+xlsxwriter>=3.1.0,<4.0.0
+
+# HTTP Requests
+requests>=2.31.0,<3.0.0
+
+# Environment Variables
+python-dotenv>=1.0.0,<2.0.0
+
+# Jupyter Notebook Support
+notebook>=7.0.0,<8.0.0
+jupyterlab>=4.0.0,<5.0.0
+ipykernel>=6.25.0,<7.0.0
+ipywidgets>=8.1.0,<9.0.0
+
+# Progress Bars
+tqdm>=4.65.0,<5.0.0
+
+# Visualization (optional but used in notebook)
+plotly>=5.17.0,<6.0.0
+
+# Database Support (optional - only if using validator)
+sqlalchemy>=2.0.0,<3.0.0
+
+# PostgreSQL adapter (platform-specific handling below)
+# For most platforms: psycopg2-binary
+# Note: psycopg2-binary may need manual installation on some ARM platforms
+psycopg2-binary>=2.9.0,<3.0.0; platform_machine != "aarch64"
+
+# Type hints support
+typing-extensions>=4.7.0,<5.0.0
+
+# =============================================================================
+# Platform-Specific Notes:
+# =============================================================================
+#
+# ARM64/aarch64 (Apple Silicon, Raspberry Pi):
+#   - If psycopg2-binary fails, install system dependencies first:
+#     macOS: brew install postgresql
+#     Linux: sudo apt-get install libpq-dev python3-dev
+#     Then: pip install psycopg2
+#
+# Windows:
+#   - All packages should install without issues
+#   - If openpyxl has issues, ensure Visual C++ Redistributable is installed
+#
+# Linux:
+#   - May need: sudo apt-get install python3-pip python3-dev build-essential
+#
+# =============================================================================
