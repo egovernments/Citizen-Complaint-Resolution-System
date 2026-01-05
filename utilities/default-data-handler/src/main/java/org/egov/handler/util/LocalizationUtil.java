@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
@@ -18,7 +19,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 @Slf4j
@@ -50,8 +50,10 @@ public class LocalizationUtil {
 		}
 	}
 
+	@Async
 	public void upsertLocalizationFromFile(DefaultDataRequest defaultDataRequest, String localizationPath){
 
+		
 		List<Message> messageList = addMessagesFromFile(defaultDataRequest, localizationPath);
 		defaultDataRequest.getRequestInfo().getUserInfo().setId(128L);
 
@@ -81,7 +83,7 @@ public class LocalizationUtil {
 					// Continue with next batch
 				}
 			}
-			log.info("Localization data upserted successfully for tenant: {}", tenantId);
+			log.info("✓ Asynchronous localization data upsert completed for tenant: {}", tenantId);
 		} catch (Exception e) {
 			log.error("Error creating Tenant localization data for {} : {}", tenantId, e.getMessage());
 //			throw new CustomException("TENANT", "Failed to create localization data for " + tenantId + " : " + e.getMessage());
