@@ -2293,66 +2293,6 @@
     "code": "null",
     "path": ""
   },
-  {
-    "id": 17,
-    "name": "MDMS",
-    "url": "/egov-mdms-service/v2/_create/common-masters.Department",
-    "displayName": "create new department",
-    "orderNumber": 1,
-    "parentModule": "",
-    "enabled": true,
-    "serviceCode": "MDMS",
-    "code": "null",
-    "path": ""
-  },
-  {
-    "id": 18,
-    "name": "MDMS",
-    "url": "/egov-mdms-service/v2/_create/common-masters.Designation",
-    "displayName": "create new Designation",
-    "orderNumber": 1,
-    "parentModule": "",
-    "enabled": true,
-    "serviceCode": "MDMS",
-    "code": "null",
-    "path": ""
-  },
-  {
-    "id": 19,
-    "name": "MDMS",
-    "url": "/egov-mdms-service/v2/_create/RAINMAKER-PGR.ServiceDefs",
-    "displayName": "create new complaint type",
-    "orderNumber": 1,
-    "parentModule": "",
-    "enabled": true,
-    "serviceCode": "MDMS",
-    "code": "null",
-    "path": ""
-  },
-  {
-    "id": 20,
-    "name": "MDMS",
-    "url": "/egov-mdms-service/v2/_create/tenant.tenants",
-    "displayName": "create new tenant",
-    "orderNumber": 1,
-    "parentModule": "",
-    "enabled": true,
-    "serviceCode": "MDMS",
-    "code": "null",
-    "path": ""
-  },
-  {
-    "id": 21,
-    "name": "MDMS",
-    "url": "/egov-mdms-service/v2/_create/common-masters.StateInfo",
-    "displayName": "create new state info",
-    "orderNumber": 1,
-    "parentModule": "",
-    "enabled": true,
-    "serviceCode": "MDMS",
-    "code": "null",
-    "path": ""
-  },
    {
     "id": 22,
     "name": "egov-bnd-mgmt",
