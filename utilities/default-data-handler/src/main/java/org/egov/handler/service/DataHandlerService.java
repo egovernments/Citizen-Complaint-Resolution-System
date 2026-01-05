@@ -681,15 +681,15 @@ public class DataHandlerService {
                 log.error("Failed to create users/employees (non-critical): {}", e.getMessage());
             }
 
-            log.info("Step 4: Loading production localization data");
-            // 5. Load production localization
+            log.info("Step 4: Loading production localization data (in background)");
+            // 5. Load production localization (runs asynchronously in background)
             localizationUtil.upsertLocalizationFromFile(defaultDataRequest,
                     serviceConfig.getDefaultLocalizationDataPath());
-            log.info("✓ Production localization data loaded for new tenant: {}", targetTenantId);
 
             log.info("========================================");
             log.info("✓✓✓ Tenant {} created successfully", targetTenantId);
-            log.info("Loaded: Schemas + Production MDMS + Users + Employees + Production Localization");
+            log.info("Loaded: Schemas + Production MDMS + Users + Employees");
+            log.info("Note: Localization data is being loaded in background");
             log.info("========================================");
         } catch (Exception e) {
             log.error("Failed to load production tenant data for tenant: {}", newTenantRequest.getTargetTenantId(), e);
