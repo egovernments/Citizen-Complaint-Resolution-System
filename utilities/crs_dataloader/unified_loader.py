@@ -1671,6 +1671,7 @@ class APIUploader:
         return result
 
     def setup_default_data(self, targetTenantId: str, module: str, schemaCodes: list, onlySchemas: bool = False) -> dict:
+        import sys
 
         url = f"{self.Datahandlerurl}/tenant/new"
 
@@ -1690,25 +1691,26 @@ class APIUploader:
             "onlySchemas": onlySchemas
         }
 
-        print("\n[DEFAULT DATA SETUP]")
-        print(f"   Target Tenant: {targetTenantId}")
-        print(f"   Module:        {module}")
-        print(f"   Schemas:       {schemaCodes}")
-        print(f"   Only Schemas:  {onlySchemas}")
-        print(f"   API URL:       {url}")
-        print("="*60)
+        print("\n[DEFAULT DATA SETUP]", flush=True)
+        print(f"   Target Tenant: {targetTenantId}", flush=True)
+        print(f"   Module:        {module}", flush=True)
+        print(f"   Schemas:       {schemaCodes}", flush=True)
+        print(f"   Only Schemas:  {onlySchemas}", flush=True)
+        print(f"   API URL:       {url}", flush=True)
+        print("="*60, flush=True)
 
         try:
             # Tenant creation can take 5-10 minutes, use long timeout
-            print(f"   ⏳ This may take 5-10 minutes, please wait...")
+            print(f"   ⏳ This may take 5-10 minutes, please wait...", flush=True)
+            sys.stdout.flush()
             response = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=1200)
             response.raise_for_status()
 
             result = response.json()
 
-            print(f"   [SUCCESS] Default data setup complete for {targetTenantId}")
-            print("Once the new tenant is created, please log in again using the new root tenant admin credentials.")
-            print("="*60)
+            print(f"   [SUCCESS] Default data setup complete for {targetTenantId}", flush=True)
+            print("="*60, flush=True)
+            print("Once the new tenant is created, please log in again using the new root tenant admin credentials.", flush=True)
 
             return {
                 "success": True,
@@ -1717,14 +1719,14 @@ class APIUploader:
 
         except requests.exceptions.HTTPError as e:
             error_text = e.response.text if hasattr(e.response, "text") else str(e)
-            print(f"[FAILED] HTTP ERROR {e.response.status_code}")
-            print(error_text)
-            print("="*60)
+            print(f"[FAILED] HTTP ERROR {e.response.status_code}", flush=True)
+            print(error_text, flush=True)
+            print("="*60, flush=True)
             return {"success": False, "error": error_text}
 
         except Exception as e:
-            print(f"[ERROR] {str(e)}")
-            print("="*60)
+            print(f"[ERROR] {str(e)}", flush=True)
+            print("="*60, flush=True)
             return {"success": False, "error": str(e)}
 
     # ========================================================================
