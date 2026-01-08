@@ -1726,7 +1726,28 @@ class APIUploader:
 
             print(f"   [SUCCESS] Default data setup complete for {targetTenantId}", flush=True)
             print("="*60, flush=True)
-            print("Once the new tenant is created, please log in again using the new root tenant admin credentials.", flush=True)
+
+            # Re-authenticate with the new tenant
+            print(f"\n🔄 Re-authenticating with new tenant: {targetTenantId}...", flush=True)
+            sys.stdout.flush()
+
+            # Store original tenant
+            original_tenant = self.tenant_id
+
+            # Update tenant ID to new tenant
+            self.tenant_id = targetTenantId
+
+            # Re-authenticate
+            try:
+                self.authenticate()
+                print(f"✅ Successfully authenticated with tenant: {targetTenantId}", flush=True)
+                print(f"   User: {self.user_info.get('userName', 'N/A')}", flush=True)
+                print(f"   Roles: {[role.get('code') for role in self.user_info.get('roles', [])]}", flush=True)
+            except Exception as auth_error:
+                print(f"⚠️  Re-authentication failed: {str(auth_error)}", flush=True)
+                print(f"   You may need to manually re-authenticate with tenant: {targetTenantId}", flush=True)
+                # Restore original tenant if re-auth fails
+                self.tenant_id = original_tenant
 
             return {
                 "success": True,
