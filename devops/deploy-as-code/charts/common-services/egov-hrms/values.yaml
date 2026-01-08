@@ -16,12 +16,12 @@ initContainers:
     schemaTable: "egov_hrms_schema"
     image:
       repository: "egov-hrms-db"
-      tag: "hrms-boundary-dfe1cb188f-16"
+      tag: "hrms-boundary-0a4e737"
 
 # Container Configs
 image:
   repository: "egov-hrms"
-  tag: "hrms-boundary-dfe1cb188f-16"
+  tag: "hrms-boundary-0a4e737"
 replicas: "1"
 healthChecks:
   enabled: true
