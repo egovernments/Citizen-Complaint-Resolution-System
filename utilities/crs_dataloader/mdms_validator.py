@@ -30,7 +30,7 @@ class MDMSValidator:
 
         # Build MDMS URL using gateway
         self.base_url = base_url.rstrip('/')
-        self.mdms_url = f"{self.base_url}/egov-mdms-service"
+        self.mdms_url = f"{self.base_url}/mdms-v2"
         self.auth_token = auth_token
         self.user_info = user_info or {}
         self.loaded_data = {}  # Cache for loaded Excel data
