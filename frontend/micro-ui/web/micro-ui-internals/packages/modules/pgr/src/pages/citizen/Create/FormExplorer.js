@@ -19,7 +19,7 @@ const configs = [
   createComplaint,
   pinComplaintLocaton,
   locationDetails,
-  complaintsLocation,
+  //complaintsLocation,
   additionalDetails,
   complaintsUploadimages
 

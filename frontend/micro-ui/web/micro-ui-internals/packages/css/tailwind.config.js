@@ -12,7 +12,7 @@ module.exports = {
     colors: {
       primary: {
         light: "#F18F5E",
-        main: "#F47738",
+        main: "rgb(3, 75, 100)",
         dark: "#C8602B",
       },
       secondary: "#22394D",
@@ -93,7 +93,7 @@ module.exports = {
     },
     boxShadow: {
       card: "0 1px 2px 0 rgba(0, 0, 0, 0.16)",
-      radiobtn: "0 0 0 5px #F47738",
+      radiobtn: "0 0 0 5px rgb(3, 75, 100)",
     },
     inset: {
       0: 0,
@@ -103,7 +103,7 @@ module.exports = {
     extend: {},
     digitv2: {
       lightTheme: {
-        primary: "#C84C0E",
+        primary: "rgb(3, 75, 100)",
         "primary-2": "#0b4b66",
         "text-color-primary": "#0B0C0C",
         "text-color-secondary": "#505A5F",
