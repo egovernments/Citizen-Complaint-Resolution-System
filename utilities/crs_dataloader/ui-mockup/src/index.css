@@ -1,0 +1,126 @@
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* DIGIT Color Palette */
+    --background: 0 0% 93%;           /* #EEEEEE */
+    --foreground: 0 8% 4%;            /* #0B0C0C */
+    --card: 0 0% 100%;                /* #FFFFFF */
+    --card-foreground: 0 8% 4%;       /* #0B0C0C */
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 8% 4%;
+    --primary: 24 91% 42%;            /* #c84c0e - DIGIT Orange */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 204 38% 22%;         /* #22394D */
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 96%;                /* #F5F5F5 */
+    --muted-foreground: 200 9% 34%;   /* #505A5F */
+    --accent: 24 91% 96%;             /* Light orange accent */
+    --accent-foreground: 24 91% 42%;
+    --destructive: 7 77% 47%;         /* #D4351C */
+    --destructive-foreground: 0 0% 100%;
+    --border: 30 3% 83%;              /* #D6D5D4 */
+    --input: 200 9% 34%;              /* #505A5F */
+    --ring: 24 91% 42%;               /* Orange ring */
+    --radius: 0.25rem;                /* 4px - DIGIT standard */
+    --chart-1: 204 80% 43%;
+    --chart-2: 45 93% 58%;
+    --chart-3: 280 60% 52%;
+    --chart-4: 28 85% 56%;
+    --chart-5: 187 85% 53%;
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: 'Roboto', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    margin: 0;
+    min-height: 100vh;
+  }
+  .dark {
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 9%;
+    --secondary: 0 0% 14.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 0 0% 14.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 0 0% 83.1%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+  }
+}
+
+/* Skip link for accessibility */
+.skip-link {
+  position: absolute;
+  top: -2.5rem;
+  left: 0;
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  padding: 0.5rem;
+  z-index: 50;
+  transition: top 0.3s;
+}
+
+.skip-link:focus {
+  top: 0;
+}
+
+/* Focus visible for accessibility */
+*:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--ring));
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: hsl(var(--muted));
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--muted-foreground) / 0.5);
+}
+
+
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
