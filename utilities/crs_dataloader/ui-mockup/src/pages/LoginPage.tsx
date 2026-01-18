@@ -8,19 +8,14 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { DigitCard, DigitCardHeader, DigitCardSubHeader } from '@/components/digit/DigitCard';
 import { LabelFieldPair, CardLabel, Field } from '@/components/digit/LabelFieldPair';
 import { SubmitBar } from '@/components/digit/SubmitBar';
-
-const environments = [
-  { url: 'https://unified-dev.digit.org', name: 'Development' },
-  { url: 'https://staging.digit.org', name: 'Staging' },
-  { url: 'https://uat.digit.org', name: 'UAT' },
-];
+import { apiClient, ENVIRONMENTS, ApiClientError } from '@/api';
 
 export default function LoginPage() {
   const { login } = useApp();
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
-    environment: environments[0].url,
+    environment: ENVIRONMENTS[0].url,
     username: '',
     password: '',
     tenantCode: 'pg',
@@ -34,35 +29,54 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    try {
+      // Set environment first
+      apiClient.setEnvironment(formData.environment);
 
-    // Mock validation
-    if (formData.username === 'admin' && formData.password === 'admin') {
+      // Attempt real login
+      const response = await apiClient.login({
+        username: formData.username,
+        password: formData.password,
+        tenantId: formData.tenantCode,
+        userType: 'EMPLOYEE',
+      });
+
+      // Extract roles from response
+      const roles = response.UserRequest.roles?.map(r => r.code) || [];
+
+      // Check for required roles
+      const hasRequiredRole = roles.some(r =>
+        ['MDMS_ADMIN', 'SUPERUSER', 'LOC_ADMIN', 'EMPLOYEE'].includes(r)
+      );
+
+      if (!hasRequiredRole) {
+        setError('User does not have required roles (MDMS_ADMIN, SUPERUSER, or LOC_ADMIN)');
+        setLoading(false);
+        return;
+      }
+
+      // Update app state
       login(
         {
-          name: 'Admin User',
-          email: 'admin@digit.org',
-          roles: ['MDMS_ADMIN', 'SUPERUSER'],
+          name: response.UserRequest.name,
+          email: response.UserRequest.emailId || `${response.UserRequest.userName}@digit.org`,
+          roles: roles,
         },
         formData.environment,
         formData.tenantCode
       );
+
       navigate('/phase/1');
-    } else if (formData.username && formData.password) {
-      // Accept any credentials for demo
-      login(
-        {
-          name: formData.username,
-          email: `${formData.username}@digit.org`,
-          roles: ['MDMS_ADMIN'],
-        },
-        formData.environment,
-        formData.tenantCode
-      );
-      navigate('/phase/1');
-    } else {
-      setError('Please enter username and password');
+    } catch (err) {
+      console.error('Login error:', err);
+
+      if (err instanceof ApiClientError) {
+        setError(err.firstError);
+      } else if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Login failed. Please check your credentials.');
+      }
       setLoading(false);
     }
   };
@@ -92,7 +106,7 @@ export default function LoginPage() {
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Error</AlertTitle>
                 <AlertDescription>
-                  {error}. Please check your credentials and try again.
+                  {error}
                 </AlertDescription>
               </Alert>
             )}
@@ -109,9 +123,9 @@ export default function LoginPage() {
                     <SelectValue placeholder="Select environment" />
                   </SelectTrigger>
                   <SelectContent>
-                    {environments.map((env) => (
+                    {ENVIRONMENTS.map((env) => (
                       <SelectItem key={env.url} value={env.url}>
-                        {env.url} ({env.name})
+                        {env.name} ({env.url.replace('https://', '')})
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -202,7 +216,7 @@ export default function LoginPage() {
 
         {/* Help text */}
         <p className="text-center text-sm text-muted-foreground mt-6">
-          Demo: Use any username/password to login
+          Requires MDMS_ADMIN or SUPERUSER role
         </p>
       </div>
     </div>

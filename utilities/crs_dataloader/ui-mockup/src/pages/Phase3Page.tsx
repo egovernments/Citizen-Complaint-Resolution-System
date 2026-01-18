@@ -10,7 +10,9 @@ import {
   Loader2,
   Building,
   MessageSquare,
-  AlertCircle
+  AlertCircle,
+  X,
+  AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -22,59 +24,198 @@ import { DigitCard } from '@/components/digit/DigitCard';
 import { Header, SubHeader } from '@/components/digit/Header';
 import { SubmitBar } from '@/components/digit/SubmitBar';
 import { Banner } from '@/components/digit/Banner';
+import { mdmsService, localizationService, ApiClientError } from '@/api';
+import {
+  parseExcelFile,
+  parseDepartmentExcel,
+  parseDesignationExcel,
+  parseComplaintTypeExcel,
+} from '@/utils/excelParser';
+import type {
+  DepartmentExcelRow,
+  DesignationExcelRow,
+  ComplaintTypeExcelRow,
+} from '@/api/types';
 
 type Step = 'landing' | 'upload' | 'preview' | 'creating-depts' | 'creating-complaints' | 'complete';
-
-const mockDepartments = [
-  { code: 'WATER', name: 'Water Department', designations: ['Engineer', 'Junior Engineer'] },
-  { code: 'SANITATION', name: 'Sanitation Dept', designations: ['Inspector'] },
-  { code: 'REVENUE', name: 'Revenue Department', designations: ['Tax Officer', 'Clerk'] },
-];
-
-const mockComplaintTypes = [
-  { code: 'WS001', name: 'No Water Supply', dept: 'WATER', sla: 24 },
-  { code: 'WS002', name: 'Low Pressure', dept: 'WATER', sla: 48 },
-  { code: 'SN001', name: 'Garbage Pile', dept: 'SANITATION', sla: 24 },
-  { code: 'SN002', name: 'Drain Blockage', dept: 'SANITATION', sla: 48 },
-  { code: 'RV001', name: 'Tax Query', dept: 'REVENUE', sla: 72 },
-];
 
 export default function Phase3Page() {
   const { completePhase, addUndo, state } = useApp();
   const navigate = useNavigate();
 
   const [step, setStep] = useState<Step>('landing');
-  const [, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
+  const [progressMessage, setProgressMessage] = useState('');
+
+  // Parsed data
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [departments, setDepartments] = useState<DepartmentExcelRow[]>([]);
+  const [designations, setDesignations] = useState<DesignationExcelRow[]>([]);
+  const [complaintTypes, setComplaintTypes] = useState<ComplaintTypeExcelRow[]>([]);
+
+  // Created counts
+  const [createdDepts, setCreatedDepts] = useState(0);
+  const [createdDesigs, setCreatedDesigs] = useState(0);
+  const [createdComplaints, setCreatedComplaints] = useState(0);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setError(null);
+    setLoading(true);
+
+    try {
+      const workbook = await parseExcelFile(file);
+
+      // Try to parse departments
+      const deptResult = parseDepartmentExcel(workbook);
+      if (deptResult.data.length > 0) {
+        setDepartments(deptResult.data);
+      }
+
+      // Try to parse designations
+      const desigResult = parseDesignationExcel(workbook);
+      if (desigResult.data.length > 0) {
+        setDesignations(desigResult.data);
+      }
+
+      // Try to parse complaint types
+      const complaintResult = parseComplaintTypeExcel(workbook);
+      if (complaintResult.data.length > 0) {
+        setComplaintTypes(complaintResult.data);
+      }
+
+      // Check if we have any data
+      if (deptResult.data.length === 0 && desigResult.data.length === 0 && complaintResult.data.length === 0) {
+        setError('No valid data found in Excel file. Please check the format.');
+        return;
+      }
+
+      setUploadedFile(file);
+      setStep('preview');
+    } catch (err) {
+      console.error('Excel parse error:', err);
+      setError('Failed to parse Excel file. Please ensure it is a valid .xlsx file.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleUpload = async () => {
     setLoading(true);
+    setError(null);
     setStep('creating-depts');
-
-    // Simulate creating departments
-    for (let i = 0; i <= 100; i += 20) {
-      await new Promise(resolve => setTimeout(resolve, 400));
-      setProgress(i);
-    }
-
-    addUndo('create_departments', 'Created 3 departments and 5 designations');
-    setStep('creating-complaints');
     setProgress(0);
 
-    // Simulate creating complaint types
-    for (let i = 0; i <= 100; i += 20) {
-      await new Promise(resolve => setTimeout(resolve, 300));
-      setProgress(i);
-    }
+    try {
+      // Create departments
+      if (departments.length > 0) {
+        setProgressMessage('Creating departments...');
+        const deptResults = await mdmsService.createDepartments(
+          state.tenant,
+          departments.map(d => ({
+            code: d.code,
+            name: d.name,
+            active: d.active,
+          }))
+        );
+        setCreatedDepts(deptResults.success.length);
 
-    addUndo('create_complaints', 'Created 5 complaint types');
-    setLoading(false);
-    setStep('complete');
+        // Create localizations for departments
+        await localizationService.uploadDepartmentLocalizations(
+          state.tenant,
+          departments.map(d => ({ code: d.code, name: d.name })),
+          'en_IN'
+        );
+
+        setProgress(30);
+      }
+
+      // Create designations
+      if (designations.length > 0) {
+        setProgressMessage('Creating designations...');
+        const desigResults = await mdmsService.createDesignations(
+          state.tenant,
+          designations.map(d => ({
+            code: d.code,
+            name: d.name,
+            department: d.department,
+            active: d.active,
+          }))
+        );
+        setCreatedDesigs(desigResults.success.length);
+
+        // Create localizations for designations
+        await localizationService.uploadDesignationLocalizations(
+          state.tenant,
+          designations.map(d => ({ code: d.code, name: d.name })),
+          'en_IN'
+        );
+
+        setProgress(60);
+      }
+
+      addUndo('create_departments', `Created ${createdDepts} departments and ${createdDesigs} designations`);
+
+      // Switch to complaint types
+      setStep('creating-complaints');
+      setProgress(0);
+
+      // Create complaint types
+      if (complaintTypes.length > 0) {
+        setProgressMessage('Creating complaint types...');
+        const complaintResults = await mdmsService.createComplaintTypes(
+          state.tenant,
+          complaintTypes.map(ct => ({
+            serviceCode: ct.serviceCode,
+            serviceName: ct.serviceName,
+            department: ct.department,
+            slaHours: ct.slaHours,
+            active: ct.active,
+          }))
+        );
+        setCreatedComplaints(complaintResults.success.length);
+
+        // Create localizations for complaint types
+        await localizationService.uploadComplaintTypeLocalizations(
+          state.tenant,
+          complaintTypes.map(ct => ({
+            serviceCode: ct.serviceCode,
+            serviceName: ct.serviceName,
+          })),
+          'en_IN'
+        );
+
+        setProgress(100);
+      }
+
+      addUndo('create_complaints', `Created ${createdComplaints} complaint types`);
+      setStep('complete');
+    } catch (err) {
+      console.error('MDMS creation error:', err);
+      if (err instanceof ApiClientError) {
+        setError(err.firstError);
+      } else if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Failed to create master data. Please try again.');
+      }
+      setStep('preview'); // Go back to preview on error
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleContinue = () => {
     completePhase(3);
     navigate('/phase/4');
+  };
+
+  const handleDownloadTemplate = () => {
+    alert('Template download would start here.');
   };
 
   return (
@@ -89,6 +230,19 @@ export default function Phase3Page() {
           <p className="text-sm sm:text-base text-muted-foreground truncate">Configure departments, designations, and complaint types</p>
         </div>
       </div>
+
+      {/* Error display */}
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription className="flex items-center justify-between">
+            <span>{error}</span>
+            <Button variant="ghost" size="sm" onClick={() => setError(null)} className="h-6 w-6 p-0">
+              <X className="h-4 w-4" />
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Landing */}
       {step === 'landing' && (
@@ -112,7 +266,12 @@ export default function Phase3Page() {
                 <p className="text-xs sm:text-sm text-muted-foreground">Common and Complaint Master.xlsx</p>
               </div>
             </div>
-            <Button variant="outline" size="sm" className="sm:ml-auto w-full sm:w-auto border-primary text-primary hover:bg-primary/10">
+            <Button
+              variant="outline"
+              size="sm"
+              className="sm:ml-auto w-full sm:w-auto border-primary text-primary hover:bg-primary/10"
+              onClick={handleDownloadTemplate}
+            >
               <Download className="w-4 h-4 mr-2" />
               Download Template
             </Button>
@@ -166,13 +325,32 @@ export default function Phase3Page() {
 
           <div
             className="border-2 border-dashed border-primary/30 rounded p-6 sm:p-12 text-center hover:border-primary hover:bg-primary/5 transition-colors cursor-pointer mb-4 sm:mb-6"
-            onClick={() => setStep('preview')}
+            onClick={() => document.getElementById('common-master-upload')?.click()}
           >
-            <Upload className="w-8 h-8 sm:w-12 sm:h-12 text-primary mx-auto mb-3 sm:mb-4" />
-            <p className="text-sm sm:text-lg font-condensed font-medium text-foreground mb-2">
-              Drop Common and Complaint Master.xlsx here
-            </p>
-            <p className="text-xs sm:text-sm text-muted-foreground">or click to browse</p>
+            {loading ? (
+              <>
+                <Loader2 className="w-8 h-8 sm:w-12 sm:h-12 text-primary mx-auto mb-3 sm:mb-4 animate-spin" />
+                <p className="text-sm sm:text-lg font-condensed font-medium text-foreground mb-2">
+                  Parsing Excel file...
+                </p>
+              </>
+            ) : (
+              <>
+                <Upload className="w-8 h-8 sm:w-12 sm:h-12 text-primary mx-auto mb-3 sm:mb-4" />
+                <p className="text-sm sm:text-lg font-condensed font-medium text-foreground mb-2">
+                  Drop Common and Complaint Master.xlsx here
+                </p>
+                <p className="text-xs sm:text-sm text-muted-foreground">or click to browse</p>
+              </>
+            )}
+            <input
+              id="common-master-upload"
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleFileUpload}
+              className="hidden"
+              disabled={loading}
+            />
           </div>
 
           <div className="flex justify-between">
@@ -186,84 +364,170 @@ export default function Phase3Page() {
         <DigitCard>
           <div className="flex items-center gap-2 text-primary mb-3 sm:mb-4">
             <Check className="w-4 h-4 sm:w-5 sm:h-5" />
-            <span className="font-medium text-sm sm:text-base truncate">File loaded: Common and Complaint Master.xlsx</span>
+            <span className="font-medium text-sm sm:text-base truncate">File: {uploadedFile?.name}</span>
           </div>
 
           <Tabs defaultValue="depts" className="mb-3 sm:mb-4">
             <TabsList className="w-full sm:w-auto flex-wrap h-auto gap-1 p-1 bg-muted">
-              <TabsTrigger value="depts" className="text-xs sm:text-sm flex-1 sm:flex-none data-[state=active]:bg-primary data-[state=active]:text-white">Depts & Desig ({mockDepartments.length})</TabsTrigger>
-              <TabsTrigger value="complaints" className="text-xs sm:text-sm flex-1 sm:flex-none data-[state=active]:bg-primary data-[state=active]:text-white">Complaints ({mockComplaintTypes.length})</TabsTrigger>
+              <TabsTrigger value="depts" className="text-xs sm:text-sm flex-1 sm:flex-none data-[state=active]:bg-primary data-[state=active]:text-white">
+                Depts ({departments.length}) & Desig ({designations.length})
+              </TabsTrigger>
+              <TabsTrigger value="complaints" className="text-xs sm:text-sm flex-1 sm:flex-none data-[state=active]:bg-primary data-[state=active]:text-white">
+                Complaints ({complaintTypes.length})
+              </TabsTrigger>
             </TabsList>
+
             <TabsContent value="depts">
-              <div className="overflow-x-auto -mx-4 sm:mx-0">
-                <div className="min-w-[500px] sm:min-w-0 px-4 sm:px-0">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-muted/50">
-                        <TableHead className="text-xs sm:text-sm font-condensed">Status</TableHead>
-                        <TableHead className="text-xs sm:text-sm font-condensed">Dept Code</TableHead>
-                        <TableHead className="text-xs sm:text-sm font-condensed">Dept Name</TableHead>
-                        <TableHead className="text-xs sm:text-sm font-condensed">Designations</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {mockDepartments.map((dept) => (
-                        <TableRow key={dept.code}>
-                          <TableCell>
-                            <Badge className="gap-1 text-xs bg-success text-white"><Check className="w-3 h-3" /> Valid</Badge>
-                          </TableCell>
-                          <TableCell className="font-mono text-xs sm:text-sm">{dept.code}</TableCell>
-                          <TableCell className="text-xs sm:text-sm">{dept.name}</TableCell>
-                          <TableCell className="text-xs sm:text-sm">{dept.designations.join(', ')}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+              <div className="space-y-4">
+                {/* Departments */}
+                {departments.length > 0 && (
+                  <div>
+                    <h4 className="font-condensed font-medium text-sm mb-2">Departments</h4>
+                    <div className="overflow-x-auto -mx-4 sm:mx-0">
+                      <div className="min-w-[400px] sm:min-w-0 px-4 sm:px-0">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-muted/50">
+                              <TableHead className="text-xs sm:text-sm font-condensed">Status</TableHead>
+                              <TableHead className="text-xs sm:text-sm font-condensed">Code</TableHead>
+                              <TableHead className="text-xs sm:text-sm font-condensed">Name</TableHead>
+                              <TableHead className="text-xs sm:text-sm font-condensed">Active</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {departments.slice(0, 10).map((dept) => (
+                              <TableRow key={dept.code}>
+                                <TableCell>
+                                  <Badge className="gap-1 text-xs bg-success text-white">
+                                    <Check className="w-3 h-3" /> Valid
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="font-mono text-xs sm:text-sm">{dept.code}</TableCell>
+                                <TableCell className="text-xs sm:text-sm">{dept.name}</TableCell>
+                                <TableCell className="text-xs sm:text-sm">{dept.active ? 'Yes' : 'No'}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                        {departments.length > 10 && (
+                          <p className="text-xs text-muted-foreground text-center py-2">
+                            Showing first 10 of {departments.length} departments
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Designations */}
+                {designations.length > 0 && (
+                  <div>
+                    <h4 className="font-condensed font-medium text-sm mb-2">Designations</h4>
+                    <div className="overflow-x-auto -mx-4 sm:mx-0">
+                      <div className="min-w-[400px] sm:min-w-0 px-4 sm:px-0">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-muted/50">
+                              <TableHead className="text-xs sm:text-sm font-condensed">Status</TableHead>
+                              <TableHead className="text-xs sm:text-sm font-condensed">Code</TableHead>
+                              <TableHead className="text-xs sm:text-sm font-condensed">Name</TableHead>
+                              <TableHead className="text-xs sm:text-sm font-condensed">Department</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {designations.slice(0, 10).map((desig) => (
+                              <TableRow key={desig.code}>
+                                <TableCell>
+                                  <Badge className="gap-1 text-xs bg-success text-white">
+                                    <Check className="w-3 h-3" /> Valid
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="font-mono text-xs sm:text-sm">{desig.code}</TableCell>
+                                <TableCell className="text-xs sm:text-sm">{desig.name}</TableCell>
+                                <TableCell className="font-mono text-xs sm:text-sm">{desig.department || '-'}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                        {designations.length > 10 && (
+                          <p className="text-xs text-muted-foreground text-center py-2">
+                            Showing first 10 of {designations.length} designations
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {departments.length === 0 && designations.length === 0 && (
+                  <Alert variant="warning">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>No departments or designations found in the file.</AlertDescription>
+                  </Alert>
+                )}
               </div>
             </TabsContent>
+
             <TabsContent value="complaints">
-              <div className="overflow-x-auto -mx-4 sm:mx-0">
-                <div className="min-w-[500px] sm:min-w-0 px-4 sm:px-0">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-muted/50">
-                        <TableHead className="text-xs sm:text-sm font-condensed">Status</TableHead>
-                        <TableHead className="text-xs sm:text-sm font-condensed">Service Code</TableHead>
-                        <TableHead className="text-xs sm:text-sm font-condensed">Service Name</TableHead>
-                        <TableHead className="text-xs sm:text-sm font-condensed">SLA</TableHead>
-                        <TableHead className="text-xs sm:text-sm font-condensed">Dept</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {mockComplaintTypes.map((type) => (
-                        <TableRow key={type.code}>
-                          <TableCell>
-                            <Badge className="gap-1 text-xs bg-success text-white"><Check className="w-3 h-3" /> Valid</Badge>
-                          </TableCell>
-                          <TableCell className="font-mono text-xs sm:text-sm">{type.code}</TableCell>
-                          <TableCell className="text-xs sm:text-sm">{type.name}</TableCell>
-                          <TableCell className="text-xs sm:text-sm">{type.sla}h</TableCell>
-                          <TableCell className="font-mono text-xs sm:text-sm">{type.dept}</TableCell>
+              {complaintTypes.length > 0 ? (
+                <div className="overflow-x-auto -mx-4 sm:mx-0">
+                  <div className="min-w-[500px] sm:min-w-0 px-4 sm:px-0">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/50">
+                          <TableHead className="text-xs sm:text-sm font-condensed">Status</TableHead>
+                          <TableHead className="text-xs sm:text-sm font-condensed">Service Code</TableHead>
+                          <TableHead className="text-xs sm:text-sm font-condensed">Service Name</TableHead>
+                          <TableHead className="text-xs sm:text-sm font-condensed">SLA</TableHead>
+                          <TableHead className="text-xs sm:text-sm font-condensed">Dept</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {complaintTypes.slice(0, 15).map((type) => (
+                          <TableRow key={type.serviceCode}>
+                            <TableCell>
+                              <Badge className="gap-1 text-xs bg-success text-white">
+                                <Check className="w-3 h-3" /> Valid
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="font-mono text-xs sm:text-sm">{type.serviceCode}</TableCell>
+                            <TableCell className="text-xs sm:text-sm">{type.serviceName}</TableCell>
+                            <TableCell className="text-xs sm:text-sm">{type.slaHours}h</TableCell>
+                            <TableCell className="font-mono text-xs sm:text-sm">{type.department}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    {complaintTypes.length > 15 && (
+                      <p className="text-xs text-muted-foreground text-center py-2">
+                        Showing first 15 of {complaintTypes.length} complaint types
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <Alert variant="warning">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>No complaint types found in the file.</AlertDescription>
+                </Alert>
+              )}
             </TabsContent>
           </Tabs>
 
           <p className="text-xs sm:text-sm text-muted-foreground mb-4 sm:mb-6">
-            Summary: <span className="text-primary font-medium">{mockDepartments.length} departments</span> • <span className="text-primary font-medium">5 designations</span> • <span className="text-primary font-medium">{mockComplaintTypes.length} complaint types</span>
+            Summary:
+            <span className="text-primary font-medium"> {departments.length} departments</span> •
+            <span className="text-primary font-medium"> {designations.length} designations</span> •
+            <span className="text-primary font-medium"> {complaintTypes.length} complaint types</span>
           </p>
 
           <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0">
             <Button variant="ghost" size="sm" onClick={() => setStep('upload')} className="text-muted-foreground hover:text-primary">← Change File</Button>
             <SubmitBar
-              label="Create All"
+              label={loading ? 'Creating...' : 'Create All'}
               onSubmit={handleUpload}
-              icon={<ChevronRight className="w-4 h-4" />}
+              disabled={loading || (departments.length === 0 && designations.length === 0 && complaintTypes.length === 0)}
+              icon={loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
             />
           </div>
         </DigitCard>
@@ -276,16 +540,16 @@ export default function Phase3Page() {
 
           <div className="mb-4 sm:mb-6">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs sm:text-sm font-medium">Creating Departments...</span>
+              <span className="text-xs sm:text-sm font-medium">{progressMessage}</span>
               <span className="text-xs sm:text-sm text-primary font-medium">{progress}%</span>
             </div>
             <Progress value={progress} className="h-2" />
           </div>
 
           <div className="space-y-2">
-            {mockDepartments.map((dept, idx) => (
+            {departments.slice(0, 5).map((dept, idx) => (
               <div key={dept.code} className="flex items-center gap-3 text-xs sm:text-sm">
-                {progress >= (idx + 1) * 33 ? (
+                {progress >= ((idx + 1) / departments.length) * 30 ? (
                   <Check className="w-4 h-4 text-success" />
                 ) : (
                   <Loader2 className="w-4 h-4 text-primary animate-spin" />
@@ -293,6 +557,9 @@ export default function Phase3Page() {
                 <span>{dept.code} - {dept.name}</span>
               </div>
             ))}
+            {departments.length > 5 && (
+              <p className="text-xs text-muted-foreground">...and {departments.length - 5} more</p>
+            )}
           </div>
         </DigitCard>
       )}
@@ -304,23 +571,26 @@ export default function Phase3Page() {
 
           <div className="mb-4 sm:mb-6">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs sm:text-sm font-medium">Creating Complaint Types...</span>
+              <span className="text-xs sm:text-sm font-medium">{progressMessage}</span>
               <span className="text-xs sm:text-sm text-primary font-medium">{progress}%</span>
             </div>
             <Progress value={progress} className="h-2" />
           </div>
 
           <div className="space-y-2">
-            {mockComplaintTypes.map((type, idx) => (
-              <div key={type.code} className="flex items-center gap-3 text-xs sm:text-sm">
-                {progress >= (idx + 1) * 20 ? (
+            {complaintTypes.slice(0, 5).map((type, idx) => (
+              <div key={type.serviceCode} className="flex items-center gap-3 text-xs sm:text-sm">
+                {progress >= ((idx + 1) / complaintTypes.length) * 100 ? (
                   <Check className="w-4 h-4 text-success" />
                 ) : (
                   <Loader2 className="w-4 h-4 text-primary animate-spin" />
                 )}
-                <span>{type.code} - {type.name}</span>
+                <span>{type.serviceCode} - {type.serviceName}</span>
               </div>
             ))}
+            {complaintTypes.length > 5 && (
+              <p className="text-xs text-muted-foreground">...and {complaintTypes.length - 5} more</p>
+            )}
           </div>
         </DigitCard>
       )}
@@ -337,9 +607,18 @@ export default function Phase3Page() {
           <div className="mt-6 p-4 bg-muted rounded">
             <Table>
               <TableBody>
-                <TableRow><TableCell className="px-3 sm:px-4 py-2 text-xs sm:text-sm">Departments</TableCell><TableCell className="px-3 sm:px-4 py-2 font-medium text-xs sm:text-sm text-primary">{mockDepartments.length}</TableCell></TableRow>
-                <TableRow><TableCell className="px-3 sm:px-4 py-2 text-xs sm:text-sm">Designations</TableCell><TableCell className="px-3 sm:px-4 py-2 font-medium text-xs sm:text-sm text-primary">5</TableCell></TableRow>
-                <TableRow><TableCell className="px-3 sm:px-4 py-2 text-xs sm:text-sm">Complaint Types</TableCell><TableCell className="px-3 sm:px-4 py-2 font-medium text-xs sm:text-sm text-primary">{mockComplaintTypes.length}</TableCell></TableRow>
+                <TableRow>
+                  <TableCell className="px-3 sm:px-4 py-2 text-xs sm:text-sm">Departments</TableCell>
+                  <TableCell className="px-3 sm:px-4 py-2 font-medium text-xs sm:text-sm text-primary">{createdDepts}</TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell className="px-3 sm:px-4 py-2 text-xs sm:text-sm">Designations</TableCell>
+                  <TableCell className="px-3 sm:px-4 py-2 font-medium text-xs sm:text-sm text-primary">{createdDesigs}</TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell className="px-3 sm:px-4 py-2 text-xs sm:text-sm">Complaint Types</TableCell>
+                  <TableCell className="px-3 sm:px-4 py-2 font-medium text-xs sm:text-sm text-primary">{createdComplaints}</TableCell>
+                </TableRow>
               </TableBody>
             </Table>
           </div>
