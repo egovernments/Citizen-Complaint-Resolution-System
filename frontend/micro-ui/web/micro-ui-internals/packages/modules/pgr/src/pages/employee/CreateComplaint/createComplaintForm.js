@@ -36,7 +36,6 @@ const CreateComplaintForm = ({
   const [localitiesOptions, setLocalitiesOptions] = useState([]);
   const hierarchyType = window?.globalConfigs?.getConfig("HIERARCHY_TYPE") || "ADMIN";
   const boundaryType = window?.globalConfigs?.getConfig("BOUNDARY_TYPE") || "Locality";
-  const [boundaryHierarchyConfig, setBoundaryHierarchyConfig] = useState(null);
 
 
 
@@ -147,43 +146,23 @@ const CreateComplaintForm = ({
     if (selectedCity) fetchBoundaryData();
   }, [selectedCity]); // ← this only runs when selectedCity changes
 
+  // Use Custom MDMS hook for fetching Hierarchy Schema
+  const { isLoading: isHierarchyLoading, data: hierarchyData } = Digit.Hooks.useCustomMDMS(
+    tenantId,
+    "CMS-BOUNDARY",
+    [{ name: "HierarchySchema" }],
+    {
+      select: (data) => data?.["CMS-BOUNDARY"]?.HierarchySchema?.[0],
+      retry: false,
+      enable: true,
+    }
+  );
+
   useEffect(() => {
-    const fetchMDMSHierarchy = async () => {
-      try {
-        const body = {
-          MdmsCriteria: {
-            tenantId: tenantId,
-            moduleDetails: [
-              {
-                moduleName: "CMS-BOUNDARY",
-                masterDetails: [
-                  {
-                    name: "HierarchySchema"
-                  }
-                ]
-              }
-            ]
-          }
-        };
-        const url = `/${window?.globalConfigs?.getConfig("MDMS_CONTEXT_PATH") || "egov-mdms-service"}/v1/_search`;
-        const res = await Digit.HttpService.post(url, body);
-        const hierarchyData = res?.MdmsRes?.["CMS-BOUNDARY"]?.HierarchySchema?.[0];
-        if (hierarchyData) {
-          const { lowestHierarchy, highestHierarchy, hierarchy } = hierarchyData;
-          setBoundaryHierarchyConfig({
-            lowestLevel: lowestHierarchy,
-            highestLevel: highestHierarchy,
-            hierarchyType: hierarchy,
-          });
-        }
-      } catch (e) {
-        console.error("MDMS Fetch Error in CreateComplaintForm", e);
-      }
-    };
-    fetchMDMSHierarchy();
-  }, [tenantId]);
-
-
+    if (hierarchyData) {
+      console.log("MDMS Response:", hierarchyData);
+    }
+  }, [hierarchyData]);
 
   const processLocalities = (boundaryList = []) => {
     if (!Array.isArray(boundaryList)) return [];
@@ -195,33 +174,33 @@ const CreateComplaintForm = ({
     }));
   };
 
-  //   useEffect(() => {
-  //     const fetchBoundaryData = async () => {
-  //       try {
-  //         const response = await Digit.CustomService.getResponse({
-  //           url: `/boundary-service/boundary-relationships/_search`,
-  //           useCache: false,
-  //           method: "POST",
-  //           userService: false,
-  //           params: {
-  //             tenantId: selectedCity,
-  //             hierarchyType: hierarchyType,
-  //             boundaryType: boundaryType,
-  //             includeChildren: true,
-  //           }
-  //         });
-  //         // Add a small delay before setting the state
-  //         setTimeout(() => {
-  //           const formatedData = processLocalities(response.TenantBoundary[0].boundary);
-  //           setLocalitiesOptions(formatedData);
-  //         }, 300); // 300ms delay
-  //       } catch (error) {
-  //         console.error("Error fetching boundary data:", error);
-  //       }
-  //     };
+  useEffect(() => {
+    const fetchBoundaryData = async () => {
+      try {
+        const response = await Digit.CustomService.getResponse({
+          url: `/boundary-service/boundary-relationships/_search`,
+          useCache: false,
+          method: "POST",
+          userService: false,
+          params: {
+            tenantId: selectedCity,
+            hierarchyType: hierarchyType,
+            boundaryType: boundaryType,
+            includeChildren: true,
+          }
+        });
+        // Add a small delay before setting the state
+        setTimeout(() => {
+          const formatedData = processLocalities(response.TenantBoundary[0].boundary);
+          setLocalitiesOptions(formatedData);
+        }, 300); // 300ms delay
+      } catch (error) {
+        console.error("Error fetching boundary data:", error);
+      }
+    };
 
-  //     if (selectedCity) fetchBoundaryData();
-  //   }, [selectedCity]); // ✅ this is correct
+    if (selectedCity) fetchBoundaryData();
+  }, [selectedCity]); // ✅ this is correct
 
 
   const updatedConfig = useMemo(() => {
@@ -269,19 +248,18 @@ const CreateComplaintForm = ({
               disable: disabledFields[field.populators.name],
             };
           }
-
-          if (field.key === "boundaryComponent" && boundaryHierarchyConfig) {
+          if (field.key === "boundaryComponent" && hierarchyData?.moduleName === "CMS") {
             return {
               ...field,
               populators: {
                 ...field.populators,
                 levelConfig: {
                   ...field.populators.levelConfig,
-                  lowestLevel: boundaryHierarchyConfig.lowestLevel,
-                  highestLevel: boundaryHierarchyConfig.highestLevel,
+                  lowestLevel: hierarchyData.lowestHierarchy || window?.globalConfigs?.getConfig("PGR_BOUNDARY_LOWEST_LEVEL") || "Ward",
+                  highestLevel: hierarchyData.highestHierarchy || window?.globalConfigs?.getConfig("PGR_BOUNDARY_HIGHEST_LEVEL") || "City",
                 },
-                hierarchyType: boundaryHierarchyConfig.hierarchyType,
-              }
+                hierarchyType: hierarchyData.hierarchy || window?.globalConfigs?.getConfig("HIERARCHY_TYPE") || "ADMIN",
+              },
             };
           }
           return field;
@@ -290,7 +268,7 @@ const CreateComplaintForm = ({
     });
 
     return { ...baseConfig, form: updatedForm };
-  }, [createComplaintConfig, serviceDefs, t, disabledFields, subType, selectedCity, localitiesOptions, boundaryHierarchyConfig]);
+  }, [createComplaintConfig, serviceDefs, t, disabledFields, subType, selectedCity, localitiesOptions, hierarchyData]);
 
 
 

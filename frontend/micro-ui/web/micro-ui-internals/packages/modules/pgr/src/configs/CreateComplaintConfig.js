@@ -104,7 +104,6 @@ export const CreateComplaintConfig = {
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
               },
             },
-
             {
               "key": "boundaryComponent",
               "type": "boundary",
@@ -113,14 +112,9 @@ export const CreateComplaintConfig = {
               "disable": false,
               "populators": {
                 "name": "boundaryComponent",
-                "levelConfig": {
-                  lowestLevel: window?.globalConfigs?.getConfig("PGR_BOUNDARY_LOWEST_LEVEL") || "Ward",
-                  highestLevel: window?.globalConfigs?.getConfig("PGR_BOUNDARY_HIGHEST_LEVEL") || "City",
-                  isSingleSelect: []
-                },
-                "hierarchyType": window?.globalConfigs?.getConfig("HIERARCHY_TYPE") || "ADMIN",
+                "levelConfig": { lowestLevel: "zone", highestLevel: "region", isSingleSelect: [] },
+                "hierarchyType": "ADMIN",
                 "noCardStyle": true,
-                "preSelected": ["NEWTEST00222_MO", "NEWTEST00222_MO_11_MARYLAND", "NEWTEST00222_MO_11_06_PLEEBO"]
               },
             },
             {

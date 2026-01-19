@@ -27,7 +27,7 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
           maxLength: rules?.maxLength || 10,
           minLength: rules?.minLength || 10,
           errorMessage: rules?.errorMessage || "ES_SEARCH_APPLICATION_MOBILE_INVALID",
-          allowedStartingDigits: rules?.allowedStartingDigits,
+          allowedStartingCharacters: rules?.allowedStartingCharacters,
           isActive: validationData?.isActive
         };
       },
@@ -41,14 +41,14 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
 
   // Default fallback validation
   const defaultValidation = {
-    allowedStartingDigits: ["6", "7", "8", "9"],
+    allowedStartingCharacters: ["6", "7", "8", "9"],
     isActive: true,
   };
 
   /** ---------- Combine configs with priority ---------- */
   const validationRules = {
-    allowedStartingDigits:
-      globalConfig?.mobileNumberAllowedStartingDigits || mdmsConfig?.allowedStartingDigits || defaultValidation?.allowedStartingDigits,
+    allowedStartingCharacters:
+      globalConfig?.mobileNumberAllowedStartingCharacters || mdmsConfig?.allowedStartingCharacters || defaultValidation?.allowedStartingCharacters,
 
     prefix: globalConfig?.mobilePrefix || mdmsConfig?.prefix,
 
@@ -71,13 +71,13 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
 
   // Helper function to get min/max values for number validation
   const getMinMaxValues = () => {
-    const { allowedStartingDigits, minLength } = validationRules;
-    if (!allowedStartingDigits || allowedStartingDigits.length === 0) {
+    const { allowedStartingCharacters, minLength } = validationRules;
+    if (!allowedStartingCharacters || allowedStartingCharacters.length === 0) {
       return { min: 0, max: 9999999999 };
     }
 
-    const minDigit = Math.min(...allowedStartingDigits.map(Number));
-    const maxDigit = Math.max(...allowedStartingDigits.map(Number));
+    const minDigit = Math.min(...allowedStartingCharacters.map(Number));
+    const maxDigit = Math.max(...allowedStartingCharacters.map(Number));
 
     const min = minDigit * Math.pow(10, minLength - 1);
     const max = (maxDigit + 1) * Math.pow(10, minLength - 1) - 1;
