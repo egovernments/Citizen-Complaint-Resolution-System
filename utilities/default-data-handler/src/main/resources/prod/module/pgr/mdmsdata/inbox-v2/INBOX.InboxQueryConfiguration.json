@@ -1,0 +1,83 @@
+[
+  {
+    "index": "inbox-pgr-services",
+    "module": "RAINMAKER-PGR",
+    "sortBy": {
+      "path": "Data.service.auditDetails.createdTime",
+      "defaultOrder": "ASC"
+    },
+    "sourceFilterPathList": [
+      "Data.currentProcessInstance",
+      "Data.service.serviceRequestId",
+      "Data.service.address.locality.code",
+      "Data.service.applicationStatus",
+      "Data.service.citizen",
+      "Data.service.auditDetails.createdTime",
+      "Data.auditDetails",
+      "Data.tenantId",
+      "Data.service.serviceCode"
+    ],
+    "allowedSearchCriteria": [
+      {
+        "name": "area",
+        "path": "Data.service.address.locality.code.keyword",
+        "operator": "EQUAL",
+        "isMandatory": false
+      },
+      {
+        "name": "status",
+        "path": "Data.currentProcessInstance.state.uuid.keyword",
+        "operator": "EQUAL",
+        "isMandatory": false
+      },
+      {
+        "name": "assignedToMe",
+        "path": "Data.workflow.assignes.*.uuid.keyword",
+        "operator": "EQUAL",
+        "isMandatory": false
+      },
+      {
+        "name": "fromDate",
+        "path": "Data.service.auditDetails.createdTime",
+        "operator": "GTE",
+        "isMandatory": false
+      },
+      {
+        "name": "toDate",
+        "path": "Data.service.auditDetails.createdTime",
+        "operator": "LTE",
+        "isMandatory": false
+      },
+      {
+        "name": "complaintNumber",
+        "path": "Data.service.serviceRequestId.keyword",
+        "operator": "EQUAL",
+        "isMandatory": false
+      },
+      {
+        "name": "mobileNumber",
+        "path": "Data.service.citizen.mobileNumber.keyword",
+        "operator": "EQUAL",
+        "isMandatory": false
+      },
+      {
+        "name": "tenantId",
+        "path": "Data.service.tenantId.keyword",
+        "operator": "EQUAL",
+        "isMandatory": false
+      },
+      {
+        "name": "assignee",
+        "path": "Data.currentProcessInstance.assignes.uuid.keyword",
+        "operator": "EQUAL",
+        "isMandatory": false
+      },
+      {
+        "name": "complaintType",
+        "path": "Data.service.serviceCode.keyword",
+        "operator": "EQUAL",
+        "isMandatory": false
+      }
+    ]
+  }
+]

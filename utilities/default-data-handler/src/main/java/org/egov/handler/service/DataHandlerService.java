@@ -57,8 +57,16 @@ public class DataHandlerService {
 
     private final RestTemplate restTemplate;
 
+    private final SchemaLoader schemaLoader;
+
+    private final WorkflowConfigLoader workflowConfigLoader;
+
     @Autowired
-    public DataHandlerService(MdmsV2Util mdmsV2Util, HrmsUtil hrmsUtil, LocalizationUtil localizationUtil, TenantManagementUtil tenantManagementUtil, ServiceConfiguration serviceConfig, ObjectMapper objectMapper, ResourceLoader resourceLoader, WorkflowUtil workflowUtil, CustomKafkaTemplate producer, MdmsBulkLoader mdmsBulkLoader, RestTemplate restTemplate) {
+    public DataHandlerService(MdmsV2Util mdmsV2Util, HrmsUtil hrmsUtil, LocalizationUtil localizationUtil,
+                              TenantManagementUtil tenantManagementUtil, ServiceConfiguration serviceConfig,
+                              ObjectMapper objectMapper, ResourceLoader resourceLoader, WorkflowUtil workflowUtil,
+                              CustomKafkaTemplate producer, MdmsBulkLoader mdmsBulkLoader, RestTemplate restTemplate,
+                              SchemaLoader schemaLoader, WorkflowConfigLoader workflowConfigLoader) {
         this.mdmsV2Util = mdmsV2Util;
         this.hrmsUtil = hrmsUtil;
         this.localizationUtil = localizationUtil;
@@ -70,6 +78,8 @@ public class DataHandlerService {
         this.producer = producer;
         this.mdmsBulkLoader = mdmsBulkLoader;
         this.restTemplate = restTemplate;
+        this.schemaLoader = schemaLoader;
+        this.workflowConfigLoader = workflowConfigLoader;
     }
 
     public void createDefaultData(DefaultDataRequest defaultDataRequest) {
@@ -477,7 +487,7 @@ public class DataHandlerService {
 
     public void createPgrWorkflowConfig(String targetTenantId) {
         // Load the JSON file
-        Resource resource = resourceLoader.getResource("classpath:PgrWorkflowConfig.json");
+        Resource resource = resourceLoader.getResource(serviceConfig.getPgrWorkflowConfigFile());
         try (InputStream inputStream = resource.getInputStream()) {
             BusinessServiceRequest businessServiceRequest = objectMapper.readValue(inputStream, BusinessServiceRequest.class);
             businessServiceRequest.getBusinessServices().forEach(service -> service.setTenantId(targetTenantId));
@@ -539,7 +549,7 @@ public class DataHandlerService {
 
     public void createDefaultEmployee(String tenantId, String emailId, String employeeCode, String name) {
 
-        Resource resource = resourceLoader.getResource(HRMS_CLASSPATH);
+        Resource resource = resourceLoader.getResource(serviceConfig.getDefaultHrmsTemplateFile());
         try (InputStream inputStream = resource.getInputStream()) {
             JsonNode rootNode = objectMapper.readTree(inputStream);
 
@@ -606,17 +616,18 @@ public class DataHandlerService {
 
     /**
      * Load production tenant data (mdmsData, localisations, and schema)
-     * This method loads production data for a new tenant
-     * Uses all default schemas automatically
-     * @param newTenantRequest - Request containing tenant information (no schema codes needed)
+     * This method loads production data for a new tenant using the module-based folder structure
+     * @param newTenantRequest - Request containing tenant information
      */
     public void loadNewTenantProductionData(NewTenantRequest newTenantRequest) {
         try {
             String targetTenantId = newTenantRequest.getTargetTenantId();
             RequestInfo requestInfo = newTenantRequest.getRequestInfo();
+            List<String> moduleList = serviceConfig.getModuleList();
 
-            log.info("Loading production tenant data for new tenant: {}", targetTenantId);
-            
+            log.info("Loading production tenant data for new tenant: {}, modules: {}",
+                    targetTenantId, moduleList.isEmpty() ? "COMMON ONLY" : moduleList);
+
             // Ensure UserInfo is present (create dummy if needed)
             if (requestInfo.getUserInfo() == null) {
                 org.egov.common.contract.request.User dummyUser = new org.egov.common.contract.request.User();
@@ -628,7 +639,7 @@ public class DataHandlerService {
             } else {
                 requestInfo.getUserInfo().setTenantId(targetTenantId);
             }
-            
+
             // Create DefaultDataRequest with all default schemas
             DefaultDataRequest defaultDataRequest = DefaultDataRequest.builder()
                     .requestInfo(requestInfo)
@@ -638,30 +649,71 @@ public class DataHandlerService {
                     .locales(serviceConfig.getDefaultLocalizationLocaleList())
                     .modules(serviceConfig.getDefaultLocalizationModuleList())
                     .build();
-            
-            log.info("Step 1: Creating MDMS schemas for tenant: {}", targetTenantId);
-            // 1. Create Schema from file
-            createMdmsSchemaFromFile(defaultDataRequest);
-            log.info("✓ Schemas created for new tenant: {}", targetTenantId);
-            
-            log.info("Step 2: Loading production MDMS data");
-            // 2. Load production MDMS data
-            mdmsBulkLoader.loadAllMdmsData(targetTenantId,
-                    requestInfo,
-                    serviceConfig.getDefaultMdmsDataPath());
-            log.info("✓ Production MDMS data loaded for new tenant: {}", targetTenantId);
 
-            log.info("Step 3: Loading production localization data");
-            // 3. Load production localization
-            localizationUtil.upsertLocalizationFromFile(defaultDataRequest,
-                    serviceConfig.getDefaultLocalizationDataPath());
-            log.info("✓ Production localization data loaded for new tenant: {}", targetTenantId);
-            
-            // 4. Skip Tenant Config for root tenants (no parent to copy from)
-            log.info("Step 4: Skipping tenant config creation (root tenant - no parent to copy from)");
+            // ===== LOAD PROD COMMON DATA =====
+            log.info("Step 1: Loading PROD common schemas");
+            schemaLoader.loadSchemasFromPath(defaultDataRequest, serviceConfig.getProdCommonSchemaPath());
 
+            log.info("Step 2: Loading PROD common MDMS data");
+            mdmsBulkLoader.loadAllMdmsData(targetTenantId, requestInfo, serviceConfig.getProdCommonMdmsDataPath());
+
+            log.info("Step 3: Loading PROD common localization");
+            localizationUtil.upsertLocalizationFromFile(defaultDataRequest, serviceConfig.getProdCommonLocalizationDataPath());
+
+            log.info("Step 4: Loading PROD common workflow config");
+            workflowConfigLoader.loadWorkflowConfigFromPath(targetTenantId, serviceConfig.getProdCommonWorkflowDataPath());
+
+            // ===== LOAD PROD MODULE DATA (for each enabled module) =====
+            for (String moduleName : moduleList) {
+                log.info("Loading PROD data for module: {}", moduleName);
+
+                String moduleSchemaPath = serviceConfig.getModulePath(
+                        serviceConfig.getProdModuleSchemaPathPattern(), moduleName);
+                String moduleMdmsPath = serviceConfig.getModulePath(
+                        serviceConfig.getProdModuleMdmsDataPathPattern(), moduleName);
+                String moduleLocalizationPath = serviceConfig.getModulePath(
+                        serviceConfig.getProdModuleLocalizationDataPathPattern(), moduleName);
+                String moduleWorkflowPath = serviceConfig.getModulePath(
+                        serviceConfig.getProdModuleWorkflowDataPathPattern(), moduleName);
+
+                schemaLoader.loadSchemasFromPath(defaultDataRequest, moduleSchemaPath);
+                mdmsBulkLoader.loadAllMdmsData(targetTenantId, requestInfo, moduleMdmsPath);
+                localizationUtil.upsertLocalizationFromFile(defaultDataRequest, moduleLocalizationPath);
+                workflowConfigLoader.loadWorkflowConfigFromPath(targetTenantId, moduleWorkflowPath);
+            }
+
+            // ===== LOAD DEV DATA (only if dev.enabled=true) =====
+            if (serviceConfig.isDevEnabled()) {
+                log.info("Dev mode enabled, loading DEV data...");
+
+                // Load DEV common data
+                schemaLoader.loadSchemasFromPath(defaultDataRequest, serviceConfig.getDevCommonSchemaPath());
+                mdmsBulkLoader.loadAllMdmsData(targetTenantId, requestInfo, serviceConfig.getDevCommonMdmsDataPath());
+                localizationUtil.upsertLocalizationFromFile(defaultDataRequest, serviceConfig.getDevCommonLocalizationDataPath());
+                workflowConfigLoader.loadWorkflowConfigFromPath(targetTenantId, serviceConfig.getDevCommonWorkflowDataPath());
+
+                // Load DEV module data for each enabled module
+                for (String moduleName : moduleList) {
+                    log.info("Loading DEV data for module: {}", moduleName);
+
+                    String moduleSchemaPath = serviceConfig.getModulePath(
+                            serviceConfig.getDevModuleSchemaPathPattern(), moduleName);
+                    String moduleMdmsPath = serviceConfig.getModulePath(
+                            serviceConfig.getDevModuleMdmsDataPathPattern(), moduleName);
+                    String moduleLocalizationPath = serviceConfig.getModulePath(
+                            serviceConfig.getDevModuleLocalizationDataPathPattern(), moduleName);
+                    String moduleWorkflowPath = serviceConfig.getModulePath(
+                            serviceConfig.getDevModuleWorkflowDataPathPattern(), moduleName);
+
+                    schemaLoader.loadSchemasFromPath(defaultDataRequest, moduleSchemaPath);
+                    mdmsBulkLoader.loadAllMdmsData(targetTenantId, requestInfo, moduleMdmsPath);
+                    localizationUtil.upsertLocalizationFromFile(defaultDataRequest, moduleLocalizationPath);
+                    workflowConfigLoader.loadWorkflowConfigFromPath(targetTenantId, moduleWorkflowPath);
+                }
+            }
+
+            // ===== CREATE USERS AND EMPLOYEES =====
             log.info("Step 5: Creating default users and employees");
-            // 5. Create Users and Employees
             Tenant newTenant = new Tenant();
             newTenant.setCode(targetTenantId);
             newTenant.setName(targetTenantId);
@@ -673,25 +725,22 @@ public class DataHandlerService {
                     .build();
 
             try {
-                // Create users from default User.json
                 User superUser = createUserFromFile(tenantRequest, serviceConfig.getDefaultUserDataFile());
                 if (superUser != null) {
-                    log.info("✓ Default users created for tenant: {}", targetTenantId);
+                    log.info("Default users created for tenant: {}", targetTenantId);
                 } else {
                     log.warn("No SUPERUSER found in created users");
                 }
 
-                // Create employees from default HRMS.json
                 createEmployeeFromFile(requestInfo, serviceConfig.getDefaultEmployeeDataFile());
-                log.info("✓ Default employees created for tenant: {}", targetTenantId);
-
+                log.info("Default employees created for tenant: {}", targetTenantId);
             } catch (Exception e) {
                 log.error("Failed to create users/employees (non-critical): {}", e.getMessage());
             }
 
             log.info("========================================");
-            log.info("✓✓✓ Tenant {} created successfully", targetTenantId);
-            log.info("Loaded: Schemas + Production MDMS + Production Localization + Tenant Config + Users + Employees");
+            log.info("Tenant {} created successfully", targetTenantId);
+            log.info("Loaded: Common + Module data for modules: {}", moduleList);
             log.info("========================================");
         } catch (Exception e) {
             log.error("Failed to load production tenant data for tenant: {}", newTenantRequest.getTargetTenantId(), e);

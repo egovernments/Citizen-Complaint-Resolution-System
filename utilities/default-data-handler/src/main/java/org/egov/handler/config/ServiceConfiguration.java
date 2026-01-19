@@ -135,17 +135,68 @@ public class ServiceConfiguration {
     @Value("${dev.enabled}")
     private boolean devEnabled;
 
-    @Value("${default.mdms.data.path}")
-    private String defaultMdmsDataPath;
+    // Module list - comma separated list of modules to load
+    @Value("${module.list:}")
+    private String moduleListString;
 
+    // PROD Common paths
+    @Value("${prod.common.schema.path}")
+    private String prodCommonSchemaPath;
+
+    @Value("${prod.common.mdms.data.path}")
+    private String prodCommonMdmsDataPath;
+
+    @Value("${prod.common.localization.data.path}")
+    private String prodCommonLocalizationDataPath;
+
+    @Value("${prod.common.workflow.data.path}")
+    private String prodCommonWorkflowDataPath;
+
+    // PROD Module path patterns
+    @Value("${prod.module.schema.path}")
+    private String prodModuleSchemaPathPattern;
+
+    @Value("${prod.module.mdms.data.path}")
+    private String prodModuleMdmsDataPathPattern;
+
+    @Value("${prod.module.localization.data.path}")
+    private String prodModuleLocalizationDataPathPattern;
+
+    @Value("${prod.module.workflow.data.path}")
+    private String prodModuleWorkflowDataPathPattern;
+
+    // DEV Common paths
+    @Value("${dev.common.schema.path}")
+    private String devCommonSchemaPath;
+
+    @Value("${dev.common.mdms.data.path}")
+    private String devCommonMdmsDataPath;
+
+    @Value("${dev.common.localization.data.path}")
+    private String devCommonLocalizationDataPath;
+
+    @Value("${dev.common.workflow.data.path}")
+    private String devCommonWorkflowDataPath;
+
+    // DEV Module path patterns
+    @Value("${dev.module.schema.path}")
+    private String devModuleSchemaPathPattern;
+
+    @Value("${dev.module.mdms.data.path}")
+    private String devModuleMdmsDataPathPattern;
+
+    @Value("${dev.module.localization.data.path}")
+    private String devModuleLocalizationDataPathPattern;
+
+    @Value("${dev.module.workflow.data.path}")
+    private String devModuleWorkflowDataPathPattern;
+
+    // User and Employee data files
     @Value("${default.user.data.file}")
     private String defaultUserDataFile;
 
     @Value("${default.employee.data.file}")
     private String defaultEmployeeDataFile;
-
-    @Value("${dev.mdms.data.path}")
-    private String devMdmsDataPath;
 
     @Value("${dev.user.data.file}")
     private String devUserDataFile;
@@ -153,9 +204,37 @@ public class ServiceConfiguration {
     @Value("${dev.employee.data.file}")
     private String devEmployeeDataFile;
 
-    @Value("${default.localization.data.path}")
-    private String defaultLocalizationDataPath;
+    // Legacy/Module-specific file paths
+    @Value("${pgr.indexer.file}")
+    private String pgrIndexerFile;
 
-    @Value("${dev.localization.data.path}")
-    private String devLocalizationDataPath;
+    @Value("${pgr.workflow.config.file}")
+    private String pgrWorkflowConfigFile;
+
+    @Value("${default.hrms.template.file}")
+    private String defaultHrmsTemplateFile;
+
+    /**
+     * Get the list of enabled modules
+     * @return List of module names, empty list if no modules configured
+     */
+    public List<String> getModuleList() {
+        if (moduleListString == null || moduleListString.trim().isEmpty()) {
+            return List.of();
+        }
+        return List.of(moduleListString.split(",")).stream()
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
+    }
+
+    /**
+     * Get module-specific path by replacing {moduleName} placeholder
+     * @param pathPattern The path pattern with {moduleName} placeholder
+     * @param moduleName The module name to substitute
+     * @return The resolved path
+     */
+    public String getModulePath(String pathPattern, String moduleName) {
+        return pathPattern.replace("{moduleName}", moduleName.toLowerCase());
+    }
 }

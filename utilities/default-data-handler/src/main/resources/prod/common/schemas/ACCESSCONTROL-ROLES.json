@@ -1,0 +1,27 @@
+[
+    {
+        "tenantId": "{tenantid}",
+        "code": "ACCESSCONTROL-ROLES.roles",
+        "description": "Access Control Roles",
+        "definition": {
+            "type": "object",
+            "title": "Access Control Role",
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "required": ["code", "name"],
+            "x-unique": ["code"],
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                }
+            },
+            "additionalProperties": true
+        },
+        "isActive": true
+    }
+]

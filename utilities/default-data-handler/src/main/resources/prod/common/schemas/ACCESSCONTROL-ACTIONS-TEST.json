@@ -1,0 +1,48 @@
+[
+    {
+        "tenantId": "{tenantid}",
+        "code": "ACCESSCONTROL-ACTIONS-TEST.actions-test",
+        "description": "Access Control Actions",
+        "definition": {
+            "type": "object",
+            "title": "Access Control Action",
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "required": ["id", "name", "url"],
+            "x-unique": ["id"],
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                },
+                "displayName": {
+                    "type": "string"
+                },
+                "orderNumber": {
+                    "type": "integer"
+                },
+                "parentModule": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "serviceCode": {
+                    "type": "string"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "path": {
+                    "type": "string"
+                }
+            },
+            "additionalProperties": true
+        },
+        "isActive": true
+    }
+]

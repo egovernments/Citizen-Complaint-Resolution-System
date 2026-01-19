@@ -1,0 +1,47 @@
+[
+
+    {
+      "tenantId": "{tenantid}",
+      "code": "ACCESSCONTROL-ROLEACTIONS.roleactions",
+      "description": "ACCESSCONTROL-ROLEACTIONS.roleactions",
+      "isActive": true,
+      "definition": {
+        "type": "object",
+        "title": "Generated schema for Root",
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "required": [
+          "rolecode",
+          "actionid",
+          "tenantId"
+        ],
+        "x-unique": [
+          "rolecode",
+          "actionid"
+        ],
+        "properties": {
+          "actionid": {
+            "type": "number"
+          },
+          "rolecode": {
+            "type": "string"
+          },
+          "tenantId": {
+            "type": "string"
+          },
+          "actioncode": {
+            "type": "string"
+          }
+        },
+        "x-ref-schema": [
+          {
+            "fieldPath": "rolecode",
+            "schemaCode": "ACCESSCONTROL-ROLES.roles"
+          },
+          {
+            "fieldPath": "actionid",
+            "schemaCode": "ACCESSCONTROL-ACTIONS-TEST.actions-test"
+          }
+        ]
+      }
+    }
+  ]

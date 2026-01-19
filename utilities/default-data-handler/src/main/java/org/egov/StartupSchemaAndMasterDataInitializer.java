@@ -1,14 +1,14 @@
 package org.egov;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import lombok.extern.slf4j.Slf4j;
 import org.egov.handler.util.LocalizationUtil;
 import org.egov.handler.util.MdmsBulkLoader;
-import org.egov.handler.web.models.User;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.annotation.Profile;
-import org.springframework.context.event.EventListener;
+import org.egov.handler.util.SchemaLoader;
+import org.egov.handler.util.WorkflowConfigLoader;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.util.StreamUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -24,15 +24,12 @@ import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Component
-//@Profile("init")
+@Slf4j
 @RequiredArgsConstructor
-public class StartupSchemaAndMasterDataInitializer{
+public class StartupSchemaAndMasterDataInitializer {
 
     private final DataHandlerService dataHandlerService;
 
@@ -46,9 +43,13 @@ public class StartupSchemaAndMasterDataInitializer{
 
     private final LocalizationUtil localizationUtil;
 
+    private final SchemaLoader schemaLoader;
+
+    private final WorkflowConfigLoader workflowConfigLoader;
+
     private final AtomicBoolean hasRun = new AtomicBoolean(false);
 
-    // Delay 1 minutes after app startup
+    // Delay 10 seconds after app startup
     @Scheduled(initialDelay =  1* 10 * 1000, fixedDelay = Long.MAX_VALUE)
     public void runOnceAfterStartup() {
         if (hasRun.get()) return;
@@ -64,15 +65,18 @@ public class StartupSchemaAndMasterDataInitializer{
     }
 
     public void executeStartupLogic() throws Exception {
-        System.out.println("[DEBUG] Startup logic executing at: " + Instant.now());
+        log.info("Startup logic executing at: {}", Instant.now());
         try {
             String tenantCode = serviceConfig.getDefaultTenantId();
+            List<String> moduleList = serviceConfig.getModuleList();
+
+            log.info("Loading data for tenant: {}, modules: {}", tenantCode,
+                    moduleList.isEmpty() ? "COMMON ONLY" : moduleList);
 
             Resource resource = resourceLoader.getResource("classpath:requestInfo.json");
             Resource tenantJson = resourceLoader.getResource("classpath:tenant.json");
 
             String json = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
-
             String jsonTenant = StreamUtils.copyToString(tenantJson.getInputStream(), StandardCharsets.UTF_8);
 
             json = json.replace("{tenantid}", tenantCode);
@@ -93,49 +97,87 @@ public class StartupSchemaAndMasterDataInitializer{
                     .tenant(tenant)
                     .build();
 
-            DefaultDataRequest defaultDataRequest = DefaultDataRequest.builder().requestInfo(tenantRequest.getRequestInfo()).targetTenantId(tenantCode).schemaCodes(serviceConfig.getDefaultMdmsSchemaList()).onlySchemas(Boolean.FALSE).locales(serviceConfig.getDefaultLocalizationLocaleList()).modules(serviceConfig.getDefaultLocalizationModuleList()).build();
-            defaultDataRequest.setTargetTenantId(tenantCode);
-//            Create Schema
-            dataHandlerService.createMdmsSchemaFromFile(defaultDataRequest);
+            DefaultDataRequest defaultDataRequest = DefaultDataRequest.builder()
+                    .requestInfo(tenantRequest.getRequestInfo())
+                    .targetTenantId(tenantCode)
+                    .schemaCodes(serviceConfig.getDefaultMdmsSchemaList())
+                    .onlySchemas(Boolean.FALSE)
+                    .locales(serviceConfig.getDefaultLocalizationLocaleList())
+                    .modules(serviceConfig.getDefaultLocalizationModuleList())
+                    .build();
 
-            // Load default MDMS data (always)
-            mdmsBulkLoader.loadAllMdmsData(defaultDataRequest.getTargetTenantId(),
-                    defaultDataRequest.getRequestInfo(),
-                    serviceConfig.getDefaultMdmsDataPath());
+            // ===== LOAD PROD COMMON DATA (always) =====
+            log.info("Loading PROD common schemas...");
+//            schemaLoader.loadSchemasFromPath(defaultDataRequest, serviceConfig.getProdCommonSchemaPath());
 
-            // Load default localization (always)
-            localizationUtil.upsertLocalizationFromFile(defaultDataRequest,
-                    serviceConfig.getDefaultLocalizationDataPath());
+            log.info("Loading PROD common MDMS data...");
+//            mdmsBulkLoader.loadAllMdmsData(tenantCode, requestInfo, serviceConfig.getProdCommonMdmsDataPath());
 
-            // Load boundary, localization, user, employee, and workflow config data only if enabled
-            if (serviceConfig.isDevEnabled()) {
-                // Load dev MDMS data
-                mdmsBulkLoader.loadAllMdmsData(defaultDataRequest.getTargetTenantId(),
-                        defaultDataRequest.getRequestInfo(),
-                        serviceConfig.getDevMdmsDataPath());
+            log.info("Loading PROD common localization...");
+//            localizationUtil.upsertLocalizationFromFile(defaultDataRequest, serviceConfig.getProdCommonLocalizationDataPath());
 
-                // Load dev localization
-                localizationUtil.upsertLocalizationFromFile(defaultDataRequest,
-                        serviceConfig.getDevLocalizationDataPath());
+            log.info("Loading PROD common workflow config...");
+//            workflowConfigLoader.loadWorkflowConfigFromPath(tenantCode, serviceConfig.getProdCommonWorkflowDataPath());
 
-//                // create Boundary Data
-//                dataHandlerService.createBoundaryDataFromFile(defaultDataRequest);
-//
-//                // create User from dev file
-//                dataHandlerService.createUserFromFile(tenantRequest, serviceConfig.getDevUserDataFile());
-//                // create PGR workflow config
-//                dataHandlerService.createPgrWorkflowConfig(tenantRequest.getTenant().getCode());
-//                // create Employee from dev file
-//                dataHandlerService.createEmployeeFromFile(defaultDataRequest.getRequestInfo(),
-//                        serviceConfig.getDevEmployeeDataFile());
+            // ===== LOAD PROD MODULE DATA (for each enabled module) =====
+            for (String moduleName : moduleList) {
+                log.info("Loading PROD data for module: {}", moduleName);
+
+                String moduleSchemaPath = serviceConfig.getModulePath(
+                        serviceConfig.getProdModuleSchemaPathPattern(), moduleName);
+                String moduleMdmsPath = serviceConfig.getModulePath(
+                        serviceConfig.getProdModuleMdmsDataPathPattern(), moduleName);
+                String moduleLocalizationPath = serviceConfig.getModulePath(
+                        serviceConfig.getProdModuleLocalizationDataPathPattern(), moduleName);
+                String moduleWorkflowPath = serviceConfig.getModulePath(
+                        serviceConfig.getProdModuleWorkflowDataPathPattern(), moduleName);
+
+                schemaLoader.loadSchemasFromPath(defaultDataRequest, moduleSchemaPath);
+                mdmsBulkLoader.loadAllMdmsData(tenantCode, requestInfo, moduleMdmsPath);
+//                localizationUtil.upsertLocalizationFromFile(defaultDataRequest, moduleLocalizationPath);
+//                workflowConfigLoader.loadWorkflowConfigFromPath(tenantCode, moduleWorkflowPath);
             }
 
-//            dataHandlerService.createTenantConfig(tenantRequest);
-        }
-        catch (Exception e) {
-            System.err.println("StartupDataInitializer failed: " + e.getMessage());
-            e.printStackTrace();
-        }
+            // ===== LOAD DEV DATA (only if dev.enabled=true) =====
+            if (serviceConfig.isDevEnabled()) {
+                log.info("Dev mode enabled, loading DEV data...");
 
+                // Load DEV common data
+                log.info("Loading DEV common schemas...");
+                schemaLoader.loadSchemasFromPath(defaultDataRequest, serviceConfig.getDevCommonSchemaPath());
+
+                log.info("Loading DEV common MDMS data...");
+                mdmsBulkLoader.loadAllMdmsData(tenantCode, requestInfo, serviceConfig.getDevCommonMdmsDataPath());
+
+                log.info("Loading DEV common localization...");
+                localizationUtil.upsertLocalizationFromFile(defaultDataRequest, serviceConfig.getDevCommonLocalizationDataPath());
+
+                log.info("Loading DEV common workflow config...");
+                workflowConfigLoader.loadWorkflowConfigFromPath(tenantCode, serviceConfig.getDevCommonWorkflowDataPath());
+
+                // Load DEV module data for each enabled module
+                for (String moduleName : moduleList) {
+                    log.info("Loading DEV data for module: {}", moduleName);
+
+                    String moduleSchemaPath = serviceConfig.getModulePath(
+                            serviceConfig.getDevModuleSchemaPathPattern(), moduleName);
+                    String moduleMdmsPath = serviceConfig.getModulePath(
+                            serviceConfig.getDevModuleMdmsDataPathPattern(), moduleName);
+                    String moduleLocalizationPath = serviceConfig.getModulePath(
+                            serviceConfig.getDevModuleLocalizationDataPathPattern(), moduleName);
+                    String moduleWorkflowPath = serviceConfig.getModulePath(
+                            serviceConfig.getDevModuleWorkflowDataPathPattern(), moduleName);
+
+                    schemaLoader.loadSchemasFromPath(defaultDataRequest, moduleSchemaPath);
+                    mdmsBulkLoader.loadAllMdmsData(tenantCode, requestInfo, moduleMdmsPath);
+                    localizationUtil.upsertLocalizationFromFile(defaultDataRequest, moduleLocalizationPath);
+                    workflowConfigLoader.loadWorkflowConfigFromPath(tenantCode, moduleWorkflowPath);
+                }
+            }
+
+            log.info("Data loading completed successfully for tenant: {}", tenantCode);
+        } catch (Exception e) {
+            log.error("StartupDataInitializer failed: {}", e.getMessage(), e);
+        }
     }
 }

@@ -1,0 +1,154 @@
+[
+  {
+    "name": "Clothing Online",
+    "code": "RETAIL.ECOM.ONFA",
+    "uom": "GROSSUNITS",
+    "applicationDocument": [
+      {
+        "applicationType": "NEW",
+        "documentList": ["IDENTIFICATIONPROOF", "BUSINESSREGISTRATIONCERTIFICATE"]
+      },
+      {
+        "applicationType": "RENEWAL",
+        "documentList": ["IDENTIFICATIONPROOF", "BUSINESSREGISTRATIONCERTIFICATE"]
+      }
+    ],
+    "verificationDocument": [],
+    "active": true,
+    "type": "TL",
+    "validityPeriod": null
+  },
+  {
+    "name": "Electronics Store",
+    "code": "RETAIL.ELEC.ELST",
+    "uom": "GROSSUNITS",
+    "applicationDocument": [
+      {
+        "applicationType": "NEW",
+        "documentList": ["IDENTIFICATIONPROOF", "BUSINESSREGISTRATIONCERTIFICATE"]
+      },
+      {
+        "applicationType": "RENEWAL",
+        "documentList": ["IDENTIFICATIONPROOF", "BUSINESSREGISTRATIONCERTIFICATE"]
+      }
+    ],
+    "verificationDocument": [],
+    "active": true,
+    "type": "TL",
+    "validityPeriod": null
+  },
+  {
+    "name": "Diagnostic Clinic",
+    "code": "SERVICES.HEAL.DIAG",
+    "uom": "GROSSUNITS",
+    "applicationDocument": [
+      {
+        "applicationType": "NEW",
+        "documentList": ["IDENTIFICATIONPROOF", "BUSINESSREGISTRATIONCERTIFICATE"]
+      },
+      {
+        "applicationType": "RENEWAL",
+        "documentList": ["IDENTIFICATIONPROOF", "BUSINESSREGISTRATIONCERTIFICATE"]
+      }
+    ],
+    "verificationDocument": [],
+    "active": true,
+    "type": "TL",
+    "validityPeriod": null
+  },
+  {
+    "name": "Pharmacy",
+    "code": "SERVICES.HEAL.PHAR",
+    "uom": "GROSSUNITS",
+    "applicationDocument": [
+      {
+        "applicationType": "NEW",
+        "documentList": ["IDENTIFICATIONPROOF", "BUSINESSREGISTRATIONCERTIFICATE"]
+      },
+      {
+        "applicationType": "RENEWAL",
+        "documentList": ["IDENTIFICATIONPROOF", "BUSINESSREGISTRATIONCERTIFICATE"]
+      }
+    ],
+    "verificationDocument": [],
+    "active": true,
+    "type": "TL",
+    "validityPeriod": null
+  },
+  {
+    "name": "Cafe",
+    "code": "SERVICES.HOTL.CAFE",
+    "uom": "GROSSUNITS",
+    "applicationDocument": [
+      {
+        "applicationType": "NEW",
+        "documentList": ["IDENTIFICATIONPROOF", "BUSINESSREGISTRATIONCERTIFICATE"]
+      },
+      {
+        "applicationType": "RENEWAL",
+        "documentList": ["IDENTIFICATIONPROOF", "BUSINESSREGISTRATIONCERTIFICATE"]
+      }
+    ],
+    "verificationDocument": [],
+    "active": true,
+    "type": "TL",
+    "validityPeriod": null
+  },
+  {
+    "name": "Spa",
+    "code": "SERVICES.HOTL.SPA",
+    "uom": "GROSSUNITS",
+    "applicationDocument": [
+      {
+        "applicationType": "NEW",
+        "documentList": ["IDENTIFICATIONPROOF", "BUSINESSREGISTRATIONCERTIFICATE"]
+      },
+      {
+        "applicationType": "RENEWAL",
+        "documentList": ["IDENTIFICATIONPROOF", "BUSINESSREGISTRATIONCERTIFICATE"]
+      }
+    ],
+    "verificationDocument": [],
+    "active": true,
+    "type": "TL",
+    "validityPeriod": null
+  },
+  {
+    "name": "Electronics Manufacturing",
+    "code": "MANUFACTURING.CONS.LITE",
+    "uom": "GROSSUNITS",
+    "applicationDocument": [
+      {
+        "applicationType": "NEW",
+        "documentList": ["IDENTIFICATIONPROOF", "BUSINESSREGISTRATIONCERTIFICATE"]
+      },
+      {
+        "applicationType": "RENEWAL",
+        "documentList": ["IDENTIFICATIONPROOF", "BUSINESSREGISTRATIONCERTIFICATE"]
+      }
+    ],
+    "verificationDocument": [],
+    "active": true,
+    "type": "TL",
+    "validityPeriod": null
+  },
+  {
+    "name": "Automotive Manufacturing",
+    "code": "MANUFACTURING.INDU.CONS",
+    "uom": "GROSSUNITS",
+    "applicationDocument": [
+      {
+        "applicationType": "NEW",
+        "documentList": ["IDENTIFICATIONPROOF", "BUSINESSREGISTRATIONCERTIFICATE"]
+      },
+      {
+        "applicationType": "RENEWAL",
+        "documentList": ["IDENTIFICATIONPROOF", "BUSINESSREGISTRATIONCERTIFICATE"]
+      }
+    ],
+    "verificationDocument": [],
+    "active": true,
+    "type": "TL",
+    "validityPeriod": null
+  }
+]

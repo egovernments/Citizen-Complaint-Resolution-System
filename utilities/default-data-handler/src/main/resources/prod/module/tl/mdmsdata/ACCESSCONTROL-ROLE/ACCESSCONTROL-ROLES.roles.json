@@ -1,0 +1,37 @@
+[
+  {
+    "code": "TL_ADMIN",
+    "name": "TL Admin",
+    "description": "Who has access to Trade License Masters"
+  },
+  {
+    "code": "TL_CREATOR",
+    "name": "TL Creator",
+    "description": "Who has access to create Trade License applications"
+  },
+  {
+    "code": "TL_APPROVER",
+    "name": "TL Approver",
+    "description": "Who has access to approve Trade License applications"
+  },
+  {
+    "code": "TL_CEMP",
+    "name": "TL Counter Employee",
+    "description": "Counter Employee in Trade License who files TL on behalf of the citizen"
+  },
+  {
+    "code": "TL_FIELD_INSPECTOR",
+    "name": "TL Field Inspector",
+    "description": "Trade license field inspector"
+  },
+  {
+    "code": "TL_DOC_VERIFIER",
+    "name": "TL Doc Verifier",
+    "description": "Trade license document verifier"
+  },
+  {
+    "code": "TL_REPORT_VIEWER",
+    "name": "TL Report Viewer",
+    "description": "TL User that can view TL reports"
+  }
+]

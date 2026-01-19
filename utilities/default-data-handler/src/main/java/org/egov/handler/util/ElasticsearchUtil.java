@@ -63,7 +63,7 @@ public class ElasticsearchUtil {
 
     public void createDefaultRecords(String tenantId) {
 
-        Resource resource = resourceLoader.getResource("classpath:PgrIndexer.json");
+        Resource resource = resourceLoader.getResource(config.getPgrIndexerFile());
 
         StringBuilder bulkRequest = new StringBuilder();
 

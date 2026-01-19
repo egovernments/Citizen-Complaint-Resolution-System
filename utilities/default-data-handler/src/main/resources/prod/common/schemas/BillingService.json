@@ -1,0 +1,141 @@
+[
+    {
+        "tenantId": "{tenantid}",
+        "code": "BillingService.BusinessService",
+        "description": "Billing Service Business Service Configuration",
+        "definition": {
+            "type": "object",
+            "title": "Business Service Config",
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "required": ["businessService", "code"],
+            "x-unique": ["code"],
+            "properties": {
+                "businessService": {
+                    "type": "string"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "collectionModesNotAllowed": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "partPaymentAllowed": {
+                    "type": "boolean"
+                },
+                "isAdvanceAllowed": {
+                    "type": "boolean"
+                },
+                "demandUpdateTime": {
+                    "type": "integer"
+                },
+                "isVoucherCreationEnabled": {
+                    "type": "boolean"
+                }
+            },
+            "additionalProperties": true
+        },
+        "isActive": true
+    },
+    {
+        "tenantId": "{tenantid}",
+        "code": "BillingService.GLCode",
+        "description": "Billing Service GL Code Mapping",
+        "definition": {
+            "type": "object",
+            "title": "GL Code Mapping",
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "required": ["code"],
+            "x-unique": ["code"],
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "glcode": {
+                    "type": ["string", "null"]
+                },
+                "cb": {
+                    "type": "string"
+                }
+            },
+            "additionalProperties": true
+        },
+        "isActive": true
+    },
+    {
+        "tenantId": "{tenantid}",
+        "code": "BillingService.TaxHeadMaster",
+        "description": "Billing Service Tax Head Master",
+        "definition": {
+            "type": "object",
+            "title": "Tax Head Master",
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "required": ["code", "service"],
+            "x-unique": ["code"],
+            "properties": {
+                "category": {
+                    "type": "string"
+                },
+                "service": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "isDebit": {
+                    "type": "boolean"
+                },
+                "isActualDemand": {
+                    "type": "boolean"
+                },
+                "order": {
+                    "type": "string"
+                },
+                "isRequired": {
+                    "type": "boolean"
+                }
+            },
+            "additionalProperties": true
+        },
+        "isActive": true
+    },
+    {
+        "tenantId": "{tenantid}",
+        "code": "BillingService.TaxPeriod",
+        "description": "Billing Service Tax Period",
+        "definition": {
+            "type": "object",
+            "title": "Tax Period",
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "required": ["code", "service"],
+            "x-unique": ["code"],
+            "properties": {
+                "fromDate": {
+                    "type": "integer"
+                },
+                "toDate": {
+                    "type": "integer"
+                },
+                "periodCycle": {
+                    "type": "string"
+                },
+                "service": {
+                    "type": "string"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "financialYear": {
+                    "type": "string"
+                }
+            },
+            "additionalProperties": true
+        },
+        "isActive": true
+    }
+]

@@ -1,14 +1,14 @@
 package org.egov;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import lombok.extern.slf4j.Slf4j;
 import org.egov.handler.util.LocalizationUtil;
 import org.egov.handler.util.MdmsBulkLoader;
-import org.egov.handler.web.models.User;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.annotation.Profile;
-import org.springframework.context.event.EventListener;
+import org.egov.handler.util.SchemaLoader;
+import org.egov.handler.util.WorkflowConfigLoader;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.util.StreamUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -24,12 +24,9 @@ import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 @Component
+@Slf4j
 @RequiredArgsConstructor
 public class StartupUserAndEmployeeInitializer {
 
@@ -39,8 +36,9 @@ public class StartupUserAndEmployeeInitializer {
     private final ObjectMapper objectMapper;
     private final MdmsBulkLoader mdmsBulkLoader;
     private final LocalizationUtil localizationUtil;
+    private final SchemaLoader schemaLoader;
+    private final WorkflowConfigLoader workflowConfigLoader;
 
-    private final AtomicBoolean hasStarted = new AtomicBoolean(false);
     private int executionCount = 0;
     private static final int MAX_EXECUTIONS = 4;
 
@@ -48,20 +46,24 @@ public class StartupUserAndEmployeeInitializer {
     public void runPeriodically() {
         if (executionCount >= MAX_EXECUTIONS) return;
 
-        System.out.println("[DEBUG] Scheduled startup logic executing at: " + Instant.now());
+        log.info("Scheduled startup logic executing at: {}", Instant.now());
 
         try {
-            executeStartupLogic();
+//            executeStartupLogic();
             executionCount++;
         } catch (Exception e) {
-            System.err.println("StartupSchemaAndMasterDataInitializer failed on attempt " + (executionCount + 1) + ": " + e.getMessage());
-            e.printStackTrace();
+            log.error("StartupUserAndEmployeeInitializer failed on attempt {}: {}",
+                    executionCount + 1, e.getMessage(), e);
             executionCount++; // Even on failure, count the attempt
         }
     }
 
     public void executeStartupLogic() throws Exception {
         String tenantCode = serviceConfig.getDefaultTenantId();
+        List<String> moduleList = serviceConfig.getModuleList();
+
+        log.info("Loading data for tenant: {}, modules: {}", tenantCode,
+                moduleList.isEmpty() ? "COMMON ONLY" : moduleList);
 
         Resource resource = resourceLoader.getResource("classpath:requestInfo.json");
         Resource tenantJson = resourceLoader.getResource("classpath:tenant.json");
@@ -92,45 +94,96 @@ public class StartupUserAndEmployeeInitializer {
                 .modules(serviceConfig.getDefaultLocalizationModuleList())
                 .build();
 
-        // Execute your logic
-        dataHandlerService.createMdmsSchemaFromFile(defaultDataRequest);
+        // ===== LOAD PROD COMMON DATA (always) =====
+        log.info("Loading PROD common schemas...");
+        schemaLoader.loadSchemasFromPath(defaultDataRequest, serviceConfig.getProdCommonSchemaPath());
 
-        // Load default MDMS data (always)
-        mdmsBulkLoader.loadAllMdmsData(defaultDataRequest.getTargetTenantId(),
-                defaultDataRequest.getRequestInfo(),
-                serviceConfig.getDefaultMdmsDataPath());
+        log.info("Loading PROD common MDMS data...");
+        mdmsBulkLoader.loadAllMdmsData(tenantCode, requestInfo, serviceConfig.getProdCommonMdmsDataPath());
 
-        // Load default localization (always)
-        localizationUtil.upsertLocalizationFromFile(defaultDataRequest,
-                serviceConfig.getDefaultLocalizationDataPath());
+        log.info("Loading PROD common localization...");
+//        localizationUtil.upsertLocalizationFromFile(defaultDataRequest, serviceConfig.getProdCommonLocalizationDataPath());
+
+        log.info("Loading PROD common workflow config...");
+//        workflowConfigLoader.loadWorkflowConfigFromPath(tenantCode, serviceConfig.getProdCommonWorkflowDataPath());
+
+        // ===== LOAD PROD MODULE DATA (for each enabled module) =====
+        for (String moduleName : moduleList) {
+            log.info("Loading PROD data for module: {}", moduleName);
+
+            String moduleSchemaPath = serviceConfig.getModulePath(
+                    serviceConfig.getProdModuleSchemaPathPattern(), moduleName);
+            String moduleMdmsPath = serviceConfig.getModulePath(
+                    serviceConfig.getProdModuleMdmsDataPathPattern(), moduleName);
+            String moduleLocalizationPath = serviceConfig.getModulePath(
+                    serviceConfig.getProdModuleLocalizationDataPathPattern(), moduleName);
+            String moduleWorkflowPath = serviceConfig.getModulePath(
+                    serviceConfig.getProdModuleWorkflowDataPathPattern(), moduleName);
+
+            schemaLoader.loadSchemasFromPath(defaultDataRequest, moduleSchemaPath);
+            mdmsBulkLoader.loadAllMdmsData(tenantCode, requestInfo, moduleMdmsPath);
+            localizationUtil.upsertLocalizationFromFile(defaultDataRequest, moduleLocalizationPath);
+            workflowConfigLoader.loadWorkflowConfigFromPath(tenantCode, moduleWorkflowPath);
+        }
 
         // Load default user (always)
+        log.info("Loading default users...");
         dataHandlerService.createUserFromFile(tenantRequest, serviceConfig.getDefaultUserDataFile());
 
         // Load default employee (always)
+        log.info("Loading default employees...");
         dataHandlerService.createEmployeeFromFile(defaultDataRequest.getRequestInfo(),
                 serviceConfig.getDefaultEmployeeDataFile());
 
-        // Load boundary, localization, user, employee, and workflow config data only if enabled
+        // ===== LOAD DEV DATA (only if dev.enabled=true) =====
         if (serviceConfig.isDevEnabled()) {
-            // Load dev MDMS data
-            mdmsBulkLoader.loadAllMdmsData(defaultDataRequest.getTargetTenantId(),
-                    defaultDataRequest.getRequestInfo(),
-                    serviceConfig.getDevMdmsDataPath());
+            log.info("Dev mode enabled, loading DEV data...");
 
-            // Load dev localization
-            localizationUtil.upsertLocalizationFromFile(defaultDataRequest,
-                    serviceConfig.getDevLocalizationDataPath());
+            // Load DEV common data
+            log.info("Loading DEV common schemas...");
+            schemaLoader.loadSchemasFromPath(defaultDataRequest, serviceConfig.getDevCommonSchemaPath());
 
+            log.info("Loading DEV common MDMS data...");
+            mdmsBulkLoader.loadAllMdmsData(tenantCode, requestInfo, serviceConfig.getDevCommonMdmsDataPath());
+
+            log.info("Loading DEV common localization...");
+            localizationUtil.upsertLocalizationFromFile(defaultDataRequest, serviceConfig.getDevCommonLocalizationDataPath());
+
+            log.info("Loading DEV common workflow config...");
+            workflowConfigLoader.loadWorkflowConfigFromPath(tenantCode, serviceConfig.getDevCommonWorkflowDataPath());
+
+            // Load DEV module data for each enabled module
+            for (String moduleName : moduleList) {
+                log.info("Loading DEV data for module: {}", moduleName);
+
+                String moduleSchemaPath = serviceConfig.getModulePath(
+                        serviceConfig.getDevModuleSchemaPathPattern(), moduleName);
+                String moduleMdmsPath = serviceConfig.getModulePath(
+                        serviceConfig.getDevModuleMdmsDataPathPattern(), moduleName);
+                String moduleLocalizationPath = serviceConfig.getModulePath(
+                        serviceConfig.getDevModuleLocalizationDataPathPattern(), moduleName);
+                String moduleWorkflowPath = serviceConfig.getModulePath(
+                        serviceConfig.getDevModuleWorkflowDataPathPattern(), moduleName);
+
+                schemaLoader.loadSchemasFromPath(defaultDataRequest, moduleSchemaPath);
+                mdmsBulkLoader.loadAllMdmsData(tenantCode, requestInfo, moduleMdmsPath);
+                localizationUtil.upsertLocalizationFromFile(defaultDataRequest, moduleLocalizationPath);
+                workflowConfigLoader.loadWorkflowConfigFromPath(tenantCode, moduleWorkflowPath);
+            }
+
+            // Load boundary data
             dataHandlerService.createBoundaryDataFromFile(defaultDataRequest);
 
             // Load dev users
+            log.info("Loading dev users...");
             dataHandlerService.createUserFromFile(tenantRequest, serviceConfig.getDevUserDataFile());
-            dataHandlerService.createPgrWorkflowConfig(tenantRequest.getTenant().getCode());
-            // create employee (dev)
+
+            // Load dev employees
+            log.info("Loading dev employees...");
             dataHandlerService.createEmployeeFromFile(defaultDataRequest.getRequestInfo(),
                     serviceConfig.getDevEmployeeDataFile());
         }
+
+        log.info("Data loading completed successfully for tenant: {}", tenantCode);
     }
 }
-

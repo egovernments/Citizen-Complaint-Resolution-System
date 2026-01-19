@@ -1,0 +1,35 @@
+[
+  {
+    "code": "Workbench",
+    "order": 1,
+    "active": true,
+    "module": "Workbench",
+    "tenants": [
+      {
+        "code": "{tenantid}"
+      }
+    ]
+  },
+  {
+    "code": "PGR",
+    "order": 2,
+    "active": true,
+    "module": "PGR",
+    "tenants": [
+      {
+        "code": "{tenantid}"
+      }
+    ]
+  },
+  {
+    "code": "HRMS",
+    "order": 3,
+    "active": true,
+    "module": "HRMS",
+    "tenants": [
+      {
+        "code": "{tenantid}"
+      }
+    ]
+  }
+]

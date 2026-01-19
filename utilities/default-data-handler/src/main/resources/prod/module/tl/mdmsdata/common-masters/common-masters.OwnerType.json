@@ -1,0 +1,7 @@
+[
+  {"code": "WIDOW", "active": true},
+  {"code": "DISABLED", "active": true},
+  {"code": "DEFENSE", "active": true},
+  {"code": "SENIORCITIZEN", "active": true},
+  {"code": "NONE", "active": true}
+]

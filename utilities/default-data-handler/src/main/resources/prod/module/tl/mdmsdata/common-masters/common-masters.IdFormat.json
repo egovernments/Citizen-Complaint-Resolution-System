@@ -1,0 +1,17 @@
+[
+  {
+    "tenantId": "{tenantid}",
+    "format": "TL/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_TL]",
+    "idname": "tl.aplnumber"
+  },
+  {
+    "tenantId": "{tenantid}",
+    "format": "TL/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_TL_RCPT]",
+    "idname": "tl.receipt.id"
+  },
+  {
+    "tenantId": "{tenantid}",
+    "format": "TL/[CITY.CODE]/[fy:yyyy-yy]/LN-[SEQ_EGOV_TL_LN]",
+    "idname": "tl.license.number"
+  }
+]

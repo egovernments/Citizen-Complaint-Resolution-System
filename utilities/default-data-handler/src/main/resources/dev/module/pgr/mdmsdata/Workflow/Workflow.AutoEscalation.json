@@ -1,0 +1,82 @@
+[
+      {
+        "state": "RESOLVED",
+        "topic": "im-auto-escalation",
+        "action": "CLOSE",
+        "active": "true",
+        "module": "im-services",
+        "stateSLA": 3.0,
+        "businessSLA": 3456,
+        "businessService": "Incident_Low"
+      },
+      {
+        "state": "RESOLVED",
+        "topic": "im-auto-escalation",
+        "action": "CLOSE",
+        "active": "true",
+        "module": "im-services",
+        "stateSLA": 3.0,
+        "businessSLA": 3456,
+        "businessService": "Incident_High"
+      },
+      {
+        "state": "RESOLVED",
+        "topic": "im-auto-escalation",
+        "action": "CLOSE",
+        "active": "true",
+        "module": "im-services",
+        "stateSLA": 3.0,
+        "businessSLA": 3456,
+        "businessService": "Incident_Medium"
+      },
+      {
+        "state": "REJECTED",
+        "topic": "im-auto-escalation",
+        "action": "CLOSE",
+        "active": "true",
+        "module": "im-services",
+        "stateSLA": 3.0,
+        "businessSLA": 3456,
+        "businessService": "Incident_Medium"
+      },
+      {
+        "state": "REJECTED",
+        "topic": "im-auto-escalation",
+        "action": "CLOSE",
+        "active": "true",
+        "module": "im-services",
+        "stateSLA": 3.0,
+        "businessSLA": 3456,
+        "businessService": "Incident_High"
+      },
+      {
+        "state": "REJECTED",
+        "topic": "im-auto-escalation",
+        "action": "CLOSE",
+        "active": "true",
+        "module": "im-services",
+        "stateSLA": 3.0,
+        "businessSLA": 3456,
+        "businessService": "Incident_Low"
+      },
+      {
+        "state": "REJECTED",
+        "topic": "im-auto-escalation",
+        "action": "CLOSE",
+        "active": "true",
+        "module": "im-services",
+        "stateSLA": 3.0,
+        "businessSLA": 3456,
+        "businessService": "Incident"
+      },
+      {
+        "state": "RESOLVED",
+        "topic": "im-auto-escalation",
+        "action": "CLOSE",
+        "active": "true",
+        "module": "im-services",
+        "stateSLA": 3.0,
+        "businessSLA": 3456,
+        "businessService": "Incident"
+      }
+]

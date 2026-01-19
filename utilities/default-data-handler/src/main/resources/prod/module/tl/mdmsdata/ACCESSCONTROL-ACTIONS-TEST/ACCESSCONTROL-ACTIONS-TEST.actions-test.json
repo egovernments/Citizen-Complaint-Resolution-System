@@ -1,0 +1,91 @@
+[
+  {
+    "id": 3001,
+    "name": "Create Trade License",
+    "url": "/tl-services/v1/_create",
+    "displayName": "Create Trade License Application",
+    "orderNumber": 1,
+    "enabled": true,
+    "serviceCode": "TL"
+  },
+  {
+    "id": 3002,
+    "name": "Update Trade License",
+    "url": "/tl-services/v1/_update",
+    "displayName": "Update Trade License Application",
+    "orderNumber": 2,
+    "enabled": true,
+    "serviceCode": "TL"
+  },
+  {
+    "id": 3003,
+    "name": "Search Trade License",
+    "url": "/tl-services/v1/_search",
+    "displayName": "Search Trade License Applications",
+    "orderNumber": 3,
+    "enabled": true,
+    "serviceCode": "TL"
+  },
+  {
+    "id": 3004,
+    "url": "url",
+    "name": "TL Inbox",
+    "path": "TLInbox",
+    "enabled": true,
+    "leftIcon": "TLIcon",
+    "displayName": "Trade License Inbox",
+    "orderNumber": 1,
+    "serviceCode": "TL",
+    "parentModule": "rainmaker-tl",
+    "navigationURL": "/digit-ui/employee/tl/inbox"
+  },
+  {
+    "id": 3005,
+    "url": "url",
+    "name": "New Trade License",
+    "path": "NewTL",
+    "enabled": true,
+    "leftIcon": "TLIcon",
+    "displayName": "Create Trade License",
+    "orderNumber": 2,
+    "serviceCode": "TL",
+    "parentModule": "rainmaker-tl",
+    "navigationURL": "/digit-ui/employee/tl/new-application"
+  },
+  {
+    "id": 3006,
+    "url": "digit-ui-card",
+    "code": "",
+    "name": "CS_HOME_APPLY_TL",
+    "path": "",
+    "enabled": true,
+    "sidebar": "digit-ui-links",
+    "leftIcon": "TLIcon",
+    "rightIcon": "",
+    "sidebarURL": "/digit-ui/citizen/tl-home",
+    "displayName": "Apply for Trade License",
+    "orderNumber": 1,
+    "queryParams": "",
+    "serviceCode": "",
+    "parentModule": "TL",
+    "navigationURL": "/digit-ui/citizen/tl/tradelicence/new-application"
+  },
+  {
+    "id": 3007,
+    "url": "digit-ui-card",
+    "code": "",
+    "name": "CS_HOME_MY_APPLICATIONS",
+    "path": "",
+    "enabled": true,
+    "sidebar": "digit-ui-links",
+    "leftIcon": "TLIcon",
+    "rightIcon": "",
+    "sidebarURL": "/digit-ui/citizen/tl-home",
+    "displayName": "My Applications",
+    "orderNumber": 2,
+    "queryParams": "",
+    "serviceCode": "",
+    "parentModule": "TL",
+    "navigationURL": "/digit-ui/citizen/tl/tradelicence/my-applications"
+  }
+]
