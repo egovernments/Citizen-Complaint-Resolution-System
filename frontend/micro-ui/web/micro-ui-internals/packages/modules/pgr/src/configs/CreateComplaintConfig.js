@@ -107,15 +107,22 @@ export const CreateComplaintConfig = {
             {
               "key": "boundaryComponent",
               "type": "boundary",
-              "inline": true,
-              "label": "BoundaryFIlter",
+              "inline": false,
               "disable": false,
               "populators": {
+                "fieldPairClassName": "boundary-filter-label-left-align",
                 "name": "boundaryComponent",
-                "levelConfig": { lowestLevel: "zone", highestLevel: "region", isSingleSelect: [] },
+                "levelConfig": { isSingleSelect: ["zone", "region"] },
+                "layoutConfig": {
+                  "isDropdownLayoutHorizontal": true,
+                  "isLabelFieldLayoutHorizontal": true
+
+                },
                 "hierarchyType": "ADMIN",
-                "noCardStyle": true,
-              },
+                "noCardStyle": false,
+                "module": "CMS-BOUNDARY"
+              }
+
             },
             {
               inline: true,
