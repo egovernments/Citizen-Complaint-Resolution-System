@@ -189,7 +189,7 @@ export const formPayloadToCreateComplaint = (formData, tenantId, user) => {
             (typeof image === 'string' && image.length > 0 ? image : null);
           
           return fileStoreId ? {
-            documentType: "PHOTO",
+            documentType: "ATTACHMENT",
             fileStoreId: fileStoreId,
             documentUid: "",
             additionalDetails: {}
