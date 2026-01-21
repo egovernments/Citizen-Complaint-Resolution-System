@@ -5,7 +5,7 @@
       "maxLength": 10,
       "minLength": 10,
       "errorMessage": "Please enter a valid 10-digit mobile number starting with 6-9",
-      "allowedStartingDigits": [
+      "allowedStartingCharacters": [
         "6",
         "7",
         "8",
