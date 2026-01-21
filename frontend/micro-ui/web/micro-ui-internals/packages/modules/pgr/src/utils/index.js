@@ -176,6 +176,31 @@ export const formPayloadToCreateComplaint = (formData, tenantId, user) => {
   };
   const additionalDetail = { supervisorName : formData?.SupervisorName?.trim()?.length > 0 ? formData?.SupervisorName?.trim() : null, supervisorContactNumber : formData?.SupervisorContactNumber?.trim()?.length > 0 ? formData?.SupervisorContactNumber?.trim() : null };
   const timestamp = Date.now();
+  const getVerificationDocuments = () => {
+    if (!formData?.ComplaintImagesPoint) return [];
+    
+    if (Array.isArray(formData.ComplaintImagesPoint)) {
+      return formData.ComplaintImagesPoint
+        .filter(img => img)
+        .map((image) => {
+          const fileStoreId = 
+            image?.fileStoreId || 
+            image?.id || 
+            (typeof image === 'string' && image.length > 0 ? image : null);
+          
+          return fileStoreId ? {
+            documentType: "PHOTO",
+            fileStoreId: fileStoreId,
+            documentUid: "",
+            additionalDetails: {}
+          } : null;
+        })
+        .filter(doc => doc !== null);
+    }
+    
+    return [];
+  };
+  
   let complaint = {
     "service": {
       "active": true,
@@ -209,7 +234,8 @@ export const formPayloadToCreateComplaint = (formData, tenantId, user) => {
       "action": "APPLY",
       "assignes": [],
       "hrmsAssignes": [],
-      "comments": ""
+      "comments": "",
+      "verificationDocuments": getVerificationDocuments()
     }
   }
 
