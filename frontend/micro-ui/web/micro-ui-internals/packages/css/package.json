@@ -1,5 +1,5 @@
 {
-  "name": "@egovernments/digit-ui-components-css",
+  "name": "@egovernments/digit-ui-health-css",
   "version": "0.2.113",
   "license": "MIT",
   "main": "dist/index.css",
@@ -12,7 +12,7 @@
   },
   "scripts": {
     "start": "gulp build",
-    "build:prod": "gulp build",
+    "build:prod": "NODE_ENV=production gulp build",
     "prepublish": "yarn build:prod",
     "deploy": "gulp && cp -R svg example && cp -R img example && gh-pages -d example"
   },
