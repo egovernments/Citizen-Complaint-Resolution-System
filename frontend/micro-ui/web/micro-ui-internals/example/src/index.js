@@ -3,7 +3,7 @@ import ReactDOM from "react-dom";
 import { PGRReducers } from "@egovernments/digit-ui-module-ccrs";
 import { initLibraries } from "@egovernments/digit-ui-libraries";
 // import { paymentConfigs, PaymentLinks, PaymentModule } from "@egovernments/digit-ui-module-common";
-import "@egovernments/digit-ui-components-css/example/index.css";
+import "@egovernments/digit-ui-health-css/example/index.css";
 import { Loader } from "@egovernments/digit-ui-components";
 
 import { UICustomizations } from "./UICustomizations";
