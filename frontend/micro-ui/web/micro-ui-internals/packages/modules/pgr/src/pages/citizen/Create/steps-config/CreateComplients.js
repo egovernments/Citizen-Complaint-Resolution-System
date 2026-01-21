@@ -15,24 +15,24 @@ export const createComplaint = {
       },
       "populators": {
         "name": "SelectComplaintType",
-        "optionsKey": "menuPathName",
+        "optionsKey": "menuPath",
         "error": "CORE_COMMON_REQUIRED_ERRMSG",
         "options": []
       }
     },
     {
-  "isMandatory": false,
-  "key": "SelectSubComplaintType",
-  "type": "dropdown",
-  "label": "CS_COMPLAINT_DETAILS_COMPLAINT_SUBTYPE",
-  "disable": false,
-  "populators": {
-    "name": "SelectSubComplaintType",
-    "optionsKey": "name",
-    "options": [],
-    "error": "CORE_COMMON_REQUIRED_ERRMSG"
-  }
-},
+      "isMandatory": false,
+      "key": "SelectSubComplaintType",
+      "type": "dropdown",
+      "label": "CS_COMPLAINT_DETAILS_COMPLAINT_SUBTYPE",
+      "disable": false,
+      "populators": {
+        "name": "SelectSubComplaintType",
+        "optionsKey": "i18nKey",
+        "options": [],
+        "error": "CORE_COMMON_REQUIRED_ERRMSG"
+      }
+    },
     // {
     //   "inline": true,
     //   "label": "CS_COMPLAINT_DETAILS_COMPLAINT_DATE",

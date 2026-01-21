@@ -292,7 +292,7 @@ const FormExplorer = () => {
         disable: false,
         populators: {
           name: "SelectSubComplaintType",
-          optionsKey: "name",
+          optionsKey: "i18nKey",
           required: true,
           error: "CORE_COMMON_REQUIRED_ERRMSG",
           options: subTypes,
