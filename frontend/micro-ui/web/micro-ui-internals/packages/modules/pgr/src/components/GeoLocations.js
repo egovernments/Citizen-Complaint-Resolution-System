@@ -42,9 +42,9 @@ const PolygonIcon = ({ active }) => (
 const GeoLocations = ({ t, config, onSelect, formData }) => {
   const { t: trans } = useTranslation();
   // Zero Mile Stone, Nagpur (Geographical Center of India)
-  const INDIA_CENTER = { lat: 21.1498, lng: 79.0806 };
-  const [coords, setCoords] = useState(INDIA_CENTER);
-  const [markerPos, setMarkerPos] = useState([INDIA_CENTER.lat, INDIA_CENTER.lng]);
+  const MAP_CENTER = window?.globalConfigs?.getConfig("MAP_CENTER_LAT_LNG") || { lat: 21.1498, lng: 79.0806 };
+  const [coords, setCoords] = useState(MAP_CENTER);
+  const [markerPos, setMarkerPos] = useState([MAP_CENTER.lat, MAP_CENTER.lng]);
   const [searchQuery, setSearchQuery] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -75,9 +75,9 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
         } else {
           hasInitialized.current = true;
           // Set default location immediately to ensure lat/lng is captured even if user clicks Next quickly
-          onSelect(config.key, { lat: INDIA_CENTER.lat, lng: INDIA_CENTER.lng });
+          onSelect(config.key, { lat: MAP_CENTER.lat, lng: MAP_CENTER.lng });
           // Fetch and display address for India's center
-          fetchAddress(INDIA_CENTER.lat, INDIA_CENTER.lng);
+          fetchAddress(MAP_CENTER.lat, MAP_CENTER.lng);
         }
       }
     }
@@ -274,9 +274,9 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     setSuggestions([]);
     setPolygonPoints([]);
     // Reset map to India center
-    setCoords(INDIA_CENTER);
+    setCoords(MAP_CENTER);
     if (mapRef.current) {
-      mapRef.current.leafletElement.setView([INDIA_CENTER.lat, INDIA_CENTER.lng], 5);
+      mapRef.current.leafletElement.setView([MAP_CENTER.lat, MAP_CENTER.lng], 5);
     }
     // Clear location from formData
     onSelect(config.key, null);
