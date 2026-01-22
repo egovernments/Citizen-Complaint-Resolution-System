@@ -99,7 +99,7 @@ const CreateComplaintForm = ({
     for (const item of data) {
       if (!seenMenuPaths.has(item.menuPath)) {
         seenMenuPaths.add(item.menuPath);
-        uniqueItems.push(item);
+        uniqueItems.push({ ...item, i18nKey: "SERVICEDEFS." + item.menuPath.toUpperCase().replace(/[ -]/g, "_") });
       }
     }
 
@@ -113,7 +113,7 @@ const CreateComplaintForm = ({
       return [];
     }
 
-    return allItems.filter(item => item.department === baseItem.department);
+    return allItems.filter(item => item.department === baseItem.department).map((item) => ({ ...item, i18nKey: "SERVICEDEFS_" + item.serviceCode.toUpperCase() }));
   }
 
 

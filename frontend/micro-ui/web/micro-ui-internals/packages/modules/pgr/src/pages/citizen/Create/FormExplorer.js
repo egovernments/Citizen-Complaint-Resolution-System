@@ -88,7 +88,7 @@ const FormExplorer = () => {
       if (!key || seen.has(key)) return false;
       seen.add(key);
       return true;
-    });
+    }).map(item => ({ ...item, i18nKey: "SERVICEDEFS." + item.menuPath.toUpperCase().replace(/[ -]/g, "_") }));
 
     const complaintTypeField = configs[0].body.find(field => field.key === "SelectComplaintType");
 
@@ -326,6 +326,7 @@ const FormExplorer = () => {
 
     const subTypes = serviceDefs
       .filter(opt => opt.menuPath === currentMenuPath)
+      .map((item) => ({ ...item, i18nKey: "SERVICEDEFS_" + item.serviceCode.toUpperCase() }))
       .sort((a, b) => (a.order || 0) - (b.order || 0));
 
     // Remove the field if no subTypes available
@@ -339,7 +340,7 @@ const FormExplorer = () => {
         disable: false,
         populators: {
           name: "SelectSubComplaintType",
-          optionsKey: "name",
+          optionsKey: "i18nKey",
           required: true,
           error: "CORE_COMMON_REQUIRED_ERRMSG",
           options: subTypes,
