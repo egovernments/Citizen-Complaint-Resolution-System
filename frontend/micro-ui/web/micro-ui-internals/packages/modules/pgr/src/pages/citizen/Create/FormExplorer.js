@@ -41,14 +41,21 @@ const FormExplorer = () => {
 
 
   // Use Custom MDMS hook for fetching Hierarchy Schema
+  const stateId = Digit.ULBService.getStateId();
   const { isLoading: isHierarchyLoading, data: hierarchyData } = Digit.Hooks.useCustomMDMS(
-    tenantId,
+    stateId,
     "CMS-BOUNDARY",
     [{ name: "HierarchySchema" }],
     {
-      select: (data) => data?.["CMS-BOUNDARY"]?.HierarchySchema?.[0],
+      select: (data) => {
+        const hierarchySchema = data?.["CMS-BOUNDARY"]?.HierarchySchema;
+        if (Array.isArray(hierarchySchema)) {
+          return hierarchySchema.find((item) => item.moduleName === "CMS");
+        }
+        return null;
+      },
       retry: false,
-      enable: true,
+      enabled: true,
     }
   );
 
@@ -88,7 +95,7 @@ const FormExplorer = () => {
       if (!key || seen.has(key)) return false;
       seen.add(key);
       return true;
-    }).map(item => ({ ...item, i18nKey: "SERVICEDEFS." + item.menuPath.toUpperCase().replace(/[ -]/g, "_") }));
+    }).map(item => ({ ...item, i18nKey: "SERVICEDEFS_" + item.menuPath.toUpperCase().replace(/[ -]/g, "_") }));
 
     const complaintTypeField = configs[0].body.find(field => field.key === "SelectComplaintType");
 

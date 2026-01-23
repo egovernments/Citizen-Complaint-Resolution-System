@@ -12,7 +12,7 @@
  * - Navigates to complaint response screen after submission
  */
 
-import { FormComposerV2, Toast } from "@egovernments/digit-ui-components";
+import { FormComposerV2, Toast, Loader } from "@egovernments/digit-ui-components";
 import React, { useEffect, useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useHistory } from "react-router-dom";
@@ -99,7 +99,7 @@ const CreateComplaintForm = ({
     for (const item of data) {
       if (!seenMenuPaths.has(item.menuPath)) {
         seenMenuPaths.add(item.menuPath);
-        uniqueItems.push({ ...item, i18nKey: "SERVICEDEFS." + item.menuPath.toUpperCase().replace(/[ -]/g, "_") });
+        uniqueItems.push({ ...item, i18nKey: "SERVICEDEFS_" + item.menuPath.toUpperCase().replace(/[ -]/g, "_") });
       }
     }
 
@@ -147,22 +147,30 @@ const CreateComplaintForm = ({
   }, [selectedCity]); // ← this only runs when selectedCity changes
 
   // Use Custom MDMS hook for fetching Hierarchy Schema
+  const stateId = Digit.ULBService.getStateId();
   const { isLoading: isHierarchyLoading, data: hierarchyData } = Digit.Hooks.useCustomMDMS(
-    tenantId,
+    stateId,
     "CMS-BOUNDARY",
     [{ name: "HierarchySchema" }],
     {
-      select: (data) => data?.["CMS-BOUNDARY"]?.HierarchySchema?.[0],
+      select: (data) => {
+        const hierarchySchema = data?.["CMS-BOUNDARY"]?.HierarchySchema;
+        if (Array.isArray(hierarchySchema)) {
+          return hierarchySchema.find((item) => item.moduleName === "CMS");
+        }
+        return null;
+      },
       retry: false,
-      enable: true,
+      enabled: true,
     }
   );
 
   useEffect(() => {
+    console.log("Hierarchy Data Debug:", { stateId, isHierarchyLoading, hierarchyData });
     if (hierarchyData) {
       console.log("MDMS Response:", hierarchyData);
     }
-  }, [hierarchyData]);
+  }, [hierarchyData, isHierarchyLoading, stateId]);
 
   const processLocalities = (boundaryList = []) => {
     if (!Array.isArray(boundaryList)) return [];
@@ -248,7 +256,7 @@ const CreateComplaintForm = ({
               disable: disabledFields[field.populators.name],
             };
           }
-          if (field.key === "boundaryComponent" && hierarchyData?.moduleName === "CMS") {
+          if (field.key === "boundaryComponent" && hierarchyData) {
             return {
               ...field,
               populators: {
@@ -393,6 +401,10 @@ const CreateComplaintForm = ({
   };
 
 
+
+  if (isHierarchyLoading) {
+    return <Loader />;
+  }
 
   return (
     <React.Fragment>
