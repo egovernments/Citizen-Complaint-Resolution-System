@@ -330,12 +330,6 @@
         "locale": "en_IN"
     },
     {
-        "code": "ACTION_TEST_LOCALISATION",
-        "message": "Localisation",
-        "module": "rainmaker-common",
-        "locale": "en_IN"
-    },
-    {
         "code": "ACTION_TEST_LOCALIZATION",
         "message": "Localization",
         "module": "rainmaker-common",
@@ -1789,7 +1783,7 @@
     },
     {
         "code": "CMN_ACK_CORPORATION_HEADER",
-        "message": "Municipal Corporation",
+        "message": "Local Government Authority",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
@@ -4633,7 +4627,7 @@
     },
     {
         "code": "COMMON_SUBDIVISION_MUNICIPAL_CORPORATION",
-        "message": "Municipal Corporation",
+        "message": "Local Government Authority",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
@@ -8431,31 +8425,31 @@
     },
     {
         "code": "ULBGRADE_MC_CLASS_II",
-        "message": "MUNICIPAL CORPORATION",
+        "message": "Local Government Authority",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
     {
         "code": "ULBGRADE_MC_CLASS_III",
-        "message": "MUNICIPAL CORPORATION",
+        "message": "Local Government Authority",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
     {
         "code": "ULBGRADE_MUNICIPAL_CORPORATION",
-        "message": "MUNICIPAL CORPORATION",
+        "message": "Local Government Authority",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
     {
         "code": "ULBGRADE_MUNICIPAL_CORPORATION ",
-        "message": "MUNICIPAL CORPORATION",
+        "message": "Local Government Authority",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
     {
         "code": "ULBGRADE_NAGAR_NIGAM",
-        "message": "MUNICIPAL CORPORATION",
+        "message": "Local Government Authority",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
@@ -8485,13 +8479,13 @@
     },
     {
         "code": "ULB_MUNICIPAL_CORPORATION",
-        "message": "MUNICIPAL CORPORATION",
+        "message": "Local Government Authority",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
     {
         "code": "ULB_MUNICIPAL_CORPORATION ",
-        "message": "MUNICIPAL CORPORATION",
+        "message": "Local Government Authority",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
@@ -8846,6 +8840,108 @@
     {
         "code": "WHATSAPP_SEARCH_LOCALITY",
         "message": "Search locality",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ENTER_MOBILE_PLACEHOLDER",
+        "message": "Enter mobile number",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ERR_INVALID_MOBILE_NUMBER",
+        "message": "Please enter a valid mobile number",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "EVENTS_DATERANGE_LABEL",
+        "message": "Date Range",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_CLEAR_ALL",
+        "message": "Clear All",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_APPLY",
+        "message": "Apply",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_CONTACT_DETAILS",
+        "message": "Contact Details",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_HOME",
+        "message": "Home",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_PAGE_1",
+        "message": "Edit profile",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PRIVACY_POLICY",
+        "message": "Privacy Policy",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_FORGOT_PASSWORD_DESC",
+        "message": "Please enter your user name to reset password.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "TL_APPROVAL_UPLOAD_HEAD",
+        "message": "Supporting Documents",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+        {
+        "code": "HR_COMMON_CREATE_EMPLOYEE_HEADER",
+        "message": "Create Employee",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "HR_HOME_SEARCH_RESULTS_HEADING",
+        "message": "Search Employee",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ACTIVE_EMPLOYEES",
+        "message": "Active Employees",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ACTION_TEST_MDMS",
+        "message": "Manage Master Data",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ACTION_TEST_WORKBENCH",
+        "message": "Workbench",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ACTION_TEST_LOCALISATION",
+        "message": "Manage Localisation",
         "module": "rainmaker-common",
         "locale": "en_IN"
     }

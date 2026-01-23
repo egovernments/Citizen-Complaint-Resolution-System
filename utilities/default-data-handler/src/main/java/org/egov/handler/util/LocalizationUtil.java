@@ -17,6 +17,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -90,29 +91,50 @@ public class LocalizationUtil {
 		}
 	}
 
-	public List<Message> addMessagesFromFile(DefaultDataRequest defaultDataRequest, String localizationPath){
-		List<Message> messages = new ArrayList<>();
-		ObjectMapper objectMapper = new ObjectMapper();
+	public List<Message> addMessagesFromFile(DefaultDataRequest defaultDataRequest, String localizationPath) {
+	    List<Message> messages = new ArrayList<>();
+	    ObjectMapper objectMapper = new ObjectMapper();
 
-		try {
-			PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
+	    try {
+	        PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
+	        Resource[] resources = resolver.getResources(localizationPath);
 
-			Resource[] resources = resolver.getResources(localizationPath);
-			log.info("Loading localization from path: {}", localizationPath);
+	        log.info("Loading localization from path: {}", localizationPath);
 
-			for (Resource resource : resources) {
-				try (InputStream inputStream = resource.getInputStream()) {
-					List<Message> fileMessages = Arrays.asList(objectMapper.readValue(inputStream, Message[].class));
-					messages.addAll(fileMessages);
-					log.info("Loaded {} messages from {}", fileMessages.size(), resource.getFilename());
-				} catch (IOException e) {
-					log.error("Failed to read localization file {}: {}", resource.getFilename(), e.getMessage());
-				}
-			}
-		} catch (IOException e) {
-			log.error("Failed to scan localization directories: {}", e.getMessage());
-		}
+	        for (Resource resource : resources) {
+	            String fileName = resource.getFilename();
 
-		return messages;
+	            try (InputStream inputStream = resource.getInputStream()) {
+
+	                List<Message> fileMessages;
+
+					if ("dynamic-labels.json".equalsIgnoreCase(fileName)) {
+						// Read as String, replace tenantId, then map
+						String content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+						content = content.replace("{tenantid}", defaultDataRequest.getTargetTenantId().toUpperCase());
+
+						fileMessages = Arrays.asList(objectMapper.readValue(content, Message[].class));
+
+						log.info("Applied tenant replacement for {}", fileName);
+					} else {
+	                    // Normal flow for all other files
+	                    fileMessages = Arrays.asList(
+	                            objectMapper.readValue(inputStream, Message[].class)
+	                    );
+	                }
+
+	                messages.addAll(fileMessages);
+	                log.info("Loaded {} messages from {}", fileMessages.size(), fileName);
+
+	            } catch (IOException e) {
+	                log.error("Failed to read localization file {}: {}", fileName, e.getMessage(), e);
+	            }
+	        }
+	    } catch (IOException e) {
+	        log.error("Failed to scan localization directories: {}", e.getMessage(), e);
+	    }
+
+	    return messages;
 	}
+
 }

@@ -1,6 +1,6 @@
 [
   {
-    "url": "http://egov-workflow-v2.core-dev:8080/egov-workflow-v2/egov-wf/auto/Incident/_escalate?tenantId=pg",
+    "url": "http://egov-workflow-v2.egov:8080/egov-workflow-v2/egov-wf/auto/Incident/_escalate?tenantId={tenantid}",
     "active": "true",
     "header": {
       "Content-Type": "application/json"

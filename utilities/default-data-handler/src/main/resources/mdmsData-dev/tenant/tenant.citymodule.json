@@ -6,10 +6,7 @@
     "module": "Workbench",
     "tenants": [
       {
-        "code": "{tenantid}.cityb"
-      },
-      {
-        "code": "{tenantid}.cityc"
+        "code": "{tenantid}"
       },
       {
         "code": "{tenantid}.citya"
@@ -22,11 +19,11 @@
     "active": true,
     "module": "PGR",
     "tenants": [
-      {
-        "code": "{tenantid}.citya"
+    {
+        "code": "{tenantid}"
       },
       {
-        "code": "{tenantid}.cityb"
+        "code": "{tenantid}.citya"
       }
     ]
   },
@@ -41,9 +38,6 @@
       },
       {
         "code": "{tenantid}.citya"
-      },
-      {
-        "code": "{tenantid}.cityb"
       }
     ]
   }

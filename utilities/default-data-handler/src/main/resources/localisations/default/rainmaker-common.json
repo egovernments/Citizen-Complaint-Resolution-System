@@ -1789,7 +1789,7 @@
     },
     {
         "code": "CMN_ACK_CORPORATION_HEADER",
-        "message": "Municipal Corporation",
+        "message": "Local Government Authority",
         "module": "rainmaker-common",
         "locale": "default"
     },
@@ -3571,7 +3571,7 @@
     },
     {
         "code": "COMMON_MASTERS_DESIGNATION_MCS01",
-        "message": "Municipal corporation Secretary",
+        "message": "Local Government Authority Secretary",
         "module": "rainmaker-common",
         "locale": "default"
     },
@@ -4633,7 +4633,7 @@
     },
     {
         "code": "COMMON_SUBDIVISION_MUNICIPAL_CORPORATION",
-        "message": "Municipal Corporation",
+        "message": "Local Government Authority",
         "module": "rainmaker-common",
         "locale": "default"
     },
@@ -8431,31 +8431,31 @@
     },
     {
         "code": "ULBGRADE_MC_CLASS_II",
-        "message": "MUNICIPAL CORPORATION",
+        "message": "Local Government Authority",
         "module": "rainmaker-common",
         "locale": "default"
     },
     {
         "code": "ULBGRADE_MC_CLASS_III",
-        "message": "MUNICIPAL CORPORATION",
+        "message": "Local Government Authority",
         "module": "rainmaker-common",
         "locale": "default"
     },
     {
         "code": "ULBGRADE_MUNICIPAL_CORPORATION",
-        "message": "MUNICIPAL CORPORATION",
+        "message": "Local Government Authority",
         "module": "rainmaker-common",
         "locale": "default"
     },
     {
         "code": "ULBGRADE_MUNICIPAL_CORPORATION ",
-        "message": "MUNICIPAL CORPORATION",
+        "message": "Local Government Authority",
         "module": "rainmaker-common",
         "locale": "default"
     },
     {
         "code": "ULBGRADE_NAGAR_NIGAM",
-        "message": "MUNICIPAL CORPORATION",
+        "message": "Local Government Authority",
         "module": "rainmaker-common",
         "locale": "default"
     },
@@ -8485,13 +8485,13 @@
     },
     {
         "code": "ULB_MUNICIPAL_CORPORATION",
-        "message": "MUNICIPAL CORPORATION",
+        "message": "Local Government Authority",
         "module": "rainmaker-common",
         "locale": "default"
     },
     {
         "code": "ULB_MUNICIPAL_CORPORATION ",
-        "message": "MUNICIPAL CORPORATION",
+        "message": "Local Government Authority",
         "module": "rainmaker-common",
         "locale": "default"
     },
