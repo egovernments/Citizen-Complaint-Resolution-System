@@ -1,0 +1,5498 @@
+[
+  {
+    "code": "ACTION_TEST_ALL_COMPLAINTS",
+    "message": "सभी शिकायतें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ACTION_TEST_CREATE_COMPLAINT",
+    "message": "शिकायत बनाएं",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ACTION_TEST_DESCRIPTION_REPORT",
+    "message": "विवरण रिपोर्ट",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ACTION_TEST_GRO_PERFORMANCE_REPORT",
+    "message": "जी आर ओ   प्रदर्शन रिपोर्ट",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ACTION_TEST_LME_PERFORMANCE_REPORT",
+    "message": "एल एम ई  प्रदर्शन रिपोर्ट",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ACTION_TEST_SEARCH_COMPLAINT",
+    "message": "शिकायत खोजें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ACTION_TEST_ULB_REPORT",
+    "message": "यूएलबी रिपोर्ट",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ASSIGNED_TO_ALL",
+    "message": "सभी को नियुक्त किया गया",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ASSIGNED_TO_ME",
+    "message": "मुझे नियुक्त किया गया",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "COMMON_BOTTOM_NAVIGATION_COMPLAINTS",
+    "message": "शिकायतें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "COMMON_BOTTOM_NAVIGATION_HOME",
+    "message": "मुख्य पृष्ठ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "COMMON_BOTTOM_NAVIGATION_INFORMATION",
+    "message": "जानकारी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "COMMON_FEVERS_DENGUE_MALARIA",
+    "message": "बुखार - डेंगू",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "COMMON_REPAIRS_TO_FLYOVERS_BRIDGES_CULVERTS",
+    "message": "फ्लाईओवर की मरम्मत",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "COMMON_UNHYGIENIC_IMPROPER_TRANSFER_OF_MEAT_LIVESTOCK",
+    "message": "अस्वच्छ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CORE_COMMON_CLOSE",
+    "message": "बंद करे",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CORE_COMMON_GO_TO_HOME",
+    "message": "मुख्य पृष्ठ पर वापस जाएं",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CORE_COMMON_MOBILE_ERROR",
+    "message": "कृपया वैध मोबाइल नंबर प्रदान करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CORE_COMMON_OPEN",
+    "message": "खोलें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CORE_COMMON_PICK",
+    "message": "चुनें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CORE_COMMON_PINCODE",
+    "message": "पिन कोड",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CORE_COMMON_PINCODE_INVALID",
+    "message": "वैध पिन कोड प्रदान करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CORE_COMMON_PINCODE_NOT_ENTERED",
+    "message": "पिनकोड दर्ज करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CORE_COMMON_PINCODE_NOT_SERVICEABLE",
+    "message": "क्षमा करें यह सेवा इस शहर में उपलब्ध नहीं है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CORE_COMMON_SEARCH_COMPLAINT",
+    "message": "शिकायत खोजें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CORE_COMMON_SKIP_CONTINUE",
+    "message": "छोड़ें और जारी रखें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CORE_COMMON_TAKE_ACTION",
+    "message": "__सन्देश लिखें__",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CORE_LOGIN_NO_ACCOUNT",
+    "message": "खाता नहीं है?",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CORE_LOGOUTPOPUP_CANCEL",
+    "message": "रद्द करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CORE_LOGOUTPOPUP_LOGOUT",
+    "message": "लॉग आउट",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ACTION_ASSIGN",
+    "message": "शिकायत नियुक्त करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ACTION_ASSIGN_TEXT",
+    "message": "शिकायत सफलतापूर्वक नियुक्त की गयी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ACTION_FILEUPLOADED",
+    "message": "फ़ाइल अपलोड की गई",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ACTION_FORWARD",
+    "message": "आगे",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ACTION_NO_FILEUPLOADED",
+    "message": "कोई फ़ाइल अपलोड नहीं हुई",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ACTION_REASSIGN",
+    "message": "फिर से नियुक्त करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ACTION_REASSIGN_TEXT",
+    "message": "शिकायत फिर से सफलतापूर्वक फिर से नियुक्त की गयी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ACTION_REJECT",
+    "message": "शिकायत अस्वीकार करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ACTION_REJECT_TEXT",
+    "message": "शिकायत सफलतापूर्वक अस्वीकृत की गयी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ACTION_REOPEN",
+    "message": "पुनः खोलें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ACTION_REOPEN_TEXT",
+    "message": "आपकी शिकायत पुनः खोल दी गई है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ACTION_RESOLVE",
+    "message": "हल करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ACTION_RESOLVE_TEXT",
+    "message": "शिकायत सफलतापूर्वक हल की गयी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ACTION_SUPPORTING_DOCUMENTS",
+    "message": "सहायक दस्तावेज",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_ADDITIONAL_DETAILS",
+    "message": "पते की अन्य जानकारी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_ADDITIONAL_DETAILS_PLACEHOLDER",
+    "message": "वार्ड और पता दर्ज करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_ADDITIONAL_DETAILS_SUBMIT_COMPLAINT",
+    "message": "शिकायत दर्ज करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_ADDITIONAL_DETAILS_TEXT",
+    "message": "अगर आपको लगता है की शिकायत के हल के लिए प्रदान की गयी जानकारी के अलावा अतिरिक्त जानकारी की ज़रुरत है तो नीचे प्रदान करें:",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_ADDRESSINFO",
+    "message": "पते की जानकारी:",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_CHANGE_PINCODE_TEXT",
+    "message": "अगर आपको शिकायत के पते का पिनकोड पता है तो नीचे बताएं हमें पते को ठीक से पहचान करने में मदद मिलेगी अथवा आप आगे बढ़ सकते हैं",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_CITY_MOHALLA_TEXT",
+    "message": "नीचे दी गयी सूची से शिकायत के इलाके / मोहल्ला चुनें।",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_COMPLAINT_DETAILS",
+    "message": "शिकायत का अतिरिक्त विवरण",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_COMPLAINT_DETAILS_PLACEHOLDER",
+    "message": "शिकायत में अतिरिक्त विवरण दर्ज करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_COMPLAINT_LOCATION",
+    "message": "शिकायत का स्थान",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_COMPLAINT_SUBTYPE",
+    "message": "शिकायत उप-प्रकार",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_COMPLAINT_SUBTYPE_PLACEHOLDER",
+    "message": "शिकायत उप-प्रकार चुनें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_COMPLAINT_SUB_TYPE",
+    "message": "शिकायत उप-प्रकार",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_COMPLAINT_TYPE",
+    "message": "शिकायत प्रकार",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_COMPLAINT_TYPE_PLACEHOLDER",
+    "message": "शिकायत प्रकार चुनें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_ERROR_COMPLAINT_SUBTYPE",
+    "message": "शिकायत उप-प्रकार का चयन करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_ERROR_COMPLAINT_TYPE",
+    "message": "शिकायत प्रकार का चयन करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_ERROR_FAILURE",
+    "message": "क्षमा करें, सेवा के साथ एक समस्या है। बाद में पुन: प्रयास करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_ERROR_MESSAGE",
+    "message": "शिकायत जमा नहीं हुई",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_ERROR_REOPEN_REASON",
+    "message": "शिकायत को फिर से खोलने का कारण चुनें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_HOUSE_NO",
+    "message": "मकान नंबर और सड़क का नाम",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_HOUSE_NO_PLACEHOLDER",
+    "message": "मकान नंबर और सड़क का नाम दर्ज़ करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_LANDMARK",
+    "message": "सीमा चिन्ह",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_LANDMARK_ERROR",
+    "message": "सीमा चिन्ह बताएं",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_LANDMARK_PLACEHOLDER",
+    "message": "सीमा चिन्ह दर्ज़ करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_LOCATION",
+    "message": "शिकायत स्थान",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_LOCATION_ERROR",
+    "message": "शहर और इलाके का चयन करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_LOCATION_ERRORMSG",
+    "message": "पता मौजूद नहीं है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_PINCODE",
+    "message": "क्या आपको पिनकोड पता है ?",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_PIN_LOCATION",
+    "message": "शिकायत के स्थान को नक़्शे में पिन करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_PIN_LOCATION_TEXT",
+    "message": "अगर आपको शिकायत के पते का पिनकोड पता है तो नीचे बताएं हमें पते को ठीक से पहचानने में मदद मिलेगी अथवा आप आगे बढ़ सकते हैं",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_PROVIDE_ADDITIONAL_DETAILS",
+    "message": "अतिरिक्त जानकारी प्रदान करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_PROVIDE_COMPLAINT_ADDRESS",
+    "message": "शिकायत का पता प्रदान करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_PROVIDE_LANDMARK",
+    "message": "सीमा चिन्ह बताएं",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_PROVIDE_LANDMARK_TEXT",
+    "message": "कृपया शिकायत के स्थान पर आसानी से पहुँचने के लिए कोई सीमा-चिन्ह बताएं",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_SELECT_GEOLOCATION_HEADER",
+    "message": "शिकायत के स्थान को नक़्शे में पिन करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_SELECT_GEOLOCATION_TEXT",
+    "message": "शिकायत स्थल को पिन करने के लिए क्लिक और होल्ड करें।  अगर आप पिन नहीं कर पा रहे हैं तो छोड़ कर आगे बढ़ सकते हैं",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_UPLOAD_ERROR_MESSAGE",
+    "message": "फोटो अपलोड करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_UPLOAD_PHOTO",
+    "message": "शिकायत के लिए फोटो अपलोड करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_UPLOAD_PHOTO_TEXT",
+    "message": "सबूत के तौर पर शिकायत के फोटो अपलोड करने के लिए नीचे दिए गए आइकन पर क्लिक करें। आप अपने कैमरे के माध्यम से सीधे तस्वीरें खींच सकते हैं या गैलरी से अपलोड कर सकते हैं।अगर शिकायत में फ़ोटो की जरूरत नहीं है, तो आप छोड़ कर आगे बढ़ सकते हैं।",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_YOU_RATED",
+    "message": "आपने रेट किया",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_ADD_COMPLAINT_COMPLAINT_SUBMISSION",
+    "message": "शिकायत जमा",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_ACCUMULATION_LITTER",
+    "message": "कूड़े का संचय",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_ASSIGN",
+    "message": "नियुक्त करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_ASSIGNED",
+    "message": "नियुक्त",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_ASSIGNED_TO",
+    "message": "को नियुक्त हुआ:",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_BACK",
+    "message": "वापस",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_BLOCKAGE_OF_DRAINS",
+    "message": "नाली में रुकावट",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_BROKEN_FOOTPATHS",
+    "message": "टूटा हुआ फुटपाथ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_CALL_BUTTON",
+    "message": "कॉल",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_CANCEL",
+    "message": "रद्द करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_CANCELLED",
+    "message": "रद्द",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_CHOOSE_FILE",
+    "message": "फ़ाइल का चयन करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_CITIZEN_FEEDBACK",
+    "message": "नागरिक प्रतिक्रिया",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_CITIZEN_REQUEST_REASSIGN",
+    "message": "फिर से नियुक्त किया जा रहा है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_CLEAR_ALL",
+    "message": "सब मिटायें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_CLEAR_SEARCH",
+    "message": "खोज मिटायें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_CLOSED",
+    "message": "बंद किया हुआ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_CLOSEDAFTERREJECTION",
+    "message": "अस्वीकृति के बाद बंद किया गया",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_CLOSEDAFTERRESOLUTION",
+    "message": "हल करने के बाद बंद किया गया",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_CLOSED_UCASE",
+    "message": "बंद किया हुआ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_COMMENTS",
+    "message": "टिप्पणी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_COMMENTS_PLACEHOLDER",
+    "message": "टिप्पणी करे",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_COMMENTS_PLACEHOLDER2",
+    "message": "टिप्पणी करे",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_COMPLAINT",
+    "message": "शिकायत",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_COMPLAINT_ASSIGNED_TO",
+    "message": "को शिकायत नियुक्त की गयी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_COMPLAINT_DATE",
+    "message": "शिकायत की तारीख",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_COMPLAINT_FILED",
+    "message": "शिकायत दर्ज की गयी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_COMPLAINT_NO",
+    "message": "शिकायत नंबर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_COMPLAINT_PENDINGFORASSINMENT",
+    "message": "नियुक्ति के लिए लंबित",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_COMPLAINT_REJECTED",
+    "message": "अस्वीकृत",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_COMPLAINT_REOPENED",
+    "message": "शिकायत फिर से खोली गयी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_COMPLAINT_RESOLVED",
+    "message": "शिकायत हल की गयी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_COMPLAINT_STATUS",
+    "message": "शिकायत की स्थिति",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_COMPLAINT_SUBMITTED",
+    "message": "शिकायत जमा हुई",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_DAY",
+    "message": "दिन",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_DAYS",
+    "message": "दिन",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_DAYS_LEFT",
+    "message": "दिन शेष",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_DAY_LEFT",
+    "message": "दिन शेष",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_EMPLOYEE_COMMENTS",
+    "message": "टिप्पणियाँ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_EMPLOYEE_NAME",
+    "message": "कर्मचारी का नाम",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_ERROR_LOADING_RESULTS",
+    "message": "परिणाम लोड करते समय कुछ रुकावट",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_ERROR_SCREEN_MESSAGE",
+    "message": "आप जिस पेज की तलाश कर रहे हैं वह नहीं मिल रहा है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_FILTER",
+    "message": "फ़िल्टर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_GARBAGE_BIN_ABSENT",
+    "message": "कचरादान नहीं है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_HOME",
+    "message": "मुख्य पृष्ठ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_INBOX",
+    "message": "इनबॉक्स",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_LOGOUT",
+    "message": "लॉग आउट",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_MOBILE_NO",
+    "message": "मोबाइल नंबर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_MOBILE_NO.",
+    "message": "मोबाइल नंबर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_NEXT",
+    "message": "अगला",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_OPEN",
+    "message": "खुला",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_OPENED",
+    "message": "खुल गया",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_OPEN_UCASE",
+    "message": "खुला",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_OVERDUE_BY",
+    "message": "भुगतान बाकी (दिन)",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_OVERFLOWING_BINS",
+    "message": "ज़्यादा भरे हुए कचरादान",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_PATHOLES",
+    "message": "सड़क का गड्ढा",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_PENDINGATLME",
+    "message": "एलएमई कार्यालय में लंबित",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_PENDINGATSUPERVISOR",
+    "message": "पर्यवेक्षक पर लंबित",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_PENDINGFORASSIGNMENT",
+    "message": "नियुक्ति के लिए लंबित",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_PENDINGFORREASSIGNMENT",
+    "message": "फिर से नियुक्ति के लिए लंबित",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_PINCODE_NOT_SERVICABLE",
+    "message": "क्षमा करें, हम इस शहर में सेवा प्रदान नहीं कर रहे हैं",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_RATE",
+    "message": "मूल्यांकन करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_RATING_SUBMIT_TEXT",
+    "message": "अपनी आवाज बुलंद करके, आप एमसेवा को बेहतर बनाने में हमारी मदद करते हैं।",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_RE-ASSIGN REQUESTED",
+    "message": "पुन: असाइन करने का अनुरोध",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_REASSIGNED",
+    "message": "फिर से नियुक्त किया गया",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_REASSIGNED_TO",
+    "message": "को फिर से नियुक्त किया गया",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_REJECT",
+    "message": "अस्वीकार",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_REJECTED",
+    "message": "रद्द किया गया",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_REJECTED_UCASE",
+    "message": "रद्द किया गया",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_REOPEN",
+    "message": "पुनः खोलें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_REOPENED",
+    "message": "पुन: खोला गया",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_RESOLVE",
+    "message": "हल करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_RESOLVED",
+    "message": "हल किया गया",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_RESOLVEDBYSUPERVISOR",
+    "message": "पर्यवेक्षक द्वारा हल किया गया",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_RESOLVED_UCASE",
+    "message": "हल किया गया",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_RE_ASSIGNED",
+    "message": "फिर से नियुक्त किया गया",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_SEARCH_BY",
+    "message": "इससे खोजें ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_SKIP",
+    "message": "छोड़ें और जारी रखें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_STATUS_ASSIGNED",
+    "message": "आपकी शिकायत नियुक्त कर दी गयी है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_STATUS_BEING_REASSIGNED",
+    "message": "शिकायत को फिर से नियुक्त किया जा रहा है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_STATUS_CLOSED",
+    "message": "आपकी शिकायत बंद कर दी गई है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_STATUS_REASSIGNED",
+    "message": "आपकी शिकायत को फिर से नियुक्त किया गया है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_STATUS_REASSIGN_REQUESTED",
+    "message": "आपकी शिकायत नियुक्त कर दी गयी है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_STATUS_REJECTED",
+    "message": "आपकी शिकायत अस्वीकार कर दी गई है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_STATUS_REOPENED",
+    "message": "आपकी शिकायत पुन: खोल दी गई है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_STATUS_RESOLVED",
+    "message": "आपकी शिकायत हल हो चुकी है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_STATUS_SUBMITTED",
+    "message": "आपकी शिकायत दर्ज की गई है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_SUBMIT",
+    "message": "जमा करे",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_SUBMITTED",
+    "message": "दर्ज़ हुआ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_SWEEPERS_ABSENT",
+    "message": "सफाई कर्मचरियों की अनुपस्थिति",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_THANK_YOU",
+    "message": "धन्यवाद ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_TRACK_COMPLAINT_TEXT",
+    "message": "शिकायत नंबर के साथ सूचना आपके पंजीकृत मोबाइल नंबर पर भेज दी गयी है। आप मोबाइल या वेब एप्लिकेशन का उपयोग करके शिकायत की स्थिति पर नज़र रख सकते हैं।",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMMON_UPLOAD_PHOTOS",
+    "message": "फ़ोटो अपलोड करे",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINTDETAILS_HOUSE",
+    "message": "मकान/गली नंबर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINTDETAILS_LANDMARK",
+    "message": "सीमा चिन्ह",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINTDETAILS_MOHALLA",
+    "message": "मोहल्ला / शहर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_ADDTIONAL_DETAILS",
+    "message": "अतिरिक्त जानकारी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_COMMENT_SUCCESS",
+    "message": "टिप्पणी सफल",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_COMPLAINT_ADDTIONAL_DETAILS",
+    "message": "अतिरिक्त जानकारी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS",
+    "message": "अतिरिक्त जानकारी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_ADDRESS_DETAILS",
+    "message": "पता की जानकारी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_APPLICATION_STATUS",
+    "message": "आवेदन की स्थिति",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_BEING_REASSIGNED",
+    "message": "शिकायत किसके द्वारा नियुक्त की जा रही है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_BUILDING_NAME",
+    "message": "इमारत का नाम",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_CITY",
+    "message": "शहर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_COMMENTS",
+    "message": "सड़क पर बहुत अधिक कचरा पड़ा है, क्षेत्र को पार करना बहुत मुश्किल है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_COMPLAINT_DESCRIPTION",
+    "message": "शिकायत विवरण",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_COMPLAINT_DETAILS",
+    "message": "शिकायत विवरण",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_COMPLAINT_FILED",
+    "message": "शिकायत दर्ज हो गयी है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_COMPLAINT_NO",
+    "message": "शिकायत नंबर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_COMPLAINT_RESOLVED",
+    "message": "शिकायत हल की गयी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_COMPLAINT_SUBTYPE",
+    "message": "शिकायत उपप्रकार",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_COMPLAINT_TIMELINE",
+    "message": "शिकायत का घटनाक्रम",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_COMPLAINT_TYPE",
+    "message": "शिकायत प्रकार",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_CURRENT_STATUS",
+    "message": "मौजूदा स्टेटस",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_DOOR",
+    "message": "द्वार",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_GEOLOCATION",
+    "message": "जियोलोकेशन",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_LANDMARK",
+    "message": "सीमा चिन्ह",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_LOCALITY",
+    "message": "इलाका",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_LOCATION",
+    "message": "शिकायत का स्थान दर्ज करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_PENDINGFORASSIGNMENT",
+    "message": "नियुक्ति के लिए लंबित",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_PENDING_STATUS",
+    "message": "शिकायत जी.आर.ओ. में रुकी हुई",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_PLOT_NO",
+    "message": "प्लॉट नंबर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_RATE",
+    "message": "मूल्यांकन करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_REASSIGN_REQUESTED",
+    "message": "फिर से नियुक्त करने की सिफारिश",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_REOPEN",
+    "message": "पुनः खोलें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_RESOLUTION_EVIDENCE",
+    "message": "समाधान का साक्ष्य",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_STREET",
+    "message": "सड़क",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_SUBMISSION_DATE",
+    "message": "दर्ज की गयी तारीख",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_FILED_DATE",
+    "message": "दाखिल करने की तारीख़",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_NO_ERROR_TEXT",
+    "message": "शिकायत नंबर में न्यूनतम 6 अंक होने चाहिए",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_PIN_COMPLAINT_LOCATION_TEXT",
+    "message": "शिकायत स्थल को पिन करने के लिए क्लिक और होल्ड करें। अगर आप पिन नहीं कर पा रहे हैं तो छोड़ कर आगे बढ़ सकते हैं",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_RATE_HELP_TEXT",
+    "message": "आप हमारे साथ अपने अनुभव को कितनी रेटिंग देंगे ?",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_RATE_TEXT",
+    "message": "आप हमारे साथ अपने अनुभव को कितनी रेटिंग देंगे ?",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_SUBMITTED_COMPLAINT_NO",
+    "message": "शिकायत नंबर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_SUBMITTED_LABEL1",
+    "message": "आपकी शिकायत दर्ज कर ली गयी है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_SUBMITTED_LABEL2",
+    "message": "आप इस ऐप पर अपनी शिकायत की स्थिति को किसी भी समय ट्रैक कर सकते हैं!",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_SUBMITTED_THANKYOU",
+    "message": "धन्यवाद",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_SUBTYPE_TEXT",
+    "message": "आपके द्वारा चुने शिकायत प्रकार के निम्न शिकायत उप प्रकार हैं। नीचे दी गई सूची में से अपनी पसंद के विकल्प का चयन करें।",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_TYPE_DRAINS",
+    "message": "नालियां",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_TYPE_GARBAGE",
+    "message": "कचरा",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_TYPE_OTHERS",
+    "message": "अन्य",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_TYPE_PUBLIC_HEALTH_HYGIENE",
+    "message": "जन स्वास्थ और स्वच्छता",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_TYPE_PUBLIC_LAND_PROPERTY",
+    "message": "सार्वजनिक भूमि और संपत्ति",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_TYPE_SEARCH_PLACEHOLDER",
+    "message": "खोजें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_TYPE_STREET_LIGHTS",
+    "message": "स्ट्रीट लाइट",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_TYPE_TEXT",
+    "message": "नीचे दी गई सूची में से अपनी शिकायत से संबंधित विकल्प चुनें। अगर शिकायत का प्रकार नहीं मिल रहा तो 'अन्य' को चुनें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_TYPE_WATER",
+    "message": "पानी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_CONTACTUS_OPEN_MAP",
+    "message": "नक्शा खोलें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_CONTACTUS_WEEKDAY",
+    "message": "सोम- शुक्र",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_CONTACTUS_WEEKEND",
+    "message": "शनिवार",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_CREATECOMPLAINT_MOHALLA",
+    "message": "इलाका / मोहल्ला",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_CREATECOMPLAINT_MOHALLA_PLACEHOLDER",
+    "message": "इलाका / मोहल्ला चुनें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_DAYS_LEFT",
+    "message": "{0} दिन शेष",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_DAY_LEFT",
+    "message": "{0} दिन शेष",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_FEEDBACK_OTHERS",
+    "message": "अन्य",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_FEEDBACK_QUALITY_OF_WORK",
+    "message": "काम की गुणवत्ता",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_FEEDBACK_RATE_HELP_TEXT",
+    "message": "आपकी मदद करने में हमारी सहायता करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_FEEDBACK_RATE_TEXT",
+    "message": "आप हमारे साथ अपने अनुभव को कितनी रेटिंग देंगे ?",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_FEEDBACK_RESOLUTION_TIME",
+    "message": "समाधान में लगा समय",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_FEEDBACK_SERVICES",
+    "message": "सेवाएँ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_FEEDBACK_SUCCESS",
+    "message": "आपकी प्रतिक्रिया के लिए आपका धन्यवाद!",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_FEEDBACK_WHAT_WAS_GOOD",
+    "message": "आपको क्या अच्छा लगा ?",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_FILE_APPLICATION_PROPERTY_LOCATION_PROVIDE_LANDMARK_TITLE_TEXT",
+    "message": "कृपया शिकायत के स्थान पर आसानी से पहुँचने के लिए कोई सीमा-चिन्ह बताएं",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_HEADER_ADD_COMPLAINT",
+    "message": "शिकायत जोड़ें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_HEADER_ALL_COMPLAINTS",
+    "message": "सभी शिकायतें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_HEADER_ASSIGN_COMPLAINT",
+    "message": "शिकायत नियुक्त करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_HEADER_COMPLAINT_SUBMITTED",
+    "message": "शिकायत दर्ज़ की गई",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_HEADER_COMPLAINT_SUMMARY",
+    "message": "शिकायत का सारांश",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_HEADER_FEEDBACK",
+    "message": "प्रतिक्रिया",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_HEADER_FEEDBACK_ACKNOWLEDGEMENT",
+    "message": "प्रतिक्रिया दर्ज की गई",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_HEADER_REASSIGN_COMPLAINT",
+    "message": "शिकायत फिर से नियुक्त करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_HEADER_REOPEN_COMPLAINT",
+    "message": "शिकायत पुनः खोलें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_HEADER_REQUEST_REASSIGN",
+    "message": "फिर से नियुक्त करने की सिफारिश करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_HEADER_TRACK_LOCATION",
+    "message": "लोकेशन ट्रैक करे",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_HOME_MY_COMPLAINTS",
+    "message": "मेरी शिकायतें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_HOME_MY_COMPLAINTS_CARD_LABEL",
+    "message": "मेरी शिकायतें ({0})",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_HOME_STATUS_PREFIX",
+    "message": "आपकी शिकायत दर्ज हो गयी है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_HOME_STATUS_REASSIGN_PREFIX",
+    "message": "आपकी शिकायत",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_HOME_UPDATES",
+    "message": "अपडेट",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_HOWITWORKS_CONNECT_OFFICER",
+    "message": "संबंधित अधिकारी से बात करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_HOWITWORKS_RAISE_COMPLAINT",
+    "message": "शिकायत दर्ज करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_HOWITWORKS_TRACK_STATUS",
+    "message": "स्टेटस पता करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_LANDING_PAGE_COMPLAINTS_DESCRIPTION",
+    "message": "mSeva Complaints नागरिक कार्य संबंधी शिकायतों को दर्ज करने के लिए एक आसान इंटरफ़ेस प्रदान करता है। यह आपको अपनी शिकायत की स्थिति ट्रैक करने एवं उसके समाधान तक अपने नगर पालिका के साथ सीधे  संपर्क की सुविधा भी देता है ।",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_LANDING_PAGE_WELCOME_TEXT",
+    "message": "स्वागत है ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_MANDATORY_COMMENTS",
+    "message": "टिप्पणियाँ अनिवार्य हैं",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_MAP_MOVE_PIN",
+    "message": "मैप पर एडजस्ट करने के लिए पिन मूव करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_MAP_PICK",
+    "message": "चुनें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_MYCOMPLAINTS_CLOSED",
+    "message": "शिकायत हल की गयी। कृपया रेटिंग करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_MYCOMPLAINTS_COMPLAINT_HEADER",
+    "message": "शिकायत का विषय",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_MYCOMPLAINTS_COMPLAINT_PREFIX",
+    "message": "शिकायत को",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_MYCOMPLAINTS_ESCALATED_TO",
+    "message": "को बढ़ाया गया:",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_MYCOMPLAINTS_NO_COMPLAINTS",
+    "message": "आपने अभी तक कोई शिकायत दर्ज नहीं की है! शुरुआत करें, बदलाव लाएँ!",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_MYCOMPLAINTS_NO_COMPLAINTS_EMPLOYEE",
+    "message": "कोई शिकायत नहीं",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_MYCOMPLAINTS_RATE",
+    "message": "कृपया रेटिंग करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_MYCOMPLAINTS_REASSIGN_MESSAGE1",
+    "message": "फिर से नियुक्त करने की सिफारिश",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_MYCOMPLAINTS_REASSIGN_MESSAGE2",
+    "message": "आपको",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_MYCOMPLAINTS_REJECTED",
+    "message": "शिकायत अस्वीकार हो गयी है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_MYCOMPLAINTS_RE_ASSIGNED",
+    "message": "को शिकायत फिर से नियुक्त की गयी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_MYCOMPLAINTS_TO",
+    "message": "को",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_OVERDUE_BY_DAY",
+    "message": "{0} दिनों से अतिदेय",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_OVERDUE_BY_DAYS",
+    "message": "{0} दिनों से अतिदेय",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_PGR_COMPLAINT_DETAILS",
+    "message": "शिकायत विवरण",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_PGR_COMPLAINT_NUMBER",
+    "message": "शिकायत नंबर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_PGR_CREATE_COMPLAINT",
+    "message": "शिकायत बनाएं",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_PGR_LOCALITY",
+    "message": "इलाका",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_PGR_RESPONSE",
+    "message": "प्रतिक्रिया",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_PGR_SEND_COMMENT",
+    "message": "भेजें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_REOPEN_COMPLAINT",
+    "message": "शिकायत को फिर से खोलने का कारण चुनें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_REOPEN_COMPLAINT_WHY",
+    "message": "आप शिकायत फिर से क्यों खुलवाना चाहते हैं ?",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_REOPEN_OPTION_FOUR",
+    "message": "कोई स्थायी समाधान नहीं है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_REOPEN_OPTION_ONE",
+    "message": "कोई काम नहीं किया गया",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_REOPEN_OPTION_THREE",
+    "message": "कर्मचारी नहीं आया",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_REOPEN_OPTION_TWO",
+    "message": "अधूरा काम हुआ है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_REOPEN_SUCCESS_MESSAGE",
+    "message": "अपनी शिकायत को पुन: खोल दिया गया है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_SELECT_CITY_AMRITSAR",
+    "message": "अमृतसर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_SELECT_CITY_BHATINDA",
+    "message": "भटिंडा",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_SELECT_CITY_CHANDIGARH",
+    "message": "चंडीगढ़",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_SELECT_CITY_CHOOSE_CITY",
+    "message": "शहर चुनें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_SELECT_CITY_FARIDKOT",
+    "message": "फरीदकोट",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_SELECT_CITY_JALANDHAR",
+    "message": "जालंधर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_SELECT_CITY_LUDHIYAA",
+    "message": "लुधियाना",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_SELECT_CITY_MOHALI",
+    "message": "मोहाली",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_SORT_OPTION_ONE",
+    "message": "शिकायत तिथि - पुरानी से नई",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_SORT_OPTION_THREE",
+    "message": "सेवा-स्तर समझौते के लिए शेष दिन",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_SORT_OPTION_TWO",
+    "message": "शिकायत तिथि - नई से पुरानी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "CS_UPLOAD_RESTRICTIONS",
+    "message": "**अपलोड प्रतिबंध",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "DASHBOARD_TITLE_PGR",
+    "message": "डैशबोर्ड",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "EMPLOYEE.ASSIGNMENT.TITLE",
+    "message": "असाइनमेंट का विवरण",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "EMPLOYEE.EMPLOYEE.TITLE",
+    "message": "कर्मचारी का विवरण",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "EMPLOYEE.JURISDICTION.TITLE",
+    "message": "क्षेत्राधिकार सूची",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "EMPLOYEE.OTHER.TITLE",
+    "message": "अन्य विवरण",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "EMPLOYEE.SERVICE.TITLE",
+    "message": "सेवा अनुभाग",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ERR_COMPLAINT_NUMBER_SEARCH",
+    "message": "शिकायत के कम से कम अंतिम छह अंक दर्ज करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_ALL_COMPLAINTS_ASSIGNED_TAB_LABEL",
+    "message": "नियुक्त",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_ALL_COMPLAINTS_ASSIGNED_TO",
+    "message": "को नियुक्त हुआ:",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_ALL_COMPLAINTS_HEADER",
+    "message": "सभी शिकायतें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_ALL_COMPLAINTS_SUBMITTED_BY",
+    "message": "प्रस्तुत द्वारा:",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_ALL_COMPLAINTS_UNASSIGNED_TAB_LABEL",
+    "message": "नयुक्त नहीं हुआ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_ASSIGN_STATUS_ASSIGN",
+    "message": "कृपया लिस्ट से उस कर्मचारी को चुने जिसे आप शिकायत नियुक्त करना चाहते हैं",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_ASSIGN_STATUS_REASSIGN",
+    "message": "कृपया लिस्ट से उस कर्मचारी को चुने जिसे आप शिकायत फिर से नियुक्त करना चाहते हैं",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_ASSIGN_TO_EMPLOYEE_HEADER",
+    "message": "कर्मचारी को नियुक्त:",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_CLOSED_COMPLAINTS_HEADER",
+    "message": "बंद शिकायतें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_COMMON_ASSIGN",
+    "message": "नियुक्त",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_COMMON_CLEAR_SEARCH",
+    "message": "खोज मिटायें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_COMMON_FILED_BY",
+    "message": "द्वारा फाइल किया गया:",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_COMMON_FILED_VIA_MOBILE",
+    "message": "मोबाइल ऍप से दाखिल किया",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_COMMON_FILED_VIA_MOBILE_APP",
+    "message": "मोबाइल ऍप से दाखिल किया",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_COMMON_FILED_VIA_WEB",
+    "message": "वेब से दाखिल किया",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_COMMON_FILED_VIA_WHATSAPP",
+    "message": "व्हाट्सएप के माध्यम से दाखिल किया",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_COMMON_FILTER",
+    "message": "इससे फ़िल्टर करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_COMMON_FILTER_BY",
+    "message": "इससे फ़िल्टर करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_COMMON_INBOX",
+    "message": "इनबॉक्स",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_COMMON_REASSIGN",
+    "message": "पुनः नियुक्त करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_COMMON_SEARCH",
+    "message": "खोजें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_COMMON_SEARCH_COMPLAINT",
+    "message": "शिकायत खोजें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_COMMON_SEARCH_EMPLOYEE",
+    "message": "कर्मचारी खोजें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_COMMON_TRACK_COMPLAINT_TEXT",
+    "message": "शिकायत नंबर के साथ एक सूचना आवेदक के मोबाइल  नंबर पर भेज दी गयी है। आवेदक मोबाइल या वेब ऍप के माध्यम से शिकायत की स्तिथि ट्रैक कर सकते हैं ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_COMPLAINTS_COUNT_RATIO_LABEL",
+    "message": "{1}{2}में से {0} शिकायत दिखाई जा रही है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_COMPLAINT_ASSIGNED_HEADER",
+    "message": "शिकायत नियुक्त की गयी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_COMPLAINT_DETAILS_ASSIGNED_BY",
+    "message": "नियुक्ति द्वारा:",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_COMPLAINT_DETAILS_REASSIGNED_BY",
+    "message": "फिर से नियुक्ति द्वारा:",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_COMPLAINT_FILED_BY_CSR",
+    "message": "शिकायत नागरिक सेवा डेस्क पर दर्ज़ हुई",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_COMPLAINT_REASSIGNED_HEADER",
+    "message": "शिकायत फिर से नियुक्त की गयी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_COMPLAINT_REJECTED_HEADER",
+    "message": "शिकायत अस्वीकृत",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_COMPLAINT_REJECT_SUCCESS_MESSAGE",
+    "message": "आपने इस शिकायत को रद्द कर दिया है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_COMPLAINT_RESOLVED_SUCCESS_MESSAGE",
+    "message": "आपने इस शिकायत को मार्क किया है:",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_COMPLAINT_SUCCESS_LASTLABEL",
+    "message": "कृपया नागरिक के साथ शिकायत नंबर साझा करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_COMPLAINT_SUMMARY_MAP",
+    "message": "नक्शा",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_CREATECOMPLAINT_ADDITIONAL_DETAILS",
+    "message": "शिकायत का अतिरिक्त विवरण",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_CREATECOMPLAINT_ADDITIONAL_DETAILS_PLACEHOLDER",
+    "message": "शिकायत विवरण जोड़ें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_CREATECOMPLAINT_ADDRESS",
+    "message": "पता",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_CREATECOMPLAINT_ADDRESS_PLACEHOLDER",
+    "message": "शिकायत का पता दर्ज करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_CREATECOMPLAINT_COMPLAINT_NAME",
+    "message": "नागरिक का नाम",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_CREATECOMPLAINT_COMPLAINT_NAME_PLACEHOLDER",
+    "message": "नागरिक का नाम दर्ज करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_CREATECOMPLAINT_MOBILE_NUMBER",
+    "message": "नागरिक का मोबाइल नंबर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_CREATECOMPLAINT_MOBILE_NUMBER_PLACEHOLDER",
+    "message": "नागरिक का मोबाइल नंबर दर्ज करें।",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_CREATECOMPLAINT_MOHALLA",
+    "message": "मोहल्ला",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_CREATECOMPLAINT_MOHALLA_PLACEHOLDER",
+    "message": "अपना मोहल्ला चुनें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_CREATECOMPLAINT_NEW_COMPLAINT",
+    "message": "नई शिकायत",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_CREATECOMPLAINT_PROVIDE_COMPLAINANT_DETAILS",
+    "message": "शिकायतकर्ता का विवरण",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_CREATECOMPLAINT_SELECT_PLACEHOLDER",
+    "message": "चुनें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_CREATE_COMPLAINT",
+    "message": "शिकायत बनाएं",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_EMPLOYEE_DIRECTORY_HEADER",
+    "message": "कर्मचारी निर्देशिका",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_MYCOMPLAINTS_CLEAR_SEARCH_BUTTON",
+    "message": "खोज मिटायें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_MYCOMPLAINTS_COMPLAINT_NO",
+    "message": "शिकायत नंबर के अंतिम 6 अंक दर्ज करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_MYCOMPLAINTS_NO_ASSIGNED_COMPLAINTS",
+    "message": "कोई नियुक्त शिकायत नहीं",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_MYCOMPLAINTS_NO_COMPLAINTS_ASSIGNED",
+    "message": "दिखाने के लिए कोई शिकायत नहीं है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_MYCOMPLAINTS_NO_COMPLAINTS_TO_ASSIGN",
+    "message": "नियुक्त करने के लिए कोई शिकायत नहीं है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_MYCOMPLAINTS_SEARCH_BUTTON",
+    "message": "खोजें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_NO_SEARCH_RESULTS",
+    "message": "कोई खोज परिणाम नहीं मिला",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_OPEN_COMPLAINTS_HEADER",
+    "message": "चालू शिकायतें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_PGR_FILTER_STATUS",
+    "message": "स्थिति",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_PGR_HEADER_COMPLAINT",
+    "message": "शिकायतें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_PGR_INBOX",
+    "message": "इनबॉक्स",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_PGR_NEW_COMPLAINT",
+    "message": "नई शिकायत",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_REASON_TO_REJECT_HEADER",
+    "message": "अस्वीकार करने का कारण",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_REASSIGN_OPTION_FOUR",
+    "message": "अन्य",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_REASSIGN_OPTION_ONE",
+    "message": "वैध शिकायत नहीं है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_REASSIGN_OPTION_THREE",
+    "message": "अनुपस्थित या छुट्टी पर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_REASSIGN_OPTION_TWO",
+    "message": "मेरे अधिकार क्षेत्र के बहार",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_REASSIGN_REQUEST_QUESTION",
+    "message": "आप इस शिकायत को पुन: नियुक्त क्यों करना चाहते हैं?",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_REASSIGN_REQUEST_SUCCESS_MESSAGE",
+    "message": "आपकी पुनर्नियुक्त करने का निवेदन भेज दिया गया है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_REASSIGN_TO_EMPLOYEE_HEADER",
+    "message": "कर्मचारी को पुनर्नियुक्त करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_REJECT_BUTTON",
+    "message": "अस्वीकार करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_REJECT_COMPLAINT_QUESTION",
+    "message": "आप इस शिकायत को अस्वीकार क्यों करना चाहते हैं?",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_REJECT_OPTION_FOUR",
+    "message": "अन्य",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_REJECT_OPTION_THREE",
+    "message": "ऑपरेशन पहले से चल रहा है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_REJECT_OPTION_TWO",
+    "message": "परिचालन क्षेत्र से बाहर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_REQUEST_REQUEST_RE_ASSIGN",
+    "message": "फिर से नियुक्ति का निवेदन करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_RESOLVE_MARK_RESOLVED",
+    "message": "हल किया गया",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_SEARCH_BOTTON",
+    "message": "खोजें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_SEARCH_BUTTON",
+    "message": "खोजें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_SORT_BOTTON",
+    "message": "क्रमबद्ध करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ES_SORT_BUTTON",
+    "message": "क्रमबद्ध करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "FILTER_BY",
+    "message": "इससे फ़िल्टर करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "PGR_APPLY_PENDINGFORASSIGNMENT_SMS_MESSAGE",
+    "message": "प्रिय नागरिक, आपकी {complaint_type} की शिकायत, आई.डी. {id}, दिनांक {date} को जमा कर दी गयी है। अपनी शिकायत की स्तिथि जानने के लिए एम-सेवा ऍप {download_link} डाउनलोड करें या स्थानीय नगर निगम वेब पोर्टल पर जाएँ.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "PGR_ASSIGN_CITIZEN_PENDINGATLME_SMS_MESSAGE",
+    "message": "प्रिय नागरिक, आपकी {complaint_type} की शिकायत, जिसकी शिकायत आई.डी. {id} है , जो दिनांक {date} को जमा की गयी थी, {emp_name} , {emp_designation}, {emp_department} को नियुक्त की गयी है। अपनी शिकायत की स्तिथि जानने और हमारे अधिकारियों से संपर्क करने के लिए एम-सेवा  ऍप {download_link} डाउनलोड करें या स्थानीय नगर निगम वेब पोर्टल पर जाएँ.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "PGR_ASSIGN_EMPLOYEE_PENDINGATLME_SMS_MESSAGE",
+    "message": "श्री {emp_name} {complaint_type} की शिकायत, जिसकी शिकायत आईडी {id} है, आपको नियुक्त की गयी है। कृपया उचित कार्यवाही करें .{ao_designation}{ulb}.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "PGR_CITIZEN_APPLY_PENDINGFORASSIGNMENT_SMS_MESSAGE",
+    "message": "प्रिय नागरिक, आपकी {complaint_type} की शिकायत,आई.डी. {id}, दिनांक {date} को जमा कर दी गयी है। अपनी शिकायत की स्तिथि जानने के लिए एम-सेवा ऍप {download_link} डाउनलोड करें या स्थानीय नगर निगम वेब पोर्टल पर जाएँ \n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "PGR_CITIZEN_REASSIGN_PENDINGATLME_SMS_MESSAGE",
+    "message": "प्रिय नागरिक, आपकी {complaint_type} की शिकायत, जिसकी शिकायत आई.डी. {id} है , जो दिनांक {date} को जमा की गयी थी, {emp_name}, {emp_designation}, {emp_department} को पुनः नियुक्त की गयी है। अपनी शिकायत की स्तिथि जानने और हमारे अधिकारियों से संपर्क करने के लिए एम-सेवा ऍप {download_link} डाउनलोड करें या स्थानीय नगर निगम वेब पोर्टल पर जाएँ  \n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "PGR_CITIZEN_REASSIGN_PENDINGFORREASSIGNMENT_SMS_MESSAGE",
+    "message": "प्रिय नागरिक, आपकी {complaint_type} की शिकायत,जिसकी शिकायत आई.डी. {id} है , जो दिनांक {date} को जमा की गयी थी, {emp_name}, {emp_designation},{emp_department} को पुनः नियुक्त की गयी है। अपनी शिकायत की स्तिथि जानने और हमारे अधिकारियों से संपर्क करने के लिए एम-सेवा ऍप {download_link} डाउनलोड करें या स्थानीय नगर निगम वेब पोर्टल पर जाएँ \n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "PGR_CITIZEN_REJECT_REJECTED_SMS_MESSAGE",
+    "message": "प्रिय नागरिक, आपकी {complaint_type} की शिकायत, जिसकी शिकायत आई.डी. {id} है , जो दिनांक {date} को जमा की गयी थी, अस्वीकार कर दी गयी है । अस्वीकृति का कारण: {additional_comments} । अगर आप शिकायत को फिर से खोलना चाहते हैं तो एम-सेवा ऍप {download_link} डाउनलोड करें या स्थानीय नगर निगम वेब पोर्टल पर जाएँ. \n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "PGR_CITIZEN_REOPEN_PENDINGFORASSIGNMENT_SMS_MESSAGE",
+    "message": "प्रिय नागरिक, आपकी {complaint_type} की शिकायत, आई.डी. {id}, जो दिनांक {date} को जमा की गयी थी, आपके निवेदन पर वापस खोल दी गयी है। अपनी शिकायत की स्तिथि जानने और हमारे अधिकारियों से संपर्क करने के लिए एम-सेवा ऍप {download_link} डाउनलोड करें या स्थानीय नगर निगम वेब पोर्टल पर जाएँ.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "PGR_CITIZEN_RESOLVE_RESOLVED_SMS_MESSAGE",
+    "message": "प्रिय नागरिक, आपकी {complaint_type} की शिकायत, आई.डी. {id}, जो दिनांक {date} को जमा की गयी थी, {emp_name} द्वारा हल कर दी गयी है। अगर आप सेवा से संतुष्ट नहीं हैं तो आप शिकायत को फिर से चालू करने के लिए एम-सेवा  ऍप {download_link} डाउनलोड करें या स्थानीय नगर निगम के वेब पोर्टल के जरिये कर सकते हैं.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "PGR_CLOSE_EMPLOYEE_CLOSEDAFTERRESOLUTION_SMS_MESSAGE",
+    "message": "श्री {emp_name} {complaint_type} की शिकायत, जिसकी शिकायत आईडी {id} है, को नागरिक द्वारा {rating}/5 रेटिंग मिली है। आपकी सेवा के लिए धन्यवाद .\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "PGR_DEFAULT_CITIZEN_SMS_MESSAGE",
+    "message": "आपकी वर्तमान शिकायत स्थिति {status} है। आप अपनी शिकायत की स्तिथि एम-सेवा ऍप पर ट्रैक कर सकते हैं या स्थानीय नगर निगम वेब पोर्टल पर देख सकते हैं.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "PGR_DEFAULT_SMS_MESSAGE",
+    "message": "आपकी वर्तमान शिकायत स्थिति {status} है। आप अपनी शिकायत की स्तिथि एम-सेवा ऍप पर ट्रैक कर सकते हैं या स्थानीय नगर निगम वेब पोर्टल पर देख सकते हैं.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "PGR_EMPLOYEE_ASSIGN_PENDINGATLME_SMS_MESSAGE",
+    "message": "श्री {emp_name} {complaint_type} की शिकायत, जिसकी शिकायत आईडी {id} है, आपको नियुक्त की गयी है। कृपया उचित कार्यवाही करें {ao_designation} - {ulb}.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "PGR_EMPLOYEE_RATE_CLOSEDAFTERREJECTION_SMS_MESSAGE",
+    "message": "श्री {emp_name} {complaint_type} की शिकायत, जिसकी शिकायत आईडी {id} है, को नागरिक द्वारा {rating}/5 रेटिंग मिली है। आपकी सेवा के लिए धन्यवाद,\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "PGR_EMPLOYEE_RATE_CLOSEDAFTERRESOLUTION_SMS_MESSAGE",
+    "message": "श्री {emp_name} {complaint_type} की शिकायत, जिसकी शिकायत आईडी {id} है, को नागरिक द्वारा {rating}/5 रेटिंग मिली है। आपकी सेवा के लिए धन्यवाद .\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "PGR_EMPLOYEE_REASSIGN_PENDINGATLME_SMS_MESSAGE",
+    "message": "श्री {emp_name} {complaint_type} की शिकायत, जिसकी शिकायत आईडी {id} है, आपके निवेदन अनुसार फिर से नियुक्त की गयी है। {ao_designation} - {ulb}. \n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "PGR_EMPLOYEE_REASSIGN_PENDINGFORREASSIGNMENT_SMS_MESSAGE",
+    "message": "श्री {emp_name} {complaint_type} की शिकायत, जिसकी शिकायत आईडी {id} है, आपके निवेदन अनुसार फिर से नियुक्त की गयी है। {ao_designation} - {ulb}. \n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "PGR_EMPLOYEE_REOPEN_PENDINGFORASSIGNMENT_SMS_MESSAGE",
+    "message": "श्री {emp_name} {complaint_type} की शिकायत आईडी {id} के साथ नागरिक द्वारा फिर से खोल दी गयी है। इसकी नियुक्त अधिकारी द्वारा समीक्षा की जा रही है - {ulb}.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "PGR_REASSIGN_EMPLOYEE_PENDINGATLME_SMS_MESSAGE",
+    "message": "श्री {emp_name} {complaint_type} की शिकायत, जिसकी शिकायत आईडी {id} है, आपके निवेदन अनुसार फिर से नियुक्त की गयी है। {ao_designation} - {ulb}.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "PGR_REASSIGN_PENDINGATLME_SMS_MESSAGE",
+    "message": "प्रिय नागरिक, आपकी {complaint_type} की शिकायत, जिसकी शिकायत आई.डी. {id} है , जो दिनांक {date} को जमा की गयी थी, {emp_name}, {emp_designation}, {emp_department} को पुनः नियुक्त की गयी है। अपनी शिकायत की स्तिथि जानने और हमारे अधिकारियों से संपर्क करने के लिए एम-सेवा ऍप {download_link} डाउनलोड करें या स्थानीय नगर निगम वेब पोर्टल पर जाएँ.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "PGR_REJECT_CITIZEN_REJECTED_SMS_MESSAGE",
+    "message": "प्रिय नागरिक, आपकी {complaint_type} की शिकायत, जिसकी शिकायत आई.डी. {id} है , जो दिनांक {date} को जमा की गयी थी, अस्वीकार कर दी गयी है । अस्वीकृति का कारण: {additional_comments} अगर आप शिकायत को फिर से खोलना चाहते हैं तो एम-सेवा ऍप {download_link} डाउनलोड करें या स्थानीय नगर निगम वेब पोर्टल पर जाएँ.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "PGR_REJECT_REJECTED_SMS_MESSAGE",
+    "message": "प्रिय नागरिक, आपकी {complaint_type} की शिकायत, जिसकी शिकायत आई.डी. {id} है , जो दिनांक {date} को जमा की गयी थी, अस्वीकार कर दी गयी है । अस्वीकृति का कारण: {additional_comments} । अगर आप शिकायत को फिर से खोलना चाहते हैं तो एम-सेवा ऍप {download_link} डाउनलोड करें या स्थानीय नगर निगम वेब पोर्टल पर जाएँ.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "PGR_REOPEN_CITIZEN_PENDINGFORASSIGNMENT_SMS_MESSAGE",
+    "message": "प्रिय नागरिक, आपकी {complaint_type} की शिकायत, आई.डी. {id}, जो दिनांक {date} को जमा की गयी थी, आपके निवेदन पर वापस खोल दी गयी है। अपनी शिकायत की स्तिथि जानने और हमारे अधिकारियों से संपर्क करने के लिए एम-सेवा ऍप {download_link} डाउनलोड करें या स्थानीय नगर निगम वेब पोर्टल पर जाएँ.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "PGR_REOPEN_EMPLOYEE_PENDINGFORASSIGNMENT_SMS_MESSAGE",
+    "message": "श्री {emp_name} {complaint_type} की शिकायत आईडी {id} के साथ नागरिक द्वारा फिर से खोल दी गयी है। इसकी नियुक्त अधिकारी द्वारा समीक्षा की जा रही है - {ulb}.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "PGR_REOPEN_PENDINGFORASSIGNMENT_SMS_MESSAGE",
+    "message": "प्रिय नागरिक, आपकी {complaint_type} की शिकायत, आई.डी. {id}, जो दिनांक {date} को जमा की गयी थी, आपके निवेदन पर वापस खोल दी गयी है। अपनी शिकायत की स्तिथि जानने और हमारे अधिकारियों से संपर्क करने के लिए एम-सेवा ऍप {download_link} डाउनलोड करें या स्थानीय नगर निगम वेब पोर्टल पर जाएँ.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "PGR_RESOLVE_CITIZEN_RESOLVED_SMS_MESSAGE",
+    "message": "प्रिय नागरिक, आपकी {complaint_type} की शिकायत, आई.डी. {id}, जो दिनांक {date} को जमा की गयी थी, {emp_name} द्वारा हल कर दी गयी है। अगर आप सेवा से संतुष्ट नहीं हैं तो आप शिकायत को फिर से चालू करने के लिए एम-सेवा मोबाइल ऍप {download_link} डाउनलोड करें या स्थानीय नगर निगम के वेब पोर्टल के जरिये कर सकते हैं.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "PGR_RESOLVE_RESOLVED_SMS_MESSAGE",
+    "message": "प्रिय नागरिक, आपकी {complaint_type} की शिकायत, आई.डी. {id}, जो दिनांक {date} को जमा की गयी थी, {emp_name} द्वारा हल कर दी गयी है। अगर आप सेवा से संतुष्ट नहीं हैं तो आप शिकायत को फिर से चालू करने के लिए एम-सेवा मोबाइल ऍप {download_link} डाउनलोड करें या स्थानीय नगर निगम के वेब पोर्टल के जरिये कर सकते हैं.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "PT_COMMON_NEXT",
+    "message": "आगे जाएँ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "PT_HOME_COMPLAINT",
+    "message": "शिकायतें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "REPORTS_RESULT_HEADER_DATE_RANGE",
+    "message": "के लिए जानकारी दिख रही है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "REPORTS_RESULT_HEADER_DATE_UPTO",
+    "message": "तक जानकारी दिख रही है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "REPORTS_SEARCHFORM_APPLY",
+    "message": "लागू",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "REPORTS_SEARCHFORM_MODIFY_DATE_HEADER",
+    "message": "रिपोर्ट को तिथि से क्रमबद्ध करें ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "REPORT_SEARCHFORM_DATE_GREATER",
+    "message": "तिथि तक' दिनांक 'तिथि से' दिनांक से पहले की है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "REPORT_SEARCHFORM_DATE_LESSER",
+    "message": "तिथि से' दिनांक 'तिथि तक' दिनांक बाद की है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ANIMALS",
+    "message": "जानवर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BADSTREETLIGHT",
+    "message": "गली की बत्तियां खराब है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BADSUPPLY",
+    "message": "आपूर्ति सही नहीं है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BADTRAFFICLIGHT",
+    "message": "ट्रैफिक लाइट खराब है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BINNOTEMPTY",
+    "message": "कूड़ेदान खाली नहीं है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BINS",
+    "message": "कूड़ादान",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BLOCK/OVERFLOWINGSEWAGE",
+    "message": "अवरोधित या अतिप्रवाह सीवेज",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BLOCKED",
+    "message": "अवरोधित",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BLOCKEDDRAIN",
+    "message": "अवरोधित नाली",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BLOCKOROVERFLOWINGSEWAGE",
+    "message": "अवरोधित या अतिप्रवाह सीवेज",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BLOCKOVERFLOWINGSEWAGE",
+    "message": "अवरोधित या अतिप्रवाह सीवेज",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BROKEN",
+    "message": "टूटी हुए",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BROKENBIN",
+    "message": "टूटा हुआ कूड़ादान",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BROKENGARBAGEBIN",
+    "message": "टूटा हुआ कूड़ादान",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BROKENGUARD",
+    "message": "टूटा हुआ गार्ड",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BROKENHANDPUMP",
+    "message": "टूटा हुआ हैंडपंप",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BROKENORDAMAGEDPIPE",
+    "message": "टूटी हुई या क्षतिग्रस्त पाइप",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BROKENORLEAKINGSEWAGEPIPE",
+    "message": "टूटा हुआ सीवेज पाइप या सीवेज पाइप में रिसाव",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BROKENPIPEORTAP",
+    "message": "टूटा हुआ पाइप या नल",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BROKENWATERPIPEORLEAKAGE",
+    "message": "टूटा हुआ पानी का पाइप / रिसाव",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BROKENWATERPIPEORTAP",
+    "message": "टूटा हुआ पानी का पाइप या नल",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BURNING",
+    "message": "जलता हुआ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BURNINGOFGARBAGE",
+    "message": "कचरा जलाना",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.CONSTRUCTIONMATERIALLYINGONTHEROAD",
+    "message": "निर्माण सामग्री सड़क पर पड़ी है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.CUTTINGORTRIMMINGOFTREEREQUIRED",
+    "message": "पेड़ की कटाई या छंटाई अनिवार्य है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DAMAGED",
+    "message": "क्षतिग्रस्त",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DAMAGED/BLOCKEDFOOTPATH",
+    "message": "क्षतिग्रस्त / अवरुद्ध फ़ुटपाथ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DAMAGEDBLOCKEDFOOTPATH",
+    "message": "क्षतिग्रस्त / अवरुद्ध फ़ुटपाथ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DAMAGEDDRAIN",
+    "message": "क्षतिग्रस्त नाली",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DAMAGEDFOOTPATH",
+    "message": "क्षतिग्रस्त फुटपाथ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DAMAGEDGARBAGEBIN",
+    "message": "क्षतिग्रस्त कचरा बिन",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DAMAGEDORBLOCKEDFOOTPATH",
+    "message": "क्षतिग्रस्त / अवरुद्ध फ़ुटपाथ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DAMAGEDROAD",
+    "message": "क्षतिग्रस्त सड़क",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DAMAGEDSTREETLIGHT",
+    "message": "क्षतिग्रस्त स्ट्रीटलाइट्स",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DEADANIMALS",
+    "message": "मृत पशु",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DEADBODY",
+    "message": "शव",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DEBRISORSILT",
+    "message": "मलबा या गाद",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DIRTYORSMELLY",
+    "message": "गंदा या बदबूदार",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DIRTYORSMELLYPUBLICTOILETS",
+    "message": "गंदा या बदबूदार सार्वजनिक शौचालय",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DIRTYWATERSUPPLY",
+    "message": "गंदे पानी की आपूर्ति",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DRAINS",
+    "message": "नालियां",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DUMPING",
+    "message": "ढेर लगाना",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.EMPLOYEEABSENT",
+    "message": "कर्मचारी अनुपस्थित है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ENCROACHMENT",
+    "message": "अतिक्रमण",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ENCROACHMENTONPUBLICPROPERTY",
+    "message": "सार्वजनिक संपत्ति पर अतिक्रमण",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.FOOTPATHS",
+    "message": "पैदलमार्ग",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.GARBAGE",
+    "message": "कचरा",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.GARBAGEBINNOTEMPTY",
+    "message": "कूड़ादान खाली नहीं है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.GARBAGEBINNOTTHERE",
+    "message": "कूड़ादान नहीं है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.GARBAGENEEDSTOBECLEANED",
+    "message": "कचरा साफ करने की ज़रूरत है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.GARBAGENEEDSTOBECLEARED",
+    "message": "कचरा साफ करने की ज़रूरत है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ILLEGALCONSTRUCTION",
+    "message": "अवैध निर्माण",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ILLEGALCONSTRUCTIONS",
+    "message": "अवैध निर्माण",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ILLEGALCUTTING",
+    "message": "अवैध कटाई",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ILLEGALCUTTINGOFTREES",
+    "message": "पेड़ों की अवैध कटाई",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ILLEGALDISCHARGE",
+    "message": "अवैध निर्वहन",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ILLEGALDISCHARGEOFSEWAGE",
+    "message": "सीवेज का अवैध निर्वहन",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ILLEGALFOOTPATHSHOP",
+    "message": "फुटपाथ पर अवैध दुकानें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ILLEGALHOARDING",
+    "message": "अवैध होर्डिंग",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ILLEGALPARKING",
+    "message": "अवैध पार्किंग",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ILLEGALSHOPS",
+    "message": "अवैध दुकानें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ILLEGALSHOPSONFOOTPATH",
+    "message": "फुटपाथ पर अवैध दुकानें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ILLEGALSHOPSONTHEFOOTPATH",
+    "message": "फुटपाथ पर अवैध दुकानें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.LANDVIOLATION",
+    "message": "भूमि अतिक्रमण",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.LANDVIOLATIONS",
+    "message": "भूमि अतिक्रमण",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.LIGHTS",
+    "message": "बत्तियां",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.MANHOLECOVERMISSINGORDAMAGED",
+    "message": "मैनहोल कवर गायब/क्षतिग्रस्त",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.MANHOLEISSUE",
+    "message": "मैनहोल से सम्बंधित",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.MISUSE",
+    "message": "दुरूपयोग",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.MOSQUITOES",
+    "message": "मच्छर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.MOSQUITOS",
+    "message": "मच्छर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.NONSWEEPINGOFROAD",
+    "message": "सड़क पर झाड़ू मारने की ज़रूरत है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.NOSTREETLIGHT",
+    "message": "गली में बत्ती नहीं है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.NOTFUNCTIONAL",
+    "message": "कार्यशील नहीं है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.NOTWATERSUPPLY",
+    "message": "जल आपूर्ति नहीं है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.NOWATERORELECTRICITY",
+    "message": "पानी या बिजली नहीं",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.NOWATERORELECTRICITYINPUBLICTOILET",
+    "message": "सार्वजनिक शौचालय में पानी या बिजली नहीं",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.NOWATERSUPPLY",
+    "message": "पानी की आपूर्ति नहीं",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.OPENDEFACATION",
+    "message": "खुले में शौच",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.OPENDEFECATION",
+    "message": "खुले में शौच",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.OPENLAND",
+    "message": "खुली ज़मीन",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.OTHERS",
+    "message": "अन्य",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.OVERFLOWING",
+    "message": "अतिप्रवाहित",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.OVERFLOWING/BLOCKEDDRAIN",
+    "message": "अतिप्रवाहित / अवरुद्ध नाली",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.OVERFLOWINGBLOCKEDDRAIN",
+    "message": "अतिप्रवाहित / अवरुद्ध नाली",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.OVERFLOWINGDRAIN",
+    "message": "अतिप्रवाहित नाली",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.OVERFLOWINGORBLOCKEDDRAIN",
+    "message": "अतिप्रवाहित / अवरुद्ध नाली",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.OVERFLOWINGSEWAGE",
+    "message": "अतिप्रवाहित सीवेज",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.PARKREQUIRESMAINTENANCE",
+    "message": "पार्क को रखरखाव की आवश्यकता है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.PARKS",
+    "message": "पार्क",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.POLEORLIGHTDAMAGE",
+    "message": "खम्बा या बल्ब क्षतिग्रस्त",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.POORSWEEPING",
+    "message": "खराब साफ़ सफाई / ठीक से झाड़ू नहीं लगती",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.POTHOLES",
+    "message": "गड्ढे",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.POTHOLESONTHEROAD",
+    "message": "सड़क पर गड्ढे",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.PUBLICTOILETISDAMAGED",
+    "message": "सार्वजनिक शौचालय क्षतिग्रस्त",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.PUBLICTOILETISNOTWORKINGPROPERLY",
+    "message": "सार्वजनिक शौचालय ठीक से काम नहीं कर रहा है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.PUBLICTOILETS",
+    "message": "सार्वजनिक शौचालय",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.REMOVEGARBAGEORWATER",
+    "message": "कचरा या पानी निकालें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.REPLACE/PROVIDEGARBAGEBIN",
+    "message": "कूड़ादान बदलें / प्रदान करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.REPLACEORPROVIDEGARBAGEBIN",
+    "message": "कूड़ादान बदलें / प्रदान करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.REPLACEPROVIDEGARBAGEBIN",
+    "message": "कूड़ादान बदलें / प्रदान करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.REQUESTNEW",
+    "message": "नये का निवेदन करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.REQUESTSMOKEOP",
+    "message": "स्मोक ऑपरेशन का निवेदन",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.REQUESTSPRAYINGORFOGGINGOPERATION",
+    "message": "छिड़काव या फॉगिंग ऑपरेशन का निवेदन करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.REQUESTSPRAYOP",
+    "message": "स्प्रे ऑपरेशन का निवेदन करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.REQUESTTANKER",
+    "message": "टैंकर का निवेदन करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.REQUESTTRIMMING",
+    "message": "छंटाई का निवेदन करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ROADORFOOTPATH",
+    "message": "सड़क या फुटपाथ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ROADS",
+    "message": "सड़कें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ROADSANDFOOTPATHS",
+    "message": "सड़कें और फुटपाथ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ROADSCODEE",
+    "message": "सड़कें कोड करने वाला",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.SERVICE",
+    "message": "सेवा",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.SERVICENAME.FEVERS_DENGUE_MALARIA",
+    "message": "बुखार - डेंगू",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.SERVICENAME.NON_RECEIPT_OF_PENSIONS_DISABLED_ELDERLY_ETC",
+    "message": "पेंशन नहीं मिलना - निष्क्रिय",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.SERVICENAME.REPAIRS_TO_FLYOVERS_BRIDGES_CULVERTS",
+    "message": "फ्लाईओवर की मरम्मत",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.SERVICENAME.UNHYGIENIC_IMPROPER_TRANSFER_OF_MEAT_LIVESTOCK",
+    "message": "अस्वच्छ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.SEWAGE",
+    "message": "मल",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.SEWAGEEFFLUENTS",
+    "message": "सीवेज प्रवाह",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.SHORTAGEOFWATER",
+    "message": "पानी की कमी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.SHORTSUPPLY",
+    "message": "कम आपूर्ति",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.SLOWPROGRESS",
+    "message": "धीमी प्रगति",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.STAGNANTWATER",
+    "message": "जमा हुआ पानी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.STORMWATERDRAIN",
+    "message": "बरसाती पानी की निकासी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.STRAYANIMALS",
+    "message": "भटकते जानवर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.STRAYCATTLE",
+    "message": "भटकते मवेशी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.STRAYDOGS",
+    "message": "भटकते कुत्ते",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.STRAYPIGS",
+    "message": "भटकते सुअर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.STREETLIGHTNOTWORKING",
+    "message": "गली की बत्ती काम नहीं कर रही है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.STREETLIGHTS",
+    "message": "सड़क की बत्तियाँ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.TOILETS",
+    "message": "प्रसाधन",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.TREES",
+    "message": "पेड़",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.TRUCKSPILLAGE",
+    "message": "ट्रक का रिसाव",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.VACANTLAND",
+    "message": "खाली जमीन",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.WATER",
+    "message": "पानी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.WATERANDSEWAGE",
+    "message": "जल और सीवेज",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.WATERBODY",
+    "message": "जल श्रोत",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.WATERLOGGED",
+    "message": "पानी भरा हुआ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.WATERLOGGEDROAD",
+    "message": "पानी से भरी सड़कें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "SERVICEDEFS.WATERPRESSUREISVERYLESS",
+    "message": "पानी का दबाव बहुत कम है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "TL_UPLOAD_RESTRICTIONS",
+    "message": "अधिकतम 5 एमबी तक अपलोड करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SU166",
+    "message": "मोहल्ला मजोरन - एरिया 1",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN02",
+    "message": "अग्रसेन चौक से मल गोदाम - दोनों पक्ष - एरिया 3",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN04",
+    "message": "अजीत नगर - एरिया1",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN08",
+    "message": "अतर सिंह कॉलोनी - एरिया2",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN105",
+    "message": "जौरा खू से सर्ऱाफा बाज़ार (दक्षिणी साइड) - एरिया1",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN109",
+    "message": "कैलाश परबत - एरिया1",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN11",
+    "message": "पिछली तरफ़ 33 केवीए ग्रिड पटियाला रोड - एरिया1",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN12",
+    "message": "पिछली तरफ़ 66 केवीए ग्रिड पटियाला रोड - एरिया2",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN13",
+    "message": "पिछली तरफ़ सिविल न्यायालय कॉलोनी - एरिया1",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN132",
+    "message": "मोहल्ला अकलगढ़ गुरुद्वारा - एरिया1",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN134",
+    "message": "मोहल्ला भद्र काली मंदिर - एरिया1",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN136",
+    "message": "मोहल्ला भट्टा वाला - एरिया2",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN137",
+    "message": "मोहल्ला भावडेयान वाला - एरिया1",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN138",
+    "message": "मोहल्ला भोजेका (दोनों पक्षों) - एरिया2",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN144",
+    "message": "मोहल्ला कोहलियाँ - एरिया1",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN150",
+    "message": "मोहल्ला राजन वाला (दोनों पक्षों) - एरिया1",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN153",
+    "message": "मोहल्ला सिंघकियाँ (उत्तरी साइड) - एरिया1",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN158",
+    "message": "मोहल्ला-कशाइयाँ वाला - एरिया2",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN161",
+    "message": "मोहल्ला-सिंघकियाँ वाला - एरिया1",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN167",
+    "message": "मोहल्ला अंगारिया वाला - एरिया1",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN169",
+    "message": "मोहल्ला बांदा पट्टी - एरिया2",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN170",
+    "message": "मोहल्ला भाई का - एरिया1",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN173",
+    "message": "मोहल्ला गंज शीदा - एरिया1",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN176",
+    "message": "मोहल्ला कांगो - एरिया1",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN178",
+    "message": "मोहल्ला ससिंघकियाँ- एरिया2",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN18",
+    "message": "पिछली तरफ़ नैना देवी मंदिर - एरिया2",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN194",
+    "message": "गुरुद्वारा पहली पथशाही उधम सिंह रोड के पास - एरिया1",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN20",
+    "message": "बृजबाला अस्पताल के पीछे - एरिया3",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN23",
+    "message": "पुरानी अनाज बाजार के पीछे - एरिया1",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN25",
+    "message": "बख्तावर नगर - एरिया1",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN31",
+    "message": "भाई मूल चंद साहिब कॉलोनी - एरिया1",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN35",
+    "message": "बिघरवाल चौक से रेलवे स्टेशन- एरिया2",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN40",
+    "message": "चंदर कॉलोनी बिग्गरवाल रोड - एरिया2",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN41",
+    "message": "चर्जन वाला मोहल्ला - एरिया1",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN45",
+    "message": "सिनेमा रोड - एरिया1",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN46",
+    "message": "सिनेमा रोड से अली बाज़ार (उत्तरी साइड) - एरिया2",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN49",
+    "message": "कॉलेज रोड (दक्षिणी पक्ष) - एरिया2",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN54",
+    "message": "दीदार दर्जी से माता मोदी उद्यान-वेस्ट साइड एरिया1",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN55",
+    "message": "दीप राइस मिल रोड - एरिया1",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN56",
+    "message": "डेंटल कॉलेज - एरिया1",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN62",
+    "message": "एकता कालोनी (दक्षिणी साइड) - एरिया1",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN75",
+    "message": "गौशाला",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN80",
+    "message": "गुगा माड़ी रोड (पूर्व की ओर) - एरिया2",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "admin.locality.SUN84",
+    "message": "गुरुद्वारा न्याय साहिब स्ट्रीट 1 - एरिया1",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "chatbot.pgr.assigned",
+    "message": "नियुक्त",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "chatbot.pgr.closed",
+    "message": "बंद ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "chatbot.pgr.open",
+    "message": "दर्ज़ हुआ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "chatbot.pgr.reassignrequested",
+    "message": "फिर से नियुक्त किया जा रहा है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "chatbot.pgr.rejected",
+    "message": "रद्द किया गया",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "chatbot.pgr.resolved",
+    "message": "हल किया गया",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Assignment.fields.department",
+    "message": "विभाग",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Assignment.fields.designation",
+    "message": "पद",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Assignment.fields.documents",
+    "message": "दस्तावेज़",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Assignment.fields.fromDate",
+    "message": "तारीख से",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Assignment.fields.function",
+    "message": "समारोह",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Assignment.fields.functionary",
+    "message": "पदाधिकारी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Assignment.fields.fund",
+    "message": "निधि",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Assignment.fields.govtOrderNumber",
+    "message": "सरकारी आदेश नंबर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Assignment.fields.grade",
+    "message": "ग्रेड",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Assignment.fields.position",
+    "message": "पद",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Assignment.fields.primary",
+    "message": "प्राथमिक है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Assignment.fields.toDate",
+    "message": "तारीख तक",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Assignment.title",
+    "message": "असाइनमेंट का विवरण",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.DepartmentalTest.fields.test",
+    "message": "परीक्षा",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.DepartmentalTest.title",
+    "message": "विभागीय टेस्ट का विवरण",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.EducationalQualification.fields.documents",
+    "message": "दस्तावेज़",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.EducationalQualification.fields.majorSubject",
+    "message": "प्रमुख विषय",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.EducationalQualification.fields.qualification",
+    "message": "योग्यता",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.EducationalQualification.fields.university",
+    "message": "विश्वविद्यालय / बोर्ड",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.EducationalQualification.title",
+    "message": "शैक्षिक योग्यता",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.EmployeePhoto",
+    "message": "कर्मचारी का फोटो",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.EmployeeSignature",
+    "message": "कर्मचारी के हस्ताक्षर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.OtherAttachments",
+    "message": "अन्य अनुलग्नक",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.User.aadhaarNumber",
+    "message": "आधार नंबर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.User.birth",
+    "message": "मूल / जन्म स्थान",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.User.bloodGroup",
+    "message": "रक्त समूह",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.User.gender",
+    "message": "लिंग",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.User.mobileNumber",
+    "message": "फ़ोन नंबर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.User.name",
+    "message": "कर्मचारी का नाम",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.User.userName",
+    "message": "उपयोगकर्ता का नाम",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.bank",
+    "message": "बैंक",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.bankAccount",
+    "message": "खाता संख्या",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.bankBranch",
+    "message": "बैंक शाखा",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.category",
+    "message": "वर्ग",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.city",
+    "message": "शहर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.code",
+    "message": "कोड",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.community",
+    "message": "समुदाय",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.correspondenceAddress",
+    "message": "पत्र भजने का पता",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.correspondencePinNumber",
+    "message": "पत्र के पते का पिन कोड",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.dateOfAppointment",
+    "message": "नोतुकत करने की तारीख़",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.dateOfBirth",
+    "message": "जन्म की तारीख",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.dateOfJoining",
+    "message": "नियुक्ति की तारीख़",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.dateOfResignation",
+    "message": "इस्तीफे की तारीख",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.dateOfRetirement",
+    "message": "सेवानिवृत्ति की तारीख़",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.dateOfTermination",
+    "message": "समाप्ति की तारीख़",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.email",
+    "message": "ईमेल आईडी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.employeeStatus",
+    "message": "कर्मचारी का स्टेटस",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.employeeType",
+    "message": "कर्मचारी का प्रकार",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.fatherSpouseName",
+    "message": "पिता / पति का नाम",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.gpfNo",
+    "message": "जीपीएफ नंबर / सीपीएस नंबर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.group",
+    "message": "कर्मचारी समूह",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.identification",
+    "message": "पहचान चिन्ह",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.languagesKnown",
+    "message": "ज्ञात भाषाएँ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.maritalStatus",
+    "message": "वैवाहिक स्थिति",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.medicalReportProduced",
+    "message": "मेडिकल रिपोर्ट बनाई गयी ?",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.motherTongue",
+    "message": "मातृ भाषा",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.pan",
+    "message": "पैन (PAN)",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.parmanentPinNumber",
+    "message": "स्थायी पिन नंबर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.passportNo",
+    "message": "पासपोर्ट नंबर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.permanentAddress",
+    "message": "स्थाई पता",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.physicallyDisabled",
+    "message": "शारीरिक रूप से अक्षम है?",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.recruitmentMode",
+    "message": "भर्ती मोड",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.recruitmentQuota",
+    "message": "भर्ती कोटा",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.recruitmentType",
+    "message": "भर्ती प्रकार / सेवा प्रकार",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.religion",
+    "message": "धर्म",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.fields.retirementAge",
+    "message": "सेवानिवृत्ति आयु",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Employee.title",
+    "message": "कर्मचारी का विवरण",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Jurisdictions.title",
+    "message": "क्षेत्राधिकार सूची",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Probation.fields.declaredOn",
+    "message": "कब घोषित हुआ:",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Probation.fields.documents",
+    "message": "दस्तावेज़",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Probation.fields.orderDate",
+    "message": "आदेश की तारीख",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Probation.fields.orderNo",
+    "message": "आदेश नंबर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Probation.fields.remarks",
+    "message": "टिप्पणियाँ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Probation.title",
+    "message": "प्रोबेशन",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Regularisation.fields.declaredOn",
+    "message": "तारीख पर घोषित:",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.Regularisation.title",
+    "message": "नियमितीकरण",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.ServiceHistory.fields.ServiceEntryDescription",
+    "message": "सेवा प्रवेश विवरण",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.ServiceHistory.fields.date",
+    "message": "तारीख",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.ServiceHistory.fields.documents",
+    "message": "दस्तावेज़",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.ServiceHistory.fields.orderNo",
+    "message": "आदेश नंबर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.ServiceHistory.fields.remarks",
+    "message": "टिप्पणी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.ServiceHistory.title",
+    "message": "सेवा इतिहास",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.TechnicalQualification.fields.grade",
+    "message": "ग्रेड",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.TechnicalQualification.fields.remarks",
+    "message": "टिप्पणियाँ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.TechnicalQualification.fields.skill",
+    "message": "कौशल",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.TechnicalQualification.fields.yearOfPassing",
+    "message": "समाप्ति का वर्ष",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.TechnicalQualification.title",
+    "message": "तकनीकी योग्यता",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.createPosition.groups.fields.outsourcepost.value1",
+    "message": "हाँ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.createPosition.groups.fields.outsourcepost.value2",
+    "message": "नहीं",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.fields.isUserActive",
+    "message": "क्या उपयोगकर्ता सक्रिय है?",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.jurisdiction.fields.boundary",
+    "message": "सीमा",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.jurisdiction.fields.boundaryType",
+    "message": "सीमा प्रकार",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.other.title",
+    "message": "अन्य विवरण",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "employee.service.title",
+    "message": "सेवा अनुभाग",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.BlockOrOverflowingSewage",
+    "message": "अवरुद्ध या अतिप्रवाहित सीवेज",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.BrokenWaterPipeOrLeakage",
+    "message": "टूटा हुआ पानी का पाइप / रिसाव",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.BurningOfGarbage",
+    "message": "कचरा का जलाना",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.ConstructionMaterialLyingOntheRoad",
+    "message": "निर्माण सामग्री सड़क पर पड़ी है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.CuttingOrTrimmingOfTreeRequired",
+    "message": "पेड़ की कटाई / ट्रिमिंग आवश्यक है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.DamagedGarbageBin",
+    "message": "क्षतिग्रस्त कूड़ादान",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.DamagedOrBlockedFootpath",
+    "message": "क्षतिग्रस्त या बंद फ़ुटपाथ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.DamagedRoad",
+    "message": "क्षतिग्रस्त सड़क",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.DeadAnimals",
+    "message": "मरे हुए जानवर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.DirtyOrSmellyPublicToilets",
+    "message": "गंदा / बदबूदार सार्वजनिक शौचालय",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.DirtyWaterSupply",
+    "message": "गंदे पानी की सप्लाई",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.GarbageNeedsTobeCleared",
+    "message": "कचरा साफ किया जाने की जरूरत है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.IllegalConstructions",
+    "message": "अवैध निर्माण",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.IllegalCuttingOfTrees",
+    "message": "पेड़ों की अवैध कटाई",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.IllegalParking",
+    "message": "अवैध पार्किंग",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.IllegalShopsOnFootPath",
+    "message": "फुटपाथ पर अवैध दुकानें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.ManholeCoverMissingOrDamaged",
+    "message": "मैनहोल का कवर गायब/क्षतिग्रस्त है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.NoWaterOrElectricityinPublicToilet",
+    "message": "सार्वजनिक शौचालय में पानी / बिजली नहीं",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.NoWaterSupply",
+    "message": "पानी सप्लाई नहीं है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.NonSweepingOfRoad",
+    "message": "सड़क पर झाड़ू मारने की ज़रूरत है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.OpenDefecation",
+    "message": "खुले में शौच",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.Others",
+    "message": "अन्य",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.OverflowingOrBlockedDrain",
+    "message": "अतिप्रवाह या रुकी हुई नाली",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.Parks",
+    "message": "पार्क को रखरखाव की आवश्यकता है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.PublicToiletIsDamaged",
+    "message": "सार्वजनिक शौचालय क्षतिग्रस्त है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.RequestSprayingOrFoggingOperation",
+    "message": "छिड़काव / फॉगिंग का निवेदन करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.ShortageOfWater",
+    "message": "पानी की कमी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.StrayAnimals",
+    "message": "भटकते जानवर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.StreetLightNotWorking",
+    "message": "स्ट्र्रेटलाइट काम नहीं कर रहा",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.WaterLoggedRoad",
+    "message": "सड़क पर पानी भरा हुआ है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.WaterPressureisVeryLess",
+    "message": "पानी का दबाव बहुत कम है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.complaint.category.illegalDischargeOfSewage",
+    "message": "सीवेज का अवैध निर्वहन",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.sms.notification.assign.citizen",
+    "message": "प्रिय नागरिक, आपकी {complaint_type} की शिकायत, जिसकी शिकायत आई.डी. {id} है , जो दिनांक {date} को जमा की गयी थी, {emp_name} , {emp_designation}, {emp_department} को नियुक्त की गयी है। अपनी शिकायत की स्तिथि जानने और हमारे अधिकारियों से संपर्क करने के लिए एम-सेवा पंजाब ऍप  {download_link} डाउनलोड करें या स्थानीय नगर निगम वेब पोर्टल पर जाएँ\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.sms.notification.assign.employee",
+    "message": "श्री {emp_name}  {complaint_type} की शिकायत, जिसकी शिकायत आईडी {id} है, आपको नियुक्त की गयी है। कृपया उचित कार्यवाही करें  {ao_designation} - {ulb}\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.sms.notification.close.employee",
+    "message": "श्री {emp_name}  {complaint_type} की शिकायत, जिसकी शिकायत आईडी {id} है, को नागरिक द्वारा {rating}/5 रेटिंग मिली है। आपकी सेवा के लिए धन्यवाद\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.sms.notification.comment",
+    "message": "श्री {emp_name} ने {{complaint_type} की शिकायत, जिसकी शिकायत आईडी {id} है, पर टिपण्णी की है।  टिपण्णी: {comment}\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.sms.notification.comment.default",
+    "message": "आपकी शिकायत पर एक टिप्पणी की गयी है। आप अपनी शिकायत की स्तिथि एम-सेवा पंजाब ऍप  पर ट्रैक कर सकते हैं  या स्थानीय नगर निगम वेब पोर्टल पर देख सकते हैं\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.sms.notification.default",
+    "message": "आपकी शिकायत की स्तिथि: {status} आप अपनी शिकायत की स्तिथि एम-सेवा पंजाब ऍप  पर ट्रैक कर सकते हैं  या स्थानीय नगर निगम वेब पोर्टल पर देख सकते हैं\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.sms.notification.reassign.citizen",
+    "message": "प्रिय नागरिक, आपकी {complaint_type} की शिकायत, जिसकी शिकायत आई.डी. {id} है , जो दिनांक {date} को जमा की गयी थी, {emp_name}, {emp_designation}, {emp_department} को पुनः नियुक्त की गयी है। अपनी शिकायत की स्तिथि जानने और हमारे अधिकारियों से संपर्क करने के लिए एम-सेवा पंजाब ऍप  {download_link} डाउनलोड करें या स्थानीय नगर निगम वेब पोर्टल पर जाएँ\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.sms.notification.reassign.employee",
+    "message": "श्री {emp_name}  {complaint_type} की शिकायत, जिसकी शिकायत आईडी {id} है, आपके निवेदन अनुसार फिर से नियुक्त की गयी है। {ao_designation} - {ulb}\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.sms.notification.reject.citizen",
+    "message": "प्रिय नागरिक, आपकी {complaint_type} की शिकायत, जिसकी शिकायत आई.डी. {id} है , जो दिनांक {date} को जमा की गयी थी, अस्वीकार कर दी गयी है । अस्वीकृति का कारण: {reason} अतिरिक्त टिपण्णियाँ : {additional_comments}। अगर आप शिकायत को फिर से खोलना चाहते हैं तो एम-सेवा पंजाब ऍप  {download_link} डाउनलोड करें या स्थानीय नगर निगम वेब पोर्टल पर जाएँ\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.sms.notification.reopen.citizen",
+    "message": "प्रिय नागरिक, आपकी {complaint_type} की शिकायत, आई.डी. {id}, जो दिनांक {date} को जमा की गयी थी, आपके निवेदन पर वापस खोल दी गयी है। अपनी शिकायत की स्तिथि जानने और हमारे अधिकारियों से संपर्क करने के लिए एम-सेवा पंजाब ऍप  {download_link} डाउनलोड करें या स्थानीय नगर निगम वेब पोर्टल पर जाएँ\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.sms.notification.reopen.employee",
+    "message": "श्री {emp_name}  {complaint_type} की शिकायत आईडी {id} के साथ नागरिक द्वारा फिर से खोल दी गयी है। इसकी नियुक्त अधिकारी द्वारा समीक्षा की जा रही है - {ulb}\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.sms.notification.resolve.citizen",
+    "message": "प्रिय नागरिक, आपकी {complaint_type} की शिकायत, आई.डी. {id}, जो दिनांक {date} को जमा की गयी थी, {emp_name} द्वारा हल कर दी गयी है।  अगर आप सेवा से संतुष्ट नहीं हैं तो आप शिकायत को फिर से चालू करने के लिए एम-सेवा पंजाब मोबाइल ऍप {download_link} डाउनलोड करें या स्थानीय नगर निगम के वेब पोर्टक के जरिये कर सकते हैं\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "pgr.sms.notification.submit.citizen",
+    "message": "प्रिय नागरिक, आपकी {complaint_type} की शिकायत, आई.डी. {id}, दिनांक {date} को जमा कर दी गयी है। अपनी शिकायत की स्तिथि जानने के लिए एम-सेवा पंजाब ऍप  {download link} डाउनलोड करें या स्थानीय नगर निगम वेब पोर्टल पर जाएँ\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.common.action",
+    "message": "कार्यवाही",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pgr.address",
+    "message": "नागरिक का पूरा पता",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pgr.assigned",
+    "message": "शिकायत नियुक्त की गयी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pgr.complaintid",
+    "message": "शिकायत आईडी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pgr.complainttype",
+    "message": "शिकायत प्रकार",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pgr.dateofassignment",
+    "message": "नियुक्ति की तारीख़",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pgr.dateofcomplaint",
+    "message": "शिकायत की तिथि",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pgr.department",
+    "message": "विभाग",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pgr.description",
+    "message": "अतिरिक्त शिकायत विवरण",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pgr.designation",
+    "message": "पद",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pgr.employee",
+    "message": "कर्मचारी का नाम",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pgr.landmark",
+    "message": "सीमा चिन्ह",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pgr.lastassignedto",
+    "message": "को शिकायत पिछली बार नियुक्त की गयी थी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pgr.name",
+    "message": "नागरिक का नाम",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pgr.open",
+    "message": "खुला शिकायतों की संख्या",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pgr.opencomplaintsoutsidesla",
+    "message": "चालू शिकायतें जो सेवा स्तर समझौते के बाहर हैं",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pgr.opencomplaintswithinsla",
+    "message": "चालू शिकायतें जो सेवा स्तर समझौते के भीतर हैं",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pgr.phone",
+    "message": "नागरिक मोबाइल नंबर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pgr.rating",
+    "message": "रेटिंग",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pgr.received",
+    "message": "शिकायत प्राप्त हुई",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pgr.reopen",
+    "message": "फिर से खोली गयी शिकायतों की संख्या",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pgr.resolvedoutsidesla",
+    "message": "सेवा स्तर समझौते के बाहर हल की गयी शिकायतें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pgr.resolvedwithinsla",
+    "message": "सेवा स्तर समझौते के भीतर हल की गयी शिकायतें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pgr.slahours",
+    "message": "सेवा स्तर समझौता",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pgr.tenantid",
+    "message": "निकाय का नाम",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pgr.ward",
+    "message": "शिकायत वार्ड / ब्लॉक",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.amount",
+    "message": "राशि ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.assessmentAmount",
+    "message": "मूल्यांकन राशि ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.assessmentNo",
+    "message": "मूल्यांकन नंबर ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.assessments",
+    "message": "मूल्यांकन",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.bankName",
+    "message": "बैंक का नाम",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.cancerCess",
+    "message": "कैंसर उपकर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.collectedAmount",
+    "message": "एकत्रित राशि",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.day",
+    "message": "तारीख",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.ddChequeTransactionNo",
+    "message": "डीडी / चेक ट्रांसेक्शन संख्या",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.documentType",
+    "message": "दस्तावेज़ का प्रकार",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.documentUid",
+    "message": "दस्तावेज़ आईडी ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.exemptionAmount",
+    "message": "छूट की राशि",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.exemptionGiven",
+    "message": "छूट प्रदान की गयी ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.exemptionRate",
+    "message": "छूट दर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.financialYear",
+    "message": "वित्तीय वर्ष",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.fireCess",
+    "message": "आग उपकर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.fireCessCollected",
+    "message": "एकत्रित आग उपकर ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.fromDate",
+    "message": "तारीख से",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.interestCollected",
+    "message": "एकत्रित ब्याज ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.month",
+    "message": "माह ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.name",
+    "message": "कर्मचारी का नाम",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.ownerType",
+    "message": "मालिक का प्रकार",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.paymentDues",
+    "message": "भुगतान देय राशि",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.paymentMode",
+    "message": "भुगतान का प्रकार",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.penaltiesCollected",
+    "message": "एकत्रित जुर्माना ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.propertyTax",
+    "message": "संपत्ति कर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.ptCollected",
+    "message": "एकत्रित पीटी ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.reason",
+    "message": "कारण",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.rebateGiven",
+    "message": "छूट प्रदान की गयी ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.receiptDate",
+    "message": "रसीद तिथि",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.receiptNo",
+    "message": "रसीद नंबर ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.subUsageType",
+    "message": "उप-उपयोग प्रकार",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.toDate",
+    "message": "तारीख तक",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.totalAssessmentAmount",
+    "message": "कुल मूल्यांकन राशि",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.totalCollectedAmount",
+    "message": "कुल एकत्रित  राशि",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.totalamountdue",
+    "message": "कुल बकाया राशि",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.totalamountpaid",
+    "message": "भुगतान की गई कुल राशि",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.ulb",
+    "message": "निकाय का नाम",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.pt.ulbName",
+    "message": "निकाय का नाम",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.Complaints Received",
+    "message": "प्राप्त हुई शिकायतें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.Source",
+    "message": "स्रोत",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.address",
+    "message": "पता",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.ao name",
+    "message": "अधिकारी का नाम नियुक्त किया जा रहा है",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.avg citizen rating",
+    "message": "नागरिक की औसत रेटिंग",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.complaint type",
+    "message": "शिकायत का प्रकार",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.complaintNo",
+    "message": "शिकायत नंबर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.complaints assigned",
+    "message": "नियुक्त की गयी शिकायतें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.complaints rejected",
+    "message": "ख़ारिज शिकायतें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.complaints unassigned",
+    "message": "शिकायतें जो नियुक्त नहीं की गयी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.complainttype",
+    "message": "शिकायत का प्रकार",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.date",
+    "message": "तारीख",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.datefrom",
+    "message": "तारीख से",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.dateto",
+    "message": "तारीख तक",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.department",
+    "message": "विभाग",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.department name",
+    "message": "विभाग का नाम",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.description",
+    "message": "शिकायत का विवरण",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.employee name",
+    "message": "कर्मचारी का नाम",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.landmark",
+    "message": "अतिरिक्त पता",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.lastassignedto",
+    "message": "को पिछली बार नियुक्त किया था",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.name",
+    "message": "नागरिक का नाम",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.outside sla",
+    "message": "सेवा स्तर समझौते के बाहर कुल शिकायतें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.phone",
+    "message": "नागरिक संपर्क",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.servicecode",
+    "message": "प्रकार",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.slahours",
+    "message": "सेवा स्तर समझौता",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.source.ivr",
+    "message": "सीएसआर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.source.mobileapp",
+    "message": "मोबाइल",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.source.unknown",
+    "message": "अनजान",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.source.web",
+    "message": "वेब",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.status",
+    "message": "स्थिति",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.status.assigned",
+    "message": "नियुक्त की गयी गई शिकायतें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.status.closed",
+    "message": "बंद शिकायतें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.status.open",
+    "message": "चालू शिकायतें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.status.reassignrequested",
+    "message": "शिकायतों को फिर से नियुक्त करें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.status.rejected",
+    "message": "अस्वीकृत शिकायतें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.tenantid",
+    "message": "निकाय का नाम",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.total",
+    "message": "कुल शिकायतें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.total closed complaints",
+    "message": "कुल बंद शिकायतें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.total complaints",
+    "message": "कुल शिकायतें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.total complaints received",
+    "message": "कुल प्राप्त शिकायतें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.total open complaints",
+    "message": "कुल चालू शिकायतें",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "reports.rainmaker-pgr.within sla",
+    "message": "सेवा स्तर समझौते के भीतर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SU166",
+    "message": "मोहल्ला मजोरान",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN02",
+    "message": "अग्रसेन चौक से मल गोदाम - दोनों पक्ष",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN04",
+    "message": "अजीत नगर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN08",
+    "message": "अतर सिंह कालोनी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN105",
+    "message": "जौरा खू से सर्ऱाफा बाज़ार (दक्षिणी साइड)",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN109",
+    "message": "कैलाश परबत",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN11",
+    "message": "पिछली साइड 33 केवीए ग्रिड पटियाला रोड",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN12",
+    "message": "पिछली साइड 66 केवीए ग्रिड पटियाला रोड",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN13",
+    "message": "पिछली साइड सिविल न्यायालय कॉलोनी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN132",
+    "message": "मोहल्ला अकलगढ़ गुरुद्वारा",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN134",
+    "message": "मोहल्ला भद्र काली मंदिर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN136",
+    "message": "मोहल्ला भट्टा वाला",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN137",
+    "message": "मोहल्ला भावडेयान वाला",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN138",
+    "message": "मोहल्ला भोजेका (दोनों तरफ़ )",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN144",
+    "message": "मोहल्ला कोहलियाँ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN150",
+    "message": "मोहल्ला राजन वाला (दोनों तरफ़ )",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN153",
+    "message": "मोहल्ला सिंघकियाँ (उत्तरी साइड)",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN158",
+    "message": "मोहल्ला-कशाइयाँ वाला",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN161",
+    "message": "मोहल्ला-सिंघकियाँ वाला",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN167",
+    "message": "मोहल्ला अंगारिया वाला",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN169",
+    "message": "मोहल्ला बांदा पट्टी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN170",
+    "message": "मोहल्ला भाई का",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN173",
+    "message": "मोहल्ला गंज शीदा",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN176",
+    "message": "मोहल्ला कांगो",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN178",
+    "message": "मोहल्ला-सिंघकियाँ",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN18",
+    "message": "पिछली साइड नैना देवी मंदिर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN194",
+    "message": "गुरुद्वारा पहली पथशाही उधम सिंह रोड के पास",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN20",
+    "message": "बृजबाला अस्पताल के पीछे",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN23",
+    "message": "पुरानी अनाज बाजार के पीछे",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN25",
+    "message": "बख्तावर नगर",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN31",
+    "message": "भाई मूल चंद साहिब कॉलोनी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN35",
+    "message": "बिघरवाल चौक से रेलवे स्टेशन",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN40",
+    "message": "चंदर कॉलोनी बिग्गरवाल रोड",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN41",
+    "message": "चर्जन वाला मोहल्ला",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN45",
+    "message": "सिनेमा रोड",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN46",
+    "message": "अली बाजार से सिनेमा रोड (उत्तरी साइड)",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN49",
+    "message": "कॉलेज रोड (दक्षिण की ओर)",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN54",
+    "message": "दीदार दर्जी से माता मोदी उद्यान-पश्चिम साइड",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN55",
+    "message": "दीप राइस मिल रोड",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN56",
+    "message": "डेंटल कॉलेज",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN62",
+    "message": "एकता कालोनी (दक्षिणी साइड)",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN75",
+    "message": "गौशाला, अरोड़ा कालोनी",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN80",
+    "message": "गुग्गा मोदी सड़क (पूर्व)",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "revenue.locality.SUN84",
+    "message": "गुरुद्वारा न्याय साहिब सड़क 1",
+    "module": "rainmaker-pgr",
+    "locale": "hi_IN"
+  }
+]

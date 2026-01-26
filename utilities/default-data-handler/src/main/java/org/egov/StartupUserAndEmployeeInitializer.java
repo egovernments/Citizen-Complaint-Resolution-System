@@ -42,14 +42,14 @@ public class StartupUserAndEmployeeInitializer {
     private int executionCount = 0;
     private static final int MAX_EXECUTIONS = 4;
 
-    @Scheduled(initialDelay = 4 * 60 * 1000, fixedDelay = 4 * 60 * 1000) // 4 minutes
+    @Scheduled(initialDelay = 1 * 60 * 1000, fixedDelay = 4 * 60 * 1000) // 4 minutes
     public void runPeriodically() {
         if (executionCount >= MAX_EXECUTIONS) return;
 
         log.info("Scheduled startup logic executing at: {}", Instant.now());
 
         try {
-//            executeStartupLogic();
+            executeStartupLogic();
             executionCount++;
         } catch (Exception e) {
             log.error("StartupUserAndEmployeeInitializer failed on attempt {}: {}",
@@ -102,10 +102,10 @@ public class StartupUserAndEmployeeInitializer {
         mdmsBulkLoader.loadAllMdmsData(tenantCode, requestInfo, serviceConfig.getProdCommonMdmsDataPath());
 
         log.info("Loading PROD common localization...");
-//        localizationUtil.upsertLocalizationFromFile(defaultDataRequest, serviceConfig.getProdCommonLocalizationDataPath());
+        localizationUtil.upsertLocalizationFromFile(defaultDataRequest, serviceConfig.getProdCommonLocalizationDataPath());
 
         log.info("Loading PROD common workflow config...");
-//        workflowConfigLoader.loadWorkflowConfigFromPath(tenantCode, serviceConfig.getProdCommonWorkflowDataPath());
+        workflowConfigLoader.loadWorkflowConfigFromPath(tenantCode, serviceConfig.getProdCommonWorkflowDataPath());
 
         // ===== LOAD PROD MODULE DATA (for each enabled module) =====
         for (String moduleName : moduleList) {

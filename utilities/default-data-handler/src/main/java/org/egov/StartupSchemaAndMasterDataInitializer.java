@@ -108,16 +108,16 @@ public class StartupSchemaAndMasterDataInitializer {
 
             // ===== LOAD PROD COMMON DATA (always) =====
             log.info("Loading PROD common schemas...");
-//            schemaLoader.loadSchemasFromPath(defaultDataRequest, serviceConfig.getProdCommonSchemaPath());
+            schemaLoader.loadSchemasFromPath(defaultDataRequest, serviceConfig.getProdCommonSchemaPath());
 
             log.info("Loading PROD common MDMS data...");
-//            mdmsBulkLoader.loadAllMdmsData(tenantCode, requestInfo, serviceConfig.getProdCommonMdmsDataPath());
+            mdmsBulkLoader.loadAllMdmsData(tenantCode, requestInfo, serviceConfig.getProdCommonMdmsDataPath());
 
             log.info("Loading PROD common localization...");
-//            localizationUtil.upsertLocalizationFromFile(defaultDataRequest, serviceConfig.getProdCommonLocalizationDataPath());
+            localizationUtil.upsertLocalizationFromFile(defaultDataRequest, serviceConfig.getProdCommonLocalizationDataPath());
 
             log.info("Loading PROD common workflow config...");
-//            workflowConfigLoader.loadWorkflowConfigFromPath(tenantCode, serviceConfig.getProdCommonWorkflowDataPath());
+            workflowConfigLoader.loadWorkflowConfigFromPath(tenantCode, serviceConfig.getProdCommonWorkflowDataPath());
 
             // ===== LOAD PROD MODULE DATA (for each enabled module) =====
             for (String moduleName : moduleList) {
@@ -134,8 +134,8 @@ public class StartupSchemaAndMasterDataInitializer {
 
                 schemaLoader.loadSchemasFromPath(defaultDataRequest, moduleSchemaPath);
                 mdmsBulkLoader.loadAllMdmsData(tenantCode, requestInfo, moduleMdmsPath);
-//                localizationUtil.upsertLocalizationFromFile(defaultDataRequest, moduleLocalizationPath);
-//                workflowConfigLoader.loadWorkflowConfigFromPath(tenantCode, moduleWorkflowPath);
+                localizationUtil.upsertLocalizationFromFile(defaultDataRequest, moduleLocalizationPath);
+                workflowConfigLoader.loadWorkflowConfigFromPath(tenantCode, moduleWorkflowPath);
             }
 
             // ===== LOAD DEV DATA (only if dev.enabled=true) =====

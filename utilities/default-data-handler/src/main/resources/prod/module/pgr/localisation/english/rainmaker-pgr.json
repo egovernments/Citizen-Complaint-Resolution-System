@@ -1,0 +1,7064 @@
+[
+  {
+    "code": "ADMIN_Locality",
+    "message": "Locality",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ANOTHER_USER",
+    "message": "Another User",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ASSIGN",
+    "message": "Assign",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ASSIGNED_TO_ALL",
+    "message": "Assigned to All",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ASSIGNED_TO_ME",
+    "message": "Assigned to Me",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ASSIGN_SUCCESSFULLY",
+    "message": "Assigned Successfully",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "COMMON_BOTTOM_NAVIGATION_COMPLAINTS",
+    "message": "Citizen Complaint Resolution System",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "COMMON_BOTTOM_NAVIGATION_INFORMATION",
+    "message": "Information",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "COMMON_BOTTOM_NAVIGATION_PAYMENTS",
+    "message": "Payments",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "COMMON_FEVERS_DENGUE_MALARIA",
+    "message": "Fevers - Dengue",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "COMMON_MASTERS_DESIGNATION_AC01",
+    "message": "Additional Commissioner",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "COMMON_MASTERS_DESIGNATION_AMO01",
+    "message": "Asst. Medical Officer",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "COMMON_MASTERS_DESIGNATION_CM01",
+    "message": "City manager",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "COMMON_MASTERS_DESIGNATION_CME01",
+    "message": "Chief Municipal Engineer",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "COMMON_MASTERS_DESIGNATION_DC01",
+    "message": "Deputy Commissioner",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "COMMON_MASTERS_DESIGNATION_HDC01",
+    "message": "Higher Division Clerk",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "COMMON_MASTERS_DESIGNATION_HSI01",
+    "message": "Head Sanitary Inspector",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "COMMON_MASTERS_DESIGNATION_MC01",
+    "message": "Municipal Commissioner",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "COMMON_MASTERS_DESIGNATION_SS01",
+    "message": "Sanitory Supervisor",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "COMMON_MASTERS_DESIGNATION_TC01",
+    "message": "Tax Collector",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "COMMON_MASTERS_DESIGNATION_TI01",
+    "message": "Tax Inspector",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "COMMON_REPAIRS_TO_FLYOVERS_BRIDGES_CULVERTS",
+    "message": "Repairs to Flyovers",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "COMMON_UNHYGIENIC_IMPROPER_TRANSFER_OF_MEAT_LIVESTOCK",
+    "message": "Unhygienic",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "COMPLAINTS_COMPLAINANT_CONTACT_NUMBER",
+    "message": "Complainant Phone No.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "COMPLAINTS_COMPLAINANT_NAME",
+    "message": "Complainant Name",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "COMPLAINTS_SUPERVISOR_CONTACT_NUMBER",
+    "message": "Supervisor Contact No.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "COMPLAINTS_SUPERVISOR_NAME",
+    "message": "Supervisor Name",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_COMMON_CLOSE",
+    "message": "CLOSE",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_COMMON_NAME_VALIDMSG",
+    "message": "Please enter a valid Name",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_COMMON_OPEN",
+    "message": "OPEN",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_COMMON_PHONENO_INVALIDMSG",
+    "message": "Invalid Mobile Number",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_COMMON_PHONENO_REGISTREDMSG",
+    "message": "Mobile Number is already Registered",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_COMMON_PHONE_NUMBER",
+    "message": "Phone Number",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_COMMON_PHONE_NUMBER_PLACEHOLDER",
+    "message": "Enter your mobile number",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_COMMON_PICK",
+    "message": "Pick",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_COMMON_PINCODE",
+    "message": "Pincode",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_COMMON_PINCODE_INVALID",
+    "message": "Provide Valid Pin code",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_COMMON_PINCODE_NOT_ENTERED",
+    "message": "Enter Pincode",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_COMMON_PINCODE_NOT_SERVICEABLE",
+    "message": "Sorry we are not providing service in this city",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_COMMON_REQUIRED_ERRMSG",
+    "message": "Required",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_COMMON_SEARCH_COMPLAINT",
+    "message": "Search Complaint",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_COMMON_SKIP_CONTINUE",
+    "message": "Skip and continue",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_COMMON_TAKE_ACTION",
+    "message": "__entermesage_____",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_COMMON_USERNAME_INVALIDMSG",
+    "message": "Please enter a valid user name",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_EMPLOYEE_OTP_CHECK_MESSAGE",
+    "message": "Please check your messages for the OTP & then set a new password.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_LOGIN_CONFIRM_NEW_PASSWORD",
+    "message": "Confirm New Password ",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_LOGIN_CONNFIRM_NEW_PASSWORD_PLACEHOLDER",
+    "message": "Confirm new password ",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_LOGIN_NEW_PASSWORD",
+    "message": "New Password ",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_LOGIN_NEW_PASSWORD_PLACEHOLDER",
+    "message": "Enter your new password",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_LOGIN_NO_ACCOUNT",
+    "message": "Don’t have an account?",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_LOGIN_PASSWORD",
+    "message": "Password",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_LOGIN_PASSWORD_ERRORMSG",
+    "message": "Password is Incorrect",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_LOGIN_PASSWORD_PLACEHOLDER",
+    "message": "Enter your Password",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_LOGIN_USERNAME",
+    "message": "User Name",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_LOGIN_USERNAME_PLACEHOLDER",
+    "message": "Enter your Employee ID",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_LOGOUTPOPUP_CANCEL",
+    "message": "CANCEL",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_LOGOUTPOPUP_CONFIRM",
+    "message": "Are you sure you want to logout?",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_LOGOUTPOPUP_LOGOUT",
+    "message": "LOGOUT",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_LOGOUTPOPUP_NO",
+    "message": "No",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_LOGOUTPOPUP_YES",
+    "message": "Yes",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_OTP_ERRORMSG",
+    "message": "Invalid OTP",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_OTP_GET_STARTED",
+    "message": "GET STARTED",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_OTP_HEADING",
+    "message": "ENTER OTP",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_OTP_NOT_RECEIVE",
+    "message": "Didn’t receive OTP?",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_OTP_OTP",
+    "message": "OTP",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_OTP_PLACEHOLDER",
+    "message": "Enter OTP",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_OTP_RESEND",
+    "message": "RESEND",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_OTP_SENT_MESSAGE",
+    "message": "An OTP has been sent to :",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_POPUP_OK",
+    "message": "OK",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_POPUP_SEND",
+    "message": "SEND",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_REGISTER_HAVE_ACCOUNT",
+    "message": "Have an account?",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_REGISTER_HEADING",
+    "message": "REGISTER",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ACTION_ASSIGN",
+    "message": "Assign Complaint",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ACTION_ASSIGN_TEXT",
+    "message": "Complaint Assigned Successfully",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ACTION_FILEUPLOADED",
+    "message": "File Uploaded",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ACTION_FORWARD",
+    "message": "Forward",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ACTION_NO_FILEUPLOADED",
+    "message": "No file uploaded",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ACTION_REASSIGN",
+    "message": "Re-assign Complaint",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ACTION_REASSIGN_TEXT",
+    "message": "Complaint Reassigned Succesfully",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ACTION_REJECT",
+    "message": "Reject Complaint",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ACTION_REJECT_TEXT",
+    "message": "Complaint Rejected Succesfully",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ACTION_REOPEN",
+    "message": "Re-open",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ACTION_REOPEN_TEXT",
+    "message": "Complaint Reopened Successfully",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ACTION_RESOLVE",
+    "message": "Resolve",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ACTION_RESOLVE_TEXT",
+    "message": "Complaint Resolved Successfully",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ACTION_Re-open",
+    "message": "Re-open",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ACTION_SUPPORTING_DOCUMENTS",
+    "message": "Supporting Documents",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_ADDITIONAL_DETAILS",
+    "message": "Additional Address Information",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_ADDITIONAL_DETAILS_PLACEHOLDER",
+    "message": "Enter WARD and address",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_ADDITIONAL_DETAILS_SUBMIT_COMPLAINT",
+    "message": "Submit Complaint",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_ADDITIONAL_DETAILS_TEXT",
+    "message": "If you think apart from information provided till now additional details are required to resolve complaint, provide it below:",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_ADDRESSINFO",
+    "message": "Address Info:",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_CHANGE_PINCODE_TEXT",
+    "message": "If you know the pincode of the complaint address, provide below. It will help us identify complaint location easily or you can skip and continue",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_CITY_MOHALLA_TEXT",
+    "message": "Choose the locality of the complaint from the list given below.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_COMPLAINT_DETAILS",
+    "message": "Complaint Additional Details",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_COMPLAINT_DETAILS_PLACEHOLDER",
+    "message": "Enter Complaint additional details",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_COMPLAINT_LOCATION",
+    "message": "Complaint's Location",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_COMPLAINT_SUBTYPE",
+    "message": "Complaint Sub-Type ",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_COMPLAINT_SUBTYPE_PLACEHOLDER",
+    "message": "Choose Complaint Sub-Type",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_COMPLAINT_SUB_TYPE",
+    "message": "Complaint Sub-Type",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_COMPLAINT_TYPE",
+    "message": "Complaint Type",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_COMPLAINT_TYPE_PLACEHOLDER",
+    "message": "Select complaint type",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_ERROR_COMPLAINT_SUBTYPE",
+    "message": "Select the complaint sub-type",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_ERROR_COMPLAINT_TYPE",
+    "message": "Select the complaint type",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_ERROR_FAILURE",
+    "message": "Sorry, there is a problem with the service. Try again later.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_ERROR_MESSAGE",
+    "message": "Complaint Not Submitted",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_ERROR_REOPEN_REASON",
+    "message": "Select reason to re-open complaint",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_HOUSE_NO",
+    "message": "House No. and Street Name",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_HOUSE_NO_PLACEHOLDER",
+    "message": "Enter House No. and Street Name",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_LANDMARK",
+    "message": "Landmark",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_LANDMARK_ERROR",
+    "message": "Enter Landmark",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_LANDMARK_PLACEHOLDER",
+    "message": "Enter landmark",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_LOCATION",
+    "message": "Complaint Location",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_LOCATION_ERROR",
+    "message": "Select City and Locality",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_LOCATION_ERRORMSG",
+    "message": "Address doesn’t exist",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_PINCODE",
+    "message": "Do you know the pincode ?",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_PIN_LOCATION",
+    "message": "Pin Complaint location",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_PIN_LOCATION_TEXT",
+    "message": "If you know the pincode of the complaint address, provide below. It will help us identify complaint location easily or you can skip and continue.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_PROVIDE_ADDITIONAL_DETAILS",
+    "message": "Provide Additional Details",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_PROVIDE_COMPLAINT_ADDRESS",
+    "message": "Provide Complaint address",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_PROVIDE_LANDMARK",
+    "message": "Provide Landmark",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_PROVIDE_LANDMARK_TEXT",
+    "message": "Provide the landmark to help us reach the complaint location easily.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_SELECT_GEOLOCATION_HEADER",
+    "message": "Pin Complaint Location",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_SELECT_GEOLOCATION_TEXT",
+    "message": "Click and hold to drop the pin to complaint location. If you are not able to pin the location you can skip the continue for next step.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_UPLOAD_ERROR_MESSAGE",
+    "message": "Upload Image",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_UPLOAD_PHOTO",
+    "message": "Upload complaint photos",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_UPLOAD_PHOTO_TEXT",
+    "message": "Click on the icon below to upload the complaint photos as evidence. You can capture photos directly through your camera or upload from your Gallery. If you do not have complaint photo, you can skip the continue for next step.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADDCOMPLAINT_YOU_RATED",
+    "message": "You Rated ",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_ADD_COMPLAINT_COMPLAINT_SUBMISSION",
+    "message": "Complaint Submission",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_ACCUMULATION_LITTER",
+    "message": "Accumulation of Litter",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_ASSIGN",
+    "message": "Assign",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_ASSIGNED",
+    "message": "Assigned",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_ASSIGNED_TO",
+    "message": "Assigned to ",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_ATTACHMENTS",
+    "message": "Attachments",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_BACK",
+    "message": "Back",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_BLOCKAGE_OF_DRAINS",
+    "message": "Blockage Of Drains",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_BROKEN_FOOTPATHS",
+    "message": "Broken Footpaths",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_CALL_BUTTON",
+    "message": "CALL",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_CANCEL",
+    "message": "Cancel",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_CANCELLED",
+    "message": "Cancelled",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_CHOOSE_FILE",
+    "message": "Choose File",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_CITIZEN_FEEDBACK",
+    "message": "Citizen Feedback",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_CITIZEN_REQUEST_REASSIGN",
+    "message": "Being Re-assigned",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_CLEAR_ALL",
+    "message": "CLEAR ALL",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_CLEAR_SEARCH",
+    "message": "CLEAR SEARCH",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_CLOSED",
+    "message": "Closed",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_CLOSEDAFTERREJECTION",
+    "message": "Closed after rejection",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_CLOSEDAFTERRESOLUTION",
+    "message": "Closed after resolution",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_CLOSED_UCASE",
+    "message": "CLOSED",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_COMMENTS",
+    "message": "Comments",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_COMMENTS_PLACEHOLDER",
+    "message": "Type your comments",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_COMMENTS_PLACEHOLDER2",
+    "message": "Write your comments...",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_COMPLAINT",
+    "message": "Complaint",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_COMPLAINT_ASSIGNED_TO",
+    "message": "Complaint assigned to",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_COMPLAINT_DATE",
+    "message": "ComplaintDate",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_COMPLAINT_FILED",
+    "message": "Complaint filed",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_COMPLAINT_NO",
+    "message": "Complaint No",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_COMPLAINT_PENDINGFORASSINMENT",
+    "message": "Pending for Assignment",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_COMPLAINT_REJECTED",
+    "message": "Rejected",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_COMPLAINT_REOPENED",
+    "message": "Complaint Re-opened",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_COMPLAINT_RESOLVED",
+    "message": "Complaint resolved",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_COMPLAINT_STATUS",
+    "message": "Complaint status",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_COMPLAINT_SUBMITTED",
+    "message": "Complaint Submitted",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_DAY",
+    "message": "day",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_DAYS",
+    "message": "days",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_DAYS_LEFT",
+    "message": "days left",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_DAY_LEFT",
+    "message": "day left",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_EMPLOYEE_COMMENTS",
+    "message": "Comments",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_EMPLOYEE_NAME",
+    "message": "Employee Name",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_ERROR_LOADING_RESULTS",
+    "message": "Error while loading results",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_ERROR_SCREEN_MESSAGE",
+    "message": "The page you are looking for cannot be found",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_FILE_A_COMPLAINT",
+    "message": "File a Complaint",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_FILTER",
+    "message": "Filter",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_GARBAGE_BIN_ABSENT",
+    "message": "Garbage Bin Absent",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_HOME",
+    "message": "Home",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_INBOX",
+    "message": "Inbox",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_LOGOUT",
+    "message": "Logout",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_MOBILE_NO",
+    "message": "Mobile No",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_MOBILE_NO.",
+    "message": "Mobile No",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_NEXT",
+    "message": "Next",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_OPEN",
+    "message": "Open",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_OPENED",
+    "message": "Opened",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_OPEN_UCASE",
+    "message": "OPEN",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_OVERDUE_BY",
+    "message": "Overdue by",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_OVERFLOWING_BINS",
+    "message": "Overflowing Garbage Bins",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_PATHOLES",
+    "message": "Patholes",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_PENDINGATLME",
+    "message": "Pending at LME",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_PENDINGATSUPERVISOR",
+    "message": "Pending At Supervisor",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_PENDINGFORASSIGNMENT",
+    "message": "Pending for assignment",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_PENDINGFORREASSIGNMENT",
+    "message": "Pending for reassignment",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_PGR_STATE_CLOSEDAFTERREJECTION",
+    "message": "Closed after rejection",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_PGR_STATE_CLOSEDAFTERRESOLUTION",
+    "message": "Closed after resolution",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_PGR_STATE_PENDINGATLME",
+    "message": "Pending at last mile employee",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_PGR_STATE_PENDINGFORASSIGNMENT",
+    "message": "Pending for assignment",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_PGR_STATE_PENDINGFORREASSIGNMENT",
+    "message": "Pending for re-assignment",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_PGR_STATE_REJECTED",
+    "message": "Rejected",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_PGR_STATE_RESOLVED",
+    "message": "Resolved",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_PINCODE_NOT_SERVICABLE",
+    "message": "Sorry we are not providing service in this city",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_RATING_SUBMIT_TEXT",
+    "message": "By making your voice heard, you help us improve mSeva.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_RE-ASSIGN REQUESTED",
+    "message": "Re-assign Requested",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_REASSIGNED",
+    "message": "Re-assigned",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_REASSIGNED_TO",
+    "message": "Re-Assigned to ",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_REJECT",
+    "message": "Reject",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_REJECTED",
+    "message": "Rejected",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_REJECTED_UCASE",
+    "message": "REJECTED",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_REOPENED",
+    "message": "Re-opened",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_REQUIRED_FIELDS_MISSING",
+    "message": "Required fields missing",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_RESOLVE",
+    "message": "Resolve",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_RESOLVED",
+    "message": "Resolved",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_RESOLVEDBYSUPERVISOR",
+    "message": "Resolved By Supervisor",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_RESOLVED_UCASE",
+    "message": "RESOLVED",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_RE_ASSIGNED",
+    "message": "Re-Assigned",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_SEARCH_BY",
+    "message": "SEARCH BY",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_SELECT_EMPLOYEE",
+    "message": "Select Employee",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_SKIP",
+    "message": "Skip and Continue",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_STATUS_ASSIGNED",
+    "message": "Assigned",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_STATUS_BEING_REASSIGNED",
+    "message": "Complaint is being Re-Assigned",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_STATUS_CLOSED",
+    "message": "Your Complaint has been Closed",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_STATUS_REASSIGNED",
+    "message": "Your Complaint has been Re-assigned",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_STATUS_REASSIGN_REQUESTED",
+    "message": "Your Complaint is being Re-Assigned",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_STATUS_REJECTED",
+    "message": "Your Complaint has been Rejected",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_STATUS_REOPENED",
+    "message": "Your Complaint has been Re-opened",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_STATUS_RESOLVED",
+    "message": "Your Complaint has been Resolved",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_STATUS_SUBMITTED",
+    "message": "Your Complaint has been Filed",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_STATUS_UNASSIGNED",
+    "message": "Unassigned",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_SUBMIT",
+    "message": "SUBMIT",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_SUBMITTED",
+    "message": "Filed",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_SWEEPERS_ABSENT",
+    "message": "Absenteeism of Sweepers",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_THANK_YOU",
+    "message": "Thank You",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_TRACK_COMPLAINT_TEXT",
+    "message": "The notification along with complaint number is sent to your registered mobile number. You can track the complaint status using mobile or web app.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMMON_UPLOAD_PHOTOS",
+    "message": "UPLOAD PHOTOS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINTDETAILS_HOUSE",
+    "message": "House/Street No",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINTDETAILS_LANDMARK",
+    "message": "Landmark",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINTDETAILS_MOHALLA",
+    "message": "Mohalla/City",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_ADDTIONAL_DETAILS",
+    "message": "Additional Details",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_COMMENT_SUCCESS",
+    "message": "Comment Successful",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_COMPLAINT_ADDTIONAL_DETAILS",
+    "message": "Additional Details",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_ACCUMULATION_LITTER",
+    "message": "Accumulation of Litter",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS",
+    "message": "Additional Details",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS_DESCRIPTION",
+    "message": "Description",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_ADDRESS_1_DETAILS",
+    "message": "Address",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_ADDRESS_2_DETAILS",
+    "message": "Address Line 1",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_ADDRESS_DETAILS",
+    "message": "Address Details",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_APPLICATION_STATUS",
+    "message": "Application Status",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_AREA",
+    "message": "Locality",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_ASSIGN",
+    "message": "Assign",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_ASSIGNED",
+    "message": "Assigned",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_ASSIGNED_TO",
+    "message": "Assigned to ",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_ATTACHMENTS",
+    "message": "Attachments",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_BACK",
+    "message": "Back",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_BEING_REASSIGNED",
+    "message": "Complaint is being re-assigned by",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_BLOCKAGE_OF_DRAINS",
+    "message": "Blockage Of Drains",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_BROKEN_FOOTPATHS",
+    "message": "Broken Footpaths",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_BUILDING_NAME",
+    "message": "Build Name",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_CALL_BUTTON",
+    "message": "CALL",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_CANCEL",
+    "message": "Cancel",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_CANCELLED",
+    "message": "Cancelled",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_CHOOSE_FILE",
+    "message": "Choose File",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_CITIZEN_FEEDBACK",
+    "message": "Citizen Feedback",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_CITIZEN_REQUEST_REASSIGN",
+    "message": "Being Re-assigned",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_CITY",
+    "message": "City",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_CLEAR_ALL",
+    "message": "CLEAR ALL",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_CLEAR_SEARCH",
+    "message": "CLEAR SEARCH",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_CLOSED",
+    "message": "Closed",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_CLOSEDAFTERREJECTION",
+    "message": "Closed after rejection",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_CLOSEDAFTERRESOLUTION",
+    "message": "Closed after resolution",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_CLOSED_UCASE",
+    "message": "CLOSED",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_COMMENTS",
+    "message": "Too much garbage lying on the road, its very dificult to cross the area.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_COMMENTS_PLACEHOLDER",
+    "message": "Type your comments",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_COMMENTS_PLACEHOLDER2",
+    "message": "Write your comments...",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_COMPLAINT",
+    "message": "Complaint",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_COMPLAINT_ASSIGNED_TO",
+    "message": "Complaint assigned to",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_COMPLAINT_DATE",
+    "message": "Complaint Date",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_COMPLAINT_DESCRIPTION",
+    "message": "Complaint Description",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_COMPLAINT_DETAILS",
+    "message": "Complaint Details",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_COMPLAINT_FILED",
+    "message": "Complaint Filed",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_COMPLAINT_NO",
+    "message": "Complaint No.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_COMPLAINT_PENDINGFORASSINMENT",
+    "message": "Pending for Assignment",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_COMPLAINT_REJECTED",
+    "message": "Rejected",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_COMPLAINT_REOPENED",
+    "message": "Complaint Re-opened",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_COMPLAINT_RESOLVED",
+    "message": "Complaint Resolved",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_COMPLAINT_STATUS",
+    "message": "Complaint status",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_COMPLAINT_SUBMITTED",
+    "message": "Complaint Submitted",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_COMPLAINT_SUBTYPE",
+    "message": "Complaint Subtype",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_COMPLAINT_TIMELINE",
+    "message": "Complaint Timeline",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_COMPLAINT_TYPE",
+    "message": "Complaint Type",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_CURRENT_STATUS",
+    "message": "Current Status",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_DAY",
+    "message": "day",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_DAYS",
+    "message": "days",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_DAYS_LEFT",
+    "message": "days left",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_DAY_LEFT",
+    "message": "day left",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_DOOR",
+    "message": "Door",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_EMPLOYEE_COMMENTS",
+    "message": "Comments",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_EMPLOYEE_NAME",
+    "message": "Employee Name",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_ERROR_LOADING_RESULTS",
+    "message": "Error while loading results",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_ERROR_SCREEN_MESSAGE",
+    "message": "The page you are looking for cannot be found",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_FILE_A_COMPLAINT",
+    "message": "File a Complaint",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_FILTER",
+    "message": "Filter",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_GARBAGE_BIN_ABSENT",
+    "message": "Garbage Bin Absent",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_GEOLOCATION",
+    "message": "Geolocation",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_HOME",
+    "message": "Home",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_INBOX",
+    "message": "Inbox",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_LANDMARK",
+    "message": "Landmark",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_LOCALITY",
+    "message": "Locality",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_LOCATION",
+    "message": "Enter Complaint Location",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_LOGOUT",
+    "message": "Logout",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_MOBILE_NO",
+    "message": "Mobile No",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_MOBILE_NO.",
+    "message": "Mobile No",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_NEXT",
+    "message": "Next",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_OPEN",
+    "message": "Open",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_OPENED",
+    "message": "Opened",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_OPEN_UCASE",
+    "message": "OPEN",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_OVERDUE_BY",
+    "message": "Overdue by",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_OVERFLOWING_BINS",
+    "message": "Overflowing Garbage Bins",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_PATHOLES",
+    "message": "Patholes",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_PENDINGATLME",
+    "message": "Pending at LME",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_PENDINGATSUPERVISOR",
+    "message": "Pending At Supervisor",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_PENDINGFORASSIGNMENT",
+    "message": "Pending for assignment",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_PENDINGFORREASSIGNMENT",
+    "message": "Pending for reassignment",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_PENDING_STATUS",
+    "message": "Complaint pending at GRO",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_PINCODE_NOT_SERVICABLE",
+    "message": "Sorry we are not providing service in this city",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_PLOT_NO",
+    "message": "Plot No.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_RATE",
+    "message": "RATE",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_RATING_SUBMIT_TEXT",
+    "message": "By making your voice heard, you help us improve mSeva.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_RE-ASSIGN REQUESTED",
+    "message": "Re-assign Requested",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_REASSIGNED",
+    "message": "Re-assigned",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_REASSIGNED_TO",
+    "message": "Re-Assigned to ",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_REASSIGN_REQUESTED",
+    "message": "Re-Assign requested",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_REJECT",
+    "message": "Reject",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_REJECTED",
+    "message": "Rejected",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_REJECTED_UCASE",
+    "message": "REJECTED",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_REOPEN",
+    "message": "RE-OPEN",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_REOPENED",
+    "message": "Re-opened",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_RESOLUTION_EVIDENCE",
+    "message": "Resolution Evidence",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_RESOLVE",
+    "message": "Resolve",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_RESOLVED",
+    "message": "Resolved",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_RESOLVEDBYSUPERVISOR",
+    "message": "Resolved By Supervisor",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_RESOLVED_UCASE",
+    "message": "RESOLVED",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_RE_ASSIGNED",
+    "message": "Re-Assigned",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_SEARCH_BY",
+    "message": "SEARCH BY",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_SKIP",
+    "message": "Skip and Continue",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_STATUS_ASSIGNED",
+    "message": "Assigned",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_STATUS_BEING_REASSIGNED",
+    "message": "Complaint is being Re-Assigned",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_STATUS_CLOSED",
+    "message": "Your Complaint has been Closed",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_STATUS_REASSIGNED",
+    "message": "Your Complaint has been Re-assigned",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_STATUS_REASSIGN_REQUESTED",
+    "message": "Your Complaint is being Re-Assigned",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_STATUS_REJECTED",
+    "message": "Your Complaint has been Rejected",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_STATUS_REOPENED",
+    "message": "Your Complaint has been Re-opened",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_STATUS_RESOLVED",
+    "message": "Your Complaint has been Resolved",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_STATUS_SUBMITTED",
+    "message": "Your Complaint has been Filed",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_STATUS_UNASSIGNED",
+    "message": "Unassigned",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_STREET",
+    "message": "Street",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_SUBMISSION_DATE",
+    "message": "Filed Date",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_SUBMIT",
+    "message": "SUBMIT",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_SUBMITTED",
+    "message": "Filed",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_SUB_COMPLAINT_TYPE",
+    "message": "Complaint Sub-Type",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_SWEEPERS_ABSENT",
+    "message": "Absenteeism of Sweepers",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_THANK_YOU",
+    "message": "Thank You",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_TRACK_COMPLAINT_TEXT",
+    "message": "The notification along with complaint number is sent to your registered mobile number. You can track the complaint status using mobile or web app.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_DETAILS_UPLOAD_PHOTOS",
+    "message": "UPLOAD PHOTOS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_FILED_DATE",
+    "message": "Filed Date",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_LANDMARK__DETAILS",
+    "message": "Landmark",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_LOCALITY",
+    "message": "Locality",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_LOCATION_DETAILS",
+    "message": "Location Details",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_NO_ERROR_TEXT",
+    "message": "Complaint No should be minimum 6 digits",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_PIN_COMPLAINT_LOCATION_TEXT",
+    "message": "Click and hold to drop the pin to complaint location. If you are not able to pin the location you can skip the continue for next step.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_POSTALCODE__DETAILS",
+    "message": "Postal Code",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_RATE_HELP_TEXT",
+    "message": "How would you rate your experience with us?",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_RATE_TEXT",
+    "message": "How would you rate your experience with us?",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_SELECT_CITY",
+    "message": "City",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_SUBMITTED_COMPLAINT_NO",
+    "message": "Complaint No.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_SUBMITTED_LABEL1",
+    "message": "Complaint Registered Successfully",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_SUBMITTED_LABEL2",
+    "message": "You can track the status of your complaint on this app anytime!",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_SUBMITTED_THANKYOU",
+    "message": "Thank You!",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_SUBTYPE_TEXT",
+    "message": "The complaint type you have chosen has following complaint sub-types. Select the option of your choice from the list given below.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_TYPE_DRAINS",
+    "message": "Drains",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_TYPE_GARBAGE",
+    "message": "Garbage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_TYPE_OTHERS",
+    "message": "Others",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_TYPE_PUBLIC_HEALTH_HYGIENE",
+    "message": "Public Health & Hygiene",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_TYPE_PUBLIC_LAND_PROPERTY",
+    "message": "Public Land & Property",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_TYPE_SEARCH_PLACEHOLDER",
+    "message": "Search",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_TYPE_STREET_LIGHTS",
+    "message": "Street Lights",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_TYPE_TEXT",
+    "message": "Select the option related to your complaint from the list given below. If the complaint type you are looking for is not listed select others.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_COMPLAINT_TYPE_WATER",
+    "message": "Water",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_CONTACTUS_OPEN_MAP",
+    "message": "Open Map",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_CONTACTUS_WEEKDAY",
+    "message": "Mon – Fri",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_CONTACTUS_WEEKEND",
+    "message": "Sat",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_CREATECOMPLAINT_MOHALLA",
+    "message": "Locality",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_CREATECOMPLAINT_MOHALLA_PLACEHOLDER",
+    "message": "Choose Locality",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_DAYS_LEFT",
+    "message": "{0} days left",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_DAY_LEFT",
+    "message": "{0} day left",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_FEEDBACK_ENTER_RATING_ERROR",
+    "message": "Please rate your experience between 1-5 stars",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_FEEDBACK_OTHERS",
+    "message": "Others",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_FEEDBACK_QUALITY_OF_WORK",
+    "message": "Quality of Work",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_FEEDBACK_RATE_HELP_TEXT",
+    "message": "Help Us Help You",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_FEEDBACK_RATE_TEXT",
+    "message": "How would you rate your experience with us?",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_FEEDBACK_RESOLUTION_TIME",
+    "message": "Resolution Time",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_FEEDBACK_SERVICES",
+    "message": "Services",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_FEEDBACK_SUCCESS",
+    "message": "Thank You for your feedback!",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_FEEDBACK_WHAT_WAS_GOOD",
+    "message": "What was good ?",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_FILE_APPLICATION_PROPERTY_LOCATION_PROVIDE_LANDMARK_TITLE_TEXT",
+    "message": "Provide the landmark to help us reach the complaint location easily.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_HEADER_ADD_COMPLAINT",
+    "message": "Add Complaint",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_HEADER_ALL_COMPLAINTS",
+    "message": "All Complaints",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_HEADER_ASSIGN_COMPLAINT",
+    "message": "Assign Complaint",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_HEADER_COMPLAINT_SUBMITTED",
+    "message": "Complaint Filed",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_HEADER_COMPLAINT_SUMMARY",
+    "message": "Complaint Summary",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_HEADER_FEEDBACK",
+    "message": "Feedback",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_HEADER_FEEDBACK_ACKNOWLEDGEMENT",
+    "message": "Feddback Submitted",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_HEADER_REASSIGN_COMPLAINT",
+    "message": "Re-Assign Complaint",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_HEADER_REOPEN_COMPLAINT",
+    "message": "Reopen Complaint",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_HEADER_REQUEST_REASSIGN",
+    "message": "Request Re-Assign",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_HEADER_TRACK_LOCATION",
+    "message": "Track Location",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_HOME_FILE_COMPLAINT",
+    "message": "File Complaint",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_HOME_HEADER_CONTACT_US",
+    "message": "Contact Us",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_HOME_HEADER_HOME",
+    "message": "Home",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_HOME_HEADER_HOW_IT_WORKS",
+    "message": "How it Works",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_HOME_HEADER_LANGUAGE",
+    "message": "Language",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_HOME_HEADER_PROFILE",
+    "message": "Edit Profile",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_HOME_HOMEHEADER",
+    "message": "Home",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_HOME_MY_COMPLAINTS",
+    "message": "My Complaints",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_HOME_MY_COMPLAINTS_CARD_LABEL",
+    "message": "My Complaints",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_HOME_STATUS_PREFIX",
+    "message": "Your complaint has been",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_HOME_STATUS_REASSIGN_PREFIX",
+    "message": "Your complaint is",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_HOME_UPDATES",
+    "message": "Filed Complaints",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_HOWITWORKS_CONNECT_OFFICER",
+    "message": "Connect to Concerned Officer",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_HOWITWORKS_DESCRIPTION",
+    "message": "We have made connecting with us easier than ever before. Once you raise the complaint, we will assign it to the responsible officer. You can track the status of your complaint on our web-site under “ My Complaints “ till your complaint is resolved.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_HOWITWORKS_RAISE_COMPLAINT",
+    "message": "Raise a Complaint",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_HOWITWORKS_TRACK_STATUS",
+    "message": "Track Status",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_LANDING_PAGE_COMPLAINTS_DESCRIPTION",
+    "message": "mSeva Complaints offers an easy to use interface which enables you to lodge civic works related complaints. It also lets you track the status of your complaint and facilitates direct interaction with your municipality till its resolution.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_LANDING_PAGE_PROPERTY_TAX_DESCRIPTION",
+    "message": "Assess, pay and track your Property Taxes online with mSeva Property Tax.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_LANDING_PAGE_TRADE_LICENSE_DESCRIPTION",
+    "message": "A licensed trade will always enjoy a greater goodwill and attract more customers and investors than unregistered entities. Help your city to plan and support your business. Apply for your Trade License Now!",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_LANDING_PAGE_WELCOME_TEXT",
+    "message": "Welcome",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_MANDATORY_COMMENTS",
+    "message": "Comments are mandatory",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_MAP_MOVE_PIN",
+    "message": "Move pin to adjust",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_MAP_PICK",
+    "message": "Pick",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_MYCOMPLAINTS_CLOSED",
+    "message": "Complaint Resolved. Please rate",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_MYCOMPLAINTS_COMPLAINT_HEADER",
+    "message": "ComplaintHeader",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_MYCOMPLAINTS_COMPLAINT_PREFIX",
+    "message": "Complaint has been",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_MYCOMPLAINTS_ESCALATED_TO",
+    "message": "Escalated To:",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_MYCOMPLAINTS_NO_COMPLAINTS",
+    "message": "You haven't logged any complaints yet. \nStart with one, make a change.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_MYCOMPLAINTS_NO_COMPLAINTS_EMPLOYEE",
+    "message": "No Records Found",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_MYCOMPLAINTS_RATE",
+    "message": ". Please rate",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_MYCOMPLAINTS_REASSIGN_MESSAGE1",
+    "message": "requested for re-assign",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_MYCOMPLAINTS_REASSIGN_MESSAGE2",
+    "message": "You have",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_MYCOMPLAINTS_REJECTED",
+    "message": "Complaint has been Rejected",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_MYCOMPLAINTS_RE_ASSIGNED",
+    "message": "Complaint Re-assigned to",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_MYCOMPLAINTS_TO",
+    "message": "to",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_MYCOMPLAINTS_TRACK",
+    "message": "TRACK",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_OVERDUE_BY_DAY",
+    "message": "Overdue by {0} day",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_OVERDUE_BY_DAYS",
+    "message": "Overdue by {0} days",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_OVERDUE_BY_DAY_TESTING",
+    "message": "Overdue by {0} and {1} week",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_PGR_COMPLAINT_DETAILS",
+    "message": "Complaint Details",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_PGR_COMPLAINT_NUMBER",
+    "message": "Complaint No.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_PGR_CREATE_COMPLAINT",
+    "message": "Create Complaint",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_PGR_LOCALITY",
+    "message": "Locality",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_PGR_REPORTS_HEADER",
+    "message": "Citizen Complaint Resolution System Reports",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_PGR_RESPONSE",
+    "message": "Response",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_PGR_SEND_COMMENT",
+    "message": "Send",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_PROFILE_EMAIL",
+    "message": "Email Id",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_PROFILE_EMAIL_ERRORMSG",
+    "message": "Invalid Email Id",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_PROFILE_EMAIL_PLACEHOLDER",
+    "message": "Enter Your Email Id",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_PROFILE_SAVE",
+    "message": "Save",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_REJECT_COMPLAINT",
+    "message": "Employee Name",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_REOPEN_COMPLAINT",
+    "message": "Choose Reason to Re-open the Complaint",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_REOPEN_COMPLAINT_WHY",
+    "message": "Why do you want to Re-Open your Complaint?",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_REOPEN_OPTION_FOUR",
+    "message": "No permanent solution",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_REOPEN_OPTION_ONE",
+    "message": "No work was done",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_REOPEN_OPTION_THREE",
+    "message": "Employee did not turn up",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_REOPEN_OPTION_TWO",
+    "message": "Only partial work was done",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_REOPEN_SUCCESS_MESSAGE",
+    "message": "Your complaint has been Re-opened",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_SELECT_CITY_AMRITSAR",
+    "message": "Amritsar",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_SELECT_CITY_BHATINDA",
+    "message": "Bhatinda",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_SELECT_CITY_CHANDIGARH",
+    "message": "Chandigarh",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_SELECT_CITY_CHOOSE_CITY",
+    "message": "Choose City",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_SELECT_CITY_FARIDKOT",
+    "message": "Faridkot",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_SELECT_CITY_JALANDHAR",
+    "message": "Jalandhar",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_SELECT_CITY_LUDHIYAA",
+    "message": "Ludhiana",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_SELECT_CITY_MOHALI",
+    "message": "Mohali",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_SORT_OPTION_ONE",
+    "message": "Complaint Date - Old to New",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_SORT_OPTION_THREE",
+    "message": "Days Remaining to SLA",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_SORT_OPTION_TWO",
+    "message": "Complaint Date - New to old",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CS_UPLOAD_RESTRICTIONS",
+    "message": "**Upload restrictions",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "DASHBOARD_CITIZEN_SERVICES_LABEL",
+    "message": "Citizen Services",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "DASHBOARD_TITLE_PGR",
+    "message": "Dashboard",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "DASHBOARD_WHATS_NEW_LABEL",
+    "message": "Whats New",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "DEPARTMENT_DEPT_1",
+    "message": "Street Lights",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "DEPARTMENT_DEPT_3",
+    "message": "Garbage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "DEPT_1",
+    "message": "Street Lights",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "DEPT_3",
+    "message": "Garbage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "EMPLOYEE.ASSIGNMENT.TITLE",
+    "message": "ASSIGNMENT DETAILS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "EMPLOYEE.EMPLOYEE.TITLE",
+    "message": "EMPLOYEE DETAILS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "EMPLOYEE.JURISDICTION.TITLE",
+    "message": "JURISDICTION LIST",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "EMPLOYEE.OTHER.TITLE",
+    "message": "OTHER DETAILS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "EMPLOYEE.SERVICE.TITLE",
+    "message": "SERVICE SECTION",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ERR_COMPLAINT_NUMBER_SEARCH",
+    "message": "Enter at least last 6 digit of complaint No",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_ALL_COMPLAINTS_ASSIGNED_TAB_LABEL",
+    "message": "ASSIGNED",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_ALL_COMPLAINTS_ASSIGNED_TO",
+    "message": "Assigned to:",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_ALL_COMPLAINTS_HEADER",
+    "message": "All Complaints",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_ALL_COMPLAINTS_SUBMITTED_BY",
+    "message": "Submitted By :",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_ALL_COMPLAINTS_UNASSIGNED_TAB_LABEL",
+    "message": "UNASSIGNED",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_ASSIGN_STATUS_ASSIGN",
+    "message": "Choose Employee to assign complaint to from the list",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_ASSIGN_STATUS_REASSIGN",
+    "message": "Choose Employee to Re-assign complaint to from the list",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_ASSIGN_TO_EMPLOYEE_HEADER",
+    "message": "Assign to Employee",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_CLOSED_COMPLAINTS_HEADER",
+    "message": "Closed Complaints",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_COMMON_ASSIGN",
+    "message": "ASSIGN",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_COMMON_CLEAR_SEARCH",
+    "message": "Clear Search",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_COMMON_FILED_BY",
+    "message": "Filed By",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_COMMON_FILED_VIA_MOBILE",
+    "message": "Filed Via Mobile App",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_COMMON_FILED_VIA_WEB",
+    "message": "Filed Via Web",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_COMMON_FILED_VIA_WHATSAPP",
+    "message": "Filed via Whatsapp",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_COMMON_FILTER",
+    "message": "Filter By",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_COMMON_FILTER_BY",
+    "message": "Filter By",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_COMMON_INBOX",
+    "message": "Inbox",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_COMMON_REASSIGN",
+    "message": "RE-ASSIGN",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_COMMON_SEARCH",
+    "message": "Search",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_COMMON_SEARCH_COMPLAINT",
+    "message": "Search Complaint",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_COMMON_SEARCH_EMPLOYEE",
+    "message": "Search Employee",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_COMMON_TRACK_COMPLAINT_TEXT",
+    "message": "The notification along with complaint number is sent to your applicant’s mobile number. Applicant can track the complaint status using mobile or web app.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_COMPLAINTS_COUNT_RATIO_LABEL",
+    "message": "Showing {0} of {1} complaints",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_COMPLAINT_ASSIGNED_HEADER",
+    "message": "Complaint Assigned",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_COMPLAINT_DETAILS_ASSIGNED_BY",
+    "message": "Assigned By",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_COMPLAINT_DETAILS_REASSIGNED_BY",
+    "message": "Re-Assigned By",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_COMPLAINT_FILED_BY_CSR",
+    "message": "Complaint Filed at Citizen Service Desk",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_COMPLAINT_REASSIGNED_HEADER",
+    "message": "Complaint Re-Assigned",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_COMPLAINT_REJECTED_HEADER",
+    "message": "Complaint Rejected",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_COMPLAINT_REJECT_SUCCESS_MESSAGE",
+    "message": "You have Rejected this complaint.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_COMPLAINT_RESOLVED_SUCCESS_MESSAGE",
+    "message": "You have marked the complaint as",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_COMPLAINT_SUCCESS_LASTLABEL",
+    "message": "Please share the complaint no. with the citizen",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_COMPLAINT_SUMMARY_MAP",
+    "message": "MAP",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_CREATECOMPLAINT_ADDITIONAL_DETAILS",
+    "message": "Additional Complaint Details",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_CREATECOMPLAINT_ADDITIONAL_DETAILS_PLACEHOLDER",
+    "message": "Add complaint description",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_CREATECOMPLAINT_ADDRESS",
+    "message": "Address",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_CREATECOMPLAINT_ADDRESS_PLACEHOLDER",
+    "message": "Enter complaint address",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_CREATECOMPLAINT_COMPLAINT_NAME",
+    "message": "Citizen Name",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_CREATECOMPLAINT_COMPLAINT_NAME_PLACEHOLDER",
+    "message": "Enter citizen name",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_CREATECOMPLAINT_FOR",
+    "message": "Complaint For",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_CREATECOMPLAINT_MOBILE_NUMBER",
+    "message": "Citizen Mobile No.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_CREATECOMPLAINT_MOBILE_NUMBER_PLACEHOLDER",
+    "message": "Enter citizen mobile no.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_CREATECOMPLAINT_MOHALLA",
+    "message": "Mohalla",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_CREATECOMPLAINT_MOHALLA_PLACEHOLDER",
+    "message": "Select your Mohalla",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_CREATECOMPLAINT_NEW_COMPLAINT",
+    "message": "New Complaint",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_CREATECOMPLAINT_PROVIDE_COMPLAINANT_DETAILS",
+    "message": "Complainant Details",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_CREATECOMPLAINT_SELECT_PLACEHOLDER",
+    "message": "Select",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_CREATE_COMPLAINT",
+    "message": "Create Complaint",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_DIALOG_SORT_BY",
+    "message": "Sort By",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_EMPLOYEE_DIRECTORY_HEADER",
+    "message": "Employee Directory",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_MYCOMPLAINTS_CLEAR_SEARCH_BUTTON",
+    "message": "CLEAR SEARCH",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_MYCOMPLAINTS_COMPLAINT_NO",
+    "message": "Enter last 6 digits of Complaint No",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_MYCOMPLAINTS_NO_ASSIGNED_COMPLAINTS",
+    "message": "No assigned complaints",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_MYCOMPLAINTS_NO_COMPLAINTS_ASSIGNED",
+    "message": "No complaints to show",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_MYCOMPLAINTS_NO_COMPLAINTS_TO_ASSIGN",
+    "message": "No complaints to Assign",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_MYCOMPLAINTS_SEARCH_BUTTON",
+    "message": "SEARCH",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_NO_SEARCH_RESULTS",
+    "message": "No search results found",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_OPEN_COMPLAINTS_HEADER",
+    "message": "Open Complaints",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_PGR_FILTER_STATUS",
+    "message": "Status",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_PGR_HEADER_COMPLAINT",
+    "message": "Citizen Complaint Resolution System",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_PGR_INBOX",
+    "message": "Inbox",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_PGR_NEW_COMPLAINT",
+    "message": "New Complaint",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_REASON_TO_REJECT_HEADER",
+    "message": "Reason to Reject",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_REASSIGN_OPTION_FOUR",
+    "message": "Other",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_REASSIGN_OPTION_ONE",
+    "message": "Not a valid complaint",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_REASSIGN_OPTION_THREE",
+    "message": "Absent or on leave",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_REASSIGN_OPTION_TWO",
+    "message": "Not my responsibility",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_REASSIGN_REQUEST_QUESTION",
+    "message": "Why do you want this complaint to be Re-Assigned?",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_REASSIGN_REQUEST_SUCCESS_MESSAGE",
+    "message": "Your Re-Assign request has been sent.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_REASSIGN_TO_EMPLOYEE_HEADER",
+    "message": "Re-Assign to Employee",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_REJECT_BUTTON",
+    "message": "REJECT",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_REJECT_COMPLAINT_QUESTION",
+    "message": "Why do you want to Reject this Complaint?",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_REJECT_OPTION_FOUR",
+    "message": "Other",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_REJECT_OPTION_THREE",
+    "message": "Operation already underway",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_REJECT_OPTION_TWO",
+    "message": "Out of operational scope",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_REQUEST_REQUEST_RE_ASSIGN",
+    "message": "REQUEST RE-ASSIGN",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_RESOLVE_MARK_RESOLVED",
+    "message": "MARK RESOLVED",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_SEARCH_BOTTON",
+    "message": "SEARCH",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_SEARCH_BUTTON",
+    "message": "SEARCH",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_SORT_BOTTON",
+    "message": "SORT",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ES_SORT_BUTTON",
+    "message": "SORT",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "FAILED_TO_UPDATE_COMPLAINT",
+    "message": "Failed to update the complaint, please try again later.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "FILTER_BY",
+    "message": "FILTER BY",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "HR_COMMON_TABLE_COL_DEPT",
+    "message": "Department",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "HR_SUMMARY_DEPT_TEST_DEATILS_SUBHEADER",
+    "message": "Department Test Details",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "HR_SUMMARY_EDUCATION_DEATILS_SUBHEADER",
+    "message": "Education Details",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "HR_SUMMARY_PERSONAL_DEATILS_SUBHEADER",
+    "message": "Personal Details",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "HR_SUMMARY_PROFESSIONAL_DEATILS_SUBHEADER",
+    "message": "Professional Details",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "MYSELF",
+    "message": "Myself",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "NO_RESULTS_FOUND",
+    "message": "No Results Found",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_ACTION_ASSIGN",
+    "message": "Assign Complaint",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_ACTION_REASSIGN",
+    "message": "Re-Assign Complaint",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_ACTION_REJECT",
+    "message": "Reject Complaint",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_ACTION_REOPEN",
+    "message": "Reopen Complaint",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_ACTION_RESOLVE",
+    "message": "Resolve Complaint",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_APPLY_PENDINGFORASSIGNMENT_SMS_MESSAGE",
+    "message": "Dear Citizen, Your complaint for {complaint_type} has been submitted with ID {id} on {date}. You can track your complaint status on the web portal.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_ASSIGN_CITIZEN_PENDINGATLME_SMS_MESSAGE",
+    "message": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been assigned to {emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_ASSIGN_EMPLOYEE_PENDINGATLME_SMS_MESSAGE",
+    "message": "Shri {emp_name}, Complaint for {complaint_type} with ID {id} has been assigned to you. Please take appropriate action. {ao_designation} - {ulb}.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_CITIZEN_APPLY_PENDINGFORASSIGNMENT_SMS_MESSAGE",
+    "message": "Dear Citizen, Your complaint for {complaint_type} has been submitted with ID {id} on {date}. You can track your complaint status on the web portal.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_CITIZEN_ASSIGN_PENDINGATLME_SMS_MESSAGE",
+    "message": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been assigned to {emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_CITIZEN_REASSIGN_PENDINGATLME_SMS_MESSAGE",
+    "message": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been re-assigned to {emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal. \n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_CITIZEN_REASSIGN_PENDINGFORREASSIGNMENT_SMS_MESSAGE",
+    "message": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been re-assigned to {emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_CITIZEN_REJECT_REJECTED_SMS_MESSAGE",
+    "message": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been rejected. Reason for Rejection: {additional_comments} If you wish to re-open the complaint, you can visit the web portal.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_CITIZEN_REOPEN_PENDINGFORASSIGNMENT_SMS_MESSAGE",
+    "message": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been Re-opened as per your request. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_CITIZEN_RESOLVE_RESOLVED_SMS_MESSAGE",
+    "message": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been resolved by {emp_name}. If you are not satisfied with service you can RE-OPEN complaint through web portal or by calling your nearest municipal office.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_CLOSE_EMPLOYEE_CLOSEDAFTERRESOLUTION_SMS_MESSAGE",
+    "message": "Shri {emp_name}, Complaint for {complaint_type} with ID {id} has received {rating}/5 feedback from the citizen. Thank you for your service.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_DEFAULT_CITIZEN_SMS_MESSAGE",
+    "message": "Your current complaint status is {status}. You can track your complaint status on the mSeva app or your local government web portal.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_DEFAULT_SMS_MESSAGE",
+    "message": "Your complaint has been {status}. You can track your complaint status on the mSeva app or your local government web portal.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_EMPLOYEE_ASSIGN_PENDINGATLME_SMS_MESSAGE",
+    "message": "Shri {emp_name}, Complaint for '{complaint_type}' with ID {id} has been assigned to you. Please take appropriate action. {ao_designation} - {ulb}.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_EMPLOYEE_RATE_CLOSEDAFTERREJECTION_SMS_MESSAGE",
+    "message": "Shri {emp_name}, Complaint for {complaint_type} with ID {id} has received {rating}/5 feedback from the citizen. Thank you for your service.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_EMPLOYEE_RATE_CLOSEDAFTERRESOLUTION_SMS_MESSAGE",
+    "message": "Shri {emp_name}, Complaint for {complaint_type} with ID {id} has received {rating}/5 feedback from the citizen. Thank you for your service.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_EMPLOYEE_REASSIGN_PENDINGATLME_SMS_MESSAGE",
+    "message": "Shri {emp_name}, Complaint for '{complaint_type}' with ID {id} has been re-assigned as per your request. {ao_designation} - {ulb} \n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_EMPLOYEE_REASSIGN_PENDINGFORREASSIGNMENT_SMS_MESSAGE",
+    "message": "Shri {emp_name}, Complaint for {complaint_type} with ID {id} has been re-assigned as per your request. {ao_designation} - {ulb}.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_EMPLOYEE_REOPEN_PENDINGFORASSIGNMENT_SMS_MESSAGE",
+    "message": "Shri {emp_name}, Complaint for {complaint_type} with ID {id} has been Re-opened by the citizen. It is being reviewed by Assigning officer - {ulb}.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_REASSIGN_CITIZEN_PENDINGATLME_SMS_MESSAGE",
+    "message": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been re-assigned to {emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_REASSIGN_EMPLOYEE_PENDINGATLME_SMS_MESSAGE",
+    "message": "Shri {emp_name}, Complaint for {complaint_type} with ID {id} has been re-assigned as per your request. {ao_designation} - {ulb}.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_REASSIGN_PENDINGATLME_SMS_MESSAGE",
+    "message": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been re-assigned to {reassign_emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_REJECT_CITIZEN_REJECTED_SMS_MESSAGE",
+    "message": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been rejected. Reason for Rejection: {reason}, Additional Comments: {additional_comments} If you wish to re-open the complaint, you can visit the web portal.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_REJECT_REJECTED_SMS_MESSAGE",
+    "message": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been rejected. Reason for Rejection: {reason}, Additional Comments: {additional_comments} If you wish to re-open the complaint, you can visit the web portal.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_REOPEN_CITIZEN_PENDINGFORASSIGNMENT_SMS_MESSAGE",
+    "message": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been RE-OPEN as per your request. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_REOPEN_EMPLOYEE_PENDINGFORASSIGNMENT_SMS_MESSAGE",
+    "message": "Shri {emp_name}, Complaint for {complaint_type} with ID {id} has been re-opened by the citizen. It is being reviewed by Assigning officer - {ulb}.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_REOPEN_PENDINGFORASSIGNMENT_SMS_MESSAGE",
+    "message": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been RE-OPEN as per your request. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_RESOLVE_CITIZEN_RESOLVED_SMS_MESSAGE",
+    "message": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been resolved by {emp_name}. If you are not satisfied with service you can RE-OPEN complaint through web portal or by calling your nearest municipal office\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PGR_RESOLVE_RESOLVED_SMS_MESSAGE",
+    "message": "Dear Citizen,\n Your complaint for <complaint_type> with ID <id> submitted on <date> has been resolved by <emp_name>. If you are not satisfied with service you can REOPEN complaint through web portal or by calling our CSR.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PPT_COMMON_ASSESSMENT_FORM_HEADER",
+    "message": "Assessment Form",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "PROFILE_UPDATED",
+    "message": "Profile is successfully updated",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "REASSIGN",
+    "message": "Re-assign",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "REASSIGN_SUCCESSFULLY",
+    "message": "Re-assigned Successfully",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "REJECT",
+    "message": "Reject",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "REJECT_SUCCESSFULLY",
+    "message": "Rejected Successfully",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "REOPEN",
+    "message": "Re-Open",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "REOPEN_SUCCESSFULLY",
+    "message": "Reopened Successfully",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "REPORTS_RESULT_HEADER_DATE_RANGE",
+    "message": "Showing data for",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "REPORTS_RESULT_HEADER_DATE_UPTO",
+    "message": "Showing data upto",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "REPORTS_SEARCHFORM_APPLY",
+    "message": "Showing data upto",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "REPORTS_SEARCHFORM_MODIFY_DATE_HEADER",
+    "message": "Modify report by date range",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "REPORT_SEARCHFORM_DATE_GREATER",
+    "message": "To Date is Lesser than From Date",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "REPORT_SEARCHFORM_DATE_LESSER",
+    "message": "From Date is Greater than To Date",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "RESOLVE",
+    "message": "Resolve",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "RESOLVE_SUCCESSFULLY",
+    "message": "Resolved Successfully",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ANIMALS",
+    "message": "Animals",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BADSTREETLIGHT",
+    "message": "Bad Streetlight",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BADSUPPLY",
+    "message": "Bad Supply",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BADTRAFFICLIGHT",
+    "message": "Bad Traffic Light",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BINNOTEMPTY",
+    "message": "Bin Not Empty",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BINS",
+    "message": "Bins",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BLOCK/OVERFLOWINGSEWAGE",
+    "message": "Block / Overflowing sewage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BLOCKED",
+    "message": "Blocked",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BLOCKEDDRAIN",
+    "message": "Blocked Drain",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BLOCKOROVERFLOWINGSEWAGE",
+    "message": "Block/Overflowing sewage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BLOCKOROVERFLOWINGSEWAGE.DEPT_4",
+    "message": "Block / Overflowing sewage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BLOCKOVERFLOWINGSEWAGE",
+    "message": "Block/Overflowing sewage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BOUNDARYSTRUCTUREIDENTITY",
+    "message": "Boundary, Structure & Identity",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BROKEN",
+    "message": "Broken",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BROKENBIN",
+    "message": "Broken Bin",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BROKENGARBAGEBIN",
+    "message": "Broken Garbage Bin",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BROKENGUARD",
+    "message": "Broken Guard",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BROKENHANDPUMP",
+    "message": "Broken Handpump",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BROKENORDAMAGEDPIPE",
+    "message": "Broken Or Damaged Pipe",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BROKENORLEAKINGSEWAGEPIPE",
+    "message": "Borken or Leaking Sewage pipe",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BROKENPIPEORTAP",
+    "message": "Broken Pipe Or Tap",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BROKENWATERPIPEORLEAKAGE",
+    "message": "Broken water pipe / Leakage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BROKENWATERPIPEORLEAKAGE.DEPT_4",
+    "message": "Broken water pipe / Leakage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BROKENWATERPIPEORTAP",
+    "message": "Broken Water Pipe or Tap",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BURNING",
+    "message": "Burning",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BURNINGOFGARBAGE",
+    "message": "Burning of garbage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.BURNINGOFGARBAGE.DEPT_3",
+    "message": "Burning of garbage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.COMPENSATION",
+    "message": "Compensation(Redevelopment & Damaged Property)",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.CONSTRUCTIONMATERIALLYINGONTHEROAD",
+    "message": "Construction material lying on the road",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.CONSTRUCTIONMATERIALLYINGONTHEROAD.DEPT_4",
+    "message": "Construction material lying on the road",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.CUSTOMS",
+    "message": "Customs Duty",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.CUSTOMSDUTY",
+    "message": "Compensation(Redevelopment & Damaged Property)",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.CUTTINGORTRIMMINGOFTREEREQUIRED",
+    "message": "Cutting/trimming of tree required",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.CUTTINGORTRIMMINGOFTREEREQUIRED.DEPT_5",
+    "message": "Cutting/trimming of tree required",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DAMAGED",
+    "message": "Damaged",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DAMAGED/BLOCKEDFOOTPATH",
+    "message": "Damaged/blocked footpath",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DAMAGEDBLOCKEDFOOTPATH",
+    "message": "Damaged/blocked footpath",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DAMAGEDDRAIN",
+    "message": "Damaged Drain",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DAMAGEDFOOTPATH",
+    "message": "Damaged Footpath",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DAMAGEDGARBAGEBIN",
+    "message": "Damaged garbage bin",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DAMAGEDGARBAGEBIN.DEPT_3",
+    "message": "Damaged garbage bin",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DAMAGEDORBLOCKEDFOOTPATH",
+    "message": "Damaged/blocked footpath",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DAMAGEDORBLOCKEDFOOTPATH.DEPT_4",
+    "message": "Damaged/blocked footpath",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DAMAGEDROAD",
+    "message": "Damaged road",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DAMAGEDROAD.DEPT_4",
+    "message": "Damaged road",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DAMAGEDSTREETLIGHT",
+    "message": "Damaged Streetlights",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DEADANIMALS",
+    "message": "Dead animals",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DEADANIMALS.DEPT_3",
+    "message": "Dead animals",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DEADBODY",
+    "message": "Dead Body",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DEBRISORSILT",
+    "message": "Debris Or Silt",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DIRTYORSMELLY",
+    "message": "Dirty Or Smelly",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DIRTYORSMELLYPUBLICTOILETS",
+    "message": "Dirty/smelly public toilet",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DIRTYORSMELLYPUBLICTOILETS.DEPT_3",
+    "message": "Dirty/smelly public toilet",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DIRTYWATERSUPPLY",
+    "message": "Dirty water supply",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DIRTYWATERSUPPLY.DEPT_4",
+    "message": "Dirty water supply",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DISPLACEMENT",
+    "message": "Displacement (Insecurity)",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DRAINS",
+    "message": "Drains",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.DUMPING",
+    "message": "Dumping",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.EMPLOYEEABSENT",
+    "message": "Employee Absent",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ENCROACHMENT",
+    "message": "Encroachment",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ENCROACHMENTONPUBLICPROPERTY",
+    "message": "Enroachment on Public Property",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.FINANCE",
+    "message": "Tax Rate",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.FOOTPATHS",
+    "message": "Footpaths",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.GARBAGE",
+    "message": "Garbage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.GARBAGEBINNOTEMPTY",
+    "message": "Garbage Bin not empty",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.GARBAGEBINNOTTHERE",
+    "message": "Garbage Bin not there",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.GARBAGENEEDSTOBECLEANED",
+    "message": "Garbage needs to be cleaned",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.GARBAGENEEDSTOBECLEARED",
+    "message": "Garbage needs to be cleared",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.GARBAGENEEDSTOBECLEARED.DEPT_3",
+    "message": "Garbage needs to be cleared",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.GOODGOVERNANCE",
+    "message": "Good Governance",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.GOVERNANCE",
+    "message": "Good Governance",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.HOUSEDEBATE",
+    "message": "Displacement (Insecurity)",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.HOUSING",
+    "message": "House Debate (Kebele House & Proclamation 47/67)",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ILLEGALCONSTRUCTION",
+    "message": "Illegal Construction",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ILLEGALCONSTRUCTIONS",
+    "message": "Illegal constructions",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ILLEGALCONSTRUCTIONS.DEPT_6",
+    "message": "Illegal constructions",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ILLEGALCUTTING",
+    "message": "Illegal Cutting",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ILLEGALCUTTINGOFTREES",
+    "message": "Illegal Cutting of trees",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ILLEGALCUTTINGOFTREES.DEPT_5",
+    "message": "Illegal Cutting of trees",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ILLEGALDISCHARGE",
+    "message": "Illegal discharge of sewage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ILLEGALDISCHARGEOFSEWAGE",
+    "message": "Ilegal Discharge of Sewage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ILLEGALDISCHARGEOFSEWAGE.DEPT_4",
+    "message": "Illegal discharge of sewage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ILLEGALFOOTPATHSHOP",
+    "message": "Illegal Footpath Shop",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ILLEGALHOARDING",
+    "message": "Illegal Hoarding",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ILLEGALPARKING",
+    "message": "Illegal parking",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ILLEGALPARKING.DEPT_6",
+    "message": "Illegal parking",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ILLEGALSHOPS",
+    "message": "Illegal Shops",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ILLEGALSHOPSONFOOTPATH",
+    "message": "Illegal shops on footpath",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ILLEGALSHOPSONFOOTPATH.DEPT_6",
+    "message": "Illegal shops on footpath",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ILLEGALSHOPSONTHEFOOTPATH",
+    "message": "Illegal Shops on the Footpath",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.INFRASTRUCTURE",
+    "message": "Boundary, Structure & Identity",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.JUSTICE",
+    "message": "Justice",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.LABOR",
+    "message": "Labor Dispute",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.LABORDISPUTE",
+    "message": "Labor Dispute",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.LANDVIOLATION",
+    "message": "Land Violation",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.LANDVIOLATIONS",
+    "message": "Land Violations",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.LEGAL",
+    "message": "Justice",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.LIGHTS",
+    "message": "Lights",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.MANHOLECOVERMISSINGORDAMAGED",
+    "message": "Manhole cover is missing/damaged",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.MANHOLECOVERMISSINGORDAMAGED.DEPT_4",
+    "message": "Manhole cover is missing/damaged",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.MANHOLEISSUE",
+    "message": "Manhole Issue",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.MISUSE",
+    "message": "Misuse",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.MOSQUITOES",
+    "message": "Mosquitoes",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.MOSQUITOS",
+    "message": "Mosquitoes",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.NONSWEEPINGOFROAD",
+    "message": "Road needs Sweeping",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.NONSWEEPINGOFROAD.DEPT_3",
+    "message": "Non sweeping of road",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.NOSTREETLIGHT",
+    "message": "No streetlight",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.NOSTREETLIGHT.DEPT_1",
+    "message": "No streetlight",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.NOTFUNCTIONAL",
+    "message": "Not Functional",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.NOTWATERSUPPLY",
+    "message": "Not Water Supply",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.NOWATERORELECTRICITY",
+    "message": "No Water Or Electricity",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.NOWATERORELECTRICITYINPUBLICTOILET",
+    "message": "No water/electricity in public toilet",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.NOWATERORELECTRICITYINPUBLICTOILET.DEPT_3",
+    "message": "No water/electricity in public toilet",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.NOWATERSUPPLY",
+    "message": "No Water Supply",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.NOWATERSUPPLY.DEPT_4",
+    "message": "No water supply",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.NonSweepingOfRoad",
+    "message": "Non Sweeping Of Road",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.OPENDEFACATION",
+    "message": "Open Defecation",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.OPENDEFECATION",
+    "message": "Open Defecation",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.OPENDEFECATION.DEPT_3",
+    "message": "Open Defecation",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.OPENLAND",
+    "message": "Open Land",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.OTHERS",
+    "message": "Others",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.OTHERS.DEPT_10",
+    "message": "Others",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.OVERFLOWING",
+    "message": "Overflowing",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.OVERFLOWING/BLOCKEDDRAIN",
+    "message": "Overflowing/Blocked drain",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.OVERFLOWINGBLOCKEDDRAIN",
+    "message": "Overflowing/Blocked drain",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.OVERFLOWINGDRAIN",
+    "message": "Owerflowing Drain",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.OVERFLOWINGORBLOCKEDDRAIN",
+    "message": "Overflowing/Blocked drain",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.OVERFLOWINGORBLOCKEDDRAIN.DEPT_4",
+    "message": "Overflowing/Blocked drain",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.OVERFLOWINGSEWAGE",
+    "message": "Overflowing Sewage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.PARKREQUIRESMAINTENANCE",
+    "message": "Park requires maintenance",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.PARKREQUIRESMAINTENANCE.DEPT_5",
+    "message": "Park requires maintenance",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.PARKS",
+    "message": "Parks",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.PENSIONS",
+    "message": "Retirement",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.POLEORLIGHTDAMAGE",
+    "message": "Pole Or Light Damage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.POORSWEEPING",
+    "message": "Poor Sweeping",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.POSSESSIONDISPUTE",
+    "message": "Possession Dispute",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.POTHOLES",
+    "message": "Potholes",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.POTHOLESONTHEROAD",
+    "message": "Potholes on the Road",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.PROPERTY",
+    "message": "Possession Dispute",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.PROPOSAL",
+    "message": "Customs Duty",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.PROPOSALS",
+    "message": "Proposal",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.PUBLICTOILETISDAMAGED",
+    "message": "Public toilet damaged",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.PUBLICTOILETISDAMAGED.DEPT_3",
+    "message": "Public toilet damaged",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.PUBLICTOILETISNOTWORKINGPROPERLY",
+    "message": "Public Toilet is not working properly",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.PUBLICTOILETS",
+    "message": "Public Toilets",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.REMOVEGARBAGEORWATER",
+    "message": "Remove Garbage Or Water",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.REPLACE/PROVIDEGARBAGEBIN",
+    "message": "Replace/provide garbage bin",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.REPLACEORPROVIDEGARBAGEBIN",
+    "message": "Replace/provide garbage bin",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.REPLACEPROVIDEGARBAGEBIN",
+    "message": "Replace/provide garbage bin",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.REQUESTNEW",
+    "message": "Request New",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.REQUESTSMOKEOP",
+    "message": "Request Smoke Op",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.REQUESTSPRAYINGORFOGGINGOPERATION",
+    "message": "Request spraying/ fogging operations",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.REQUESTSPRAYINGORFOGGINGOPERATION.DEPT_3",
+    "message": "Request spraying/ fogging operations",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.REQUESTSPRAYOP",
+    "message": "Request Spray Op",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.REQUESTTANKER",
+    "message": "Request Tanker",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.REQUESTTRIMMING",
+    "message": "Request Trimming",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.RETIREMENT",
+    "message": "Retirement",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ROADORFOOTPATH",
+    "message": "Road Or Footpath",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ROADS",
+    "message": "Roads",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ROADSANDFOOTPATHS",
+    "message": "Roads & footpaths",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.ROADSCODEE",
+    "message": "Roads codee",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.SERVICE",
+    "message": "Service",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.SERVICENAME.FEVERS_DENGUE_MALARIA",
+    "message": "Fevers - Dengue",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.SERVICENAME.NON_RECEIPT_OF_PENSIONS_DISABLED_ELDERLY_ETC",
+    "message": "Non-Receipt of Pensions - Disabled",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.SERVICENAME.REPAIRS_TO_FLYOVERS_BRIDGES_CULVERTS",
+    "message": "Repairs to Flyovers",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.SERVICENAME.UNHYGIENIC_IMPROPER_TRANSFER_OF_MEAT_LIVESTOCK",
+    "message": "Unhygienic",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.SEWAGE",
+    "message": "Sewage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.SEWAGEEFFLUENTS",
+    "message": "Sewage Effluents",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.SHORTAGEOFWATER",
+    "message": "Shortage of water",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.SHORTAGEOFWATER.DEPT_4",
+    "message": "Shortage of water",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.SHORTSUPPLY",
+    "message": "Short Supply",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.SLOWPROGRESS",
+    "message": "Slow Progress",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.STAGNANTWATER",
+    "message": "Stagnant Water",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.STORMWATERDRAIN",
+    "message": "Storm Water Drain",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.STRAYANIMALS",
+    "message": "Stray animals",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.STRAYANIMALS.DEPT_3",
+    "message": "Stray animals",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.STRAYCATTLE",
+    "message": "Stray Cattle",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.STRAYDOGS",
+    "message": "Stray Dogs",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.STRAYPIGS",
+    "message": "Stray Pigs",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.STREETLIGHTNOTWORKING",
+    "message": "Streetlight not working",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.STREETLIGHTNOTWORKING.DEPT_1",
+    "message": "Streetlight not working",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.STREETLIGHTS",
+    "message": "Streetlights",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.SUGGESTION",
+    "message": "Proposal",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.SUGGESTIONS",
+    "message": "Suggestion",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.SUPPORT",
+    "message": "Support / Help",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.SUPPORTHELP",
+    "message": "House Debate (Kebele House & Proclamation 47/67)",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.TAXRATE",
+    "message": "Tax Rate",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.TOILETS",
+    "message": "Toilets",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.TREES",
+    "message": "Trees",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.TRUCKSPILLAGE",
+    "message": "Truck Spillage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.VACANTLAND",
+    "message": "Vacant Land",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.WATER",
+    "message": "Water",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.WATERANDSEWAGE",
+    "message": "Water & Sewage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.WATERBODY",
+    "message": "Water Body",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.WATERLOGGED",
+    "message": "Water Logged",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.WATERLOGGEDROAD",
+    "message": "Water logged road",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.WATERLOGGEDROAD.DEPT_4",
+    "message": "Water logged road",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.WATERPRESSUREISVERYLESS",
+    "message": "Water pressure is very less",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "SERVICEDEFS.WATERPRESSUREISVERYLESS.DEPT_4",
+    "message": "Water pressure is very less",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "TENANT_TENANTS_STATEA_STATE",
+    "message": "State A",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "WF_PGR_APPLY",
+    "message": "Applied",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "WF_PGR_ASSIGN",
+    "message": "Assigned",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "WF_PGR_RATE",
+    "message": "Closed after rating",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "WF_PGR_REASSIGN",
+    "message": "Re-Assigned",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "WF_PGR_REJECT",
+    "message": "Rejected",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "WF_PGR_REOPEN",
+    "message": "Reopened",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "WF_PGR_RESOLVE",
+    "message": "Resolved",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "chatbot.pgr.assigned",
+    "message": "Assigned",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "chatbot.pgr.closed",
+    "message": "Closed",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "chatbot.pgr.open",
+    "message": "Filed",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "chatbot.pgr.reassignrequested",
+    "message": "Being Re-assigned",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "chatbot.pgr.rejected",
+    "message": "Rejected",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "chatbot.pgr.resolved",
+    "message": "Resolved",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Assignment.fields.department",
+    "message": "Department",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Assignment.fields.designation",
+    "message": "Designation",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Assignment.fields.documents",
+    "message": "Documents",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Assignment.fields.fromDate",
+    "message": "From Date",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Assignment.fields.function",
+    "message": "Function",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Assignment.fields.functionary",
+    "message": "Functionary",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Assignment.fields.fund",
+    "message": "Fund",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Assignment.fields.govtOrderNumber",
+    "message": "Govt Order Number",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Assignment.fields.grade",
+    "message": "Grade",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Assignment.fields.hod",
+    "message": "If Hod",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Assignment.fields.position",
+    "message": "Position",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Assignment.fields.primary",
+    "message": "Is Primary",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Assignment.fields.toDate",
+    "message": "To Date",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Assignment.title",
+    "message": "ASSIGNMENT DETAILS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.DepartmentalTest.fields.test",
+    "message": "Test",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.DepartmentalTest.title",
+    "message": "Departmental Test Details",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.EducationalQualification.fields.documents",
+    "message": "Doc Documents",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.EducationalQualification.fields.majorSubject",
+    "message": "Major Subject",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.EducationalQualification.fields.qualification",
+    "message": "Qualification",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.EducationalQualification.fields.university",
+    "message": "University/Board",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.EducationalQualification.title",
+    "message": "Educational Qualification",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.EmployeePhoto",
+    "message": "Employee Photo",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.EmployeeSignature",
+    "message": "Employee Signature",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.OtherAttachments",
+    "message": "Other Attachment",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.User.aadhaarNumber",
+    "message": "Aadhaar Number",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.User.birth",
+    "message": "Native/Birth Place",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.User.bloodGroup",
+    "message": "Blood Group",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.User.gender",
+    "message": "Gender",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.User.mobileNumber",
+    "message": "Phone Number",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.User.name",
+    "message": "Employee Name",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.User.userName",
+    "message": "User Name",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.bank",
+    "message": "Bank",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.bankAccount",
+    "message": "Account Number",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.bankBranch",
+    "message": "Bank Branch",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.category",
+    "message": "Category",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.city",
+    "message": "City",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.code",
+    "message": "Code",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.community",
+    "message": "Community",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.correspondenceAddress",
+    "message": "Correspondence Address",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.correspondencePinNumber",
+    "message": "Correspondence Pin Number",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.dateOfAppointment",
+    "message": "Date of Appointment",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.dateOfBirth",
+    "message": "Date of Birth",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.dateOfJoining",
+    "message": "Date of Joining/Deputation",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.dateOfResignation",
+    "message": "Date of Resignation",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.dateOfRetirement",
+    "message": "Date of Retirement",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.dateOfTermination",
+    "message": "Date of Termination",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.email",
+    "message": "Email Id",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.employeeStatus",
+    "message": "Employee Status",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.employeeType",
+    "message": "Employee Type",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.fatherSpouseName",
+    "message": "Father's/Spouse Name",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.gpfNo",
+    "message": "Gpf No/CPS Number",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.group",
+    "message": "Employee Group",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.identification",
+    "message": "Identification Mark",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.languagesKnown",
+    "message": "Languages Known",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.maritalStatus",
+    "message": "Marital Status",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.medicalReportProduced",
+    "message": "Medical Report Produced?",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.motherTongue",
+    "message": "Mother Tongue",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.pan",
+    "message": "PAN",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.parmanentPinNumber",
+    "message": "Permanent Pin Number",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.passportNo",
+    "message": "Passport No",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.permanentAddress",
+    "message": "Permanent Address",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.physicallyDisabled",
+    "message": "Is Physically Disabled?",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.recruitmentMode",
+    "message": "Recruitment Mode",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.recruitmentQuota",
+    "message": "Recruitment Quota",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.recruitmentType",
+    "message": "Recruitment Type/Service Type",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.religion",
+    "message": "Religion",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.fields.retirementAge",
+    "message": "Retirement Age",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Employee.title",
+    "message": "EMPLOYEE DETAILS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Jurisdictions.title",
+    "message": "JURISDICTION LIST",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Probation.fields.declaredOn",
+    "message": "Declared On",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Probation.fields.documents",
+    "message": "Documents",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Probation.fields.orderDate",
+    "message": "Order Date",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Probation.fields.orderNo",
+    "message": "Order No",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Probation.fields.remarks",
+    "message": "Remarks",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Probation.title",
+    "message": "Probation",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Regularisation.fields.declaredOn",
+    "message": "Declared On Date",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.Regularisation.title",
+    "message": "Regularisation",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.ServiceHistory.fields.ServiceEntryDescription",
+    "message": "Service Entry Description",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.ServiceHistory.fields.date",
+    "message": "Date",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.ServiceHistory.fields.documents",
+    "message": "Documents",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.ServiceHistory.fields.orderNo",
+    "message": "Order No",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.ServiceHistory.fields.remarks",
+    "message": "Remarks/Comments",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.ServiceHistory.title",
+    "message": "Service History",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.TechnicalQualification.fields.grade",
+    "message": "Grade",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.TechnicalQualification.fields.remarks",
+    "message": "Remarks",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.TechnicalQualification.fields.skill",
+    "message": "Skills",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.TechnicalQualification.fields.yearOfPassing",
+    "message": "Year Of Completion",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.TechnicalQualification.title",
+    "message": "Technical Qualification",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.createPosition.groups.fields.outsourcepost.value1",
+    "message": "Yes",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.createPosition.groups.fields.outsourcepost.value2",
+    "message": "No",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.fields.isUserActive",
+    "message": "Is User Active?",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.jurisdiction.fields.boundary",
+    "message": "Boundary",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.jurisdiction.fields.boundaryType",
+    "message": "Boundary Type",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.other.title",
+    "message": "OTHER DETAILS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "employee.service.title",
+    "message": "SERVICE SECTION",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.ANIMALS",
+    "message": "Animals",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.BADSTREETLIGHT",
+    "message": "Bad Streetlight",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.BADSUPPLY",
+    "message": "Bad Supply",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.BADTRAFFICLIGHT",
+    "message": "Bad Traffic Light",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.BINNOTEMPTY",
+    "message": "Bin Not Empty",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.BINS",
+    "message": "Bins",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.BLOCK/OVERFLOWINGSEWAGE",
+    "message": "Block / Overflowing sewage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.BLOCKED",
+    "message": "Blocked",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.BLOCKEDDRAIN",
+    "message": "Blocked Drain",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.BLOCKOROVERFLOWINGSEWAGE",
+    "message": "Block/Overflowing sewage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.BLOCKOVERFLOWINGSEWAGE",
+    "message": "Block/Overflowing sewage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.BOUNDARYSTRUCTUREIDENTITY",
+    "message": "Boundary, Structure & Identity",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.BROKEN",
+    "message": "Broken",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.BROKENBIN",
+    "message": "Broken Bin",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.BROKENGARBAGEBIN",
+    "message": "Broken Garbage Bin",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.BROKENGUARD",
+    "message": "Broken Guard",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.BROKENHANDPUMP",
+    "message": "Broken Handpump",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.BROKENORDAMAGEDPIPE",
+    "message": "Broken Or Damaged Pipe",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.BROKENORLEAKINGSEWAGEPIPE",
+    "message": "Borken or Leaking Sewage pipe",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.BROKENPIPEORTAP",
+    "message": "Broken Pipe Or Tap",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.BROKENWATERPIPEORLEAKAGE",
+    "message": "Broken water pipe / Leakage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.BROKENWATERPIPEORTAP",
+    "message": "Broken Water Pipe or Tap",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.BURNING",
+    "message": "Burning",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.BURNINGOFGARBAGE",
+    "message": "Burning of garbage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.BlockOrOverflowingSewage",
+    "message": "Block/Overflowing sewage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.BoundaryStructureIdentity",
+    "message": "Boundary, Structure & Identity",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.BrokenWaterPipeOrLeakage",
+    "message": "Broken water pipe / Leakage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.BurningOfGarbage",
+    "message": "Burning of garbage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.COMPENSATION",
+    "message": "Compensation(Redevelopment & Damaged Property)",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.CONSTRUCTIONMATERIALLYINGONTHEROAD",
+    "message": "Construction material lying on the road",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.CUSTOMS",
+    "message": "Customs Duty",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.CUSTOMSDUTY",
+    "message": "Customs Duty",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.CUTTINGORTRIMMINGOFTREEREQUIRED",
+    "message": "Cutting/trimming of tree required",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.Compensation",
+    "message": "Compensation(Redevelopment & Damaged Property)",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.ConstructionMaterialLyingOntheRoad",
+    "message": "Construction material lying on the road",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.CustomsDuty",
+    "message": "Customs Duty",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.CuttingOrTrimmingOfTreeRequired",
+    "message": "Cutting/trimming of tree required",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.DAMAGED",
+    "message": "Damaged",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.DAMAGED/BLOCKEDFOOTPATH",
+    "message": "Damaged/blocked footpath",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.DAMAGEDBLOCKEDFOOTPATH",
+    "message": "Damaged/blocked footpath",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.DAMAGEDDRAIN",
+    "message": "Damaged Drain",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.DAMAGEDFOOTPATH",
+    "message": "Damaged Footpath",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.DAMAGEDGARBAGEBIN",
+    "message": "Damaged garbage bin",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.DAMAGEDORBLOCKEDFOOTPATH",
+    "message": "Damaged/blocked footpath",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.DAMAGEDROAD",
+    "message": "Damaged road",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.DAMAGEDSTREETLIGHT",
+    "message": "Damaged Streetlights",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.DEADANIMALS",
+    "message": "Dead animals",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.DEADBODY",
+    "message": "Dead Body",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.DEBRISORSILT",
+    "message": "Debris Or Silt",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.DIRTYORSMELLY",
+    "message": "Dirty Or Smelly",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.DIRTYORSMELLYPUBLICTOILETS",
+    "message": "Dirty/smelly public toilet",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.DIRTYWATERSUPPLY",
+    "message": "Dirty water supply",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.DISPLACEMENT",
+    "message": "Displacement (Insecurity)",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.DRAINS",
+    "message": "Drains",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.DUMPING",
+    "message": "Dumping",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.DamagedGarbageBin",
+    "message": "Damaged garbage bin",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.DamagedOrBlockedFootpath",
+    "message": "Damaged/blocked footpath",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.DamagedRoad",
+    "message": "Damaged road",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.DeadAnimals",
+    "message": "Dead animals",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.DirtyOrSmellyPublicToilets",
+    "message": "Dirty/smelly public toilet",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.DirtyWaterSupply",
+    "message": "Dirty water supply",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.Displacement",
+    "message": "Displacement (Insecurity)",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.EMPLOYEEABSENT",
+    "message": "Employee Absent",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.ENCROACHMENT",
+    "message": "Encroachment",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.ENCROACHMENTONPUBLICPROPERTY",
+    "message": "Enroachment on Public Property",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.FINANCE",
+    "message": "Tax Rate",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.FOOTPATHS",
+    "message": "Footpaths",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.GARBAGE",
+    "message": "Garbage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.GARBAGEBINNOTEMPTY",
+    "message": "Garbage Bin not empty",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.GARBAGEBINNOTTHERE",
+    "message": "Garbage Bin not there",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.GARBAGENEEDSTOBECLEANED",
+    "message": "Garbage needs to be cleaned",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.GARBAGENEEDSTOBECLEARED",
+    "message": "Garbage needs to be cleared",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.GOODGOVERNANCE",
+    "message": "Good Governance",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.GOVERNANCE",
+    "message": "Good Governance",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.GarbageNeedsTobeCleared",
+    "message": "Garbage needs to be cleared",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.GoodGovernance",
+    "message": "Good Governance",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.HOUSEDEBATE",
+    "message": "House Debate (Kebele House & Proclamation 47/67)",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.HOUSING",
+    "message": "House Debate (Kebele House & Proclamation 47/67)",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.HouseDebate",
+    "message": "House Debate (Kebele House & Proclamation 47/67)",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.ILLEGALCONSTRUCTION",
+    "message": "Illegal Construction",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.ILLEGALCONSTRUCTIONS",
+    "message": "Illegal constructions",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.ILLEGALCUTTING",
+    "message": "Illegal Cutting",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.ILLEGALCUTTINGOFTREES",
+    "message": "Illegal Cutting of trees",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.ILLEGALDISCHARGE",
+    "message": "Illegal discharge of sewage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.ILLEGALDISCHARGEOFSEWAGE",
+    "message": "Ilegal Discharge of Sewage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.ILLEGALFOOTPATHSHOP",
+    "message": "Illegal Footpath Shop",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.ILLEGALHOARDING",
+    "message": "Illegal Hoarding",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.ILLEGALPARKING",
+    "message": "Illegal parking",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.ILLEGALSHOPS",
+    "message": "Illegal Shops",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.ILLEGALSHOPSONFOOTPATH",
+    "message": "Illegal shops on footpath",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.ILLEGALSHOPSONTHEFOOTPATH",
+    "message": "Illegal Shops on the Footpath",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.INFRASTRUCTURE",
+    "message": "Boundary, Structure & Identity",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.IllegalConstructions",
+    "message": "Illegal constructions",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.IllegalCuttingOfTrees",
+    "message": "Illegal Cutting of trees",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.IllegalParking",
+    "message": "Illegal parking",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.IllegalShopsOnFootPath",
+    "message": "Illegal shops on footpath",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.JUSTICE",
+    "message": "Justice",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.Justice",
+    "message": "Justice",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.LABOR",
+    "message": "Labor Dispute",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.LABORDISPUTE",
+    "message": "Labor Dispute",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.LANDVIOLATION",
+    "message": "Land Violation",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.LANDVIOLATIONS",
+    "message": "Land Violations",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.LEGAL",
+    "message": "Justice",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.LIGHTS",
+    "message": "Lights",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.LaborDispute",
+    "message": "Labor Dispute",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.MANHOLECOVERMISSINGORDAMAGED",
+    "message": "Manhole cover is missing/damaged",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.MANHOLEISSUE",
+    "message": "Manhole Issue",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.MISUSE",
+    "message": "Misuse",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.MOSQUITOES",
+    "message": "Mosquitoes",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.MOSQUITOS",
+    "message": "Mosquitoes",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.ManholeCoverMissingOrDamaged",
+    "message": "Manhole cover is missing/damaged",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.NONSWEEPINGOFROAD",
+    "message": "Non sweeping of road",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.NOSTREETLIGHT",
+    "message": "No streetlight",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.NOTFUNCTIONAL",
+    "message": "Not Functional",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.NOTWATERSUPPLY",
+    "message": "Not Water Supply",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.NOWATERORELECTRICITY",
+    "message": "No Water Or Electricity",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.NOWATERORELECTRICITYINPUBLICTOILET",
+    "message": "No water/electricity in public toilet",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.NOWATERSUPPLY",
+    "message": "No Water Supply",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.NoStreetlight",
+    "message": "No streetlight",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.NoWaterOrElectricityinPublicToilet",
+    "message": "No water/electricity in public toilet",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.NoWaterSupply",
+    "message": "No Water Supply",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.NonSweepingOfRoad",
+    "message": "Non Sweeping Of Road",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.OPENDEFACATION",
+    "message": "Open Defecation",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.OPENDEFECATION",
+    "message": "Open Defecation",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.OPENLAND",
+    "message": "Open Land",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.OTHERS",
+    "message": "Others",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.OVERFLOWING",
+    "message": "Overflowing",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.OVERFLOWING/BLOCKEDDRAIN",
+    "message": "Overflowing/Blocked drain",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.OVERFLOWINGBLOCKEDDRAIN",
+    "message": "Overflowing/Blocked drain",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.OVERFLOWINGDRAIN",
+    "message": "Owerflowing Drain",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.OVERFLOWINGORBLOCKEDDRAIN",
+    "message": "Overflowing/Blocked drain",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.OVERFLOWINGSEWAGE",
+    "message": "Overflowing Sewage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.OpenDefecation",
+    "message": "Open Defecation",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.Others",
+    "message": "Others",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.OverflowingOrBlockedDrain",
+    "message": "Overflowing/Blocked drain",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.PARKREQUIRESMAINTENANCE",
+    "message": "Park requires maintenance",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.PARKS",
+    "message": "Parks",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.PENSIONS",
+    "message": "Retirement",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.POLEORLIGHTDAMAGE",
+    "message": "Pole Or Light Damage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.POORSWEEPING",
+    "message": "Poor Sweeping",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.POSSESSIONDISPUTE",
+    "message": "Possession Dispute",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.POTHOLES",
+    "message": "Potholes",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.POTHOLESONTHEROAD",
+    "message": "Potholes on the Road",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.PROPERTY",
+    "message": "Possession Dispute",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.PROPOSAL",
+    "message": "Proposal",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.PROPOSALS",
+    "message": "Proposal",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.PUBLICTOILETISDAMAGED",
+    "message": "Public toilet damaged",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.PUBLICTOILETISNOTWORKINGPROPERLY",
+    "message": "Public Toilet is not working properly",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.PUBLICTOILETS",
+    "message": "Public Toilets",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.ParkRequiresMaintenance",
+    "message": "Park requires maintenance",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.Parks",
+    "message": "Park requires maintenance",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.PossessionDispute",
+    "message": "Possession Dispute",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.Proposal",
+    "message": "Proposal",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.PublicToiletIsDamaged",
+    "message": "Public toilet damaged",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.REMOVEGARBAGEORWATER",
+    "message": "Remove Garbage Or Water",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.REPLACE/PROVIDEGARBAGEBIN",
+    "message": "Replace/provide garbage bin",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.REPLACEORPROVIDEGARBAGEBIN",
+    "message": "Replace/provide garbage bin",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.REPLACEPROVIDEGARBAGEBIN",
+    "message": "Replace/provide garbage bin",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.REQUESTNEW",
+    "message": "Request New",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.REQUESTSMOKEOP",
+    "message": "Request Smoke Op",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.REQUESTSPRAYINGORFOGGINGOPERATION",
+    "message": "Request spraying/ fogging operations",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.REQUESTSPRAYOP",
+    "message": "Request Spray Op",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.REQUESTTANKER",
+    "message": "Request Tanker",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.REQUESTTRIMMING",
+    "message": "Request Trimming",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.RETIREMENT",
+    "message": "Retirement",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.ROADORFOOTPATH",
+    "message": "Road Or Footpath",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.ROADS",
+    "message": "Roads",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.ROADSANDFOOTPATHS",
+    "message": "Roads & footpaths",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.ROADSCODEE",
+    "message": "Roads codee",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.ReplaceOrProvideGarbageBin",
+    "message": "Replace or provide garbage bin ",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.RequestSprayingOrFoggingOperation",
+    "message": "Request spraying/ fogging operations",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.Retirement",
+    "message": "Retirement",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.SERVICE",
+    "message": "Service",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.SERVICENAME.FEVERS_DENGUE_MALARIA",
+    "message": "Fevers - Dengue",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.SERVICENAME.NON_RECEIPT_OF_PENSIONS_DISABLED_ELDERLY_ETC",
+    "message": "Non-Receipt of Pensions - Disabled",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.SERVICENAME.REPAIRS_TO_FLYOVERS_BRIDGES_CULVERTS",
+    "message": "Repairs to Flyovers",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.SERVICENAME.UNHYGIENIC_IMPROPER_TRANSFER_OF_MEAT_LIVESTOCK",
+    "message": "Unhygienic",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.SEWAGE",
+    "message": "Sewage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.SEWAGEEFFLUENTS",
+    "message": "Sewage Effluents",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.SHORTAGEOFWATER",
+    "message": "Shortage of water",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.SHORTSUPPLY",
+    "message": "Short Supply",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.SLOWPROGRESS",
+    "message": "Slow Progress",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.STAGNANTWATER",
+    "message": "Stagnant Water",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.STORMWATERDRAIN",
+    "message": "Storm Water Drain",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.STRAYANIMALS",
+    "message": "Stray animals",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.STRAYCATTLE",
+    "message": "Stray Cattle",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.STRAYDOGS",
+    "message": "Stray Dogs",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.STRAYPIGS",
+    "message": "Stray Pigs",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.STREETLIGHTNOTWORKING",
+    "message": "Streetlight not working",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.STREETLIGHTS",
+    "message": "Streetlights",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.SUGGESTION",
+    "message": "Suggestion",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.SUGGESTIONS",
+    "message": "Suggestion",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.SUPPORT",
+    "message": "Support / Help",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.SUPPORTHELP",
+    "message": "Support / Help",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.ShortageOfWater",
+    "message": "Shortage of water",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.StrayAnimals",
+    "message": "Stray animals",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.StreetLightNotWorking",
+    "message": "Streetlight not working",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.Suggestion",
+    "message": "Suggestion",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.SupportHelp",
+    "message": "Support / Help",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.TAXRATE",
+    "message": "Tax Rate",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.TOILETS",
+    "message": "Toilets",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.TREES",
+    "message": "Trees",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.TRUCKSPILLAGE",
+    "message": "Truck Spillage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.TaxRate",
+    "message": "Tax Rate",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.VACANTLAND",
+    "message": "Vacant Land",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.WATER",
+    "message": "Water",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.WATERANDSEWAGE",
+    "message": "Water & Sewage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.WATERBODY",
+    "message": "Water Body",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.WATERLOGGED",
+    "message": "Water Logged",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.WATERLOGGEDROAD",
+    "message": "Water logged road",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.WATERPRESSUREISVERYLESS",
+    "message": "Water pressure is very less",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.WaterLoggedRoad",
+    "message": "Water logged road",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.WaterPressureisVeryLess",
+    "message": "Water pressure is very less",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.complaint.category.illegalDischargeOfSewage",
+    "message": "Ilegal Discharge of Sewage",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.sms.notification.assign",
+    "message": "Your complaint for {complaint_type} has been assigned to {emp_name}, {emp_designation}, {emp_department}\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.sms.notification.assign.citizen",
+    "message": "Dear Citizen, Your complaint for <complaint_type> with ID <id> submitted on <date> has been assigned to <emp_name>, <emp_designation>, <emp_department>. You can track your complaint status and connect with our officials on the on the web portal.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.sms.notification.assign.employee",
+    "message": "Shri <emp_name>, Complaint for '<complaint_type>' with ID <id> has been assigned to you. Please take appropriate action. <ao_designation> - <ulb>",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.sms.notification.close.employee",
+    "message": "Shri <emp_name>, Complaint for <complaint_type> with ID <id> has received <rating>/5 feedback from the citizen. Thank you for your service.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.sms.notification.comment",
+    "message": "<emp_name> has commented on your complaint for <complaint_type> with complaint ID <id>. Comment - <comment>.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.sms.notification.comment.default",
+    "message": "You have received a comment on your complaint. You can track your complaint status on the mSeva app or your local government web portal.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.sms.notification.default",
+    "message": "Your complaint has been <status>. You can track your complaint status on the mSeva app or your local government web portal",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.sms.notification.reassign",
+    "message": "Your complaint for {complaint_type} has been re-assigned to {emp_name}, {emp_designation}, {emp_department}.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.sms.notification.reassign.citizen",
+    "message": "Dear Citizen, Your complaint for <complaint_type> with ID <id> submitted on <date> has been re-assigned to <emp_name>, <emp_designation>, <emp_department>. You can track your complaint status and connect with our officials on the on the web portal.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.sms.notification.reassign.employee",
+    "message": "Shri <emp_name>, Complaint for '<complaint_type>' with ID <id> has been re-assigned as per your request. <ao_designation> - <ulb>",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.sms.notification.reject",
+    "message": "Your complaint for {complaint_type} has been rejected on {date}. Reason for Rejection: {reason} Additional Comments: {additional_comments}.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.sms.notification.reject.citizen",
+    "message": "Dear Citizen, Your complaint for <complaint_type> with ID <id> submitted on <date> has been rejected. Reason for Rejection: <reason>, Additional Comments: <additional_comments> If you wish to re-open the complaint, you can visit the web portal.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.sms.notification.reopen",
+    "message": "Your complaint for {complaint_type} has been re-opened on {date}.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.sms.notification.reopen.citizen",
+    "message": "Dear Citizen, Your complaint for <complaint_type> with ID <id> submitted on <date> has been RE-OPEN as per your request. You can track your complaint status and connect with our officials on the web portal.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.sms.notification.reopen.employee",
+    "message": "Shri <emp_name>, Complaint for <complaint_type> with ID <id> has been re-opened by the citizen. It is being reviewed by Assigning officer - <ulb>.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.sms.notification.resolve",
+    "message": "Your complaint for {complaint_type} has been resolved on {date}. Please give us your feedback on the mSeva app, your local government web portal or at this link {app_link}.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.sms.notification.resolve.citizen",
+    "message": "Dear Citizen, Your complaint for <complaint_type> with ID <id> submitted on <date> has been resolved by <emp_name>. If you are not satisfied with service you can RE-OPEN complaint through web portal or by calling our CSR.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.sms.notification.submit",
+    "message": "Your complaint for {complaint_type} has been submitted with ID {id} on {date}. You can track your complaint status on the mSeva app or your local government web portal.\n\nEGOVS",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  },
+  {
+    "code": "pgr.sms.notification.submit.citizen",
+    "message": "Dear Citizen, Your complaint for <complaint_type> has been submitted with ID <id> on <date>. You can track your complaint status on the web portal.",
+    "module": "rainmaker-pgr",
+    "locale": "en_IN"
+  }
+]
