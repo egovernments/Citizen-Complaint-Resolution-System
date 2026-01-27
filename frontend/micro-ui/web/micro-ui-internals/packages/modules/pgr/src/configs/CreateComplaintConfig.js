@@ -60,7 +60,7 @@ export const CreateComplaintConfig = {
               },
               populators: {
                 name: "SelectComplaintType",
-                optionsKey: "menuPathName",
+                optionsKey: "i18nKey",
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
               },
             },
@@ -82,55 +82,7 @@ export const CreateComplaintConfig = {
 
           ],
         },
-        // {
-        //   head: "CS_COMPLAINT_DETAILS_COMPLAINT_DETAILS",
-        //   body: [
-        //     // {
-        //     //   isMandatory: true,
-        //     //   key: "SelectComplaintType",
-        //     //   type: "dropdown",
-        //     //   label: "CS_COMPLAINT_DETAILS_COMPLAINT_TYPE",
-        //     //   disable: false,
-        //     //   preProcess : {
-        //     //     updateDependent : ["populators.options"]
-        //     //   },
-        //     //   populators: {
-        //     //     name: "SelectComplaintType",
-        //     //     optionsKey: "i18nKey",
-        //     //     error: "CORE_COMMON_REQUIRED_ERRMSG",
-        //     //   },
-        //     // },
-        //     // {
-        //     //   inline: true,
-        //     //   label: "CS_COMPLAINT_DETAILS_COMPLAINT_DATE",
-        //     //   isMandatory: true,
-        //     //   key: "ComplaintDate",
-        //     //   type: "date", // Input type is date picker
-        //     //   disable: false,
-        //     //   preProcess : {
-        //     //     updateDependent : ["populators.validation.max"]
-        //     //   },
-        //     //   populators: {
-        //     //     name: "ComplaintDate",
-        //     //     required: true,
-        //     //     validation:{
-        //     //       max: "currentDate"
-        //     //     },
-        //     //     error: "CORE_COMMON_REQUIRED_ERRMSG"
-        //     //   },
-        //     // },
-        //     {
-        //       type: "component",
-        //       isMandatory: true,
-        //       component: "PGRBoundaryComponent",
-        //       key: "SelectedBoundary",
-        //       label: "Boundary",
-        //       populators: {
-        //         name: "SelectedBoundary",
-        //       },
-        //     }
-        //   ],
-        // },
+
 
         {
           head: "CS_COMPLAINT_LOCATION_DETAILS",
@@ -152,38 +104,25 @@ export const CreateComplaintConfig = {
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
               },
             },
-
             {
-              isMandatory: true,
-              key: "SelectCity",
-              type: "dropdown",
-              label: "CS_COMPLAINT_SELECT_CITY",
-              disable: false,
-              preProcess: {
-                updateDependent: ["populators.options"]
-              },
-              populators: {
-                name: "SelectCity",
-                optionsKey: "i18nKey",
-                error: "CORE_COMMON_REQUIRED_ERRMSG",
-              },
-            },
+              "key": "boundaryComponent",
+              "type": "boundary",
+              "inline": false,
+              "disable": false,
+              "populators": {
+                "fieldPairClassName": "boundary-filter-label-left-align",
+                "name": "boundaryComponent",
+                "levelConfig": { isSingleSelect: ["zone", "region"] },
+                "layoutConfig": {
+                  "isDropdownLayoutHorizontal": true,
+                  "isLabelFieldLayoutHorizontal": true
 
+                },
+                "hierarchyType": "ADMIN",
+                "noCardStyle": false,
+                "module": "CMS-BOUNDARY"
+              }
 
-            {
-              isMandatory: true,
-              key: "SelectLocality",
-              type: "dropdown",
-              label: "CS_COMPLAINT_LOCALITY",
-              disable: false,
-              preProcess: {
-                updateDependent: ["populators.options"]
-              },
-              populators: {
-                name: "SelectLocality",
-                optionsKey: "i18nKey",
-                error: "CORE_COMMON_REQUIRED_ERRMSG",
-              },
             },
             {
               inline: true,

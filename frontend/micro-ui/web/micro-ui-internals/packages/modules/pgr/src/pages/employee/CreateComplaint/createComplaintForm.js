@@ -12,7 +12,7 @@
  * - Navigates to complaint response screen after submission
  */
 
-import { FormComposerV2, Toast } from "@egovernments/digit-ui-components";
+import { FormComposerV2, Toast, Loader } from "@egovernments/digit-ui-components";
 import React, { useEffect, useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useHistory } from "react-router-dom";
@@ -99,7 +99,7 @@ const CreateComplaintForm = ({
     for (const item of data) {
       if (!seenMenuPaths.has(item.menuPath)) {
         seenMenuPaths.add(item.menuPath);
-        uniqueItems.push(item);
+        uniqueItems.push({ ...item, i18nKey: "SERVICEDEFS_" + item.menuPath.toUpperCase().replace(/[ -]/g, "_") });
       }
     }
 
@@ -113,7 +113,7 @@ const CreateComplaintForm = ({
       return [];
     }
 
-    return allItems.filter(item => item.department === baseItem.department);
+    return allItems.filter(item => item.department === baseItem.department).map((item) => ({ ...item, i18nKey: "SERVICEDEFS_" + item.serviceCode.toUpperCase() }));
   }
 
 
@@ -146,6 +146,31 @@ const CreateComplaintForm = ({
     if (selectedCity) fetchBoundaryData();
   }, [selectedCity]); // ← this only runs when selectedCity changes
 
+  // Use Custom MDMS hook for fetching Hierarchy Schema
+  const stateId = Digit.ULBService.getStateId();
+  const { isLoading: isHierarchyLoading, data: hierarchyData } = Digit.Hooks.useCustomMDMS(
+    stateId,
+    "CMS-BOUNDARY",
+    [{ name: "HierarchySchema" }],
+    {
+      select: (data) => {
+        const hierarchySchema = data?.["CMS-BOUNDARY"]?.HierarchySchema;
+        if (Array.isArray(hierarchySchema)) {
+          return hierarchySchema.find((item) => item.moduleName === "CMS");
+        }
+        return null;
+      },
+      retry: false,
+      enabled: true,
+    }
+  );
+
+  useEffect(() => {
+   
+    if (hierarchyData) {
+  
+    }
+  }, [hierarchyData, isHierarchyLoading, stateId]);
 
   const processLocalities = (boundaryList = []) => {
     if (!Array.isArray(boundaryList)) return [];
@@ -231,13 +256,30 @@ const CreateComplaintForm = ({
               disable: disabledFields[field.populators.name],
             };
           }
+          if (field.key === "boundaryComponent" && hierarchyData) {
+            return {
+              ...field,
+              populators: {
+                ...field.populators,
+                levelConfig: {
+                  ...field.populators.levelConfig,
+                  lowestLevel: hierarchyData.lowestHierarchy || window?.globalConfigs?.getConfig("PGR_BOUNDARY_LOWEST_LEVEL") || "Ward",
+                  highestLevel: hierarchyData.highestHierarchy || window?.globalConfigs?.getConfig("PGR_BOUNDARY_HIGHEST_LEVEL") || "City",
+                  isSingleSelect: [
+                    hierarchyData.lowestHierarchy || window?.globalConfigs?.getConfig("PGR_BOUNDARY_LOWEST_LEVEL") || "Ward",
+                    hierarchyData.highestHierarchy || window?.globalConfigs?.getConfig("PGR_BOUNDARY_HIGHEST_LEVEL") || "City"]
+                },
+                hierarchyType: hierarchyData.hierarchy || window?.globalConfigs?.getConfig("HIERARCHY_TYPE") || "ADMIN",
+              },
+            };
+          }
           return field;
         }),
       };
     });
 
     return { ...baseConfig, form: updatedForm };
-  }, [createComplaintConfig, serviceDefs, t, disabledFields, subType, selectedCity, localitiesOptions]);
+  }, [createComplaintConfig, serviceDefs, t, disabledFields, subType, selectedCity, localitiesOptions, hierarchyData]);
 
 
 
@@ -359,6 +401,10 @@ const CreateComplaintForm = ({
   };
 
 
+
+  if (isHierarchyLoading) {
+    return <Loader />;
+  }
 
   return (
     <React.Fragment>

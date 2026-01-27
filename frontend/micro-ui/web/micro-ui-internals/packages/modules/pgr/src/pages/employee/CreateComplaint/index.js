@@ -40,20 +40,20 @@ const CreateComplaint = () => {
     {
       select: (data) => data?.["RAINMAKER-PGR"]?.CreateComplaintConfig?.[0],
       retry: false,
-      enable: false, // Disabled fetch by default – relies on fallback config
+      enable: true,
     }
   );
 
-     // Fetch the list of service definitions (e.g., complaint types) for current tenant
-    //  const serviceDefs = Digit.Hooks.pgr.useServiceDefs(tenantId, "PGR");
+  // Fetch the list of service definitions (e.g., complaint types) for current tenant
+  //  const serviceDefs = Digit.Hooks.pgr.useServiceDefs(tenantId, "PGR");
 
   // Use MDMS config if available, otherwise fallback to local static config
   let configs = mdmsData || CreateComplaintConfig?.CreateComplaintConfig?.[0];
-  
-   /**
-    * Preprocess config using translation and inject complaint types into the serviceCode dropdown
-    * and inject mobile validation from MDMS
-    */
+
+  /**
+   * Preprocess config using translation and inject complaint types into the serviceCode dropdown
+   * and inject mobile validation from MDMS
+   */
 
   // Inject mobile validation rules from MDMS into the config
   if (configs && validationRules) {
@@ -71,7 +71,7 @@ const CreateComplaint = () => {
                   populators: {
                     ...field.populators,
                     componentInFront: validationRules.prefix,
-                    prefix:validationRules.prefix,
+                    prefix: validationRules.prefix,
                     validation: {
                       required: true,
                       minlength: validationRules.minLength,
