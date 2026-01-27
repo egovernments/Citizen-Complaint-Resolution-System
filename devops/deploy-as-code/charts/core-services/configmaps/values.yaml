@@ -208,3 +208,6 @@ secrets:
   egov-user-chatbot:
     namespace: egov
     name: egov-user-chatbot
+  egov-hrms:
+    name: egov-hrms
+    namespace: egov
