@@ -1,0 +1,992 @@
+openapi: 3.0.3
+info:
+  title: PGR UI Middleware API
+  description: |
+    Middleware API that consolidates PGR UI orchestration.
+    This layer hides cross-service fan-out (PGR, workflow, HRMS, boundary, MDMS, filestore)
+    and returns UI-friendly DTOs.
+  version: 0.1.0
+servers:
+  - url: https://{host}/api
+    variables:
+      host:
+        default: middleware.example.org
+security:
+  - bearerAuth: []
+paths:
+  /ui/pgr/config:
+    get:
+      summary: Fetch UI configuration and reference data
+      operationId: getPgrUiConfig
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/Locale"
+      responses:
+        "200":
+          description: UI configuration bundle
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/PgrUiConfig"
+        "400":
+          description: Invalid input.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+        "401":
+          description: Unauthorized.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+  /ui/pgr/inbox:
+    post:
+      summary: Search PGR inbox
+      operationId: searchPgrInbox
+      requestBody:
+        required: true
+        content:
+          "*/*":
+            schema:
+              $ref: "#/components/schemas/InboxSearchRequest"
+      responses:
+        "200":
+          description: Inbox search results
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/InboxSearchResponse"
+        "400":
+          description: Invalid input.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+        "401":
+          description: Unauthorized.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+  /ui/pgr/complaints:
+    post:
+      summary: Create a complaint
+      operationId: createComplaint
+      requestBody:
+        required: true
+        content:
+          "*/*":
+            schema:
+              $ref: "#/components/schemas/CreateComplaintRequest"
+      responses:
+        "201":
+          description: Complaint created
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/ComplaintCreateResponse"
+        "400":
+          description: Invalid input.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+        "401":
+          description: Unauthorized.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+  /ui/pgr/complaints/{complaintId}:
+    get:
+      summary: Get complaint details and workflow context
+      operationId: getComplaintDetails
+      parameters:
+        - $ref: "#/components/parameters/ComplaintId"
+        - $ref: "#/components/parameters/TenantId"
+      responses:
+        "200":
+          description: Complaint details and workflow context
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/ComplaintDetailsResponse"
+        "404":
+          description: Not found.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+        "401":
+          description: Unauthorized.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+  /ui/pgr/complaints/{complaintId}/actions:
+    post:
+      summary: Perform a workflow action on a complaint
+      operationId: actOnComplaint
+      parameters:
+        - $ref: "#/components/parameters/ComplaintId"
+        - $ref: "#/components/parameters/TenantId"
+      requestBody:
+        required: true
+        content:
+          "*/*":
+            schema:
+              $ref: "#/components/schemas/ComplaintActionRequest"
+      responses:
+        "200":
+          description: Action applied
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/ComplaintActionResponse"
+        "400":
+          description: Invalid input.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+        "401":
+          description: Unauthorized.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+  /ui/pgr/complaints/{complaintId}/rate:
+    post:
+      summary: Rate a resolved complaint
+      operationId: rateComplaint
+      parameters:
+        - $ref: "#/components/parameters/ComplaintId"
+        - $ref: "#/components/parameters/TenantId"
+      requestBody:
+        required: true
+        content:
+          "*/*":
+            schema:
+              $ref: "#/components/schemas/ComplaintRatingRequest"
+      responses:
+        "200":
+          description: Rating submitted
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/ComplaintActionResponse"
+        "400":
+          description: Invalid input.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+        "401":
+          description: Unauthorized.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+  /ui/pgr/complaints/{complaintId}/reopen:
+    post:
+      summary: Reopen a closed complaint
+      operationId: reopenComplaint
+      parameters:
+        - $ref: "#/components/parameters/ComplaintId"
+        - $ref: "#/components/parameters/TenantId"
+      requestBody:
+        required: true
+        content:
+          "*/*":
+            schema:
+              $ref: "#/components/schemas/ComplaintReopenRequest"
+      responses:
+        "200":
+          description: Complaint reopened
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/ComplaintActionResponse"
+        "400":
+          description: Invalid input.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+        "401":
+          description: Unauthorized.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+  /ui/pgr/uploads:
+    post:
+      summary: Upload a file and return a fileStoreId
+      operationId: uploadFile
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                requestInfo:
+                  $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/RequestInfo"
+                file:
+                  type: string
+                  format: binary
+                documentType:
+                  type: string
+                  example: PHOTO
+      responses:
+        "200":
+          description: Upload success
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/UploadResponse"
+        "400":
+          description: Invalid input.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+        "401":
+          description: Unauthorized.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    TenantId:
+      name: tenantId
+      in: query
+      required: true
+      schema:
+        type: string
+      example: pb.amritsar
+    Locale:
+      name: locale
+      in: query
+      required: false
+      schema:
+        type: string
+      example: en_IN
+    ComplaintId:
+      name: complaintId
+      in: path
+      required: true
+      schema:
+        type: string
+      example: PG-PGR-2024-05-12-000123
+  schemas:
+    PgrUiConfig:
+      type: object
+      description: Bundle of UI configuration and reference data for PGR.
+      properties:
+        serviceDefs:
+          type: array
+          description: Service definitions for complaint types and departments.
+          items:
+            $ref: "#/components/schemas/ServiceDef"
+        complaintTypes:
+          type: array
+          description: Top-level complaint types.
+          items:
+            $ref: "#/components/schemas/ComplaintType"
+        complaintSubTypes:
+          type: array
+          description: Subtypes for complaint types.
+          items:
+            $ref: "#/components/schemas/ComplaintSubType"
+        boundaryHierarchy:
+          type: array
+          description: Boundary tree for locality selection.
+          items:
+            $ref: "#/components/schemas/BoundaryNode"
+        inboxConfig:
+          type: object
+          description: Config for inbox UI behavior.
+          additionalProperties: true
+        createConfig:
+          type: object
+          description: Config for create complaint UI behavior.
+          additionalProperties: true
+    ServiceDef:
+      type: object
+      description: Service definition entry with code and department.
+      properties:
+        serviceCode:
+          type: string
+          description: Service code identifier.
+          minLength: 2
+          maxLength: 128
+        department:
+          type: string
+          description: Department owning the service.
+          minLength: 2
+          maxLength: 128
+        i18nKey:
+          type: string
+          description: Localization key for display text.
+          minLength: 2
+          maxLength: 256
+    ComplaintType:
+      type: object
+      description: Complaint type entry.
+      properties:
+        code:
+          type: string
+          description: Complaint type code.
+          minLength: 2
+          maxLength: 128
+        name:
+          type: string
+          description: Human-readable complaint type name.
+          minLength: 2
+          maxLength: 256
+    ComplaintSubType:
+      type: object
+      description: Complaint subtype entry.
+      properties:
+        code:
+          type: string
+          description: Complaint subtype code.
+          minLength: 2
+          maxLength: 128
+        parentCode:
+          type: string
+          description: Parent complaint type code.
+          minLength: 2
+          maxLength: 128
+        name:
+          type: string
+          description: Human-readable complaint subtype name.
+          minLength: 2
+          maxLength: 256
+    BoundaryNode:
+      type: object
+      description: Boundary tree node.
+      properties:
+        code:
+          type: string
+          description: Boundary code.
+          minLength: 1
+          maxLength: 128
+        name:
+          type: string
+          description: Human-readable boundary name.
+          minLength: 1
+          maxLength: 256
+        boundaryType:
+          type: string
+          description: Boundary type identifier (e.g., Locality).
+          minLength: 2
+          maxLength: 64
+        children:
+          type: array
+          description: Child boundaries.
+          items:
+            $ref: "#/components/schemas/BoundaryNode"
+    InboxSearchRequest:
+      type: object
+      description: Request wrapper for inbox search criteria and metadata.
+      properties:
+        requestInfo:
+          $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/RequestInfo"
+        criteria:
+          $ref: "#/components/schemas/InboxSearchCriteria"
+    InboxSearchCriteria:
+      type: object
+      description: Search parameters for inbox list.
+      required:
+        - tenantId
+      properties:
+        tenantId:
+          type: string
+          description: Tenant identifier for the search.
+          minLength: 2
+          maxLength: 64
+        complaintNumber:
+          type: string
+          description: Complaint number to search.
+          minLength: 2
+          maxLength: 64
+        mobileNumber:
+          type: string
+          description: Mobile number associated with the complaint.
+          minLength: 6
+          maxLength: 16
+        status:
+          type: array
+          description: List of workflow statuses to filter by.
+          items:
+            type: string
+            minLength: 2
+            maxLength: 64
+        serviceCode:
+          type: string
+          description: Service code for complaint type.
+          minLength: 2
+          maxLength: 128
+        locality:
+          type: string
+          description: Locality code to filter by.
+          minLength: 1
+          maxLength: 128
+        assignedTo:
+          type: string
+          description: ASSIGNED_TO_ME or ASSIGNED_TO_ALL
+          minLength: 8
+          maxLength: 16
+        dateRange:
+          $ref: "#/components/schemas/DateRange"
+        offset:
+          type: integer
+          description: Offset for pagination.
+          minimum: 0
+          default: 0
+        limit:
+          type: integer
+          description: Limit for pagination.
+          minimum: 1
+          default: 20
+    InboxSearchResponse:
+      type: object
+      description: Inbox search response containing matching items.
+      properties:
+        responseInfo:
+          $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/ResponseInfo"
+        totalCount:
+          type: integer
+          description: Total count of matching records.
+        items:
+          type: array
+          description: List of matching complaints.
+          items:
+            $ref: "#/components/schemas/ComplaintSummary"
+    ComplaintSummary:
+      type: object
+      description: Summary entry for inbox listing.
+      properties:
+        complaintId:
+          type: string
+          description: Complaint identifier.
+          minLength: 2
+          maxLength: 64
+        serviceCode:
+          type: string
+          description: Service code for the complaint type.
+          minLength: 2
+          maxLength: 128
+        locality:
+          type: string
+          description: Locality code.
+          minLength: 1
+          maxLength: 128
+        status:
+          type: string
+          description: Current workflow status.
+          minLength: 2
+          maxLength: 64
+        assignee:
+          type: string
+          description: Current assignee display name.
+          minLength: 1
+          maxLength: 256
+        slaRemainingDays:
+          type: integer
+          description: Remaining SLA days.
+        createdTime:
+          type: integer
+          format: int64
+          description: Epoch time when complaint was created.
+    CreateComplaintRequest:
+      type: object
+      description: Request wrapper for creating a complaint with metadata.
+      properties:
+        requestInfo:
+          $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/RequestInfo"
+        complaint:
+          $ref: "#/components/schemas/ComplaintCreatePayload"
+    ComplaintCreatePayload:
+      type: object
+      description: Payload for creating a complaint.
+      required:
+        - tenantId
+        - serviceCode
+        - description
+        - address
+      properties:
+        tenantId:
+          type: string
+          description: Tenant identifier for the complaint.
+          minLength: 2
+          maxLength: 64
+        serviceCode:
+          type: string
+          description: Service code for complaint type.
+          minLength: 2
+          maxLength: 128
+        description:
+          type: string
+          description: Complaint description text.
+          minLength: 1
+          maxLength: 2048
+        source:
+          type: string
+          description: Source channel for the complaint.
+          default: web
+          minLength: 2
+          maxLength: 32
+        complainant:
+          $ref: "#/components/schemas/Complainant"
+        address:
+          $ref: "#/components/schemas/Address"
+        images:
+          type: array
+          description: Supporting images/documents.
+          items:
+            $ref: "#/components/schemas/UploadedDocument"
+        additionalDetail:
+          type: object
+          description: Additional metadata for the complaint.
+          additionalProperties: true
+    ComplaintCreateResponse:
+      type: object
+      description: Response after creating a complaint.
+      properties:
+        responseInfo:
+          $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/ResponseInfo"
+        complaintId:
+          type: string
+          description: Complaint identifier.
+          minLength: 2
+          maxLength: 64
+        status:
+          type: string
+          description: Current workflow status.
+          minLength: 2
+          maxLength: 64
+        createdTime:
+          type: integer
+          format: int64
+          description: Epoch time when created.
+    ComplaintDetailsResponse:
+      type: object
+      description: Combined complaint details and workflow context.
+      properties:
+        responseInfo:
+          $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/ResponseInfo"
+        complaint:
+          $ref: "#/components/schemas/ComplaintDetails"
+        timeline:
+          type: array
+          description: Workflow timeline entries.
+          items:
+            $ref: "#/components/schemas/TimelineItem"
+        nextActions:
+          type: array
+          description: Available workflow actions for the user.
+          items:
+            $ref: "#/components/schemas/WorkflowAction"
+        assigneeOptions:
+          type: array
+          description: Assignee options for assignment actions.
+          items:
+            $ref: "#/components/schemas/AssigneeOption"
+    ComplaintDetails:
+      type: object
+      description: Detailed complaint object.
+      properties:
+        complaintId:
+          type: string
+          description: Complaint identifier.
+          minLength: 2
+          maxLength: 64
+        tenantId:
+          type: string
+          description: Tenant identifier.
+          minLength: 2
+          maxLength: 64
+        serviceCode:
+          type: string
+          description: Service code for complaint type.
+          minLength: 2
+          maxLength: 128
+        description:
+          type: string
+          description: Complaint description text.
+          minLength: 1
+          maxLength: 2048
+        status:
+          type: string
+          description: Current workflow status.
+          minLength: 2
+          maxLength: 64
+        createdTime:
+          type: integer
+          format: int64
+          description: Epoch time when created.
+        address:
+          $ref: "#/components/schemas/Address"
+        complainant:
+          $ref: "#/components/schemas/Complainant"
+        images:
+          type: array
+          description: Supporting images/documents.
+          items:
+            $ref: "#/components/schemas/UploadedDocument"
+        additionalDetail:
+          type: object
+          description: Additional metadata for the complaint.
+          additionalProperties: true
+    TimelineItem:
+      type: object
+      description: Workflow timeline entry.
+      properties:
+        action:
+          type: string
+          description: Action performed.
+          minLength: 2
+          maxLength: 64
+        status:
+          type: string
+          description: Resulting status.
+          minLength: 2
+          maxLength: 64
+        performedBy:
+          $ref: "#/components/schemas/UserRef"
+        comments:
+          type: array
+          description: Comments attached to the action.
+          items:
+            type: string
+            minLength: 0
+            maxLength: 2048
+        documents:
+          type: array
+          description: Documents associated with the action.
+          items:
+            $ref: "#/components/schemas/UploadedDocument"
+        audit:
+          $ref: "#/components/schemas/AuditDetails"
+    WorkflowAction:
+      type: object
+      description: Workflow action available to the user.
+      properties:
+        action:
+          type: string
+          description: Action code.
+          minLength: 2
+          maxLength: 64
+        roles:
+          type: array
+          description: Roles allowed to perform the action.
+          items:
+            type: string
+            minLength: 2
+            maxLength: 128
+        nextState:
+          type: string
+          description: Next workflow state identifier.
+          minLength: 2
+          maxLength: 128
+    AssigneeOption:
+      type: object
+      description: Assignee option for assignment actions.
+      properties:
+        id:
+          type: string
+          description: User identifier for assignment.
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          description: Display name of assignee.
+          minLength: 1
+          maxLength: 256
+        department:
+          type: string
+          description: Department name or code.
+          minLength: 2
+          maxLength: 128
+        mobileNumber:
+          type: string
+          description: Mobile number for contact.
+          minLength: 6
+          maxLength: 16
+    ComplaintActionRequest:
+      type: object
+      description: Request to perform a workflow action.
+      required:
+        - action
+      properties:
+        requestInfo:
+          $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/RequestInfo"
+        action:
+          type: string
+          example: ASSIGN
+          description: Action code to execute.
+          minLength: 2
+          maxLength: 64
+        comments:
+          type: string
+          description: Optional comments for the action.
+          minLength: 0
+          maxLength: 2048
+        assigneeId:
+          type: string
+          description: User identifier to assign to.
+          minLength: 1
+          maxLength: 64
+        hrmsAssigneeId:
+          type: string
+          description: HRMS UUID for assignee.
+          minLength: 1
+          maxLength: 64
+        documents:
+          type: array
+          description: Documents attached to the action.
+          items:
+            $ref: "#/components/schemas/UploadedDocument"
+    ComplaintActionResponse:
+      type: object
+      description: Response after applying a workflow action.
+      properties:
+        responseInfo:
+          $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/ResponseInfo"
+        complaintId:
+          type: string
+          description: Complaint identifier.
+          minLength: 2
+          maxLength: 64
+        status:
+          type: string
+          description: Current workflow status after action.
+          minLength: 2
+          maxLength: 64
+        timeline:
+          type: array
+          description: Updated workflow timeline.
+          items:
+            $ref: "#/components/schemas/TimelineItem"
+    ComplaintRatingRequest:
+      type: object
+      description: Request to rate a complaint.
+      required:
+        - rating
+      properties:
+        requestInfo:
+          $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/RequestInfo"
+        rating:
+          type: integer
+          description: Rating value.
+          minimum: 1
+          maximum: 5
+        feedback:
+          type: array
+          description: Selected feedback options.
+          items:
+            type: string
+            minLength: 1
+            maxLength: 128
+        comments:
+          type: string
+          description: Optional free-text feedback.
+          minLength: 0
+          maxLength: 2048
+    ComplaintReopenRequest:
+      type: object
+      description: Request to reopen a closed complaint.
+      required:
+        - reason
+      properties:
+        requestInfo:
+          $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/RequestInfo"
+        reason:
+          type: string
+          description: Reopen reason text or code.
+          minLength: 2
+          maxLength: 512
+        comments:
+          type: string
+          description: Additional comments for reopening.
+          minLength: 0
+          maxLength: 2048
+        images:
+          type: array
+          description: Supporting images/documents for reopening.
+          items:
+            $ref: "#/components/schemas/UploadedDocument"
+    UploadResponse:
+      type: object
+      description: Response for file upload.
+      properties:
+        responseInfo:
+          $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/ResponseInfo"
+        fileStoreId:
+          type: string
+          description: File store identifier.
+          minLength: 1
+          maxLength: 64
+        documentType:
+          type: string
+          description: Document type code.
+          minLength: 2
+          maxLength: 64
+        url:
+          type: string
+          description: Accessible URL for the uploaded file, if available.
+          minLength: 0
+          maxLength: 1024
+    UploadedDocument:
+      type: object
+      description: Document reference attached to a complaint or action.
+      properties:
+        documentType:
+          type: string
+          description: Document type code.
+          minLength: 2
+          maxLength: 64
+        fileStoreId:
+          type: string
+          description: File store identifier.
+          minLength: 1
+          maxLength: 64
+        documentUid:
+          type: string
+          description: Document UID if applicable.
+          minLength: 0
+          maxLength: 64
+        additionalDetails:
+          type: object
+          description: Additional document metadata.
+          additionalProperties: true
+    Complainant:
+      type: object
+      description: Complaint user details.
+      properties:
+        name:
+          type: string
+          description: Name of the complainant.
+          minLength: 1
+          maxLength: 256
+        mobileNumber:
+          type: string
+          description: Mobile number of the complainant.
+          minLength: 6
+          maxLength: 16
+        userName:
+          type: string
+          description: Username or login identifier.
+          minLength: 1
+          maxLength: 128
+        type:
+          type: string
+          description: User type.
+          example: EMPLOYEE
+          minLength: 2
+          maxLength: 32
+    Address:
+      type: object
+      description: Address for the complaint.
+      properties:
+        landmark:
+          type: string
+          description: Landmark near the complaint location.
+          minLength: 0
+          maxLength: 256
+        buildingName:
+          type: string
+          description: Building name.
+          minLength: 0
+          maxLength: 256
+        street:
+          type: string
+          description: Street name.
+          minLength: 0
+          maxLength: 256
+        pincode:
+          type: string
+          description: Postal code.
+          minLength: 4
+          maxLength: 16
+        localityCode:
+          type: string
+          description: Locality code.
+          minLength: 1
+          maxLength: 128
+        localityName:
+          type: string
+          description: Locality name.
+          minLength: 1
+          maxLength: 256
+        geoLocation:
+          $ref: "#/components/schemas/GeoLocation"
+    GeoLocation:
+      type: object
+      description: Latitude and longitude coordinates.
+      properties:
+        latitude:
+          type: number
+          format: float
+          description: Latitude value.
+        longitude:
+          type: number
+          format: float
+          description: Longitude value.
+    UserRef:
+      type: object
+      description: Lightweight user reference.
+      properties:
+        id:
+          type: string
+          description: User identifier.
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          description: User display name.
+          minLength: 1
+          maxLength: 256
+        mobileNumber:
+          type: string
+          description: User mobile number.
+          minLength: 6
+          maxLength: 16
+    AuditDetails:
+      type: object
+      description: Audit metadata.
+      properties:
+        createdTime:
+          type: integer
+          format: int64
+          description: Epoch time when created.
+        lastModifiedTime:
+          type: integer
+          format: int64
+          description: Epoch time when last modified.
+    DateRange:
+      type: object
+      description: Date range filter in epoch milliseconds.
+      properties:
+        startDate:
+          type: integer
+          format: int64
+          description: Range start time (epoch).
+        endDate:
+          type: integer
+          format: int64
+          description: Range end time (epoch).
