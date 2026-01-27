@@ -166,9 +166,9 @@ const CreateComplaintForm = ({
   );
 
   useEffect(() => {
-    console.log("Hierarchy Data Debug:", { stateId, isHierarchyLoading, hierarchyData });
+   
     if (hierarchyData) {
-      console.log("MDMS Response:", hierarchyData);
+  
     }
   }, [hierarchyData, isHierarchyLoading, stateId]);
 
