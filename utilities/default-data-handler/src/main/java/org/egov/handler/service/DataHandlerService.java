@@ -265,18 +265,18 @@ public class DataHandlerService {
         }
     }
 
-    public void createBoundaryDataFromFile(DefaultDataRequest defaultDataRequest) throws IOException {
+    public void createBoundaryDataFromFile(DefaultDataRequest defaultDataRequest, String folder) throws IOException {
 
-        createBoundaryDefinitionFromFile(defaultDataRequest.getRequestInfo(), defaultDataRequest.getTargetTenantId());
-        createBoundaryEntityFromFile(defaultDataRequest.getRequestInfo(), defaultDataRequest.getTargetTenantId());
-        createBoundaryRelationshipFromFile(defaultDataRequest.getRequestInfo(), defaultDataRequest.getTargetTenantId());
+        createBoundaryDefinitionFromFile(defaultDataRequest.getRequestInfo(), defaultDataRequest.getTargetTenantId(), folder);
+        createBoundaryEntityFromFile(defaultDataRequest.getRequestInfo(), defaultDataRequest.getTargetTenantId(), folder);
+        createBoundaryRelationshipFromFile(defaultDataRequest.getRequestInfo(), defaultDataRequest.getTargetTenantId(), folder);
     }
 
-    public void createBoundaryDefinitionFromFile(RequestInfo requestInfo, String targetTenantId) throws IOException {
+    public void createBoundaryDefinitionFromFile(RequestInfo requestInfo, String targetTenantId, String folder) throws IOException {
         try{
             String hierarchyDefinitionCreateUri = serviceConfig.getHierarchyDefinitionCreateUri();
 
-            Resource resource = resourceLoader.getResource("classpath:boundary/hierarchy-definition/hierarchy.json");
+            Resource resource = resourceLoader.getResource("classpath:" + folder + "/hierarchy-definition/hierarchy.json");
             InputStream inputStream = resource.getInputStream();
 
             // Read file content as raw JSON string
@@ -289,22 +289,22 @@ public class DataHandlerService {
             Map<String, Object> payload = new HashMap<>();
             payload.put("RequestInfo", requestInfo);
             payload.put("BoundaryHierarchy", boundaryPayload.get("BoundaryHierarchy"));
-            System.out.println(payload);
+            log.debug("Boundary hierarchy payload: {}", payload);
 
             restTemplate.postForObject(hierarchyDefinitionCreateUri, payload, Object.class);
-            log.info("Created boundary hierarchy for tenant: {}", targetTenantId);
+            log.info("Created boundary hierarchy for tenant: {} from folder: {}", targetTenantId, folder);
         }
         catch (Exception e) {
-            log.error("Failed to create boundary hierarchy for tenant: {}", targetTenantId);
+            log.error("Failed to create boundary hierarchy for tenant: {} from folder: {}", targetTenantId, folder, e);
 //            throw new CustomException("BOUNDARY_DATA_CREATE_FAILED", "Failed to create boundary data for " + targetTenantId + " : " + e.getMessage());
         }
     }
 
-    public void createBoundaryEntityFromFile(RequestInfo requestInfo, String targetTenantId) throws IOException {
+    public void createBoundaryEntityFromFile(RequestInfo requestInfo, String targetTenantId, String folder) throws IOException {
         try{
             String hierarchyEntityCreateUri = serviceConfig.getBoundaryEntityCreateUri();
 
-            Resource resource = resourceLoader.getResource("classpath:boundary/entity/entity.json");
+            Resource resource = resourceLoader.getResource("classpath:" + folder + "/entity/entity.json");
             InputStream inputStream = resource.getInputStream();
 
             // Read file content as raw JSON string
@@ -317,22 +317,22 @@ public class DataHandlerService {
             Map<String, Object> payload = new HashMap<>();
             payload.put("RequestInfo", requestInfo);
             payload.put("Boundary", objectMapper.convertValue(boundaryArrayNode, List.class));
-            System.out.println(payload);
+            log.debug("Boundary entity payload: {}", payload);
 
             restTemplate.postForObject(hierarchyEntityCreateUri, payload, Object.class);
-            log.info("Created boundary hierarchy entity for tenant: {}", targetTenantId);
+            log.info("Created boundary hierarchy entity for tenant: {} from folder: {}", targetTenantId, folder);
         }
         catch (Exception e) {
-            log.error("Failed to create boundary hierarchy entity for tenant: {}", targetTenantId);
+            log.error("Failed to create boundary hierarchy entity for tenant: {} from folder: {}", targetTenantId, folder, e);
 //            throw new CustomException("BOUNDARY_DATA_CREATE_FAILED", "Failed to create boundary data for " + targetTenantId + " : " + e.getMessage());
         }
     }
 
-    public void createBoundaryRelationshipFromFile(RequestInfo requestInfo, String targetTenantId) throws IOException {
+    public void createBoundaryRelationshipFromFile(RequestInfo requestInfo, String targetTenantId, String folder) throws IOException {
         try{
             String hierarchyRelationshipCreateUri = serviceConfig.getBoundaryRelationshipCreateUri();
 
-            Resource resource = resourceLoader.getResource("classpath:boundary/relationship/relationship.json");
+            Resource resource = resourceLoader.getResource("classpath:" + folder + "/relationship/relationship.json");
             InputStream inputStream = resource.getInputStream();
 
             // Read file content as raw JSON string
@@ -355,17 +355,17 @@ public class DataHandlerService {
 
                     restTemplate.postForObject(hierarchyRelationshipCreateUri, entity, Object.class);
 
-                    log.info("Created boundary relationship entry for tenant: {}", targetTenantId);
+                    log.info("Created boundary relationship entry for tenant: {} from folder: {}", targetTenantId, folder);
                 } catch (Exception ex) {
-                    log.error("Failed to create individual boundary relationship entry for tenant: {}. Skipping...",
-                            targetTenantId, ex);
+                    log.error("Failed to create individual boundary relationship entry for tenant: {} from folder: {}. Skipping...",
+                            targetTenantId, folder, ex);
                     // continue with next entry
                 }
             }
-            log.info("Created boundary hierarchy relationship for tenant: {}", targetTenantId);
+            log.info("Created boundary hierarchy relationship for tenant: {} from folder: {}", targetTenantId, folder);
         }
         catch (Exception e) {
-            log.error("Failed to create boundary hierarchy relationship for tenant: {}", targetTenantId);
+            log.error("Failed to create boundary hierarchy relationship for tenant: {} from folder: {}", targetTenantId, folder, e);
 //            throw new CustomException("BOUNDARY_DATA_CREATE_FAILED", "Failed to create boundary data for " + targetTenantId + " : " + e.getMessage());
         }
     }

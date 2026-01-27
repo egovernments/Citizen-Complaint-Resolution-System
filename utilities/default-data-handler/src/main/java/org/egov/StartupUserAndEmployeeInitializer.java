@@ -122,7 +122,9 @@ public class StartupUserAndEmployeeInitializer {
             localizationUtil.upsertLocalizationFromFile(defaultDataRequest,
                     serviceConfig.getDevLocalizationDataPath());
 
-            dataHandlerService.createBoundaryDataFromFile(defaultDataRequest);
+            // Create boundary data from both boundary and boundary-root folders
+            dataHandlerService.createBoundaryDataFromFile(defaultDataRequest, "boundary");
+            dataHandlerService.createBoundaryDataFromFile(defaultDataRequest, "boundary-root");
 
             // Load dev users
             dataHandlerService.createUserFromFile(tenantRequest, serviceConfig.getDevUserDataFile());
