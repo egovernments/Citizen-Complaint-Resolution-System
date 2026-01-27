@@ -1,0 +1,44 @@
+[
+  {
+    "tenantId": "{tenantid}",
+    "code": "PG_CITYA_ADMIN_CITY",
+    "hierarchyType": "ADMIN",
+    "boundaryType": "City",
+    "parent": ""
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "Z1_ADMIN_ZONE",
+    "hierarchyType": "ADMIN",
+    "boundaryType": "Zone",
+    "parent": "PG_CITYA_ADMIN_CITY"
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "B1_ADMIN_BLOCK",
+    "hierarchyType": "ADMIN",
+    "boundaryType": "Block",
+    "parent": "Z1_ADMIN_ZONE"
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "SUN01_ADMIN_LOCALITY",
+    "hierarchyType": "ADMIN",
+    "boundaryType": "Locality",
+    "parent": "B1_ADMIN_BLOCK"
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "SUN02_ADMIN_LOCALITY",
+    "hierarchyType": "ADMIN",
+    "boundaryType": "Locality",
+    "parent": "B1_ADMIN_BLOCK"
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "SUN03_ADMIN_LOCALITY",
+    "hierarchyType": "ADMIN",
+    "boundaryType": "Locality",
+    "parent": "B1_ADMIN_BLOCK"
+  }
+]
