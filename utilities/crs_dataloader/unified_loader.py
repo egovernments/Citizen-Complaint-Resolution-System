@@ -661,7 +661,7 @@ class APIUploader:
             self.base_url = self.base_url[:-1]
 
         # Service endpoints from .env (configurable)
-        mdms_v2_service = os.getenv("MDMS_V2_SERVICE", "/egov-mdms-service")
+        mdms_v2_service = os.getenv("MDMS_V2_SERVICE", "/mdms-v2")
         boundary_service = os.getenv("BOUNDARY_SERVICE", "/boundary-service")
         boundary_mgmt_service = os.getenv("BOUNDARY_MGMT_SERVICE", "/egov-bndry-mgmnt")
         localization_service = os.getenv("LOCALIZATION_SERVICE", "/localization")
@@ -692,6 +692,9 @@ class APIUploader:
         self.auth_token = None
         self.user_info = None
         self.authenticated = False
+
+        # HTTP headers for API requests
+        self.headers = {'Content-Type': 'application/json'}
 
         # Auto-authenticate if credentials provided
         if self.username and self.password:
@@ -756,6 +759,19 @@ class APIUploader:
         except Exception as e:
             print(f"❌ Authentication error: {str(e)}")
             return False
+
+    def _get_request_info(self) -> Dict:
+        """Generate RequestInfo object for API requests
+
+        Returns:
+            Dict containing RequestInfo with authentication details
+        """
+        return {
+            "apiId": "Rainmaker",
+            "authToken": self.auth_token,
+            "userInfo": self.user_info,
+            "msgId": f"{int(time.time() * 1000)}|en_IN"
+        }
 
     def _extract_error_message(self, error_text: str) -> str:
         """Extract clean error message from API error response
@@ -1671,6 +1687,7 @@ class APIUploader:
         return result
 
     def setup_default_data(self, targetTenantId: str, module: str, schemaCodes: list, onlySchemas: bool = False) -> dict:
+        import sys
 
         url = f"{self.Datahandlerurl}/tenant/new"
 
@@ -1690,25 +1707,47 @@ class APIUploader:
             "onlySchemas": onlySchemas
         }
 
-        print("\n[DEFAULT DATA SETUP]")
-        print(f"   Target Tenant: {targetTenantId}")
-        print(f"   Module:        {module}")
-        print(f"   Schemas:       {schemaCodes}")
-        print(f"   Only Schemas:  {onlySchemas}")
-        print(f"   API URL:       {url}")
-        print("="*60)
+        print("\n[DEFAULT DATA SETUP]", flush=True)
+        print(f"   Target Tenant: {targetTenantId}", flush=True)
+        print(f"   Module:        {module}", flush=True)
+        print(f"   Schemas:       {schemaCodes}", flush=True)
+        print(f"   Only Schemas:  {onlySchemas}", flush=True)
+        print(f"   API URL:       {url}", flush=True)
+        print("="*60, flush=True)
 
         try:
             # Tenant creation can take 5-10 minutes, use long timeout
-            print(f"   ⏳ This may take 5-10 minutes, please wait...")
+            print(f"   ⏳ This may take 5-10 minutes, please wait...", flush=True)
+            sys.stdout.flush()
             response = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=1200)
             response.raise_for_status()
 
             result = response.json()
 
-            print(f"   [SUCCESS] Default data setup complete for {targetTenantId}")
-            print("Once the new tenant is created, please log in again using the new root tenant admin credentials.")
-            print("="*60)
+            print(f"   [SUCCESS] Default data setup complete for {targetTenantId}", flush=True)
+            print("="*60, flush=True)
+
+            # Re-authenticate with the new tenant
+            print(f"\n🔄 Re-authenticating with new tenant: {targetTenantId}...", flush=True)
+            sys.stdout.flush()
+
+            # Store original tenant
+            original_tenant = self.tenant_id
+
+            # Update tenant ID to new tenant
+            self.tenant_id = targetTenantId
+
+            # Re-authenticate
+            try:
+                self.authenticate()
+                print(f"✅ Successfully authenticated with tenant: {targetTenantId}", flush=True)
+                print(f"   User: {self.user_info.get('userName', 'N/A')}", flush=True)
+                print(f"   Roles: {[role.get('code') for role in self.user_info.get('roles', [])]}", flush=True)
+            except Exception as auth_error:
+                print(f"⚠️  Re-authentication failed: {str(auth_error)}", flush=True)
+                print(f"   You may need to manually re-authenticate with tenant: {targetTenantId}", flush=True)
+                # Restore original tenant if re-auth fails
+                self.tenant_id = original_tenant
 
             return {
                 "success": True,
@@ -1717,14 +1756,14 @@ class APIUploader:
 
         except requests.exceptions.HTTPError as e:
             error_text = e.response.text if hasattr(e.response, "text") else str(e)
-            print(f"[FAILED] HTTP ERROR {e.response.status_code}")
-            print(error_text)
-            print("="*60)
+            print(f"[FAILED] HTTP ERROR {e.response.status_code}", flush=True)
+            print(error_text, flush=True)
+            print("="*60, flush=True)
             return {"success": False, "error": error_text}
 
         except Exception as e:
-            print(f"[ERROR] {str(e)}")
-            print("="*60)
+            print(f"[ERROR] {str(e)}", flush=True)
+            print("="*60, flush=True)
             return {"success": False, "error": str(e)}
 
     # ========================================================================
@@ -3073,3 +3112,270 @@ class APIUploader:
 
         return results
 
+
+    # ========================================================================
+    # WORKFLOW MANAGEMENT (PHASE 5)
+    # ========================================================================
+
+    def search_workflow(self, tenant: str, business_service: str = "PGR") -> Dict:
+        """Search for existing workflow configuration
+        
+        Args:
+            tenant: Tenant ID
+            business_service: Business service name (default: PGR)
+            
+        Returns:
+            Dict with workflow data if found, None otherwise
+        """
+        search_url = f"{self.base_url}/egov-workflow-v2/egov-wf/businessservice/_search"
+        
+        params = {
+            "tenantId": tenant,
+            "businessServices": business_service
+        }
+        
+        payload = {
+            "RequestInfo": self._get_request_info()
+        }
+        
+        try:
+            response = requests.post(search_url, json=payload, params=params, headers=self.headers)
+            response.raise_for_status()
+            data = response.json()
+            
+            business_services = data.get('BusinessServices', [])
+            if business_services:
+                print(f"✅ Found existing workflow: {business_service}")
+                return business_services[0]
+            else:
+                print(f"ℹ️  No existing workflow found for: {business_service}")
+                return None
+                
+        except Exception as e:
+            print(f"❌ Error searching workflow: {str(e)}")
+            return None
+    
+    def download_workflow_json(self, tenant: str, business_service: str = "PGR", output_path: str = None, template_path: str = None) -> str:
+        """Download workflow configuration as JSON file
+
+        If workflow doesn't exist for the tenant, falls back to downloading from template.
+
+        Args:
+            tenant: Tenant ID
+            business_service: Business service name
+            output_path: Optional output file path
+            template_path: Optional path to template workflow JSON file
+
+        Returns:
+            Path to downloaded JSON file
+        """
+        print(f"\n📥 Downloading workflow configuration...")
+        print(f"   Tenant: {tenant}")
+        print(f"   Business Service: {business_service}")
+
+        # Search for existing workflow
+        workflow_data = self.search_workflow(tenant, business_service)
+
+        if not workflow_data:
+            print(f"⚠️  No workflow found for tenant: {tenant}")
+            print(f"🔄 Attempting to load from template...")
+
+            # Try to load from template
+            if not template_path:
+                # Default template path - use local templates folder
+                template_path = "templates/PgrWorkflowConfig.json"
+
+            try:
+                import os
+                abs_template_path = os.path.abspath(template_path)
+
+                if not os.path.exists(abs_template_path):
+                    print(f"❌ Template file not found: {abs_template_path}")
+                    return None
+
+                # Load template
+                with open(abs_template_path, 'r') as f:
+                    template_data = json.load(f)
+
+                # Extract business service from template
+                if 'BusinessServices' in template_data and template_data['BusinessServices']:
+                    workflow_data = template_data['BusinessServices'][0]
+                    # Update tenant ID to target tenant
+                    workflow_data['tenantId'] = tenant
+                    print(f"✅ Loaded workflow template from: {os.path.basename(abs_template_path)}")
+                    print(f"   Updated tenantId to: {tenant}")
+                else:
+                    print(f"❌ Invalid template structure: Missing BusinessServices")
+                    return None
+
+            except Exception as e:
+                print(f"❌ Error loading template: {str(e)}")
+                return None
+        
+        # Prepare full request structure
+        workflow_request = {
+            "RequestInfo": {
+                "apiId": "Rainmaker",
+                "authToken": self.auth_token,
+                "userInfo": {
+                    "id": self.user_info.get('id'),
+                    "uuid": self.user_info.get('uuid'),
+                    "userName": self.user_info.get('userName'),
+                    "name": self.user_info.get('name'),
+                    "mobileNumber": self.user_info.get('mobileNumber'),
+                    "emailId": self.user_info.get('emailId'),
+                    "type": self.user_info.get('type'),
+                    "roles": self.user_info.get('roles', []),
+                    "active": True,
+                    "tenantId": self.user_info.get('tenantId')
+                },
+                "msgId": "20170310130900|en_IN"
+            },
+            "BusinessServices": [workflow_data]
+        }
+        
+        # Determine output path
+        if not output_path:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_path = f"upload/WorkflowConfig_{business_service}_{tenant}_{timestamp}.json"
+
+        # Ensure upload directory exists
+        import os
+        os.makedirs("upload", exist_ok=True)
+
+        # Save to file
+        with open(output_path, 'w') as f:
+            json.dump(workflow_request, f, indent=2)
+
+        print(f"\n✅ Workflow downloaded successfully!")
+        print(f"   File: {output_path}")
+
+        # Display download button if in Jupyter environment
+        try:
+            from IPython.display import display, HTML
+            import os
+
+            # Get absolute path and filename
+            abs_path = os.path.abspath(output_path)
+            filename = os.path.basename(output_path)
+
+            # Create HTML download button
+            download_button_html = f"""
+            <div style="margin: 20px 0; padding: 15px; background-color: #f0f8ff; border-radius: 8px; border-left: 4px solid #4CAF50;">
+                <h3 style="margin-top: 0; color: #2c3e50;">📥 Download Workflow Configuration</h3>
+                <p style="margin: 10px 0; color: #555;">Click the button below to download the workflow JSON file:</p>
+                <a href="{output_path}" download="{filename}"
+                   style="display: inline-block; padding: 12px 24px; background-color: #4CAF50; color: white;
+                          text-decoration: none; border-radius: 5px; font-weight: bold; margin: 10px 0;
+                          box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                    ⬇️ Download {filename}
+                </a>
+                <p style="margin: 15px 0 5px 0; color: #555;"><strong>📝 Next steps:</strong></p>
+                <ol style="margin: 5px 0; color: #555;">
+                    <li>Click the download button above to save the file</li>
+                    <li>Edit the JSON file with your changes</li>
+                    <li>Save the modified file</li>
+                    <li>Use Section 5.2 below to upload the modified JSON</li>
+                </ol>
+            </div>
+            """
+            display(HTML(download_button_html))
+
+        except ImportError:
+            # Not in Jupyter environment, just print the message
+            print(f"\n📝 Next steps:")
+            print(f"   1. Edit the JSON file with your changes")
+            print(f"   2. Upload the modified JSON using the upload function")
+
+        return output_path
+    
+    def create_or_update_workflow(self, workflow_json_path: str) -> Dict:
+        """Create or update workflow from JSON file
+        
+        Automatically determines whether to create or update based on existing workflow
+        
+        Args:
+            workflow_json_path: Path to workflow JSON file
+            
+        Returns:
+            Dict with result status
+        """
+        print(f"\n🔄 Processing workflow configuration...")
+        print(f"   File: {workflow_json_path}")
+        
+        # Load JSON file
+        try:
+            with open(workflow_json_path, 'r') as f:
+                workflow_request = json.load(f)
+        except Exception as e:
+            print(f"❌ Error reading JSON file: {str(e)}")
+            return {"success": False, "error": str(e)}
+        
+        # Validate structure
+        if 'BusinessServices' not in workflow_request or not workflow_request['BusinessServices']:
+            print(f"❌ Invalid workflow JSON: Missing BusinessServices")
+            return {"success": False, "error": "Invalid JSON structure"}
+        
+        business_service_data = workflow_request['BusinessServices'][0]
+        tenant_id = business_service_data.get('tenantId')
+        business_service = business_service_data.get('businessService')
+        
+        if not tenant_id or not business_service:
+            print(f"❌ Invalid workflow: Missing tenantId or businessService")
+            return {"success": False, "error": "Missing required fields"}
+        
+        print(f"   Tenant: {tenant_id}")
+        print(f"   Business Service: {business_service}")
+
+        # Check if workflow exists
+        existing_workflow = self.search_workflow(tenant_id, business_service)
+
+        if existing_workflow:
+            print(f"⚠️  Workflow already exists for {business_service} in tenant {tenant_id}")
+            print(f"   Skipping create operation.")
+            return {
+                "success": False,
+                "error": "Workflow already exists",
+                "tenant": tenant_id,
+                "businessService": business_service
+            }
+
+        # Update RequestInfo with current auth token
+        workflow_request['RequestInfo']['authToken'] = self.auth_token
+        workflow_request['RequestInfo']['userInfo'] = self.user_info
+
+        # Always use create endpoint
+        endpoint = f"{self.base_url}/egov-workflow-v2/egov-wf/businessservice/_create"
+        action = "Creating"
+        
+        print(f"\n{action} workflow...")
+        
+        try:
+            response = requests.post(endpoint, json=workflow_request, headers=self.headers)
+            response.raise_for_status()
+            
+            print(f"\n✅ Workflow {action.lower()} successfully!")
+            print(f"   Tenant: {tenant_id}")
+            print(f"   Business Service: {business_service}")
+            
+            return {
+                "success": True,
+                "action": "created",
+                "tenant": tenant_id,
+                "businessService": business_service
+            }
+            
+        except requests.exceptions.HTTPError as e:
+            error_msg = self._extract_error_message(str(e))
+            print(f"\n❌ Failed to {action.lower()} workflow")
+            print(f"   Error: {error_msg}")
+            return {
+                "success": False,
+                "error": error_msg
+            }
+        except Exception as e:
+            print(f"\n❌ Unexpected error: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e)
+            }

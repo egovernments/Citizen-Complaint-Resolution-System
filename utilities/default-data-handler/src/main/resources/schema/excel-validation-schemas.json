@@ -24,7 +24,7 @@
         },
         "tenantCode": {
           "type": "string",
-          "pattern": "^[A-Z]+\\.[A-Z]+$|^[A-Z]+$"
+          "pattern": "^[A-Za-z]+\\.[A-Za-z]+$|^[A-Za-z]+$"
         },
         "tenantType": {
           "type": "string",

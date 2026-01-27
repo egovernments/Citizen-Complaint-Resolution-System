@@ -1,0 +1,16 @@
+[
+    {
+        "moduleName": "CMS",
+        "department": "All",
+        "hierarchy": "ADMIN",
+        "highestHierarchy": "Zone",
+        "lowestHierarchy": "Locality"
+    },
+    {
+        "moduleName": "HRMS",
+        "department": "All",
+        "hierarchy": "ADMIN",
+        "highestHierarchy": "Zone",
+        "lowestHierarchy": "Locality"
+    }
+]

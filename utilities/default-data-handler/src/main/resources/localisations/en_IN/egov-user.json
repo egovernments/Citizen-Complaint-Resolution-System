@@ -13,7 +13,7 @@
     },
     {
         "code": "sms.register.otp.msg",
-        "message": "Dear Citizen, Your OTP to complete your mSeva Registration is %s.\n\nEGOVS",
+        "message": "Dear Citizen, Your OTP to complete your DIGIT Registration is %s.\n\nEGOVS",
         "module": "egov-user",
         "locale": "en_IN"
     }

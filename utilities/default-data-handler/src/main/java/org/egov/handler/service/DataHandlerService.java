@@ -651,17 +651,9 @@ public class DataHandlerService {
                     serviceConfig.getDefaultMdmsDataPath());
             log.info("✓ Production MDMS data loaded for new tenant: {}", targetTenantId);
 
-            log.info("Step 3: Loading production localization data");
-            // 3. Load production localization
-            localizationUtil.upsertLocalizationFromFile(defaultDataRequest,
-                    serviceConfig.getDefaultLocalizationDataPath());
-            log.info("✓ Production localization data loaded for new tenant: {}", targetTenantId);
-            
-            // 4. Skip Tenant Config for root tenants (no parent to copy from)
-            log.info("Step 4: Skipping tenant config creation (root tenant - no parent to copy from)");
 
-            log.info("Step 5: Creating default users and employees");
-            // 5. Create Users and Employees
+            log.info("Step 3: Creating default users and employees");
+            // 4. Create Users and Employees
             Tenant newTenant = new Tenant();
             newTenant.setCode(targetTenantId);
             newTenant.setName(targetTenantId);
@@ -689,9 +681,15 @@ public class DataHandlerService {
                 log.error("Failed to create users/employees (non-critical): {}", e.getMessage());
             }
 
+            log.info("Step 4: Loading production localization data (in background)");
+            // 5. Load production localization (runs asynchronously in background)
+            localizationUtil.upsertLocalizationFromFile(defaultDataRequest,
+                    serviceConfig.getDefaultLocalizationDataPath());
+
             log.info("========================================");
             log.info("✓✓✓ Tenant {} created successfully", targetTenantId);
-            log.info("Loaded: Schemas + Production MDMS + Production Localization + Tenant Config + Users + Employees");
+            log.info("Loaded: Schemas + Production MDMS + Users + Employees");
+            log.info("Note: Localization data is being loaded in background");
             log.info("========================================");
         } catch (Exception e) {
             log.error("Failed to load production tenant data for tenant: {}", newTenantRequest.getTargetTenantId(), e);
