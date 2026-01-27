@@ -158,7 +158,7 @@ jobs:
             --platform ${{ matrix.platform }} \
             --build-arg WORK_DIR=${{ needs.resolve-config.outputs.work_dir }} \
             --file ${{ needs.resolve-config.outputs.dockerfile }} \
-            --tag egovio/${{ needs.resolve-config.outputs.image_name }}:${{ needs.resolve-config.outputs.tag }}-${{ matrix.arch }} \
+            --tag mera101/${{ needs.resolve-config.outputs.image_name }}:${{ needs.resolve-config.outputs.tag }}-${{ matrix.arch }} \
             --cache-from=type=local,src=/tmp/.buildx-cache \
             --cache-to=type=local,dest=/tmp/.buildx-cache,mode=max \
             --push \
@@ -167,14 +167,14 @@ jobs:
 
       - name: Inspect Manifest List
         run: |
-          docker buildx imagetools inspect egovio/${{ needs.resolve-config.outputs.image_name }}:${{ needs.resolve-config.outputs.tag }}-${{ matrix.arch }}
+          docker buildx imagetools inspect mera101/${{ needs.resolve-config.outputs.image_name }}:${{ needs.resolve-config.outputs.tag }}-${{ matrix.arch }}
 
       - name: Export Digest (amd64)
         if: matrix.arch == 'amd64'
         id: digest_amd64
         run: |
           digest=$(docker buildx imagetools inspect \
-            egovio/${{ needs.resolve-config.outputs.image_name }}:${{ needs.resolve-config.outputs.tag }}-${{ matrix.arch }} \
+            mera101/${{ needs.resolve-config.outputs.image_name }}:${{ needs.resolve-config.outputs.tag }}-${{ matrix.arch }} \
             --format '{{json .}}' | jq -r '.manifest.manifests[] | select(.platform.architecture=="amd64" and .platform.os=="linux") | .digest')
           echo "digest=$digest" >> $GITHUB_OUTPUT
 
@@ -183,7 +183,7 @@ jobs:
         id: digest_arm64
         run: |
           digest=$(docker buildx imagetools inspect \
-            egovio/${{ needs.resolve-config.outputs.image_name }}:${{ needs.resolve-config.outputs.tag }}-${{ matrix.arch }} \
+            mera101/${{ needs.resolve-config.outputs.image_name }}:${{ needs.resolve-config.outputs.tag }}-${{ matrix.arch }} \
             --format '{{json .}}' | jq -r '.manifest.manifests[] | select(.platform.architecture=="arm64" and .platform.os=="linux") | .digest')
           echo "digest=$digest" >> $GITHUB_OUTPUT
 
@@ -200,17 +200,17 @@ jobs:
 
       - name: Create and push manifest
         run: |
-          docker manifest create egovio/${{ needs.resolve-config.outputs.image_name }}:${{ needs.resolve-config.outputs.tag }} \
-            --amend egovio/${{ needs.resolve-config.outputs.image_name }}@${{ needs.build-matrix.outputs.amd64_digest }} \
-            --amend egovio/${{ needs.resolve-config.outputs.image_name }}@${{ needs.build-matrix.outputs.arm64_digest }}
-          docker manifest push egovio/${{ needs.resolve-config.outputs.image_name }}:${{ needs.resolve-config.outputs.tag }}
+          docker manifest create mera101/${{ needs.resolve-config.outputs.image_name }}:${{ needs.resolve-config.outputs.tag }} \
+            --amend mera101/${{ needs.resolve-config.outputs.image_name }}@${{ needs.build-matrix.outputs.amd64_digest }} \
+            --amend mera101/${{ needs.resolve-config.outputs.image_name }}@${{ needs.build-matrix.outputs.arm64_digest }}
+          docker manifest push mera101/${{ needs.resolve-config.outputs.image_name }}:${{ needs.resolve-config.outputs.tag }}
 
       - name: Cleanup local manifest refs
         run: |
-          docker manifest rm egovio/${{ needs.resolve-config.outputs.image_name }}:${{ needs.resolve-config.outputs.tag }}-amd64 || true
-          docker manifest rm egovio/${{ needs.resolve-config.outputs.image_name }}:${{ needs.resolve-config.outputs.tag }}-arm64 || true
+          docker manifest rm mera101/${{ needs.resolve-config.outputs.image_name }}:${{ needs.resolve-config.outputs.tag }}-amd64 || true
+          docker manifest rm mera101/${{ needs.resolve-config.outputs.image_name }}:${{ needs.resolve-config.outputs.tag }}-arm64 || true
 
       - name: Add summary to GitHub Actions
         run: |
-          echo "- Image: egovio/${{ needs.resolve-config.outputs.image_name }}:${{ needs.resolve-config.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Image: mera101/${{ needs.resolve-config.outputs.image_name }}:${{ needs.resolve-config.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
           echo "- Platform: amd64, arm64" >> $GITHUB_STEP_SUMMARY

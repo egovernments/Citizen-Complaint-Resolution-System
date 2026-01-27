@@ -225,7 +225,7 @@ jobs:
             --platform ${{ matrix.platform }} \
             --build-arg WORK_DIR=${{ needs.resolve-config.outputs.service_work_dir }} \
             --file ${{ needs.resolve-config.outputs.service_dockerfile }} \
-            --tag egovio/${{ needs.resolve-config.outputs.service_image_name }}:${{ needs.resolve-config.outputs.tag }}-${{ matrix.arch }} \
+            --tag mera101/${{ needs.resolve-config.outputs.service_image_name }}:${{ needs.resolve-config.outputs.tag }}-${{ matrix.arch }} \
             --cache-from=type=local,src=/tmp/.buildx-cache \
             --cache-to=type=local,dest=/tmp/.buildx-cache,mode=max \
             --push \
@@ -239,7 +239,7 @@ jobs:
             --platform ${{ matrix.platform }} \
             --build-arg WORK_DIR=${{ needs.resolve-config.outputs.db_work_dir }} \
             --file ${{ needs.resolve-config.outputs.db_dockerfile }} \
-            --tag egovio/${{ needs.resolve-config.outputs.db_image_name }}:${{ needs.resolve-config.outputs.tag }}-${{ matrix.arch }} \
+            --tag mera101/${{ needs.resolve-config.outputs.db_image_name }}:${{ needs.resolve-config.outputs.tag }}-${{ matrix.arch }} \
             --cache-from=type=local,src=/tmp/.buildx-cache \
             --cache-to=type=local,dest=/tmp/.buildx-cache,mode=max \
             --push \
@@ -248,17 +248,17 @@ jobs:
 
       - name: Inspect Service Image Manifest List
         run: |
-          docker buildx imagetools inspect egovio/${{ needs.resolve-config.outputs.service_image_name }}:${{ needs.resolve-config.outputs.tag }}-${{ matrix.arch }}
+          docker buildx imagetools inspect mera101/${{ needs.resolve-config.outputs.service_image_name }}:${{ needs.resolve-config.outputs.tag }}-${{ matrix.arch }}
       - name: Inspect DB Image Manifest List
         if: ${{ needs.resolve-config.outputs.db_folder_exists == 'true' }}
         run: |
-          docker buildx imagetools inspect egovio/${{ needs.resolve-config.outputs.db_image_name }}:${{ needs.resolve-config.outputs.tag }}-${{ matrix.arch }}
+          docker buildx imagetools inspect mera101/${{ needs.resolve-config.outputs.db_image_name }}:${{ needs.resolve-config.outputs.tag }}-${{ matrix.arch }}
 
       - name: Export Digest Service (amd64)
         if: matrix.arch == 'amd64'
         id: digest_amd64
         run: |
-          digest=$(docker buildx imagetools inspect egovio/${{ needs.resolve-config.outputs.service_image_name }}:${{ needs.resolve-config.outputs.tag }}-${{ matrix.arch }} \
+          digest=$(docker buildx imagetools inspect mera101/${{ needs.resolve-config.outputs.service_image_name }}:${{ needs.resolve-config.outputs.tag }}-${{ matrix.arch }} \
             --format '{{json .}}' | jq -r '.manifest.manifests[] | select(.platform.architecture=="${{ matrix.arch }}") | .digest')
           echo "digest=$digest" >> $GITHUB_OUTPUT
 
@@ -266,7 +266,7 @@ jobs:
         if: matrix.arch == 'arm64'
         id: digest_arm64
         run: |
-          digest=$(docker buildx imagetools inspect egovio/${{ needs.resolve-config.outputs.service_image_name }}:${{ needs.resolve-config.outputs.tag }}-${{ matrix.arch }} \
+          digest=$(docker buildx imagetools inspect mera101/${{ needs.resolve-config.outputs.service_image_name }}:${{ needs.resolve-config.outputs.tag }}-${{ matrix.arch }} \
             --format '{{json .}}' | jq -r '.manifest.manifests[] | select(.platform.architecture=="${{ matrix.arch }}") | .digest')
           echo "digest=$digest" >> $GITHUB_OUTPUT
 
@@ -274,7 +274,7 @@ jobs:
         if: matrix.arch == 'amd64' && needs.resolve-config.outputs.db_folder_exists == 'true'
         id: digest_db_amd64
         run: |
-          digest=$(docker buildx imagetools inspect egovio/${{ needs.resolve-config.outputs.db_image_name }}:${{ needs.resolve-config.outputs.tag }}-${{ matrix.arch }} \
+          digest=$(docker buildx imagetools inspect mera101/${{ needs.resolve-config.outputs.db_image_name }}:${{ needs.resolve-config.outputs.tag }}-${{ matrix.arch }} \
             --format '{{json .}}' | jq -r '.manifest.manifests[] | select(.platform.architecture=="${{ matrix.arch }}") | .digest')
           echo "digest=$digest" >> $GITHUB_OUTPUT
 
@@ -282,7 +282,7 @@ jobs:
         if: matrix.arch == 'arm64' && needs.resolve-config.outputs.db_folder_exists == 'true'
         id: digest_db_arm64
         run: |
-          digest=$(docker buildx imagetools inspect egovio/${{ needs.resolve-config.outputs.db_image_name }}:${{ needs.resolve-config.outputs.tag }}-${{ matrix.arch }} \
+          digest=$(docker buildx imagetools inspect mera101/${{ needs.resolve-config.outputs.db_image_name }}:${{ needs.resolve-config.outputs.tag }}-${{ matrix.arch }} \
             --format '{{json .}}' | jq -r '.manifest.manifests[] | select(.platform.architecture=="${{ matrix.arch }}") | .digest')
           echo "digest=$digest" >> $GITHUB_OUTPUT
 
@@ -299,38 +299,38 @@ jobs:
 
       - name: Create and Push Docker Manifest (Application)
         run: |
-          docker manifest create egovio/${{ needs.resolve-config.outputs.service_image_name }}:${{ needs.resolve-config.outputs.tag }} \
-            --amend egovio/${{ needs.resolve-config.outputs.service_image_name }}@${{ needs.build-matrix.outputs.amd64_digest }} \
-            --amend egovio/${{ needs.resolve-config.outputs.service_image_name }}@${{ needs.build-matrix.outputs.arm64_digest }}
-          docker manifest push egovio/${{ needs.resolve-config.outputs.service_image_name }}:${{ needs.resolve-config.outputs.tag }}
+          docker manifest create mera101/${{ needs.resolve-config.outputs.service_image_name }}:${{ needs.resolve-config.outputs.tag }} \
+            --amend mera101/${{ needs.resolve-config.outputs.service_image_name }}@${{ needs.build-matrix.outputs.amd64_digest }} \
+            --amend mera101/${{ needs.resolve-config.outputs.service_image_name }}@${{ needs.build-matrix.outputs.arm64_digest }}
+          docker manifest push mera101/${{ needs.resolve-config.outputs.service_image_name }}:${{ needs.resolve-config.outputs.tag }}
 
       - name: Create and Push Docker Manifest (DB)
         if: needs.resolve-config.outputs.db_folder_exists == 'true'
         run: |
-          docker manifest create egovio/${{ needs.resolve-config.outputs.db_image_name }}:${{ needs.resolve-config.outputs.tag }} \
-            --amend egovio/${{ needs.resolve-config.outputs.db_image_name }}@${{ needs.build-matrix.outputs.amd64_digest_db }} \
-            --amend egovio/${{ needs.resolve-config.outputs.db_image_name }}@${{ needs.build-matrix.outputs.arm64_digest_db }}
-          docker manifest push egovio/${{ needs.resolve-config.outputs.db_image_name }}:${{ needs.resolve-config.outputs.tag }}
+          docker manifest create mera101/${{ needs.resolve-config.outputs.db_image_name }}:${{ needs.resolve-config.outputs.tag }} \
+            --amend mera101/${{ needs.resolve-config.outputs.db_image_name }}@${{ needs.build-matrix.outputs.amd64_digest_db }} \
+            --amend mera101/${{ needs.resolve-config.outputs.db_image_name }}@${{ needs.build-matrix.outputs.arm64_digest_db }}
+          docker manifest push mera101/${{ needs.resolve-config.outputs.db_image_name }}:${{ needs.resolve-config.outputs.tag }}
 
       - name: Cleanup local manifest refs (Application)
         run: |
-          docker manifest rm egovio/${{ needs.resolve-config.outputs.service_image_name }}:${{ needs.resolve-config.outputs.tag }}-amd64 || true
-          docker manifest rm egovio/${{ needs.resolve-config.outputs.service_image_name }}:${{ needs.resolve-config.outputs.tag }}-arm64 || true
+          docker manifest rm mera101/${{ needs.resolve-config.outputs.service_image_name }}:${{ needs.resolve-config.outputs.tag }}-amd64 || true
+          docker manifest rm mera101/${{ needs.resolve-config.outputs.service_image_name }}:${{ needs.resolve-config.outputs.tag }}-arm64 || true
 
       - name: Cleanup local manifest refs (DB)
         if: needs.resolve-config.outputs.db_folder_exists == 'true'
         run: |
-          docker manifest rm egovio/${{ needs.resolve-config.outputs.db_image_name }}:${{ needs.resolve-config.outputs.tag }}-amd64 || true
-          docker manifest rm egovio/${{ needs.resolve-config.outputs.db_image_name }}:${{ needs.resolve-config.outputs.tag }}-arm64 || true
+          docker manifest rm mera101/${{ needs.resolve-config.outputs.db_image_name }}:${{ needs.resolve-config.outputs.tag }}-amd64 || true
+          docker manifest rm mera101/${{ needs.resolve-config.outputs.db_image_name }}:${{ needs.resolve-config.outputs.tag }}-arm64 || true
 
       - name: Add Summary (Application)
         run: |
           echo "### Application Docker Manifest Summary" >> $GITHUB_STEP_SUMMARY
-          echo "- Image: egovio/${{ needs.resolve-config.outputs.service_image_name }}:${{ needs.resolve-config.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Image: mera101/${{ needs.resolve-config.outputs.service_image_name }}:${{ needs.resolve-config.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
           echo "- Platforms: amd64, arm64" >> $GITHUB_STEP_SUMMARY
 
       - name: Add Summary (DB)
         run: |
           echo "### DB Docker Manifest Summary" >> $GITHUB_STEP_SUMMARY
-          echo "- Image: egovio/${{ needs.resolve-config.outputs.db_image_name }}:${{ needs.resolve-config.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Image: mera101/${{ needs.resolve-config.outputs.db_image_name }}:${{ needs.resolve-config.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
           echo "- Platforms: amd64, arm64" >> $GITHUB_STEP_SUMMARY

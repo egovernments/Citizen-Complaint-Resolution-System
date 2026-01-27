@@ -40,6 +40,16 @@ export const locationDetails = {
       }
     },
     {
+      "type": "component",
+      "isMandatory": true,
+      "component": "SelectAddress",
+      "key": "SelectAddress",
+      "label": "CS_ADDCOMPLAINT_COMPLAINT_LOCATION",
+      "populators": {
+        "name": "SelectAddress"
+      }
+    },
+    /*{
       "inline": true,
       "label": "CS_COMPLAINT_POSTALCODE__DETAILS",
       "isMandatory": false,
@@ -53,6 +63,6 @@ export const locationDetails = {
                   pattern: /^[1-9][0-9]{5}$/i,
                 },
       }
-    }
+    }*/
   ]
 }

@@ -135,7 +135,7 @@ export const CreateComplaintConfig = {
         {
           head: "CS_COMPLAINT_LOCATION_DETAILS",
           body: [
-            {
+           /* {
               inline: true,
               label: "CS_COMPLAINT_POSTALCODE__DETAILS",
               type: "number",
@@ -151,7 +151,7 @@ export const CreateComplaintConfig = {
                 },
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
               },
-            },
+            },*/
 
             {
               isMandatory: true,
@@ -220,6 +220,26 @@ export const CreateComplaintConfig = {
             },
           ],
         },
+
+{
+  "head": "CS_ADDCOMPLAINT_UPLOAD_PHOTO",
+  "body": [
+    {
+      "type": "component",
+      "isMandatory": false,
+      "component": "SelectImages",
+      "key": "ComplaintImagesPoint",
+      "label": "CS_ADDCOMPLAINT_UPLOAD_PHOTO_TEXT",
+      "populators": {
+        "name": "ComplaintImagesPoint"
+      }
+    },
+
+  ]
+
+},
+
+        
 
       ],
     }
