@@ -46,7 +46,7 @@
           "actions": [
             {
               "tenantId": "{tenantid}",
-              "currentState": "ce08d758-1788-4b56-b1ec-91db449d41a4",
+              "currentState": null,
               "action": "APPLY",
               "nextState": "PENDINGFORASSIGNMENT",
               "roles": [
