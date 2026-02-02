@@ -11,7 +11,7 @@ const useServiceDefs = (tenantId, moduleCode) => {
       const serviceDefs = await Digit.MDMSService.getServiceDefs(tenantId, moduleCode);
       SessionStorage.set("serviceDefs", serviceDefs);
 
-      const serviceDefsWithKeys = serviceDefs.map((def) => ({ ...def, i18nKey: "SERVICEDEFS." + def.serviceCode.toUpperCase() + `.${def.department}`, code: `${def.serviceCode}.${def.department}` }));
+      const serviceDefsWithKeys = serviceDefs.map((def) => ({ ...def, i18nKey: "SERVICEDEFS_" + def.serviceCode.toUpperCase() + `_${def.department}`, code: `${def.serviceCode}_${def.department}` }));
       setLocalMenu(serviceDefsWithKeys);
     })();
   }, [tenantId, moduleCode]);
