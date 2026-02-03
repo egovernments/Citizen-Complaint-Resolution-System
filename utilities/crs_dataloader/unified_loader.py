@@ -936,6 +936,15 @@ class APIUploader:
                     # Extract clean error message from API response
                     error_message = self._extract_error_message(error_text) if error_text else str(e)[:200]
 
+                    # Fail fast on auth errors
+                    if status_code == 401:
+                        print(f"\n   ❌ AUTHORIZATION FAILED - Cannot create MDMS data")
+                        print(f"   The endpoint /mdms-v2/v2/_create/{schema_code} requires authentication.")
+                        print(f"   Ask admin to add it to EGOV_OPEN_ENDPOINTS_WHITELIST.")
+                        results['failed'] = len(data_list)
+                        results['errors'].append({'error': 'Authorization failed (401) - endpoint not in whitelist'})
+                        return results
+
                     if 'already exists' in error_text.lower() or 'duplicate' in error_text.lower():
                         print(f"   [EXISTS] [{i}/{len(data_list)}] {unique_id} (HTTP {status_code})")
                         results['exists'] += 1
@@ -1039,7 +1048,8 @@ class APIUploader:
                 print(f"   Filtered to {len(mdms_records)} records matching provided IDs")
 
             # Step 2: Update each record with isActive=false
-            for record in mdms_records:
+            auth_failed = False
+            for i, record in enumerate(mdms_records):
                 unique_id = record.get('uniqueIdentifier', 'unknown')
 
                 # Skip if already inactive
@@ -1071,6 +1081,15 @@ class APIUploader:
                     if upd_response.status_code == 200:
                         print(f"   ✅ Deleted: {unique_id}")
                         results['deleted'] += 1
+                    elif upd_response.status_code == 401:
+                        # Fail fast on auth errors
+                        print(f"\n   ❌ AUTHORIZATION FAILED - Cannot delete MDMS data")
+                        print(f"   The endpoint /mdms-v2/v2/_update/{schema_code} requires authentication.")
+                        print(f"   Ask admin to add it to EGOV_OPEN_ENDPOINTS_WHITELIST or use direct DB access.")
+                        results['failed'] = len(mdms_records) - results['skipped']
+                        results['errors'].append({'error': 'Authorization failed (401) - endpoint not in whitelist'})
+                        auth_failed = True
+                        break
                     else:
                         error_msg = upd_response.text[:100]
                         print(f"   ❌ Failed to delete {unique_id}: {error_msg}")
@@ -1082,6 +1101,9 @@ class APIUploader:
                     results['errors'].append({'id': unique_id, 'error': str(e)})
 
                 time.sleep(0.05)  # Small delay between updates
+
+            if auth_failed:
+                return results
 
         except Exception as e:
             print(f"   ❌ Error: {str(e)[:100]}")
