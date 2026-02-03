@@ -121,10 +121,10 @@ class CRSLoader:
 
         if branding:
             results['branding'] = self.uploader.create_mdms_data(
-                schema_code='tenant.citymodule',
+                schema_code='tenant.branding',
                 data_list=branding,
                 tenant=target_tenant,
-                sheet_name='Tenant Branding Deatils',
+                sheet_name='Tenant Branding Details',
                 excel_file=excel_path
             )
 
@@ -181,7 +181,8 @@ class CRSLoader:
             tenant_id=tenant,
             filestore_id=filestore_id,
             hierarchy_type=hierarchy_type,
-            action="create"
+            action="create",
+            excel_file=excel_path
         )
 
         status = result.get('status', 'unknown')
@@ -306,6 +307,206 @@ class CRSLoader:
         )
 
         self._print_summary("Employees", {'employees': results})
+        return results
+
+    def delete_boundaries(self, target_tenant: str = None) -> Dict:
+        """Delete all boundary entities for a tenant
+
+        Args:
+            target_tenant: Tenant ID (e.g., 'statea', 'pg.citya')
+
+        Returns:
+            dict: {deleted: int, relationships_deleted: int, status: str}
+        """
+        self._check_auth()
+        tenant = target_tenant or self.tenant_id
+
+        print(f"\n{'='*60}")
+        print(f"DELETING BOUNDARIES")
+        print(f"{'='*60}")
+        print(f"Tenant: {tenant}")
+
+        import subprocess
+
+        # Database connection details
+        db_host = "chakshu-pgr-db.czvokiourya9.ap-south-1.rds.amazonaws.com"
+        db_name = "chakshupgrdb"
+        db_user = "chakshupgr"
+
+        # Get DB password from K8s secret
+        pw_result = subprocess.run(
+            ["kubectl", "get", "secret", "db", "-n", "egov", "-o", "jsonpath={.data.password}"],
+            capture_output=True, text=True
+        )
+        import base64
+        db_pass = base64.b64decode(pw_result.stdout).decode()
+
+        # Ensure cleanup pod exists
+        subprocess.run(["kubectl", "delete", "pod", "db-cleanup", "-n", "egov", "--ignore-not-found"],
+                      capture_output=True)
+        subprocess.run(["kubectl", "run", "db-cleanup", "--image=postgres:15", "-n", "egov",
+                       "--restart=Never", "--command", "--", "sleep", "3600"], capture_output=True)
+        subprocess.run(["kubectl", "wait", "--for=condition=Ready", "pod/db-cleanup", "-n", "egov",
+                       "--timeout=60s"], capture_output=True)
+
+        conn_str = f"postgresql://{db_user}:{db_pass}@{db_host}:5432/{db_name}"
+
+        # Delete relationships first, then boundaries
+        result = subprocess.run(
+            ["kubectl", "exec", "-n", "egov", "db-cleanup", "--",
+             "psql", conn_str, "-t", "-c",
+             f"DELETE FROM boundary_relationship WHERE tenantid='{tenant}'; "
+             f"DELETE FROM boundary WHERE tenantid='{tenant}';"],
+            capture_output=True, text=True
+        )
+
+        # Parse DELETE counts
+        counts = [int(line.split()[1]) for line in result.stdout.strip().split('\n')
+                  if line.strip().startswith('DELETE')]
+        rel_deleted = counts[0] if len(counts) > 0 else 0
+        deleted = counts[1] if len(counts) > 1 else 0
+
+        print(f"   Relationships deleted: {rel_deleted}")
+        print(f"   Boundaries deleted: {deleted}")
+        print(f"{'='*60}")
+
+        return {'deleted': deleted, 'relationships_deleted': rel_deleted, 'status': 'success'}
+
+    def delete_hierarchy(self, hierarchy_type: str, target_tenant: str = None) -> Dict:
+        """Delete a boundary hierarchy definition
+
+        Args:
+            hierarchy_type: Hierarchy type (e.g., 'REVENUE', 'ADMIN')
+            target_tenant: Tenant ID
+
+        Returns:
+            dict: {status: str, message: str}
+        """
+        self._check_auth()
+        tenant = target_tenant or self.tenant_id
+        return self.uploader.delete_boundary_hierarchy(tenant, hierarchy_type)
+
+    def reset_boundaries(self, hierarchy_type: str = "REVENUE", target_tenant: str = None) -> Dict:
+        """Full reset: delete all boundaries and hierarchy for a tenant
+
+        Args:
+            hierarchy_type: Hierarchy type to delete
+            target_tenant: Tenant ID
+
+        Returns:
+            dict: Combined results
+        """
+        self._check_auth()
+        tenant = target_tenant or self.tenant_id
+
+        print(f"\n{'='*60}")
+        print(f"RESETTING BOUNDARIES")
+        print(f"{'='*60}")
+        print(f"Tenant: {tenant}")
+        print(f"Hierarchy: {hierarchy_type}")
+
+        results = {}
+
+        # 1. Delete boundaries
+        results['boundaries'] = self.delete_boundaries(tenant)
+
+        # 2. Delete hierarchy
+        results['hierarchy'] = self.delete_hierarchy(hierarchy_type, tenant)
+
+        print(f"\n{'─'*40}")
+        print(f"Reset Complete")
+        print(f"{'─'*40}")
+        return results
+
+    def delete_mdms(self, schema_code: str, target_tenant: str = None, unique_ids: list = None) -> Dict:
+        """Delete MDMS data by setting isActive=false
+
+        Args:
+            schema_code: Schema code (e.g., 'common-masters.Department')
+            target_tenant: Tenant ID
+            unique_ids: Optional list of specific IDs to delete. If None, deletes all.
+
+        Returns:
+            dict: {deleted: count, failed: count, ...}
+        """
+        self._check_auth()
+        tenant = target_tenant or self.tenant_id
+        return self.uploader.delete_mdms_data(schema_code, tenant, unique_ids)
+
+    def rollback_common_masters(self, target_tenant: str = None) -> Dict:
+        """Rollback all common masters (departments, designations, complaint types)
+
+        Args:
+            target_tenant: Tenant ID
+
+        Returns:
+            dict: Results per schema
+        """
+        self._check_auth()
+        tenant = target_tenant or self.tenant_id
+
+        schemas = [
+            'common-masters.Department',
+            'common-masters.Designation',
+            'RAINMAKER-PGR.ServiceDefs'
+        ]
+        return self.uploader.rollback_mdms_by_schema(schemas, tenant)
+
+    def rollback_tenant(self, target_tenant: str = None) -> Dict:
+        """Rollback tenant configuration (tenants, branding)
+
+        Args:
+            target_tenant: Tenant ID
+
+        Returns:
+            dict: Results per schema
+        """
+        self._check_auth()
+        tenant = target_tenant or self.tenant_id
+
+        schemas = [
+            'tenant.tenants',
+            'tenant.citymodule'
+        ]
+        return self.uploader.rollback_mdms_by_schema(schemas, tenant)
+
+    def full_reset(self, hierarchy_type: str = "REVENUE", target_tenant: str = None) -> Dict:
+        """Full reset: delete ALL data (MDMS + boundaries) for a tenant
+
+        WARNING: This deletes everything! Use with caution.
+
+        Args:
+            hierarchy_type: Boundary hierarchy type
+            target_tenant: Tenant ID
+
+        Returns:
+            dict: Combined results
+        """
+        self._check_auth()
+        tenant = target_tenant or self.tenant_id
+
+        print(f"\n{'='*60}")
+        print(f"⚠️  FULL RESET - DELETING ALL DATA")
+        print(f"{'='*60}")
+        print(f"Tenant: {tenant}")
+
+        results = {}
+
+        # 1. Delete common masters
+        print(f"\n[1/3] Deleting common masters...")
+        results['common_masters'] = self.rollback_common_masters(tenant)
+
+        # 2. Delete tenant config
+        print(f"\n[2/3] Deleting tenant config...")
+        results['tenant'] = self.rollback_tenant(tenant)
+
+        # 3. Delete boundaries
+        print(f"\n[3/3] Deleting boundaries...")
+        results['boundaries'] = self.reset_boundaries(hierarchy_type, tenant)
+
+        print(f"\n{'='*60}")
+        print(f"FULL RESET COMPLETE")
+        print(f"{'='*60}")
         return results
 
     def _print_summary(self, phase: str, results: Dict):

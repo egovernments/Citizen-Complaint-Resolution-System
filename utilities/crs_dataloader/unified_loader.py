@@ -168,9 +168,9 @@ class UnifiedExcelReader:
             list: Branding information records for MDMS upload
         """
         try:
-            df = pd.read_excel(self.excel_file, sheet_name='Tenant Branding Deatils')
+            df = pd.read_excel(self.excel_file, sheet_name='Tenant Branding Details')
         except Exception as e:
-            print(f"⚠️ Could not read 'Tenant Branding Deatils' sheet: {str(e)}")
+            print(f"⚠️ Could not read 'Tenant Branding Details' sheet: {str(e)}")
             return []
 
         branding_list = []
@@ -983,12 +983,144 @@ class APIUploader:
 
             return results
 
+    def delete_mdms_data(self, schema_code: str, tenant: str, unique_ids: List[str] = None) -> Dict:
+        """Soft-delete MDMS data by setting isActive=false
 
-    
+        Args:
+            schema_code: Schema code (e.g., 'common-masters.Department')
+            tenant: Tenant ID
+            unique_ids: Optional list of specific uniqueIdentifiers to delete.
+                       If None, deletes ALL data for this schema/tenant.
 
+        Returns:
+            dict: {deleted: count, failed: count, errors: []}
+        """
+        print(f"\n🗑️ Deleting MDMS data: {schema_code} for tenant: {tenant}")
 
+        results = {'deleted': 0, 'failed': 0, 'skipped': 0, 'errors': []}
 
-    def _write_status_to_excel(self, excel_file: str, sheet_name: str, 
+        # Step 1: Search for existing data
+        search_url = f"{self.mdms_url}/v2/_search"
+        update_url = f"{self.mdms_url}/v2/_update/{schema_code}"
+
+        search_payload = {
+            "RequestInfo": {
+                "apiId": "asset-services",
+                "msgId": f"search-{int(time.time()*1000)}",
+                "authToken": self.auth_token,
+                "userInfo": self.user_info
+            },
+            "MdmsCriteria": {
+                "tenantId": tenant,
+                "schemaCode": schema_code,
+                "limit": 500,
+                "offset": 0
+            }
+        }
+
+        try:
+            response = requests.post(search_url, json=search_payload, headers={'Content-Type': 'application/json'})
+            if response.status_code != 200:
+                print(f"   ❌ Failed to search MDMS data: {response.status_code}")
+                return results
+
+            data = response.json()
+            mdms_records = data.get('mdms', [])
+
+            if not mdms_records:
+                print(f"   ℹ️ No MDMS data found for {schema_code}")
+                return results
+
+            print(f"   Found {len(mdms_records)} records")
+
+            # Filter by unique_ids if provided
+            if unique_ids:
+                mdms_records = [r for r in mdms_records if r.get('uniqueIdentifier') in unique_ids]
+                print(f"   Filtered to {len(mdms_records)} records matching provided IDs")
+
+            # Step 2: Update each record with isActive=false
+            for record in mdms_records:
+                unique_id = record.get('uniqueIdentifier', 'unknown')
+
+                # Skip if already inactive
+                if not record.get('isActive', True):
+                    print(f"   ⏭️ Already inactive: {unique_id}")
+                    results['skipped'] += 1
+                    continue
+
+                update_payload = {
+                    "RequestInfo": {
+                        "apiId": "asset-services",
+                        "msgId": f"delete-{int(time.time()*1000)}",
+                        "authToken": self.auth_token,
+                        "userInfo": self.user_info
+                    },
+                    "Mdms": {
+                        "tenantId": tenant,
+                        "schemaCode": schema_code,
+                        "uniqueIdentifier": unique_id,
+                        "id": record.get('id'),
+                        "data": record.get('data', {}),
+                        "auditDetails": record.get('auditDetails'),
+                        "isActive": False  # This is the key - set to false to "delete"
+                    }
+                }
+
+                try:
+                    upd_response = requests.post(update_url, json=update_payload, headers={'Content-Type': 'application/json'})
+                    if upd_response.status_code == 200:
+                        print(f"   ✅ Deleted: {unique_id}")
+                        results['deleted'] += 1
+                    else:
+                        error_msg = upd_response.text[:100]
+                        print(f"   ❌ Failed to delete {unique_id}: {error_msg}")
+                        results['failed'] += 1
+                        results['errors'].append({'id': unique_id, 'error': error_msg})
+                except Exception as e:
+                    print(f"   ❌ Error deleting {unique_id}: {str(e)[:50]}")
+                    results['failed'] += 1
+                    results['errors'].append({'id': unique_id, 'error': str(e)})
+
+                time.sleep(0.05)  # Small delay between updates
+
+        except Exception as e:
+            print(f"   ❌ Error: {str(e)[:100]}")
+            results['errors'].append({'error': str(e)})
+
+        print(f"\n   Summary: Deleted {results['deleted']}, Failed {results['failed']}, Skipped {results['skipped']}")
+        return results
+
+    def rollback_mdms_by_schema(self, schema_codes: List[str], tenant: str) -> Dict:
+        """Rollback (delete) all MDMS data for multiple schema codes
+
+        Args:
+            schema_codes: List of schema codes to rollback
+            tenant: Tenant ID
+
+        Returns:
+            dict: {schema_code: {deleted, failed, ...}, ...}
+        """
+        print(f"\n{'='*60}")
+        print(f"MDMS ROLLBACK")
+        print(f"{'='*60}")
+        print(f"Tenant: {tenant}")
+        print(f"Schemas: {', '.join(schema_codes)}")
+
+        results = {}
+        for schema_code in schema_codes:
+            results[schema_code] = self.delete_mdms_data(schema_code, tenant)
+
+        # Summary
+        total_deleted = sum(r.get('deleted', 0) for r in results.values())
+        total_failed = sum(r.get('failed', 0) for r in results.values())
+
+        print(f"\n{'─'*40}")
+        print(f"Rollback Complete: {total_deleted} deleted, {total_failed} failed")
+        print(f"{'─'*40}")
+
+        return results
+
+    def _write_status_to_excel(self, excel_file: str, sheet_name: str,
                                row_statuses: List[Dict], schema_code: str):
         """
         Write / overwrite _STATUS, _STATUS_CODE, _ERROR_MESSAGE columns directly into uploaded Excel.
@@ -2032,70 +2164,402 @@ class APIUploader:
             print(f"❌ Upload error: {str(e)[:200]}")
             return None
 
-    def process_boundary_data(self, tenant_id: str, filestore_id: str, hierarchy_type: str, action: str = "create") -> Dict:
-        """Process uploaded boundary data
+    def process_boundary_data(self, tenant_id: str, filestore_id: str = None, hierarchy_type: str = "ADMIN", action: str = "create", excel_file: str = None) -> Dict:
+        """Process boundary data - creates boundaries one-by-one via direct API
+
+        This method reads the boundary Excel file and creates boundaries directly
+        via the boundary-service API, avoiding the need for bulk upload services.
 
         Args:
             tenant_id: Tenant ID
-            filestore_id: FileStore ID of uploaded Excel
-            hierarchy_type: Hierarchy type
+            filestore_id: FileStore ID (optional, for compatibility)
+            hierarchy_type: Hierarchy type (default: ADMIN)
             action: Action type (create/update)
+            excel_file: Path to Excel file with boundary data
 
         Returns:
             Dict with processing results
         """
-        url = f"{self.boundary_mgmt_url}/v1/_process"
+        import pandas as pd
 
-        # Override userInfo tenantId to match the request tenant
+        results = {
+            'status': 'processing',
+            'boundaries_created': 0,
+            'relationships_created': 0,
+            'errors': []
+        }
+
+        if not excel_file:
+            print("❌ No Excel file provided")
+            results['status'] = 'failed'
+            results['errors'].append("No Excel file provided")
+            return results
+
+        try:
+            # Read boundary data from Excel
+            print(f"\n📖 Reading boundary data from: {excel_file}")
+
+            # Try different sheet names
+            sheet_name = 'Boundary'
+            try:
+                df = pd.read_excel(excel_file, sheet_name='Boundary')
+            except:
+                try:
+                    df = pd.read_excel(excel_file, sheet_name='Boundary Data')
+                except:
+                    df = pd.read_excel(excel_file, sheet_name=0)  # First sheet
+
+            print(f"   Found {len(df)} boundary records")
+            print(f"   Columns: {list(df.columns)}")
+
+            # Get hierarchy definition to understand boundary types
+            hierarchy = self._get_boundary_hierarchy(tenant_id, hierarchy_type)
+            if hierarchy:
+                boundary_types = [h['boundaryType'] for h in hierarchy.get('boundaryHierarchy', [])]
+                print(f"   Hierarchy: {' → '.join(boundary_types)}")
+            else:
+                print("   ⚠️ Could not fetch hierarchy, will use boundaryType from Excel")
+                boundary_types = df['boundaryType'].unique().tolist() if 'boundaryType' in df.columns else []
+
+            # Check if Excel has the standard format (code, name, boundaryType, parentCode)
+            if 'code' in df.columns and 'boundaryType' in df.columns:
+                print("   Using standard format (code, boundaryType, parentCode)")
+
+                # Map Excel boundary types to hierarchy types if they don't match
+                # Common mappings for Punjab-style templates
+                type_mapping = {
+                    'State': 'Country',  # If hierarchy starts with Country
+                    'District': 'State',
+                    'Tehsil': 'City',
+                    'Block': 'Ward',
+                    'Village': 'Locality'
+                }
+
+                # Check if we need mapping (Excel types vs hierarchy types)
+                excel_types = set(df['boundaryType'].unique())
+                hierarchy_set = set(boundary_types) if boundary_types else set()
+
+                # If Excel types match hierarchy, no mapping needed
+                if excel_types.issubset(hierarchy_set) or not hierarchy_set:
+                    use_mapping = False
+                    print("   Boundary types match hierarchy - no mapping needed")
+                else:
+                    use_mapping = True
+                    print(f"   ⚠️ Boundary type mismatch detected")
+                    print(f"      Excel types: {excel_types}")
+                    print(f"      Hierarchy types: {hierarchy_set}")
+                    print(f"      Will attempt to map types")
+
+                # Process each row
+                for idx, row in df.iterrows():
+                    code = str(row.get('code', '')).strip()
+                    boundary_type = str(row.get('boundaryType', '')).strip()
+                    parent_code = str(row.get('parentCode', '')).strip() if pd.notna(row.get('parentCode')) else None
+
+                    if not code or not boundary_type:
+                        continue
+
+                    # Apply type mapping if needed
+                    mapped_type = type_mapping.get(boundary_type, boundary_type) if use_mapping else boundary_type
+
+                    # Create boundary entity
+                    success = self._create_boundary_entity(tenant_id, code)
+                    if success:
+                        results['boundaries_created'] += 1
+
+                    # Create boundary relationship - try with original type first, then mapped
+                    rel_success = self._create_boundary_relationship(
+                        tenant_id, hierarchy_type, code, boundary_type, parent_code
+                    )
+                    if not rel_success and use_mapping and mapped_type != boundary_type:
+                        # Try with mapped type
+                        rel_success = self._create_boundary_relationship(
+                            tenant_id, hierarchy_type, code, mapped_type, parent_code
+                        )
+                    if rel_success:
+                        results['relationships_created'] += 1
+            else:
+                # Handle column-per-level format
+                print("   Using column-per-level format")
+                for boundary_type in boundary_types:
+                    if boundary_type not in df.columns:
+                        continue
+
+                    boundaries_at_level = df[boundary_type].dropna().unique()
+
+                    for boundary_code in boundaries_at_level:
+                        if pd.isna(boundary_code) or str(boundary_code).strip() == '':
+                            continue
+
+                        boundary_code = str(boundary_code).strip()
+                        success = self._create_boundary_entity(tenant_id, boundary_code)
+                        if success:
+                            results['boundaries_created'] += 1
+
+                        parent_type_idx = boundary_types.index(boundary_type) - 1
+                        parent_code = None
+                        if parent_type_idx >= 0:
+                            parent_type = boundary_types[parent_type_idx]
+                            row = df[df[boundary_type] == boundary_code].iloc[0] if len(df[df[boundary_type] == boundary_code]) > 0 else None
+                            if row is not None and parent_type in df.columns:
+                                parent_code = str(row[parent_type]).strip() if pd.notna(row[parent_type]) else None
+
+                        rel_success = self._create_boundary_relationship(
+                            tenant_id, hierarchy_type, boundary_code, boundary_type, parent_code
+                        )
+                        if rel_success:
+                            results['relationships_created'] += 1
+
+            results['status'] = 'completed'
+            print(f"\n✅ Boundary processing completed!")
+            print(f"   Boundaries created: {results['boundaries_created']}")
+            print(f"   Relationships created: {results['relationships_created']}")
+
+        except Exception as e:
+            print(f"❌ Error processing boundaries: {str(e)}")
+            results['status'] = 'failed'
+            results['errors'].append(str(e))
+
+        return results
+
+    def _get_boundary_hierarchy(self, tenant_id: str, hierarchy_type: str) -> Dict:
+        """Fetch boundary hierarchy definition"""
+        url = f"{self.boundary_url}/boundary-hierarchy-definition/_search"
+
         user_info_copy = self.user_info.copy()
         user_info_copy['tenantId'] = tenant_id
 
         payload = {
-            "ResourceDetails": {
-                "tenantId": tenant_id,
-                "fileStoreId": filestore_id,
-                "hierarchyType": hierarchy_type,
-                "additionalDetails": {},
-                "action": action
-            },
             "RequestInfo": {
                 "apiId": "Rainmaker",
                 "authToken": self.auth_token,
-                "userInfo": user_info_copy,
-                "msgId": f"{int(time.time() * 1000)}|en_IN",
-                "plainAccessRequest": {}
+                "userInfo": user_info_copy
+            },
+            "BoundaryTypeHierarchySearchCriteria": {
+                "tenantId": tenant_id,
+                "hierarchyType": hierarchy_type
             }
         }
 
-        headers = {'Content-Type': 'application/json'}
-    
-
         try:
-            response = requests.post(url, json=payload, headers=headers)
-      
+            response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'})
             response.raise_for_status()
             data = response.json()
-
-            resource = data.get('ResourceDetails', {})
-            status = resource.get('status')
-            processed_id = resource.get('processedFileStoreId')
-
-            print(f"\n✅ Boundary data processing initiated")
-            print(f"   Status: {status}")
-            print(f"   Task ID: {resource.get('id')}")
-
-            if processed_id:
-                print(f"   Processed FileStore ID: {processed_id}")
-
-            return resource
-
-        except requests.exceptions.HTTPError as e:
-            error_text = e.response.text if hasattr(e.response, 'text') else str(e)
-            print(f"❌ HTTP Error: {error_text[:300]}")
-            return {}
+            hierarchies = data.get('BoundaryHierarchy', [])
+            return hierarchies[0] if hierarchies else None
         except Exception as e:
-            print(f"❌ Error: {str(e)}")
-            return {}
+            print(f"   ⚠️ Error fetching hierarchy: {str(e)[:100]}")
+            return None
+
+    def _create_boundary_entity(self, tenant_id: str, code: str) -> bool:
+        """Create a single boundary entity"""
+        url = f"{self.boundary_url}/boundary/_create"
+
+        user_info_copy = self.user_info.copy()
+        user_info_copy['tenantId'] = tenant_id
+
+        payload = {
+            "RequestInfo": {
+                "apiId": "Rainmaker",
+                "msgId": f"create-boundary-{int(time.time()*1000)}",
+                "authToken": self.auth_token,
+                "userInfo": user_info_copy
+            },
+            "Boundary": [{
+                "tenantId": tenant_id,
+                "code": code,
+                "geometry": {"type": "Polygon", "coordinates": [[[0,0],[0,1],[1,1],[1,0],[0,0]]]}
+            }]
+        }
+
+        try:
+            response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'})
+            if response.status_code in [200, 201, 202]:
+                print(f"   ✅ Created boundary: {code}")
+                return True
+            else:
+                data = response.json()
+                error_code = data.get('Errors', [{}])[0].get('code', '')
+                error_msg = data.get('Errors', [{}])[0].get('message', '')
+                if error_code == 'DUPLICATE_CODE' or 'already exists' in str(error_msg).lower():
+                    print(f"   ⚠️ Boundary exists: {code}")
+                    return True  # Already exists is OK
+                else:
+                    print(f"   ❌ Failed to create boundary {code}: {error_code or error_msg or response.status_code}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Error creating boundary {code}: {str(e)[:100]}")
+            return False
+
+    def _create_boundary_relationship(self, tenant_id: str, hierarchy_type: str,
+                                       code: str, boundary_type: str, parent_code: str = None) -> bool:
+        """Create boundary relationship (parent-child link)"""
+        url = f"{self.boundary_url}/boundary-relationships/_create"
+
+        user_info_copy = self.user_info.copy()
+        user_info_copy['tenantId'] = tenant_id
+
+        payload = {
+            "RequestInfo": {
+                "apiId": "Rainmaker",
+                "msgId": f"create-relationship-{int(time.time()*1000)}",
+                "authToken": self.auth_token,
+                "userInfo": user_info_copy
+            },
+            "BoundaryRelationship": {
+                "tenantId": tenant_id,
+                "hierarchyType": hierarchy_type,
+                "code": code,
+                "boundaryType": boundary_type
+            }
+        }
+
+        if parent_code:
+            payload["BoundaryRelationship"]["parent"] = parent_code
+
+        try:
+            response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'})
+            if response.status_code in [200, 201, 202]:
+                parent_info = f" (parent: {parent_code})" if parent_code else " (root)"
+                print(f"   ✅ Created relationship: {code} [{boundary_type}]{parent_info}")
+                return True
+            else:
+                data = response.json()
+                error_code = data.get('Errors', [{}])[0].get('code', '')
+                error_msg = data.get('Errors', [{}])[0].get('message', '')
+                if 'already exists' in str(error_msg).lower() or error_code == 'DUPLICATE':
+                    print(f"   ⚠️ Relationship exists: {code}")
+                    return True
+                else:
+                    print(f"   ❌ Failed relationship {code}: {error_msg[:80] if error_msg else error_code or response.status_code}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Error creating relationship {code}: {str(e)[:100]}")
+            return False
+
+    def delete_all_boundaries(self, tenant_id: str) -> Dict:
+        """Delete all boundary entities for a tenant
+
+        Args:
+            tenant_id: Tenant ID (e.g., 'statea', 'pg.citya')
+
+        Returns:
+            dict: {deleted: count, failed: count}
+        """
+        print(f"\n🗑️ Deleting all boundaries for tenant: {tenant_id}")
+
+        results = {'deleted': 0, 'failed': 0, 'codes': []}
+
+        # Search for all boundaries
+        url = f"{self.boundary_url}/boundary/_search"
+        payload = {
+            "RequestInfo": {
+                "apiId": "asset-services",
+                "msgId": f"search-{int(time.time()*1000)}",
+                "authToken": self.auth_token,
+                "userInfo": self.user_info
+            },
+            "BoundaryCriteria": {
+                "tenantId": tenant_id,
+                "limit": 500,
+                "offset": 0
+            }
+        }
+
+        try:
+            response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'})
+            if response.status_code != 200:
+                print(f"   ❌ Failed to search boundaries: {response.status_code}")
+                return results
+
+            data = response.json()
+            boundaries = data.get('Boundary', [])
+
+            if not boundaries:
+                print(f"   ℹ️ No boundaries found for tenant {tenant_id}")
+                return results
+
+            print(f"   Found {len(boundaries)} boundaries to delete")
+
+            # Delete each boundary
+            for boundary in boundaries:
+                code = boundary.get('code')
+                if not code:
+                    continue
+
+                delete_url = f"{self.boundary_url}/boundary/_delete"
+                delete_payload = {
+                    "RequestInfo": {
+                        "apiId": "asset-services",
+                        "msgId": f"delete-{int(time.time()*1000)}",
+                        "authToken": self.auth_token,
+                        "userInfo": self.user_info
+                    }
+                }
+
+                try:
+                    del_response = requests.post(
+                        f"{delete_url}?tenantId={tenant_id}&code={code}",
+                        json=delete_payload,
+                        headers={'Content-Type': 'application/json'}
+                    )
+
+                    if del_response.status_code == 200:
+                        print(f"   ✅ Deleted: {code}")
+                        results['deleted'] += 1
+                        results['codes'].append(code)
+                    else:
+                        print(f"   ❌ Failed to delete {code}: {del_response.status_code}")
+                        results['failed'] += 1
+                except Exception as e:
+                    print(f"   ❌ Error deleting {code}: {str(e)[:30]}")
+                    results['failed'] += 1
+
+        except Exception as e:
+            print(f"   ❌ Error searching boundaries: {str(e)[:50]}")
+
+        print(f"\n   Summary: Deleted {results['deleted']}, Failed {results['failed']}")
+        return results
+
+    def delete_boundary_hierarchy(self, tenant_id: str, hierarchy_type: str) -> Dict:
+        """Delete a boundary hierarchy definition
+
+        Args:
+            tenant_id: Tenant ID
+            hierarchy_type: Hierarchy type (e.g., 'REVENUE', 'ADMIN')
+
+        Returns:
+            dict: {status: 'success'|'failed', message: str}
+        """
+        print(f"\n🗑️ Deleting hierarchy {hierarchy_type} for tenant: {tenant_id}")
+
+        url = f"{self.boundary_url}/boundary-hierarchy-definition/_delete"
+
+        payload = {
+            "RequestInfo": {
+                "apiId": "asset-services",
+                "msgId": f"delete-hierarchy-{int(time.time()*1000)}",
+                "authToken": self.auth_token,
+                "userInfo": self.user_info
+            },
+            "BoundaryTypeHierarchyDefinition": {
+                "tenantId": tenant_id,
+                "hierarchyType": hierarchy_type
+            }
+        }
+
+        try:
+            response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'})
+            if response.status_code == 200:
+                print(f"   ✅ Deleted hierarchy: {hierarchy_type}")
+                return {'status': 'success', 'message': f'Deleted {hierarchy_type}'}
+            else:
+                error = response.json().get('Errors', [{}])[0].get('message', response.text[:100])
+                print(f"   ❌ Failed: {error}")
+                return {'status': 'failed', 'message': error}
+        except Exception as e:
+            print(f"   ❌ Error: {str(e)[:50]}")
+            return {'status': 'failed', 'message': str(e)}
 
     # ========================================================================
     # HRMS EMPLOYEE METHODS
