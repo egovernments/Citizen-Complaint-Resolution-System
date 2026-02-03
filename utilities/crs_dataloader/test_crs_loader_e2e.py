@@ -110,20 +110,35 @@ def run_all_tests():
         if not loader._authenticated:
             return
         print("\n[CLEANUP] Final teardown - ensuring all test data is removed...")
+
+        # 1. Delete boundaries
         try:
             result = loader.delete_boundaries(TARGET_TENANT)
             deleted = result.get('deleted', 0)
             if deleted > 0:
-                print(f"   Cleaned up {deleted} boundaries")
+                print(f"   Boundaries: deleted {deleted}")
         except Exception as e:
-            print(f"   Boundary cleanup: {e}")
+            print(f"   Boundaries: {e}")
+
+        # 2. Rollback common masters (departments, designations, service defs)
         try:
             result = loader.rollback_common_masters(TARGET_TENANT)
             total = sum(r.get('deleted', 0) for r in result.values() if isinstance(r, dict))
             if total > 0:
-                print(f"   Rolled back {total} MDMS records")
+                print(f"   Common masters: rolled back {total}")
         except Exception as e:
-            print(f"   MDMS cleanup: {e}")
+            print(f"   Common masters: {e}")
+
+        # 3. Rollback tenant data (tenant info, branding)
+        try:
+            result = loader.rollback_tenant(TARGET_TENANT)
+            if result:
+                for key, val in result.items():
+                    if isinstance(val, dict) and val.get('deleted', 0) > 0:
+                        print(f"   {key}: rolled back {val.get('deleted', 0)}")
+        except Exception as e:
+            print(f"   Tenant: {e}")
+
         print("   Final cleanup complete")
 
     try:
@@ -148,12 +163,19 @@ def run_all_tests():
         # ==========================================================================
         print("\n[2/10] Initial cleanup - rolling back any existing test data...")
 
-        # Rollback common masters first
+        # Rollback tenant data first
+        try:
+            result = loader.rollback_tenant(TARGET_TENANT)
+            print("   Rolled back tenant/branding data")
+        except Exception as e:
+            print(f"   WARN: Tenant rollback: {e}")
+
+        # Rollback common masters
         try:
             result = loader.rollback_common_masters(TARGET_TENANT)
             print("   Rolled back common masters")
         except Exception as e:
-            print(f"   WARN: Common masters rollback failed (may not exist): {e}")
+            print(f"   WARN: Common masters rollback: {e}")
 
         # Delete boundaries
         try:
@@ -161,7 +183,7 @@ def run_all_tests():
             deleted = result.get('deleted', 0)
             print(f"   Deleted {deleted} boundaries")
         except Exception as e:
-            print(f"   WARN: Boundary delete failed (may not exist): {e}")
+            print(f"   WARN: Boundary delete: {e}")
 
         print("   PASS: Initial cleanup complete")
         passed += 1
