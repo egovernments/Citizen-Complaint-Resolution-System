@@ -63,8 +63,9 @@ jobs:
       - name: Run E2E Tests
         working-directory: utilities/crs_dataloader
         env:
-          DIGIT_USERNAME: ${{ secrets.DIGIT_USERNAME }}
-          DIGIT_PASSWORD: ${{ secrets.DIGIT_PASSWORD }}
+          # Public test credentials for chakshu dev environment
+          DIGIT_USERNAME: ADMIN
+          DIGIT_PASSWORD: eGov@123
         run: |
           echo "Testing against: $DIGIT_URL"
           echo "Tenant: $DIGIT_TENANT"
