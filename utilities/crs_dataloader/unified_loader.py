@@ -661,7 +661,8 @@ class APIUploader:
             self.base_url = self.base_url[:-1]
 
         # Service endpoints from .env (configurable)
-        mdms_v2_service = os.getenv("MDMS_V2_SERVICE", "/egov-mdms-service")
+        # MDMS path varies by environment: /mdms-v2 (chakshu) or /egov-mdms-service (unified-dev)
+        mdms_v2_service = os.getenv("MDMS_V2_SERVICE", None)  # Auto-detect if not set
         boundary_service = os.getenv("BOUNDARY_SERVICE", "/boundary-service")
         boundary_mgmt_service = os.getenv("BOUNDARY_MGMT_SERVICE", "/egov-bndry-mgmnt")
         localization_service = os.getenv("LOCALIZATION_SERVICE", "/localization")
@@ -672,7 +673,11 @@ class APIUploader:
         auth_service = os.getenv("AUTH_SERVICE", "/user")
 
         # Build full service URLs
-        self.mdms_url = f"{self.base_url}{mdms_v2_service}"
+        # Auto-detect MDMS path if not explicitly set
+        if mdms_v2_service:
+            self.mdms_url = f"{self.base_url}{mdms_v2_service}"
+        else:
+            self.mdms_url = self._detect_mdms_path()
         self.boundary_url = f"{self.base_url}{boundary_service}"
         self.boundary_mgmt_url = f"{self.base_url}{boundary_mgmt_service}"
         self.localization_url = f"{self.base_url}{localization_service}"
@@ -697,6 +702,47 @@ class APIUploader:
         if self.username and self.password:
             self.authenticate()
 
+    def _detect_mdms_path(self):
+        """Auto-detect the MDMS v2 service path by testing available endpoints.
+
+        Different environments use different paths:
+        - /mdms-v2 (chakshu-digit, newer deployments)
+        - /egov-mdms-service (unified-dev, older deployments)
+
+        Returns:
+            str: The working MDMS URL (base_url + path)
+        """
+        # Paths to try, in order of preference
+        paths_to_try = ["/mdms-v2", "/egov-mdms-service"]
+
+        for path in paths_to_try:
+            test_url = f"{self.base_url}{path}/v2/_search"
+            try:
+                # Simple probe request - doesn't need auth for search on some envs
+                response = requests.post(
+                    test_url,
+                    json={
+                        "MdmsCriteria": {"tenantId": "default", "limit": 1},
+                        "RequestInfo": {"apiId": "Rainmaker"}
+                    },
+                    headers={"Content-Type": "application/json"},
+                    timeout=5
+                )
+
+                # If not 404, this path exists (even if auth required, we get 401/403 not 404)
+                if response.status_code != 404:
+                    print(f"   MDMS path auto-detected: {path} (status: {response.status_code})")
+                    return f"{self.base_url}{path}"
+                else:
+                    print(f"   MDMS path {path}: 404, trying next...")
+
+            except requests.exceptions.RequestException as e:
+                print(f"   MDMS path {path}: error {e}, trying next...")
+                continue
+
+        # Default fallback
+        print(f"   MDMS path: using default /egov-mdms-service (no path responded)")
+        return f"{self.base_url}/egov-mdms-service"
 
     def authenticate(self):
         """Authenticate using OAuth2 password grant and fetch user info"""
