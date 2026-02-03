@@ -14,11 +14,11 @@ on:
       environment:
         description: 'Target environment'
         required: true
-        default: 'chakshu'
+        default: 'unified-dev'
         type: choice
         options:
-          - chakshu
           - unified-dev
+          - chakshu
 
 env:
   PYTHON_VERSION: '3.12'
@@ -49,14 +49,14 @@ jobs:
 
       - name: Set environment variables
         run: |
-          # Default to chakshu environment
-          ENV="${{ github.event.inputs.environment || 'chakshu' }}"
+          # Default to unified-dev environment
+          ENV="${{ github.event.inputs.environment || 'unified-dev' }}"
 
-          if [ "$ENV" = "chakshu" ]; then
-            echo "DIGIT_URL=https://chakshu-digit.egov.theflywheel.in" >> $GITHUB_ENV
-            echo "DIGIT_TENANT=statea" >> $GITHUB_ENV
-          else
+          if [ "$ENV" = "unified-dev" ]; then
             echo "DIGIT_URL=https://unified-dev.digit.org" >> $GITHUB_ENV
+            echo "DIGIT_TENANT=statea.citya" >> $GITHUB_ENV
+          else
+            echo "DIGIT_URL=https://chakshu-digit.egov.theflywheel.in" >> $GITHUB_ENV
             echo "DIGIT_TENANT=statea" >> $GITHUB_ENV
           fi
 
