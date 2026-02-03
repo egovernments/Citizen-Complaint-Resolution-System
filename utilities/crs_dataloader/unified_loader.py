@@ -1565,6 +1565,15 @@ class APIUploader:
                     # Extract clean error message from API response
                     error_message = self._extract_error_message(error_text) if error_text else str(e)[:200]
 
+                    # Fail fast on auth errors
+                    if status_code == 401:
+                        print(f"\n   ❌ AUTHORIZATION FAILED - Cannot upload localization messages")
+                        print(f"   The endpoint /localization/messages/v1/_upsert requires authentication.")
+                        print(f"   Ask admin to add it to EGOV_OPEN_ENDPOINTS_WHITELIST.")
+                        results['failed'] = total_messages
+                        results['errors'].append({'error': 'Authorization failed (401) - endpoint not in whitelist'})
+                        return results
+
                     # Check for duplicate/already exists errors
                     if ('duplicate' in error_text.lower() or
                         'already exists' in error_text.lower() or
@@ -3506,6 +3515,15 @@ class APIUploader:
 
                 # Extract clean error message from API response
                 error_message = self._extract_error_message(error_text) if error_text else str(e)[:200]
+
+                # Fail fast on auth errors
+                if status_code == 401:
+                    print(f"\n   ❌ AUTHORIZATION FAILED - Cannot create employees")
+                    print(f"   The endpoint /egov-hrms/employees/_create requires authentication.")
+                    print(f"   Ask admin to add it to EGOV_OPEN_ENDPOINTS_WHITELIST.")
+                    results['failed'] = len(employee_list)
+                    results['errors'].append({'error': 'Authorization failed (401) - endpoint not in whitelist'})
+                    return results
 
                 # Check for duplicate/already exists
                 if ('already exists' in error_text.lower() or
