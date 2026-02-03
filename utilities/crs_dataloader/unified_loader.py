@@ -846,7 +846,8 @@ class APIUploader:
             # If JSON parsing fails, return truncated original text
             return error_text[:200]
 
-    def search_mdms_data(self, schema_code: str, tenant: str, unique_identifiers: List[str] = None, limit: int = 100, offset: int = 0) -> List[Dict]:
+    def search_mdms_data(self, schema_code: str, tenant: str, unique_identifiers: List[str] = None,
+                         limit: int = 100, offset: int = 0, include_inactive: bool = True) -> List[Dict]:
         """Generic function to search MDMS v2 data
 
         Args:
@@ -855,9 +856,10 @@ class APIUploader:
             unique_identifiers: Optional list of unique identifiers to filter by
             limit: Max number of records (default: 100)
             offset: Pagination offset (default: 0)
+            include_inactive: If False, filter out soft-deleted records (default: True)
 
         Returns:
-            list: List of data objects retrieved
+            list: List of data objects retrieved (with 'isActive' field added from wrapper)
         """
         url = f"{self.mdms_url}/v2/_search"
 
@@ -877,6 +879,10 @@ class APIUploader:
         if unique_identifiers:
             criteria["uniqueIdentifiers"] = unique_identifiers
 
+        # Add isActive filter if only active records requested
+        if not include_inactive:
+            criteria["isActive"] = True
+
         payload = {
             "RequestInfo": {
                 "apiId": "Rainmaker",
@@ -895,9 +901,18 @@ class APIUploader:
             data = response.json()
 
             # Extract data list from response
-            # API returns: {"mdms": [{"id": "...", "data": {...}, ...}]}
+            # API returns: {"mdms": [{"id": "...", "data": {...}, "isActive": true/false, ...}]}
             mdms_records = data.get('mdms', [])
-            data_list = [record['data'] for record in mdms_records]
+
+            # Include isActive status in each data object for caller to check
+            data_list = []
+            for record in mdms_records:
+                record_data = record.get('data', {}).copy()
+                # Add wrapper's isActive status to data object
+                record_data['_isActive'] = record.get('isActive', True)
+                record_data['_uniqueIdentifier'] = record.get('uniqueIdentifier')
+                data_list.append(record_data)
+
             return data_list
 
         except requests.exceptions.HTTPError as e:

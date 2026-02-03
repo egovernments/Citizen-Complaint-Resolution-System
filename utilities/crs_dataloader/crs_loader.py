@@ -17,6 +17,11 @@ Usage:
 from unified_loader import UnifiedExcelReader, APIUploader
 from typing import Optional, Dict
 import os
+import requests
+
+# kubectl API server URL (for environments without kubectl access)
+KUBECTL_API_URL = os.environ.get('KUBECTL_API_URL', 'http://localhost:8765')
+KUBECTL_API_KEY = os.environ.get('KUBECTL_API_KEY', 'dev-only-key')
 
 
 class CRSLoader:
@@ -377,11 +382,12 @@ class CRSLoader:
         self._print_summary("Localizations", results)
         return results
 
-    def delete_boundaries(self, target_tenant: str = None) -> Dict:
+    def delete_boundaries(self, target_tenant: str = None, use_db: bool = False) -> Dict:
         """Delete all boundary entities for a tenant
 
         Args:
             target_tenant: Tenant ID (e.g., 'statea', 'pg.citya')
+            use_db: If True, use direct DB access (requires kubectl). Default: False (use API)
 
         Returns:
             dict: {deleted: int, relationships_deleted: int, status: str}
@@ -394,6 +400,52 @@ class CRSLoader:
         print(f"{'='*60}")
         print(f"Tenant: {tenant}")
 
+        if use_db:
+            return self._delete_boundaries_via_db(tenant)
+        else:
+            return self._delete_boundaries_via_api(tenant)
+
+    def _delete_boundaries_via_api(self, tenant: str) -> Dict:
+        """Delete boundaries using the boundary service API
+
+        Fallback chain:
+        1. Boundary service API (delete_all_boundaries)
+        2. Direct kubectl DB access
+        3. kubectl API server (for CI environments)
+        """
+        # Try boundary service API first
+        result = self.uploader.delete_all_boundaries(tenant)
+
+        deleted = result.get('deleted', 0)
+        failed = result.get('failed', 0)
+
+        # If API worked, return result
+        if deleted > 0 or (deleted == 0 and failed == 0):
+            print(f"   Boundaries deleted: {deleted}")
+            print(f"   Failed: {failed}")
+            print(f"{'='*60}")
+            return {
+                'deleted': deleted,
+                'relationships_deleted': 0,
+                'failed': failed,
+                'status': 'success' if failed == 0 else 'partial'
+            }
+
+        # Try direct kubectl DB access
+        print("   Boundary API didn't delete, trying DB method...")
+        db_result = self._delete_boundaries_via_db(tenant)
+        if db_result.get('status') == 'success':
+            return db_result
+
+        # Try kubectl API server (for CI without kubectl)
+        if db_result.get('status') == 'skipped':
+            print("   kubectl not available, trying kubectl API server...")
+            return self._delete_boundaries_via_kubectl_api(tenant)
+
+        return db_result
+
+    def _delete_boundaries_via_db(self, tenant: str) -> Dict:
+        """Delete boundaries using direct database access (requires kubectl)"""
         import subprocess
 
         # Database connection details
@@ -406,6 +458,13 @@ class CRSLoader:
             ["kubectl", "get", "secret", "db", "-n", "egov", "-o", "jsonpath={.data.password}"],
             capture_output=True, text=True
         )
+
+        if pw_result.returncode != 0:
+            print("   WARNING: kubectl not available, cannot delete via DB")
+            print(f"{'='*60}")
+            return {'deleted': 0, 'relationships_deleted': 0, 'status': 'skipped',
+                    'error': 'kubectl not available'}
+
         import base64
         db_pass = base64.b64decode(pw_result.stdout).decode()
 
@@ -439,6 +498,45 @@ class CRSLoader:
         print(f"{'='*60}")
 
         return {'deleted': deleted, 'relationships_deleted': rel_deleted, 'status': 'success'}
+
+    def _delete_boundaries_via_kubectl_api(self, tenant: str, env: str = 'chakshu') -> Dict:
+        """Delete boundaries using the kubectl API server (for CI environments)
+
+        The kubectl API server wraps kubectl commands and exposes them via HTTP.
+        Start it with: python kubectl_api.py
+        Set KUBECTL_API_URL and KUBECTL_API_KEY environment variables.
+        """
+        try:
+            response = requests.post(
+                f"{KUBECTL_API_URL}/boundaries/delete",
+                json={'tenant_id': tenant, 'env': env},
+                headers={'X-API-Key': KUBECTL_API_KEY},
+                timeout=120
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                deleted = data.get('boundaries_deleted', 0)
+                rel_deleted = data.get('relationships_deleted', 0)
+                print(f"   Boundaries deleted (via kubectl API): {deleted}")
+                print(f"   Relationships deleted: {rel_deleted}")
+                print(f"{'='*60}")
+                return {
+                    'deleted': deleted,
+                    'relationships_deleted': rel_deleted,
+                    'status': 'success'
+                }
+            else:
+                error = response.json().get('error', response.text)
+                print(f"   kubectl API error: {error}")
+                return {'deleted': 0, 'relationships_deleted': 0, 'status': 'failed', 'error': error}
+
+        except requests.exceptions.ConnectionError:
+            print(f"   kubectl API server not available at {KUBECTL_API_URL}")
+            return {'deleted': 0, 'relationships_deleted': 0, 'status': 'unavailable'}
+        except Exception as e:
+            print(f"   kubectl API error: {str(e)}")
+            return {'deleted': 0, 'relationships_deleted': 0, 'status': 'error', 'error': str(e)}
 
     def delete_hierarchy(self, hierarchy_type: str, target_tenant: str = None) -> Dict:
         """Delete a boundary hierarchy definition
