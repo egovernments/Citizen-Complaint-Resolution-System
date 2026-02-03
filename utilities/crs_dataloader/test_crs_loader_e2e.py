@@ -102,267 +102,284 @@ def run_all_tests():
     failed = 0
     skipped = 0
 
-    # ==========================================================================
-    # TEST 1: Login
-    # ==========================================================================
-    print("[1/10] Testing login...")
+    # Initialize loader early so cleanup can access it
     loader = CRSLoader(BASE_URL)
-    success = loader.login(username=USERNAME, password=PASSWORD, tenant_id=TARGET_TENANT)
 
-    if not success:
-        print("   FAIL: Login failed - check credentials")
-        return 1
-
-    assert loader._authenticated, "Should be authenticated"
-    assert loader.uploader is not None, "Uploader should be initialized"
-    assert loader.uploader.auth_token is not None, "Auth token should be set"
-    print(f"   PASS: Logged in as {loader.uploader.user_info.get('userName')}")
-    passed += 1
-
-    # ==========================================================================
-    # TEST 2: Initial Cleanup (Rollback existing data)
-    # ==========================================================================
-    print("\n[2/10] Initial cleanup - rolling back any existing test data...")
-
-    # Rollback common masters first
-    try:
-        result = loader.rollback_common_masters(TARGET_TENANT)
-        print("   Rolled back common masters")
-    except Exception as e:
-        print(f"   WARN: Common masters rollback failed (may not exist): {e}")
-
-    # Delete boundaries
-    try:
-        result = loader.delete_boundaries(TARGET_TENANT)
-        deleted = result.get('deleted', 0)
-        print(f"   Deleted {deleted} boundaries")
-    except Exception as e:
-        print(f"   WARN: Boundary delete failed (may not exist): {e}")
-
-    print("   PASS: Initial cleanup complete")
-    passed += 1
-
-    # ==========================================================================
-    # TEST 3: Phase 1 - Tenant & Branding
-    # ==========================================================================
-    print("\n[3/10] Testing Phase 1 - Tenant & Branding...")
-    tenant_file = os.path.join(TEMPLATES_DIR, "Tenant And Branding Master.xlsx")
-
-    if os.path.exists(tenant_file):
-        result = loader.load_tenant(tenant_file, target_tenant=TARGET_TENANT)
-
-        # Verify tenant creation
-        if result.get('tenants'):
-            created, exists = assert_success(result['tenants'], "Tenants")
-            print(f"   Tenants: created={created}, exists={exists}")
-
-        # Verify branding
-        if result.get('branding'):
-            created, exists = assert_success(result['branding'], "Branding")
-            print(f"   Branding: created={created}, exists={exists}")
-
-        # Verify localization
-        if result.get('localization'):
-            created, exists = assert_success(result['localization'], "Localization")
-            print(f"   Localization: created={created}")
-
-        print("   PASS: Phase 1 loaded successfully")
-        passed += 1
-    else:
-        print(f"   SKIP: {tenant_file} not found")
-        skipped += 1
-
-    # ==========================================================================
-    # TEST 4: Phase 2 - Boundaries
-    # ==========================================================================
-    print("\n[4/10] Testing Phase 2 - Boundaries...")
-    boundary_file = os.path.join(TEMPLATES_DIR, "Boundary_Master.xlsx")
-
-    if os.path.exists(boundary_file):
-        result = loader.load_boundaries(boundary_file, target_tenant=TARGET_TENANT, hierarchy_type="REVENUE")
-
-        assert result is not None, "Boundary result should not be None"
-        status = result.get('status')
-        assert status in ['completed', 'exists'], f"Unexpected status: {status}"
-
-        boundaries = result.get('boundaries_created', 0)
-        relationships = result.get('relationships_created', 0)
-        print(f"   Status: {status}")
-        print(f"   Boundaries: {boundaries}, Relationships: {relationships}")
-        print("   PASS: Phase 2 loaded successfully")
-        passed += 1
-    else:
-        print(f"   SKIP: {boundary_file} not found")
-        skipped += 1
-
-    # ==========================================================================
-    # TEST 5: Phase 3 - Common Masters
-    # ==========================================================================
-    print("\n[5/10] Testing Phase 3 - Common Masters...")
-    common_file = os.path.join(TEMPLATES_DIR, "Common and Complaint Master.xlsx")
-
-    if os.path.exists(common_file):
-        result = loader.load_common_masters(common_file, target_tenant=TARGET_TENANT)
-
-        assert result is not None, "Common masters result should not be None"
-
-        for key in ['departments', 'designations', 'complaint_types']:
-            if result.get(key):
-                created, exists = assert_success(result[key], key.title())
-                print(f"   {key}: created={created}, exists={exists}")
-
-        print("   PASS: Phase 3 loaded successfully")
-        passed += 1
-    else:
-        print(f"   SKIP: {common_file} not found")
-        skipped += 1
-
-    # ==========================================================================
-    # TEST 6: Phase 4 - Employees
-    # ==========================================================================
-    print("\n[6/10] Testing Phase 4 - Employees...")
-    employee_file = os.path.join(TEMPLATES_DIR, f"Employee_Master_Dynamic_{TARGET_TENANT}.xlsx")
-
-    if os.path.exists(employee_file):
-        result = loader.load_employees(employee_file, target_tenant=TARGET_TENANT)
-
-        created, exists = assert_success(result, "Employees")
-        print(f"   Employees: created={created}, exists={exists}")
-        print("   PASS: Phase 4 loaded successfully")
-        passed += 1
-    else:
-        print(f"   SKIP: {employee_file} not found")
-        skipped += 1
-
-    # ==========================================================================
-    # TEST 7: Rollback Common Masters
-    # ==========================================================================
-    print("\n[7/10] Testing rollback_common_masters()...")
+    def final_cleanup():
+        """Cleanup function that runs regardless of test outcome"""
+        if not loader._authenticated:
+            return
+        print("\n[CLEANUP] Final teardown - ensuring all test data is removed...")
+        try:
+            result = loader.delete_boundaries(TARGET_TENANT)
+            deleted = result.get('deleted', 0)
+            if deleted > 0:
+                print(f"   Cleaned up {deleted} boundaries")
+        except Exception as e:
+            print(f"   Boundary cleanup: {e}")
+        try:
+            result = loader.rollback_common_masters(TARGET_TENANT)
+            total = sum(r.get('deleted', 0) for r in result.values() if isinstance(r, dict))
+            if total > 0:
+                print(f"   Rolled back {total} MDMS records")
+        except Exception as e:
+            print(f"   MDMS cleanup: {e}")
+        print("   Final cleanup complete")
 
     try:
-        result = loader.rollback_common_masters(TARGET_TENANT)
-        assert result is not None, "Rollback result should not be None"
+        # ==========================================================================
+        # TEST 1: Login
+        # ==========================================================================
+        print("[1/10] Testing login...")
+        success = loader.login(username=USERNAME, password=PASSWORD, tenant_id=TARGET_TENANT)
 
-        # Check each schema was processed - report results
-        # Note: Rollback failures are acceptable in test environments since items
-        # may not exist, be already deleted, or have validation constraints
-        total_deleted = 0
-        total_failed = 0
-        for schema in ['common-masters.Department', 'common-masters.Designation', 'RAINMAKER-PGR.ServiceDefs']:
-            if schema in result:
-                schema_result = result[schema]
-                deleted = schema_result.get('deleted', 0)
-                failed_count = schema_result.get('failed', 0)
-                total_deleted += deleted
-                total_failed += failed_count
-                print(f"   {schema}: deleted={deleted}, failed={failed_count}")
+        if not success:
+            print("   FAIL: Login failed - check credentials")
+            return 1
 
-                # Report any failures but don't fail the test
-                # Rollback is best-effort cleanup - failures are often expected
-                if failed_count > 0:
-                    errors = schema_result.get('errors', [])
-                    if any('401' in str(e) or 'Authorization' in str(e) for e in errors):
-                        print(f"      INFO: Auth constraint (endpoint may not be whitelisted)")
-                    else:
-                        print(f"      INFO: Some items could not be rolled back (may not exist)")
-
-        print(f"   Summary: {total_deleted} deleted, {total_failed} skipped")
-        print("   PASS: Common masters rollback completed")
+        assert loader._authenticated, "Should be authenticated"
+        assert loader.uploader is not None, "Uploader should be initialized"
+        assert loader.uploader.auth_token is not None, "Auth token should be set"
+        print(f"   PASS: Logged in as {loader.uploader.user_info.get('userName')}")
         passed += 1
-    except Exception as e:
-        print(f"   FAIL: Rollback failed with exception: {e}")
-        failed += 1
 
-    # ==========================================================================
-    # TEST 8: Delete Boundaries
-    # ==========================================================================
-    print("\n[8/10] Testing delete_boundaries()...")
+        # ==========================================================================
+        # TEST 2: Initial Cleanup (Rollback existing data)
+        # ==========================================================================
+        print("\n[2/10] Initial cleanup - rolling back any existing test data...")
 
-    try:
-        result = loader.delete_boundaries(TARGET_TENANT)
+        # Rollback common masters first
+        try:
+            result = loader.rollback_common_masters(TARGET_TENANT)
+            print("   Rolled back common masters")
+        except Exception as e:
+            print(f"   WARN: Common masters rollback failed (may not exist): {e}")
 
-        assert result is not None, "Delete result should not be None"
-        assert result.get('status') == 'success', f"Expected success, got: {result.get('status')}"
+        # Delete boundaries
+        try:
+            result = loader.delete_boundaries(TARGET_TENANT)
+            deleted = result.get('deleted', 0)
+            print(f"   Deleted {deleted} boundaries")
+        except Exception as e:
+            print(f"   WARN: Boundary delete failed (may not exist): {e}")
 
-        deleted = result.get('deleted', 0)
-        rel_deleted = result.get('relationships_deleted', 0)
-        print(f"   Deleted: {deleted} boundaries, {rel_deleted} relationships")
-        print("   PASS: Boundary deletion completed")
+        print("   PASS: Initial cleanup complete")
         passed += 1
-    except Exception as e:
-        print(f"   FAIL: Boundary delete failed: {e}")
-        failed += 1
 
-    # ==========================================================================
-    # TEST 9: Verify Rollback - Load Again Should Create (not exist)
-    # ==========================================================================
-    print("\n[9/10] Verifying rollback - reloading boundaries should create new...")
+        # ==========================================================================
+        # TEST 3: Phase 1 - Tenant & Branding
+        # ==========================================================================
+        print("\n[3/10] Testing Phase 1 - Tenant & Branding...")
+        tenant_file = os.path.join(TEMPLATES_DIR, "Tenant And Branding Master.xlsx")
 
-    if os.path.exists(boundary_file):
-        result = loader.load_boundaries(boundary_file, target_tenant=TARGET_TENANT, hierarchy_type="REVENUE")
+        if os.path.exists(tenant_file):
+            result = loader.load_tenant(tenant_file, target_tenant=TARGET_TENANT)
 
-        # After rollback, loading should create new boundaries
-        boundaries = result.get('boundaries_created', 0)
-        print(f"   Created {boundaries} boundaries after rollback")
+            # Verify tenant creation
+            if result.get('tenants'):
+                created, exists = assert_success(result['tenants'], "Tenants")
+                print(f"   Tenants: created={created}, exists={exists}")
 
-        # Clean up again
-        loader.delete_boundaries(TARGET_TENANT)
-        print("   Cleaned up test boundaries")
-        print("   PASS: Rollback verification complete")
-        passed += 1
-    else:
-        print("   SKIP: No boundary file to verify with")
-        skipped += 1
+            # Verify branding
+            if result.get('branding'):
+                created, exists = assert_success(result['branding'], "Branding")
+                print(f"   Branding: created={created}, exists={exists}")
 
-    # ==========================================================================
-    # TEST 10: Error Handling
-    # ==========================================================================
-    print("\n[10/10] Testing error handling...")
+            # Verify localization
+            if result.get('localization'):
+                created, exists = assert_success(result['localization'], "Localization")
+                print(f"   Localization: created={created}")
 
-    # Test unauthenticated access
-    unauthenticated = CRSLoader(BASE_URL)
-    try:
-        unauthenticated.load_tenant("dummy.xlsx")
-        print("   FAIL: Should have raised RuntimeError for unauthenticated access")
-        failed += 1
-    except RuntimeError as e:
-        if "Not authenticated" in str(e):
-            print("   Unauthenticated access correctly blocked")
+            print("   PASS: Phase 1 loaded successfully")
+            passed += 1
         else:
-            print(f"   FAIL: Wrong error: {e}")
+            print(f"   SKIP: {tenant_file} not found")
+            skipped += 1
+
+        # ==========================================================================
+        # TEST 4: Phase 2 - Boundaries
+        # ==========================================================================
+        print("\n[4/10] Testing Phase 2 - Boundaries...")
+        boundary_file = os.path.join(TEMPLATES_DIR, "Boundary_Master.xlsx")
+
+        if os.path.exists(boundary_file):
+            result = loader.load_boundaries(boundary_file, target_tenant=TARGET_TENANT, hierarchy_type="REVENUE")
+
+            assert result is not None, "Boundary result should not be None"
+            status = result.get('status')
+            assert status in ['completed', 'exists'], f"Unexpected status: {status}"
+
+            boundaries = result.get('boundaries_created', 0)
+            relationships = result.get('relationships_created', 0)
+            print(f"   Status: {status}")
+            print(f"   Boundaries: {boundaries}, Relationships: {relationships}")
+            print("   PASS: Phase 2 loaded successfully")
+            passed += 1
+        else:
+            print(f"   SKIP: {boundary_file} not found")
+            skipped += 1
+
+        # ==========================================================================
+        # TEST 5: Phase 3 - Common Masters
+        # ==========================================================================
+        print("\n[5/10] Testing Phase 3 - Common Masters...")
+        common_file = os.path.join(TEMPLATES_DIR, "Common and Complaint Master.xlsx")
+
+        if os.path.exists(common_file):
+            result = loader.load_common_masters(common_file, target_tenant=TARGET_TENANT)
+
+            assert result is not None, "Common masters result should not be None"
+
+            for key in ['departments', 'designations', 'complaint_types']:
+                if result.get(key):
+                    created, exists = assert_success(result[key], key.title())
+                    print(f"   {key}: created={created}, exists={exists}")
+
+            print("   PASS: Phase 3 loaded successfully")
+            passed += 1
+        else:
+            print(f"   SKIP: {common_file} not found")
+            skipped += 1
+
+        # ==========================================================================
+        # TEST 6: Phase 4 - Employees
+        # ==========================================================================
+        print("\n[6/10] Testing Phase 4 - Employees...")
+        employee_file = os.path.join(TEMPLATES_DIR, f"Employee_Master_Dynamic_{TARGET_TENANT}.xlsx")
+
+        if os.path.exists(employee_file):
+            result = loader.load_employees(employee_file, target_tenant=TARGET_TENANT)
+
+            created, exists = assert_success(result, "Employees")
+            print(f"   Employees: created={created}, exists={exists}")
+            print("   PASS: Phase 4 loaded successfully")
+            passed += 1
+        else:
+            print(f"   SKIP: {employee_file} not found")
+            skipped += 1
+
+        # ==========================================================================
+        # TEST 7: Rollback Common Masters
+        # ==========================================================================
+        print("\n[7/10] Testing rollback_common_masters()...")
+
+        try:
+            result = loader.rollback_common_masters(TARGET_TENANT)
+            assert result is not None, "Rollback result should not be None"
+
+            # Check each schema was processed - report results
+            total_deleted = 0
+            total_failed = 0
+            for schema in ['common-masters.Department', 'common-masters.Designation', 'RAINMAKER-PGR.ServiceDefs']:
+                if schema in result:
+                    schema_result = result[schema]
+                    deleted = schema_result.get('deleted', 0)
+                    failed_count = schema_result.get('failed', 0)
+                    total_deleted += deleted
+                    total_failed += failed_count
+                    print(f"   {schema}: deleted={deleted}, failed={failed_count}")
+
+            print(f"   Summary: {total_deleted} deleted, {total_failed} skipped")
+            print("   PASS: Common masters rollback completed")
+            passed += 1
+        except Exception as e:
+            print(f"   FAIL: Rollback failed with exception: {e}")
             failed += 1
-    except Exception as e:
-        print(f"   FAIL: Wrong exception type: {type(e).__name__}: {e}")
-        failed += 1
 
-    # Test file not found
-    try:
-        loader.load_tenant("nonexistent_file_12345.xlsx")
-        print("   FAIL: Should have raised exception for missing file")
-        failed += 1
-    except Exception as e:
-        print(f"   Missing file correctly raises: {type(e).__name__}")
+        # ==========================================================================
+        # TEST 8: Delete Boundaries
+        # ==========================================================================
+        print("\n[8/10] Testing delete_boundaries()...")
 
-    print("   PASS: Error handling works correctly")
-    passed += 1
+        try:
+            result = loader.delete_boundaries(TARGET_TENANT)
 
-    # ==========================================================================
-    # Summary
-    # ==========================================================================
-    print("\n" + "=" * 70)
-    print("TEST SUMMARY")
-    print("=" * 70)
-    print(f"   Passed:  {passed}")
-    print(f"   Failed:  {failed}")
-    print(f"   Skipped: {skipped}")
-    print("=" * 70)
+            assert result is not None, "Delete result should not be None"
+            assert result.get('status') == 'success', f"Expected success, got: {result.get('status')}"
 
-    if failed > 0:
-        print("SOME TESTS FAILED")
-        return 1
-    else:
-        print("ALL TESTS PASSED")
-        return 0
+            deleted = result.get('deleted', 0)
+            rel_deleted = result.get('relationships_deleted', 0)
+            print(f"   Deleted: {deleted} boundaries, {rel_deleted} relationships")
+            print("   PASS: Boundary deletion completed")
+            passed += 1
+        except Exception as e:
+            print(f"   FAIL: Boundary delete failed: {e}")
+            failed += 1
+
+        # ==========================================================================
+        # TEST 9: Verify Rollback - Load Again Should Create (not exist)
+        # ==========================================================================
+        print("\n[9/10] Verifying rollback - reloading boundaries should create new...")
+
+        if os.path.exists(boundary_file):
+            result = loader.load_boundaries(boundary_file, target_tenant=TARGET_TENANT, hierarchy_type="REVENUE")
+
+            # After rollback, loading should create new boundaries
+            boundaries = result.get('boundaries_created', 0)
+            print(f"   Created {boundaries} boundaries after rollback")
+
+            # Clean up again
+            loader.delete_boundaries(TARGET_TENANT)
+            print("   Cleaned up test boundaries")
+            print("   PASS: Rollback verification complete")
+            passed += 1
+        else:
+            print("   SKIP: No boundary file to verify with")
+            skipped += 1
+
+        # ==========================================================================
+        # TEST 10: Error Handling
+        # ==========================================================================
+        print("\n[10/10] Testing error handling...")
+
+        # Test unauthenticated access
+        unauthenticated = CRSLoader(BASE_URL)
+        try:
+            unauthenticated.load_tenant("dummy.xlsx")
+            print("   FAIL: Should have raised RuntimeError for unauthenticated access")
+            failed += 1
+        except RuntimeError as e:
+            if "Not authenticated" in str(e):
+                print("   Unauthenticated access correctly blocked")
+            else:
+                print(f"   FAIL: Wrong error: {e}")
+                failed += 1
+        except Exception as e:
+            print(f"   FAIL: Wrong exception type: {type(e).__name__}: {e}")
+            failed += 1
+
+        # Test file not found
+        try:
+            loader.load_tenant("nonexistent_file_12345.xlsx")
+            print("   FAIL: Should have raised exception for missing file")
+            failed += 1
+        except Exception as e:
+            print(f"   Missing file correctly raises: {type(e).__name__}")
+
+        print("   PASS: Error handling works correctly")
+        passed += 1
+
+        # ==========================================================================
+        # Summary
+        # ==========================================================================
+        print("\n" + "=" * 70)
+        print("TEST SUMMARY")
+        print("=" * 70)
+        print(f"   Passed:  {passed}")
+        print(f"   Failed:  {failed}")
+        print(f"   Skipped: {skipped}")
+        print("=" * 70)
+
+        if failed > 0:
+            print("SOME TESTS FAILED")
+            return 1
+        else:
+            print("ALL TESTS PASSED")
+            return 0
+
+    finally:
+        # Always run cleanup, even if tests crash
+        final_cleanup()
 
 
 if __name__ == "__main__":
