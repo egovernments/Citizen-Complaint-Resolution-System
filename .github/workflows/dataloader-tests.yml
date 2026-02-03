@@ -14,11 +14,11 @@ on:
       environment:
         description: 'Target environment'
         required: true
-        default: 'unified-dev'
+        default: 'chakshu'
         type: choice
         options:
-          - unified-dev
           - chakshu
+          - unified-dev
 
 env:
   PYTHON_VERSION: '3.12'
@@ -49,15 +49,15 @@ jobs:
 
       - name: Set environment variables
         run: |
-          # Default to unified-dev environment
-          ENV="${{ github.event.inputs.environment || 'unified-dev' }}"
+          # Default to chakshu environment (has MDMS v2 deployed)
+          ENV="${{ github.event.inputs.environment || 'chakshu' }}"
 
-          if [ "$ENV" = "unified-dev" ]; then
-            echo "DIGIT_URL=https://unified-dev.digit.org" >> $GITHUB_ENV
-            echo "DIGIT_TENANT=statea.citya" >> $GITHUB_ENV
-          else
+          if [ "$ENV" = "chakshu" ]; then
             echo "DIGIT_URL=https://chakshu-digit.egov.theflywheel.in" >> $GITHUB_ENV
             echo "DIGIT_TENANT=statea" >> $GITHUB_ENV
+          else
+            echo "DIGIT_URL=https://unified-dev.digit.org" >> $GITHUB_ENV
+            echo "DIGIT_TENANT=statea.citya" >> $GITHUB_ENV
           fi
 
       - name: Run E2E Tests
