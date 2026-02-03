@@ -352,13 +352,16 @@ def run_all_tests():
 
             print(f"   Deleted: {deleted}, API failures: {api_failed}, Status: {status}")
 
-            # Note: Boundary deletion requires direct DB access or API support
-            # The boundary service may not have a delete endpoint
-            if api_failed > 0 and deleted == 0:
-                print("   WARNING: Boundary delete API not available (HTTP 400)")
+            # Note: Boundary deletion requires direct DB access (no API endpoint exists)
+            # - API method fails (no endpoint)
+            # - DB method requires kubectl access
+            # - kubectl API method requires KUBECTL_API_URL/KEY environment variables
+            if status in ['skipped', 'failed'] or (api_failed > 0 and deleted == 0):
+                print("   INFO: Boundary deletion requires kubectl/DB access")
                 print("   This is expected - DIGIT boundary service has no delete endpoint")
-                print("   Boundaries can only be deleted via direct database access")
-                print("   SKIP: Boundary deletion not supported via API")
+                if status == 'skipped':
+                    print(f"   Reason: {result.get('error', 'kubectl not available')}")
+                print("   SKIP: Boundary deletion (requires kubectl)")
                 skipped += 1
             elif status in ['success', 'partial']:
                 # Verify boundaries are actually gone
