@@ -38,28 +38,17 @@ TARGET_TENANT = os.environ.get("DIGIT_TENANT", "statea")
 TEMPLATES_DIR = "templates"
 
 
-def assert_success(result, operation_name, allow_auth_failures=True):
+def assert_success(result, operation_name):
     """Assert that an operation succeeded (created or exists, no failures)
 
     Args:
         result: The operation result dict
         operation_name: Name for error messages
-        allow_auth_failures: If True, auth failures are treated as skipped, not failures
     """
     assert result is not None, f"{operation_name}: Result should not be None"
 
-    # Check for failed count
+    # Check for failed count - strict mode, no failures allowed
     failed = result.get('failed', 0)
-
-    if failed > 0 and allow_auth_failures:
-        # Check if failures are auth-related (endpoint not whitelisted)
-        errors = result.get('errors', [])
-        auth_errors = [e for e in errors if any(x in str(e) for x in ['401', 'Authorization', 'authentication', 'whitelist'])]
-        if len(auth_errors) == failed:
-            # All failures are auth-related - treat as skipped
-            print(f"   WARN: {operation_name} skipped due to auth ({failed} items need endpoint whitelisting)")
-            return 0, 0  # Return 0 created, 0 exists (skipped)
-
     assert failed == 0, f"{operation_name}: Expected 0 failures, got {failed}. Errors: {result.get('errors', [])}"
 
     # Verify we got a success response (created or exists)
@@ -74,20 +63,12 @@ def assert_rollback_success(result, operation_name):
     """Assert that a rollback operation succeeded"""
     assert result is not None, f"{operation_name}: Result should not be None"
 
-    # For MDMS rollback, check each schema
+    # For MDMS rollback, check each schema - strict mode
     if isinstance(result, dict):
         for schema, schema_result in result.items():
             if isinstance(schema_result, dict):
                 failed = schema_result.get('failed', 0)
-                # Rollback can have auth failures if endpoints not whitelisted - that's OK for test
-                if failed > 0 and schema_result.get('errors'):
-                    errors = schema_result.get('errors', [])
-                    # Check if it's just auth errors (expected in some envs)
-                    auth_errors = [e for e in errors if 'Authorization' in str(e) or '401' in str(e)]
-                    if len(auth_errors) == len(errors):
-                        print(f"   WARN: {schema} rollback blocked by auth (endpoint not whitelisted)")
-                        continue
-                assert failed == 0, f"{operation_name} {schema}: Expected 0 failures, got {failed}"
+                assert failed == 0, f"{operation_name} {schema}: Expected 0 failures, got {failed}. Errors: {schema_result.get('errors', [])}"
 
 
 # =============================================================================
