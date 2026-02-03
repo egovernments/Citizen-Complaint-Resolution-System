@@ -309,6 +309,74 @@ class CRSLoader:
         self._print_summary("Employees", {'employees': results})
         return results
 
+    def load_localizations(self, excel_path: str, target_tenant: str = None,
+                          language_label: str = None, locale_code: str = None) -> Dict:
+        """Phase 5: Load bulk localization messages from Excel
+
+        Args:
+            excel_path: Path to localization Excel file
+                       Must have 'Localization' or 'localization' sheet
+                       Required columns: Code, Message, Locale (optional: Module)
+            target_tenant: Target tenant ID
+            language_label: Display name for new language (e.g., 'Hindi', 'ਪੰਜਾਬੀ')
+                           If provided, updates StateInfo with this language
+            locale_code: Locale code for new language (e.g., 'hi_IN', 'pa_IN')
+                        Required if language_label is provided
+
+        Returns:
+            dict: Summary of localization upload and StateInfo update
+        """
+        self._check_auth()
+
+        print(f"\n{'='*60}")
+        print(f"PHASE 5: LOCALIZATIONS")
+        print(f"{'='*60}")
+        print(f"File: {os.path.basename(excel_path)}")
+
+        tenant = target_tenant or self.tenant_id
+        reader = UnifiedExcelReader(excel_path)
+        results = {'messages': None, 'stateinfo': None}
+
+        # 1. Read localization data from Excel
+        print(f"\n[1/2] Reading localization data...")
+        localization_data = reader.read_localization()
+
+        if not localization_data:
+            print("   No localization data found in Excel")
+            print("   Make sure the Excel has a 'Localization' sheet with Code and Message columns")
+            return results
+
+        print(f"   Found {len(localization_data)} messages")
+
+        # Show locale breakdown
+        from collections import defaultdict
+        by_locale = defaultdict(int)
+        for loc in localization_data:
+            by_locale[loc.get('locale', 'unknown')] += 1
+        for locale, count in by_locale.items():
+            print(f"   - {locale}: {count} messages")
+
+        # 2. Upload localization messages
+        print(f"\n[2/2] Uploading localization messages...")
+        results['messages'] = self.uploader.create_localization_messages(
+            localization_list=localization_data,
+            tenant=tenant,
+            sheet_name='Localization'
+        )
+
+        # 3. Optionally update StateInfo with new language
+        if language_label and locale_code:
+            print(f"\n[BONUS] Updating StateInfo with new language...")
+            print(f"   Language: {language_label} ({locale_code})")
+            results['stateinfo'] = self.uploader.update_stateinfo_language(
+                language_label=language_label,
+                language_value=locale_code,
+                state_tenant=tenant
+            )
+
+        self._print_summary("Localizations", results)
+        return results
+
     def delete_boundaries(self, target_tenant: str = None) -> Dict:
         """Delete all boundary entities for a tenant
 
