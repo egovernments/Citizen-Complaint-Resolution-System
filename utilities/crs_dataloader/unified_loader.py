@@ -3638,3 +3638,168 @@ class APIUploader:
 
         return results
 
+    # =========================================================================
+    # WORKFLOW SERVICE METHODS
+    # =========================================================================
+
+    def search_workflow(self, tenant: str, business_service: str = "PGR") -> Dict:
+        """Search for workflow business service configuration
+
+        Args:
+            tenant: Tenant ID (e.g., 'statea')
+            business_service: Business service code (default: 'PGR')
+
+        Returns:
+            dict: BusinessService object if found, empty dict if not found
+        """
+        url = f"{self.workflow_url}/egov-wf/businessservice/_search"
+        params = {
+            "tenantId": tenant,
+            "businessServices": business_service
+        }
+
+        payload = {
+            "RequestInfo": {
+                "apiId": "Rainmaker",
+                "authToken": self.auth_token,
+                "userInfo": self.user_info,
+                "msgId": f"{int(time.time() * 1000)}|en_IN"
+            }
+        }
+
+        headers = {"Content-Type": "application/json"}
+
+        try:
+            response = requests.post(url, json=payload, headers=headers, params=params)
+            response.raise_for_status()
+
+            data = response.json()
+            services = data.get('BusinessServices', [])
+
+            if services:
+                return services[0]
+            return {}
+
+        except requests.exceptions.HTTPError as e:
+            print(f"   Workflow search error: {e.response.status_code}")
+            return {}
+        except Exception as e:
+            print(f"   Workflow search error: {str(e)}")
+            return {}
+
+    def create_workflow(self, tenant: str, business_service: Dict) -> Dict:
+        """Create a new workflow business service
+
+        Args:
+            tenant: Tenant ID
+            business_service: BusinessService object with states and actions
+
+        Returns:
+            dict: {created: bool, error: str or None, data: response data}
+        """
+        url = f"{self.workflow_url}/egov-wf/businessservice/_create"
+
+        # Ensure tenantId is set on the business service
+        business_service['tenantId'] = tenant
+
+        payload = {
+            "RequestInfo": {
+                "apiId": "Rainmaker",
+                "action": "",
+                "did": 1,
+                "key": "",
+                "msgId": f"{int(time.time() * 1000)}|en_IN",
+                "requesterId": "",
+                "ts": int(time.time() * 1000),
+                "ver": ".01",
+                "authToken": self.auth_token,
+                "userInfo": self.user_info
+            },
+            "BusinessServices": [business_service]
+        }
+
+        headers = {"Content-Type": "application/json"}
+
+        try:
+            response = requests.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+
+            data = response.json()
+            return {
+                'created': True,
+                'error': None,
+                'data': data.get('BusinessServices', [{}])[0]
+            }
+
+        except requests.exceptions.HTTPError as e:
+            error_text = e.response.text if hasattr(e, 'response') and e.response else str(e)
+            return {
+                'created': False,
+                'error': self._extract_error_message(error_text),
+                'data': None
+            }
+        except Exception as e:
+            return {
+                'created': False,
+                'error': str(e),
+                'data': None
+            }
+
+    def update_workflow(self, tenant: str, business_service: Dict) -> Dict:
+        """Update an existing workflow business service
+
+        Args:
+            tenant: Tenant ID
+            business_service: BusinessService object with states and actions
+
+        Returns:
+            dict: {updated: bool, error: str or None, data: response data}
+        """
+        url = f"{self.workflow_url}/egov-wf/businessservice/_update"
+
+        # Ensure tenantId is set on the business service
+        business_service['tenantId'] = tenant
+
+        payload = {
+            "RequestInfo": {
+                "apiId": "Rainmaker",
+                "action": "",
+                "did": 1,
+                "key": "",
+                "msgId": f"{int(time.time() * 1000)}|en_IN",
+                "requesterId": "",
+                "ts": int(time.time() * 1000),
+                "ver": ".01",
+                "authToken": self.auth_token,
+                "userInfo": self.user_info
+            },
+            "BusinessServices": [business_service]
+        }
+
+        headers = {"Content-Type": "application/json"}
+
+        try:
+            response = requests.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+
+            data = response.json()
+            return {
+                'updated': True,
+                'error': None,
+                'data': data.get('BusinessServices', [{}])[0]
+            }
+
+        except requests.exceptions.HTTPError as e:
+            error_text = e.response.text if hasattr(e, 'response') and e.response else str(e)
+            return {
+                'updated': False,
+                'error': self._extract_error_message(error_text),
+                'data': None
+            }
+        except Exception as e:
+            return {
+                'updated': False,
+                'error': str(e),
+                'data': None
+            }
+

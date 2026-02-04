@@ -17,6 +17,7 @@ Usage:
 from unified_loader import UnifiedExcelReader, APIUploader
 from typing import Optional, Dict
 import os
+import json
 import requests
 
 # kubectl API server URL (for environments without kubectl access)
@@ -381,6 +382,157 @@ class CRSLoader:
 
         self._print_summary("Localizations", results)
         return results
+
+    def load_workflow(self, json_path: str, target_tenant: str = None,
+                      business_service: str = "PGR") -> Dict:
+        """Phase 6: Load/update workflow business service configuration from JSON file
+
+        Args:
+            json_path: Path to workflow JSON file (e.g., PgrWorkflowConfig.json)
+                      The JSON should have a "BusinessServices" array with the workflow config.
+            target_tenant: Target tenant ID
+            business_service: Business service code (default: 'PGR')
+
+        Returns:
+            dict: {status: 'created'|'updated'|'exists'|'failed', error: str or None}
+        """
+        self._check_auth()
+
+        print(f"\n{'='*60}")
+        print(f"PHASE 6: WORKFLOW")
+        print(f"{'='*60}")
+        print(f"File: {os.path.basename(json_path)}")
+
+        tenant = target_tenant or self.tenant_id
+        print(f"Tenant: {tenant}")
+        print(f"Business Service: {business_service}")
+
+        # Load workflow config from JSON file
+        print(f"\n[1/3] Loading workflow config from JSON...")
+        workflow_config = self._load_workflow_from_json(json_path, tenant)
+
+        if not workflow_config:
+            return {'status': 'failed', 'error': 'Failed to load workflow config from JSON'}
+
+        # Ensure business service code is set
+        workflow_config['businessService'] = business_service
+        print(f"   Loaded {len(workflow_config.get('states', []))} states")
+
+        # Check if workflow already exists
+        print(f"\n[2/3] Checking for existing workflow...")
+        existing = self.uploader.search_workflow(tenant, business_service)
+
+        if existing:
+            print(f"   Found existing workflow: {existing.get('businessService')}")
+            print(f"   States: {len(existing.get('states', []))}")
+
+            # Check if we should update
+            existing_states = len(existing.get('states', []))
+            new_states = len(workflow_config.get('states', []))
+
+            if existing_states == new_states:
+                print(f"\n[3/3] Workflow already configured (same state count)")
+                return {'status': 'exists', 'error': None, 'states': existing_states}
+
+            # Update existing workflow
+            print(f"\n[3/3] Updating workflow ({existing_states} -> {new_states} states)...")
+
+            # Copy UUIDs from existing to new config for update
+            workflow_config = self._merge_workflow_uuids(existing, workflow_config)
+
+            result = self.uploader.update_workflow(tenant, workflow_config)
+
+            if result.get('updated'):
+                print(f"   Workflow updated successfully")
+                return {'status': 'updated', 'error': None, 'states': new_states}
+            else:
+                print(f"   Update failed: {result.get('error')}")
+                return {'status': 'failed', 'error': result.get('error')}
+
+        else:
+            # Create new workflow
+            print(f"   No existing workflow found")
+            print(f"\n[3/3] Creating workflow...")
+
+            result = self.uploader.create_workflow(tenant, workflow_config)
+
+            if result.get('created'):
+                states = len(workflow_config.get('states', []))
+                print(f"   Workflow created successfully ({states} states)")
+                return {'status': 'created', 'error': None, 'states': states}
+            else:
+                print(f"   Create failed: {result.get('error')}")
+                return {'status': 'failed', 'error': result.get('error')}
+
+    def _load_workflow_from_json(self, json_path: str, tenant: str) -> Optional[Dict]:
+        """Load workflow configuration from JSON file
+
+        Args:
+            json_path: Path to workflow JSON file
+            tenant: Target tenant ID (replaces {tenantid} placeholders)
+
+        Returns:
+            BusinessService config dict, or None if failed
+        """
+        try:
+            with open(json_path, 'r') as f:
+                data = json.load(f)
+
+            # Extract BusinessServices array
+            business_services = data.get('BusinessServices', [])
+            if not business_services:
+                print(f"   ERROR: No BusinessServices found in JSON")
+                return None
+
+            # Get first business service config
+            workflow_config = business_services[0]
+
+            # Replace {tenantid} placeholders with actual tenant
+            workflow_json = json.dumps(workflow_config)
+            workflow_json = workflow_json.replace('{tenantid}', tenant)
+            workflow_config = json.loads(workflow_json)
+
+            return workflow_config
+
+        except FileNotFoundError:
+            print(f"   ERROR: File not found: {json_path}")
+            return None
+        except json.JSONDecodeError as e:
+            print(f"   ERROR: Invalid JSON: {e}")
+            return None
+        except Exception as e:
+            print(f"   ERROR: Failed to load workflow: {e}")
+            return None
+
+    def _merge_workflow_uuids(self, existing: Dict, new_config: Dict) -> Dict:
+        """Merge UUIDs from existing workflow into new config for update
+
+        The workflow service requires UUIDs to be preserved when updating.
+        """
+        # Copy top-level UUID
+        if existing.get('uuid'):
+            new_config['uuid'] = existing['uuid']
+
+        # Build a map of state name -> state object from existing
+        existing_states = {s.get('state'): s for s in existing.get('states', [])}
+
+        # Merge UUIDs for matching states
+        for new_state in new_config.get('states', []):
+            state_name = new_state.get('state')
+            if state_name in existing_states:
+                old_state = existing_states[state_name]
+                new_state['uuid'] = old_state.get('uuid')
+
+                # Build action map for this state
+                old_actions = {a.get('action'): a for a in old_state.get('actions', []) or []}
+
+                # Merge action UUIDs
+                for new_action in new_state.get('actions', []) or []:
+                    action_name = new_action.get('action')
+                    if action_name in old_actions:
+                        new_action['uuid'] = old_actions[action_name].get('uuid')
+
+        return new_config
 
     def delete_boundaries(self, target_tenant: str = None, use_db: bool = False) -> Dict:
         """Delete all boundary entities for a tenant
