@@ -127,7 +127,7 @@ class CRSLoader:
 
         if branding:
             results['branding'] = self.uploader.create_mdms_data(
-                schema_code='tenant.branding',
+                schema_code='tenant.citymodule',
                 data_list=branding,
                 tenant=target_tenant,
                 sheet_name='Tenant Branding Details',

@@ -741,8 +741,8 @@ class APIUploader:
                 continue
 
         # Default fallback
-        print(f"   MDMS path: using default /egov-mdms-service (no path responded)")
-        return f"{self.base_url}/egov-mdms-service"
+        print(f"   MDMS path: using default /mdms-v2 (no path responded)")
+        return f"{self.base_url}/mdms-v2"
 
     def authenticate(self):
         """Authenticate using OAuth2 password grant and fetch user info"""
