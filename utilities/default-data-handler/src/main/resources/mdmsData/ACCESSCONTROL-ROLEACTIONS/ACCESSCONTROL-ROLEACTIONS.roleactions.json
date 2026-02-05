@@ -225,13 +225,6 @@
   },
   {
     "rolecode": "MDMS_ADMIN",
-    "actionid": 2600,
-    "actioncode": "",
-    "tenantId": "{tenantid}",
-    "id": 1135
-  },
-  {
-    "rolecode": "MDMS_ADMIN",
     "actionid": 2599,
     "actioncode": "",
     "tenantId": "{tenantid}",
@@ -805,20 +798,6 @@
     "actioncode": ""
   },
   {
-    "id": 1050,
-    "actionid": 2540,
-    "rolecode": "MDMS_ADMIN",
-    "tenantId": "{tenantid}",
-    "actioncode": ""
-  },
-  {
-    "id": 1049,
-    "actionid": 2539,
-    "rolecode": "MDMS_ADMIN",
-    "tenantId": "{tenantid}",
-    "actioncode": ""
-  },
-  {
     "id": 1048,
     "actionid": 2538,
     "rolecode": "MDMS_ADMIN",
@@ -833,36 +812,8 @@
     "actioncode": ""
   },
   {
-    "id": 1046,
-    "actionid": 2537,
-    "rolecode": "MDMS_ADMIN",
-    "tenantId": "{tenantid}",
-    "actioncode": ""
-  },
-  {
-    "id": 1045,
-    "actionid": 2536,
-    "rolecode": "MDMS_ADMIN",
-    "tenantId": "{tenantid}",
-    "actioncode": ""
-  },
-  {
     "id": 1044,
     "actionid": 2535,
-    "rolecode": "MDMS_ADMIN",
-    "tenantId": "{tenantid}",
-    "actioncode": ""
-  },
-  {
-    "id": 1043,
-    "actionid": 2534,
-    "rolecode": "MDMS_ADMIN",
-    "tenantId": "{tenantid}",
-    "actioncode": ""
-  },
-  {
-    "id": 1042,
-    "actionid": 2533,
     "rolecode": "MDMS_ADMIN",
     "tenantId": "{tenantid}",
     "actioncode": ""
@@ -875,36 +826,8 @@
     "actioncode": ""
   },
   {
-    "id": 1040,
-    "actionid": 2531,
-    "rolecode": "MDMS_ADMIN",
-    "tenantId": "{tenantid}",
-    "actioncode": ""
-  },
-  {
-    "id": 1039,
-    "actionid": 2530,
-    "rolecode": "MDMS_ADMIN",
-    "tenantId": "{tenantid}",
-    "actioncode": ""
-  },
-  {
     "id": 1038,
     "actionid": 2529,
-    "rolecode": "MDMS_ADMIN",
-    "tenantId": "{tenantid}",
-    "actioncode": ""
-  },
-  {
-    "id": 1037,
-    "actionid": 2528,
-    "rolecode": "MDMS_ADMIN",
-    "tenantId": "{tenantid}",
-    "actioncode": ""
-  },
-  {
-    "id": 1036,
-    "actionid": 2527,
     "rolecode": "MDMS_ADMIN",
     "tenantId": "{tenantid}",
     "actioncode": ""
@@ -933,20 +856,6 @@
   {
     "id": 1032,
     "actionid": 698,
-    "rolecode": "MDMS_ADMIN",
-    "tenantId": "{tenantid}",
-    "actioncode": ""
-  },
-  {
-    "id": 1031,
-    "actionid": 2516,
-    "rolecode": "MDMS_ADMIN",
-    "tenantId": "{tenantid}",
-    "actioncode": ""
-  },
-  {
-    "id": 1030,
-    "actionid": 2515,
     "rolecode": "MDMS_ADMIN",
     "tenantId": "{tenantid}",
     "actioncode": ""
@@ -2340,13 +2249,6 @@
   {
     "id": 1101,
     "actionid": 2008,
-    "rolecode": "PGR_VIEWER",
-    "tenantId": "{tenantid}",
-    "actioncode": ""
-  },
-  {
-    "id": 1101,
-    "actionid": 1429,
     "rolecode": "PGR_VIEWER",
     "tenantId": "{tenantid}",
     "actioncode": ""

@@ -1,0 +1,8 @@
+[
+    {
+        "code": "TENANT_TENANTS_{tenantid}",
+        "message": "{tenantid}",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    }
+]
