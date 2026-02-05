@@ -1,0 +1,45 @@
+@startuml
+title Config Service ERD
+
+entity "config" as config {
+  *id : uuid
+  --
+  tenant_id : string
+  namespace : string
+  config_name : string
+  config_code : string
+  version : string
+  status : string
+  environment : string
+  description : string
+  content : jsonb
+  created_by : string
+  created_time : long
+  last_modified_by : string
+  last_modified_time : long
+}
+
+entity "config_set" as config_set {
+  *id : uuid
+  --
+  tenant_id : string
+  environment : string
+  name : string
+  status : string
+  created_by : string
+  created_time : long
+  last_modified_by : string
+  last_modified_time : long
+}
+
+entity "config_set_item" as config_set_item {
+  *id : uuid
+  --
+  config_set_id : uuid
+  config_id : uuid
+}
+
+config_set ||--o{ config_set_item : contains
+config ||--o{ config_set_item : includes
+
+@enduml
