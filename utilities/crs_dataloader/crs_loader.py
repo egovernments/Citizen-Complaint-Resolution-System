@@ -145,6 +145,123 @@ class CRSLoader:
         self._print_summary("Tenant & Branding", results)
         return results
 
+    def load_hierarchy(self, name: str, levels: list, target_tenant: str = None,
+                       output_dir: str = "upload") -> str:
+        """Phase 2a: Create boundary hierarchy and generate template
+
+        Creates a boundary hierarchy definition and generates a downloadable
+        Excel template that can be filled with boundary data.
+
+        Args:
+            name: Hierarchy type name (e.g., "REVENUE", "ADMIN")
+            levels: List of boundary level names from top to bottom
+                   (e.g., ["State", "District", "Block", "Village"])
+            target_tenant: Target tenant ID
+            output_dir: Directory to save the template (default: "upload")
+
+        Returns:
+            str: Path to downloaded template file, or None if failed
+
+        Example:
+            template = loader.load_hierarchy(
+                name="REVENUE",
+                levels=["State", "District", "Block"],
+                target_tenant="statea"
+            )
+        """
+        self._check_auth()
+
+        print(f"\n{'='*60}")
+        print(f"PHASE 2a: BOUNDARY HIERARCHY & TEMPLATE")
+        print(f"{'='*60}")
+
+        tenant = target_tenant or self.tenant_id
+        print(f"Tenant: {tenant}")
+        print(f"Hierarchy: {name}")
+        print(f"Levels: {' -> '.join(levels)}")
+
+        # Ensure output directory exists
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Step 1: Build hierarchy data structure
+        print(f"\n[1/4] Building hierarchy definition...")
+        boundary_hierarchy = []
+        for i, level in enumerate(levels):
+            level_data = {
+                "boundaryType": level,
+                "boundaryTypeHierarchyOrder": i + 1,
+                "active": True
+            }
+            # Add parent reference for non-root levels
+            if i > 0:
+                level_data["parentBoundaryType"] = levels[i - 1]
+            boundary_hierarchy.append(level_data)
+
+        hierarchy_data = {
+            "tenantId": tenant,
+            "hierarchyType": name,
+            "boundaryHierarchy": boundary_hierarchy
+        }
+
+        print(f"   Created {len(levels)} level definitions")
+
+        # Step 2: Create hierarchy
+        print(f"\n[2/4] Creating hierarchy...")
+        try:
+            result = self.uploader.create_boundary_hierarchy(hierarchy_data)
+            if result.get('exists'):
+                print(f"   Hierarchy already exists (OK)")
+            else:
+                print(f"   Hierarchy created successfully")
+        except Exception as e:
+            print(f"   ERROR: Failed to create hierarchy: {e}")
+            return None
+
+        # Step 3: Generate template
+        print(f"\n[3/4] Generating template...")
+        gen_result = self.uploader.generate_boundary_template(tenant, name)
+
+        if not gen_result:
+            print(f"   ERROR: Template generation failed")
+            return None
+
+        # Step 4: Poll for completion and download
+        print(f"\n[4/4] Waiting for template...")
+        poll_result = self.uploader.poll_boundary_template_status(tenant, name)
+
+        if not poll_result or poll_result.get('status') == 'failed':
+            print(f"   ERROR: Template generation failed")
+            error = poll_result.get('error') if poll_result else 'Unknown error'
+            print(f"   Details: {error}")
+            return None
+
+        filestore_id = poll_result.get('fileStoreid')
+        if not filestore_id:
+            print(f"   ERROR: No filestore ID returned")
+            return None
+
+        # Download template
+        output_path = os.path.join(output_dir, f"Boundary_Template_{tenant}_{name}.xlsx")
+        downloaded_path = self.uploader.download_boundary_template(
+            tenant_id=tenant,
+            filestore_id=filestore_id,
+            hierarchy_type=name,
+            output_path=output_path
+        )
+
+        if downloaded_path:
+            print(f"\n{'─'*40}")
+            print(f"Template downloaded: {downloaded_path}")
+            print(f"{'─'*40}")
+            print(f"\nNext steps:")
+            print(f"1. Open {downloaded_path}")
+            print(f"2. Fill in boundary data (codes and names)")
+            print(f"3. Use loader.load_boundaries() to upload")
+            return downloaded_path
+        else:
+            print(f"   ERROR: Failed to download template")
+            return None
+
     def load_boundaries(self, excel_path: str, target_tenant: str = None,
                        hierarchy_type: str = "ADMIN") -> Dict:
         """Phase 2: Load boundary hierarchy from Excel
