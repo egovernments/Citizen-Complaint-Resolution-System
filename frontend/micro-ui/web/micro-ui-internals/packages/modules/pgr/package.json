@@ -1,5 +1,5 @@
 {
-  "name": "@egovernments/digit-ui-module-ccrs",
+  "name": "@egovernments/digit-ui-module-cms",
   "version": "0.0.1",
   "description": "PGR Module UI",
   "main": "dist/index.js",
@@ -31,6 +31,10 @@
     "leaflet": "1.6.0",
     "react-leaflet": "2.7.0"
   },
-  "author": "Ramkrishna <ramkrishna.sahoo@egovernments.org>",
+  "author": "Hariprasad <hariprasad@egovernments.org>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System.git"
+  },
   "license": "MIT"
 }
