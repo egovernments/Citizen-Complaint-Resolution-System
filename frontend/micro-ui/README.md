@@ -31,7 +31,7 @@ micro-ui-internals/
 │   │   ├── postcss.config.js
 │   │   ├── tailwind.config.js
 │   ├── modules/                 # Contains different micro UI modules
-│   │   ├── pgr/
+│   │   ├── cms/
 ```
 
 
@@ -123,7 +123,7 @@ To run this project, you will need to add the following environment variables to
 
 ## Modules
 
-    1. pgr
+    1. cms
 
 🎨 Tailwind CSS Configuration
 The project uses Tailwind CSS for styling. The global configuration is located in:

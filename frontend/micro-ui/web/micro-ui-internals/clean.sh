@@ -33,8 +33,8 @@ msg "Cleaning microplan  module"
 cd "$BASEDIR/packages/modules/microplan" && rm -rf node_modules
 
 
-msg "Cleaning pgr  module"
-cd "$BASEDIR/packages/modules/pgr" && rm -rf node_modules
+msg "Cleaning cms  module"
+cd "$BASEDIR/packages/modules/cms" && rm -rf node_modules
 
 msg "Cleaning workbench-hcm  module"
 cd "$BASEDIR/packages/modules/workbench-hcm" && rm -rf node_modules

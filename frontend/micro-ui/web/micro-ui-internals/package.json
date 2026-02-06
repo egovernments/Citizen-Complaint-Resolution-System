@@ -21,10 +21,10 @@
     "dev:css": "cd packages/css && yarn start",
     "publish:css": "cd packages/css && yarn && npm publish --tag workbench-1.0",
     "dev:example": "cd example && yarn start",
-    "dev:pgr": "cd packages/modules/pgr && yarn start",
+    "dev:cms": "cd packages/modules/cms && yarn start",
     "build": "run-p build:**",
     "build:css": "cd packages/css && yarn prepublish",
-    "build:pgr": "cd packages/modules/pgr && yarn build",
+    "build:cms": "cd packages/modules/cms && yarn build",
     "deploy:jenkins": "./scripts/jenkins.sh",
     "clean": "rm -rf node_modules"
   },
