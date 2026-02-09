@@ -1,5 +1,6 @@
 name: Release CMS Package to NPM
 
+on:
   workflow_dispatch:
   push:
     branches:
