@@ -41,7 +41,8 @@
     "**/minimatch": "7.4.6",
     "**/glob": "7.2.3",
     "**/chokidar": "3.5.3",
-    "**/tar": "6.2.1"
+    "**/tar": "6.2.1",
+    "**/nopt": "5.0.0"
   },
   "devDependencies": {
     "husky": "7.0.4",
