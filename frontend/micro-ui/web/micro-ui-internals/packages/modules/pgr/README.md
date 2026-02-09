@@ -3,7 +3,7 @@
 ## Install
 
 ```bash
-npm install --save egovernments/digit-ui-module-health-pgr
+npm install --save egovernments/digit-ui-module-cms
 ```
 
 ## Limitation
@@ -21,7 +21,7 @@ frontend/micro-ui/web/package.json
 ```
 
 ```json
-"@egovernments/digit-ui-module-health-pgr" :"0.0.1",
+"@egovernments/digit-ui-module-cms" :"0.0.1",
 ```
 
 then navigate to App.js
@@ -33,7 +33,7 @@ then navigate to App.js
 ```jsx
 /** add this import **/
 
-import { initPGRComponents } from "egovernments/digit-ui-module-health-pgr"
+import { initPGRComponents } from "egovernments/digit-ui-module-cms"
 
 /** inside enabledModules add this new module key **/
 
