@@ -6,7 +6,6 @@ name: Release CMS Package to NPM
       - master
     paths:
       - 'frontend/micro-ui/web/micro-ui-internals/packages/modules/pgr/**'
-      - '.github/workflows/publish-cms-package.yml'
 
 permissions:
   contents: write
@@ -48,7 +47,7 @@ jobs:
             ${{ runner.os }}-yarn-
 
       - name: Install dependencies
-        run: yarn install --immutable
+        run: yarn install
         working-directory: ./frontend/micro-ui/web/micro-ui-internals/packages/modules/pgr
 
       - name: Build package
