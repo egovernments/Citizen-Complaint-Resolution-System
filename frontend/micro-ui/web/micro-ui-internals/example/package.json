@@ -14,7 +14,7 @@
     "@egovernments/digit-ui-module-core": "1.9.9",
     "@egovernments/digit-ui-module-utilities": "1.0.12",
     "@egovernments/digit-ui-react-components": "1.8.21",
-    "@egovernments/digit-ui-module-cms": "0.0.1",
+    "@egovernments/digit-ui-module-cms": "1.0.0",
     "@egovernments/digit-ui-module-workbench": "1.0.28",
     "@egovernments/digit-ui-module-hrms": "1.9.4",
     "http-proxy-middleware": "^1.0.5",
