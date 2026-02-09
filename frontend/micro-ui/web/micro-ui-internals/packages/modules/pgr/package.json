@@ -11,8 +11,7 @@
   "scripts": {
     "start": "microbundle-crl watch --no-compress --format modern,cjs",
     "build": "microbundle-crl --compress --no-sourcemap --format cjs",
-    "prepublishOnly": "yarn build",
-    "semantic-release": "semantic-release"
+    "prepublish": "yarn build"
   },
   "publishConfig": {
     "access": "public",
@@ -36,6 +35,12 @@
     "leaflet": "1.6.0",
     "react-leaflet": "2.7.0"
   },
+  "resolutions": {
+    "**/minimatch": "7.4.6",
+    "minimatch": "7.4.6",
+    "**/glob": "7.2.3",
+    "glob": "7.2.3"
+  },
   "author": "Hariprasad <hariprasad@egovernments.org>",
   "repository": {
     "type": "git",
@@ -52,8 +57,6 @@
     "module"
   ],
   "devDependencies": {
-    "@semantic-release/changelog": "^6.0.3",
-    "@semantic-release/git": "^10.0.1",
-    "semantic-release": "^18.0.0"
+    "microbundle-crl": "^0.13.11"
   }
 }
