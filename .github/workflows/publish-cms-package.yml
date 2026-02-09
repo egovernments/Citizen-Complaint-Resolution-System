@@ -1,11 +1,12 @@
 name: Release CMS Package to NPM
 
-on:
+  workflow_dispatch:
   push:
     branches:
       - master
     paths:
       - 'frontend/micro-ui/web/micro-ui-internals/packages/modules/pgr/**'
+      - '.github/workflows/publish-cms-package.yml'
 
 permissions:
   contents: write
