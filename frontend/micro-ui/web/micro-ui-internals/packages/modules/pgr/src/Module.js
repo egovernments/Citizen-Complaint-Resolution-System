@@ -1,6 +1,5 @@
 import { Loader } from "@egovernments/digit-ui-react-components";
-console.log('Triggering CMS release workflow 55');
-console.log('Triggering CMS release workflow 66');
+console.log('Triggering CMS release workflow 33');
 import React, { useState } from "react";
 import { useRouteMatch } from "react-router-dom";
 import { default as EmployeeApp } from "./pages/employee";
