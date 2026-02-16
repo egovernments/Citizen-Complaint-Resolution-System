@@ -38,6 +38,34 @@ Implement outbound WhatsApp notifications for DIGIT (PGR-first) using Novu for d
 - **Novu** (WhatsApp delivery orchestration only)
 - **WhatsApp Provider** (delivery channel)
 
+## Why Dedicated Config Service (instead of only MDMS v2)
+If requirements are limited to storing and searching records, MDMS v2 can be sufficient. A dedicated Config Service is needed because runtime configuration requires deterministic behavior, consistent precedence, and predictable performance.
+
+### Justification
+1. Runtime contract mismatch
+- MDMS-style access is browse/search oriented.
+- Runtime consumers typically require a single best-match config, not a list.
+
+2. Deterministic precedence must be centralized
+- Tenant/locale specificity and wildcard fallback need one shared contract.
+- Implementing fallback in each consumer causes behavior drift.
+
+3. Performance model differs
+- Runtime resolution must be index-backed and low-latency.
+- Fetch-and-filter patterns degrade at scale and are harder to operate.
+
+4. Synchronous operational behavior
+- Runtime config updates often need immediate read-after-write consistency.
+- A synchronous Config Service write path reduces eventual-consistency surprises.
+
+5. Explicit domain semantics
+- Runtime config requires explicit selector keys, fallback semantics, and tie-break rules.
+- A dedicated service makes these semantics testable and auditable.
+
+### Recommended split
+1. Keep MDMS v2 schema APIs for schema governance.
+2. Use Config Service for synchronous config CRUD/search and deterministic runtime resolve.
+
 ## Key Flows
 1) PGR workflow event -> Kafka -> digit-novu-bridge.
 2) digit-novu-bridge -> Config Service (policy + template bindings).

@@ -195,6 +195,7 @@ components:
               $ref: "#/components/schemas/ConsentPolicy"
             EMAIL:
               $ref: "#/components/schemas/ConsentPolicy"
+    
     ConsentPolicy:
       type: object
       description: Consent settings for a specific channel.

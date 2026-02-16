@@ -1,0 +1,468 @@
+openapi: 3.0.3
+info:
+  title: DIGIT Config Service API
+  description: |
+    Config Service API for runtime-safe configuration management.
+    Scope for Phase-1 is limited to two config codes:
+    - NOTIF_TEMPLATE_MAP
+    - NOTIF_EVENT_SCHEMA
+  version: 0.1.0
+servers:
+  - url: https://{host}/config-service
+    variables:
+      host:
+        default: config.example.org
+security:
+  - bearerAuth: []
+paths:
+  /config/v1/entry/_create:
+    post:
+      tags:
+        - ConfigEntry
+      summary: Create a config entry
+      description: |
+        RBAC: Requires role `CONFIG_CREATOR`.
+      operationId: createConfigEntry
+      requestBody:
+        required: true
+        content:
+          "*/*":
+            schema:
+              $ref: "#/components/schemas/ConfigEntryCreateRequest"
+      responses:
+        "201":
+          description: Entry created
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/ConfigEntryResponse"
+        "400":
+          description: Invalid input
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+        "401":
+          description: Unauthorized
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+        "409":
+          description: Conflict (duplicate active key)
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+
+  /config/v1/entry/_update:
+    post:
+      tags:
+        - ConfigEntry
+      summary: Update a config entry
+      description: |
+        Uses optimistic locking via `expectedRevision`.
+        RBAC: Requires role `CONFIG_CREATOR`.
+      operationId: updateConfigEntry
+      requestBody:
+        required: true
+        content:
+          "*/*":
+            schema:
+              $ref: "#/components/schemas/ConfigEntryUpdateRequest"
+      responses:
+        "200":
+          description: Entry updated
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/ConfigEntryResponse"
+        "400":
+          description: Invalid input
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+        "401":
+          description: Unauthorized
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+        "404":
+          description: Entry not found
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+        "409":
+          description: Revision conflict
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+
+  /config/v1/entry/_search:
+    post:
+      tags:
+        - ConfigEntry
+      summary: Search config entries
+      description: "RBAC: Requires role `CONFIG_VIEWER`."
+      operationId: searchConfigEntries
+      requestBody:
+        required: true
+        content:
+          "*/*":
+            schema:
+              $ref: "#/components/schemas/ConfigEntrySearchRequest"
+      responses:
+        "200":
+          description: Search result
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/ConfigEntrySearchResponse"
+        "400":
+          description: Invalid input
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+        "401":
+          description: Unauthorized
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+
+  /config/v1/entry/_resolve:
+    post:
+      tags:
+        - ConfigEntry
+      summary: Resolve deterministic best-match config entry
+      description: |
+        Returns a single resolved entry using deterministic tenant+locale precedence.
+        Intended for runtime consumers.
+        RBAC: Requires role `CONFIG_VIEWER`.
+        Trusted decrypt mode: when `resolveRequest.decryptSensitive=true`, caller must also
+        have privileged secret-read authorization (for example `CONFIG_SECRET_VIEWER`).
+      operationId: resolveConfigEntry
+      requestBody:
+        required: true
+        content:
+          "*/*":
+            schema:
+              $ref: "#/components/schemas/ConfigResolveRequest"
+      responses:
+        "200":
+          description: Resolved entry
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/ConfigResolveResponse"
+        "400":
+          description: Invalid input
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+        "401":
+          description: Unauthorized
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+        "404":
+          description: No matching entry found
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+        "403":
+          description: Secret access denied for decrypt-sensitive resolve
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ConfigCode:
+      type: string
+      enum:
+        - NOTIF_TEMPLATE_MAP
+        - NOTIF_EVENT_SCHEMA
+
+    ConfigEntry:
+      type: object
+      required:
+        - configCode
+        - module
+        - tenantId
+        - locale
+        - enabled
+        - key
+        - value
+      properties:
+        id:
+          type: string
+          description: Entry identifier
+          example: c6f2b6b0-4d48-45e2-a6be-cf761de3e1c3
+        configCode:
+          $ref: "#/components/schemas/ConfigCode"
+        module:
+          type: string
+          minLength: 1
+          maxLength: 128
+          example: Complaints
+        tenantId:
+          type: string
+          minLength: 1
+          maxLength: 256
+          example: pb.amritsar
+        locale:
+          type: string
+          minLength: 1
+          maxLength: 32
+          example: en_IN
+        enabled:
+          type: boolean
+          default: true
+        key:
+          type: object
+          description: Selector object used for search/resolve.
+          additionalProperties: true
+          example:
+            eventName: COMPLAINT_CREATED
+            audience: CITIZEN
+            workflowState: PENDINGFORASSIGNMENT
+            channel: WHATSAPP
+        value:
+          type: object
+          description: Config payload.
+          additionalProperties: true
+          example:
+            templateKey: pgr_created_v1
+            templateVersion: "1"
+            requiredVars:
+              - complaintId
+              - name
+            optionalVars:
+              - ward
+            paramOrder:
+              - name
+              - complaintId
+              - ward
+            fallbackTemplateKey: pgr_created_fallback
+            fallbackTemplateVersion: "1"
+        revision:
+          type: integer
+          format: int64
+          minimum: 1
+          example: 1
+        expectedRevision:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Required for update requests.
+        auditDetails:
+          $ref: "#/components/schemas/AuditDetails"
+
+    AuditDetails:
+      type: object
+      properties:
+        createdBy:
+          type: string
+        createdTime:
+          type: integer
+          format: int64
+        lastModifiedBy:
+          type: string
+        lastModifiedTime:
+          type: integer
+          format: int64
+
+    ConfigEntryCreateRequest:
+      type: object
+      required:
+        - requestInfo
+        - entry
+      properties:
+        requestInfo:
+          $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/RequestInfo"
+        entry:
+          allOf:
+            - $ref: "#/components/schemas/ConfigEntry"
+          required:
+            - configCode
+            - module
+            - tenantId
+            - locale
+            - enabled
+            - key
+            - value
+
+    ConfigEntryUpdateRequest:
+      type: object
+      required:
+        - requestInfo
+        - entry
+      properties:
+        requestInfo:
+          $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/RequestInfo"
+        entry:
+          type: object
+          required:
+            - id
+            - expectedRevision
+          properties:
+            id:
+              type: string
+            expectedRevision:
+              type: integer
+              format: int64
+              minimum: 1
+            enabled:
+              type: boolean
+            key:
+              type: object
+              additionalProperties: true
+            value:
+              type: object
+              additionalProperties: true
+
+    ConfigEntryResponse:
+      type: object
+      properties:
+        responseInfo:
+          $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/ResponseInfo"
+        entry:
+          $ref: "#/components/schemas/ConfigEntry"
+
+    ConfigEntrySearchCriteria:
+      type: object
+      properties:
+        ids:
+          type: array
+          items:
+            type: string
+        configCode:
+          $ref: "#/components/schemas/ConfigCode"
+        module:
+          type: string
+        tenantId:
+          type: string
+        locale:
+          type: string
+        enabled:
+          type: boolean
+        keyFilter:
+          type: object
+          description: JSON containment filter for key fields.
+          additionalProperties: true
+        valueFilter:
+          type: object
+          description: JSON containment filter for value fields.
+          additionalProperties: true
+        limit:
+          type: integer
+          format: int32
+          minimum: 0
+          default: 50
+        offset:
+          type: integer
+          format: int32
+          minimum: 0
+          default: 0
+
+    ConfigEntrySearchRequest:
+      type: object
+      required:
+        - requestInfo
+        - criteria
+      properties:
+        requestInfo:
+          $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/RequestInfo"
+        criteria:
+          $ref: "#/components/schemas/ConfigEntrySearchCriteria"
+
+    ConfigEntrySearchResponse:
+      type: object
+      properties:
+        responseInfo:
+          $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/ResponseInfo"
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConfigEntry"
+        pagination:
+          $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/Pagination"
+
+    ConfigResolveCriteria:
+      type: object
+      required:
+        - configCode
+        - module
+        - tenantId
+        - locale
+        - selectors
+      properties:
+        configCode:
+          $ref: "#/components/schemas/ConfigCode"
+        module:
+          type: string
+        tenantId:
+          type: string
+        locale:
+          type: string
+        selectors:
+          type: object
+          description: Selector object used for deterministic matching.
+          additionalProperties: true
+        decryptSensitive:
+          type: boolean
+          default: false
+          description: |
+            Optional trusted mode. When true, service may return decrypted sensitive fields
+            only for authorized internal callers.
+
+    ConfigResolveRequest:
+      type: object
+      required:
+        - requestInfo
+        - resolveRequest
+      properties:
+        requestInfo:
+          $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/RequestInfo"
+        resolveRequest:
+          $ref: "#/components/schemas/ConfigResolveCriteria"
+
+    ResolutionMeta:
+      type: object
+      properties:
+        matchedTenant:
+          type: string
+        matchedLocale:
+          type: string
+
+    ConfigResolveResult:
+      type: object
+      properties:
+        entry:
+          $ref: "#/components/schemas/ConfigEntry"
+        resolutionMeta:
+          $ref: "#/components/schemas/ResolutionMeta"
+
+    ConfigResolveResponse:
+      type: object
+      properties:
+        responseInfo:
+          $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/ResponseInfo"
+        resolved:
+          $ref: "#/components/schemas/ConfigResolveResult"
