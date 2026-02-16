@@ -1,0 +1,1599 @@
+{
+  "info": {
+    "_postman_id": "f860e852-9489-43de-96d0-288a3285a86f",
+    "name": "PGR-Demo",
+    "description": "Mandatory Variables\n\n- url\n    \n- username\n    \n- password\n    \n- cityTenant (also used for employee auth token)\n    \n- stateTenant\n    \n\nWorkflow:\n\nEmployee Auth Token > MDMSv2 PGR Search > File upload > PGR Create > PGR Update (Assign) > PGR Update (Resolve) > PGR Search (final verification of resolved status)\n\nIf using filestore id, then the PGR Update request body needs to be updated with correct variable.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "27625854"
+  },
+  "item": [
+    {
+      "name": "Employee Auth Token",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "var jsonData = pm.response.json();",
+              "",
+              "pm.collectionVariables.set(\"authToken\", jsonData.access_token);",
+              "",
+              "var userInfo, userReqInfo;",
+              "for (let key in jsonData) {",
+              "    if (key.includes('UserRequest')) {",
+              "        console.log(JSON.stringify(jsonData[key]));",
+              "        userInfo = JSON.stringify(jsonData[key])",
+              "    }",
+              "}",
+              "pm.collectionVariables.set(\"userReqInfo\", userInfo);",
+              "",
+              "pm.execution.setNextRequest(\"MDMSv2 PGR Search\");",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {}
+          }
+        },
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {}
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "authority",
+            "value": "upyog.niua.org"
+          },
+          {
+            "key": "accept",
+            "value": "application/json, text/plain, */*"
+          },
+          {
+            "key": "accept-language",
+            "value": "en-GB,en;q=0.9"
+          },
+          {
+            "key": "authorization",
+            "value": "{{authorization}}"
+          },
+          {
+            "key": "content-type",
+            "value": "application/x-www-form-urlencoded"
+          },
+          {
+            "key": "origin",
+            "value": "https://upyog.niua.org"
+          },
+          {
+            "key": "referer",
+            "value": "https://upyog.niua.org/employee/user/login"
+          },
+          {
+            "key": "sec-ch-ua",
+            "value": "\"Not?A_Brand\";v=\"8\", \"Chromium\";v=\"108\", \"Google Chrome\";v=\"108\""
+          },
+          {
+            "key": "sec-ch-ua-mobile",
+            "value": "?0"
+          },
+          {
+            "key": "sec-ch-ua-platform",
+            "value": "\"Linux\""
+          },
+          {
+            "key": "sec-fetch-dest",
+            "value": "empty"
+          },
+          {
+            "key": "sec-fetch-mode",
+            "value": "cors"
+          },
+          {
+            "key": "sec-fetch-site",
+            "value": "same-origin"
+          },
+          {
+            "key": "user-agent",
+            "value": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36"
+          }
+        ],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "username",
+              "value": "{{username}}",
+              "type": "text"
+            },
+            {
+              "key": "password",
+              "value": "{{password}}",
+              "type": "text"
+            },
+            {
+              "key": "grant_type",
+              "value": "password",
+              "type": "text"
+            },
+            {
+              "key": "scope",
+              "value": "read",
+              "type": "text"
+            },
+            {
+              "key": "tenantId",
+              "value": "{{cityTenant}}",
+              "type": "text"
+            },
+            {
+              "key": "userType",
+              "value": "{{userType}}",
+              "type": "text"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{url}}/user/oauth/token",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "user",
+            "oauth",
+            "token"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "MDMSv2 PGR Search",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "var jsonData = pm.response.json();",
+              "",
+              "// Get the list of ServiceDefs",
+              "var serviceDefs = jsonData.MdmsRes['RAINMAKER-PGR'].ServiceDefs;",
+              "",
+              "console.log(\"Total ServiceDefs:\", serviceDefs.length);",
+              "",
+              "// Check if there are any items",
+              "if (serviceDefs.length > 0) {",
+              "    // Pick a random index",
+              "    var randomIndex = Math.floor(Math.random() * serviceDefs.length);",
+              "",
+              "    // Pick the object at that index",
+              "    var selected = serviceDefs[randomIndex];",
+              "",
+              "    // Store the full object as a string in a collection variable",
+              "    pm.collectionVariables.set(\"ServiceDef\", JSON.stringify(selected));",
+              "}",
+              "",
+              "// Log what was picked",
+              "console.log(\"ServiceDef:\", pm.collectionVariables.get(\"ServiceDef_code\"));",
+              "",
+              "pm.execution.setNextRequest(\"PGR Create\");"
+            ],
+            "type": "text/javascript",
+            "packages": {}
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"RequestInfo\": {\n        \"apiId\": \"asset-services\",\n        \"ver\": null,\n        \"ts\": null,\n        \"action\": null,\n        \"did\": null,\n        \"key\": null,\n        \"msgId\": \"search with from and to values\",\n        \"authToken\": \"{{authToken}}\",\n        \"correlationId\": null,\n        \"userInfo\": {{userReqInfo}}\n    },\n    \"MdmsCriteria\": {\n        \"tenantId\": \"{{stateTenant}}\",\n        \"moduleDetails\": [\n            {\n                \"moduleName\": \"RAINMAKER-PGR\",\n                \"masterDetails\": [\n                    {\n                        \"name\": \"ServiceDefs\"\n                    }\n                ]\n            }\n        ]\n    }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/mdms-v2/v1/_search",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "mdms-v2",
+            "v1",
+            "_search"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "MDMSv2 Tenant Schema",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "var jsonData = pm.response.json();",
+              "",
+              "// Get the list of ServiceDefs",
+              "var serviceDefs = jsonData.MdmsRes['RAINMAKER-PGR'].ServiceDefs;",
+              "",
+              "console.log(\"Total ServiceDefs:\", serviceDefs.length);",
+              "",
+              "// Check if there are any items",
+              "if (serviceDefs.length > 0) {",
+              "    // Pick a random index",
+              "    var randomIndex = Math.floor(Math.random() * serviceDefs.length);",
+              "",
+              "    // Pick the object at that index",
+              "    var selected = serviceDefs[randomIndex];",
+              "",
+              "    // Store the full object as a string in a collection variable",
+              "    pm.collectionVariables.set(\"ServiceDef\", JSON.stringify(selected));",
+              "}",
+              "",
+              "// Log what was picked",
+              "console.log(\"ServiceDef:\", pm.collectionVariables.get(\"ServiceDef_code\"));",
+              "",
+              "pm.execution.setNextRequest(\"PGR Create\");"
+            ],
+            "type": "text/javascript",
+            "packages": {}
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"RequestInfo\": {\n        \"apiId\": \"asset-services\",\n        \"ver\": null,\n        \"ts\": null,\n        \"action\": null,\n        \"did\": null,\n        \"key\": null,\n        \"msgId\": \"search with from and to values\",\n        \"authToken\": \"{{authToken}}\",\n        \"correlationId\": null,\n        \"userInfo\": {{userReqInfo}}\n    },\n    \"MdmsCriteria\": {\n        \"tenantId\": \"{{stateTenant}}\",\n        \"moduleDetails\": [\n            {\n                \"moduleName\": \"RAINMAKER-PGR\",\n                \"masterDetails\": [\n                    {\n                        \"name\": \"ServiceDefs\"\n                    }\n                ]\n            }\n        ]\n    }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/mdms-v2/v1/_search",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "mdms-v2",
+            "v1",
+            "_search"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "PGR Create",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "var data = JSON.parse(pm.collectionVariables.get(\"ServiceDef\"));",
+              "",
+              "pm.variables.set(\"ServiceDef_code\", data.serviceCode);",
+              "pm.variables.set(\"ServiceDef_name\", data.name);",
+              "",
+              "console.log(pm.variables.get(\"ServiceDef_code\"));"
+            ],
+            "type": "text/javascript",
+            "packages": {}
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "var response = pm.response.json()",
+              "",
+              "var serviceRequest = response.ServiceWrappers[0].service",
+              "",
+              "pm.collectionVariables.set(\"Service\", JSON.stringify(serviceRequest))",
+              "",
+              "pm.execution.setNextRequest(\"PGR Update (Assign)\");"
+            ],
+            "type": "text/javascript",
+            "packages": {}
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "accept",
+            "value": "application/json, text/plain, */*"
+          },
+          {
+            "key": "accept-language",
+            "value": "en-GB,en;q=0.9"
+          },
+          {
+            "key": "content-type",
+            "value": "application/json;charset=UTF-8"
+          },
+          {
+            "key": "origin",
+            "value": "https://staging.digit.org"
+          },
+          {
+            "key": "priority",
+            "value": "u=1, i"
+          },
+          {
+            "key": "referer",
+            "value": "https://staging.digit.org/digit-ui/employee/pgr/complaint/create"
+          },
+          {
+            "key": "sec-ch-ua",
+            "value": "\"Google Chrome\";v=\"137\", \"Chromium\";v=\"137\", \"Not/A)Brand\";v=\"24\""
+          },
+          {
+            "key": "sec-ch-ua-mobile",
+            "value": "?0"
+          },
+          {
+            "key": "sec-ch-ua-platform",
+            "value": "\"Linux\""
+          },
+          {
+            "key": "sec-fetch-dest",
+            "value": "empty"
+          },
+          {
+            "key": "sec-fetch-mode",
+            "value": "cors"
+          },
+          {
+            "key": "sec-fetch-site",
+            "value": "same-origin"
+          },
+          {
+            "key": "user-agent",
+            "value": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"service\": {\n        \"tenantId\": \"{{cityTenant}}\",\n        \"serviceCode\": \"{{ServiceDef_code}}\",\n        \"description\": \"{{ServiceDef_name}}\",\n        \"additionalDetail\": {},\n        \"source\": \"web\",\n        \"address\": {\n            \"landmark\": \"Test Landmark\",\n            \"city\": \"City A\",\n            \"district\": \"City A\",\n            \"region\": \"City A\",\n            \"pincode\": \"\",\n            \"locality\": {\n                \"code\": \"JLC477\",\n                \"name\": \"Gali No,. 2 To Gali No. 6\"\n            },\n            \"geoLocation\": {}\n        },\n        \"citizen\": {\n            \"name\": \"Dennis\",\n            \"type\": \"CITIZEN\",\n            \"mobileNumber\": \"9999009999\",\n            \"roles\": [\n                {\n                    \"id\": null,\n                    \"name\": \"Citizen\",\n                    \"code\": \"CITIZEN\",\n                    \"tenantId\": \"{{cityTenant}}\"\n                }\n            ],\n            \"tenantId\": \"{{cityTenant}}\"\n        }\n    },\n    \"workflow\": {\n        \"action\": \"APPLY\"\n    },\n    \"RequestInfo\": {\n        \"apiId\": \"Rainmaker\",\n        \"authToken\": \"{{authToken}}\",\n        \"userInfo\": {{userReqInfo}},\n        \"msgId\": \"1751888233965|en_IN\",\n        \"plainAccessRequest\": {}\n    }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/pgr-services/v2/request/_create?tenantId={{cityTenant}}",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "pgr-services",
+            "v2",
+            "request",
+            "_create"
+          ],
+          "query": [
+            {
+              "key": "tenantId",
+              "value": "{{cityTenant}}"
+            }
+          ]
+        },
+        "description": "Generated from cURL: curl 'https://staging.digit.org/pgr-services/v2/request/_create?tenantId=pg.citya' \\\n  -H 'accept: application/json, text/plain, */*' \\\n  -H 'accept-language: en-GB,en;q=0.9' \\\n  -H 'content-type: application/json;charset=UTF-8' \\\n  -H 'origin: https://staging.digit.org' \\\n  -H 'priority: u=1, i' \\\n  -H 'referer: https://staging.digit.org/digit-ui/employee/pgr/complaint/create' \\\n  -H 'sec-ch-ua: \"Google Chrome\";v=\"137\", \"Chromium\";v=\"137\", \"Not/A)Brand\";v=\"24\"' \\\n  -H 'sec-ch-ua-mobile: ?0' \\\n  -H 'sec-ch-ua-platform: \"Linux\"' \\\n  -H 'sec-fetch-dest: empty' \\\n  -H 'sec-fetch-mode: cors' \\\n  -H 'sec-fetch-site: same-origin' \\\n  -H 'user-agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36' \\\n  --data-raw '{\"service\":{\"tenantId\":\"pg.citya\",\"serviceCode\":\"NoStreetlight\",\"description\":\"Test Add Info\",\"additionalDetail\":{},\"source\":\"web\",\"address\":{\"landmark\":\"Test Landmark\",\"city\":\"City A\",\"district\":\"City A\",\"region\":\"City A\",\"pincode\":\"\",\"locality\":{\"code\":\"JLC477\",\"name\":\"Gali No,. 2 To Gali No. 6\"},\"geoLocation\":{}},\"citizen\":{\"name\":\"Dennis\",\"type\":\"CITIZEN\",\"mobileNumber\":\"9999009999\",\"roles\":[{\"id\":null,\"name\":\"Citizen\",\"code\":\"CITIZEN\",\"tenantId\":\"pg.citya\"}],\"tenantId\":\"pg.citya\"}},\"workflow\":{\"action\":\"APPLY\"},\"RequestInfo\":{\"apiId\":\"Rainmaker\",\"authToken\":\"68366a34-a9fb-472e-92fe-a1c2f438e5ab\",\"userInfo\":{\"id\":5447,\"uuid\":\"cb9d4646-828c-4d0a-bd21-5010bbdfc3b7\",\"userName\":\"PGRSU\",\"name\":\"PGR SU\",\"mobileNumber\":\"9000000091\",\"emailId\":\"\",\"locale\":\"en_IN\",\"type\":\"EMPLOYEE\",\"roles\":[{\"name\":\"Employee\",\"code\":\"EMPLOYEE\",\"tenantId\":\"pg.citya\"},{\"name\":\"PGR Last Mile Employee\",\"code\":\"PGR_LME\",\"tenantId\":\"pg.citya\"},{\"name\":\"Customer Support Representative\",\"code\":\"CSR\",\"tenantId\":\"pg.citya\"},{\"name\":\"Grievance Routing Officer\",\"code\":\"GRO\",\"tenantId\":\"pg.citya\"}],\"active\":true,\"tenantId\":\"pg.citya\",\"permanentCity\":null},\"msgId\":\"1751888233965|en_IN\",\"plainAccessRequest\":{}}}'"
+      },
+      "response": []
+    },
+    {
+      "name": "PGR Update (Assign)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "var serviceData = JSON.parse(pm.collectionVariables.get(\"Service\"));",
+              "",
+              "pm.variables.set(\"citizen_data\", JSON.stringify(serviceData.citizen));",
+              "pm.variables.set(\"audit_data\", JSON.stringify(serviceData.auditDetails));",
+              "pm.variables.set(\"serviceCode_data\", serviceData.serviceCode);",
+              "pm.variables.set(\"empUUID_data\", serviceData.auditDetails.createdBy);",
+              "",
+              "console.log(\"citizen\", pm.variables.get(\"citizen_data\"));",
+              "console.log(\"auditDetails\", pm.variables.get(\"audit_data\"));",
+              "console.log(\"serviceCode\", pm.variables.get(\"serviceCode_data\"));",
+              "console.log(\"createdBy\", pm.variables.get(\"empUUID_data\"));"
+            ],
+            "type": "text/javascript",
+            "packages": {}
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "var response = pm.response.json()",
+              "",
+              "var serviceRequest = response.ServiceWrappers[0].service",
+              "",
+              "pm.collectionVariables.set(\"Service\", JSON.stringify(serviceRequest))",
+              "",
+              "pm.execution.setNextRequest(\"PGR Update (Resolve)\");"
+            ],
+            "type": "text/javascript",
+            "packages": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "accept",
+            "value": "application/json, text/plain, */*"
+          },
+          {
+            "key": "accept-language",
+            "value": "en-GB,en;q=0.9"
+          },
+          {
+            "key": "content-type",
+            "value": "application/json;charset=UTF-8"
+          },
+          {
+            "key": "origin",
+            "value": "https://staging.digit.org"
+          },
+          {
+            "key": "priority",
+            "value": "u=1, i"
+          },
+          {
+            "key": "referer",
+            "value": "https://staging.digit.org/digit-ui/employee/pgr/complaint/details/PG-PGR-2025-07-07-001062"
+          },
+          {
+            "key": "sec-ch-ua",
+            "value": "\"Google Chrome\";v=\"137\", \"Chromium\";v=\"137\", \"Not/A)Brand\";v=\"24\""
+          },
+          {
+            "key": "sec-ch-ua-mobile",
+            "value": "?0"
+          },
+          {
+            "key": "sec-ch-ua-platform",
+            "value": "\"Linux\""
+          },
+          {
+            "key": "sec-fetch-dest",
+            "value": "empty"
+          },
+          {
+            "key": "sec-fetch-mode",
+            "value": "cors"
+          },
+          {
+            "key": "sec-fetch-site",
+            "value": "same-origin"
+          },
+          {
+            "key": "user-agent",
+            "value": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"workflow\": {\n        /* \"action\" value changes at each step */\n        \"action\": \"ASSIGN\",\n        \"assignes\": [ /* Add uuid of valid employee user */],\n        \"comments\": \"Test Comment\",\n        \"verificationDocuments\": [\n            {\n                \"documentType\": \"PHOTO\",\n                /* Once the filestore service is working, add 'fileStoreId' variable below */\n                \"fileStoreId\": \"\",\n                \"documentUid\": \"\",\n                \"additionalDetails\": {}\n            }\n        ]\n    },\n    \"service\": {{Service}},\n    \"audit\": {\n        \"citizen\": {{citizen_data}},\n        \"details\": {{audit_data}},\n        \"source\": \"web\",\n        \"rating\": null,\n        \"serviceCode\": \"{{serviceCode_data}}\"\n    },\n    \"RequestInfo\": {\n        \"apiId\": \"Rainmaker\",\n        \"authToken\": \"{{authToken}}\",\n        \"userInfo\": {{userReqInfo}},\n        \"msgId\": \"1751903352532|en_IN\",\n        \"plainAccessRequest\": {}\n    }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/pgr-services/v2/request/_update",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "pgr-services",
+            "v2",
+            "request",
+            "_update"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "PGR Update (Re-Assign)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "var serviceData = JSON.parse(pm.collectionVariables.get(\"Service\"));",
+              "",
+              "pm.variables.set(\"citizen_data\", JSON.stringify(serviceData.citizen));",
+              "pm.variables.set(\"audit_data\", JSON.stringify(serviceData.auditDetails));",
+              "pm.variables.set(\"serviceCode_data\", serviceData.serviceCode);",
+              "pm.variables.set(\"empUUID_data\", serviceData.auditDetails.createdBy);",
+              "",
+              "console.log(\"citizen\", pm.variables.get(\"citizen_data\"));",
+              "console.log(\"auditDetails\", pm.variables.get(\"audit_data\"));",
+              "console.log(\"serviceCode\", pm.variables.get(\"serviceCode_data\"));",
+              "console.log(\"createdBy\", pm.variables.get(\"empUUID_data\"));"
+            ],
+            "type": "text/javascript",
+            "packages": {}
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "var response = pm.response.json()",
+              "",
+              "var serviceRequest = response.ServiceWrappers[0].service",
+              "",
+              "pm.collectionVariables.set(\"Service\", JSON.stringify(serviceRequest))",
+              "",
+              "pm.execution.setNextRequest(\"PGR Update (Resolve)\");"
+            ],
+            "type": "text/javascript",
+            "packages": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "accept",
+            "value": "application/json, text/plain, */*"
+          },
+          {
+            "key": "accept-language",
+            "value": "en-GB,en;q=0.9"
+          },
+          {
+            "key": "content-type",
+            "value": "application/json;charset=UTF-8"
+          },
+          {
+            "key": "origin",
+            "value": "https://staging.digit.org"
+          },
+          {
+            "key": "priority",
+            "value": "u=1, i"
+          },
+          {
+            "key": "referer",
+            "value": "https://staging.digit.org/digit-ui/employee/pgr/complaint/details/PG-PGR-2025-07-07-001062"
+          },
+          {
+            "key": "sec-ch-ua",
+            "value": "\"Google Chrome\";v=\"137\", \"Chromium\";v=\"137\", \"Not/A)Brand\";v=\"24\""
+          },
+          {
+            "key": "sec-ch-ua-mobile",
+            "value": "?0"
+          },
+          {
+            "key": "sec-ch-ua-platform",
+            "value": "\"Linux\""
+          },
+          {
+            "key": "sec-fetch-dest",
+            "value": "empty"
+          },
+          {
+            "key": "sec-fetch-mode",
+            "value": "cors"
+          },
+          {
+            "key": "sec-fetch-site",
+            "value": "same-origin"
+          },
+          {
+            "key": "user-agent",
+            "value": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"workflow\": {\n        /* \"action\" value changes at each step */\n        \"action\": \"REASSIGN\",\n        \"assignes\": [ /* Add uuid of valid employee user */],\n        \"comments\": \"Test Comment\",\n        \"verificationDocuments\": [\n            {\n                \"documentType\": \"PHOTO\",\n                /* Once the filestore service is working, add 'fileStoreId' variable below */\n                \"fileStoreId\": \"\",\n                \"documentUid\": \"\",\n                \"additionalDetails\": {}\n            }\n        ]\n    },\n    \"service\": {{Service}},\n    \"audit\": {\n        \"citizen\": {{citizen_data}},\n        \"details\": {{audit_data}},\n        \"source\": \"web\",\n        \"rating\": null,\n        \"serviceCode\": \"{{serviceCode_data}}\"\n    },\n    \"RequestInfo\": {\n        \"apiId\": \"Rainmaker\",\n        \"authToken\": \"{{authToken}}\",\n        \"userInfo\": {{userReqInfo}},\n        \"msgId\": \"1751903352532|en_IN\",\n        \"plainAccessRequest\": {}\n    }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/pgr-services/v2/request/_update",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "pgr-services",
+            "v2",
+            "request",
+            "_update"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "PGR Update (Resolve)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "var serviceData = JSON.parse(pm.collectionVariables.get(\"Service\"));",
+              "",
+              "pm.variables.set(\"citizen_data\", JSON.stringify(serviceData.citizen));",
+              "pm.variables.set(\"audit_data\", JSON.stringify(serviceData.auditDetails));",
+              "pm.variables.set(\"serviceCode_data\", serviceData.serviceCode);",
+              "pm.variables.set(\"empUUID_data\", serviceData.auditDetails.createdBy);",
+              "",
+              "// console.log(\"citizen\", pm.variables.get(\"citizen_data\"));",
+              "// console.log(\"auditDetails\", pm.variables.get(\"audit_data\"));",
+              "// console.log(\"serviceCode\", pm.variables.get(\"serviceCode_data\"));",
+              "// console.log(\"createdBy\", pm.variables.get(\"empUUID_data\"));"
+            ],
+            "type": "text/javascript",
+            "packages": {}
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "var response = pm.response.json()",
+              "",
+              "var serviceRequest = response.ServiceWrappers[0].service",
+              "",
+              "pm.collectionVariables.set(\"Service\", JSON.stringify(serviceRequest))",
+              "",
+              "pm.execution.setNextRequest(\"PGR Update (Rate&Close)\");"
+            ],
+            "type": "text/javascript",
+            "packages": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "accept",
+            "value": "application/json, text/plain, */*"
+          },
+          {
+            "key": "accept-language",
+            "value": "en-GB,en;q=0.9"
+          },
+          {
+            "key": "content-type",
+            "value": "application/json;charset=UTF-8"
+          },
+          {
+            "key": "origin",
+            "value": "https://staging.digit.org"
+          },
+          {
+            "key": "priority",
+            "value": "u=1, i"
+          },
+          {
+            "key": "referer",
+            "value": "https://staging.digit.org/digit-ui/employee/pgr/complaint/details/PG-PGR-2025-07-07-001062"
+          },
+          {
+            "key": "sec-ch-ua",
+            "value": "\"Google Chrome\";v=\"137\", \"Chromium\";v=\"137\", \"Not/A)Brand\";v=\"24\""
+          },
+          {
+            "key": "sec-ch-ua-mobile",
+            "value": "?0"
+          },
+          {
+            "key": "sec-ch-ua-platform",
+            "value": "\"Linux\""
+          },
+          {
+            "key": "sec-fetch-dest",
+            "value": "empty"
+          },
+          {
+            "key": "sec-fetch-mode",
+            "value": "cors"
+          },
+          {
+            "key": "sec-fetch-site",
+            "value": "same-origin"
+          },
+          {
+            "key": "user-agent",
+            "value": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"workflow\": {\n        /* \"action\" value changes at each step */\n        \"action\": \"RESOLVE\",\n        \"assignes\": [ /* Add uuid of valid employee user */],\n        \"comments\": \"Test Comment\",\n        \"verificationDocuments\": [\n            {\n                \"documentType\": \"PHOTO\",\n                /* Once the filestore service is working, add 'fileStoreId' variable below */\n                \"fileStoreId\": \"\",\n                \"documentUid\": \"\",\n                \"additionalDetails\": {}\n            }\n        ]\n    },\n    \"service\": {{Service}},\n    \"audit\": {\n        \"citizen\": {{citizen_data}},\n        \"details\": {{audit_data}},\n        \"source\": \"web\",\n        \"rating\": null,\n        \"serviceCode\": \"{{serviceCode_data}}\"\n    },\n    \"RequestInfo\": {\n        \"apiId\": \"Rainmaker\",\n        \"authToken\": \"{{authToken}}\",\n        \"userInfo\": {{userReqInfo}},\n        \"msgId\": \"1751903352532|en_IN\",\n        \"plainAccessRequest\": {}\n    }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/pgr-services/v2/request/_update",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "pgr-services",
+            "v2",
+            "request",
+            "_update"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "PGR Update (Reject)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "var serviceData = JSON.parse(pm.collectionVariables.get(\"Service\"));",
+              "",
+              "pm.variables.set(\"citizen_data\", JSON.stringify(serviceData.citizen));",
+              "pm.variables.set(\"audit_data\", JSON.stringify(serviceData.auditDetails));",
+              "pm.variables.set(\"serviceCode_data\", serviceData.serviceCode);",
+              "pm.variables.set(\"empUUID_data\", serviceData.auditDetails.createdBy);",
+              "",
+              "console.log(\"citizen\", pm.variables.get(\"citizen_data\"));",
+              "console.log(\"auditDetails\", pm.variables.get(\"audit_data\"));",
+              "console.log(\"serviceCode\", pm.variables.get(\"serviceCode_data\"));",
+              "console.log(\"createdBy\", pm.variables.get(\"empUUID_data\"));"
+            ],
+            "type": "text/javascript",
+            "packages": {}
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "var response = pm.response.json()",
+              "",
+              "var serviceRequest = response.ServiceWrappers[0].service",
+              "",
+              "pm.collectionVariables.set(\"Service\", JSON.stringify(serviceRequest))",
+              "",
+              "pm.execution.setNextRequest(\"PGR Update (Reopen)\");"
+            ],
+            "type": "text/javascript",
+            "packages": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "accept",
+            "value": "application/json, text/plain, */*"
+          },
+          {
+            "key": "accept-language",
+            "value": "en-GB,en;q=0.9"
+          },
+          {
+            "key": "content-type",
+            "value": "application/json;charset=UTF-8"
+          },
+          {
+            "key": "origin",
+            "value": "https://staging.digit.org"
+          },
+          {
+            "key": "priority",
+            "value": "u=1, i"
+          },
+          {
+            "key": "referer",
+            "value": "https://staging.digit.org/digit-ui/employee/pgr/complaint/details/PG-PGR-2025-07-07-001062"
+          },
+          {
+            "key": "sec-ch-ua",
+            "value": "\"Google Chrome\";v=\"137\", \"Chromium\";v=\"137\", \"Not/A)Brand\";v=\"24\""
+          },
+          {
+            "key": "sec-ch-ua-mobile",
+            "value": "?0"
+          },
+          {
+            "key": "sec-ch-ua-platform",
+            "value": "\"Linux\""
+          },
+          {
+            "key": "sec-fetch-dest",
+            "value": "empty"
+          },
+          {
+            "key": "sec-fetch-mode",
+            "value": "cors"
+          },
+          {
+            "key": "sec-fetch-site",
+            "value": "same-origin"
+          },
+          {
+            "key": "user-agent",
+            "value": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"workflow\": {\n        /* \"action\" value changes at each step */\n        \"action\": \"REJECT\",\n        \"assignes\": [ /* Add uuid of valid employee user */],\n        \"comments\": \"Test Comment\",\n        \"verificationDocuments\": [\n            {\n                \"documentType\": \"PHOTO\",\n                /* Once the filestore service is working, add 'fileStoreId' variable below */\n                \"fileStoreId\": \"\",\n                \"documentUid\": \"\",\n                \"additionalDetails\": {}\n            }\n        ]\n    },\n    \"service\": {{Service}},\n    \"audit\": {\n        \"citizen\": {{citizen_data}},\n        \"details\": {{audit_data}},\n        \"source\": \"web\",\n        \"rating\": null,\n        \"serviceCode\": \"{{serviceCode_data}}\"\n    },\n    \"RequestInfo\": {\n        \"apiId\": \"Rainmaker\",\n        \"authToken\": \"{{authToken}}\",\n        \"userInfo\": {{userReqInfo}},\n        \"msgId\": \"1751903352532|en_IN\",\n        \"plainAccessRequest\": {}\n    }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/pgr-services/v2/request/_update",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "pgr-services",
+            "v2",
+            "request",
+            "_update"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "PGR Update (Reopen)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "var serviceData = JSON.parse(pm.collectionVariables.get(\"Service\"));",
+              "",
+              "pm.variables.set(\"citizen_data\", JSON.stringify(serviceData.citizen));",
+              "pm.variables.set(\"audit_data\", JSON.stringify(serviceData.auditDetails));",
+              "pm.variables.set(\"serviceCode_data\", serviceData.serviceCode);",
+              "pm.variables.set(\"empUUID_data\", serviceData.auditDetails.createdBy);",
+              "",
+              "console.log(\"citizen\", pm.variables.get(\"citizen_data\"));",
+              "console.log(\"auditDetails\", pm.variables.get(\"audit_data\"));",
+              "console.log(\"serviceCode\", pm.variables.get(\"serviceCode_data\"));",
+              "console.log(\"createdBy\", pm.variables.get(\"empUUID_data\"));"
+            ],
+            "type": "text/javascript",
+            "packages": {}
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "var response = pm.response.json()",
+              "",
+              "var serviceRequest = response.ServiceWrappers[0].service",
+              "",
+              "pm.collectionVariables.set(\"Service\", JSON.stringify(serviceRequest))",
+              "",
+              "pm.execution.setNextRequest(\"PGR Update (Assign)\");"
+            ],
+            "type": "text/javascript",
+            "packages": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "accept",
+            "value": "application/json, text/plain, */*"
+          },
+          {
+            "key": "accept-language",
+            "value": "en-GB,en;q=0.9"
+          },
+          {
+            "key": "content-type",
+            "value": "application/json;charset=UTF-8"
+          },
+          {
+            "key": "origin",
+            "value": "https://staging.digit.org"
+          },
+          {
+            "key": "priority",
+            "value": "u=1, i"
+          },
+          {
+            "key": "referer",
+            "value": "https://staging.digit.org/digit-ui/employee/pgr/complaint/details/PG-PGR-2025-07-07-001062"
+          },
+          {
+            "key": "sec-ch-ua",
+            "value": "\"Google Chrome\";v=\"137\", \"Chromium\";v=\"137\", \"Not/A)Brand\";v=\"24\""
+          },
+          {
+            "key": "sec-ch-ua-mobile",
+            "value": "?0"
+          },
+          {
+            "key": "sec-ch-ua-platform",
+            "value": "\"Linux\""
+          },
+          {
+            "key": "sec-fetch-dest",
+            "value": "empty"
+          },
+          {
+            "key": "sec-fetch-mode",
+            "value": "cors"
+          },
+          {
+            "key": "sec-fetch-site",
+            "value": "same-origin"
+          },
+          {
+            "key": "user-agent",
+            "value": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"workflow\": {\n        /* \"action\" value changes at each step */\n        \"action\": \"REOPEN\",\n        \"assignes\": [ /* Add uuid of valid employee user */],\n        \"comments\": \"Test reopen comments\",\n        \"verificationDocuments\": [\n            {\n                \"documentType\": \"PHOTO\",\n                /* Once the filestore service is working, add 'fileStoreId' variable below */\n                \"fileStoreId\": \"\",\n                \"documentUid\": \"\",\n                \"additionalDetails\": {}\n            }\n        ]\n    },\n    \"service\": {{Service}},\n    \"audit\": {\n        \"citizen\": {{citizen_data}},\n        \"details\": {{audit_data}},\n        \"source\": \"web\",\n        \"rating\": null,\n        \"serviceCode\": \"{{serviceCode_data}}\"\n    },\n    \"RequestInfo\": {\n        \"apiId\": \"Rainmaker\",\n        \"authToken\": \"{{authToken}}\",\n        \"userInfo\": {{userReqInfo}},\n        \"msgId\": \"1751903352532|en_IN\",\n        \"plainAccessRequest\": {}\n    }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/pgr-services/v2/request/_update",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "pgr-services",
+            "v2",
+            "request",
+            "_update"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "PGR Update (Rate&Close)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "var serviceData = JSON.parse(pm.collectionVariables.get(\"Service\"));",
+              "",
+              "pm.variables.set(\"citizen_data\", JSON.stringify(serviceData.citizen));",
+              "pm.variables.set(\"audit_data\", JSON.stringify(serviceData.auditDetails));",
+              "pm.variables.set(\"serviceCode_data\", serviceData.serviceCode);",
+              "pm.variables.set(\"empUUID_data\", serviceData.auditDetails.createdBy);",
+              "",
+              "console.log(\"citizen\", pm.variables.get(\"citizen_data\"));",
+              "console.log(\"auditDetails\", pm.variables.get(\"audit_data\"));",
+              "console.log(\"serviceCode\", pm.variables.get(\"serviceCode_data\"));",
+              "console.log(\"createdBy\", pm.variables.get(\"empUUID_data\"));"
+            ],
+            "type": "text/javascript",
+            "packages": {}
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "var response = pm.response.json()",
+              "",
+              "var serviceRequest = response.ServiceWrappers[0].service",
+              "",
+              "pm.collectionVariables.set(\"Service\", JSON.stringify(serviceRequest))",
+              "",
+              "pm.execution.setNextRequest(\"PGR Search\");"
+            ],
+            "type": "text/javascript",
+            "packages": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "accept",
+            "value": "application/json, text/plain, */*"
+          },
+          {
+            "key": "accept-language",
+            "value": "en-GB,en;q=0.9"
+          },
+          {
+            "key": "content-type",
+            "value": "application/json;charset=UTF-8"
+          },
+          {
+            "key": "origin",
+            "value": "https://staging.digit.org"
+          },
+          {
+            "key": "priority",
+            "value": "u=1, i"
+          },
+          {
+            "key": "referer",
+            "value": "https://staging.digit.org/digit-ui/employee/pgr/complaint/details/PG-PGR-2025-07-07-001062"
+          },
+          {
+            "key": "sec-ch-ua",
+            "value": "\"Google Chrome\";v=\"137\", \"Chromium\";v=\"137\", \"Not/A)Brand\";v=\"24\""
+          },
+          {
+            "key": "sec-ch-ua-mobile",
+            "value": "?0"
+          },
+          {
+            "key": "sec-ch-ua-platform",
+            "value": "\"Linux\""
+          },
+          {
+            "key": "sec-fetch-dest",
+            "value": "empty"
+          },
+          {
+            "key": "sec-fetch-mode",
+            "value": "cors"
+          },
+          {
+            "key": "sec-fetch-site",
+            "value": "same-origin"
+          },
+          {
+            "key": "user-agent",
+            "value": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"workflow\": {\n        /* \"action\" value changes at each step */\n        \"action\": \"RATE\",\n        \"assignes\": [ /* Add uuid of valid employee user */],\n        \"comments\": \"Test citizen comment for closure\",\n        \"verificationDocuments\": [\n            {\n                \"documentType\": \"PHOTO\",\n                /* Once the filestore service is working, add 'fileStoreId' variable below */\n                \"fileStoreId\": \"\",\n                \"documentUid\": \"\",\n                \"additionalDetails\": {}\n            }\n        ]\n    },\n    \"service\": {{Service}},\n    \"audit\": {\n        \"citizen\": {{citizen_data}},\n        \"details\": {{audit_data}},\n        \"source\": \"web\",\n        \"rating\": null,\n        \"serviceCode\": \"{{serviceCode_data}}\"\n    },\n    \"RequestInfo\": {\n        \"apiId\": \"Rainmaker\",\n        \"authToken\": \"{{authToken}}\",\n        \"userInfo\": {{userReqInfo}},\n        \"msgId\": \"1751903352532|en_IN\",\n        \"plainAccessRequest\": {}\n    }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/pgr-services/v2/request/_update",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "pgr-services",
+            "v2",
+            "request",
+            "_update"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "PGR Search",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "var data = JSON.parse(pm.collectionVariables.get(\"Service\"));",
+              "",
+              "pm.variables.set(\"serviceRequestId\", data.serviceRequestId);",
+              "",
+              "console.log(pm.variables.get(\"serviceRequestId\"));"
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "var response = pm.response.json()",
+              "",
+              "var serviceRequest = response.ServiceWrappers[0].service",
+              "",
+              "// pm.collectionVariables.set(\"Service\", JSON.stringify(serviceRequest))",
+              "",
+              "pm.test(\"Application Status test\", function () {",
+              "    pm.expect(serviceRequest.applicationStatus).to.eql(\"CLOSEDAFTERRESOLUTION\");",
+              "});",
+              "",
+              "pm.execution.setNextRequest(null); // Stop the execution after the test"
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "accept",
+            "value": "application/json, text/plain, */*"
+          },
+          {
+            "key": "accept-language",
+            "value": "en-GB,en;q=0.9"
+          },
+          {
+            "key": "content-type",
+            "value": "application/json;charset=UTF-8"
+          },
+          {
+            "key": "origin",
+            "value": "https://staging.digit.org"
+          },
+          {
+            "key": "priority",
+            "value": "u=1, i"
+          },
+          {
+            "key": "referer",
+            "value": "https://staging.digit.org/digit-ui/employee/pgr/complaint/details/PG-PGR-2025-07-07-001062"
+          },
+          {
+            "key": "sec-ch-ua",
+            "value": "\"Google Chrome\";v=\"137\", \"Chromium\";v=\"137\", \"Not/A)Brand\";v=\"24\""
+          },
+          {
+            "key": "sec-ch-ua-mobile",
+            "value": "?0"
+          },
+          {
+            "key": "sec-ch-ua-platform",
+            "value": "\"Linux\""
+          },
+          {
+            "key": "sec-fetch-dest",
+            "value": "empty"
+          },
+          {
+            "key": "sec-fetch-mode",
+            "value": "cors"
+          },
+          {
+            "key": "sec-fetch-site",
+            "value": "same-origin"
+          },
+          {
+            "key": "user-agent",
+            "value": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"RequestInfo\": {\n        \"apiId\": \"Rainmaker\",\n        \"authToken\": \"{{authToken}}\",\n        \"userInfo\": {{userReqInfo}},\n        \"msgId\": \"1751901786702|en_IN\",\n        \"plainAccessRequest\": {}\n    }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/pgr-services/v2/request/_search?tenantId={{cityTenant}}&serviceRequestId{{serviceRequestId}}&_=1751901786702",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "pgr-services",
+            "v2",
+            "request",
+            "_search"
+          ],
+          "query": [
+            {
+              "key": "tenantId",
+              "value": "{{cityTenant}}"
+            },
+            {
+              "key": "serviceRequestId{{serviceRequestId}}",
+              "value": null
+            },
+            {
+              "key": "_",
+              "value": "1751901786702"
+            }
+          ]
+        },
+        "description": "Generated from cURL: curl 'https://staging.digit.org/pgr-services/v2/request/_search?tenantId=pg.citya&serviceRequestId=PG-PGR-2025-07-07-001062&_=1751901786702' \\\n  -H 'accept: application/json, text/plain, */*' \\\n  -H 'accept-language: en-GB,en;q=0.9' \\\n  -H 'content-type: application/json;charset=UTF-8' \\\n  -H 'origin: https://staging.digit.org' \\\n  -H 'priority: u=1, i' \\\n  -H 'referer: https://staging.digit.org/digit-ui/employee/pgr/complaint/details/PG-PGR-2025-07-07-001062' \\\n  -H 'sec-ch-ua: \"Google Chrome\";v=\"137\", \"Chromium\";v=\"137\", \"Not/A)Brand\";v=\"24\"' \\\n  -H 'sec-ch-ua-mobile: ?0' \\\n  -H 'sec-ch-ua-platform: \"Linux\"' \\\n  -H 'sec-fetch-dest: empty' \\\n  -H 'sec-fetch-mode: cors' \\\n  -H 'sec-fetch-site: same-origin' \\\n  -H 'user-agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36' \\\n  --data-raw '{\"RequestInfo\":{\"apiId\":\"Rainmaker\",\"authToken\":\"68366a34-a9fb-472e-92fe-a1c2f438e5ab\",\"userInfo\":{\"id\":5447,\"uuid\":\"cb9d4646-828c-4d0a-bd21-5010bbdfc3b7\",\"userName\":\"PGRSU\",\"name\":\"PGR SU\",\"mobileNumber\":\"9000000091\",\"emailId\":\"\",\"locale\":\"en_IN\",\"type\":\"EMPLOYEE\",\"roles\":[{\"name\":\"Employee\",\"code\":\"EMPLOYEE\",\"tenantId\":\"pg.citya\"},{\"name\":\"PGR Last Mile Employee\",\"code\":\"PGR_LME\",\"tenantId\":\"pg.citya\"},{\"name\":\"Customer Support Representative\",\"code\":\"CSR\",\"tenantId\":\"pg.citya\"},{\"name\":\"Grievance Routing Officer\",\"code\":\"GRO\",\"tenantId\":\"pg.citya\"}],\"active\":true,\"tenantId\":\"pg.citya\",\"permanentCity\":null},\"msgId\":\"1751901786702|en_IN\",\"plainAccessRequest\":{}}}'"
+      },
+      "response": []
+    },
+    {
+      "name": "File Upload (Attachment)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "var response = pm.response.json()",
+              "pm.collectionVariables.set(\"fileStoreId\", response.files[0].fileStoreId)"
+            ],
+            "type": "text/javascript",
+            "packages": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "accept",
+            "value": "application/json, text/plain, */*"
+          },
+          {
+            "key": "accept-language",
+            "value": "en-GB,en;q=0.9"
+          },
+          {
+            "key": "auth-token",
+            "value": "93c17074-12f1-4022-b7ae-2e7ba10eaaff"
+          },
+          {
+            "key": "origin",
+            "value": "https://staging.digit.org"
+          },
+          {
+            "key": "priority",
+            "value": "u=1, i"
+          },
+          {
+            "key": "referer",
+            "value": "https://staging.digit.org/digit-ui/employee/pgr/complaint/details/PG-PGR-2025-07-07-001061"
+          },
+          {
+            "key": "sec-ch-ua",
+            "value": "\"Google Chrome\";v=\"137\", \"Chromium\";v=\"137\", \"Not/A)Brand\";v=\"24\""
+          },
+          {
+            "key": "sec-ch-ua-mobile",
+            "value": "?0"
+          },
+          {
+            "key": "sec-ch-ua-platform",
+            "value": "\"Linux\""
+          },
+          {
+            "key": "sec-fetch-dest",
+            "value": "empty"
+          },
+          {
+            "key": "sec-fetch-mode",
+            "value": "cors"
+          },
+          {
+            "key": "sec-fetch-site",
+            "value": "same-origin"
+          },
+          {
+            "key": "user-agent",
+            "value": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+          }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": "/home/moolya/Downloads/Apps/IMG.jpg"
+            },
+            {
+              "key": "tenantId",
+              "value": "{{cityTenant}}",
+              "type": "text"
+            },
+            {
+              "key": "module",
+              "value": "property-upload",
+              "type": "text"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{url}}/filestore/v1/files",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "filestore",
+            "v1",
+            "files"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Citizen Auth Token",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "var jsonData = pm.response.json();",
+              "",
+              "pm.environment.set(\"authToken\", jsonData.access_token);",
+              "",
+              "var userInfo, userReqInfo;",
+              "for(let key in jsonData)",
+              "{",
+              "if(key.includes('UserRequest')){",
+              "   console.log(JSON.stringify(jsonData[key]));",
+              "   userInfo = JSON.stringify(jsonData[key])",
+              "}",
+              "}",
+              "pm.environment.set(\"userReqInfo\", userInfo);",
+              "",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {}
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "authority",
+            "value": "staging.digit.org"
+          },
+          {
+            "key": "accept",
+            "value": "application/json, text/plain, */*"
+          },
+          {
+            "key": "accept-language",
+            "value": "en-GB,en;q=0.9"
+          },
+          {
+            "key": "authorization",
+            "value": "Basic ZWdvdi11c2VyLWNsaWVudDo="
+          },
+          {
+            "key": "content-type",
+            "value": "application/x-www-form-urlencoded"
+          },
+          {
+            "key": "origin",
+            "value": "https://staging.digit.org"
+          },
+          {
+            "key": "referer",
+            "value": "https://staging.digit.org/citizen/user/otp"
+          },
+          {
+            "key": "sec-ch-ua",
+            "value": "\" Not A;Brand\";v=\"99\", \"Chromium\";v=\"101\", \"Google Chrome\";v=\"101\""
+          },
+          {
+            "key": "sec-ch-ua-mobile",
+            "value": "?0"
+          },
+          {
+            "key": "sec-ch-ua-platform",
+            "value": "\"Linux\""
+          },
+          {
+            "key": "sec-fetch-dest",
+            "value": "empty"
+          },
+          {
+            "key": "sec-fetch-mode",
+            "value": "cors"
+          },
+          {
+            "key": "sec-fetch-site",
+            "value": "same-origin"
+          },
+          {
+            "key": "user-agent",
+            "value": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.0.0 Safari/537.36"
+          }
+        ],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "username",
+              "value": "{{phone}}",
+              "type": "text"
+            },
+            {
+              "key": "password",
+              "value": "{{cpassword}}",
+              "type": "text"
+            },
+            {
+              "key": "grant_type",
+              "value": "password",
+              "type": "text"
+            },
+            {
+              "key": "scope",
+              "value": "",
+              "type": "text"
+            },
+            {
+              "key": "tenantId",
+              "value": "{{ctenantid}}",
+              "type": "text"
+            },
+            {
+              "key": "userType",
+              "value": "CITIZEN",
+              "type": "text"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{url}}/user/oauth/token",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "user",
+            "oauth",
+            "token"
+          ],
+          "query": [
+            {
+              "key": "_",
+              "value": "1665565349318",
+              "disabled": true
+            }
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "url",
+      "value": "https://pgr-demo.digit.org"
+    },
+    {
+      "key": "username",
+      "value": "GRO"
+    },
+    {
+      "key": "password",
+      "value": "eGov@123"
+    },
+    {
+      "key": "cityTenant",
+      "value": "statea.citya"
+    },
+    {
+      "key": "userType",
+      "value": "EMPLOYEE"
+    },
+    {
+      "key": "stateTenant",
+      "value": "statea"
+    },
+    {
+      "key": "authToken",
+      "value": ""
+    },
+    {
+      "key": "userReqInfo",
+      "value": ""
+    },
+    {
+      "key": "ServiceDef",
+      "value": ""
+    },
+    {
+      "key": "Service",
+      "value": ""
+    },
+    {
+      "key": "authorization",
+      "value": "Basic ZWdvdi11c2VyLWNsaWVudDo="
+    }
+  ]
+}

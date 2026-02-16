@@ -1,0 +1,267 @@
+_format_version: '3.0'
+_transform: true
+consumers:
+- username: digit-dev
+  keyauth_credentials:
+  - key: digit-dev-api-key-change-me
+  tags:
+  - development
+- username: digit-admin
+  keyauth_credentials:
+  - key: digit-admin-api-key-change-me
+  tags:
+  - admin
+plugins:
+- name: cors
+  config:
+    origins:
+    - '*'
+    methods:
+    - GET
+    - POST
+    - PUT
+    - PATCH
+    - DELETE
+    - OPTIONS
+    headers:
+    - Accept
+    - Accept-Version
+    - Content-Length
+    - Content-Type
+    - Authorization
+    - X-API-Key
+    - X-Requested-With
+    - auth-token
+    exposed_headers:
+    - X-Auth-Token
+    credentials: true
+    max_age: 3600
+- name: request-size-limiting
+  config:
+    allowed_payload_size: 10
+    size_unit: megabytes
+services:
+- name: mdms-service
+  url: http://egov-mdms-service:8094
+  tags:
+  - core
+  routes:
+  - name: mdms-route
+    paths:
+    - /mdms-v2
+    strip_path: false
+- name: user-service
+  url: http://egov-user:8107
+  tags:
+  - core
+  - auth
+  routes:
+  - name: user-route
+    paths:
+    - /user
+    strip_path: false
+- name: user-auth-public
+  url: http://egov-user:8107
+  tags:
+  - core
+  - auth
+  - public
+  routes:
+  - name: user-oauth-route
+    paths:
+    - /user/oauth/token
+    strip_path: false
+    methods:
+    - POST
+- name: enc-service
+  url: http://egov-enc-service:1234
+  tags:
+  - core
+  - security
+  routes:
+  - name: enc-route
+    paths:
+    - /egov-enc-service
+    strip_path: false
+- name: idgen-service
+  url: http://egov-idgen:8088
+  tags:
+  - core
+  routes:
+  - name: idgen-route
+    paths:
+    - /egov-idgen
+    strip_path: false
+- name: workflow-service
+  url: http://egov-workflow-v2:8109
+  tags:
+  - core
+  routes:
+  - name: workflow-route
+    paths:
+    - /egov-workflow-v2
+    strip_path: false
+- name: localization-service
+  url: http://egov-localization:8096
+  tags:
+  - core
+  routes:
+  - name: localization-route
+    paths:
+    - /localization
+    strip_path: false
+- name: location-service
+  url: http://egov-location:8084
+  tags:
+  - core
+  routes:
+  - name: location-route
+    paths:
+    - /egov-location
+    strip_path: false
+- name: boundary-service
+  url: http://boundary-service:8081
+  tags:
+  - core
+  routes:
+  - name: boundary-route
+    paths:
+    - /boundary-service
+    strip_path: false
+- name: accesscontrol-service
+  url: http://egov-accesscontrol:8090
+  tags:
+  - core
+  - security
+  routes:
+  - name: accesscontrol-route
+    paths:
+    - /access
+    strip_path: false
+- name: persister-service
+  url: http://egov-persister:8091
+  tags:
+  - core
+  - internal
+  routes:
+  - name: persister-route
+    paths:
+    - /common-persist
+    strip_path: false
+- name: health-mdms
+  url: http://egov-mdms-service:8094
+  routes:
+  - name: health-mdms-route
+    paths:
+    - /health/mdms
+    strip_path: true
+  plugins:
+  - name: request-transformer
+    config:
+      replace:
+        uri: /mdms-v2/health
+- name: health-user
+  url: http://egov-user:8107
+  routes:
+  - name: health-user-route
+    paths:
+    - /health/user
+    strip_path: true
+  plugins:
+  - name: request-transformer
+    config:
+      replace:
+        uri: /user/health
+- name: health-workflow
+  url: http://egov-workflow-v2:8109
+  routes:
+  - name: health-workflow-route
+    paths:
+    - /health/workflow
+    strip_path: true
+  plugins:
+  - name: request-transformer
+    config:
+      replace:
+        uri: /egov-workflow-v2/health
+- name: health-boundary
+  url: http://boundary-service:8081
+  routes:
+  - name: health-boundary-route
+    paths:
+    - /health/boundary
+    strip_path: true
+  plugins:
+  - name: request-transformer
+    config:
+      replace:
+        uri: /boundary-service/actuator/health
+- name: pgr-service
+  url: http://pgr-services:8080
+  tags:
+  - rainmaker
+  - pgr
+  routes:
+  - name: pgr-route
+    paths:
+    - /pgr-services
+    strip_path: false
+- name: health-pgr
+  url: http://pgr-services:8080
+  routes:
+  - name: health-pgr-route
+    paths:
+    - /health/pgr
+    strip_path: true
+  plugins:
+  - name: request-transformer
+    config:
+      replace:
+        uri: /pgr-services/health
+- name: filestore-service
+  url: http://egov-filestore:8083
+  tags:
+  - core
+  routes:
+  - name: filestore-route
+    paths:
+    - /filestore
+    strip_path: false
+- name: hrms-service
+  url: http://egov-hrms:8092
+  tags:
+  - core
+  routes:
+  - name: hrms-route
+    paths:
+    - /egov-hrms
+    strip_path: false
+- name: bndry-mgmnt-service
+  url: http://egov-bndry-mgmnt:8080
+  tags:
+  - core
+  routes:
+  - name: bndry-mgmnt-route
+    paths:
+    - /egov-bndry-mgmnt
+    strip_path: true
+- name: digit-ui
+  url: http://digit-ui:80
+  tags:
+  - frontend
+  - ui
+  routes:
+  - name: digit-ui-route
+    paths:
+    - /digit-ui
+    strip_path: false
+- name: jupyter-service
+  url: http://digit-jupyter:8888
+  tags:
+  - tools
+  - jupyter
+  routes:
+  - name: jupyter-route
+    paths:
+    - /jupyter
+    strip_path: false
