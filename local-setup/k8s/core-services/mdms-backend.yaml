@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mdms-backend
+  namespace: digit
+  labels:
+    app: mdms-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mdms-backend
+  template:
+    metadata:
+      labels:
+        app: mdms-backend
+    spec:
+      containers:
+        - name: mdms-backend
+          image: localhost:5000/egovio/mdms-v2:v2.9.2-4a60f20
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8094
+          envFrom:
+            - configMapRef:
+                name: digit-common-env
+            - secretRef:
+                name: digit-db-credentials
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:otel:postgresql://postgres:5432/egov"
+            - name: SERVER_PORT
+              value: "8094"
+            - name: JAVA_TOOL_OPTIONS
+              value: "-Xms64m -Xmx192m"
+          resources:
+            limits:
+              memory: 512Mi
+              cpu: "1"
+            requests:
+              memory: 256Mi
+              cpu: "250m"
+          readinessProbe:
+            httpGet:
+              path: /mdms-v2/health
+              port: 8094
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 15
+          livenessProbe:
+            httpGet:
+              path: /mdms-v2/health
+              port: 8094
+            initialDelaySeconds: 0
+            periodSeconds: 30
+            timeoutSeconds: 10
+          startupProbe:
+            httpGet:
+              path: /mdms-v2/health
+              port: 8094
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 30
+            timeoutSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mdms-backend
+  namespace: digit
+spec:
+  selector:
+    app: mdms-backend
+  ports:
+    - port: 8094
+      targetPort: 8094

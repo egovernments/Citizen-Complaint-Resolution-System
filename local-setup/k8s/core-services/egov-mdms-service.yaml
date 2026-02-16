@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: egov-mdms-service
+  namespace: digit
+  labels:
+    app: egov-mdms-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: egov-mdms-service
+  template:
+    metadata:
+      labels:
+        app: egov-mdms-service
+    spec:
+      containers:
+        - name: egov-mdms-service
+          image: localhost:5000/nginx:alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8094
+          resources:
+            limits:
+              memory: 64Mi
+              cpu: "100m"
+            requests:
+              memory: 32Mi
+              cpu: "50m"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8094
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8094
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: mdms-proxy.conf
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: nginx-configs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: egov-mdms-service
+  namespace: digit
+spec:
+  selector:
+    app: egov-mdms-service
+  ports:
+    - port: 8094
+      targetPort: 8094

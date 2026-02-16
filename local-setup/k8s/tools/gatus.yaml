@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gatus
+  namespace: digit
+  labels:
+    app: gatus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gatus
+  template:
+    metadata:
+      labels:
+        app: gatus
+    spec:
+      containers:
+        - name: gatus
+          image: localhost:5000/twinproduction/gatus:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: GATUS_CONFIG_PATH
+              value: /config/config.yaml
+          resources:
+            limits:
+              memory: 64Mi
+              cpu: "100m"
+            requests:
+              memory: 32Mi
+              cpu: "50m"
+          readinessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          volumeMounts:
+            - name: gatus-config
+              mountPath: /config/config.yaml
+              subPath: config.yaml
+      volumes:
+        - name: gatus-config
+          configMap:
+            name: gatus-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gatus
+  namespace: digit
+spec:
+  selector:
+    app: gatus
+  ports:
+    - port: 8080
+      targetPort: 8080
