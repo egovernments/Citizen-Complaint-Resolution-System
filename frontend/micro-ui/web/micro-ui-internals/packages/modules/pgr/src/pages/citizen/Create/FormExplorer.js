@@ -7,11 +7,11 @@ import { useDispatch } from "react-redux";
 import { createComplaint as citizenCreateComplaints } from "../../../redux/actions/index";
 
 import { complaintsUploadimages } from "./steps-config/complaintsUploadimages";
-import { createComplaint } from "../../citizen/Create/steps-config/CreateComplients";
-import { complaintsLocation } from "../../citizen/Create/steps-config/ComplaintsLocation";
-import { pinComplaintLocaton } from "../../citizen/Create/steps-config/pinComplaintLocaton";
-import { additionalDetails } from "../../citizen/Create/steps-config/additionalDetails";
-import { locationDetails } from "../../citizen/Create/steps-config/locationDetails";
+import { createComplaint } from "./steps-config/CreateComplients";
+import { complaintsLocation } from "./steps-config/ComplaintsLocation";
+import { pinComplaintLocaton } from "./steps-config/pinComplaintLocaton";
+import { additionalDetails } from "./steps-config/additionalDetails";
+import { locationDetails } from "./steps-config/locationDetails";
 import { useQueryClient } from "react-query";
 import { useHistory, useRouteMatch, useParams } from "react-router-dom";
 

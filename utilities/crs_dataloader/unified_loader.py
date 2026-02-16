@@ -168,9 +168,9 @@ class UnifiedExcelReader:
             list: Branding information records for MDMS upload
         """
         try:
-            df = pd.read_excel(self.excel_file, sheet_name='Tenant Branding Deatils')
+            df = pd.read_excel(self.excel_file, sheet_name='Tenant Branding Details')
         except Exception as e:
-            print(f"⚠️ Could not read 'Tenant Branding Deatils' sheet: {str(e)}")
+            print(f"⚠️ Could not read 'Tenant Branding Details' sheet: {str(e)}")
             return []
 
         branding_list = []
@@ -661,6 +661,7 @@ class APIUploader:
             self.base_url = self.base_url[:-1]
 
         # Service endpoints from .env (configurable)
+        # MDMS path - default to /mdms-v2
         mdms_v2_service = os.getenv("MDMS_V2_SERVICE", "/mdms-v2")
         boundary_service = os.getenv("BOUNDARY_SERVICE", "/boundary-service")
         boundary_mgmt_service = os.getenv("BOUNDARY_MGMT_SERVICE", "/egov-bndry-mgmnt")
@@ -672,7 +673,11 @@ class APIUploader:
         auth_service = os.getenv("AUTH_SERVICE", "/user")
 
         # Build full service URLs
-        self.mdms_url = f"{self.base_url}{mdms_v2_service}"
+        # Auto-detect MDMS path if not explicitly set
+        if mdms_v2_service:
+            self.mdms_url = f"{self.base_url}{mdms_v2_service}"
+        else:
+            self.mdms_url = self._detect_mdms_path()
         self.boundary_url = f"{self.base_url}{boundary_service}"
         self.boundary_mgmt_url = f"{self.base_url}{boundary_mgmt_service}"
         self.localization_url = f"{self.base_url}{localization_service}"
@@ -693,13 +698,51 @@ class APIUploader:
         self.user_info = None
         self.authenticated = False
 
-        # HTTP headers for API requests
-        self.headers = {'Content-Type': 'application/json'}
-
         # Auto-authenticate if credentials provided
         if self.username and self.password:
             self.authenticate()
 
+    def _detect_mdms_path(self):
+        """Auto-detect the MDMS v2 service path by testing available endpoints.
+
+        Different environments use different paths:
+        - /mdms-v2 (chakshu-digit, newer deployments)
+        - /egov-mdms-service (unified-dev, older deployments)
+
+        Returns:
+            str: The working MDMS URL (base_url + path)
+        """
+        # Paths to try, in order of preference
+        paths_to_try = ["/mdms-v2", "/egov-mdms-service"]
+
+        for path in paths_to_try:
+            test_url = f"{self.base_url}{path}/v2/_search"
+            try:
+                # Simple probe request - doesn't need auth for search on some envs
+                response = requests.post(
+                    test_url,
+                    json={
+                        "MdmsCriteria": {"tenantId": "default", "limit": 1},
+                        "RequestInfo": {"apiId": "Rainmaker"}
+                    },
+                    headers={"Content-Type": "application/json"},
+                    timeout=5
+                )
+
+                # If not 404, this path exists (even if auth required, we get 401/403 not 404)
+                if response.status_code != 404:
+                    print(f"   MDMS path auto-detected: {path} (status: {response.status_code})")
+                    return f"{self.base_url}{path}"
+                else:
+                    print(f"   MDMS path {path}: 404, trying next...")
+
+            except requests.exceptions.RequestException as e:
+                print(f"   MDMS path {path}: error {e}, trying next...")
+                continue
+
+        # Default fallback
+        print(f"   MDMS path: using default /mdms-v2 (no path responded)")
+        return f"{self.base_url}/mdms-v2"
 
     def authenticate(self):
         """Authenticate using OAuth2 password grant and fetch user info"""
@@ -760,19 +803,6 @@ class APIUploader:
             print(f"❌ Authentication error: {str(e)}")
             return False
 
-    def _get_request_info(self) -> Dict:
-        """Generate RequestInfo object for API requests
-
-        Returns:
-            Dict containing RequestInfo with authentication details
-        """
-        return {
-            "apiId": "Rainmaker",
-            "authToken": self.auth_token,
-            "userInfo": self.user_info,
-            "msgId": f"{int(time.time() * 1000)}|en_IN"
-        }
-
     def _extract_error_message(self, error_text: str) -> str:
         """Extract clean error message from API error response
 
@@ -816,7 +846,8 @@ class APIUploader:
             # If JSON parsing fails, return truncated original text
             return error_text[:200]
 
-    def search_mdms_data(self, schema_code: str, tenant: str, unique_identifiers: List[str] = None, limit: int = 100, offset: int = 0) -> List[Dict]:
+    def search_mdms_data(self, schema_code: str, tenant: str, unique_identifiers: List[str] = None,
+                         limit: int = 100, offset: int = 0, include_inactive: bool = True) -> List[Dict]:
         """Generic function to search MDMS v2 data
 
         Args:
@@ -825,9 +856,10 @@ class APIUploader:
             unique_identifiers: Optional list of unique identifiers to filter by
             limit: Max number of records (default: 100)
             offset: Pagination offset (default: 0)
+            include_inactive: If False, filter out soft-deleted records (default: True)
 
         Returns:
-            list: List of data objects retrieved
+            list: List of data objects retrieved (with 'isActive' field added from wrapper)
         """
         url = f"{self.mdms_url}/v2/_search"
 
@@ -847,6 +879,10 @@ class APIUploader:
         if unique_identifiers:
             criteria["uniqueIdentifiers"] = unique_identifiers
 
+        # Add isActive filter if only active records requested
+        if not include_inactive:
+            criteria["isActive"] = True
+
         payload = {
             "RequestInfo": {
                 "apiId": "Rainmaker",
@@ -865,9 +901,18 @@ class APIUploader:
             data = response.json()
 
             # Extract data list from response
-            # API returns: {"mdms": [{"id": "...", "data": {...}, ...}]}
+            # API returns: {"mdms": [{"id": "...", "data": {...}, "isActive": true/false, ...}]}
             mdms_records = data.get('mdms', [])
-            data_list = [record['data'] for record in mdms_records]
+
+            # Include isActive status in each data object for caller to check
+            data_list = []
+            for record in mdms_records:
+                record_data = record.get('data', {}).copy()
+                # Add wrapper's isActive status to data object
+                record_data['_isActive'] = record.get('isActive', True)
+                record_data['_uniqueIdentifier'] = record.get('uniqueIdentifier')
+                data_list.append(record_data)
+
             return data_list
 
         except requests.exceptions.HTTPError as e:
@@ -952,6 +997,15 @@ class APIUploader:
                     # Extract clean error message from API response
                     error_message = self._extract_error_message(error_text) if error_text else str(e)[:200]
 
+                    # Fail fast on auth errors
+                    if status_code == 401:
+                        print(f"\n   ❌ AUTHORIZATION FAILED - Cannot create MDMS data")
+                        print(f"   The endpoint /mdms-v2/v2/_create/{schema_code} requires authentication.")
+                        print(f"   Ask admin to add it to EGOV_OPEN_ENDPOINTS_WHITELIST.")
+                        results['failed'] = len(data_list)
+                        results['errors'].append({'error': 'Authorization failed (401) - endpoint not in whitelist'})
+                        return results
+
                     if 'already exists' in error_text.lower() or 'duplicate' in error_text.lower():
                         print(f"   [EXISTS] [{i}/{len(data_list)}] {unique_id} (HTTP {status_code})")
                         results['exists'] += 1
@@ -999,12 +1053,157 @@ class APIUploader:
 
             return results
 
+    def delete_mdms_data(self, schema_code: str, tenant: str, unique_ids: List[str] = None) -> Dict:
+        """Soft-delete MDMS data by setting isActive=false
 
-    
+        Args:
+            schema_code: Schema code (e.g., 'common-masters.Department')
+            tenant: Tenant ID
+            unique_ids: Optional list of specific uniqueIdentifiers to delete.
+                       If None, deletes ALL data for this schema/tenant.
 
+        Returns:
+            dict: {deleted: count, failed: count, errors: []}
+        """
+        print(f"\n🗑️ Deleting MDMS data: {schema_code} for tenant: {tenant}")
 
+        results = {'deleted': 0, 'failed': 0, 'skipped': 0, 'errors': []}
 
-    def _write_status_to_excel(self, excel_file: str, sheet_name: str, 
+        # Step 1: Search for existing data
+        search_url = f"{self.mdms_url}/v2/_search"
+        update_url = f"{self.mdms_url}/v2/_update/{schema_code}"
+
+        search_payload = {
+            "RequestInfo": {
+                "apiId": "asset-services",
+                "msgId": f"search-{int(time.time()*1000)}",
+                "authToken": self.auth_token,
+                "userInfo": self.user_info
+            },
+            "MdmsCriteria": {
+                "tenantId": tenant,
+                "schemaCode": schema_code,
+                "limit": 500,
+                "offset": 0
+            }
+        }
+
+        try:
+            response = requests.post(search_url, json=search_payload, headers={'Content-Type': 'application/json'})
+            if response.status_code != 200:
+                print(f"   ❌ Failed to search MDMS data: {response.status_code}")
+                return results
+
+            data = response.json()
+            mdms_records = data.get('mdms', [])
+
+            if not mdms_records:
+                print(f"   ℹ️ No MDMS data found for {schema_code}")
+                return results
+
+            print(f"   Found {len(mdms_records)} records")
+
+            # Filter by unique_ids if provided
+            if unique_ids:
+                mdms_records = [r for r in mdms_records if r.get('uniqueIdentifier') in unique_ids]
+                print(f"   Filtered to {len(mdms_records)} records matching provided IDs")
+
+            # Step 2: Update each record with isActive=false
+            auth_failed = False
+            for i, record in enumerate(mdms_records):
+                unique_id = record.get('uniqueIdentifier', 'unknown')
+
+                # Skip if already inactive
+                if not record.get('isActive', True):
+                    print(f"   ⏭️ Already inactive: {unique_id}")
+                    results['skipped'] += 1
+                    continue
+
+                update_payload = {
+                    "RequestInfo": {
+                        "apiId": "asset-services",
+                        "msgId": f"delete-{int(time.time()*1000)}",
+                        "authToken": self.auth_token,
+                        "userInfo": self.user_info
+                    },
+                    "Mdms": {
+                        "tenantId": tenant,
+                        "schemaCode": schema_code,
+                        "uniqueIdentifier": unique_id,
+                        "id": record.get('id'),
+                        "data": record.get('data', {}),
+                        "auditDetails": record.get('auditDetails'),
+                        "isActive": False  # This is the key - set to false to "delete"
+                    }
+                }
+
+                try:
+                    upd_response = requests.post(update_url, json=update_payload, headers={'Content-Type': 'application/json'})
+                    if upd_response.status_code == 200:
+                        print(f"   ✅ Deleted: {unique_id}")
+                        results['deleted'] += 1
+                    elif upd_response.status_code == 401:
+                        # Fail fast on auth errors
+                        print(f"\n   ❌ AUTHORIZATION FAILED - Cannot delete MDMS data")
+                        print(f"   The endpoint /mdms-v2/v2/_update/{schema_code} requires authentication.")
+                        print(f"   Ask admin to add it to EGOV_OPEN_ENDPOINTS_WHITELIST or use direct DB access.")
+                        results['failed'] = len(mdms_records) - results['skipped']
+                        results['errors'].append({'error': 'Authorization failed (401) - endpoint not in whitelist'})
+                        auth_failed = True
+                        break
+                    else:
+                        error_msg = upd_response.text[:100]
+                        print(f"   ❌ Failed to delete {unique_id}: {error_msg}")
+                        results['failed'] += 1
+                        results['errors'].append({'id': unique_id, 'error': error_msg})
+                except Exception as e:
+                    print(f"   ❌ Error deleting {unique_id}: {str(e)[:50]}")
+                    results['failed'] += 1
+                    results['errors'].append({'id': unique_id, 'error': str(e)})
+
+                time.sleep(0.05)  # Small delay between updates
+
+            if auth_failed:
+                return results
+
+        except Exception as e:
+            print(f"   ❌ Error: {str(e)[:100]}")
+            results['errors'].append({'error': str(e)})
+
+        print(f"\n   Summary: Deleted {results['deleted']}, Failed {results['failed']}, Skipped {results['skipped']}")
+        return results
+
+    def rollback_mdms_by_schema(self, schema_codes: List[str], tenant: str) -> Dict:
+        """Rollback (delete) all MDMS data for multiple schema codes
+
+        Args:
+            schema_codes: List of schema codes to rollback
+            tenant: Tenant ID
+
+        Returns:
+            dict: {schema_code: {deleted, failed, ...}, ...}
+        """
+        print(f"\n{'='*60}")
+        print(f"MDMS ROLLBACK")
+        print(f"{'='*60}")
+        print(f"Tenant: {tenant}")
+        print(f"Schemas: {', '.join(schema_codes)}")
+
+        results = {}
+        for schema_code in schema_codes:
+            results[schema_code] = self.delete_mdms_data(schema_code, tenant)
+
+        # Summary
+        total_deleted = sum(r.get('deleted', 0) for r in results.values())
+        total_failed = sum(r.get('failed', 0) for r in results.values())
+
+        print(f"\n{'─'*40}")
+        print(f"Rollback Complete: {total_deleted} deleted, {total_failed} failed")
+        print(f"{'─'*40}")
+
+        return results
+
+    def _write_status_to_excel(self, excel_file: str, sheet_name: str,
                                row_statuses: List[Dict], schema_code: str):
         """
         Write / overwrite _STATUS, _STATUS_CODE, _ERROR_MESSAGE columns directly into uploaded Excel.
@@ -1427,6 +1626,15 @@ class APIUploader:
                     # Extract clean error message from API response
                     error_message = self._extract_error_message(error_text) if error_text else str(e)[:200]
 
+                    # Fail fast on auth errors
+                    if status_code == 401:
+                        print(f"\n   ❌ AUTHORIZATION FAILED - Cannot upload localization messages")
+                        print(f"   The endpoint /localization/messages/v1/_upsert requires authentication.")
+                        print(f"   Ask admin to add it to EGOV_OPEN_ENDPOINTS_WHITELIST.")
+                        results['failed'] = total_messages
+                        results['errors'].append({'error': 'Authorization failed (401) - endpoint not in whitelist'})
+                        return results
+
                     # Check for duplicate/already exists errors
                     if ('duplicate' in error_text.lower() or
                         'already exists' in error_text.lower() or
@@ -1687,7 +1895,6 @@ class APIUploader:
         return result
 
     def setup_default_data(self, targetTenantId: str, module: str, schemaCodes: list, onlySchemas: bool = False) -> dict:
-        import sys
 
         url = f"{self.Datahandlerurl}/tenant/new"
 
@@ -1707,47 +1914,25 @@ class APIUploader:
             "onlySchemas": onlySchemas
         }
 
-        print("\n[DEFAULT DATA SETUP]", flush=True)
-        print(f"   Target Tenant: {targetTenantId}", flush=True)
-        print(f"   Module:        {module}", flush=True)
-        print(f"   Schemas:       {schemaCodes}", flush=True)
-        print(f"   Only Schemas:  {onlySchemas}", flush=True)
-        print(f"   API URL:       {url}", flush=True)
-        print("="*60, flush=True)
+        print("\n[DEFAULT DATA SETUP]")
+        print(f"   Target Tenant: {targetTenantId}")
+        print(f"   Module:        {module}")
+        print(f"   Schemas:       {schemaCodes}")
+        print(f"   Only Schemas:  {onlySchemas}")
+        print(f"   API URL:       {url}")
+        print("="*60)
 
         try:
             # Tenant creation can take 5-10 minutes, use long timeout
-            print(f"   ⏳ This may take 5-10 minutes, please wait...", flush=True)
-            sys.stdout.flush()
+            print(f"   ⏳ This may take 5-10 minutes, please wait...")
             response = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=1200)
             response.raise_for_status()
 
             result = response.json()
 
-            print(f"   [SUCCESS] Default data setup complete for {targetTenantId}", flush=True)
-            print("="*60, flush=True)
-
-            # Re-authenticate with the new tenant
-            print(f"\n🔄 Re-authenticating with new tenant: {targetTenantId}...", flush=True)
-            sys.stdout.flush()
-
-            # Store original tenant
-            original_tenant = self.tenant_id
-
-            # Update tenant ID to new tenant
-            self.tenant_id = targetTenantId
-
-            # Re-authenticate
-            try:
-                self.authenticate()
-                print(f"✅ Successfully authenticated with tenant: {targetTenantId}", flush=True)
-                print(f"   User: {self.user_info.get('userName', 'N/A')}", flush=True)
-                print(f"   Roles: {[role.get('code') for role in self.user_info.get('roles', [])]}", flush=True)
-            except Exception as auth_error:
-                print(f"⚠️  Re-authentication failed: {str(auth_error)}", flush=True)
-                print(f"   You may need to manually re-authenticate with tenant: {targetTenantId}", flush=True)
-                # Restore original tenant if re-auth fails
-                self.tenant_id = original_tenant
+            print(f"   [SUCCESS] Default data setup complete for {targetTenantId}")
+            print("Once the new tenant is created, please log in again using the new root tenant admin credentials.")
+            print("="*60)
 
             return {
                 "success": True,
@@ -1756,14 +1941,14 @@ class APIUploader:
 
         except requests.exceptions.HTTPError as e:
             error_text = e.response.text if hasattr(e.response, "text") else str(e)
-            print(f"[FAILED] HTTP ERROR {e.response.status_code}", flush=True)
-            print(error_text, flush=True)
-            print("="*60, flush=True)
+            print(f"[FAILED] HTTP ERROR {e.response.status_code}")
+            print(error_text)
+            print("="*60)
             return {"success": False, "error": error_text}
 
         except Exception as e:
-            print(f"[ERROR] {str(e)}", flush=True)
-            print("="*60, flush=True)
+            print(f"[ERROR] {str(e)}")
+            print("="*60)
             return {"success": False, "error": str(e)}
 
     # ========================================================================
@@ -2071,70 +2256,402 @@ class APIUploader:
             print(f"❌ Upload error: {str(e)[:200]}")
             return None
 
-    def process_boundary_data(self, tenant_id: str, filestore_id: str, hierarchy_type: str, action: str = "create") -> Dict:
-        """Process uploaded boundary data
+    def process_boundary_data(self, tenant_id: str, filestore_id: str = None, hierarchy_type: str = "ADMIN", action: str = "create", excel_file: str = None) -> Dict:
+        """Process boundary data - creates boundaries one-by-one via direct API
+
+        This method reads the boundary Excel file and creates boundaries directly
+        via the boundary-service API, avoiding the need for bulk upload services.
 
         Args:
             tenant_id: Tenant ID
-            filestore_id: FileStore ID of uploaded Excel
-            hierarchy_type: Hierarchy type
+            filestore_id: FileStore ID (optional, for compatibility)
+            hierarchy_type: Hierarchy type (default: ADMIN)
             action: Action type (create/update)
+            excel_file: Path to Excel file with boundary data
 
         Returns:
             Dict with processing results
         """
-        url = f"{self.boundary_mgmt_url}/v1/_process"
+        import pandas as pd
 
-        # Override userInfo tenantId to match the request tenant
+        results = {
+            'status': 'processing',
+            'boundaries_created': 0,
+            'relationships_created': 0,
+            'errors': []
+        }
+
+        if not excel_file:
+            print("❌ No Excel file provided")
+            results['status'] = 'failed'
+            results['errors'].append("No Excel file provided")
+            return results
+
+        try:
+            # Read boundary data from Excel
+            print(f"\n📖 Reading boundary data from: {excel_file}")
+
+            # Try different sheet names
+            sheet_name = 'Boundary'
+            try:
+                df = pd.read_excel(excel_file, sheet_name='Boundary')
+            except:
+                try:
+                    df = pd.read_excel(excel_file, sheet_name='Boundary Data')
+                except:
+                    df = pd.read_excel(excel_file, sheet_name=0)  # First sheet
+
+            print(f"   Found {len(df)} boundary records")
+            print(f"   Columns: {list(df.columns)}")
+
+            # Get hierarchy definition to understand boundary types
+            hierarchy = self._get_boundary_hierarchy(tenant_id, hierarchy_type)
+            if hierarchy:
+                boundary_types = [h['boundaryType'] for h in hierarchy.get('boundaryHierarchy', [])]
+                print(f"   Hierarchy: {' → '.join(boundary_types)}")
+            else:
+                print("   ⚠️ Could not fetch hierarchy, will use boundaryType from Excel")
+                boundary_types = df['boundaryType'].unique().tolist() if 'boundaryType' in df.columns else []
+
+            # Check if Excel has the standard format (code, name, boundaryType, parentCode)
+            if 'code' in df.columns and 'boundaryType' in df.columns:
+                print("   Using standard format (code, boundaryType, parentCode)")
+
+                # Map Excel boundary types to hierarchy types if they don't match
+                # Common mappings for Punjab-style templates
+                type_mapping = {
+                    'State': 'Country',  # If hierarchy starts with Country
+                    'District': 'State',
+                    'Tehsil': 'City',
+                    'Block': 'Ward',
+                    'Village': 'Locality'
+                }
+
+                # Check if we need mapping (Excel types vs hierarchy types)
+                excel_types = set(df['boundaryType'].unique())
+                hierarchy_set = set(boundary_types) if boundary_types else set()
+
+                # If Excel types match hierarchy, no mapping needed
+                if excel_types.issubset(hierarchy_set) or not hierarchy_set:
+                    use_mapping = False
+                    print("   Boundary types match hierarchy - no mapping needed")
+                else:
+                    use_mapping = True
+                    print(f"   ⚠️ Boundary type mismatch detected")
+                    print(f"      Excel types: {excel_types}")
+                    print(f"      Hierarchy types: {hierarchy_set}")
+                    print(f"      Will attempt to map types")
+
+                # Process each row
+                for idx, row in df.iterrows():
+                    code = str(row.get('code', '')).strip()
+                    boundary_type = str(row.get('boundaryType', '')).strip()
+                    parent_code = str(row.get('parentCode', '')).strip() if pd.notna(row.get('parentCode')) else None
+
+                    if not code or not boundary_type:
+                        continue
+
+                    # Apply type mapping if needed
+                    mapped_type = type_mapping.get(boundary_type, boundary_type) if use_mapping else boundary_type
+
+                    # Create boundary entity
+                    success = self._create_boundary_entity(tenant_id, code)
+                    if success:
+                        results['boundaries_created'] += 1
+
+                    # Create boundary relationship - try with original type first, then mapped
+                    rel_success = self._create_boundary_relationship(
+                        tenant_id, hierarchy_type, code, boundary_type, parent_code
+                    )
+                    if not rel_success and use_mapping and mapped_type != boundary_type:
+                        # Try with mapped type
+                        rel_success = self._create_boundary_relationship(
+                            tenant_id, hierarchy_type, code, mapped_type, parent_code
+                        )
+                    if rel_success:
+                        results['relationships_created'] += 1
+            else:
+                # Handle column-per-level format
+                print("   Using column-per-level format")
+                for boundary_type in boundary_types:
+                    if boundary_type not in df.columns:
+                        continue
+
+                    boundaries_at_level = df[boundary_type].dropna().unique()
+
+                    for boundary_code in boundaries_at_level:
+                        if pd.isna(boundary_code) or str(boundary_code).strip() == '':
+                            continue
+
+                        boundary_code = str(boundary_code).strip()
+                        success = self._create_boundary_entity(tenant_id, boundary_code)
+                        if success:
+                            results['boundaries_created'] += 1
+
+                        parent_type_idx = boundary_types.index(boundary_type) - 1
+                        parent_code = None
+                        if parent_type_idx >= 0:
+                            parent_type = boundary_types[parent_type_idx]
+                            row = df[df[boundary_type] == boundary_code].iloc[0] if len(df[df[boundary_type] == boundary_code]) > 0 else None
+                            if row is not None and parent_type in df.columns:
+                                parent_code = str(row[parent_type]).strip() if pd.notna(row[parent_type]) else None
+
+                        rel_success = self._create_boundary_relationship(
+                            tenant_id, hierarchy_type, boundary_code, boundary_type, parent_code
+                        )
+                        if rel_success:
+                            results['relationships_created'] += 1
+
+            results['status'] = 'completed'
+            print(f"\n✅ Boundary processing completed!")
+            print(f"   Boundaries created: {results['boundaries_created']}")
+            print(f"   Relationships created: {results['relationships_created']}")
+
+        except Exception as e:
+            print(f"❌ Error processing boundaries: {str(e)}")
+            results['status'] = 'failed'
+            results['errors'].append(str(e))
+
+        return results
+
+    def _get_boundary_hierarchy(self, tenant_id: str, hierarchy_type: str) -> Dict:
+        """Fetch boundary hierarchy definition"""
+        url = f"{self.boundary_url}/boundary-hierarchy-definition/_search"
+
         user_info_copy = self.user_info.copy()
         user_info_copy['tenantId'] = tenant_id
 
         payload = {
-            "ResourceDetails": {
-                "tenantId": tenant_id,
-                "fileStoreId": filestore_id,
-                "hierarchyType": hierarchy_type,
-                "additionalDetails": {},
-                "action": action
-            },
             "RequestInfo": {
                 "apiId": "Rainmaker",
                 "authToken": self.auth_token,
-                "userInfo": user_info_copy,
-                "msgId": f"{int(time.time() * 1000)}|en_IN",
-                "plainAccessRequest": {}
+                "userInfo": user_info_copy
+            },
+            "BoundaryTypeHierarchySearchCriteria": {
+                "tenantId": tenant_id,
+                "hierarchyType": hierarchy_type
             }
         }
 
-        headers = {'Content-Type': 'application/json'}
-    
-
         try:
-            response = requests.post(url, json=payload, headers=headers)
-      
+            response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'})
             response.raise_for_status()
             data = response.json()
-
-            resource = data.get('ResourceDetails', {})
-            status = resource.get('status')
-            processed_id = resource.get('processedFileStoreId')
-
-            print(f"\n✅ Boundary data processing initiated")
-            print(f"   Status: {status}")
-            print(f"   Task ID: {resource.get('id')}")
-
-            if processed_id:
-                print(f"   Processed FileStore ID: {processed_id}")
-
-            return resource
-
-        except requests.exceptions.HTTPError as e:
-            error_text = e.response.text if hasattr(e.response, 'text') else str(e)
-            print(f"❌ HTTP Error: {error_text[:300]}")
-            return {}
+            hierarchies = data.get('BoundaryHierarchy', [])
+            return hierarchies[0] if hierarchies else None
         except Exception as e:
-            print(f"❌ Error: {str(e)}")
-            return {}
+            print(f"   ⚠️ Error fetching hierarchy: {str(e)[:100]}")
+            return None
+
+    def _create_boundary_entity(self, tenant_id: str, code: str) -> bool:
+        """Create a single boundary entity"""
+        url = f"{self.boundary_url}/boundary/_create"
+
+        user_info_copy = self.user_info.copy()
+        user_info_copy['tenantId'] = tenant_id
+
+        payload = {
+            "RequestInfo": {
+                "apiId": "Rainmaker",
+                "msgId": f"create-boundary-{int(time.time()*1000)}",
+                "authToken": self.auth_token,
+                "userInfo": user_info_copy
+            },
+            "Boundary": [{
+                "tenantId": tenant_id,
+                "code": code,
+                "geometry": {"type": "Polygon", "coordinates": [[[0,0],[0,1],[1,1],[1,0],[0,0]]]}
+            }]
+        }
+
+        try:
+            response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'})
+            if response.status_code in [200, 201, 202]:
+                print(f"   ✅ Created boundary: {code}")
+                return True
+            else:
+                data = response.json()
+                error_code = data.get('Errors', [{}])[0].get('code', '')
+                error_msg = data.get('Errors', [{}])[0].get('message', '')
+                if error_code == 'DUPLICATE_CODE' or 'already exists' in str(error_msg).lower():
+                    print(f"   ⚠️ Boundary exists: {code}")
+                    return True  # Already exists is OK
+                else:
+                    print(f"   ❌ Failed to create boundary {code}: {error_code or error_msg or response.status_code}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Error creating boundary {code}: {str(e)[:100]}")
+            return False
+
+    def _create_boundary_relationship(self, tenant_id: str, hierarchy_type: str,
+                                       code: str, boundary_type: str, parent_code: str = None) -> bool:
+        """Create boundary relationship (parent-child link)"""
+        url = f"{self.boundary_url}/boundary-relationships/_create"
+
+        user_info_copy = self.user_info.copy()
+        user_info_copy['tenantId'] = tenant_id
+
+        payload = {
+            "RequestInfo": {
+                "apiId": "Rainmaker",
+                "msgId": f"create-relationship-{int(time.time()*1000)}",
+                "authToken": self.auth_token,
+                "userInfo": user_info_copy
+            },
+            "BoundaryRelationship": {
+                "tenantId": tenant_id,
+                "hierarchyType": hierarchy_type,
+                "code": code,
+                "boundaryType": boundary_type
+            }
+        }
+
+        if parent_code:
+            payload["BoundaryRelationship"]["parent"] = parent_code
+
+        try:
+            response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'})
+            if response.status_code in [200, 201, 202]:
+                parent_info = f" (parent: {parent_code})" if parent_code else " (root)"
+                print(f"   ✅ Created relationship: {code} [{boundary_type}]{parent_info}")
+                return True
+            else:
+                data = response.json()
+                error_code = data.get('Errors', [{}])[0].get('code', '')
+                error_msg = data.get('Errors', [{}])[0].get('message', '')
+                if 'already exists' in str(error_msg).lower() or error_code == 'DUPLICATE':
+                    print(f"   ⚠️ Relationship exists: {code}")
+                    return True
+                else:
+                    print(f"   ❌ Failed relationship {code}: {error_msg[:80] if error_msg else error_code or response.status_code}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Error creating relationship {code}: {str(e)[:100]}")
+            return False
+
+    def delete_all_boundaries(self, tenant_id: str) -> Dict:
+        """Delete all boundary entities for a tenant
+
+        Args:
+            tenant_id: Tenant ID (e.g., 'statea', 'pg.citya')
+
+        Returns:
+            dict: {deleted: count, failed: count}
+        """
+        print(f"\n🗑️ Deleting all boundaries for tenant: {tenant_id}")
+
+        results = {'deleted': 0, 'failed': 0, 'codes': []}
+
+        # Search for all boundaries
+        url = f"{self.boundary_url}/boundary/_search"
+        payload = {
+            "RequestInfo": {
+                "apiId": "asset-services",
+                "msgId": f"search-{int(time.time()*1000)}",
+                "authToken": self.auth_token,
+                "userInfo": self.user_info
+            },
+            "BoundaryCriteria": {
+                "tenantId": tenant_id,
+                "limit": 500,
+                "offset": 0
+            }
+        }
+
+        try:
+            response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'})
+            if response.status_code != 200:
+                print(f"   ❌ Failed to search boundaries: {response.status_code}")
+                return results
+
+            data = response.json()
+            boundaries = data.get('Boundary', [])
+
+            if not boundaries:
+                print(f"   ℹ️ No boundaries found for tenant {tenant_id}")
+                return results
+
+            print(f"   Found {len(boundaries)} boundaries to delete")
+
+            # Delete each boundary
+            for boundary in boundaries:
+                code = boundary.get('code')
+                if not code:
+                    continue
+
+                delete_url = f"{self.boundary_url}/boundary/_delete"
+                delete_payload = {
+                    "RequestInfo": {
+                        "apiId": "asset-services",
+                        "msgId": f"delete-{int(time.time()*1000)}",
+                        "authToken": self.auth_token,
+                        "userInfo": self.user_info
+                    }
+                }
+
+                try:
+                    del_response = requests.post(
+                        f"{delete_url}?tenantId={tenant_id}&code={code}",
+                        json=delete_payload,
+                        headers={'Content-Type': 'application/json'}
+                    )
+
+                    if del_response.status_code == 200:
+                        print(f"   ✅ Deleted: {code}")
+                        results['deleted'] += 1
+                        results['codes'].append(code)
+                    else:
+                        print(f"   ❌ Failed to delete {code}: {del_response.status_code}")
+                        results['failed'] += 1
+                except Exception as e:
+                    print(f"   ❌ Error deleting {code}: {str(e)[:30]}")
+                    results['failed'] += 1
+
+        except Exception as e:
+            print(f"   ❌ Error searching boundaries: {str(e)[:50]}")
+
+        print(f"\n   Summary: Deleted {results['deleted']}, Failed {results['failed']}")
+        return results
+
+    def delete_boundary_hierarchy(self, tenant_id: str, hierarchy_type: str) -> Dict:
+        """Delete a boundary hierarchy definition
+
+        Args:
+            tenant_id: Tenant ID
+            hierarchy_type: Hierarchy type (e.g., 'REVENUE', 'ADMIN')
+
+        Returns:
+            dict: {status: 'success'|'failed', message: str}
+        """
+        print(f"\n🗑️ Deleting hierarchy {hierarchy_type} for tenant: {tenant_id}")
+
+        url = f"{self.boundary_url}/boundary-hierarchy-definition/_delete"
+
+        payload = {
+            "RequestInfo": {
+                "apiId": "asset-services",
+                "msgId": f"delete-hierarchy-{int(time.time()*1000)}",
+                "authToken": self.auth_token,
+                "userInfo": self.user_info
+            },
+            "BoundaryTypeHierarchyDefinition": {
+                "tenantId": tenant_id,
+                "hierarchyType": hierarchy_type
+            }
+        }
+
+        try:
+            response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'})
+            if response.status_code == 200:
+                print(f"   ✅ Deleted hierarchy: {hierarchy_type}")
+                return {'status': 'success', 'message': f'Deleted {hierarchy_type}'}
+            else:
+                error = response.json().get('Errors', [{}])[0].get('message', response.text[:100])
+                print(f"   ❌ Failed: {error}")
+                return {'status': 'failed', 'message': error}
+        except Exception as e:
+            print(f"   ❌ Error: {str(e)[:50]}")
+            return {'status': 'failed', 'message': str(e)}
 
     # ========================================================================
     # HRMS EMPLOYEE METHODS
@@ -3060,6 +3577,15 @@ class APIUploader:
                 # Extract clean error message from API response
                 error_message = self._extract_error_message(error_text) if error_text else str(e)[:200]
 
+                # Fail fast on auth errors
+                if status_code == 401:
+                    print(f"\n   ❌ AUTHORIZATION FAILED - Cannot create employees")
+                    print(f"   The endpoint /egov-hrms/employees/_create requires authentication.")
+                    print(f"   Ask admin to add it to EGOV_OPEN_ENDPOINTS_WHITELIST.")
+                    results['failed'] = len(employee_list)
+                    results['errors'].append({'error': 'Authorization failed (401) - endpoint not in whitelist'})
+                    return results
+
                 # Check for duplicate/already exists
                 if ('already exists' in error_text.lower() or
                     'duplicate' in error_text.lower() or
@@ -3112,270 +3638,168 @@ class APIUploader:
 
         return results
 
-
-    # ========================================================================
-    # WORKFLOW MANAGEMENT (PHASE 5)
-    # ========================================================================
+    # =========================================================================
+    # WORKFLOW SERVICE METHODS
+    # =========================================================================
 
     def search_workflow(self, tenant: str, business_service: str = "PGR") -> Dict:
-        """Search for existing workflow configuration
-        
+        """Search for workflow business service configuration
+
         Args:
-            tenant: Tenant ID
-            business_service: Business service name (default: PGR)
-            
+            tenant: Tenant ID (e.g., 'statea')
+            business_service: Business service code (default: 'PGR')
+
         Returns:
-            Dict with workflow data if found, None otherwise
+            dict: BusinessService object if found, empty dict if not found
         """
-        search_url = f"{self.base_url}/egov-workflow-v2/egov-wf/businessservice/_search"
-        
+        url = f"{self.workflow_url}/egov-wf/businessservice/_search"
         params = {
             "tenantId": tenant,
             "businessServices": business_service
         }
-        
+
         payload = {
-            "RequestInfo": self._get_request_info()
-        }
-        
-        try:
-            response = requests.post(search_url, json=payload, params=params, headers=self.headers)
-            response.raise_for_status()
-            data = response.json()
-            
-            business_services = data.get('BusinessServices', [])
-            if business_services:
-                print(f"✅ Found existing workflow: {business_service}")
-                return business_services[0]
-            else:
-                print(f"ℹ️  No existing workflow found for: {business_service}")
-                return None
-                
-        except Exception as e:
-            print(f"❌ Error searching workflow: {str(e)}")
-            return None
-    
-    def download_workflow_json(self, tenant: str, business_service: str = "PGR", output_path: str = None, template_path: str = None) -> str:
-        """Download workflow configuration as JSON file
-
-        If workflow doesn't exist for the tenant, falls back to downloading from template.
-
-        Args:
-            tenant: Tenant ID
-            business_service: Business service name
-            output_path: Optional output file path
-            template_path: Optional path to template workflow JSON file
-
-        Returns:
-            Path to downloaded JSON file
-        """
-        print(f"\n📥 Downloading workflow configuration...")
-        print(f"   Tenant: {tenant}")
-        print(f"   Business Service: {business_service}")
-
-        # Search for existing workflow
-        workflow_data = self.search_workflow(tenant, business_service)
-
-        if not workflow_data:
-            print(f"⚠️  No workflow found for tenant: {tenant}")
-            print(f"🔄 Attempting to load from template...")
-
-            # Try to load from template
-            if not template_path:
-                # Default template path - use local templates folder
-                template_path = "templates/PgrWorkflowConfig.json"
-
-            try:
-                import os
-                abs_template_path = os.path.abspath(template_path)
-
-                if not os.path.exists(abs_template_path):
-                    print(f"❌ Template file not found: {abs_template_path}")
-                    return None
-
-                # Load template
-                with open(abs_template_path, 'r') as f:
-                    template_data = json.load(f)
-
-                # Extract business service from template
-                if 'BusinessServices' in template_data and template_data['BusinessServices']:
-                    workflow_data = template_data['BusinessServices'][0]
-                    # Update tenant ID to target tenant
-                    workflow_data['tenantId'] = tenant
-                    print(f"✅ Loaded workflow template from: {os.path.basename(abs_template_path)}")
-                    print(f"   Updated tenantId to: {tenant}")
-                else:
-                    print(f"❌ Invalid template structure: Missing BusinessServices")
-                    return None
-
-            except Exception as e:
-                print(f"❌ Error loading template: {str(e)}")
-                return None
-        
-        # Prepare full request structure
-        workflow_request = {
             "RequestInfo": {
                 "apiId": "Rainmaker",
                 "authToken": self.auth_token,
-                "userInfo": {
-                    "id": self.user_info.get('id'),
-                    "uuid": self.user_info.get('uuid'),
-                    "userName": self.user_info.get('userName'),
-                    "name": self.user_info.get('name'),
-                    "mobileNumber": self.user_info.get('mobileNumber'),
-                    "emailId": self.user_info.get('emailId'),
-                    "type": self.user_info.get('type'),
-                    "roles": self.user_info.get('roles', []),
-                    "active": True,
-                    "tenantId": self.user_info.get('tenantId')
-                },
-                "msgId": "20170310130900|en_IN"
-            },
-            "BusinessServices": [workflow_data]
+                "userInfo": self.user_info,
+                "msgId": f"{int(time.time() * 1000)}|en_IN"
+            }
         }
-        
-        # Determine output path
-        if not output_path:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_path = f"upload/WorkflowConfig_{business_service}_{tenant}_{timestamp}.json"
 
-        # Ensure upload directory exists
-        import os
-        os.makedirs("upload", exist_ok=True)
+        headers = {"Content-Type": "application/json"}
 
-        # Save to file
-        with open(output_path, 'w') as f:
-            json.dump(workflow_request, f, indent=2)
-
-        print(f"\n✅ Workflow downloaded successfully!")
-        print(f"   File: {output_path}")
-
-        # Display download button if in Jupyter environment
         try:
-            from IPython.display import display, HTML
-            import os
-
-            # Get absolute path and filename
-            abs_path = os.path.abspath(output_path)
-            filename = os.path.basename(output_path)
-
-            # Create HTML download button
-            download_button_html = f"""
-            <div style="margin: 20px 0; padding: 15px; background-color: #f0f8ff; border-radius: 8px; border-left: 4px solid #4CAF50;">
-                <h3 style="margin-top: 0; color: #2c3e50;">📥 Download Workflow Configuration</h3>
-                <p style="margin: 10px 0; color: #555;">Click the button below to download the workflow JSON file:</p>
-                <a href="{output_path}" download="{filename}"
-                   style="display: inline-block; padding: 12px 24px; background-color: #4CAF50; color: white;
-                          text-decoration: none; border-radius: 5px; font-weight: bold; margin: 10px 0;
-                          box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-                    ⬇️ Download {filename}
-                </a>
-                <p style="margin: 15px 0 5px 0; color: #555;"><strong>📝 Next steps:</strong></p>
-                <ol style="margin: 5px 0; color: #555;">
-                    <li>Click the download button above to save the file</li>
-                    <li>Edit the JSON file with your changes</li>
-                    <li>Save the modified file</li>
-                    <li>Use Section 5.2 below to upload the modified JSON</li>
-                </ol>
-            </div>
-            """
-            display(HTML(download_button_html))
-
-        except ImportError:
-            # Not in Jupyter environment, just print the message
-            print(f"\n📝 Next steps:")
-            print(f"   1. Edit the JSON file with your changes")
-            print(f"   2. Upload the modified JSON using the upload function")
-
-        return output_path
-    
-    def create_or_update_workflow(self, workflow_json_path: str) -> Dict:
-        """Create or update workflow from JSON file
-        
-        Automatically determines whether to create or update based on existing workflow
-        
-        Args:
-            workflow_json_path: Path to workflow JSON file
-            
-        Returns:
-            Dict with result status
-        """
-        print(f"\n🔄 Processing workflow configuration...")
-        print(f"   File: {workflow_json_path}")
-        
-        # Load JSON file
-        try:
-            with open(workflow_json_path, 'r') as f:
-                workflow_request = json.load(f)
-        except Exception as e:
-            print(f"❌ Error reading JSON file: {str(e)}")
-            return {"success": False, "error": str(e)}
-        
-        # Validate structure
-        if 'BusinessServices' not in workflow_request or not workflow_request['BusinessServices']:
-            print(f"❌ Invalid workflow JSON: Missing BusinessServices")
-            return {"success": False, "error": "Invalid JSON structure"}
-        
-        business_service_data = workflow_request['BusinessServices'][0]
-        tenant_id = business_service_data.get('tenantId')
-        business_service = business_service_data.get('businessService')
-        
-        if not tenant_id or not business_service:
-            print(f"❌ Invalid workflow: Missing tenantId or businessService")
-            return {"success": False, "error": "Missing required fields"}
-        
-        print(f"   Tenant: {tenant_id}")
-        print(f"   Business Service: {business_service}")
-
-        # Check if workflow exists
-        existing_workflow = self.search_workflow(tenant_id, business_service)
-
-        if existing_workflow:
-            print(f"⚠️  Workflow already exists for {business_service} in tenant {tenant_id}")
-            print(f"   Skipping create operation.")
-            return {
-                "success": False,
-                "error": "Workflow already exists",
-                "tenant": tenant_id,
-                "businessService": business_service
-            }
-
-        # Update RequestInfo with current auth token
-        workflow_request['RequestInfo']['authToken'] = self.auth_token
-        workflow_request['RequestInfo']['userInfo'] = self.user_info
-
-        # Always use create endpoint
-        endpoint = f"{self.base_url}/egov-workflow-v2/egov-wf/businessservice/_create"
-        action = "Creating"
-        
-        print(f"\n{action} workflow...")
-        
-        try:
-            response = requests.post(endpoint, json=workflow_request, headers=self.headers)
+            response = requests.post(url, json=payload, headers=headers, params=params)
             response.raise_for_status()
-            
-            print(f"\n✅ Workflow {action.lower()} successfully!")
-            print(f"   Tenant: {tenant_id}")
-            print(f"   Business Service: {business_service}")
-            
-            return {
-                "success": True,
-                "action": "created",
-                "tenant": tenant_id,
-                "businessService": business_service
-            }
-            
+
+            data = response.json()
+            services = data.get('BusinessServices', [])
+
+            if services:
+                return services[0]
+            return {}
+
         except requests.exceptions.HTTPError as e:
-            error_msg = self._extract_error_message(str(e))
-            print(f"\n❌ Failed to {action.lower()} workflow")
-            print(f"   Error: {error_msg}")
+            print(f"   Workflow search error: {e.response.status_code}")
+            return {}
+        except Exception as e:
+            print(f"   Workflow search error: {str(e)}")
+            return {}
+
+    def create_workflow(self, tenant: str, business_service: Dict) -> Dict:
+        """Create a new workflow business service
+
+        Args:
+            tenant: Tenant ID
+            business_service: BusinessService object with states and actions
+
+        Returns:
+            dict: {created: bool, error: str or None, data: response data}
+        """
+        url = f"{self.workflow_url}/egov-wf/businessservice/_create"
+
+        # Ensure tenantId is set on the business service
+        business_service['tenantId'] = tenant
+
+        payload = {
+            "RequestInfo": {
+                "apiId": "Rainmaker",
+                "action": "",
+                "did": 1,
+                "key": "",
+                "msgId": f"{int(time.time() * 1000)}|en_IN",
+                "requesterId": "",
+                "ts": int(time.time() * 1000),
+                "ver": ".01",
+                "authToken": self.auth_token,
+                "userInfo": self.user_info
+            },
+            "BusinessServices": [business_service]
+        }
+
+        headers = {"Content-Type": "application/json"}
+
+        try:
+            response = requests.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+
+            data = response.json()
             return {
-                "success": False,
-                "error": error_msg
+                'created': True,
+                'error': None,
+                'data': data.get('BusinessServices', [{}])[0]
+            }
+
+        except requests.exceptions.HTTPError as e:
+            error_text = e.response.text if hasattr(e, 'response') and e.response else str(e)
+            return {
+                'created': False,
+                'error': self._extract_error_message(error_text),
+                'data': None
             }
         except Exception as e:
-            print(f"\n❌ Unexpected error: {str(e)}")
             return {
-                "success": False,
-                "error": str(e)
+                'created': False,
+                'error': str(e),
+                'data': None
             }
+
+    def update_workflow(self, tenant: str, business_service: Dict) -> Dict:
+        """Update an existing workflow business service
+
+        Args:
+            tenant: Tenant ID
+            business_service: BusinessService object with states and actions
+
+        Returns:
+            dict: {updated: bool, error: str or None, data: response data}
+        """
+        url = f"{self.workflow_url}/egov-wf/businessservice/_update"
+
+        # Ensure tenantId is set on the business service
+        business_service['tenantId'] = tenant
+
+        payload = {
+            "RequestInfo": {
+                "apiId": "Rainmaker",
+                "action": "",
+                "did": 1,
+                "key": "",
+                "msgId": f"{int(time.time() * 1000)}|en_IN",
+                "requesterId": "",
+                "ts": int(time.time() * 1000),
+                "ver": ".01",
+                "authToken": self.auth_token,
+                "userInfo": self.user_info
+            },
+            "BusinessServices": [business_service]
+        }
+
+        headers = {"Content-Type": "application/json"}
+
+        try:
+            response = requests.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+
+            data = response.json()
+            return {
+                'updated': True,
+                'error': None,
+                'data': data.get('BusinessServices', [{}])[0]
+            }
+
+        except requests.exceptions.HTTPError as e:
+            error_text = e.response.text if hasattr(e, 'response') and e.response else str(e)
+            return {
+                'updated': False,
+                'error': self._extract_error_message(error_text),
+                'data': None
+            }
+        except Exception as e:
+            return {
+                'updated': False,
+                'error': str(e),
+                'data': None
+            }
+

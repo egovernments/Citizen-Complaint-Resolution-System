@@ -1,7 +1,7 @@
 {
-  "name": "@egovernments/digit-ui-module-ccrs",
-  "version": "0.0.1",
-  "description": "PGR Module UI",
+  "name": "@egovernments/digit-ui-module-cms",
+  "version": "1.0.0",
+  "description": "CMS Module UI for DIGIT Platform",
   "main": "dist/index.js",
   "module": "dist/index.modern.js",
   "source": "src/Module.js",
@@ -12,6 +12,10 @@
     "start": "microbundle-crl watch --no-compress --format modern,cjs",
     "build": "microbundle-crl --compress --no-sourcemap --format cjs",
     "prepublish": "yarn build"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "peerDependencies": {
     "react": "17.0.2",
@@ -31,6 +35,28 @@
     "leaflet": "1.6.0",
     "react-leaflet": "2.7.0"
   },
-  "author": "Ramkrishna <ramkrishna.sahoo@egovernments.org>",
-  "license": "MIT"
+  "resolutions": {
+    "**/minimatch": "7.4.6",
+    "minimatch": "7.4.6",
+    "**/glob": "7.2.3",
+    "glob": "7.2.3"
+  },
+  "author": "Hariprasad <hariprasad@egovernments.org>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System.git"
+  },
+  "license": "MIT",
+  "keywords": [
+    "digit",
+    "egov",
+    "cms",
+    "citizen-complaint",
+    "digit-ui",
+    "react",
+    "module"
+  ],
+  "devDependencies": {
+    "microbundle-crl": "^0.13.11"
+  }
 }

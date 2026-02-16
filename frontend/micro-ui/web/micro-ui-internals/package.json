@@ -11,7 +11,7 @@
   "license": "MIT",
   "private": true,
   "engines": {
-    "node": ">=14"
+    "node": "14"
   },
   "scripts": {
     "start": "SKIP_PREFLIGHT_CHECK=true run-s build start:dev",

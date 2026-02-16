@@ -11,7 +11,7 @@ import { initLibraries } from "@egovernments/digit-ui-libraries";
 // import { initHRMSComponents } from "@egovernments/digit-ui-module-hrms";
 import { UICustomizations } from "./Customisations/UICustomizations";
 import { initUtilitiesComponents } from "@egovernments/digit-ui-module-utilities";
-import { initPGRComponents,PGRReducers, } from "@egovernments/digit-ui-module-ccrs";
+import { initPGRComponents, PGRReducers, } from "@egovernments/digit-ui-module-cms";
 import { Loader } from "@egovernments/digit-ui-components";
 import { initWorkbenchComponents } from "@egovernments/digit-ui-module-workbench";
 import { initHRMSComponents } from "@egovernments/digit-ui-module-hrms";
@@ -38,7 +38,7 @@ initLibraries().then(() => {
 
 const moduleReducers = (initData) => ({
   initData,
-  pgr:PGRReducers(initData)
+  pgr: PGRReducers(initData)
 });
 
 const initDigitUI = () => {
@@ -68,7 +68,7 @@ function App() {
         enabledModules={enabledModules}
         moduleReducers={moduleReducers}
         defaultLanding="employee"
-        allowedUserTypes={["employee","citizen"]}
+        allowedUserTypes={["employee", "citizen"]}
       />
     </Suspense>
   );

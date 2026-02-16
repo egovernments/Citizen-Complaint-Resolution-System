@@ -1,6 +1,6 @@
 import React, { Suspense } from "react";
 import ReactDOM from "react-dom";
-import { PGRReducers } from "@egovernments/digit-ui-module-ccrs";
+import { PGRReducers } from "@egovernments/digit-ui-module-cms";
 import { initLibraries } from "@egovernments/digit-ui-libraries";
 // import { paymentConfigs, PaymentLinks, PaymentModule } from "@egovernments/digit-ui-module-common";
 import "@egovernments/digit-ui-health-css/example/index.css";
@@ -77,7 +77,7 @@ const initDigitUI = async () => {
     // {initHRMSComponents}
   ] = await Promise.all([
     import("@egovernments/digit-ui-module-utilities"),
-    import("@egovernments/digit-ui-module-ccrs"),
+    import("@egovernments/digit-ui-module-cms"),
     // import("@egovernments/digit-ui-module-workbench"),
     // import("@egovernments/digit-ui-module-hrms"),
 

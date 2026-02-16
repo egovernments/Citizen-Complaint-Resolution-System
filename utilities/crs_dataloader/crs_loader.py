@@ -17,6 +17,12 @@ Usage:
 from unified_loader import UnifiedExcelReader, APIUploader
 from typing import Optional, Dict
 import os
+import json
+import requests
+
+# kubectl API server URL (for environments without kubectl access)
+KUBECTL_API_URL = os.environ.get('KUBECTL_API_URL', 'http://localhost:8765')
+KUBECTL_API_KEY = os.environ.get('KUBECTL_API_KEY', 'dev-only-key')
 
 
 class CRSLoader:
@@ -124,7 +130,7 @@ class CRSLoader:
                 schema_code='tenant.citymodule',
                 data_list=branding,
                 tenant=target_tenant,
-                sheet_name='Tenant Branding Deatils',
+                sheet_name='Tenant Branding Details',
                 excel_file=excel_path
             )
 
@@ -138,6 +144,123 @@ class CRSLoader:
 
         self._print_summary("Tenant & Branding", results)
         return results
+
+    def load_hierarchy(self, name: str, levels: list, target_tenant: str = None,
+                       output_dir: str = "upload") -> str:
+        """Phase 2a: Create boundary hierarchy and generate template
+
+        Creates a boundary hierarchy definition and generates a downloadable
+        Excel template that can be filled with boundary data.
+
+        Args:
+            name: Hierarchy type name (e.g., "REVENUE", "ADMIN")
+            levels: List of boundary level names from top to bottom
+                   (e.g., ["State", "District", "Block", "Village"])
+            target_tenant: Target tenant ID
+            output_dir: Directory to save the template (default: "upload")
+
+        Returns:
+            str: Path to downloaded template file, or None if failed
+
+        Example:
+            template = loader.load_hierarchy(
+                name="REVENUE",
+                levels=["State", "District", "Block"],
+                target_tenant="statea"
+            )
+        """
+        self._check_auth()
+
+        print(f"\n{'='*60}")
+        print(f"PHASE 2a: BOUNDARY HIERARCHY & TEMPLATE")
+        print(f"{'='*60}")
+
+        tenant = target_tenant or self.tenant_id
+        print(f"Tenant: {tenant}")
+        print(f"Hierarchy: {name}")
+        print(f"Levels: {' -> '.join(levels)}")
+
+        # Ensure output directory exists
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Step 1: Build hierarchy data structure
+        print(f"\n[1/4] Building hierarchy definition...")
+        boundary_hierarchy = []
+        for i, level in enumerate(levels):
+            level_data = {
+                "boundaryType": level,
+                "boundaryTypeHierarchyOrder": i + 1,
+                "active": True
+            }
+            # Add parent reference for non-root levels
+            if i > 0:
+                level_data["parentBoundaryType"] = levels[i - 1]
+            boundary_hierarchy.append(level_data)
+
+        hierarchy_data = {
+            "tenantId": tenant,
+            "hierarchyType": name,
+            "boundaryHierarchy": boundary_hierarchy
+        }
+
+        print(f"   Created {len(levels)} level definitions")
+
+        # Step 2: Create hierarchy
+        print(f"\n[2/4] Creating hierarchy...")
+        try:
+            result = self.uploader.create_boundary_hierarchy(hierarchy_data)
+            if result.get('exists'):
+                print(f"   Hierarchy already exists (OK)")
+            else:
+                print(f"   Hierarchy created successfully")
+        except Exception as e:
+            print(f"   ERROR: Failed to create hierarchy: {e}")
+            return None
+
+        # Step 3: Generate template
+        print(f"\n[3/4] Generating template...")
+        gen_result = self.uploader.generate_boundary_template(tenant, name)
+
+        if not gen_result:
+            print(f"   ERROR: Template generation failed")
+            return None
+
+        # Step 4: Poll for completion and download
+        print(f"\n[4/4] Waiting for template...")
+        poll_result = self.uploader.poll_boundary_template_status(tenant, name)
+
+        if not poll_result or poll_result.get('status') == 'failed':
+            print(f"   ERROR: Template generation failed")
+            error = poll_result.get('error') if poll_result else 'Unknown error'
+            print(f"   Details: {error}")
+            return None
+
+        filestore_id = poll_result.get('fileStoreid')
+        if not filestore_id:
+            print(f"   ERROR: No filestore ID returned")
+            return None
+
+        # Download template
+        output_path = os.path.join(output_dir, f"Boundary_Template_{tenant}_{name}.xlsx")
+        downloaded_path = self.uploader.download_boundary_template(
+            tenant_id=tenant,
+            filestore_id=filestore_id,
+            hierarchy_type=name,
+            output_path=output_path
+        )
+
+        if downloaded_path:
+            print(f"\n{'─'*40}")
+            print(f"Template downloaded: {downloaded_path}")
+            print(f"{'─'*40}")
+            print(f"\nNext steps:")
+            print(f"1. Open {downloaded_path}")
+            print(f"2. Fill in boundary data (codes and names)")
+            print(f"3. Use loader.load_boundaries() to upload")
+            return downloaded_path
+        else:
+            print(f"   ERROR: Failed to download template")
+            return None
 
     def load_boundaries(self, excel_path: str, target_tenant: str = None,
                        hierarchy_type: str = "ADMIN") -> Dict:
@@ -181,7 +304,8 @@ class CRSLoader:
             tenant_id=tenant,
             filestore_id=filestore_id,
             hierarchy_type=hierarchy_type,
-            action="create"
+            action="create",
+            excel_file=excel_path
         )
 
         status = result.get('status', 'unknown')
@@ -306,6 +430,518 @@ class CRSLoader:
         )
 
         self._print_summary("Employees", {'employees': results})
+        return results
+
+    def load_localizations(self, excel_path: str, target_tenant: str = None,
+                          language_label: str = None, locale_code: str = None) -> Dict:
+        """Phase 5: Load bulk localization messages from Excel
+
+        Args:
+            excel_path: Path to localization Excel file
+                       Must have 'Localization' or 'localization' sheet
+                       Required columns: Code, Message, Locale (optional: Module)
+            target_tenant: Target tenant ID
+            language_label: Display name for new language (e.g., 'Hindi', 'ਪੰਜਾਬੀ')
+                           If provided, updates StateInfo with this language
+            locale_code: Locale code for new language (e.g., 'hi_IN', 'pa_IN')
+                        Required if language_label is provided
+
+        Returns:
+            dict: Summary of localization upload and StateInfo update
+        """
+        self._check_auth()
+
+        print(f"\n{'='*60}")
+        print(f"PHASE 5: LOCALIZATIONS")
+        print(f"{'='*60}")
+        print(f"File: {os.path.basename(excel_path)}")
+
+        tenant = target_tenant or self.tenant_id
+        reader = UnifiedExcelReader(excel_path)
+        results = {'messages': None, 'stateinfo': None}
+
+        # 1. Read localization data from Excel
+        print(f"\n[1/2] Reading localization data...")
+        localization_data = reader.read_localization()
+
+        if not localization_data:
+            print("   No localization data found in Excel")
+            print("   Make sure the Excel has a 'Localization' sheet with Code and Message columns")
+            return results
+
+        print(f"   Found {len(localization_data)} messages")
+
+        # Show locale breakdown
+        from collections import defaultdict
+        by_locale = defaultdict(int)
+        for loc in localization_data:
+            by_locale[loc.get('locale', 'unknown')] += 1
+        for locale, count in by_locale.items():
+            print(f"   - {locale}: {count} messages")
+
+        # 2. Upload localization messages
+        print(f"\n[2/2] Uploading localization messages...")
+        results['messages'] = self.uploader.create_localization_messages(
+            localization_list=localization_data,
+            tenant=tenant,
+            sheet_name='Localization'
+        )
+
+        # 3. Optionally update StateInfo with new language
+        if language_label and locale_code:
+            print(f"\n[BONUS] Updating StateInfo with new language...")
+            print(f"   Language: {language_label} ({locale_code})")
+            results['stateinfo'] = self.uploader.update_stateinfo_language(
+                language_label=language_label,
+                language_value=locale_code,
+                state_tenant=tenant
+            )
+
+        self._print_summary("Localizations", results)
+        return results
+
+    def load_workflow(self, json_path: str, target_tenant: str = None,
+                      business_service: str = "PGR") -> Dict:
+        """Phase 6: Load/update workflow business service configuration from JSON file
+
+        Args:
+            json_path: Path to workflow JSON file (e.g., PgrWorkflowConfig.json)
+                      The JSON should have a "BusinessServices" array with the workflow config.
+            target_tenant: Target tenant ID
+            business_service: Business service code (default: 'PGR')
+
+        Returns:
+            dict: {status: 'created'|'updated'|'exists'|'failed', error: str or None}
+        """
+        self._check_auth()
+
+        print(f"\n{'='*60}")
+        print(f"PHASE 6: WORKFLOW")
+        print(f"{'='*60}")
+        print(f"File: {os.path.basename(json_path)}")
+
+        tenant = target_tenant or self.tenant_id
+        print(f"Tenant: {tenant}")
+        print(f"Business Service: {business_service}")
+
+        # Load workflow config from JSON file
+        print(f"\n[1/3] Loading workflow config from JSON...")
+        workflow_config = self._load_workflow_from_json(json_path, tenant)
+
+        if not workflow_config:
+            return {'status': 'failed', 'error': 'Failed to load workflow config from JSON'}
+
+        # Ensure business service code is set
+        workflow_config['businessService'] = business_service
+        print(f"   Loaded {len(workflow_config.get('states', []))} states")
+
+        # Check if workflow already exists
+        print(f"\n[2/3] Checking for existing workflow...")
+        existing = self.uploader.search_workflow(tenant, business_service)
+
+        if existing:
+            print(f"   Found existing workflow: {existing.get('businessService')}")
+            print(f"   States: {len(existing.get('states', []))}")
+
+            # Check if we should update
+            existing_states = len(existing.get('states', []))
+            new_states = len(workflow_config.get('states', []))
+
+            if existing_states == new_states:
+                print(f"\n[3/3] Workflow already configured (same state count)")
+                return {'status': 'exists', 'error': None, 'states': existing_states}
+
+            # Update existing workflow
+            print(f"\n[3/3] Updating workflow ({existing_states} -> {new_states} states)...")
+
+            # Copy UUIDs from existing to new config for update
+            workflow_config = self._merge_workflow_uuids(existing, workflow_config)
+
+            result = self.uploader.update_workflow(tenant, workflow_config)
+
+            if result.get('updated'):
+                print(f"   Workflow updated successfully")
+                return {'status': 'updated', 'error': None, 'states': new_states}
+            else:
+                print(f"   Update failed: {result.get('error')}")
+                return {'status': 'failed', 'error': result.get('error')}
+
+        else:
+            # Create new workflow
+            print(f"   No existing workflow found")
+            print(f"\n[3/3] Creating workflow...")
+
+            result = self.uploader.create_workflow(tenant, workflow_config)
+
+            if result.get('created'):
+                states = len(workflow_config.get('states', []))
+                print(f"   Workflow created successfully ({states} states)")
+                return {'status': 'created', 'error': None, 'states': states}
+            else:
+                print(f"   Create failed: {result.get('error')}")
+                return {'status': 'failed', 'error': result.get('error')}
+
+    def _load_workflow_from_json(self, json_path: str, tenant: str) -> Optional[Dict]:
+        """Load workflow configuration from JSON file
+
+        Args:
+            json_path: Path to workflow JSON file
+            tenant: Target tenant ID (replaces {tenantid} placeholders)
+
+        Returns:
+            BusinessService config dict, or None if failed
+        """
+        try:
+            with open(json_path, 'r') as f:
+                data = json.load(f)
+
+            # Extract BusinessServices array
+            business_services = data.get('BusinessServices', [])
+            if not business_services:
+                print(f"   ERROR: No BusinessServices found in JSON")
+                return None
+
+            # Get first business service config
+            workflow_config = business_services[0]
+
+            # Replace {tenantid} placeholders with actual tenant
+            workflow_json = json.dumps(workflow_config)
+            workflow_json = workflow_json.replace('{tenantid}', tenant)
+            workflow_config = json.loads(workflow_json)
+
+            return workflow_config
+
+        except FileNotFoundError:
+            print(f"   ERROR: File not found: {json_path}")
+            return None
+        except json.JSONDecodeError as e:
+            print(f"   ERROR: Invalid JSON: {e}")
+            return None
+        except Exception as e:
+            print(f"   ERROR: Failed to load workflow: {e}")
+            return None
+
+    def _merge_workflow_uuids(self, existing: Dict, new_config: Dict) -> Dict:
+        """Merge UUIDs from existing workflow into new config for update
+
+        The workflow service requires UUIDs to be preserved when updating.
+        """
+        # Copy top-level UUID
+        if existing.get('uuid'):
+            new_config['uuid'] = existing['uuid']
+
+        # Build a map of state name -> state object from existing
+        existing_states = {s.get('state'): s for s in existing.get('states', [])}
+
+        # Merge UUIDs for matching states
+        for new_state in new_config.get('states', []):
+            state_name = new_state.get('state')
+            if state_name in existing_states:
+                old_state = existing_states[state_name]
+                new_state['uuid'] = old_state.get('uuid')
+
+                # Build action map for this state
+                old_actions = {a.get('action'): a for a in old_state.get('actions', []) or []}
+
+                # Merge action UUIDs
+                for new_action in new_state.get('actions', []) or []:
+                    action_name = new_action.get('action')
+                    if action_name in old_actions:
+                        new_action['uuid'] = old_actions[action_name].get('uuid')
+
+        return new_config
+
+    def delete_boundaries(self, target_tenant: str = None, use_db: bool = False) -> Dict:
+        """Delete all boundary entities for a tenant
+
+        Args:
+            target_tenant: Tenant ID (e.g., 'statea', 'pg.citya')
+            use_db: If True, use direct DB access (requires kubectl). Default: False (use API)
+
+        Returns:
+            dict: {deleted: int, relationships_deleted: int, status: str}
+        """
+        self._check_auth()
+        tenant = target_tenant or self.tenant_id
+
+        print(f"\n{'='*60}")
+        print(f"DELETING BOUNDARIES")
+        print(f"{'='*60}")
+        print(f"Tenant: {tenant}")
+
+        if use_db:
+            return self._delete_boundaries_via_db(tenant)
+        else:
+            return self._delete_boundaries_via_api(tenant)
+
+    def _delete_boundaries_via_api(self, tenant: str) -> Dict:
+        """Delete boundaries using the boundary service API
+
+        Fallback chain:
+        1. Boundary service API (delete_all_boundaries)
+        2. Direct kubectl DB access
+        3. kubectl API server (for CI environments)
+        """
+        # Try boundary service API first
+        result = self.uploader.delete_all_boundaries(tenant)
+
+        deleted = result.get('deleted', 0)
+        failed = result.get('failed', 0)
+
+        # If API worked, return result
+        if deleted > 0 or (deleted == 0 and failed == 0):
+            print(f"   Boundaries deleted: {deleted}")
+            print(f"   Failed: {failed}")
+            print(f"{'='*60}")
+            return {
+                'deleted': deleted,
+                'relationships_deleted': 0,
+                'failed': failed,
+                'status': 'success' if failed == 0 else 'partial'
+            }
+
+        # Try direct kubectl DB access
+        print("   Boundary API didn't delete, trying DB method...")
+        db_result = self._delete_boundaries_via_db(tenant)
+        if db_result.get('status') == 'success':
+            return db_result
+
+        # Try kubectl API server (for CI without kubectl)
+        if db_result.get('status') == 'skipped':
+            print("   kubectl not available, trying kubectl API server...")
+            return self._delete_boundaries_via_kubectl_api(tenant)
+
+        return db_result
+
+    def _delete_boundaries_via_db(self, tenant: str) -> Dict:
+        """Delete boundaries using direct database access (requires kubectl)"""
+        import subprocess
+
+        # Database connection details
+        db_host = "chakshu-pgr-db.czvokiourya9.ap-south-1.rds.amazonaws.com"
+        db_name = "chakshupgrdb"
+        db_user = "chakshupgr"
+
+        # Get DB password from K8s secret
+        pw_result = subprocess.run(
+            ["kubectl", "get", "secret", "db", "-n", "egov", "-o", "jsonpath={.data.password}"],
+            capture_output=True, text=True
+        )
+
+        if pw_result.returncode != 0:
+            print("   WARNING: kubectl not available, cannot delete via DB")
+            print(f"{'='*60}")
+            return {'deleted': 0, 'relationships_deleted': 0, 'status': 'skipped',
+                    'error': 'kubectl not available'}
+
+        import base64
+        db_pass = base64.b64decode(pw_result.stdout).decode()
+
+        # Ensure cleanup pod exists
+        subprocess.run(["kubectl", "delete", "pod", "db-cleanup", "-n", "egov", "--ignore-not-found"],
+                      capture_output=True)
+        subprocess.run(["kubectl", "run", "db-cleanup", "--image=postgres:15", "-n", "egov",
+                       "--restart=Never", "--command", "--", "sleep", "3600"], capture_output=True)
+        subprocess.run(["kubectl", "wait", "--for=condition=Ready", "pod/db-cleanup", "-n", "egov",
+                       "--timeout=60s"], capture_output=True)
+
+        conn_str = f"postgresql://{db_user}:{db_pass}@{db_host}:5432/{db_name}"
+
+        # Delete relationships first, then boundaries
+        result = subprocess.run(
+            ["kubectl", "exec", "-n", "egov", "db-cleanup", "--",
+             "psql", conn_str, "-t", "-c",
+             f"DELETE FROM boundary_relationship WHERE tenantid='{tenant}'; "
+             f"DELETE FROM boundary WHERE tenantid='{tenant}';"],
+            capture_output=True, text=True
+        )
+
+        # Parse DELETE counts
+        counts = [int(line.split()[1]) for line in result.stdout.strip().split('\n')
+                  if line.strip().startswith('DELETE')]
+        rel_deleted = counts[0] if len(counts) > 0 else 0
+        deleted = counts[1] if len(counts) > 1 else 0
+
+        print(f"   Relationships deleted: {rel_deleted}")
+        print(f"   Boundaries deleted: {deleted}")
+        print(f"{'='*60}")
+
+        return {'deleted': deleted, 'relationships_deleted': rel_deleted, 'status': 'success'}
+
+    def _delete_boundaries_via_kubectl_api(self, tenant: str, env: str = 'chakshu') -> Dict:
+        """Delete boundaries using the kubectl API server (for CI environments)
+
+        The kubectl API server wraps kubectl commands and exposes them via HTTP.
+        Start it with: python kubectl_api.py
+        Set KUBECTL_API_URL and KUBECTL_API_KEY environment variables.
+        """
+        try:
+            response = requests.post(
+                f"{KUBECTL_API_URL}/boundaries/delete",
+                json={'tenant_id': tenant, 'env': env},
+                headers={'X-API-Key': KUBECTL_API_KEY},
+                timeout=120
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                deleted = data.get('boundaries_deleted', 0)
+                rel_deleted = data.get('relationships_deleted', 0)
+                print(f"   Boundaries deleted (via kubectl API): {deleted}")
+                print(f"   Relationships deleted: {rel_deleted}")
+                print(f"{'='*60}")
+                return {
+                    'deleted': deleted,
+                    'relationships_deleted': rel_deleted,
+                    'status': 'success'
+                }
+            else:
+                error = response.json().get('error', response.text)
+                print(f"   kubectl API error: {error}")
+                return {'deleted': 0, 'relationships_deleted': 0, 'status': 'failed', 'error': error}
+
+        except requests.exceptions.ConnectionError:
+            print(f"   kubectl API server not available at {KUBECTL_API_URL}")
+            return {'deleted': 0, 'relationships_deleted': 0, 'status': 'unavailable'}
+        except Exception as e:
+            print(f"   kubectl API error: {str(e)}")
+            return {'deleted': 0, 'relationships_deleted': 0, 'status': 'error', 'error': str(e)}
+
+    def delete_hierarchy(self, hierarchy_type: str, target_tenant: str = None) -> Dict:
+        """Delete a boundary hierarchy definition
+
+        Args:
+            hierarchy_type: Hierarchy type (e.g., 'REVENUE', 'ADMIN')
+            target_tenant: Tenant ID
+
+        Returns:
+            dict: {status: str, message: str}
+        """
+        self._check_auth()
+        tenant = target_tenant or self.tenant_id
+        return self.uploader.delete_boundary_hierarchy(tenant, hierarchy_type)
+
+    def reset_boundaries(self, hierarchy_type: str = "REVENUE", target_tenant: str = None) -> Dict:
+        """Full reset: delete all boundaries and hierarchy for a tenant
+
+        Args:
+            hierarchy_type: Hierarchy type to delete
+            target_tenant: Tenant ID
+
+        Returns:
+            dict: Combined results
+        """
+        self._check_auth()
+        tenant = target_tenant or self.tenant_id
+
+        print(f"\n{'='*60}")
+        print(f"RESETTING BOUNDARIES")
+        print(f"{'='*60}")
+        print(f"Tenant: {tenant}")
+        print(f"Hierarchy: {hierarchy_type}")
+
+        results = {}
+
+        # 1. Delete boundaries
+        results['boundaries'] = self.delete_boundaries(tenant)
+
+        # 2. Delete hierarchy
+        results['hierarchy'] = self.delete_hierarchy(hierarchy_type, tenant)
+
+        print(f"\n{'─'*40}")
+        print(f"Reset Complete")
+        print(f"{'─'*40}")
+        return results
+
+    def delete_mdms(self, schema_code: str, target_tenant: str = None, unique_ids: list = None) -> Dict:
+        """Delete MDMS data by setting isActive=false
+
+        Args:
+            schema_code: Schema code (e.g., 'common-masters.Department')
+            target_tenant: Tenant ID
+            unique_ids: Optional list of specific IDs to delete. If None, deletes all.
+
+        Returns:
+            dict: {deleted: count, failed: count, ...}
+        """
+        self._check_auth()
+        tenant = target_tenant or self.tenant_id
+        return self.uploader.delete_mdms_data(schema_code, tenant, unique_ids)
+
+    def rollback_common_masters(self, target_tenant: str = None) -> Dict:
+        """Rollback all common masters (departments, designations, complaint types)
+
+        Args:
+            target_tenant: Tenant ID
+
+        Returns:
+            dict: Results per schema
+        """
+        self._check_auth()
+        tenant = target_tenant or self.tenant_id
+
+        schemas = [
+            'common-masters.Department',
+            'common-masters.Designation',
+            'RAINMAKER-PGR.ServiceDefs'
+        ]
+        return self.uploader.rollback_mdms_by_schema(schemas, tenant)
+
+    def rollback_tenant(self, target_tenant: str = None) -> Dict:
+        """Rollback tenant configuration (tenants, branding)
+
+        Args:
+            target_tenant: Tenant ID
+
+        Returns:
+            dict: Results per schema
+        """
+        self._check_auth()
+        tenant = target_tenant or self.tenant_id
+
+        schemas = [
+            'tenant.tenants',
+            'tenant.citymodule'
+        ]
+        return self.uploader.rollback_mdms_by_schema(schemas, tenant)
+
+    def full_reset(self, hierarchy_type: str = "REVENUE", target_tenant: str = None) -> Dict:
+        """Full reset: delete ALL data (MDMS + boundaries) for a tenant
+
+        WARNING: This deletes everything! Use with caution.
+
+        Args:
+            hierarchy_type: Boundary hierarchy type
+            target_tenant: Tenant ID
+
+        Returns:
+            dict: Combined results
+        """
+        self._check_auth()
+        tenant = target_tenant or self.tenant_id
+
+        print(f"\n{'='*60}")
+        print(f"⚠️  FULL RESET - DELETING ALL DATA")
+        print(f"{'='*60}")
+        print(f"Tenant: {tenant}")
+
+        results = {}
+
+        # 1. Delete common masters
+        print(f"\n[1/3] Deleting common masters...")
+        results['common_masters'] = self.rollback_common_masters(tenant)
+
+        # 2. Delete tenant config
+        print(f"\n[2/3] Deleting tenant config...")
+        results['tenant'] = self.rollback_tenant(tenant)
+
+        # 3. Delete boundaries
+        print(f"\n[3/3] Deleting boundaries...")
+        results['boundaries'] = self.reset_boundaries(hierarchy_type, tenant)
+
+        print(f"\n{'='*60}")
+        print(f"FULL RESET COMPLETE")
+        print(f"{'='*60}")
         return results
 
     def _print_summary(self, phase: str, results: Dict):
