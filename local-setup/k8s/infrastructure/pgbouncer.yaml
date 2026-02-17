@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pgbouncer
+  namespace: digit
+  labels:
+    app: pgbouncer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pgbouncer
+  template:
+    metadata:
+      labels:
+        app: pgbouncer
+    spec:
+      containers:
+        - name: pgbouncer
+          image: localhost:5000/edoburu/pgbouncer:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+          env:
+            - name: DB_HOST
+              value: postgres-db
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_USER
+              value: egov
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: digit-db-credentials
+                  key: POSTGRES_PASSWORD
+            - name: DB_NAME
+              value: egov
+            - name: POOL_MODE
+              value: transaction
+            - name: MAX_CLIENT_CONN
+              value: "500"
+            - name: DEFAULT_POOL_SIZE
+              value: "20"
+            - name: MIN_POOL_SIZE
+              value: "5"
+            - name: RESERVE_POOL_SIZE
+              value: "5"
+            - name: AUTH_TYPE
+              value: scram-sha-256
+          resources:
+            limits:
+              memory: 128Mi
+              cpu: "250m"
+            requests:
+              memory: 64Mi
+              cpu: "100m"
+          readinessProbe:
+            tcpSocket:
+              port: 5432
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 5432
+            initialDelaySeconds: 15
+            periodSeconds: 30
+---
+# Named "postgres" so all services transparently connect to pgbouncer
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: digit
+spec:
+  selector:
+    app: pgbouncer
+  ports:
+    - port: 5432
+      targetPort: 5432

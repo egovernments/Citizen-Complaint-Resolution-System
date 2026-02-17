@@ -1,0 +1,69 @@
+{
+  "name": "DIGIT 2.9 LTS Core Storm",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "dockerDashComposeVersion": "v2"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "hostRequirements": {
+    "cpus": 8,
+    "memory": "32gb",
+    "storage": "64gb"
+  },
+  "forwardPorts": [
+    18080,
+    18000,
+    18888,
+    18889,
+    15432,
+    19000,
+    19001
+  ],
+  "portsAttributes": {
+    "18080": {
+      "label": "DIGIT UI",
+      "onAutoForward": "notify"
+    },
+    "18000": {
+      "label": "Kong API Gateway",
+      "onAutoForward": "silent"
+    },
+    "18888": {
+      "label": "Jupyter Lab",
+      "onAutoForward": "notify"
+    },
+    "18889": {
+      "label": "Gatus Health Dashboard",
+      "onAutoForward": "silent"
+    },
+    "15432": {
+      "label": "PostgreSQL",
+      "onAutoForward": "silent"
+    },
+    "19000": {
+      "label": "MinIO API",
+      "onAutoForward": "silent"
+    },
+    "19001": {
+      "label": "MinIO Console",
+      "onAutoForward": "silent"
+    }
+  },
+  "postCreateCommand": "docker compose -f docker-compose.db-dump.yml pull",
+  "postStartCommand": "echo 'Run: docker compose -f docker-compose.db-dump.yml up -d'",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-azuretools.vscode-docker",
+        "ms-python.python",
+        "redhat.vscode-yaml"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+  "remoteUser": "vscode"
+}

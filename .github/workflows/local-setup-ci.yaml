@@ -1,0 +1,278 @@
+name: Local Setup CI
+
+on:
+  push:
+    branches: [main, master, feature/*]
+    paths:
+      - 'local-setup/**'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'local-setup/**'
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: local-setup
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free disk space
+        working-directory: .
+        run: |
+          # Remove unnecessary tools to free space
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          df -h
+
+      - name: Pull pre-built images
+        run: |
+          # Use pre-built images from Docker Hub instead of building (much faster)
+          docker pull egovio/digit-ui:master-e58961a
+          docker pull egovio/pgr-services:crs_dataseeder-084b7cc
+
+          # Tag them as expected by docker-compose
+          docker tag egovio/digit-ui:master-e58961a digit-ui-dev:latest
+          docker tag egovio/pgr-services:crs_dataseeder-084b7cc pgr-services-dev:latest
+
+      - name: Start services
+        run: |
+          docker compose up -d
+          echo "Waiting for services to start..."
+
+      - name: Wait for infrastructure
+        run: |
+          echo "Waiting for Postgres..."
+          timeout 120 bash -c 'until docker exec docker-postgres pg_isready -U egov; do sleep 2; done'
+
+          echo "Waiting for Redis..."
+          timeout 60 bash -c 'until docker exec digit-redis redis-cli ping; do sleep 2; done'
+
+          echo "Waiting for Redpanda..."
+          timeout 120 bash -c 'until docker exec digit-redpanda rpk cluster health; do sleep 2; done'
+
+          echo "Waiting for Elasticsearch..."
+          timeout 120 bash -c 'until curl -sf http://localhost:19200/_cluster/health; do sleep 2; done'
+
+      - name: Wait for all containers healthy
+        run: |
+          echo "Waiting for all containers to be healthy (up to 15 minutes)..."
+          # Skip digit-ui for now - it's not required for API tests
+          SKIP_CONTAINERS="digit-ui"
+          # Wait for all services to report healthy via Docker
+          timeout 900 bash -c '
+            while true; do
+              UNHEALTHY_NAMES=$(docker compose ps --format json | jq -r "select(.Health != \"healthy\" and .Health != \"\" and .State == \"running\") | .Name" | grep -v "digit-ui" || true)
+              UNHEALTHY=$(echo "$UNHEALTHY_NAMES" | grep -c . || true)
+              TOTAL=$(docker compose ps --format json | jq -r "select(.State == \"running\") | .Name" | grep -v "digit-ui" | wc -l)
+              echo "Healthy containers: $((TOTAL - UNHEALTHY))/$TOTAL (skipping digit-ui)"
+              if [ "$UNHEALTHY" -gt 0 ]; then
+                echo "  Waiting on: $UNHEALTHY_NAMES" | tr "\n" " "
+                echo ""
+              fi
+              if [ "$UNHEALTHY" -eq 0 ] && [ "$TOTAL" -gt 0 ]; then
+                echo "All required containers healthy!"
+                break
+              fi
+              sleep 10
+            done
+          '
+
+      - name: Wait for seeds to complete
+        run: |
+          echo "Waiting for seed containers to finish (timeout: 10 minutes)..."
+
+          # List of all seed containers
+          SEEDS="mdms-tenant-seed mdms-security-seed mdms-workflow-seed localization-seed pgr-workflow-seed db-seed"
+
+          # Overall timeout in seconds (10 minutes)
+          TIMEOUT=600
+          START_TIME=$(date +%s)
+
+          # Wait for each seed container to exit
+          for seed in $SEEDS; do
+            echo ""
+            echo ">>> Waiting for $seed..."
+            WAIT_COUNT=0
+            while true; do
+              # Check overall timeout
+              CURRENT_TIME=$(date +%s)
+              ELAPSED=$((CURRENT_TIME - START_TIME))
+              if [ $ELAPSED -gt $TIMEOUT ]; then
+                echo ""
+                echo "=== TIMEOUT: Seeds did not complete in ${TIMEOUT}s ==="
+                echo ""
+                echo "=== Container Status ==="
+                docker compose ps
+                echo ""
+                echo "=== Checking why seeds haven't started ==="
+                for s in $SEEDS; do
+                  CONTAINER_JSON=$(docker compose ps -a --format json 2>/dev/null | jq -s "map(select(.Service == \"$s\")) | .[0]" 2>/dev/null)
+                  if [ "$CONTAINER_JSON" = "null" ] || [ -z "$CONTAINER_JSON" ]; then
+                    echo "[$s] NOT STARTED - checking dependencies..."
+                    # Show the depends_on for this service
+                    docker compose config --services 2>/dev/null | grep -q "$s" && echo "  Service exists in compose"
+                  else
+                    STATUS=$(echo "$CONTAINER_JSON" | jq -r '.State // "unknown"')
+                    echo "[$s] Status: $STATUS"
+                  fi
+                done
+                echo ""
+                echo "=== Services with health issues ==="
+                docker compose ps --format json | jq -r 'select(.Health != "healthy" and .Health != "") | "\(.Name): \(.Health)"'
+                exit 1
+              fi
+
+              # Get container info - use -a to include EXITED containers!
+              CONTAINER_JSON=$(docker compose ps -a --format json 2>/dev/null | jq -s "map(select(.Service == \"$seed\")) | .[0]" 2>/dev/null)
+
+              if [ "$CONTAINER_JSON" = "null" ] || [ -z "$CONTAINER_JSON" ]; then
+                echo "    [$seed] Waiting to start... (${WAIT_COUNT}s, total: ${ELAPSED}s)"
+              else
+                STATUS=$(echo "$CONTAINER_JSON" | jq -r '.State // "unknown"')
+                HEALTH=$(echo "$CONTAINER_JSON" | jq -r '.Health // "none"')
+                EXIT_CODE=$(echo "$CONTAINER_JSON" | jq -r '.ExitCode // "0"')
+
+                if [ "$STATUS" = "exited" ]; then
+                  if [ "$EXIT_CODE" != "0" ]; then
+                    echo "    [$seed] FAILED with exit code $EXIT_CODE"
+                    docker compose logs "$seed"
+                    exit 1
+                  fi
+                  echo "    [$seed] COMPLETED successfully"
+                  break
+                elif [ "$STATUS" = "running" ]; then
+                  echo "    [$seed] Running... (${WAIT_COUNT}s, health: $HEALTH)"
+                else
+                  echo "    [$seed] Status: $STATUS (${WAIT_COUNT}s)"
+                fi
+              fi
+
+              sleep 5
+              WAIT_COUNT=$((WAIT_COUNT + 5))
+            done
+          done
+
+          echo ""
+          echo "=== All seeds completed successfully! ==="
+
+      - name: Verify seed data ingestion
+        run: |
+          echo "=== Verifying seed data was ingested ==="
+
+          # Check schema definitions in database
+          echo "1. Checking MDMS schema definitions..."
+          SCHEMA_COUNT=$(docker exec docker-postgres psql -U egov -d egov -t -c "SELECT COUNT(*) FROM eg_mdms_schema_definition WHERE isactive = true;")
+          SCHEMA_COUNT=$(echo $SCHEMA_COUNT | tr -d ' ')
+          echo "   Found $SCHEMA_COUNT active schema definitions"
+          if [ "$SCHEMA_COUNT" -lt 10 ]; then
+            echo "ERROR: Expected at least 10 schema definitions, found $SCHEMA_COUNT"
+            exit 1
+          fi
+
+          # Check MDMS data records
+          echo "2. Checking MDMS data records..."
+          DATA_COUNT=$(docker exec docker-postgres psql -U egov -d egov -t -c "SELECT COUNT(*) FROM eg_mdms_data WHERE isactive = true;")
+          DATA_COUNT=$(echo $DATA_COUNT | tr -d ' ')
+          echo "   Found $DATA_COUNT active MDMS data records"
+          if [ "$DATA_COUNT" -lt 100 ]; then
+            echo "ERROR: Expected at least 100 MDMS data records, found $DATA_COUNT"
+            exit 1
+          fi
+
+          # Check tenant data via API
+          echo "3. Checking tenant data via MDMS API..."
+          TENANT_RESPONSE=$(curl -sS -X POST "http://localhost:18094/mdms-v2/v1/_search" \
+            -H 'Content-Type: application/json' \
+            -d '{"RequestInfo":{"apiId":"digit","ver":"1.0","ts":0},"MdmsCriteria":{"tenantId":"pg","moduleDetails":[{"moduleName":"tenant","masterDetails":[{"name":"tenants"}]}]}}')
+          if echo "$TENANT_RESPONSE" | grep -q '"tenantId"'; then
+            echo "   Tenant data verified via API"
+          else
+            echo "ERROR: Tenant data not found via API"
+            echo "$TENANT_RESPONSE"
+            exit 1
+          fi
+
+          # Check localization data
+          echo "4. Checking localization data..."
+          LOC_COUNT=$(docker exec docker-postgres psql -U egov -d egov -t -c "SELECT COUNT(*) FROM message;")
+          LOC_COUNT=$(echo $LOC_COUNT | tr -d ' ')
+          echo "   Found $LOC_COUNT localization messages"
+          if [ "$LOC_COUNT" -lt 50 ]; then
+            echo "ERROR: Expected at least 50 localization messages, found $LOC_COUNT"
+            exit 1
+          fi
+
+          # Check idgen table exists (created by egov-idgen Flyway migrations)
+          echo "5. Checking IDGEN table exists..."
+          TABLE_EXISTS=$(docker exec docker-postgres psql -U egov -d egov -t -c "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'id_generator');")
+          TABLE_EXISTS=$(echo $TABLE_EXISTS | tr -d ' ')
+          if [ "$TABLE_EXISTS" = "t" ]; then
+            echo "   IDGEN table exists (managed by egov-idgen Flyway)"
+          else
+            echo "ERROR: id_generator table does not exist"
+            exit 1
+          fi
+
+          echo "=== All seed data verification passed! ==="
+
+      - name: Run health checks
+        run: |
+          bash scripts/health-check.sh http://localhost
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: local-setup/tests/package-lock.json
+
+      - name: Install test dependencies
+        run: |
+          cd tests
+          npm ci
+
+      - name: Run Node.js smoke tests
+        env:
+          BASE_URL: http://localhost
+          DB_HOST: localhost
+          DB_PORT: 15432
+          DB_PASSWORD: egov123
+        run: |
+          cd tests
+          npm test
+
+      - name: Test idgen service
+        run: |
+          echo "Testing idgen..."
+          RESPONSE=$(curl -s -X POST 'http://localhost:18088/egov-idgen/id/_generate' \
+            -H 'Content-Type: application/json' \
+            -d '{"RequestInfo":{"apiId":"digit","ver":"1.0"},"idRequests":[{"tenantId":"pg","idName":"pgr.servicerequestid"}]}')
+
+          if echo "$RESPONSE" | jq -e '.idResponses[0].id' > /dev/null 2>&1; then
+            ID=$(echo "$RESPONSE" | jq -r '.idResponses[0].id')
+            echo "idgen generated ID: $ID"
+          else
+            echo "idgen failed:"
+            echo "$RESPONSE" | jq .
+            exit 1
+          fi
+
+      - name: Show service logs on failure
+        if: failure()
+        run: |
+          echo "=== Docker Compose Logs ==="
+          docker compose logs --tail=100
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker compose down -v --remove-orphans
