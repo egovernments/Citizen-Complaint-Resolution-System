@@ -1,0 +1,287 @@
+openapi: 3.0.3
+info:
+  title: DIGIT Novu Adapter API
+  description: |
+    Test and dry-run APIs for Novu adapter inside novu-bridge.
+    These APIs are intended for validation and operational testing without Kafka.
+  version: 0.1.0
+servers:
+  - url: https://{host}/novu-bridge
+    variables:
+      host:
+        default: novu-bridge.example.org
+security:
+  - bearerAuth: []
+paths:
+  /novu-adapter/v1/dispatch/_validate:
+    post:
+      tags: [NovuAdapter]
+      summary: Validate event envelope and config resolution without sending
+      description: |
+        RBAC: Requires role `CONFIG_VIEWER` and operator role (for example `NOVU_ADAPTER_TESTER`).
+      operationId: validateNotificationEvent
+      requestBody:
+        required: true
+        content:
+          "*/*":
+            schema:
+              $ref: '#/components/schemas/DispatchDryRunRequest'
+      responses:
+        '200':
+          description: Validation result
+          content:
+            "*/*":
+              schema:
+                $ref: '#/components/schemas/DispatchDryRunResponse'
+        '400':
+          description: Invalid input
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+        '401':
+          description: Unauthorized
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+
+  /novu-adapter/v1/dispatch/_dry-run:
+    post:
+      tags: [NovuAdapter]
+      summary: Execute dry-run pipeline with optional Novu trigger
+      description: |
+        Validates envelope, preference, config resolve, and required vars.
+        If `send=true`, triggers Novu and returns provider response.
+        RBAC: Requires role `CONFIG_VIEWER` and operator role (for example `NOVU_ADAPTER_TESTER`).
+      operationId: dryRunNotificationDispatch
+      requestBody:
+        required: true
+        content:
+          "*/*":
+            schema:
+              $ref: '#/components/schemas/DispatchDryRunRequest'
+      responses:
+        '200':
+          description: Dry-run result
+          content:
+            "*/*":
+              schema:
+                $ref: '#/components/schemas/DispatchDryRunResponse'
+        '400':
+          description: Invalid input
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+        '401':
+          description: Unauthorized
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+
+  /novu-adapter/v1/dispatch/_test-trigger:
+    post:
+      tags: [NovuAdapter]
+      summary: Send direct trigger to Novu for provider troubleshooting
+      description: |
+        Sends a direct Novu trigger call using explicit `templateKey` and payload.
+        This bypasses Config Service resolve and preference checks.
+        RBAC: Requires privileged operator role (for example `NOVU_ADAPTER_TESTER`).
+      operationId: testNovuTrigger
+      requestBody:
+        required: true
+        content:
+          "*/*":
+            schema:
+              $ref: '#/components/schemas/TestTriggerRequest'
+      responses:
+        '200':
+          description: Trigger response
+          content:
+            "*/*":
+              schema:
+                $ref: '#/components/schemas/TestTriggerResponse'
+        '400':
+          description: Invalid input
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+        '401':
+          description: Unauthorized
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    NotificationEvent:
+      type: object
+      required:
+        - eventId
+        - eventTime
+        - producer
+        - module
+        - eventName
+        - tenantId
+        - channel
+        - locale
+        - recipient
+        - data
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        eventTime:
+          type: string
+          format: date-time
+        producer:
+          type: string
+          example: pgr-service
+        module:
+          type: string
+          example: Complaints
+        eventName:
+          type: string
+          example: PGR.WORKFLOW.ASSIGN
+        tenantId:
+          type: string
+          example: pb.amritsar
+        channel:
+          type: string
+          enum: [WHATSAPP]
+        locale:
+          type: string
+          example: en_IN
+        recipient:
+          type: object
+          required: [type, value]
+          properties:
+            type:
+              type: string
+              enum: [MOBILE]
+            value:
+              type: string
+              example: "+9198xxxx"
+            userId:
+              type: string
+              format: uuid
+        meta:
+          type: object
+          additionalProperties: true
+          example:
+            audience: CITIZEN
+            workflowState: PENDINGATLME
+        data:
+          type: object
+          additionalProperties: true
+
+    DispatchDryRunRequest:
+      type: object
+      required: [requestInfo, event]
+      properties:
+        requestInfo:
+          type: object
+          description: DIGIT RequestInfo payload.
+          additionalProperties: true
+        send:
+          type: boolean
+          default: false
+          description: If true, Novu trigger call is executed.
+        event:
+          $ref: '#/components/schemas/NotificationEvent'
+
+    DispatchDryRunResponse:
+      type: object
+      properties:
+        responseInfo:
+          type: object
+          additionalProperties: true
+        result:
+          type: object
+          properties:
+            valid:
+              type: boolean
+            preferenceAllowed:
+              type: boolean
+            resolvedTemplate:
+              type: object
+              nullable: true
+              properties:
+                templateKey:
+                  type: string
+                templateVersion:
+                  type: string
+                requiredVars:
+                  type: array
+                  items:
+                    type: string
+                optionalVars:
+                  type: array
+                  items:
+                    type: string
+            missingRequiredVars:
+              type: array
+              items:
+                type: string
+            novuTriggered:
+              type: boolean
+            novuStatusCode:
+              type: integer
+              nullable: true
+            novuResponse:
+              type: object
+              nullable: true
+              additionalProperties: true
+            diagnostics:
+              type: array
+              items:
+                type: string
+
+    TestTriggerRequest:
+      type: object
+      required: [requestInfo, templateKey, recipient, payload]
+      properties:
+        requestInfo:
+          type: object
+          additionalProperties: true
+        templateKey:
+          type: string
+          example: pgr_assign_citizen_whatsapp_v1
+        recipient:
+          type: object
+          required: [subscriberId]
+          properties:
+            subscriberId:
+              type: string
+              example: "+9198xxxx"
+        payload:
+          type: object
+          additionalProperties: true
+        transactionId:
+          type: string
+          description: Optional custom transaction identifier.
+
+    TestTriggerResponse:
+      type: object
+      properties:
+        responseInfo:
+          type: object
+          additionalProperties: true
+        status:
+          type: string
+          example: ACCEPTED
+        novuStatusCode:
+          type: integer
+        novuResponse:
+          type: object
+          additionalProperties: true
