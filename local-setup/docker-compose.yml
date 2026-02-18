@@ -110,7 +110,7 @@ services:
       resources:
         limits:
           memory: 300M
-          cpus: '0.5'
+          cpus: '1'
     networks:
       egov-network:
         aliases:
@@ -436,7 +436,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 320M
+          memory: 512M
           cpus: '1'
     networks:
       - egov-network

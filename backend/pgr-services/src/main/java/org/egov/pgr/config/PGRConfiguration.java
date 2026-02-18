@@ -237,4 +237,13 @@ public class PGRConfiguration {
     @Value("${pgr.kafka.update.inbox.topic}")
     private String inboxUpdateTopic;
 
+    @Value("${kafka.topics.complaints.domain.events:complaints.domain.events}")
+    private String complaintsDomainEventsTopic;
+
+    @Value("${complaints.domain.events.enabled:true}")
+    private Boolean isComplaintsDomainEventEnabled;
+
+    @Value("${complaints.domain.events.default.locale:en_IN}")
+    private String complaintsDomainEventDefaultLocale;
+
 }

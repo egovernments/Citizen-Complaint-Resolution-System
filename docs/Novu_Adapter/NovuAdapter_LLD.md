@@ -19,7 +19,7 @@ The adapter will:
 ### 2.1 In scope
 
 - Channel: `WHATSAPP` outbound only.
-- Producer: initially `pgr-service` but adapter remains module-agnostic.
+- Producer: initially `complaints-service` but adapter remains module-agnostic.
 - Config codes only:
   - `NOTIF_TEMPLATE_MAP`
   - `NOTIF_EVENT_SCHEMA`
@@ -60,30 +60,92 @@ The adapter will:
 
 ## 4. Event Contract (Input)
 
-Minimum expected envelope:
+Minimum expected envelope (generic complaints domain event):
 
 ```json
 {
   "eventId": "uuid",
+  "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
   "eventTime": "ISO-8601",
-  "producer": "pgr-service",
+  "producer": "complaints-service",
   "module": "Complaints",
-  "eventName": "PGR.WORKFLOW.ASSIGN",
+  "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+  "entityType": "COMPLAINT",
+  "entityId": "CMP-123",
   "tenantId": "pb.amritsar",
-  "channel": "WHATSAPP",
-  "locale": "en_IN",
-  "recipient": {
-    "type": "MOBILE",
-    "value": "+9198xxxx",
-    "userId": "uuid-optional"
+  "actor": {
+    "userId": "uuid",
+    "userType": "EMPLOYEE"
   },
-  "meta": {
-    "audience": "CITIZEN",
-    "workflowState": "PENDINGATLME"
+  "workflow": {
+    "action": "ASSIGN",
+    "fromState": "PENDINGFORASSIGNMENT",
+    "toState": "PENDINGATLME"
+  },
+  "stakeholders": [
+    {
+      "type": "CITIZEN",
+      "userId": "uuid-optional",
+      "mobile": "+9198xxxx"
+    }
+  ],
+  "context": {
+    "locale": "en_IN"
   },
   "data": {
-    "id": "PGR-123",
+    "id": "CMP-123",
     "complaint_type": "Garbage"
+  }
+}
+```
+
+### 4.1 Adapter-derived notification context
+
+`novu-bridge` derives notification-specific fields from the generic event:
+
+- `channel`: fixed to `WHATSAPP` in Phase-1 (adapter scope).
+- `workflowState`: from `workflow.toState`.
+- `audience`: from selected stakeholder type (`CITIZEN` or `EMPLOYEE`).
+- `recipient`: from stakeholder contact data (`mobile` preferred; fallback strategy can use user lookup if configured).
+- `locale`: from `context.locale`; fallback to tenant default.
+
+### 4.2 Sample: Complaint Created Event
+
+Use this payload when a complaint is created and needs notification dispatch:
+
+```json
+{
+  "eventId": "uuid",
+  "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+  "eventName": "COMPLAINTS.WORKFLOW.APPLY",
+  "eventTime": "ISO-8601",
+  "producer": "complaints-service",
+  "module": "Complaints",
+  "entityType": "COMPLAINT",
+  "entityId": "CMP-123",
+  "tenantId": "pb.amritsar",
+  "actor": {
+    "userId": "citizen-uuid",
+    "userType": "CITIZEN"
+  },
+  "workflow": {
+    "action": "APPLY",
+    "fromState": null,
+    "toState": "PENDINGFORASSIGNMENT"
+  },
+  "stakeholders": [
+    {
+      "type": "CITIZEN",
+      "userId": "citizen-uuid",
+      "mobile": "+9198xxxx"
+    }
+  ],
+  "context": {
+    "locale": "en_IN"
+  },
+  "data": {
+    "complaintNo": "CMP-123",
+    "complaintType": "Garbage"
   }
 }
 ```
@@ -92,19 +154,20 @@ Minimum expected envelope:
 
 1. Consume event from Kafka.
 2. Validate envelope using `NOTIF_EVENT_SCHEMA` constraints.
-3. Reject unsupported channel or recipient type.
-4. Check user preference for WhatsApp.
-5. Resolve `NOTIF_TEMPLATE_MAP` with selectors:
+3. Derive notification context (`channel`, `audience`, `workflowState`, `recipient`, `locale`) from the domain event.
+4. Reject if recipient/contact is unavailable for the selected audience.
+5. Check user preference for WhatsApp.
+6. Resolve `NOTIF_TEMPLATE_MAP` with selectors:
    - `eventName`, `audience`, `workflowState`, `channel`
-6. Validate all `requiredVars` are available in event `data`.
-7. Build Novu trigger payload:
+7. Validate all `requiredVars` are available in event `data`.
+8. Build Novu trigger payload:
    - `name` = `templateKey`
    - `to.subscriberId` = recipient mobile or stable user id strategy
    - `payload` = named values from event `data`
    - `transactionId` = `eventId`
-8. Call Novu trigger API.
-9. Persist dispatch result synchronously.
-10. On transient failure, retry with backoff; on max attempts, publish DLQ.
+9. Call Novu trigger API.
+10. Persist dispatch result synchronously.
+11. On transient failure, retry with backoff; on max attempts, publish DLQ.
 
 ## 6. Config Service Interaction
 
@@ -119,7 +182,7 @@ Resolve request shape:
     "tenantId": "pb.amritsar",
     "locale": "en_IN",
     "selectors": {
-      "eventName": "PGR.WORKFLOW.ASSIGN",
+      "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
       "audience": "CITIZEN",
       "workflowState": "PENDINGATLME",
       "channel": "WHATSAPP"
@@ -151,12 +214,12 @@ Expected config `value` fields:
 
 ```json
 {
-  "name": "pgr_assign_citizen_whatsapp_v1",
+  "name": "complaints_assign_citizen_whatsapp_v1",
   "to": {
     "subscriberId": "+9198xxxx"
   },
   "payload": {
-    "id": "PGR-123",
+    "id": "CMP-123",
     "complaint_type": "Garbage"
   },
   "transactionId": "6f6db286-f11a-49a8-b353-850e4e341930"
@@ -216,7 +279,7 @@ Allow developers/ops to validate end-to-end adapter behavior using direct HTTP c
 
 | Endpoint | Purpose |
 |---|---|
-| `POST /novu-adapter/v1/dispatch/_dry-run` | Validates envelope, preference, config resolve, required vars; optionally calls Novu |
+| `POST /novu-adapter/v1/dispatch/_dry-run` | Validates domain event, derives notification context, checks preference/config/vars; optionally calls Novu |
 | `POST /novu-adapter/v1/dispatch/_validate` | Validates envelope + resolve + vars only; does not call Novu |
 | `POST /novu-adapter/v1/dispatch/_test-trigger` | Sends direct trigger to Novu using explicit template key and payload |
 

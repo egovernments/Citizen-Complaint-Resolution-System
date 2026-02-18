@@ -16,7 +16,7 @@ paths:
   /novu-adapter/v1/dispatch/_validate:
     post:
       tags: [NovuAdapter]
-      summary: Validate event envelope and config resolution without sending
+      summary: Validate domain event and config resolution without sending
       description: |
         RBAC: Requires role `CONFIG_VIEWER` and operator role (for example `NOVU_ADAPTER_TESTER`).
       operationId: validateNotificationEvent
@@ -51,7 +51,8 @@ paths:
       tags: [NovuAdapter]
       summary: Execute dry-run pipeline with optional Novu trigger
       description: |
-        Validates envelope, preference, config resolve, and required vars.
+        Validates generic complaints domain event, derives notification context, then runs
+        preference check, config resolve, and required-vars validation.
         If `send=true`, triggers Novu and returns provider response.
         RBAC: Requires role `CONFIG_VIEWER` and operator role (for example `NOVU_ADAPTER_TESTER`).
       operationId: dryRunNotificationDispatch
@@ -124,63 +125,92 @@ components:
       bearerFormat: JWT
 
   schemas:
-    NotificationEvent:
+    ComplaintsDomainEvent:
       type: object
       required:
         - eventId
+        - eventType
         - eventTime
         - producer
         - module
         - eventName
+        - entityType
+        - entityId
         - tenantId
-        - channel
-        - locale
-        - recipient
+        - workflow
+        - stakeholders
         - data
       properties:
         eventId:
           type: string
           format: uuid
+        eventType:
+          type: string
+          example: COMPLAINTS_WORKFLOW_TRANSITIONED
         eventTime:
           type: string
           format: date-time
         producer:
           type: string
-          example: pgr-service
+          example: complaints-service
         module:
           type: string
           example: Complaints
         eventName:
           type: string
-          example: PGR.WORKFLOW.ASSIGN
+          example: COMPLAINTS.WORKFLOW.ASSIGN
+        entityType:
+          type: string
+          example: COMPLAINT
+        entityId:
+          type: string
+          example: CMP-123
         tenantId:
           type: string
           example: pb.amritsar
-        channel:
-          type: string
-          enum: [WHATSAPP]
-        locale:
-          type: string
-          example: en_IN
-        recipient:
+        actor:
           type: object
-          required: [type, value]
           properties:
-            type:
-              type: string
-              enum: [MOBILE]
-            value:
-              type: string
-              example: "+9198xxxx"
             userId:
               type: string
               format: uuid
-        meta:
+            userType:
+              type: string
+              example: EMPLOYEE
+        workflow:
           type: object
-          additionalProperties: true
-          example:
-            audience: CITIZEN
-            workflowState: PENDINGATLME
+          required: [action, toState]
+          properties:
+            action:
+              type: string
+              example: ASSIGN
+            fromState:
+              type: string
+              example: PENDINGFORASSIGNMENT
+            toState:
+              type: string
+              example: PENDINGATLME
+        stakeholders:
+          type: array
+          items:
+            type: object
+            required: [type]
+            properties:
+              type:
+                type: string
+                enum: [CITIZEN, EMPLOYEE]
+              userId:
+                type: string
+                format: uuid
+              mobile:
+                type: string
+                example: "+9198xxxx"
+        context:
+          type: object
+          properties:
+            locale:
+              type: string
+              example: en_IN
         data:
           type: object
           additionalProperties: true
@@ -198,7 +228,7 @@ components:
           default: false
           description: If true, Novu trigger call is executed.
         event:
-          $ref: '#/components/schemas/NotificationEvent'
+          $ref: '#/components/schemas/ComplaintsDomainEvent'
 
     DispatchDryRunResponse:
       type: object
@@ -213,6 +243,25 @@ components:
               type: boolean
             preferenceAllowed:
               type: boolean
+            derivedContext:
+              type: object
+              nullable: true
+              properties:
+                channel:
+                  type: string
+                  example: WHATSAPP
+                audience:
+                  type: string
+                  example: CITIZEN
+                workflowState:
+                  type: string
+                  example: PENDINGATLME
+                locale:
+                  type: string
+                  example: en_IN
+                recipientMobile:
+                  type: string
+                  example: "+9198xxxx"
             resolvedTemplate:
               type: object
               nullable: true
@@ -256,7 +305,7 @@ components:
           additionalProperties: true
         templateKey:
           type: string
-          example: pgr_assign_citizen_whatsapp_v1
+          example: complaints_assign_citizen_whatsapp_v1
         recipient:
           type: object
           required: [subscriberId]
