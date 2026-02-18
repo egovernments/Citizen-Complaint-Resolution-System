@@ -16,7 +16,120 @@
   <title>DIGIT</title>
   <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
 
+  <!-- globalConfigs is injected at Helm chart level (nginx) in production -->
   <!-- <script src="https://egov-dev-assets.s3.ap-south-1.amazonaws.com/globalConfigsWorkbenchDev.js"></script> -->
+
+  <!-- Override citizen header logo with DIGIT_FOOTER config -->
+  <script>
+    (function () {
+      var CUSTOM_LOGO_URL = null;
+      var imgObserver = null; // watches the img src attribute directly
+
+      // Get the logo URL - tries CITIZEN_HEADER_LOGO first, then DIGIT_FOOTER as fallback
+      function getLogoUrl() {
+        if (CUSTOM_LOGO_URL) return CUSTOM_LOGO_URL;
+        try {
+          var cfg = window.globalConfigs;
+          if (cfg) {
+            var url = cfg.getConfig("CITIZEN_HEADER_LOGO") || cfg.getConfig("DIGIT_FOOTER");
+            if (url) {
+              CUSTOM_LOGO_URL = url;
+            }
+          }
+        } catch (e) { }
+        return CUSTOM_LOGO_URL;
+      }
+
+      // Find the header img element
+      function findHeaderImg() {
+        return document.querySelector('.digit-header-action-fields img') ||
+          document.querySelector('.digit-topbar img') ||
+          document.querySelector('#topbar-logo') ||
+          document.querySelector('.city');
+      }
+
+      // Apply the logo override to a specific img element
+      // Also attach a per-element observer so React src resets are immediately undone
+      function applyLogoToImg(img, logoUrl) {
+        if (!img || !logoUrl) return;
+
+        // Set the src
+        if (img.getAttribute('src') !== logoUrl) {
+          img.setAttribute('src', logoUrl);
+        }
+
+        // If we're already watching this exact element, skip
+        if (img._logoOverrideActive) return;
+        img._logoOverrideActive = true;
+
+        // Watch this specific img for src attribute changes (React re-renders)
+        var attrObserver = new MutationObserver(function (mutations) {
+          mutations.forEach(function (mutation) {
+            if (mutation.attributeName === 'src') {
+              var current = img.getAttribute('src');
+              if (current !== logoUrl) {
+                img.setAttribute('src', logoUrl);
+              }
+            }
+          });
+        });
+        attrObserver.observe(img, { attributes: true, attributeFilter: ['src'] });
+      }
+
+      // Only override on citizen-facing routes
+      function isCitizenRoute() {
+        return window.location.pathname.indexOf('/citizen') !== -1;
+      }
+
+      // Main function: find img and apply override
+      function overrideLogo() {
+        if (!isCitizenRoute()) return; // skip employee / other pages
+
+        var logoUrl = getLogoUrl();
+        if (!logoUrl) return; // globalConfigs not ready yet
+
+        var img = findHeaderImg();
+        if (img) {
+          applyLogoToImg(img, logoUrl);
+        }
+      }
+
+      // Watch the whole DOM for the img to appear (React mounting)
+      function startDomObserver() {
+        var domObserver = new MutationObserver(function (mutations) {
+          for (var i = 0; i < mutations.length; i++) {
+            var m = mutations[i];
+            if (m.addedNodes.length || m.type === 'childList') {
+              overrideLogo();
+              break;
+            }
+          }
+        });
+        domObserver.observe(document.body, { childList: true, subtree: true });
+      }
+
+      // Bootstrap
+      function init() {
+        overrideLogo(); // try immediately
+        startDomObserver(); // keep watching for React renders
+
+        // Also poll briefly in case globalConfigs loads after this script
+        var pollCount = 0;
+        var poll = setInterval(function () {
+          overrideLogo();
+          pollCount++;
+          if (pollCount > 20) clearInterval(poll); // stop after 10 seconds
+        }, 500);
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+    })();
+  </script>
+
   <script>
     // DOM Override for Profile Page
     (function () {

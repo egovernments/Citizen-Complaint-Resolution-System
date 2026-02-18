@@ -19,6 +19,114 @@
   <!-- <link rel="stylesheet" href="https://unpkg.com/@egovernments/digit-ui-components-css@0.2.0/dist/index.css" /> -->
 
   <script src="%REACT_APP_GLOBAL%"></script>
+
+  <!-- Override citizen header logo with DIGIT_FOOTER config (citizen routes only) -->
+  <script>
+    (function () {
+      var CUSTOM_LOGO_URL = null;
+
+      // Get the logo URL - tries CITIZEN_HEADER_LOGO first, then DIGIT_FOOTER as fallback
+      function getLogoUrl() {
+        if (CUSTOM_LOGO_URL) return CUSTOM_LOGO_URL;
+        try {
+          var cfg = window.globalConfigs;
+          if (cfg) {
+            var url = cfg.getConfig("CITIZEN_HEADER_LOGO") || cfg.getConfig("DIGIT_FOOTER");
+            if (url) {
+              CUSTOM_LOGO_URL = url;
+            }
+          }
+        } catch (e) { }
+        return CUSTOM_LOGO_URL;
+      }
+
+      // Only override on citizen-facing routes
+      function isCitizenRoute() {
+        return window.location.pathname.indexOf('/citizen') !== -1;
+      }
+
+      // Find the header img element
+      function findHeaderImg() {
+        return document.querySelector('.digit-header-action-fields img') ||
+          document.querySelector('.digit-topbar img') ||
+          document.querySelector('#topbar-logo') ||
+          document.querySelector('.city');
+      }
+
+      // Apply the logo override to a specific img element
+      // Also attach a per-element observer so React src resets are immediately undone
+      function applyLogoToImg(img, logoUrl) {
+        if (!img || !logoUrl) return;
+
+        if (img.getAttribute('src') !== logoUrl) {
+          img.setAttribute('src', logoUrl);
+        }
+
+        if (img._logoOverrideActive) return;
+        img._logoOverrideActive = true;
+
+        // Watch this specific img for src attribute changes (React re-renders)
+        var attrObserver = new MutationObserver(function (mutations) {
+          mutations.forEach(function (mutation) {
+            if (mutation.attributeName === 'src') {
+              var current = img.getAttribute('src');
+              if (current !== logoUrl) {
+                img.setAttribute('src', logoUrl);
+              }
+            }
+          });
+        });
+        attrObserver.observe(img, { attributes: true, attributeFilter: ['src'] });
+      }
+
+      // Main function: find img and apply override
+      function overrideLogo() {
+        if (!isCitizenRoute()) return; // skip employee / other pages
+
+        var logoUrl = getLogoUrl();
+        if (!logoUrl) return;
+
+        var img = findHeaderImg();
+        if (img) {
+          applyLogoToImg(img, logoUrl);
+        }
+      }
+
+      // Watch the whole DOM for the img to appear (React mounting)
+      function startDomObserver() {
+        var domObserver = new MutationObserver(function (mutations) {
+          for (var i = 0; i < mutations.length; i++) {
+            if (mutations[i].addedNodes.length || mutations[i].type === 'childList') {
+              overrideLogo();
+              break;
+            }
+          }
+        });
+        domObserver.observe(document.body, { childList: true, subtree: true });
+      }
+
+      // Bootstrap
+      function init() {
+        overrideLogo();
+        startDomObserver();
+
+        // Poll briefly in case globalConfigs loads after this script
+        var pollCount = 0;
+        var poll = setInterval(function () {
+          overrideLogo();
+          pollCount++;
+          if (pollCount > 20) clearInterval(poll); // stop after 10 seconds
+        }, 500);
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+    })();
+  </script>
+
   <script>
     // DOM Override for Profile Page
     (function () {
