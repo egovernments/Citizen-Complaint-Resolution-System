@@ -1,0 +1,27 @@
+@startuml
+title Novu Configuration During DIGIT Setup
+
+actor "DevOps/Admin" as Admin
+participant "DIGIT Config Service" as Config
+participant "digit-novu-bridge" as Bridge
+participant "Novu" as Novu
+
+Admin -> Config: Create/update notification configs\n(templates, policies, bindings)
+Config --> Admin: Config versions + configSetId
+
+Admin -> Config: Activate config set\n(configSetId)
+Config --> Admin: Activation success
+
+Admin -> Novu: Create tenant project\n(projectName, environment)
+Novu --> Admin: Project API keys
+
+Admin -> Novu: Create workflows per eventType\n(PGR_CREATED, PGR_STATUS_CHANGED)
+Novu --> Admin: Workflow identifiers
+
+Admin -> Config: Store Novu project + workflow IDs\n(mapped to tenant/eventType)
+Config --> Admin: Mapping saved
+
+Bridge -> Config: Load active config mappings\n(on startup / refresh interval)
+Config --> Bridge: Active policy + Novu mapping
+
+@enduml

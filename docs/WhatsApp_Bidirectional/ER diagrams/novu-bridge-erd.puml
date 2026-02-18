@@ -1,0 +1,32 @@
+@startuml
+title digit-novu-bridge ERD (Optional Persistence)
+
+entity "notification_event" as notification_event {
+  *id : uuid
+  --
+  tenant_id : string
+  event_type : string
+  recipient_id : string
+  channel : string
+  transaction_id : string
+  payload : jsonb
+  status : string
+  created_time : long
+}
+
+
+
+entity "config_snapshot" as config_snapshot {
+  *id : uuid
+  --
+  event_id : uuid
+  config_set_id : string
+  policy_code : string
+  template_code : string
+  locale : string
+  created_time : long
+}
+
+notification_event ||--o{ config_snapshot : used_by
+
+@enduml

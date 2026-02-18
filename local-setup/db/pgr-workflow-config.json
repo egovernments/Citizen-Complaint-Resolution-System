@@ -1,0 +1,259 @@
+{
+  "RequestInfo": {
+    "apiId": "Rainmaker",
+    "action": "",
+    "did": 1,
+    "key": "",
+    "msgId": "20170310130900|en_IN",
+    "requesterId": "",
+    "ts": 1513579888683,
+    "ver": ".01",
+    "authToken": "",
+    "userInfo": {
+      "id": 1,
+      "userName": "SYSTEM",
+      "name": "SYSTEM",
+      "type": "SYSTEM",
+      "mobileNumber": "",
+      "emailId": "",
+      "roles": [
+        {
+          "id": 1,
+          "name": "Super User",
+          "code": "SUPERUSER",
+          "tenantId": "pg"
+        }
+      ],
+      "tenantId": "pg",
+      "uuid": "system-uuid"
+    }
+  },
+  "BusinessServices": [
+    {
+      "tenantId": "pg",
+      "businessService": "PGR",
+      "business": "pgr-services",
+      "businessServiceSla": 432000000,
+      "states": [
+        {
+          "tenantId": "pg",
+          "sla": null,
+          "state": null,
+          "applicationStatus": null,
+          "docUploadRequired": false,
+          "isStartState": true,
+          "isTerminateState": false,
+          "isStateUpdatable": true,
+          "actions": [
+            {
+              "tenantId": "pg",
+              "currentState": null,
+              "action": "APPLY",
+              "nextState": "PENDINGFORASSIGNMENT",
+              "roles": [
+                "CITIZEN",
+                "CSR",
+                "EMPLOYEE"
+              ],
+              "active": true
+            }
+          ]
+        },
+        {
+          "tenantId": "pg",
+          "sla": null,
+          "state": "PENDINGFORASSIGNMENT",
+          "applicationStatus": "PENDINGFORASSIGNMENT",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": false,
+          "isStateUpdatable": false,
+          "actions": [
+            {
+              "tenantId": "pg",
+              "currentState": "PENDINGFORASSIGNMENT",
+              "action": "ASSIGN",
+              "nextState": "PENDINGATLME",
+              "roles": [
+                "GRO",
+                "DGRO",
+                "EMPLOYEE"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "pg",
+              "currentState": "PENDINGFORASSIGNMENT",
+              "action": "REJECT",
+              "nextState": "REJECTED",
+              "roles": [
+                "GRO",
+                "DGRO",
+                "EMPLOYEE"
+              ],
+              "active": true
+            }
+          ]
+        },
+        {
+          "tenantId": "pg",
+          "sla": 300000,
+          "state": "PENDINGFORREASSIGNMENT",
+          "applicationStatus": "PENDINGFORREASSIGNMENT",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": false,
+          "isStateUpdatable": false,
+          "actions": [
+            {
+              "tenantId": "pg",
+              "currentState": "PENDINGFORREASSIGNMENT",
+              "action": "REJECT",
+              "nextState": "REJECTED",
+              "roles": [
+                "GRO",
+                "DGRO"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "pg",
+              "currentState": "PENDINGFORREASSIGNMENT",
+              "action": "ASSIGN",
+              "nextState": "PENDINGATLME",
+              "roles": [
+                "GRO",
+                "DGRO"
+              ],
+              "active": true
+            }
+          ]
+        },
+        {
+          "tenantId": "pg",
+          "sla": 300000,
+          "state": "PENDINGATLME",
+          "applicationStatus": "PENDINGATLME",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": false,
+          "isStateUpdatable": false,
+          "actions": [
+            {
+              "tenantId": "pg",
+              "currentState": "PENDINGATLME",
+              "action": "REASSIGN",
+              "nextState": "PENDINGFORREASSIGNMENT",
+              "roles": [
+                "PGR_LME",
+                "EMPLOYEE"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "pg",
+              "currentState": "PENDINGATLME",
+              "action": "RESOLVE",
+              "nextState": "RESOLVED",
+              "roles": [
+                "PGR_LME",
+                "EMPLOYEE"
+              ],
+              "active": true
+            }
+          ]
+        },
+        {
+          "tenantId": "pg",
+          "sla": 300000,
+          "state": "REJECTED",
+          "applicationStatus": "REJECTED",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": true,
+          "isStateUpdatable": false,
+          "actions": [
+            {
+              "tenantId": "pg",
+              "currentState": "REJECTED",
+              "action": "REOPEN",
+              "nextState": "PENDINGFORASSIGNMENT",
+              "roles": [
+                "CITIZEN",
+                "CSR",
+                "EMPLOYEE"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "pg",
+              "currentState": "REJECTED",
+              "action": "RATE",
+              "nextState": "CLOSEDAFTERREJECTION",
+              "roles": [
+                "CITIZEN"
+              ],
+              "active": true
+            }
+          ]
+        },
+        {
+          "tenantId": "pg",
+          "sla": 300000,
+          "state": "RESOLVED",
+          "applicationStatus": "RESOLVED",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": true,
+          "isStateUpdatable": false,
+          "actions": [
+            {
+              "tenantId": "pg",
+              "currentState": "RESOLVED",
+              "action": "RATE",
+              "nextState": "CLOSEDAFTERRESOLUTION",
+              "roles": [
+                "CITIZEN"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "pg",
+              "currentState": "RESOLVED",
+              "action": "REOPEN",
+              "nextState": "PENDINGFORASSIGNMENT",
+              "roles": [
+                "CITIZEN",
+                "CSR",
+                "EMPLOYEE"
+              ],
+              "active": true
+            }
+          ]
+        },
+        {
+          "tenantId": "pg",
+          "sla": null,
+          "state": "CLOSEDAFTERREJECTION",
+          "applicationStatus": "CLOSEDAFTERREJECTION",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": true,
+          "isStateUpdatable": false,
+          "actions": null
+        },
+        {
+          "tenantId": "pg",
+          "sla": null,
+          "state": "CLOSEDAFTERRESOLUTION",
+          "applicationStatus": "CLOSEDAFTERRESOLUTION",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": true,
+          "isStateUpdatable": false,
+          "actions": null
+        }
+      ]
+    }
+  ]
+}

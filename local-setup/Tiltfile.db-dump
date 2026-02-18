@@ -1,0 +1,107 @@
+# DIGIT Core Services - Tiltfile (db-dump mode)
+#
+# Simple Tiltfile for the db-dump based docker-compose.yml.
+# All services use pre-built images; no local builds or hot reload.
+#
+# Usage:
+#   cp Tiltfile.db-dump Tiltfile   # or: TILT_FILE=Tiltfile.db-dump tilt up
+#   tilt up
+
+allow_k8s_contexts(k8s_context())
+load('ext://uibutton', 'cmd_button', 'location')
+
+# ==================== Docker Compose ====================
+docker_compose('./docker-compose.yml')
+
+# ==================== Infrastructure ====================
+dc_resource('postgres-db', labels=['infrastructure'])
+dc_resource('pgbouncer', labels=['infrastructure'])
+dc_resource('redis', labels=['infrastructure'])
+dc_resource('redpanda', labels=['infrastructure'])
+dc_resource('minio', labels=['infrastructure'])
+dc_resource('minio-init', labels=['infrastructure'])
+
+# ==================== Core Services ====================
+dc_resource('mdms-backend', labels=['core-services'],
+    links=[link('http://localhost:18094/mdms-v2/health', 'Health')])
+
+dc_resource('egov-mdms-service', labels=['core-services'],
+    links=[link('http://localhost:18094/mdms-v2/health', 'Health')])
+
+dc_resource('egov-enc-service', labels=['core-services'],
+    links=[link('http://localhost:11234/egov-enc-service/actuator/health', 'Health')])
+
+dc_resource('egov-idgen', labels=['core-services'],
+    links=[link('http://localhost:18088/egov-idgen/health', 'Health')])
+
+dc_resource('egov-user', labels=['core-services'],
+    links=[link('http://localhost:18107/user/health', 'Health')])
+
+dc_resource('egov-workflow-v2', labels=['core-services'],
+    links=[link('http://localhost:18109/egov-workflow-v2/health', 'Health')])
+
+dc_resource('egov-localization', labels=['core-services'],
+    links=[link('http://localhost:18096/localization/actuator/health', 'Health')])
+
+dc_resource('boundary-service', labels=['core-services'],
+    links=[link('http://localhost:18081/boundary-service/actuator/health', 'Health')])
+
+dc_resource('egov-accesscontrol', labels=['core-services'],
+    links=[link('http://localhost:18090/access/health', 'Health')])
+
+dc_resource('egov-persister', labels=['core-services'],
+    links=[link('http://localhost:18091/common-persist/actuator/health', 'Health')])
+
+dc_resource('egov-filestore', labels=['core-services'],
+    links=[link('http://localhost:18084/filestore/health', 'Health')])
+
+dc_resource('egov-url-shortening', labels=['core-services'],
+    links=[link('http://localhost:18085/egov-url-shortening/actuator/health', 'Health')])
+
+dc_resource('egov-hrms', labels=['core-services'],
+    links=[link('http://localhost:18092/egov-hrms/actuator/health', 'Health')])
+
+dc_resource('egov-bndry-mgmnt', labels=['core-services'],
+    links=[link('http://localhost:18086', 'Service')])
+
+# ==================== PGR ====================
+dc_resource('pgr-services', labels=['pgr'],
+    links=[link('http://localhost:18083/pgr-services/health', 'Health')])
+
+# ==================== Frontend ====================
+dc_resource('digit-ui', labels=['frontend'],
+    links=[link('http://localhost:18000/digit-ui/', 'UI via Kong')])
+
+# ==================== Gateway ====================
+dc_resource('kong', labels=['gateway'],
+    links=[
+        link('http://localhost:18000', 'Proxy'),
+        link('http://localhost:18001', 'Admin API'),
+        link('http://localhost:18002', 'Manager GUI'),
+    ])
+
+# ==================== Tools ====================
+dc_resource('gatus', labels=['tools'],
+    links=[link('http://localhost:18889', 'Health Dashboard')])
+
+dc_resource('jupyter', labels=['tools'],
+    links=[link('http://localhost:18888/lab', 'Jupyter Lab')])
+
+# ==================== Buttons ====================
+cmd_button(
+    name='nuke-db',
+    argv=['sh', '-c', 'docker compose down -v && docker compose up -d postgres-db redis redpanda'],
+    location=location.NAV, icon_name='delete_forever', text='Nuke DB',
+)
+
+cmd_button(
+    name='health-check',
+    argv=['./scripts/health-check.sh'],
+    location=location.NAV, icon_name='favorite', text='Health Check',
+)
+
+cmd_button(
+    name='smoke-tests',
+    argv=['./scripts/smoke-tests.sh'],
+    location=location.NAV, icon_name='science', text='Smoke Tests',
+)

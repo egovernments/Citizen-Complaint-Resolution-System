@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: egov-persister
+  namespace: digit
+  labels:
+    app: egov-persister
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: egov-persister
+  template:
+    metadata:
+      labels:
+        app: egov-persister
+    spec:
+      containers:
+        - name: egov-persister
+          image: localhost:5000/egovio/egov-persister:v2.9.2-4a60f20
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8091
+          envFrom:
+            - configMapRef:
+                name: digit-common-env
+            - secretRef:
+                name: digit-db-credentials
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:otel:postgresql://postgres:5432/egov"
+            - name: SERVER_PORT
+              value: "8091"
+            - name: EGOV_PERSIST_YML_REPO_PATH
+              value: /persister-config/
+            - name: JAVA_TOOL_OPTIONS
+              value: "-Xms64m -Xmx192m"
+          resources:
+            limits:
+              memory: 256Mi
+              cpu: "250m"
+            requests:
+              memory: 128Mi
+              cpu: "100m"
+          readinessProbe:
+            httpGet:
+              path: /common-persist/actuator/health
+              port: 8091
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /common-persist/actuator/health
+              port: 8091
+            initialDelaySeconds: 0
+            periodSeconds: 30
+            timeoutSeconds: 10
+          startupProbe:
+            httpGet:
+              path: /common-persist/actuator/health
+              port: 8091
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 30
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: persister-config
+              mountPath: /persister-config
+      volumes:
+        - name: persister-config
+          configMap:
+            name: persister-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: egov-persister
+  namespace: digit
+spec:
+  selector:
+    app: egov-persister
+  ports:
+    - port: 8091
+      targetPort: 8091

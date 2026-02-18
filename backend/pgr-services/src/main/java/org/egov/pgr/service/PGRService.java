@@ -43,11 +43,14 @@ public class PGRService {
 
     private MDMSUtils mdmsUtils;
 
+    private ComplaintDomainEventService complaintDomainEventService;
+
 
     @Autowired
     public PGRService(EnrichmentService enrichmentService, UserService userService, WorkflowService workflowService,
                       ServiceRequestValidator serviceRequestValidator, ServiceRequestValidator validator, Producer producer,
-                      PGRConfiguration config, PGRRepository repository, MDMSUtils mdmsUtils) {
+                      PGRConfiguration config, PGRRepository repository, MDMSUtils mdmsUtils,
+                      ComplaintDomainEventService complaintDomainEventService) {
         this.enrichmentService = enrichmentService;
         this.userService = userService;
         this.workflowService = workflowService;
@@ -57,6 +60,7 @@ public class PGRService {
         this.config = config;
         this.repository = repository;
         this.mdmsUtils = mdmsUtils;
+        this.complaintDomainEventService = complaintDomainEventService;
     }
 
 
@@ -67,6 +71,7 @@ public class PGRService {
      */
     public ServiceRequest create(ServiceRequest request){
         String tenantId = request.getService().getTenantId();
+        String fromState = request.getService().getApplicationStatus();
         Object mdmsData = mdmsUtils.mDMSCall(request);
         validator.validateCreate(request, mdmsData);
         enrichmentService.enrichCreateRequest(request);
@@ -76,6 +81,7 @@ public class PGRService {
         Map<String, Object> additionalDetailMap = new HashMap<>();
         additionalDetailMap.put("department", getDepartmentFromMDMS(request, mdmsData));
         service.setAdditionalDetail(additionalDetailMap);
+        complaintDomainEventService.publishWorkflowTransitionEvent(request, fromState);
 
         producer.push(tenantId,config.getCreateTopic(),request);
         producer.push(tenantId,config.getInboxCreateTopic(),request);
@@ -134,10 +140,12 @@ public class PGRService {
      */
     public ServiceRequest update(ServiceRequest request){
         String tenantId = request.getService().getTenantId();
+        String fromState = request.getService().getApplicationStatus();
         Object mdmsData = mdmsUtils.mDMSCall(request);
         validator.validateUpdate(request, mdmsData);
         enrichmentService.enrichUpdateRequest(request);
         workflowService.updateWorkflowStatus(request);
+        complaintDomainEventService.publishWorkflowTransitionEvent(request, fromState);
         producer.push(tenantId,config.getUpdateTopic(),request);
         producer.push(tenantId,config.getInboxUpdateTopic(),request);
         return request;

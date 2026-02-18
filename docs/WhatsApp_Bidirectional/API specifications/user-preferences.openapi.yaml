@@ -1,0 +1,222 @@
+openapi: 3.0.3
+info:
+  title: DIGIT User Preferences Service API
+  description: Lightweight service for user consent and messaging preferences.
+  version: 0.1.0
+servers:
+  - url: https://{host}/user-preferences
+    variables:
+      host:
+        default: preferences.example.org
+security:
+  - bearerAuth: []
+paths:
+  /v1/_upsert:
+    post:
+      tags:
+        - UserPreferences
+      summary: Create or update a preference
+      operationId: upsertPreference
+      requestBody:
+        required: true
+        content:
+          "*/*":
+            schema:
+              $ref: "#/components/schemas/PreferenceRequest"
+      responses:
+        "200":
+          description: Preference upserted
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/PreferenceResponse"
+        "400":
+          description: Invalid input.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+        "401":
+          description: Unauthorized.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+  /v1/_search:
+    post:
+      tags:
+        - UserPreferences
+      summary: Search preferences
+      operationId: searchPreferences
+      requestBody:
+        required: true
+        content:
+          "*/*":
+            schema:
+              $ref: "#/components/schemas/PreferenceSearchRequest"
+      responses:
+        "200":
+          description: Preferences search results
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/PreferenceResponse"
+        "400":
+          description: Bad Request.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+        "401":
+          description: Unauthorized.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    PreferenceRequest:
+      type: object
+      description: Request wrapper containing metadata and a preference payload.
+      properties:
+        requestInfo:
+          $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/RequestInfo"
+        preference:
+          $ref: "#/components/schemas/Preference"
+    PreferenceResponse:
+      type: object
+      description: Response wrapper containing preferences and pagination.
+      properties:
+        responseInfo:
+          $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/ResponseInfo"
+        preferences:
+          type: array
+          description: List of matching preference records.
+          items:
+            $ref: "#/components/schemas/Preference"
+        pagination:
+          $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/Pagination"
+    PreferenceSearchRequest:
+      type: object
+      description: Request wrapper for search criteria and request metadata.
+      properties:
+        requestInfo:
+          $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/RequestInfo"
+        criteria:
+          $ref: "#/components/schemas/PreferenceCriteria"
+    PreferenceCriteria:
+      type: object
+      description: Search filters for preferences.
+      properties:
+        userId:
+          type: string
+          description: Unique identifier for the user.
+          minLength: 1
+          maxLength: 64
+        tenantId:
+          type: string
+          description: Tenant identifier for scoping preferences.
+          minLength: 2
+          maxLength: 64
+        preferenceCode:
+          type: string
+          description: Preference namespace/code, e.g. USER_NOTIFICATION_PREFERENCES.
+          minLength: 2
+          maxLength: 128
+        limit:
+          type: integer
+          description: Maximum number of records to return.
+          minimum: 0
+        offset:
+          type: integer
+          description: Number of records to skip before returning results.
+          minimum: 0
+    Preference:
+      type: object
+      description: Stored preference record keyed by preferenceCode.
+      required:
+        - userId
+        - preferenceCode
+        - payload
+      properties:
+        id:
+          type: string
+          description: Unique identifier of the preference record.
+          minLength: 1
+          maxLength: 64
+        userId:
+          type: string
+          description: Unique identifier for the user.
+          minLength: 1
+          maxLength: 64
+        tenantId:
+          type: string
+          description: Tenant identifier for tenant-scoped preferences.
+          minLength: 2
+          maxLength: 64
+        preferenceCode:
+          type: string
+          description: Preference namespace/code.
+          example: USER_NOTIFICATION_PREFERENCES
+          minLength: 2
+          maxLength: 128
+        payload:
+          type: object
+          description: JSON payload with preference values. Check out the PreferencePayloadSchema to be loaded in MDMS for verification.
+          additionalProperties: true
+        auditDetails:
+          $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/AuditDetails"
+    
+    PreferencePayloadSchema:
+      type: object
+      description: |
+        JSON schema for preference payload stored in MDMS v2.
+        Current schema supports default language and per-channel consent.
+      properties:
+        preferredLanguage:
+          type: string
+          description: Default locale for notifications.
+          example: en_IN
+          minLength: 2
+          maxLength: 16
+        consent:
+          type: object
+          description: Per-channel consent status and scope.
+          additionalProperties: false
+          properties:
+            WHATSAPP:
+              $ref: "#/components/schemas/ConsentPolicy"
+            SMS:
+              $ref: "#/components/schemas/ConsentPolicy"
+            EMAIL:
+              $ref: "#/components/schemas/ConsentPolicy"
+    
+    ConsentPolicy:
+      type: object
+      description: Consent settings for a specific channel.
+      properties:
+        status:
+          type: string
+          description: Consent status for the channel.
+          enum:
+            - GRANTED
+            - REVOKED
+          example: GRANTED
+          minLength: 6
+          maxLength: 7
+        scope:
+          type: string
+          description: Scope at which consent applies.
+          example: GLOBAL
+          minLength: 6
+          maxLength: 6
+        tenantId:
+          type: string
+          description: Required when scope is TENANT
+          minLength: 2
+          maxLength: 64

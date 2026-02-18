@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: egov-bndry-mgmnt
+  namespace: digit
+  labels:
+    app: egov-bndry-mgmnt
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: egov-bndry-mgmnt
+  template:
+    metadata:
+      labels:
+        app: egov-bndry-mgmnt
+    spec:
+      containers:
+        - name: egov-bndry-mgmnt
+          image: localhost:5000/egovio/egov-bndry-mgmnt:bndry-mgmnt-3794b8c
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - secretRef:
+                name: digit-db-credentials
+          env:
+            - name: DB_HOST
+              value: postgres
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: egov
+            - name: DB_USER
+              value: egov
+            - name: KAFKA_BROKERS
+              value: redpanda:9092
+            - name: KAFKA_BROKER_HOST
+              value: redpanda:9092
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: redpanda:9092
+            - name: BOOTSTRAP_SERVERS
+              value: redpanda:9092
+            - name: REDIS_HOST
+              value: redis
+            - name: REDIS_PORT
+              value: "6379"
+            - name: EGOV_MDMS_HOST
+              value: "http://egov-mdms-service:8094/"
+            - name: EGOV_MDMS_V2_HOST
+              value: "http://egov-mdms-service:8094/"
+            - name: EGOV_BOUNDARY_HOST
+              value: "http://boundary-service:8081/"
+            - name: EGOV_FILESTORE_HOST
+              value: "http://egov-filestore:8083/"
+            - name: EGOV_FILESTORE_SERVICE_HOST
+              value: "http://egov-filestore:8083/"
+            - name: EGOV_LOCALIZATION_HOST
+              value: "http://egov-localization:8096/"
+            - name: STATE_LEVEL_TENANT_ID
+              value: pg
+            - name: KAFKAJS_NO_PARTITIONER_WARNING
+              value: "1"
+          resources:
+            limits:
+              memory: 768Mi
+              cpu: "500m"
+            requests:
+              memory: 384Mi
+              cpu: "200m"
+          readinessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: egov-bndry-mgmnt
+  namespace: digit
+spec:
+  selector:
+    app: egov-bndry-mgmnt
+  ports:
+    - port: 8080
+      targetPort: 8080
