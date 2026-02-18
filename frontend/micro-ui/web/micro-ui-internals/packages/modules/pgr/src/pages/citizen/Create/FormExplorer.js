@@ -387,7 +387,6 @@ const FormExplorer = () => {
 
   return (
     <Card type="secondary">
-      <Header>{t("FORM_STEP", { current: currentStep + 1, total: configs.length })}</Header>
 
       <FormComposerV2
         config={[configs[currentStep]]}
