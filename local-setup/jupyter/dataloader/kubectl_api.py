@@ -11,6 +11,7 @@ This allows CI environments without kubectl access to perform DB operations.
 import subprocess
 import base64
 import os
+import re
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
@@ -35,12 +36,38 @@ DB_CONFIG = {
 
 # Simple API key for basic auth (set via env var)
 API_KEY = os.environ.get('KUBECTL_API_KEY', 'dev-only-key')
+TENANT_ID_REGEX = re.compile(r"^[A-Za-z0-9-]+$")
+READ_ONLY_SQL_PREFIX_REGEX = re.compile(r"^\s*(SELECT|EXPLAIN)\b", re.IGNORECASE)
+DISALLOWED_SQL_VERBS_REGEX = re.compile(
+    r"\b(ALTER|DELETE|UPDATE|INSERT|CREATE|DROP|TRUNCATE|GRANT|REVOKE|CALL|MERGE|UPSERT|REPLACE|DO|COPY|COMMENT|VACUUM|ANALYZE|REFRESH|SET)\b",
+    re.IGNORECASE,
+)
 
 
 def check_auth():
     """Check API key in header"""
     key = request.headers.get('X-API-Key')
     if key != API_KEY:
+        return False
+    return True
+
+
+def is_valid_tenant_id(tenant_id: str) -> bool:
+    """Allow only non-empty tenant IDs with A-Z, a-z, 0-9 and hyphen."""
+    if not tenant_id:
+        return False
+    return TENANT_ID_REGEX.fullmatch(tenant_id) is not None
+
+
+def is_safe_read_only_sql(sql: str) -> bool:
+    """Allow only single read-only statements that start with SELECT or EXPLAIN."""
+    if not sql or not sql.strip():
+        return False
+    if ";" in sql:
+        return False
+    if not READ_ONLY_SQL_PREFIX_REGEX.match(sql):
+        return False
+    if DISALLOWED_SQL_VERBS_REGEX.search(sql):
         return False
     return True
 
@@ -126,6 +153,8 @@ def delete_boundaries():
 
     if not tenant_id:
         return jsonify({'error': 'tenant_id required'}), 400
+    if not is_valid_tenant_id(tenant_id):
+        return jsonify({'error': 'Invalid tenant_id. Allowed: [A-Za-z0-9-]'}), 400
 
     try:
         sql = f"""
@@ -171,6 +200,8 @@ def count_boundaries():
 
     if not tenant_id:
         return jsonify({'error': 'tenant_id required'}), 400
+    if not is_valid_tenant_id(tenant_id):
+        return jsonify({'error': 'Invalid tenant_id. Allowed: [A-Za-z0-9-]'}), 400
 
     try:
         sql = f"""
@@ -217,10 +248,10 @@ def execute_sql():
     if not sql:
         return jsonify({'error': 'sql required'}), 400
 
-    # Block dangerous operations
-    sql_upper = sql.upper()
-    if any(kw in sql_upper for kw in ['DROP TABLE', 'DROP DATABASE', 'TRUNCATE']):
-        return jsonify({'error': 'Dangerous operation blocked'}), 403
+    if not is_safe_read_only_sql(sql):
+        return jsonify({
+            'error': 'Only single-statement read-only SQL is allowed (must start with SELECT or EXPLAIN; no semicolons; no write/admin verbs).'
+        }), 403
 
     try:
         result = run_sql(sql, env)

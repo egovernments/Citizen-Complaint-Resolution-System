@@ -138,27 +138,27 @@ serviceMaps:
     - query: INSERT INTO eg_wf_document_v2( id, tenantid, active, documenttype,documentUid, processinstanceid, filestoreid, createdby, lastmodifiedby, createdtime, lastmodifiedtime) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
       basePath: ProcessInstances.*.documents.*
       jsonMaps:
-      - jsonPath: $.ProcessInstances.documents.*.id
+      - jsonPath: $.ProcessInstances.*.documents.*.id
 
-      - jsonPath: $.ProcessInstances.documents.*.tenantId
+      - jsonPath: $.ProcessInstances.*.documents.*.tenantId
 
-      - jsonPath: $.ProcessInstances.documents.*.active
+      - jsonPath: $.ProcessInstances.*.documents.*.active
 
-      - jsonPath: $.ProcessInstances.documents.*.documentType
+      - jsonPath: $.ProcessInstances.*.documents.*.documentType
 
-      - jsonPath: $.ProcessInstances.documents.*.documentUid
+      - jsonPath: $.ProcessInstances.*.documents.*.documentUid
 
       - jsonPath: $.ProcessInstances[*][?({id} in @.documents[*].id)].id
 
-      - jsonPath: $.ProcessInstances.documents.*.fileStoreId
+      - jsonPath: $.ProcessInstances.*.documents.*.fileStoreId
 
-      - jsonPath: $.ProcessInstances.documents.*.auditDetails.createdBy
+      - jsonPath: $.ProcessInstances.*.documents.*.auditDetails.createdBy
 
-      - jsonPath: $.ProcessInstances.documents.*.auditDetails.lastModifiedBy
+      - jsonPath: $.ProcessInstances.*.documents.*.auditDetails.lastModifiedBy
 
-      - jsonPath: $.ProcessInstances.documents.*.auditDetails.createdTime
+      - jsonPath: $.ProcessInstances.*.documents.*.auditDetails.createdTime
 
-      - jsonPath: $.ProcessInstances.documents.*.auditDetails.lastModifiedTime
+      - jsonPath: $.ProcessInstances.*.documents.*.auditDetails.lastModifiedTime
 
 
     - query: INSERT INTO eg_wf_assignee_v2(processinstanceid, tenantid, assignee, createdby, lastmodifiedby, createdtime, lastmodifiedtime) VALUES (?, ?, ?, ?, ?, ?, ?);
@@ -177,4 +177,3 @@ serviceMaps:
       - jsonPath: $.ProcessInstances[*][?({uuid} in @.assignes[*].uuid)].auditDetails.createdTime
 
       - jsonPath: $.ProcessInstances[*][?({uuid} in @.assignes[*].uuid)].auditDetails.lastModifiedTime
-

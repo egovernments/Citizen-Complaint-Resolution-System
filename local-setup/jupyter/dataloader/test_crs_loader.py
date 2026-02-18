@@ -23,6 +23,36 @@ BASE_URL = os.environ.get("DIGIT_URL", "https://chakshu-digit.egov.theflywheel.i
 TEMPLATES_DIR = "templates"
 TARGET_TENANT = os.environ.get("DIGIT_TENANT", "statea")
 
+
+def _is_success_result(result):
+    """Best-effort success check across bool/dict/custom return types."""
+    if result is None:
+        return False
+    if isinstance(result, bool):
+        return result
+    if isinstance(result, dict):
+        if "success" in result:
+            return bool(result.get("success"))
+        if "status" in result:
+            return str(result.get("status")).strip().lower() in ("success", "ok", "completed")
+        if result.get("error"):
+            return False
+        return bool(result)
+    if hasattr(result, "success"):
+        return bool(getattr(result, "success"))
+    if hasattr(result, "status"):
+        return str(getattr(result, "status")).strip().lower() in ("success", "ok", "completed")
+    return bool(result)
+
+
+def _ensure_phase_success(phase_name, file_path, tenant, result):
+    if _is_success_result(result):
+        return
+    raise RuntimeError(
+        f"[FAIL] {phase_name} failed for tenant='{tenant}', file='{file_path}', result={result!r}"
+    )
+
+
 def main():
     print("=" * 60)
     print("CRS Data Loader v2 - E2E Test Run")
@@ -57,6 +87,7 @@ def main():
     tenant_file = os.path.join(TEMPLATES_DIR, "Tenant And Branding Master.xlsx")
     if os.path.exists(tenant_file):
         result = loader.load_tenant(tenant_file, target_tenant=TARGET_TENANT)
+        _ensure_phase_success("Phase 1 - Tenant & Branding", tenant_file, TARGET_TENANT, result)
     else:
         print(f"   SKIP: {tenant_file} not found")
 
@@ -65,6 +96,7 @@ def main():
     boundary_file = os.path.join(TEMPLATES_DIR, "Boundary_Master.xlsx")
     if os.path.exists(boundary_file):
         result = loader.load_boundaries(boundary_file, target_tenant=TARGET_TENANT, hierarchy_type="REVENUE")
+        _ensure_phase_success("Phase 2 - Boundaries", boundary_file, TARGET_TENANT, result)
     else:
         print(f"   SKIP: {boundary_file} not found")
 
@@ -73,6 +105,7 @@ def main():
     common_file = os.path.join(TEMPLATES_DIR, "Common and Complaint Master.xlsx")
     if os.path.exists(common_file):
         result = loader.load_common_masters(common_file, target_tenant=TARGET_TENANT)
+        _ensure_phase_success("Phase 3 - Common Masters", common_file, TARGET_TENANT, result)
     else:
         print(f"   SKIP: {common_file} not found")
 
@@ -81,6 +114,7 @@ def main():
     employee_file = os.path.join(TEMPLATES_DIR, f"Employee_Master_Dynamic_{TARGET_TENANT}.xlsx")
     if os.path.exists(employee_file):
         result = loader.load_employees(employee_file, target_tenant=TARGET_TENANT)
+        _ensure_phase_success("Phase 4 - Employees", employee_file, TARGET_TENANT, result)
     else:
         print(f"   SKIP: {employee_file} not found")
 
@@ -89,6 +123,7 @@ def main():
     localization_file = os.path.join(TEMPLATES_DIR, "localization.xlsx")
     if os.path.exists(localization_file):
         result = loader.load_localizations(localization_file, target_tenant=TARGET_TENANT)
+        _ensure_phase_success("Phase 5 - Localizations", localization_file, TARGET_TENANT, result)
     else:
         print(f"   SKIP: {localization_file} not found (optional phase)")
 

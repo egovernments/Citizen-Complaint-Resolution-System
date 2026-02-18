@@ -51,6 +51,12 @@ spec:
               command: ["pg_isready", "-U", "egov"]
             initialDelaySeconds: 30
             periodSeconds: 30
+          startupProbe:
+            exec:
+              command: ["pg_isready", "-U", "egov"]
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            failureThreshold: 40
           volumeMounts:
             - name: postgres-data
               mountPath: /var/lib/postgresql/data

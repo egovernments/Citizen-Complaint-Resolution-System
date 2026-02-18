@@ -263,18 +263,21 @@ class CRSLoader:
 
         # Try to use psql to update directly (if running locally with Docker)
         try:
-            # Get unique identifier hash
-            import hashlib
-            config_str = json_lib.dumps(new_config, sort_keys=True, separators=(',', ':'))
+            module_code_escaped = module_code.replace("'", "''")
+            json_payload = json_lib.dumps(new_config, separators=(',', ':'), ensure_ascii=False)
+
+            dollar_tag = "$json$"
+            while dollar_tag in json_payload:
+                dollar_tag = f"${dollar_tag.strip('$')}_x$"
 
             # Construct SQL update
             sql = f"""
             UPDATE eg_mdms_data
-            SET data = '{json_lib.dumps(new_config)}'::jsonb,
+            SET data = {dollar_tag}{json_payload}{dollar_tag}::jsonb,
                 lastmodifiedtime = EXTRACT(EPOCH FROM NOW())::bigint * 1000
             WHERE schemacode = 'tenant.citymodule'
               AND tenantid = 'pg'
-              AND data->>'code' = '{module_code}';
+              AND data->>'code' = '{module_code_escaped}';
             """
 
             result = subprocess.run(

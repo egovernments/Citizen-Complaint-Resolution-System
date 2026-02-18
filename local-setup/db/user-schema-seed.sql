@@ -1,6 +1,9 @@
 -- User Schema DDL - Combined from DIGIT-OSS egov-user migrations
 -- Source: https://github.com/egovernments/DIGIT-OSS/tree/master/core-services/egov-user/src/main/resources/db/migration/ddl
 
+-- Required for gen_random_uuid()
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- Create sequences
 CREATE SEQUENCE IF NOT EXISTS seq_eg_user START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
 CREATE SEQUENCE IF NOT EXISTS seq_eg_user_address START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
