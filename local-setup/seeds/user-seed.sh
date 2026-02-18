@@ -20,6 +20,10 @@ for i in $(seq 1 $MAX_RETRIES); do
   fi
   echo "Attempt $i/$MAX_RETRIES - egov-user not ready, waiting ${RETRY_INTERVAL}s..."
   sleep $RETRY_INTERVAL
+  if [ "$i" -eq "$MAX_RETRIES" ]; then
+    echo "ERROR: egov-user did not become healthy after $MAX_RETRIES attempts"
+    exit 1
+  fi
 done
 
 # Function to create user
