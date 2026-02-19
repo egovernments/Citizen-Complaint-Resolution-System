@@ -888,22 +888,7 @@ services:
         condition: service_healthy
     volumes:
       - ./db/pgr-workflow-config.json:/pgr-workflow-config.json:ro
-    entrypoint: >
-      sh -c "
-        echo 'Seeding PGR workflow business service...';
-        HTTP_CODE=$$(curl -sS -o /tmp/response.txt -w '%{http_code}' \
-          -X POST 'http://egov-workflow-v2:8109/egov-workflow-v2/egov-wf/businessservice/_create' \
-          -H 'Content-Type: application/json' \
-          -d @/pgr-workflow-config.json);
-        if [ \"$$HTTP_CODE\" = '200' ] || [ \"$$HTTP_CODE\" = '400' ]; then
-          echo \"PGR workflow seed done (HTTP $$HTTP_CODE)\";
-          cat /tmp/response.txt; echo;
-        else
-          echo \"PGR workflow seed FAILED (HTTP $$HTTP_CODE)\";
-          cat /tmp/response.txt; echo;
-          exit 1;
-        fi
-      "
+    entrypoint: ["sh", "-c", "echo 'Seeding PGR workflow business service...' && HTTP_CODE=$(curl -sS -o /tmp/response.txt -w '%{http_code}' -X POST 'http://egov-workflow-v2:8109/egov-workflow-v2/egov-wf/businessservice/_create' -H 'Content-Type: application/json' -d @/pgr-workflow-config.json) && echo \"PGR workflow seed done (HTTP $HTTP_CODE)\" && cat /tmp/response.txt && echo || (echo 'PGR workflow seed FAILED' && cat /tmp/response.txt 2>/dev/null && exit 1)"]
     networks:
       - egov-network
     restart: "no"
