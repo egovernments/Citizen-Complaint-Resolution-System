@@ -11,7 +11,7 @@
   "devDependencies": {
     "@egovernments/digit-ui-libraries": "1.9.3",
     "@egovernments/digit-ui-components": "0.2.4",
-    "@egovernments/digit-ui-module-core": "1.9.9",
+    "@egovernments/digit-ui-module-core": "1.9.12",
     "@egovernments/digit-ui-module-utilities": "1.0.12",
     "@egovernments/digit-ui-react-components": "1.8.21",
     "@egovernments/digit-ui-module-cms": "1.0.0",
