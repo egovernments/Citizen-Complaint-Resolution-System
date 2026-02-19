@@ -20,6 +20,8 @@ import os
 import json
 import requests
 
+REQUEST_TIMEOUT = 30  # seconds - prevent indefinite hangs on unresponsive services
+
 # kubectl API server URL (for environments without kubectl access)
 KUBECTL_API_URL = os.environ.get('KUBECTL_API_URL', 'http://localhost:8765')
 KUBECTL_API_KEY = os.environ.get('KUBECTL_API_KEY', 'dev-only-key')
@@ -128,7 +130,7 @@ class CRSLoader:
             "RequestInfo": {"apiId": "Rainmaker"}
         }
 
-        resp = requests.post(search_url, json=search_payload, headers={"Content-Type": "application/json"})
+        resp = requests.post(search_url, json=search_payload, headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
         existing_tenants = []
         if resp.ok:
             try:
@@ -175,7 +177,7 @@ class CRSLoader:
             }
         }
 
-        resp = requests.post(create_url, json=create_payload, headers={"Content-Type": "application/json"})
+        resp = requests.post(create_url, json=create_payload, headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
 
         if resp.ok:
             print(f"✅ Tenant '{tenant_code}' created successfully!")
@@ -220,7 +222,7 @@ class CRSLoader:
             "RequestInfo": {"apiId": "Rainmaker"}
         }
 
-        resp = requests.post(search_url, json=search_payload, headers={"Content-Type": "application/json"})
+        resp = requests.post(search_url, json=search_payload, headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
         if not resp.ok:
             print(f"   ⚠️  Could not fetch citymodule config for {module_code}")
             return
@@ -326,7 +328,7 @@ class CRSLoader:
 
         existing_roles = set()
         try:
-            resp = requests.post(search_url, json=search_payload, headers={"Content-Type": "application/json"})
+            resp = requests.post(search_url, json=search_payload, headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
             if resp.ok:
                 roles_data = resp.json().get("MdmsRes", {}).get("ACCESSCONTROL-ROLES", {}).get("roles", [])
                 existing_roles = {r.get("code") for r in roles_data}
@@ -365,7 +367,7 @@ class CRSLoader:
             }
 
             try:
-                resp = requests.post(create_url, json=create_payload, headers={"Content-Type": "application/json"})
+                resp = requests.post(create_url, json=create_payload, headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
                 if resp.ok:
                     print(f"   ✅ Created role '{role_code}' for tenant '{state_tenant}'")
                 elif "already exists" in resp.text.lower() or "duplicate" in resp.text.lower():
@@ -437,7 +439,7 @@ class CRSLoader:
         }
 
         try:
-            resp = requests.post(create_url, json=user_payload, headers={"Content-Type": "application/json"})
+            resp = requests.post(create_url, json=user_payload, headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
 
             if resp.ok:
                 result = resp.json()
