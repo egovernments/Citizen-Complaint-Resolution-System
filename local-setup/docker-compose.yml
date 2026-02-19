@@ -232,9 +232,10 @@ services:
       SPRING_FLYWAY_ENABLED: 'false'
       SERVER_PORT: 1234
       OTEL_TRACES_EXPORTER: none
-      MASTER_PASSWORD: asd@#$@$!132123
-      MASTER_SALT: qweasdzx
-      MASTER_INITIALVECTOR: qweasdzxqwea
+      # DEV ONLY - override via .env or environment for non-local use
+      MASTER_PASSWORD: ${ENC_MASTER_PASSWORD:-asd@#$@$!132123}
+      MASTER_SALT: ${ENC_MASTER_SALT:-qweasdzx}
+      MASTER_INITIALVECTOR: ${ENC_MASTER_INITIALVECTOR:-qweasdzxqwea}
       MASTER_PASSWORD_PROVIDER: software
       EGOV_MDMS_HOST: http://egov-mdms-service:8094
       EGOV_MDMS_SEARCH_ENDPOINT: /mdms-v2/v1/_search
