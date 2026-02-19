@@ -13,9 +13,11 @@ echo "EGOV_USER_HOST: $EGOV_USER_HOST"
 
 # Wait for egov-user to be healthy
 echo "Waiting for egov-user service..."
+HEALTHY=false
 for i in $(seq 1 $MAX_RETRIES); do
   if curl -sf "$EGOV_USER_HOST/user/health" >/dev/null 2>&1; then
     echo "egov-user is healthy!"
+    HEALTHY=true
     break
   fi
   echo "Attempt $i/$MAX_RETRIES - egov-user not ready, waiting ${RETRY_INTERVAL}s..."
@@ -25,6 +27,11 @@ for i in $(seq 1 $MAX_RETRIES); do
     exit 1
   fi
 done
+
+if [ "$HEALTHY" != "true" ]; then
+  echo "ERROR: egov-user did not become healthy after $MAX_RETRIES attempts. Aborting."
+  exit 1
+fi
 
 # Function to create user
 create_user() {
