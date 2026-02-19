@@ -43,7 +43,7 @@ class MDMSValidator:
             'Tenant Master.xlsx': 'tenant.masterschemavalidation',
             'Tenant_Master.xlsx': 'tenant.masterschemavalidation',
             'Common Master.xlsx': 'common.masterschemavalidation',
-            'Common_Master.xlsx': 'common.mastmasterschemavalidationer',
+            'Common_Master.xlsx': 'common.masterschemavalidation',
             'localization.xlsx': 'localization.masterschemavalidation',
         }
 
