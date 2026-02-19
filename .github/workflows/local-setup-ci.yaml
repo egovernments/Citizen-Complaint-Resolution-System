@@ -196,6 +196,57 @@ jobs:
             exit 1
           fi
 
+      - name: Run Postman core validation
+        run: |
+          npx newman@latest run postman/digit-core-validation.postman_collection.json \
+            --env-var "baseUrl=http://localhost"
+
+      - name: Run Postman complaints demo
+        run: |
+          # Create a test employee user for the Postman collection
+          TIMESTAMP=$(date +%s)
+          GRO_USER="gro-ci-${TIMESTAMP}"
+
+          echo "Creating test employee user: $GRO_USER"
+          CREATE_RESPONSE=$(curl -sS -X POST "http://localhost:18107/user/users/_createnovalidate" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "RequestInfo": {"apiId": "digit", "ver": "1.0"},
+              "user": {
+                "userName": "'"$GRO_USER"'",
+                "password": "eGov@123",
+                "name": "CI Test GRO",
+                "mobileNumber": "9999900099",
+                "type": "EMPLOYEE",
+                "active": true,
+                "tenantId": "pg.citya",
+                "roles": [
+                  {"code": "EMPLOYEE", "name": "Employee", "tenantId": "pg.citya"},
+                  {"code": "GRO", "name": "Grievance Routing Officer", "tenantId": "pg.citya"},
+                  {"code": "DGRO", "name": "Department Grievance Routing Officer", "tenantId": "pg.citya"},
+                  {"code": "PGR_LME", "name": "PGR Last Mile Employee", "tenantId": "pg.citya"}
+                ]
+              }
+            }')
+
+          if echo "$CREATE_RESPONSE" | jq -e '.user[0].uuid' > /dev/null 2>&1; then
+            echo "Employee created successfully"
+          else
+            echo "Failed to create employee:"
+            echo "$CREATE_RESPONSE" | jq .
+            exit 1
+          fi
+
+          # Run the complaints demo collection through Kong gateway
+          npx newman@latest run postman/complaints-demo.postman_collection.json \
+            --env-var "url=http://localhost:18000" \
+            --env-var "username=${GRO_USER}" \
+            --env-var "password=eGov@123" \
+            --env-var "cityTenant=pg.citya" \
+            --env-var "stateTenant=pg" \
+            --env-var "userType=EMPLOYEE" \
+            --env-var "authorization=Basic ZWdvdi11c2VyLWNsaWVudDo="
+
       - name: Show service logs on failure
         if: failure()
         run: |
