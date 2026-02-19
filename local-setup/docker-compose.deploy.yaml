@@ -193,7 +193,7 @@ services:
       EGOV_MDMS_HOST: http://egov-mdms-service:8094
       EGOV_MDMS_SEARCH_ENDPOINT: /mdms-v2/v1/_search
       EGOV_STATE_LEVEL_TENANT_ID: pg
-      STATE_LEVEL_TENANT_ID: pg.citya
+      STATE_LEVEL_TENANT_ID: pg
       JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m
     ports:
     - 11234:1234
@@ -413,7 +413,7 @@ services:
       EGOV_MDMS_HOST: http://egov-mdms-service:8094/
       EGOV_MDMS_SEARCH_ENDPOINT: mdms-v2/v1/_search
       EGOV_USER_HOST: http://egov-user:8107/
-      STATE_LEVEL_TENANT_ID: pg.citya
+      STATE_LEVEL_TENANT_ID: pg
       EGOV_STATE_LEVEL_TENANT_ID: pg
       # Disable schema-per-tenant mode - use public schema for all tenants
       IS_ENVIRONMENT_CENTRAL_INSTANCE: 'false'
