@@ -1,5 +1,11 @@
+# docker-compose.deploy.yaml
+# Same as docker-compose.yml but WITHOUT resource limits.
+# Use for deployment on machines with ample CPU/RAM.
+#
+# Usage: docker compose -f docker-compose.deploy.yaml up -d
+
 services:
-  # Actual PostgreSQL - services should NOT connect directly to this
+  # PostgreSQL with pre-loaded data (no migrations needed)
   postgres-db:
     image: postgres:16
     container_name: docker-postgres
@@ -8,20 +14,19 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       POSTGRES_DB: egov
     volumes:
-    - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/full-dump.sql:/docker-entrypoint-initdb.d/01-full-dump.sql:ro
     ports:
-    - 15432:5432
+      - 15432:5432
     healthcheck:
-      test:
-      - CMD-SHELL
-      - pg_isready -U egov
+      test: ["CMD-SHELL", "pg_isready -U egov"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-    - egov-network
+      - egov-network
 
-  # PgBouncer - transparent connection pooler, aliased as "postgres"
+  # PgBouncer - connection pooler
   pgbouncer:
     image: edoburu/pgbouncer:latest
     container_name: digit-pgbouncer
@@ -54,19 +59,15 @@ services:
     image: redis:7.2.4
     container_name: digit-redis
     ports:
-    - 16379:6379
+      - 16379:6379
     healthcheck:
-      test:
-      - CMD
-      - redis-cli
-      - ping
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-    - egov-network
+      - egov-network
 
-  # Redpanda - Kafka-compatible streaming (keeping original for now, debugging separately)
   redpanda:
     image: redpandadata/redpanda:v24.1.1
     container_name: digit-redpanda
@@ -102,7 +103,6 @@ services:
           - kafka
           - kafka-v2.kafka-cluster
 
-  # MinIO - S3-compatible object storage for filestore
   minio:
     image: minio/minio:RELEASE.2024-01-16T16-07-38Z
     container_name: digit-minio
@@ -123,7 +123,6 @@ services:
     networks:
       - egov-network
 
-  # MinIO init - creates the bucket
   minio-init:
     image: minio/mc:RELEASE.2024-01-16T16-06-34Z
     container_name: digit-minio-init
@@ -140,74 +139,7 @@ services:
     networks:
       - egov-network
 
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.10.3
-    container_name: digit-elasticsearch
-    profiles:
-      - tools  # Disabled by default - enable with: docker compose --profile tools up elasticsearch
-    environment:
-    - discovery.type=single-node
-    - xpack.security.enabled=false
-    - ES_JAVA_OPTS=-Xms256m -Xmx384m
-    volumes:
-    - es_data:/usr/share/elasticsearch/data
-    ports:
-    - 19200:9200
-    healthcheck:
-      test:
-      - CMD-SHELL
-      - curl -f http://localhost:9200/_cluster/health || exit 1
-      interval: 30s
-      timeout: 10s
-      retries: 5
-    networks:
-    - egov-network
-
-  egov-enc-service:
-    image: egovio/egov-enc-service:v2.9.2-4a60f20
-    container_name: egov-enc-service
-    depends_on:
-      egov-mdms-service:
-        condition: service_healthy
-      mdms-tenant-seed:
-        condition: service_completed_successfully
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:otel:postgresql://postgres:5432/egov
-      SPRING_DATASOURCE_USERNAME: egov
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
-      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: enc_schema_version
-      SERVER_PORT: 1234
-      OTEL_TRACES_EXPORTER: none
-      # DEV ONLY - override via .env or environment for non-local use
-      MASTER_PASSWORD: ${ENC_MASTER_PASSWORD:-asd@#$@$!132123}
-      MASTER_SALT: ${ENC_MASTER_SALT:-qweasdzx}
-      MASTER_INITIALVECTOR: ${ENC_MASTER_INITIALVECTOR:-qweasdzxqwea}
-      MASTER_PASSWORD_PROVIDER: software
-      EGOV_MDMS_HOST: http://egov-mdms-service:8094
-      EGOV_MDMS_SEARCH_ENDPOINT: /mdms-v2/v1/_search
-      EGOV_STATE_LEVEL_TENANT_ID: pg
-      STATE_LEVEL_TENANT_ID: pg
-      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m
-    ports:
-    - 11234:1234
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:1234/egov-enc-service/actuator/health >/dev/null 2>&1 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    networks:
-    - egov-network
-
-  # MDMS Backend (actual service)
+  # MDMS Backend
   mdms-backend:
     image: egovio/mdms-v2:v2.9.2-4a60f20
     container_name: mdms-backend
@@ -222,30 +154,21 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: mdms_schema_version
+      SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8094
       OTEL_TRACES_EXPORTER: none
-      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
     healthcheck:
-      # Check Spring Boot health - Flyway runs before app context starts, so health implies migrations done
       test: ["CMD-SHELL", "wget -qO- http://localhost:8094/mdms-v2/health >/dev/null 2>&1 || exit 1"]
       interval: 10s
       timeout: 10s
       retries: 15
       start_period: 45s
     networks:
-    - egov-network
+      - egov-network
 
-  # MDMS Proxy - handles path rewriting for backward compatibility
-  # Rewrites /egov-mdms-service/* to /mdms-v2/* for older services
   egov-mdms-service:
     image: nginx:alpine
     container_name: egov-mdms-service
@@ -255,16 +178,51 @@ services:
     volumes:
       - ./nginx/mdms-proxy.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
-    - 18094:8094
+      - 18094:8094
     healthcheck:
-      # Simplified: just verify API responds (don't require tenant data)
       test: ["CMD-SHELL", "curl -sf -X POST 'http://localhost:8094/mdms-v2/v1/_search' -H 'Content-Type: application/json' -d '{\"RequestInfo\":{\"apiId\":\"health\"},\"MdmsCriteria\":{\"tenantId\":\"pg\",\"moduleDetails\":[{\"moduleName\":\"tenant\",\"masterDetails\":[{\"name\":\"tenants\"}]}]}}'"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 30s
     networks:
-    - egov-network
+      - egov-network
+
+  egov-enc-service:
+    image: egovio/egov-enc-service:v2.9.2-4a60f20
+    container_name: egov-enc-service
+    depends_on:
+      egov-mdms-service:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:otel:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
+      SPRING_FLYWAY_ENABLED: 'false'
+      SERVER_PORT: 1234
+      OTEL_TRACES_EXPORTER: none
+      # DEV ONLY - override via .env or environment for non-local use
+      MASTER_PASSWORD: ${ENC_MASTER_PASSWORD:-asd@#$@$!132123}
+      MASTER_SALT: ${ENC_MASTER_SALT:-qweasdzx}
+      MASTER_INITIALVECTOR: ${ENC_MASTER_INITIALVECTOR:-qweasdzxqwea}
+      MASTER_PASSWORD_PROVIDER: software
+      EGOV_MDMS_HOST: http://egov-mdms-service:8094
+      EGOV_MDMS_SEARCH_ENDPOINT: /mdms-v2/v1/_search
+      EGOV_STATE_LEVEL_TENANT_ID: pg
+      STATE_LEVEL_TENANT_ID: pg
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
+    ports:
+      - 11234:1234
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:1234/egov-enc-service/actuator/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - egov-network
 
   egov-idgen:
     image: egovio/egov-idgen:v2.9.2-4a60f20
@@ -276,8 +234,6 @@ services:
         condition: service_healthy
       egov-mdms-service:
         condition: service_healthy
-      db-migrations:
-        condition: service_completed_successfully
     environment:
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
@@ -285,7 +241,6 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      # Flyway disabled - migrations run by db-migrations container
       SPRING_FLYWAY_ENABLED: 'false'
       EGOV_MDMS_HOST: http://egov-mdms-service:8094/
       MDMS_HOST: http://egov-mdms-service:8094/
@@ -297,9 +252,9 @@ services:
       SERVER_PORT: 8088
       OTEL_TRACES_EXPORTER: none
       MANAGEMENT_HEALTH_DB_ENABLED: 'false'
-      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
     ports:
-    - 18088:8088
+      - 18088:8088
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8088/egov-idgen/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -307,24 +262,7 @@ services:
       retries: 3
       start_period: 120s
     networks:
-    - egov-network
-
-  # Unified database migrations for all DIGIT services
-  # Runs all Flyway migrations in one container before services start
-  db-migrations:
-    build:
-      context: ./docker/db-migrations
-      dockerfile: Dockerfile
-    depends_on:
-      pgbouncer:
-        condition: service_healthy
-    environment:
-      DB_URL: jdbc:postgresql://postgres:5432/egov
-      FLYWAY_USER: egov
-      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-    networks:
       - egov-network
-    restart: "no"
 
   egov-user:
     image: egovio/egov-user:master-fa75ba8
@@ -338,21 +276,13 @@ services:
         condition: service_healthy
       egov-enc-service:
         condition: service_healthy
-      mdms-tenant-seed:
-        condition: service_completed_successfully
-      mdms-security-seed:
-        condition: service_completed_successfully
-      db-migrations:
-        condition: service_completed_successfully
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      # Flyway disabled - migrations run by db-migrations container
       FLYWAY_ENABLED: 'false'
-      # Kafka config - use property name expected by egov-user
       KAFKA_CONFIG_BOOTSTRAP_SERVER_CONFIG: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_REDIS_HOST: redis
@@ -373,7 +303,7 @@ services:
       OTEL_TRACES_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m
     ports:
-    - 18107:8107
+      - 18107:8107
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8107/user/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -381,7 +311,7 @@ services:
       retries: 3
       start_period: 120s
     networks:
-    - egov-network
+      - egov-network
 
   egov-workflow-v2:
     image: egovio/egov-workflow-v2:v2.9.2-4a60f20
@@ -393,21 +323,13 @@ services:
         condition: service_healthy
       egov-idgen:
         condition: service_healthy
-      mdms-workflow-seed:
-        condition: service_completed_successfully
     environment:
       SPRING_DATASOURCE_URL: jdbc:otel:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: workflow_schema_version
+      SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8109
@@ -416,12 +338,11 @@ services:
       EGOV_USER_HOST: http://egov-user:8107/
       STATE_LEVEL_TENANT_ID: pg
       EGOV_STATE_LEVEL_TENANT_ID: pg
-      # Disable schema-per-tenant mode - use public schema for all tenants
       IS_ENVIRONMENT_CENTRAL_INSTANCE: 'false'
       OTEL_TRACES_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms64m -Xmx256m
     ports:
-    - 18109:8109
+      - 18109:8109
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8109/egov-workflow-v2/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -429,7 +350,7 @@ services:
       retries: 3
       start_period: 120s
     networks:
-    - egov-network
+      - egov-network
 
   egov-localization:
     image: egovio/egov-localization:v2.9.2-4a60f20
@@ -443,15 +364,12 @@ services:
         condition: service_healthy
       egov-mdms-service:
         condition: service_healthy
-      db-migrations:
-        condition: service_completed_successfully
     environment:
       SPRING_DATASOURCE_URL: jdbc:otel:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      # Flyway disabled - migrations run by db-migrations container
       SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_REDIS_HOST: redis
@@ -460,7 +378,7 @@ services:
       OTEL_TRACES_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms64m -Xmx256m
     ports:
-    - 18096:8096
+      - 18096:8096
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8096/localization/actuator/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -468,7 +386,7 @@ services:
       retries: 3
       start_period: 120s
     networks:
-    - egov-network
+      - egov-network
 
   boundary-service:
     image: egovio/boundary-service:v2.9.2-4a60f20
@@ -487,13 +405,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: boundary_schema_version
+      SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8081
@@ -507,9 +419,9 @@ services:
       OTEL_TRACES_EXPORTER: none
       OTEL_INSTRUMENTATION_JDBC_ENABLED: 'false'
       MANAGEMENT_HEALTH_DB_ENABLED: 'false'
-      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
     ports:
-    - 18081:8081
+      - 18081:8081
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8081/boundary-service/actuator/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -517,7 +429,7 @@ services:
       retries: 3
       start_period: 120s
     networks:
-    - egov-network
+      - egov-network
 
   egov-accesscontrol:
     image: egovio/egov-accesscontrol:v2.9.2-4a60f20
@@ -535,49 +447,20 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: accesscontrol_schema_version
+      SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8090
       EGOV_MDMS_HOST: http://egov-mdms-service:8094/
       OTEL_TRACES_EXPORTER: none
-      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
     ports:
-    - 18090:8090
+      - 18090:8090
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8090/access/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 120s
-    networks:
-    - egov-network
-
-  # Default Data Handler - seeds schemas and master data for new tenants
-  default-data-handler:
-    image: egovio/default-data-handler:crs_dataseeder-084b7cc
-    container_name: default-data-handler
-    depends_on:
-      mdms-backend:
-        condition: service_healthy
-      redpanda:
-        condition: service_healthy
-    environment:
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
-      KAFKA_CONFIG_BOOTSTRAP_SERVER_CONFIG: redpanda:9092
-      EGOV_MDMS_HOST: http://mdms-backend:8094/
-      EGOV_LOCALIZATION_HOST: http://egov-localization:8096/
-      EGOV_USER_HOST: http://egov-user:8107/
-      EGOV_HRMS_HOST: http://egov-hrms:8092/
-      EGOV_WORKFLOW_HOST: http://egov-workflow-v2:8109/
-      EGOV_BOUNDARY_HOST: http://boundary-service:8081/
-      STATE_LEVEL_TENANT_ID: pg
-      JAVA_OPTS: -Xms128m -Xmx256m
     networks:
       - egov-network
 
@@ -602,11 +485,11 @@ services:
       SERVER_PORT: 8091
       EGOV_PERSIST_YML_REPO_PATH: /persister-config/
       OTEL_TRACES_EXPORTER: none
-      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
     volumes:
-    - ./configs/persister:/persister-config:ro
+      - ./configs/persister:/persister-config:ro
     ports:
-    - 18091:8091
+      - 18091:8091
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8091/common-persist/actuator/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -614,11 +497,8 @@ services:
       retries: 3
       start_period: 120s
     networks:
-    - egov-network
+      - egov-network
 
-  # ===========================================================================
-  # Filestore Service - File upload/download
-  # ===========================================================================
   egov-filestore:
     image: egovio/egov-filestore:v2.9.2-4a60f20
     container_name: egov-filestore
@@ -635,23 +515,16 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: filestore_schema_version
+      SPRING_FLYWAY_ENABLED: 'false'
       SERVER_PORT: 8083
       OTEL_TRACES_EXPORTER: none
-      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m
-      # MinIO/S3 storage (local S3-compatible storage for dev)
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
       ISS3ENABLED: 'true'
       MINIO_URL: http://minio:9000
       AWS_KEY: minioadmin
       AWS_SECRETKEY: minioadmin
       IS_BUCKET_FIXED: 'true'
       FIXED_BUCKETNAME: egov-rainmaker
-      # From CCRS env.yaml - complete MIME type mapping
       ALLOWED_FORMATS_MAP: "{jpg:{'image/jpg','image/jpeg'},jpeg:{'image/jpeg','image/jpg'},png:{'image/png'},pdf:{'application/pdf'},odt:{'application/vnd.oasis.opendocument.text'},ods:{'application/vnd.oasis.opendocument.spreadsheet'},docx:{'application/x-tika-msoffice','application/x-tika-ooxml','application/vnd.oasis.opendocument.text','application/msword'},doc:{'application/x-tika-msoffice','application/x-tika-ooxml','application/vnd.oasis.opendocument.text','application/msword'},dxf:{'text/plain','application/dxf','application/octet-stream','image/vnd.dxf','image/vnd.dxf; format=ascii','image/vnd.dxf; format=binary','image/vnd.dxb'},csv:{'text/plain'},txt:{'text/plain'},xlsx:{'application/x-tika-ooxml','application/x-tika-msoffice','application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/zip'},xls:{'application/x-tika-ooxml','application/x-tika-msoffice','application/vnd.ms-excel','multipart/form-data'},zip:{'application/zip','application/octet-stream'},geojson:{'application/json','text/plain','application/geo+json','multipart/form-data'},json:{'application/json','text/plain'}}"
       EGOV_MDMS_HOST: http://egov-mdms-service:8094
     ports:
@@ -665,45 +538,6 @@ services:
     networks:
       - egov-network
 
-  # ===========================================================================
-  # HRMS Prerequisites Gate - Verifies system user is queryable before HRMS starts
-  # ===========================================================================
-  hrms-prereq-gate:
-    image: curlimages/curl:latest
-    container_name: hrms-prereq-gate
-    depends_on:
-      egov-user:
-        condition: service_healthy
-      user-seed:
-        condition: service_completed_successfully
-    command:
-      - sh
-      - -c
-      - |
-        echo 'Waiting for INTERNAL_MICROSERVICE_ROLE user to be queryable via egov-user API...'
-        echo 'HRMS searches for users by roleCodes=INTERNAL_MICROSERVICE_ROLE on startup'
-        i=1
-        while [ $$i -le 30 ]; do
-          RESPONSE=$$(curl -sf http://egov-user:8107/user/v1/_search \
-            -H "Content-Type: application/json" \
-            -d '{"RequestInfo":{"apiId":"check"},"tenantId":"pg","roleCodes":["INTERNAL_MICROSERVICE_ROLE"]}')
-          if echo "$$RESPONSE" | grep -q '"INTERNAL_MICROSERVICE_ROLE"'; then
-            echo "INTERNAL_MICROSERVICE_ROLE user found on attempt $$i! HRMS can start."
-            exit 0
-          fi
-          echo "Attempt $$i: INTERNAL_MICROSERVICE_ROLE user not yet queryable, waiting 3s..."
-          sleep 3
-          i=$$((i + 1))
-        done
-        echo "ERROR: INTERNAL_MICROSERVICE_ROLE user not found after 30 attempts!"
-        exit 1
-    networks:
-      - egov-network
-    restart: "no"
-
-  # ===========================================================================
-  # HRMS Service - Employee management
-  # ===========================================================================
   egov-hrms:
     image: egovio/egov-hrms:hrms-boundary-0a4e737
     container_name: egov-hrms
@@ -718,26 +552,19 @@ services:
         condition: service_healthy
       egov-user:
         condition: service_healthy
-      hrms-prereq-gate:
-        condition: service_completed_successfully
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: hrms_schema_version
+      SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_CONSUMER_GROUP_ID: employee-group1
       SERVER_PORT: 8092
       OTEL_TRACES_EXPORTER: none
-      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
       EGOV_MDMS_HOST: http://egov-mdms-service:8094
       EGOV_IDGEN_HOST: http://egov-idgen:8088
       EGOV_USER_HOST: http://egov-user:8107
@@ -758,9 +585,6 @@ services:
     networks:
       - egov-network
 
-  # ===========================================================================
-  # Boundary Management Service - Boundary generation from Excel
-  # ===========================================================================
   egov-bndry-mgmnt:
     image: egovio/egov-bndry-mgmnt:bndry-mgmnt-3794b8c
     container_name: egov-bndry-mgmnt
@@ -776,15 +600,13 @@ services:
       boundary-service:
         condition: service_healthy
     environment:
-      # Node.js service
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: egov
       DB_USER: egov
       DB_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      # Try multiple Kafka env var names
-      KAFKA_BROKER_HOST: redpanda:9092
       KAFKA_BROKERS: redpanda:9092
+      KAFKA_BROKER_HOST: redpanda:9092
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       BOOTSTRAP_SERVERS: redpanda:9092
       REDIS_HOST: redis
@@ -800,7 +622,6 @@ services:
     ports:
       - 18086:8080
     healthcheck:
-      # Service doesn't have a /health endpoint - use TCP check
       test: ["CMD-SHELL", "node -e \"require('net').connect(8080, 'localhost').on('connect', () => process.exit(0)).on('error', () => process.exit(1))\""]
       interval: 30s
       timeout: 10s
@@ -809,204 +630,36 @@ services:
     networks:
       - egov-network
 
-  # RE-ENABLED: Required for services to start (schema definitions)
-  mdms-tenant-seed:
-    image: postgres:16
+  egov-url-shortening:
+    image: egovio/egov-url-shortening:v2.9.2-4a60f20
+    container_name: egov-url-shortening
     depends_on:
       pgbouncer:
         condition: service_healthy
-      mdms-backend:
-        condition: service_healthy
-    volumes:
-      - ./db/tenant-seed.sql:/tenant-seed.sql:ro
-    entrypoint: >
-      bash -c "
-        echo 'Waiting for MDMS tables to be created by Flyway...';
-        until [ \"$(psql postgresql://egov:${POSTGRES_PASSWORD:-egov123}@postgres:5432/egov -tAc \"SELECT to_regclass('public.eg_mdms_schema_definition') IS NOT NULL\" 2>/dev/null)\" = \"t\" ]; do
-          echo 'MDMS tables not ready, waiting...';
-          sleep 2;
-        done;
-        echo 'MDMS tables ready. Seeding tenant master...';
-        psql postgresql://egov:${POSTGRES_PASSWORD:-egov123}@postgres:5432/egov -f /tenant-seed.sql
-        echo 'Tenant seed complete'
-      "
-    networks:
-      - egov-network
-    restart: "no"
-
-  # RE-ENABLED: Required for egov-workflow-v2 to start
-  mdms-workflow-seed:
-    image: postgres:16
-    depends_on:
-      pgbouncer:
-        condition: service_healthy
-      mdms-backend:
-        condition: service_healthy
-      mdms-tenant-seed:
-        condition: service_completed_successfully
-    volumes:
-      - ./db/mdms-workflow-seed.sql:/workflow-seed.sql:ro
-    entrypoint: >
-      bash -c "
-        echo 'Waiting for MDMS tables...';
-        until [ \"$(psql postgresql://egov:${POSTGRES_PASSWORD:-egov123}@postgres:5432/egov -tAc \"SELECT to_regclass('public.eg_mdms_schema_definition') IS NOT NULL\" 2>/dev/null)\" = \"t\" ]; do
-          echo 'MDMS tables not ready, waiting...';
-          sleep 2;
-        done;
-        echo 'Seeding workflow business service config...';
-        psql postgresql://egov:${POSTGRES_PASSWORD:-egov123}@postgres:5432/egov -f /workflow-seed.sql
-        echo 'Workflow MDMS seed complete'
-      "
-    networks:
-      - egov-network
-    restart: "no"
-
-  # RE-ENABLED: Required for security services
-  mdms-security-seed:
-    image: postgres:16
-    depends_on:
-      pgbouncer:
-        condition: service_healthy
-      mdms-backend:
-        condition: service_healthy
-      mdms-tenant-seed:
-        condition: service_completed_successfully
-    volumes:
-      - ./db/mdms-security-seed.sql:/security-seed.sql:ro
-    entrypoint: >
-      bash -c "
-        echo 'Waiting for MDMS tables...';
-        until [ \"$(psql postgresql://egov:${POSTGRES_PASSWORD:-egov123}@postgres:5432/egov -tAc \"SELECT to_regclass('public.eg_mdms_schema_definition') IS NOT NULL\" 2>/dev/null)\" = \"t\" ]; do
-          echo 'MDMS tables not ready, waiting...';
-          sleep 2;
-        done;
-        echo 'Seeding Security MDMS configs...';
-        psql postgresql://egov:${POSTGRES_PASSWORD:-egov123}@postgres:5432/egov -f /security-seed.sql
-        echo 'Security MDMS seed complete'
-      "
-    networks:
-      - egov-network
-    restart: "no"
-
-  # PAUSED: Using default-data-handler instead
-  mdms-bndry-mgmnt-seed:
-    image: postgres:16
-    depends_on:
-      pgbouncer:
-        condition: service_healthy
-      mdms-backend:
-        condition: service_healthy
-      mdms-tenant-seed:
-        condition: service_completed_successfully
-    # volumes:
-    #   - ./db/mdms-bndry-mgmnt-seed.sql:/bndry-mgmnt-seed.sql:ro
-    entrypoint: ["bash", "-c", "echo 'PAUSED: Using default-data-handler for boundary mgmt seeding'"]
-    networks:
-      - egov-network
-    restart: "no"
-
-  # RE-ENABLED: Required for localization
-  localization-seed:
-    image: postgres:16
-    depends_on:
-      pgbouncer:
-        condition: service_healthy
-      egov-localization:
-        condition: service_healthy
-    volumes:
-      - ./db/localization-seed.sql:/localization-seed.sql:ro
-    entrypoint: >
-      bash -c "
-        echo 'Seeding localization data...';
-        psql postgresql://egov:${POSTGRES_PASSWORD:-egov123}@postgres:5432/egov -f /localization-seed.sql
-        echo 'Localization seed complete'
-      "
-    networks:
-      - egov-network
-    restart: "no"
-
-  # PAUSED: Using default-data-handler instead
-  # Seed PGR workflow business service via API
-  pgr-workflow-seed:
-    image: curlimages/curl:latest
-    depends_on:
-      egov-workflow-v2:
-        condition: service_healthy
-      mdms-workflow-seed:
-        condition: service_completed_successfully
-    # volumes:
-    #   - ./db/pgr-workflow-config.json:/pgr-workflow-config.json:ro
-    entrypoint: ["sh", "-c", "echo 'PAUSED: Using default-data-handler for PGR workflow seeding'"]
-    networks:
-      - egov-network
-    restart: "no"
-
-  # RE-ENABLED: Creates base database records needed by services
-  db-seed:
-    image: postgres:16
-    container_name: db-seed-container
-    depends_on:
-      pgbouncer:
-        condition: service_healthy
-      egov-mdms-service:
-        condition: service_healthy
-      mdms-tenant-seed:
-        condition: service_completed_successfully
-      mdms-workflow-seed:
-        condition: service_completed_successfully
-      mdms-security-seed:
-        condition: service_completed_successfully
-      localization-seed:
-        condition: service_completed_successfully
-      egov-workflow-v2:
-        condition: service_healthy
-      egov-localization:
-        condition: service_healthy
-      egov-accesscontrol:
-        condition: service_healthy
-    volumes:
-      - ./db/seed.sql:/seed.sql:ro
-    entrypoint: >
-      bash -c "
-        echo 'Waiting for MDMS tables...';
-        until [ \"$(psql postgresql://egov:${POSTGRES_PASSWORD:-egov123}@postgres:5432/egov -tAc \"SELECT to_regclass('public.eg_mdms_schema_definition') IS NOT NULL\" 2>/dev/null)\" = \"t\" ]; do
-          echo 'MDMS tables not ready, waiting...';
-          sleep 2;
-        done;
-        echo 'Running seed.sql...';
-        psql postgresql://egov:${POSTGRES_PASSWORD:-egov123}@postgres:5432/egov -f /seed.sql;
-        echo 'Done loading seed data'
-      "
-    networks:
-      - egov-network
-    restart: "no"
-
-  # RE-ENABLED: Required for system users (HRMS needs this)
-  # User seed via API (ensures proper password encryption via egov-enc-service)
-  user-seed:
-    image: curlimages/curl:latest
-    container_name: user-seed-container
-    depends_on:
-      egov-user:
-        condition: service_healthy
-      egov-enc-service:
-        condition: service_healthy
-      db-seed:
-        condition: service_completed_successfully
-    volumes:
-      - ./seeds/user-seed.sh:/user-seed.sh:ro
-    entrypoint: ["sh", "/user-seed.sh"]
     environment:
-      EGOV_USER_HOST: http://egov-user:8107
+      SPRING_DATASOURCE_URL: jdbc:otel:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
+      SPRING_FLYWAY_ENABLED: 'false'
+      SERVER_PORT: 8080
+      OTEL_TRACES_EXPORTER: none
+      OTEL_INSTRUMENTATION_JDBC_ENABLED: 'false'
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx128m
+    ports:
+      - 18085:8080
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/egov-url-shortening/actuator/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     networks:
       - egov-network
-    restart: "no"
 
-  # ===========================================================================
-  # PGR Services (Public Grievance Redressal)
-  # ===========================================================================
   pgr-services:
-    image: pgr-services-dev
+    image: egovio/pgr-services:multiarch-d448cb7
     container_name: pgr-services
     depends_on:
       pgbouncer:
@@ -1029,13 +682,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
-      SPRING_FLYWAY_TABLE: pgr_services_schema
+      SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_CONSUMER_GROUP_ID: egov-pgr-services
@@ -1074,20 +721,13 @@ services:
     networks:
       - egov-network
 
-  # ===========================================================================
-  # DIGIT UI (React Frontend)
-  # Image built by Tilt from CCRS repo, or manually with:
-  # docker build -t digit-ui-dev -f ../frontend/micro-ui/web/docker/Dockerfile ../frontend/micro-ui
-  # ===========================================================================
   digit-ui:
-    image: digit-ui-dev
+    image: egovio/digit-ui:multiarch-d448cb7
     container_name: digit-ui
     ports:
       - "18080:80"
     volumes:
-      # Custom nginx config with sub_filter to inject globalConfigs.js at runtime
       - ./nginx/digit-ui.conf:/etc/nginx/conf.d/default.conf:ro
-      # Mount globalConfigs.js for runtime configuration
       - ./nginx/globalConfigs.js:/var/web/digit-ui/globalConfigs.js:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:80/digit-ui/ >/dev/null 2>&1 || exit 1"]
@@ -1098,10 +738,6 @@ services:
     networks:
       - egov-network
 
-  # ===========================================================================
-  # Kong API Gateway (DB-less mode)
-  # Main entry point: http://localhost:18000/digit-ui/
-  # ===========================================================================
   kong:
     image: kong:3.6
     container_name: kong-gateway
@@ -1120,11 +756,11 @@ services:
     volumes:
       - ./kong/kong.yml:/kong/kong.yml:ro
     ports:
-      - "18000:8000"   # Proxy (HTTP)
-      - "18443:8443"   # Proxy (HTTPS)
-      - "18001:8001"   # Admin API
-      - "18002:8002"   # Kong Manager GUI
-      - "18100:8100"   # Status endpoint
+      - "18000:8000"
+      - "18443:8443"
+      - "18001:8001"
+      - "18002:8002"
+      - "18100:8100"
     healthcheck:
       test: ["CMD", "kong", "health"]
       interval: 30s
@@ -1139,7 +775,6 @@ services:
     networks:
       - egov-network
 
-  # ==================== Gatus Health Monitoring ====================
   gatus:
     image: twinproduction/gatus:latest
     container_name: digit-gatus
@@ -1157,7 +792,6 @@ services:
     networks:
       - egov-network
 
-  # ==================== Jupyter Lab for PGR Configuration ====================
   jupyter:
     build:
       context: ./jupyter
@@ -1203,6 +837,4 @@ networks:
 
 volumes:
   postgres_data: null
-  es_data: null
-  filestore_data: null
   minio_data: null
