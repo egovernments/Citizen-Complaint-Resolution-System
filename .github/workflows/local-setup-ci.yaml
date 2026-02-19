@@ -203,49 +203,31 @@ jobs:
 
       - name: Run Postman complaints demo
         run: |
-          # Create a test employee user for the Postman collection
-          TIMESTAMP=$(date +%s)
-          GRO_USER="gro-ci-${TIMESTAMP}"
+          # Install Python dependencies for ci-dataloader
+          pip install requests openpyxl --quiet
 
-          echo "Creating test employee user: $GRO_USER"
-          CREATE_RESPONSE=$(curl -sS -X POST "http://localhost:18107/user/users/_createnovalidate" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "RequestInfo": {"apiId": "digit", "ver": "1.0"},
-              "user": {
-                "userName": "'"$GRO_USER"'",
-                "password": "eGov@123",
-                "name": "CI Test GRO",
-                "mobileNumber": "9999900099",
-                "type": "EMPLOYEE",
-                "active": true,
-                "tenantId": "pg.citya",
-                "roles": [
-                  {"code": "EMPLOYEE", "name": "Employee", "tenantId": "pg.citya"},
-                  {"code": "GRO", "name": "Grievance Routing Officer", "tenantId": "pg.citya"},
-                  {"code": "DGRO", "name": "Department Grievance Routing Officer", "tenantId": "pg.citya"},
-                  {"code": "PGR_LME", "name": "PGR Last Mile Employee", "tenantId": "pg.citya"}
-                ]
-              }
-            }')
+          # Run CI dataloader to create tenant, HRMS employee, and load masters
+          CI_OUTPUT=$(DIGIT_URL=http://localhost:18000 TARGET_TENANT=pg.citest python3 scripts/ci-dataloader.py)
+          echo "$CI_OUTPUT"
 
-          if echo "$CREATE_RESPONSE" | jq -e '.user[0].uuid' > /dev/null 2>&1; then
-            echo "Employee created successfully"
-          else
-            echo "Failed to create employee:"
-            echo "$CREATE_RESPONSE" | jq .
+          # Parse output for service code
+          CI_SERVICE_CODE=$(echo "$CI_OUTPUT" | grep '^CI_SERVICE_CODE=' | cut -d= -f2)
+          if [ -z "$CI_SERVICE_CODE" ]; then
+            echo "FATAL: ci-dataloader did not output CI_SERVICE_CODE"
             exit 1
           fi
+          echo "Using serviceCode: $CI_SERVICE_CODE"
 
           # Run the complaints demo collection through Kong gateway
           npx newman@latest run postman/complaints-demo.postman_collection.json \
             --env-var "url=http://localhost:18000" \
-            --env-var "username=${GRO_USER}" \
+            --env-var "username=CI-ADMIN" \
             --env-var "password=eGov@123" \
-            --env-var "cityTenant=pg.citya" \
+            --env-var "cityTenant=pg.citest" \
             --env-var "stateTenant=pg" \
             --env-var "userType=EMPLOYEE" \
-            --env-var "authorization=Basic ZWdvdi11c2VyLWNsaWVudDo="
+            --env-var "authorization=Basic ZWdvdi11c2VyLWNsaWVudDo=" \
+            --env-var "serviceCode=${CI_SERVICE_CODE}"
 
       - name: Show service logs on failure
         if: failure()
