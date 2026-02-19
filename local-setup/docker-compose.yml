@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       POSTGRES_DB: egov
     volumes:
-      - postgres_data:/var/lib/docker-postgresql/data
+      - postgres_data:/var/lib/postgresql/data
       - ./db/full-dump.sql:/docker-entrypoint-initdb.d/01-full-dump.sql:ro
     ports:
       - 15432:5432
