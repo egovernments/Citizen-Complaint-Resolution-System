@@ -1,148 +1,294 @@
-# DIGIT Core Services - Local Development Stack
+# DIGIT CRS - Local Development Stack
 
-Run a complete DIGIT development environment locally with all core services, PGR module, and the DIGIT UI.
+Run a complete DIGIT development environment locally with Docker Compose. Includes all core services, PGR (Public Grievance Redressal) module, DIGIT UI, and tools for loading master data and running API tests.
 
 ## Prerequisites
-Ensure you have the following tools installed on your machine:
-1. `docker compose`
-2. `tilt`
-3. `npm` 
-4. Postman and newman CLI
 
-## Quick Start
+- Docker Desktop (or Docker Engine + Docker Compose v2)
+- 8 GB RAM available for Docker (runs in ~3.8 GB)
+- `npm` (for running Postman tests with Newman)
+- Python 3.8+ (for the DataLoader)
+
+**Optional (for hot reload development):**
+- [Patched Tilt](#installing-patched-tilt) (for the Tilt dashboard)
+- Maven 3.9+ (for PGR Java hot reload)
+- Node.js 14+ and Yarn (for UI hot reload)
+
+## Quick Start (Docker Compose)
 
 ```bash
-# 1. Clone the CCRS repo and navigate to local-setup
+# 1. Clone and navigate to local-setup
 git clone https://github.com/egovernments/Citizen-Complaint-Resolution-System.git
 cd Citizen-Complaint-Resolution-System/local-setup
 
-# 2. Start with Tilt (recommended)
-tilt up
+# 2. Start all services
+docker compose up -d
 
-# 3. Open the Tilt dashboard and verify the health of services
-open http://localhost:10350/
+# 3. Wait for services to become healthy (~3-5 minutes)
+watch 'docker compose ps --format "table {{.Name}}\t{{.Status}}" | grep -v "Exited"'
 
-# 4. Access DIGIT UI
+# 4. Verify health
+./scripts/health-check.sh
+
+# 5. Access the UI
 open http://localhost:18000/digit-ui/
 ```
 
-## Remote Development (Recommended for Teams)
+### Default Credentials
 
-Run everything on a shared remote server. Developers edit code via SSH — local file changes trigger rebuilds of downstream services (PGR, digit-ui) on the remote.
+| Username | Password | Type | Tenant | Roles |
+|----------|----------|------|--------|-------|
+| `ADMIN` | `eGov@123` | EMPLOYEE | pg | SUPERUSER, EMPLOYEE, PGR-ADMIN, GRO (pg.citya) |
 
-```bash
-# On the remote server
-git clone https://github.com/egovernments/Citizen-Complaint-Resolution-System.git ~/code/ccrs
-cd ~/code/ccrs/local-setup
-tilt up
-
-# From your machine — forward ports
-ssh -L 10350:localhost:10350 -L 18000:localhost:18000 dev-server
-# Then open http://localhost:10350 (Tilt) and http://localhost:18000/digit-ui/ (UI)
-```
-
-Edit code on the server via VS Code Remote SSH, and Tilt automatically rebuilds the changed services. Only PGR and digit-ui rebuild on code changes — core services stay running.
-
-See [docs/REMOTE-DEV-SETUP.md](docs/REMOTE-DEV-SETUP.md) for full setup including file sync, multi-developer workflows, and port forwarding.
-
-For hybrid setups (core on remote, dev services on your laptop), see [docs/HYBRID-SETUP.md](docs/HYBRID-SETUP.md).
-### Verify your set up
+Login at the UI as `ADMIN` with city "City A", or via API:
 
 ```bash
-# 1. Check all services are healthy
-./scripts/health-check.sh
-
-# 2. Run smoke tests
-./scripts/smoke-tests.sh
-
-# 3. Test ID generation
-curl -X POST "http://localhost:18088/egov-idgen/id/_generate" \
-  -H "Content-Type: application/json" \
-  -d '{"RequestInfo":{"apiId":"digit","ver":"1.0"},"idRequests":[{"tenantId":"pg","idName":"pgr.servicerequestid"}]}'
-```
-
-## Postman Collections (Newman)
-
-Run the Postman collections via `scripts/run-postman.sh`. Set these environment variables before running to target your environment:
-
-**Core validation collection**
-- `BASE_URL` (example: `http://localhost`)
-
-**Complaints demo collection**
-- `URL` (example: `http://localhost:18000`)
-- `USERNAME` (example: `ADMIN`)
-- `PASSWORD` (example: `eGov@123`)
-- `CITY_TENANT` (example: `pg.citya`)
-- `STATE_TENANT` (example: `pg`)
-- `USER_TYPE` (example: `EMPLOYEE`)
-- `AUTHORIZATION` (example: `Basic ZWdvdi11c2VyLWNsaWVudDo=`)
-
-Example:
-```bash
-BASE_URL=http://localhost \
-URL=http://localhost:18000 \
-CITY_TENANT=pg.citya \
-STATE_TENANT=pg \
-USERNAME=GRO \
-PASSWORD=eGov@123 \
-scripts/run-postman.sh all
-```
-
-## End-to-End Testing
-
-### Test Credentials
-
-A default admin user is created by the `user-schema-seed` service:
-
-| Username | Password | Type | Tenant |
-|----------|----------|------|--------|
-| `ADMIN` | `eGov@123` | EMPLOYEE | pg |
-
-**Note:** The admin user has roles: SUPERUSER, EMPLOYEE (pg), PGR-ADMIN, GRO (pg.citya)
-
-### Manual UI Test Flow
-
-1. Open http://localhost:18000/digit-ui/
-2. Select language → Select city (City A)
-3. Login as Employee: `ADMIN@pg` / `eGov@123`
-4. Navigate to Complaints → Create new complaint
-5. Fill form and submit
-6. Verify complaint appears in inbox
-
-### API Test Flow
-
-```bash
-# 1. Get auth token
-TOKEN=$(curl -s -X POST "http://localhost:18000/user/oauth/token" \
+curl -X POST "http://localhost:18000/user/oauth/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -H "Authorization: Basic ZWdvdi11c2VyLWNsaWVudDo=" \
-  -d "username=ADMIN@pg&password=eGov@123&tenantId=pg&grant_type=password&scope=read&userType=EMPLOYEE" | jq -r '.access_token')
+  -d "username=ADMIN&password=eGov@123&tenantId=pg&grant_type=password&scope=read&userType=EMPLOYEE"
+```
 
-# 2. Create a complaint
-curl -X POST "http://localhost:18000/pgr-services/v2/request/_create" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{
-    "RequestInfo": {"apiId": "Rainmaker", "authToken": "'$TOKEN'"},
-    "service": {
-      "tenantId": "pg.citya",
-      "serviceCode": "StreetLightNotWorking",
-      "description": "Test complaint from API",
-      "source": "web",
-      "address": {"city": "pg.citya", "locality": {"code": "SL001"}}
-    }
-  }'
+### Stopping
 
-# 3. Search complaints
-curl -X POST "http://localhost:18000/pgr-services/v2/request/_search" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"RequestInfo": {"apiId": "Rainmaker", "authToken": "'$TOKEN'"}, "tenantId": "pg.citya"}'
+```bash
+docker compose down        # Stop (preserves data)
+docker compose down -v     # Stop and delete all data
+```
+
+## Loading Master Data (Jupyter Notebook)
+
+The DataLoader notebook (`jupyter/dataloader/DataLoader_v2.ipynb`) lets you set up a new tenant with all the master data needed for PGR. It runs inside a Jupyter Lab instance bundled with the stack.
+
+### Starting Jupyter
+
+```bash
+# Start Jupyter Lab (already defined in docker-compose, just needs to be started)
+docker compose up -d jupyter
+
+# Access at http://localhost:18888
+# Token: displayed in logs
+docker compose logs jupyter | grep token
+```
+
+Or if using Tilt, click the "Start Jupyter" button in the dashboard.
+
+### DataLoader Phases
+
+The notebook walks through 6 phases. Run each cell in order:
+
+| Phase | What it does | Required? |
+|-------|-------------|-----------|
+| **1. Tenant & Branding** | Creates a new tenant (e.g., `pg.myorg`) with UI customization | Yes |
+| **2a. Boundary Template** | Generates an Excel template for administrative hierarchy | Yes |
+| **2b. Load Boundaries** | Uploads the filled boundary hierarchy (State > District > Block) | Yes |
+| **3. Common Masters** | Loads departments, designations, complaint types, and localizations | Yes |
+| **4. Employees** | Creates staff accounts with roles and department assignments via HRMS | Yes |
+| **5. Localizations** | Bulk loads translations for additional languages (Hindi, Tamil, etc.) | Optional |
+| **6. Workflow** | Configures the PGR complaint state machine | Yes |
+
+### Configuration
+
+Edit these variables at the top of the notebook:
+
+```python
+URL = "http://kong:8000"          # Kong gateway (inside Docker network)
+USERNAME = "ADMIN"                 # Superuser
+PASSWORD = "eGov@123"
+TENANT_ID = "pg"                   # Root tenant for login
+TARGET_TENANT = "pg.myorg"         # New tenant to create
+```
+
+### Key Classes
+
+- `CRSLoader` (in `crs_loader.py`) - Main loader. Handles auth, tenant creation, master data loading
+- `CRSLoader.create_employee()` - Creates a single HRMS employee with proper department assignment
+- `CRSLoader.load_common_masters()` - Loads departments, designations, complaint types from Excel
+- `CRSLoader.load_workflow()` - Loads the PGR workflow state machine
+
+### Rollback
+
+Each phase has a rollback function in the notebook:
+
+```python
+loader.full_reset(TARGET_TENANT)              # Reset everything
+loader.rollback_common_masters(TARGET_TENANT)  # Just masters
+loader.delete_boundaries(TARGET_TENANT)        # Just boundaries
+```
+
+## Postman Collections
+
+Two Postman collections are included for API testing:
+
+| Collection | File | Purpose |
+|-----------|------|---------|
+| Core Validation | `postman/digit-core-validation.postman_collection.json` | Validates all core service APIs are responding |
+| Complaints Demo | `postman/complaints-demo.postman_collection.json` | Full PGR lifecycle: Create > Assign > Resolve > Rate & Close |
+
+### Running with Newman (CLI)
+
+**Core validation** (no auth needed):
+
+```bash
+npx newman run postman/digit-core-validation.postman_collection.json \
+  --env-var "baseUrl=http://localhost"
+```
+
+**Complaints demo** (requires an HRMS employee user):
+
+```bash
+npx newman run postman/complaints-demo.postman_collection.json \
+  --env-var "url=http://localhost:18000" \
+  --env-var "username=CI-ADMIN" \
+  --env-var "password=eGov@123" \
+  --env-var "cityTenant=pg.citest" \
+  --env-var "stateTenant=pg" \
+  --env-var "userType=EMPLOYEE" \
+  --env-var "authorization=Basic ZWdvdi11c2VyLWNsaWVudDo=" \
+  --env-var "serviceCode=RequestSprayingOrFoggingOperation"
+```
+
+### Complaints Demo Variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `url` | Kong gateway URL | `http://localhost:18000` |
+| `username` | Employee username | `CI-ADMIN` |
+| `password` | Employee password | `eGov@123` |
+| `cityTenant` | City-level tenant | `pg.citest` |
+| `stateTenant` | State-level tenant | `pg` |
+| `userType` | Must be `EMPLOYEE` | `EMPLOYEE` |
+| `authorization` | OAuth client credentials | `Basic ZWdvdi11c2VyLWNsaWVudDo=` |
+| `serviceCode` | (Optional) Specific complaint type to test | `RequestSprayingOrFoggingOperation` |
+
+If `serviceCode` is not set, the collection picks a random complaint type.
+
+### CI DataLoader
+
+For automated testing, use the CI dataloader script instead of the Jupyter notebook. It creates a tenant, loads masters, creates an HRMS employee in the correct department, and outputs the `serviceCode` for Newman:
+
+```bash
+pip install requests openpyxl pandas python-dotenv
+
+DIGIT_URL=http://localhost:18000 \
+TARGET_TENANT=pg.mytest \
+python3 scripts/ci-dataloader.py
+
+# Output:
+# CI_TENANT=pg.mytest
+# CI_USER=CI-ADMIN
+# CI_SERVICE_CODE=RequestSprayingOrFoggingOperation
+```
+
+The script performs 6 steps:
+1. Login as superuser
+2. Create target tenant
+3. Load common masters (departments, designations, complaint types)
+4. Look up a ServiceDef to find which department handles it
+5. Create an HRMS employee in that department (with all PGR roles)
+6. Load the PGR workflow
+
+## What's Included
+
+### Infrastructure
+
+| Service | Host Port | Memory | Description |
+|---------|-----------|--------|-------------|
+| Postgres | 15432 | 768 MB | Database (with PgBouncer at 5432 internally) |
+| Redis | 16379 | 128 MB | Cache |
+| Redpanda | 19092 | 300 MB | Kafka-compatible event streaming |
+| MinIO | 19000 | 256 MB | S3-compatible file storage |
+
+### Core Services
+
+| Service | Host Port | Memory | Health Check |
+|---------|-----------|--------|--------------|
+| MDMS v2 | 18094 | 512 MB | `/mdms-v2/health` |
+| User | 18107 | 512 MB | `/user/health` |
+| Workflow v2 | 18109 | 320 MB | `/egov-workflow-v2/health` |
+| Localization | 18096 | 320 MB | `/localization/actuator/health` |
+| Boundary v2 | 18081 | 256 MB | `/boundary-service/actuator/health` |
+| Access Control | 18090 | 256 MB | `/access/health` |
+| IDGEN | 18088 | 256 MB | `/egov-idgen/health` |
+| ENC | 11234 | 300 MB | `/egov-enc-service/actuator/health` |
+| Persister | 18091 | 256 MB | `/common-persist/actuator/health` |
+| Filestore | - | 384 MB | `/filestore/health` |
+| HRMS | - | 256 MB | `/egov-hrms/health` |
+
+### Application
+
+| Service | Host Port | Memory | Description |
+|---------|-----------|--------|-------------|
+| PGR Services | 18083 | 300 MB | Complaint management API |
+| DIGIT UI | 18080 | 128 MB | React frontend (static) |
+| Kong Gateway | 18000 | 256 MB | API gateway (main entry point) |
+
+### Tools (optional)
+
+| Service | Port | Description |
+|---------|------|-------------|
+| Jupyter Lab | 18888 | DataLoader notebook |
+| Gatus | 18181 | Health monitoring dashboard |
+
+### Resource Usage
+
+| Component | Memory |
+|-----------|--------|
+| Infrastructure (Postgres, Redis, Redpanda, MinIO) | ~1.5 GB |
+| Core Services (11 Java/Node services) | ~3.0 GB |
+| Application (PGR, UI, Kong) | ~0.7 GB |
+| **Total** | **~3.8 GB** |
+
+All services have memory limits set in `docker-compose.yml` to prevent runaway usage.
+
+## Development with Tilt
+
+Tilt provides a better development experience with a dashboard, live logs, and hot reload:
+
+```bash
+# Install patched Tilt (see below), then:
+tilt up
+
+# Dashboard: http://localhost:10350
+```
+
+### Installing Patched Tilt
+
+This project requires a patched version of Tilt that waits for Docker Compose health checks. The upstream Tilt has a bug where it marks containers "ready" before health checks pass.
+
+```bash
+# Linux amd64
+curl -fsSL https://github.com/ChakshuGautam/tilt/releases/download/v0.36.3-healthcheck/tilt-linux-amd64.gz \
+  | gunzip > /usr/local/bin/tilt
+chmod +x /usr/local/bin/tilt
+```
+
+PR to upstream: https://github.com/tilt-dev/tilt/pull/6682
+
+### Hot Reload
+
+**PGR Services (Java)** - requires Maven:
+```bash
+tilt up
+# Edit backend/pgr-services/src/main/java/...
+# Tilt recompiles with Maven and syncs the JAR to the container
+```
+
+**DIGIT UI (React)** - requires Node.js + Yarn:
+```bash
+tilt up
+# Enable "ui-watch" in Tilt dashboard, or manually:
+cd ../frontend/micro-ui/web && yarn install && yarn build:webpack --watch
+```
+
+**CI Mode** (no hot reload, builds Docker images instead):
+```bash
+TILT_CI=1 tilt up
 ```
 
 ## API Access
 
-All APIs are available through Kong gateway at `http://localhost:18000`:
+All APIs go through Kong at `http://localhost:18000`:
 
 ```bash
 # MDMS search
@@ -150,238 +296,74 @@ curl -X POST "http://localhost:18000/mdms-v2/v1/_search" \
   -H "Content-Type: application/json" \
   -d '{"MdmsCriteria":{"tenantId":"pg","moduleDetails":[{"moduleName":"tenant","masterDetails":[{"name":"tenants"}]}]},"RequestInfo":{"apiId":"Rainmaker"}}'
 
-# User login (after creating user - see Test Credentials section)
-curl -X POST "http://localhost:18000/user/oauth/token" \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -H "Authorization: Basic ZWdvdi11c2VyLWNsaWVudDo=" \
-  -d "username=ADMIN&password=eGov@123&tenantId=pg&grant_type=password&scope=read&userType=EMPLOYEE"
+# PGR search
+curl -X POST "http://localhost:18000/pgr-services/v2/request/_search" \
+  -H "Content-Type: application/json" \
+  -d '{"RequestInfo":{"apiId":"Rainmaker","authToken":"YOUR_TOKEN"},"tenantId":"pg.citya"}'
 ```
 
 ## Database Access
 
 ```bash
-# Connect to Postgres
 docker exec -it docker-postgres psql -U egov -d egov
-
-# Common queries
-\dt                          # List tables
-SELECT * FROM eg_user LIMIT 5;
 ```
-
-## Prerequisites
-
-- Docker Desktop (or Docker Engine + Compose v2)
-- **Patched Tilt** (see below) - required for proper health check handling
-- 8+ GB RAM available for Docker
-
-**For hot reload development (optional):**
-- Maven 3.9+ (for PGR Java hot reload)
-- Node.js 14+ and Yarn (for UI hot reload)
-
-### Installing Patched Tilt
-
-This project requires a patched version of Tilt that properly waits for Docker Compose health checks before marking services as ready. The upstream Tilt has a bug where it considers containers "ready" as soon as they're "running", ignoring health check status.
-
-```bash
-# Linux amd64
-curl -fsSL https://github.com/ChakshuGautam/tilt/releases/download/v0.36.3-healthcheck/tilt-linux-amd64.gz | gunzip > /usr/local/bin/tilt
-chmod +x /usr/local/bin/tilt
-
-# Verify installation
-tilt version
-# Should show: v0.36.3-dev
-```
-
-**Why is this needed?**
-- Services like HRMS require other services (egov-user, egov-enc-service) to be fully healthy before starting
-- Docker Compose `depends_on: condition: service_healthy` handles this correctly
-- But Tilt bypasses this by using `--no-deps` and only checking if containers are "running"
-- The patched Tilt checks the `HealthStatus` field and waits for "healthy" before proceeding
-
-**PR to upstream:** https://github.com/tilt-dev/tilt/pull/6682
-
-## What's Included
-
-### Infrastructure
-| Service | Port | Description |
-|---------|------|-------------|
-| Postgres | 15432 | Database |
-| Redis | 16379 | Cache |
-| Redpanda | 19092 | Kafka-compatible messaging |
-| Elasticsearch | 19200 | Search & indexing |
-
-### Core Services
-| Service | Port | Health Check |
-|---------|------|--------------|
-| MDMS v2 | 18094 | `/mdms-v2/health` |
-| User | 18107 | `/user/health` |
-| Workflow v2 | 18109 | `/egov-workflow-v2/health` |
-| Localization | 18096 | `/localization/actuator/health` |
-| Location | 18084 | `/egov-location/health` |
-| Boundary v2 | 18081 | `/boundary-service/actuator/health` |
-| Access Control | 18090 | `/access/health` |
-| IDGEN | 18088 | `/egov-idgen/health` |
-| ENC | 11234 | `/egov-enc-service/actuator/health` |
-| Persister | 18091 | `/common-persist/actuator/health` |
-
-### Application
-| Service | Port | URL |
-|---------|------|-----|
-| Kong Gateway | 18000 | Main entry point |
-| DIGIT UI | 18080 | Static assets only |
-| PGR Services | 18083 | `/pgr-services/health` |
-
-## Development with Tilt
-
-Tilt provides a better development experience with:
-- Dashboard at http://localhost:10350
-- Live logs for all services
-- One-click restarts
-- Health status monitoring
-
-```bash
-# Start everything
-tilt up
-
-# Stop everything
-tilt down
-```
-
-### Tilt Dashboard Features
-- **Health Check** button - runs all health checks
-- **Smoke Tests** button - validates API functionality
-- **Nuke DB** button - reset database (destructive)
-- **Start Jupyter** - launch Jupyter Lab for data exploration
-- **Start Gatus** - launch health monitoring dashboard
-
-## Alternative: Docker Compose Only
-
-```bash
-# Start
-docker compose up -d
-
-# Watch logs
-docker compose logs -f
-
-# Stop
-docker compose down
-
-# Reset (remove volumes)
-docker compose down -v
-```
-
-## Hot Reload Development
-
-### PGR Services (Java)
-
-Requires Maven installed locally.
-
-```bash
-# Start Tilt - it will compile PGR with Maven
-tilt up
-
-# Make changes to Java code
-vim ../backend/pgr-services/src/main/java/...
-
-# Tilt detects changes, recompiles, and syncs to container automatically
-```
-
-The `pgr-compile` resource in Tilt runs `mvn package` when source files change.
-
-### DIGIT UI (React)
-
-Requires Node.js and Yarn installed locally.
-
-```bash
-# Start Tilt
-tilt up
-
-# In Tilt UI (http://localhost:10350), enable the "ui-watch" resource
-# Or run webpack watch manually:
-cd ../frontend/micro-ui/web
-yarn install
-yarn build:webpack --watch
-
-# Make changes to React code - webpack rebuilds, Tilt syncs to container
-```
-
-### CI Mode (No Hot Reload)
-
-If you don't have Maven/Node installed, run in CI mode:
-
-```bash
-TILT_CI=1 tilt up
-```
-
-This builds images using Docker (slower initial build, no hot reload).
-
-### Configuration
-- `globalConfigs.js` is mounted from `CCRS/configs/assets/globalConfigsPGR.js`
-- Edit this file to change tenant ID, API keys, feature flags
-
-
 
 ## Troubleshooting
 
 ### Services not starting
 ```bash
-# Check service logs
-docker compose logs <service-name>
-
-# Restart a specific service
-docker compose restart <service-name>
+docker compose logs <service-name>     # Check logs
+docker compose restart <service-name>  # Restart one service
 ```
 
-### UI showing blank page
-- Check browser console for errors
-- Verify globalConfigs.js is loaded: `curl http://localhost:18000/digit-ui/globalConfigs.js`
-- Ensure CCRS repo is cloned correctly
+### PGR Assign returns "DEPARTMENT_NOT_FOUND"
+The assignee must be an HRMS employee (not just a user) with a department matching the complaint type's ServiceDef. Use the DataLoader notebook (Phase 4) or `ci-dataloader.py` to create proper HRMS employees.
 
-### API returning errors
-- Check Kong is running: `curl http://localhost:18000/`
-- Check backend service health: `curl http://localhost:18094/mdms-v2/health`
+### UI showing blank page
+```bash
+curl http://localhost:18000/digit-ui/globalConfigs.js  # Should return JS config
+```
 
 ### Reset everything
 ```bash
-docker compose down -v
-docker compose up -d
+docker compose down -v     # Delete all data
+docker compose up -d       # Fresh start
 ```
-
-## Resource Usage
-
-Optimized for ~4GB RAM usage:
-
-| Component | Memory |
-|-----------|--------|
-| Infrastructure (Postgres, Redis, ES, Redpanda) | ~1.5 GB |
-| Core Services (Java) | ~2 GB |
-| Kong + UI | ~0.3 GB |
-| **Total** | **~3.8 GB** |
 
 ## Project Structure
 
 ```
-digit-core/
-├── docker-compose.yml    # Service definitions
-├── Tiltfile              # Tilt configuration
-├── docker/
-│   └── pgr-services/     # PGR Dockerfile for CI builds
+local-setup/
+├── docker-compose.yml           # Main service definitions (~3.8GB RAM)
+├── docker-compose.deploy.yaml   # Deploy variant (no resource limits)
+├── Tiltfile                     # Tilt orchestration
 ├── kong/
-│   └── kong.yml          # API gateway routes
+│   └── kong.yml                 # API gateway route config
 ├── db/
-│   ├── seed.sql          # Database seed data
-│   ├── tenant-seed.sql   # Tenant master data
-│   └── mdms-*.sql        # MDMS seed data
+│   └── full-dump.sql            # Database seed (tenants, MDMS, users)
 ├── configs/
-│   └── persister/        # Persister YAML configs
+│   └── persister/               # Persister YAML configs (9 files)
+├── jupyter/
+│   └── dataloader/
+│       ├── DataLoader_v2.ipynb  # Interactive data loader notebook
+│       ├── crs_loader.py        # Loader library (used by notebook + CI)
+│       ├── unified_loader.py    # Low-level MDMS/HRMS API wrapper
+│       └── templates/           # Excel templates for master data
+├── postman/
+│   ├── complaints-demo.postman_collection.json    # PGR lifecycle tests
+│   └── digit-core-validation.postman_collection.json  # Core API tests
 ├── scripts/
-│   ├── health-check.sh   # Service health verification
-│   └── smoke-tests.sh    # API smoke tests
-└── gatus/
-    └── config.yaml       # Health dashboard config
+│   ├── ci-dataloader.py         # Automated tenant + employee setup
+│   ├── health-check.sh          # Service health verification
+│   ├── smoke-tests.sh           # API smoke tests
+│   └── run-postman.sh           # Newman wrapper
+├── nginx/                       # Nginx configs for MDMS proxy, UI
+├── gatus/                       # Health monitoring dashboard config
+└── docs/                        # Additional documentation
+    ├── REMOTE-DEV-SETUP.md
+    └── HYBRID-SETUP.md
 
-../                          # CCRS repo root
-├── frontend/micro-ui/    # DIGIT UI source
-├── backend/pgr-services/ # PGR Java source
-└── configs/assets/       # Runtime configs
+../backend/pgr-services/         # PGR Java source (hot reload target)
+../frontend/micro-ui/            # DIGIT UI React source (hot reload target)
+../configs/assets/               # Runtime configs (globalConfigs.js)
 ```
