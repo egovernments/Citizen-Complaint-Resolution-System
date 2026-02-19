@@ -204,7 +204,7 @@ jobs:
       - name: Run Postman complaints demo
         run: |
           # Install Python dependencies for ci-dataloader
-          pip install requests openpyxl pandas --quiet
+          pip install requests openpyxl pandas python-dotenv --quiet
 
           # Run CI dataloader to create tenant, HRMS employee, and load masters
           CI_OUTPUT=$(DIGIT_URL=http://localhost:18000 TARGET_TENANT=pg.citest python3 scripts/ci-dataloader.py)
