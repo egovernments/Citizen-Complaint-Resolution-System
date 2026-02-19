@@ -1,0 +1,319 @@
+# DIGIT Core Services - Kubernetes Tiltfile
+# Run with: tilt up -f Tiltfile.k8s
+# Requires: Kind cluster "ccrs" (run scripts/setup-k8s.sh first)
+
+allow_k8s_contexts('kind-ccrs')
+default_registry('localhost:5000')
+
+load('ext://uibutton', 'cmd_button', 'location')
+
+# ==================== Configuration ====================
+CCRS_PATH = os.getenv('CCRS_PATH', '..')
+FRONTEND_PATH = CCRS_PATH + '/frontend/micro-ui'
+PGR_PATH = CCRS_PATH + '/backend/pgr-services'
+
+# CI mode: use pre-built Docker Hub images, no live reload
+CI_MODE = os.getenv('CI', '') != '' or os.getenv('TILT_CI', '') != ''
+
+# ==================== ConfigMaps from files ====================
+# Generated dynamically so edits to source files auto-apply on tilt up
+k8s_yaml(local('kubectl create configmap persister-config --from-file=configs/persister/ -n digit --dry-run=client -o yaml'))
+k8s_yaml(local('kubectl create configmap kong-config --from-file=kong.yml=kong/kong.yml -n digit --dry-run=client -o yaml'))
+k8s_yaml(local('kubectl create configmap nginx-configs --from-file=mdms-proxy.conf=nginx/mdms-proxy.conf --from-file=digit-ui.conf=nginx/digit-ui.conf --from-file=globalConfigs.js=nginx/globalConfigs.js -n digit --dry-run=client -o yaml'))
+k8s_yaml(local('kubectl create configmap gatus-config --from-file=config.yaml=gatus/config.yaml -n digit --dry-run=client -o yaml'))
+
+# ==================== K8s Manifests ====================
+k8s_yaml([
+    # Config
+    'k8s/config/common-env.yaml',
+    'k8s/config/db-credentials.yaml',
+    # Infrastructure
+    'k8s/infrastructure/postgres.yaml',
+    'k8s/infrastructure/pgbouncer.yaml',
+    'k8s/infrastructure/redis.yaml',
+    'k8s/infrastructure/redpanda.yaml',
+    'k8s/infrastructure/minio.yaml',
+    # Core Services
+    'k8s/core-services/mdms-backend.yaml',
+    'k8s/core-services/egov-mdms-service.yaml',
+    'k8s/core-services/egov-enc-service.yaml',
+    'k8s/core-services/egov-idgen.yaml',
+    'k8s/core-services/egov-user.yaml',
+    'k8s/core-services/egov-workflow-v2.yaml',
+    'k8s/core-services/egov-localization.yaml',
+    'k8s/core-services/boundary-service.yaml',
+    'k8s/core-services/egov-accesscontrol.yaml',
+    'k8s/core-services/egov-persister.yaml',
+    'k8s/core-services/egov-filestore.yaml',
+    'k8s/core-services/egov-hrms.yaml',
+    'k8s/core-services/egov-bndry-mgmnt.yaml',
+    'k8s/core-services/egov-url-shortening.yaml',
+    # App Services
+    'k8s/app-services/pgr-services.yaml',
+    'k8s/app-services/digit-ui.yaml',
+    'k8s/app-services/kong.yaml',
+    # Tools
+    'k8s/tools/gatus.yaml',
+])
+
+# ==================== PGR Services ====================
+if CI_MODE:
+    docker_build('pgr-services-dev', context='.',
+        dockerfile_contents='FROM localhost:5000/egovio/pgr-services:multiarch-d448cb7',
+        only=['.dockerignore'],
+    )
+else:
+    maven_check = str(local('which mvn || echo "not_found"', quiet=True))
+    if 'not_found' in maven_check:
+        fail('''
+Maven not found! For local development with hot reload, install Maven:
+  - macOS: brew install maven
+  - Ubuntu: sudo apt install maven
+
+Or run in CI mode without hot reload:
+  TILT_CI=1 tilt up -f Tiltfile.k8s
+''')
+
+    # Initial Maven build if target doesn't exist
+    pgr_target_exists = str(local('test -d "' + PGR_PATH + '/target/extracted" && echo "exists" || echo "missing"', quiet=True))
+    if 'missing' in pgr_target_exists:
+        print('PGR target not found, running initial Maven build...')
+        local('cd ' + PGR_PATH + ' && mvn package -DskipTests -q && unzip -o target/pgr-services-*.jar -d target/extracted')
+
+    local_resource(
+        'pgr-compile',
+        'cd ' + PGR_PATH + ' && mvn package -DskipTests -q && ' +
+        'unzip -o target/pgr-services-*.jar -d target/extracted',
+        deps=[PGR_PATH + '/src', PGR_PATH + '/pom.xml'],
+        labels=['pgr'],
+    )
+
+    docker_build(
+        'pgr-services-dev',
+        context=PGR_PATH + '/target/extracted',
+        dockerfile_contents='''
+FROM eclipse-temurin:17-jre-jammy
+WORKDIR /app
+COPY . /app
+ENTRYPOINT ["java", "-cp", ".:BOOT-INF/lib/*:BOOT-INF/classes", "org.egov.pgr.PGRApp"]
+''',
+        live_update=[
+            sync(PGR_PATH + '/target/extracted/BOOT-INF/lib', '/app/BOOT-INF/lib'),
+            sync(PGR_PATH + '/target/extracted/BOOT-INF/classes', '/app/BOOT-INF/classes'),
+            sync(PGR_PATH + '/target/extracted/META-INF', '/app/META-INF'),
+        ],
+    )
+
+# ==================== DIGIT UI ====================
+if CI_MODE:
+    docker_build('digit-ui-dev', context='.',
+        dockerfile_contents='FROM localhost:5000/egovio/digit-ui:multiarch-d448cb7',
+        only=['.dockerignore'],
+    )
+else:
+    yarn_check = str(local('which yarn || echo "not_found"', quiet=True))
+    if 'not_found' not in yarn_check:
+        local_resource(
+            'ui-watch',
+            serve_cmd='cd ' + FRONTEND_PATH + '/web && yarn build:webpack --watch',
+            deps=[FRONTEND_PATH + '/web/src'],
+            labels=['frontend'],
+            resource_deps=['digit-ui'],
+            auto_init=False,
+        )
+
+    docker_build(
+        'digit-ui-dev',
+        context=FRONTEND_PATH,
+        dockerfile=FRONTEND_PATH + '/web/docker/Dockerfile',
+        build_args={'WORK_DIR': '.'},
+        live_update=[
+            sync(FRONTEND_PATH + '/web/build/', '/var/web/digit-ui/'),
+        ],
+    )
+
+# ==================== Infrastructure ====================
+k8s_resource('postgres-db', labels=['infrastructure'])
+k8s_resource('pgbouncer', labels=['infrastructure'],
+    resource_deps=['postgres-db'])
+k8s_resource('redis', labels=['infrastructure'])
+k8s_resource('redpanda', labels=['infrastructure'])
+k8s_resource('minio', labels=['infrastructure'])
+k8s_resource('minio-init', labels=['infrastructure'],
+    resource_deps=['minio'])
+k8s_resource('gatus', labels=['infrastructure'],
+    port_forwards=['8889:8080'],
+    links=[link('http://localhost:8889', 'Health Dashboard')])
+
+# ==================== Core Services ====================
+k8s_resource('mdms-backend', labels=['core-services'],
+    resource_deps=['pgbouncer', 'redpanda'])
+
+k8s_resource('egov-mdms-service', labels=['core-services'],
+    resource_deps=['mdms-backend'],
+    port_forwards=['8094:8094'],
+    links=[link('http://localhost:8094/mdms-v2/health', 'Health')])
+
+k8s_resource('egov-enc-service', labels=['core-services'],
+    resource_deps=['egov-mdms-service'],
+    port_forwards=['1234:1234'],
+    links=[link('http://localhost:1234/egov-enc-service/actuator/health', 'Health')])
+
+k8s_resource('egov-idgen', labels=['core-services'],
+    resource_deps=['egov-mdms-service'],
+    port_forwards=['8088:8088'],
+    links=[link('http://localhost:8088/egov-idgen/health', 'Health')])
+
+k8s_resource('egov-user', labels=['core-services'],
+    resource_deps=['egov-enc-service'],
+    port_forwards=['8107:8107'],
+    links=[link('http://localhost:8107/user/health', 'Health')])
+
+k8s_resource('egov-workflow-v2', labels=['core-services'],
+    resource_deps=['egov-idgen'],
+    port_forwards=['8109:8109'],
+    links=[link('http://localhost:8109/egov-workflow-v2/health', 'Health')])
+
+k8s_resource('egov-localization', labels=['core-services'],
+    resource_deps=['egov-mdms-service'],
+    port_forwards=['8096:8096'],
+    links=[link('http://localhost:8096/localization/actuator/health', 'Health')])
+
+k8s_resource('boundary-service', labels=['core-services'],
+    resource_deps=['egov-mdms-service'],
+    port_forwards=['8081:8081'],
+    links=[link('http://localhost:8081/boundary-service/actuator/health', 'Health')])
+
+k8s_resource('egov-accesscontrol', labels=['core-services'],
+    resource_deps=['egov-mdms-service'],
+    port_forwards=['8090:8090'],
+    links=[link('http://localhost:8090/access/health', 'Health')])
+
+k8s_resource('egov-persister', labels=['core-services'],
+    resource_deps=['egov-mdms-service'],
+    port_forwards=['8091:8091'],
+    links=[link('http://localhost:8091/common-persist/actuator/health', 'Health')])
+
+k8s_resource('egov-filestore', labels=['core-services'],
+    resource_deps=['minio-init', 'egov-mdms-service'],
+    port_forwards=['8083:8083'],
+    links=[link('http://localhost:8083/filestore/health', 'Health')])
+
+k8s_resource('egov-url-shortening', labels=['core-services'],
+    resource_deps=['pgbouncer'],
+    port_forwards=['8085:8080'],
+    links=[link('http://localhost:8085/egov-url-shortening/actuator/health', 'Health')])
+
+k8s_resource('egov-bndry-mgmnt', labels=['core-services'],
+    resource_deps=['boundary-service', 'egov-filestore'],
+    port_forwards=['8086:8080'])
+
+# ==================== HRMS ====================
+k8s_resource('egov-hrms', labels=['hrms'],
+    resource_deps=['egov-mdms-service', 'egov-idgen', 'egov-user'],
+    port_forwards=['8092:8092'],
+    links=[link('http://localhost:8092/egov-hrms/actuator/health', 'Health')])
+
+# ==================== API Gateway ====================
+k8s_resource('kong', labels=['gateway'],
+    resource_deps=['egov-mdms-service', 'egov-user'],
+    links=[
+        link('http://localhost:30080', 'Proxy (NodePort)'),
+        link('http://localhost:30001', 'Admin API (NodePort)'),
+    ])
+
+# ==================== PGR Services ====================
+k8s_resource('pgr-services', labels=['pgr'],
+    resource_deps=['egov-idgen', 'egov-user', 'egov-workflow-v2', 'egov-localization'],
+    port_forwards=['8180:8080'],
+    links=[link('http://localhost:8180/pgr-services/health', 'Health')])
+
+# ==================== Frontend ====================
+k8s_resource('digit-ui', labels=['frontend'],
+    resource_deps=['kong'],
+    links=[link('http://localhost:30080/digit-ui/', 'UI via Kong')])
+
+# ==================== Local Resources ====================
+
+# Database reset - manually triggered only
+local_resource(
+    'nuke-db',
+    cmd='kubectl delete statefulset postgres-db -n digit --ignore-not-found && kubectl delete pvc postgres-data-postgres-db-0 -n digit --ignore-not-found && sleep 2 && kubectl apply -f k8s/infrastructure/postgres.yaml',
+    auto_init=False,
+    labels=['maintenance'],
+)
+
+# ==================== Custom Buttons ====================
+
+cmd_button(
+    name='nuke-db-btn',
+    argv=['sh', '-c', 'kubectl delete statefulset postgres-db -n digit --ignore-not-found && kubectl delete pvc postgres-data-postgres-db-0 -n digit --ignore-not-found && sleep 2 && kubectl apply -f k8s/infrastructure/postgres.yaml'],
+    location=location.NAV,
+    icon_name='delete_forever',
+    text='Nuke DB',
+)
+
+cmd_button(
+    name='health-check',
+    argv=['./scripts/health-check.sh'],
+    location=location.NAV,
+    icon_name='favorite',
+    text='Health Check',
+)
+
+cmd_button(
+    name='smoke-tests',
+    argv=['./scripts/smoke-tests.sh'],
+    location=location.NAV,
+    icon_name='science',
+    text='Smoke Tests',
+)
+
+cmd_button(
+    name='reseed-mdms',
+    argv=['sh', '-c', 'kubectl exec -n digit statefulset/postgres-db -- psql -U egov -d egov < ./db/seed.sql'],
+    location=location.NAV,
+    icon_name='refresh',
+    text='Re-seed MDMS',
+)
+
+cmd_button(
+    name='kong-test',
+    argv=['sh', '-c', 'curl -s http://localhost:30080/mdms-v2/health | head -20'],
+    location=location.NAV,
+    icon_name='security',
+    text='Kong Test',
+)
+
+cmd_button(
+    name='idgen-test',
+    argv=['sh', '-c', '''curl -s -X POST "http://localhost:8088/egov-idgen/id/_generate" \
+      -H "Content-Type: application/json" \
+      -d '{"RequestInfo":{"apiId":"digit","ver":"1.0"},"idRequests":[{"tenantId":"pg","idName":"pgr.servicerequestid"}]}' | jq .'''],
+    location=location.NAV,
+    icon_name='tag',
+    text='Test idgen',
+)
+
+# ==================== Port Summary ====================
+# Kong Gateway (NodePorts via Kind):
+#   - Proxy:     30080  (main external access)
+#   - Admin API: 30001
+#   - Status:    30000
+#
+# Tilt Port Forwards (for direct service debugging):
+#   - MDMS Proxy:       8094
+#   - ENC:              1234
+#   - IDGEN:            8088
+#   - User:             8107
+#   - Workflow:          8109
+#   - Localization:      8096
+#   - Boundary:          8081
+#   - AccessControl:     8090
+#   - Persister:         8091
+#   - Filestore:         8083
+#   - HRMS:              8092
+#   - URL Shortening:    8085
+#   - Bndry Mgmnt:       8086
+#   - PGR Services:      8180
+#   - Gatus Dashboard:   8889

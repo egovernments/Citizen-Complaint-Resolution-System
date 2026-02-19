@@ -1,0 +1,241 @@
+name: Local Setup CI
+
+on:
+  push:
+    branches: [main, master, feature/*]
+    paths:
+      - 'local-setup/**'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'local-setup/**'
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: local-setup
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free disk space
+        working-directory: .
+        run: |
+          # Remove unnecessary tools to free space
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          df -h
+
+      - name: Start services
+        run: |
+          docker compose up -d
+          echo "Waiting for services to start..."
+
+      - name: Wait for infrastructure
+        run: |
+          echo "Waiting for Postgres..."
+          timeout 120 bash -c 'until docker exec docker-postgres pg_isready -U egov; do sleep 2; done'
+
+          echo "Waiting for Redis..."
+          timeout 60 bash -c 'until docker exec digit-redis redis-cli ping; do sleep 2; done'
+
+          echo "Waiting for Redpanda..."
+          timeout 120 bash -c 'until docker exec digit-redpanda rpk cluster health; do sleep 2; done'
+
+      - name: Wait for all containers healthy
+        run: |
+          echo "Waiting for all containers to be healthy (up to 15 minutes)..."
+          # Skip digit-ui for now - it's not required for API tests
+          SKIP_CONTAINERS="digit-ui"
+          # Wait for all services to report healthy via Docker
+          timeout 900 bash -c '
+            while true; do
+              UNHEALTHY_NAMES=$(docker compose ps --format json | jq -r "select(.Health != \"healthy\" and .Health != \"\" and .State == \"running\") | .Name" | grep -v "digit-ui" || true)
+              UNHEALTHY=$(echo "$UNHEALTHY_NAMES" | grep -c . || true)
+              TOTAL=$(docker compose ps --format json | jq -r "select(.State == \"running\") | .Name" | grep -v "digit-ui" | wc -l)
+              echo "Healthy containers: $((TOTAL - UNHEALTHY))/$TOTAL (skipping digit-ui)"
+              if [ "$UNHEALTHY" -gt 0 ]; then
+                echo "  Waiting on: $UNHEALTHY_NAMES" | tr "\n" " "
+                echo ""
+              fi
+              if [ "$UNHEALTHY" -eq 0 ] && [ "$TOTAL" -gt 0 ]; then
+                echo "All required containers healthy!"
+                break
+              fi
+              sleep 10
+            done
+          '
+
+      - name: Wait for PGR workflow seed
+        run: |
+          echo "Waiting for pgr-workflow-seed to complete..."
+          timeout 120 bash -c '
+            while true; do
+              STATUS=$(docker compose ps -a --format json 2>/dev/null | jq -r "select(.Service == \"pgr-workflow-seed\") | .State" 2>/dev/null)
+              if [ "$STATUS" = "exited" ]; then
+                EXIT_CODE=$(docker compose ps -a --format json 2>/dev/null | jq -r "select(.Service == \"pgr-workflow-seed\") | .ExitCode" 2>/dev/null)
+                if [ "$EXIT_CODE" != "0" ]; then
+                  echo "pgr-workflow-seed FAILED (exit code $EXIT_CODE)"
+                  docker compose logs pgr-workflow-seed
+                  exit 1
+                fi
+                echo "pgr-workflow-seed completed successfully"
+                break
+              fi
+              echo "  pgr-workflow-seed status: $STATUS"
+              sleep 5
+            done
+          '
+
+      - name: Verify database data
+        run: |
+          echo "=== Verifying database data (loaded from dump) ==="
+
+          # Check schema definitions in database
+          echo "1. Checking MDMS schema definitions..."
+          SCHEMA_COUNT=$(docker exec docker-postgres psql -U egov -d egov -t -c "SELECT COUNT(*) FROM eg_mdms_schema_definition WHERE isactive = true;")
+          SCHEMA_COUNT=$(echo $SCHEMA_COUNT | tr -d ' ')
+          echo "   Found $SCHEMA_COUNT active schema definitions"
+          if [ "$SCHEMA_COUNT" -lt 10 ]; then
+            echo "ERROR: Expected at least 10 schema definitions, found $SCHEMA_COUNT"
+            exit 1
+          fi
+
+          # Check MDMS data records
+          echo "2. Checking MDMS data records..."
+          DATA_COUNT=$(docker exec docker-postgres psql -U egov -d egov -t -c "SELECT COUNT(*) FROM eg_mdms_data WHERE isactive = true;")
+          DATA_COUNT=$(echo $DATA_COUNT | tr -d ' ')
+          echo "   Found $DATA_COUNT active MDMS data records"
+          if [ "$DATA_COUNT" -lt 100 ]; then
+            echo "ERROR: Expected at least 100 MDMS data records, found $DATA_COUNT"
+            exit 1
+          fi
+
+          # Check tenant data via API
+          echo "3. Checking tenant data via MDMS API..."
+          TENANT_RESPONSE=$(curl -sS -X POST "http://localhost:18094/mdms-v2/v1/_search" \
+            -H 'Content-Type: application/json' \
+            -d '{"RequestInfo":{"apiId":"digit","ver":"1.0","ts":0},"MdmsCriteria":{"tenantId":"pg","moduleDetails":[{"moduleName":"tenant","masterDetails":[{"name":"tenants"}]}]}}')
+          if echo "$TENANT_RESPONSE" | grep -q '"tenantId"'; then
+            echo "   Tenant data verified via API"
+          else
+            echo "ERROR: Tenant data not found via API"
+            echo "$TENANT_RESPONSE"
+            exit 1
+          fi
+
+          # Check localization data
+          echo "4. Checking localization data..."
+          LOC_COUNT=$(docker exec docker-postgres psql -U egov -d egov -t -c "SELECT COUNT(*) FROM message;")
+          LOC_COUNT=$(echo $LOC_COUNT | tr -d ' ')
+          echo "   Found $LOC_COUNT localization messages"
+          if [ "$LOC_COUNT" -lt 50 ]; then
+            echo "ERROR: Expected at least 50 localization messages, found $LOC_COUNT"
+            exit 1
+          fi
+
+          # Check idgen table exists (created by egov-idgen Flyway migrations)
+          echo "5. Checking IDGEN table exists..."
+          TABLE_EXISTS=$(docker exec docker-postgres psql -U egov -d egov -t -c "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'id_generator');")
+          TABLE_EXISTS=$(echo $TABLE_EXISTS | tr -d ' ')
+          if [ "$TABLE_EXISTS" = "t" ]; then
+            echo "   IDGEN table exists (managed by egov-idgen Flyway)"
+          else
+            echo "ERROR: id_generator table does not exist"
+            exit 1
+          fi
+
+          echo "=== All seed data verification passed! ==="
+
+      - name: Run health checks
+        run: |
+          bash scripts/health-check.sh http://localhost
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: local-setup/tests/package-lock.json
+
+      - name: Install test dependencies
+        run: |
+          cd tests
+          npm ci
+
+      - name: Run Node.js smoke tests
+        env:
+          BASE_URL: http://localhost
+          DB_HOST: localhost
+          DB_PORT: 15432
+          DB_PASSWORD: egov123
+        run: |
+          cd tests
+          npm test
+
+      - name: Test idgen service
+        run: |
+          echo "Testing idgen..."
+          RESPONSE=$(curl -s -X POST 'http://localhost:18088/egov-idgen/id/_generate' \
+            -H 'Content-Type: application/json' \
+            -d '{"RequestInfo":{"apiId":"digit","ver":"1.0"},"idRequests":[{"tenantId":"pg","idName":"pgr.servicerequestid"}]}')
+
+          if echo "$RESPONSE" | jq -e '.idResponses[0].id' > /dev/null 2>&1; then
+            ID=$(echo "$RESPONSE" | jq -r '.idResponses[0].id')
+            echo "idgen generated ID: $ID"
+          else
+            echo "idgen failed:"
+            echo "$RESPONSE" | jq .
+            exit 1
+          fi
+
+      - name: Run Postman core validation
+        run: |
+          npx newman@latest run postman/digit-core-validation.postman_collection.json \
+            --env-var "baseUrl=http://localhost"
+
+      - name: Run Postman complaints demo
+        run: |
+          # Install Python dependencies for ci-dataloader
+          pip install requests openpyxl pandas python-dotenv --quiet
+
+          # Run CI dataloader to create tenant, HRMS employee, and load masters
+          CI_OUTPUT=$(DIGIT_URL=http://localhost:18000 TARGET_TENANT=pg.citest python3 scripts/ci-dataloader.py)
+          echo "$CI_OUTPUT"
+
+          # Parse output for service code
+          CI_SERVICE_CODE=$(echo "$CI_OUTPUT" | grep '^CI_SERVICE_CODE=' | cut -d= -f2)
+          if [ -z "$CI_SERVICE_CODE" ]; then
+            echo "FATAL: ci-dataloader did not output CI_SERVICE_CODE"
+            exit 1
+          fi
+          echo "Using serviceCode: $CI_SERVICE_CODE"
+
+          # Run the complaints demo collection through Kong gateway
+          npx newman@latest run postman/complaints-demo.postman_collection.json \
+            --env-var "url=http://localhost:18000" \
+            --env-var "username=CI-ADMIN" \
+            --env-var "password=eGov@123" \
+            --env-var "cityTenant=pg.citest" \
+            --env-var "stateTenant=pg" \
+            --env-var "userType=EMPLOYEE" \
+            --env-var "authorization=Basic ZWdvdi11c2VyLWNsaWVudDo=" \
+            --env-var "serviceCode=${CI_SERVICE_CODE}"
+
+      - name: Show service logs on failure
+        if: failure()
+        run: |
+          echo "=== Docker Compose Logs ==="
+          docker compose logs --tail=100
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker compose down -v --remove-orphans
