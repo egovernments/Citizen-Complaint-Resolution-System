@@ -775,6 +775,92 @@ class CRSLoader:
         self._print_summary("Common Masters", results)
         return results
 
+    def create_employee(self, tenant: str, username: str, password: str,
+                        name: str = None, mobile: str = "9999999999",
+                        roles: list = None, department: str = None,
+                        designation: str = None) -> bool:
+        """Create a single HRMS employee programmatically.
+
+        Creates both the user account AND the HRMS employee record.
+        Use this when PGR needs department info for the assignee.
+
+        Args:
+            tenant: Target tenant ID
+            username: Employee username
+            password: Employee password
+            name: Display name (defaults to username)
+            mobile: Mobile number
+            roles: List of role codes (defaults to ["EMPLOYEE"])
+            department: Department code (auto-detected if not provided)
+            designation: Designation code (auto-detected if not provided)
+
+        Returns:
+            bool: True if employee was created or already exists
+        """
+        self._check_auth()
+
+        state_tenant = tenant.split(".")[0] if "." in tenant else tenant
+        name = name or username
+        roles = roles or ["EMPLOYEE"]
+
+        if not department or not designation:
+            depts = self.uploader.fetch_departments(tenant)
+            desigs = self.uploader.fetch_designations(tenant)
+            if not department and depts:
+                department = depts[0].get('code', 'DEPT_1')
+            if not designation and desigs:
+                designation = desigs[0].get('code', 'DESIG_01')
+
+        if not department or not designation:
+            print(f"   No departments/designations in MDMS. Load common masters first.")
+            return False
+
+        self._ensure_roles_exist(state_tenant, roles)
+        role_objects = [{"code": r, "name": r, "tenantId": state_tenant} for r in roles]
+
+        # HRMS _create ignores the password we pass and generates a random one.
+        # unified_loader skips password update for "eGov@123", so use a sentinel.
+        employee = {
+            'tenantId': tenant, 'code': username,
+            'employeeStatus': 'EMPLOYED', 'employeeType': 'PERMANENT',
+            'dateOfAppointment': 1704067200000,
+            'assignments': [{'fromDate': 1704067200000, 'isCurrentAssignment': True,
+                             'department': department, 'designation': designation}],
+            'jurisdictions': [{'hierarchy': 'REVENUE', 'boundaryType': 'City',
+                               'boundary': tenant, 'tenantId': tenant, 'roles': role_objects}],
+            'user': {'name': name, 'userName': username, 'mobileNumber': mobile,
+                     'active': True, 'type': 'EMPLOYEE', 'tenantId': tenant,
+                     'roles': role_objects, 'password': 'TempHRMS@999', 'otpReference': '12345'},
+            'serviceHistory': [], 'education': [], 'tests': [],
+        }
+
+        print(f"   Creating HRMS employee '{username}' (dept={department}, desig={designation})")
+        results = self.uploader.create_employees(employee_list=[employee], tenant=tenant)
+        created = results.get('created', 0) > 0 or results.get('exists', 0) > 0
+
+        # Set the real password via HRMS _update
+        if created and password != 'TempHRMS@999':
+            hrms_svc = os.environ.get("HRMS_SERVICE", "/egov-hrms")
+            headers = {"Content-Type": "application/json"}
+            try:
+                sr = requests.post(f"{self.base_url}{hrms_svc}/employees/_search",
+                    json={"RequestInfo": {"apiId": "Rainmaker", "authToken": self.auth_token,
+                          "userInfo": self.user_info}, "codes": [username], "tenantId": tenant},
+                    headers=headers, params={"tenantId": tenant, "codes": username},
+                    timeout=REQUEST_TIMEOUT)
+                emp = sr.json().get("Employees", [{}])[0] if sr.ok else {}
+                if emp.get("id"):
+                    emp["user"]["password"] = password
+                    requests.post(f"{self.base_url}{hrms_svc}/employees/_update",
+                        json={"RequestInfo": {"apiId": "Rainmaker", "authToken": self.auth_token,
+                              "userInfo": self.user_info}, "Employees": [emp]},
+                        headers=headers, timeout=REQUEST_TIMEOUT)
+                    print(f"   Password set for '{username}'")
+            except Exception as e:
+                print(f"   Warning: password update failed: {e}")
+
+        return created
+
     def load_employees(self, excel_path: str, target_tenant: str = None) -> Dict:
         """Phase 4: Load employee master data
 

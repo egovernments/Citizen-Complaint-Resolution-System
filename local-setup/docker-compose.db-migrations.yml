@@ -1097,7 +1097,7 @@ services:
       EGOV_LOCALIZATION_HOST: http://egov-localization:8096/
       EGOV_USER_HOST: http://egov-user:8107/
       EGOV_LOCATION_HOST: http://boundary-service:8081/
-      EGOV_HRMS_HOST: http://egov-user:8107/
+      EGOV_HRMS_HOST: http://egov-hrms:8092/
       EGOV_URL_SHORTNER_HOST: http://egov-url-shortening:8080/
       EGOV_UI_APP_HOST: http://localhost:18080
       NOTIFICATION_SMS_ENABLED: 'false'
