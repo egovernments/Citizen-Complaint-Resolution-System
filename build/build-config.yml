@@ -25,6 +25,27 @@ config:
         dockerfile: "build/maven/Dockerfile"
       - work-dir: "backend/pgr-services/src/main/resources/db"
         image-name: "pgr-services-db"
+  - name: "builds/Citizen-Complaint-Resolution-System/backend/novu-bridge"
+    build:
+      - work-dir: "backend/novu-bridge"
+        image-name: "novu-bridge"
+        dockerfile: "build/maven/Dockerfile"
+      - work-dir: "backend/novu-bridge/src/main/resources/db"
+        image-name: "novu-bridge-db"
+  - name: "builds/Citizen-Complaint-Resolution-System/backend/digit-config-service"
+    build:
+      - work-dir: "backend/digit-config-service"
+        image-name: "digit-config-service"
+        dockerfile: "build/maven/Dockerfile"
+      - work-dir: "backend/digit-config-service/src/main/resources/db"
+        image-name: "digit-config-service-db"
+  - name: "builds/Citizen-Complaint-Resolution-System/backend/digit-user-preferences-service"
+    build:
+      - work-dir: "backend/digit-user-preferences-service"
+        image-name: "digit-user-preferences-service"
+        dockerfile: "build/maven/Dockerfile"
+      - work-dir: "backend/digit-user-preferences-service/src/main/resources/db"
+        image-name: "digit-user-preferences-service-db"
   - name: "builds/Citizen-Complaint-Resolution-System/utilities/default-data-handler"
     build:
       - work-dir: "utilities/default-data-handler"
