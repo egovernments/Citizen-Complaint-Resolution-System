@@ -1244,7 +1244,7 @@
           }
         },
         "url": {
-          "raw": "{{url}}/pgr-services/v2/request/_search?tenantId={{cityTenant}}&serviceRequestId{{serviceRequestId}}&_=1751901786702",
+          "raw": "{{url}}/pgr-services/v2/request/_search?tenantId={{cityTenant}}&serviceRequestId={{serviceRequestId}}&_=1751901786702",
           "host": [
             "{{url}}"
           ],
@@ -1260,8 +1260,8 @@
               "value": "{{cityTenant}}"
             },
             {
-              "key": "serviceRequestId{{serviceRequestId}}",
-              "value": null
+              "key": "serviceRequestId",
+              "value": "{{serviceRequestId}}"
             },
             {
               "key": "_",
