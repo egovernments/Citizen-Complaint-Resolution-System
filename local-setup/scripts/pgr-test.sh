@@ -15,12 +15,12 @@ NC='\033[0m' # No Color
 
 pass() {
     echo -e "[${GREEN}PASS${NC}] $1"
-    ((PASSED++))
+    PASSED=$((PASSED + 1))
 }
 
 fail() {
     echo -e "[${RED}FAIL${NC}] $1"
-    ((FAILED++))
+    FAILED=$((FAILED + 1))
 }
 
 echo "=== PGR Services API Tests ==="
