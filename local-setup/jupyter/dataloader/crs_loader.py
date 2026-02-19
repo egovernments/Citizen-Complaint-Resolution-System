@@ -269,18 +269,21 @@ class CRSLoader:
             import hashlib
             config_str = json_lib.dumps(new_config, sort_keys=True, separators=(',', ':'))
 
-            # Construct SQL update
-            sql = f"""
+            # Construct SQL update (parameterized to prevent SQL injection)
+            update_sql = """
             UPDATE eg_mdms_data
-            SET data = '{json_lib.dumps(new_config)}'::jsonb,
+            SET data = :'new_data'::jsonb,
                 lastmodifiedtime = EXTRACT(EPOCH FROM NOW())::bigint * 1000
             WHERE schemacode = 'tenant.citymodule'
               AND tenantid = 'pg'
-              AND data->>'code' = '{module_code}';
+              AND data->>'code' = :'mod_code';
             """
 
             result = subprocess.run(
-                ["docker", "exec", "docker-postgres", "psql", "-U", "egov", "-d", "egov", "-c", sql],
+                ["docker", "exec", "docker-postgres", "psql", "-U", "egov", "-d", "egov",
+                 "-v", f"new_data={json_lib.dumps(new_config)}",
+                 "-v", f"mod_code={module_code}",
+                 "-c", update_sql],
                 capture_output=True, text=True, timeout=10
             )
 
@@ -1099,10 +1102,10 @@ class CRSLoader:
         """Delete boundaries using direct database access (requires kubectl)"""
         import subprocess
 
-        # Database connection details
-        db_host = "chakshu-pgr-db.czvokiourya9.ap-south-1.rds.amazonaws.com"
-        db_name = "chakshupgrdb"
-        db_user = "chakshupgr"
+        # Database connection details (from environment or defaults for local Docker)
+        db_host = os.environ.get("BOUNDARY_DB_HOST", "postgres")
+        db_name = os.environ.get("BOUNDARY_DB_NAME", "egov")
+        db_user = os.environ.get("BOUNDARY_DB_USER", "egov")
 
         # Get DB password from K8s secret
         pw_result = subprocess.run(
@@ -1129,12 +1132,13 @@ class CRSLoader:
 
         conn_str = f"postgresql://{db_user}:{db_pass}@{db_host}:5432/{db_name}"
 
-        # Delete relationships first, then boundaries
+        # Delete relationships first, then boundaries (parameterized to prevent SQL injection)
+        delete_sql = "DELETE FROM boundary_relationship WHERE tenantid = :'tenant_id'; DELETE FROM boundary WHERE tenantid = :'tenant_id';"
         result = subprocess.run(
             ["kubectl", "exec", "-n", "egov", "db-cleanup", "--",
-             "psql", conn_str, "-t", "-c",
-             f"DELETE FROM boundary_relationship WHERE tenantid='{tenant}'; "
-             f"DELETE FROM boundary WHERE tenantid='{tenant}';"],
+             "psql", conn_str, "-t",
+             "-v", f"tenant_id={tenant}",
+             "-c", delete_sql],
             capture_output=True, text=True
         )
 
