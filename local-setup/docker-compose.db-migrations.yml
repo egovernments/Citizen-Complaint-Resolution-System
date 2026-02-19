@@ -1255,7 +1255,7 @@ services:
       --port=8888
       --no-browser
       --allow-root
-      --ServerApp.token=''
+      --ServerApp.token=${JUPYTER_TOKEN:-digit-crs-local}
       --ServerApp.password=''
       --ServerApp.base_url=/jupyter
       --ServerApp.allow_origin='*'
