@@ -33,16 +33,6 @@ jobs:
           sudo rm -rf /usr/local/share/boost
           df -h
 
-      - name: Pull pre-built images
-        run: |
-          # Use pre-built images from Docker Hub instead of building (much faster)
-          docker pull egovio/digit-ui:master-e58961a
-          docker pull egovio/pgr-services:crs_dataseeder-084b7cc
-
-          # Tag them as expected by docker-compose
-          docker tag egovio/digit-ui:master-e58961a digit-ui-dev:latest
-          docker tag egovio/pgr-services:crs_dataseeder-084b7cc pgr-services-dev:latest
-
       - name: Start services
         run: |
           docker compose up -d
@@ -83,87 +73,9 @@ jobs:
             done
           '
 
-      - name: Wait for seeds to complete
+      - name: Verify database data
         run: |
-          echo "Waiting for seed containers to finish (timeout: 10 minutes)..."
-
-          # List of all seed containers
-          SEEDS="mdms-tenant-seed mdms-security-seed mdms-workflow-seed localization-seed pgr-workflow-seed db-seed"
-
-          # Overall timeout in seconds (10 minutes)
-          TIMEOUT=600
-          START_TIME=$(date +%s)
-
-          # Wait for each seed container to exit
-          for seed in $SEEDS; do
-            echo ""
-            echo ">>> Waiting for $seed..."
-            WAIT_COUNT=0
-            while true; do
-              # Check overall timeout
-              CURRENT_TIME=$(date +%s)
-              ELAPSED=$((CURRENT_TIME - START_TIME))
-              if [ $ELAPSED -gt $TIMEOUT ]; then
-                echo ""
-                echo "=== TIMEOUT: Seeds did not complete in ${TIMEOUT}s ==="
-                echo ""
-                echo "=== Container Status ==="
-                docker compose ps
-                echo ""
-                echo "=== Checking why seeds haven't started ==="
-                for s in $SEEDS; do
-                  CONTAINER_JSON=$(docker compose ps -a --format json 2>/dev/null | jq -s "map(select(.Service == \"$s\")) | .[0]" 2>/dev/null)
-                  if [ "$CONTAINER_JSON" = "null" ] || [ -z "$CONTAINER_JSON" ]; then
-                    echo "[$s] NOT STARTED - checking dependencies..."
-                    # Show the depends_on for this service
-                    docker compose config --services 2>/dev/null | grep -q "$s" && echo "  Service exists in compose"
-                  else
-                    STATUS=$(echo "$CONTAINER_JSON" | jq -r '.State // "unknown"')
-                    echo "[$s] Status: $STATUS"
-                  fi
-                done
-                echo ""
-                echo "=== Services with health issues ==="
-                docker compose ps --format json | jq -r 'select(.Health != "healthy" and .Health != "") | "\(.Name): \(.Health)"'
-                exit 1
-              fi
-
-              # Get container info - use -a to include EXITED containers!
-              CONTAINER_JSON=$(docker compose ps -a --format json 2>/dev/null | jq -s "map(select(.Service == \"$seed\")) | .[0]" 2>/dev/null)
-
-              if [ "$CONTAINER_JSON" = "null" ] || [ -z "$CONTAINER_JSON" ]; then
-                echo "    [$seed] Waiting to start... (${WAIT_COUNT}s, total: ${ELAPSED}s)"
-              else
-                STATUS=$(echo "$CONTAINER_JSON" | jq -r '.State // "unknown"')
-                HEALTH=$(echo "$CONTAINER_JSON" | jq -r '.Health // "none"')
-                EXIT_CODE=$(echo "$CONTAINER_JSON" | jq -r '.ExitCode // "0"')
-
-                if [ "$STATUS" = "exited" ]; then
-                  if [ "$EXIT_CODE" != "0" ]; then
-                    echo "    [$seed] FAILED with exit code $EXIT_CODE"
-                    docker compose logs "$seed"
-                    exit 1
-                  fi
-                  echo "    [$seed] COMPLETED successfully"
-                  break
-                elif [ "$STATUS" = "running" ]; then
-                  echo "    [$seed] Running... (${WAIT_COUNT}s, health: $HEALTH)"
-                else
-                  echo "    [$seed] Status: $STATUS (${WAIT_COUNT}s)"
-                fi
-              fi
-
-              sleep 5
-              WAIT_COUNT=$((WAIT_COUNT + 5))
-            done
-          done
-
-          echo ""
-          echo "=== All seeds completed successfully! ==="
-
-      - name: Verify seed data ingestion
-        run: |
-          echo "=== Verifying seed data was ingested ==="
+          echo "=== Verifying database data (loaded from dump) ==="
 
           # Check schema definitions in database
           echo "1. Checking MDMS schema definitions..."

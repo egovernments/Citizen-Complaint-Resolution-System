@@ -12,7 +12,6 @@ services=(
   "Postgres:15432:SELECT 1"
   "Redis:16379:PING"
   "Redpanda:19092:broker"
-  "Elasticsearch:19200:/_cluster/health"
   "MDMS:18094:/mdms-v2/health"
   "ENC Service:11234:/egov-enc-service/actuator/health"
   "IDGEN:18088:/egov-idgen/health"
