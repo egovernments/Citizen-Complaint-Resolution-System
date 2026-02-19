@@ -63,10 +63,4 @@ describe('Health Checks', () => {
     const result = await db.queryValue<number>('SELECT 1');
     expect(result).toBe(1);
   });
-
-  test('Elasticsearch cluster is healthy', async () => {
-    const response = await api.get(ports.elasticsearch, '/_cluster/health');
-    expect(response.ok).toBe(true);
-    expect(['green', 'yellow']).toContain((response.data as { status: string }).status);
-  });
 });

@@ -14,7 +14,6 @@ export const config = {
     encryption: 11234,
     location: 18084,
     boundary: 18081,
-    elasticsearch: 19200,
     kong: 18000,
   },
 

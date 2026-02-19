@@ -73,6 +73,27 @@ jobs:
             done
           '
 
+      - name: Wait for PGR workflow seed
+        run: |
+          echo "Waiting for pgr-workflow-seed to complete..."
+          timeout 120 bash -c '
+            while true; do
+              STATUS=$(docker compose ps -a --format json 2>/dev/null | jq -r "select(.Service == \"pgr-workflow-seed\") | .State" 2>/dev/null)
+              if [ "$STATUS" = "exited" ]; then
+                EXIT_CODE=$(docker compose ps -a --format json 2>/dev/null | jq -r "select(.Service == \"pgr-workflow-seed\") | .ExitCode" 2>/dev/null)
+                if [ "$EXIT_CODE" != "0" ]; then
+                  echo "pgr-workflow-seed FAILED (exit code $EXIT_CODE)"
+                  docker compose logs pgr-workflow-seed
+                  exit 1
+                fi
+                echo "pgr-workflow-seed completed successfully"
+                break
+              fi
+              echo "  pgr-workflow-seed status: $STATUS"
+              sleep 5
+            done
+          '
+
       - name: Verify database data
         run: |
           echo "=== Verifying database data (loaded from dump) ==="
