@@ -585,7 +585,7 @@ class MDMSValidator:
 
         # Set sheet-specific required fields (DO NOT copy from full schema)
         # Each sheet has its own set of required fields based on template type
-        if template_type == 'tenant.master':
+        if template_type == 'tenant.masterschemavalidation':
             # NEW FORMAT ONLY: Tenant Info sheet
             if sheet_name == 'Tenant Info':
                 # Only 4 required fields for new format
@@ -596,7 +596,7 @@ class MDMSValidator:
                 # Branding sheet has no required fields (all optional)
                 sheet_schema['required'] = []
 
-        elif template_type == 'common.master':
+        elif template_type == 'common.masterschemavalidation':
             if sheet_name == 'Department And Desgination Mast':
                 # Dept/Desig sheet requires both fields
                 dept_required = ['departmentName', 'designationName']
@@ -607,7 +607,7 @@ class MDMSValidator:
                                     'resolutionTimeHours', 'searchWords']
                 sheet_schema['required'] = [f for f in complaint_required if f in sheet_fields]
 
-        elif template_type == 'localization.master':
+        elif template_type == 'localization.masterschemavalidation':
             if sheet_name == 'localization':
                 # Localization requires module, code, and locale
                 loc_required = ['module', 'code', 'locale']
