@@ -16,5 +16,6 @@ do
            -locations="$FLYWAY_LOCATIONS" \
            -baselineOnMigrate=true \
            -outOfOrder=true \
+           -ignoreMigrationPatterns="*:missing" \
            migrate
 done
