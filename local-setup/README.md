@@ -188,6 +188,8 @@ tilt up    # uses the default Tiltfile with hot reload
 
 After the stack is running, you can create a new city/tenant with all the master data needed for PGR complaints. The DataLoader notebook guides you through this step by step.
 
+> **Full documentation**: See the [DIGIT CRS Deployment Guide](https://docs.digit.org/complaints-resolution/deploy/setup/production-setup/deploy-crs/unified-approach/1.-login-and-add-tenant) for detailed instructions on the tenant setup flow.
+
 ### Step 1: Open Jupyter Lab
 
 Open http://localhost:18000/jupyter/lab?token=digit-crs-local
