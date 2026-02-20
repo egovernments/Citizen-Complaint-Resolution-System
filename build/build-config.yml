@@ -43,8 +43,7 @@ config:
     build:
       - work-dir: "backend/digit-user-preferences-service"
         image-name: "digit-user-preferences-service"
-        dockerfile: "build/maven/Dockerfile"
-      - work-dir: "backend/digit-user-preferences-service/src/main/resources/db"
+      - work-dir: "backend/digit-user-preferences-service/db"
         image-name: "digit-user-preferences-service-db"
   - name: "builds/Citizen-Complaint-Resolution-System/utilities/default-data-handler"
     build:
