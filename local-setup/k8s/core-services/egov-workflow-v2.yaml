@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: egov-workflow-v2
+  namespace: digit
+  labels:
+    app: egov-workflow-v2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: egov-workflow-v2
+  template:
+    metadata:
+      labels:
+        app: egov-workflow-v2
+    spec:
+      containers:
+        - name: egov-workflow-v2
+          image: localhost:5000/egovio/egov-workflow-v2:v2.9.2-4a60f20
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8109
+          envFrom:
+            - configMapRef:
+                name: digit-common-env
+            - secretRef:
+                name: digit-db-credentials
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:otel:postgresql://postgres:5432/egov"
+            - name: SERVER_PORT
+              value: "8109"
+            - name: EGOV_MDMS_HOST
+              value: "http://egov-mdms-service:8094/"
+            - name: EGOV_MDMS_SEARCH_ENDPOINT
+              value: "mdms-v2/v1/_search"
+            - name: EGOV_USER_HOST
+              value: "http://egov-user:8107/"
+            - name: STATE_LEVEL_TENANT_ID
+              value: pg.citya
+            - name: IS_ENVIRONMENT_CENTRAL_INSTANCE
+              value: "false"
+            - name: JAVA_TOOL_OPTIONS
+              value: "-Xms64m -Xmx256m"
+          resources:
+            limits:
+              memory: 320Mi
+              cpu: "250m"
+            requests:
+              memory: 192Mi
+              cpu: "100m"
+          readinessProbe:
+            httpGet:
+              path: /egov-workflow-v2/health
+              port: 8109
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /egov-workflow-v2/health
+              port: 8109
+            initialDelaySeconds: 0
+            periodSeconds: 30
+            timeoutSeconds: 10
+          startupProbe:
+            httpGet:
+              path: /egov-workflow-v2/health
+              port: 8109
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 30
+            timeoutSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: egov-workflow-v2
+  namespace: digit
+spec:
+  selector:
+    app: egov-workflow-v2
+  ports:
+    - port: 8109
+      targetPort: 8109

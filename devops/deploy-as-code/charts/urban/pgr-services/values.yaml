@@ -17,7 +17,7 @@ initContainers:
     schemaTable: "pgr_services_schema"
     image:
       repository: "pgr-services-db"
-      tag: "develop-de5dc8c-3"
+      tag: "v2.9.0-8b3aa24-4"
     env: |
         {{- if index .Values "pgr-ismultischema-enabled" }}        
         - name: SCHEMA_NAME
@@ -49,7 +49,7 @@ initContainers:
 # Container Configs
 image:
   repository: "pgr-services"
-  tag: "develop-de5dc8c-3"
+  tag: "v2.9.0-8b3aa24-4"
 replicas: "1"
 healthChecks:
   enabled: true
@@ -184,6 +184,11 @@ env: |
       configMapKeyRef:
         name: egov-config
         key: egov-state-level-tenant-id
+  - name: SPRING_DATASOURCE_URL
+    valueFrom:
+      configMapKeyRef:
+        name: egov-config
+        key: db-url
   {{- if index .Values "tracing-enabled" }}
   - name: TRACER_OPENTRACING_ENABLED
     value: "true" 

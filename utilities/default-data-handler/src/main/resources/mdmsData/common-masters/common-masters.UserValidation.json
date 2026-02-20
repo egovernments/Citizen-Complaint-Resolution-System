@@ -1,0 +1,20 @@
+[
+  {
+    "rules": {
+      "pattern": "^[6-9][0-9]{9}$",
+      "maxLength": 10,
+      "minLength": 10,
+      "errorMessage": "Please enter a valid 10-digit mobile number starting with 6-9",
+      "allowedStartingCharacters": [
+        "6",
+        "7",
+        "8",
+        "9"
+      ]
+    },
+    "fieldType": "mobile",
+    "attributes": {
+      "prefix": "+91"
+    }
+  }
+]

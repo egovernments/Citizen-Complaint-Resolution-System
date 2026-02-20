@@ -9,7 +9,7 @@ the citizen and will be updated by notifications whenever the status of the comp
 - egov-user
 - egov-localization
 - egov-idgen
-- egov-mdms
+- mdms-v2
 - egov-persister
 - egov-notification-sms
 - egov-notification-mail
@@ -73,3 +73,8 @@ the citizen and will be updated by notifications whenever the status of the comp
 - Following are the Producer topic.
     - **save-pgr-request** :- This topic is used to create new complaint in the system.
     - **update-pgr-request** :- This topic is used to update the existing complaint in the systen.
+
+### note
+all master data, localisation data, boundary data, users, employees, workflow config will be update by a service in utilities/default-data-handler which update all these data which is maintained in resource folder.
+
+and all the configs which are required for pgr are maintained in configs folder.

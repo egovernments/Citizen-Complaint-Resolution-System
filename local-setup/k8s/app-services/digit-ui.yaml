@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: digit-ui
+  namespace: digit
+  labels:
+    app: digit-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: digit-ui
+  template:
+    metadata:
+      labels:
+        app: digit-ui
+    spec:
+      containers:
+        - name: digit-ui
+          image: digit-ui-dev
+          ports:
+            - containerPort: 80
+          resources:
+            limits:
+              memory: 128Mi
+              cpu: "100m"
+            requests:
+              memory: 64Mi
+              cpu: "50m"
+          readinessProbe:
+            httpGet:
+              path: /digit-ui/
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /digit-ui/
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: digit-ui.conf
+            - name: nginx-config
+              mountPath: /var/web/digit-ui/globalConfigs.js
+              subPath: globalConfigs.js
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: nginx-configs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: digit-ui
+  namespace: digit
+spec:
+  selector:
+    app: digit-ui
+  ports:
+    - port: 80
+      targetPort: 80

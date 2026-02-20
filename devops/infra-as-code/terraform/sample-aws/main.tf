@@ -13,6 +13,10 @@ terraform {
       source  = "gavinbunney/kubectl"
       version = "~> 1.14.0" 
     }
+    kubernetes = {
+      source = "hashicorp/kubernetes"
+      version = "2.37.1"
+    }
   }
 }
 
@@ -194,8 +198,8 @@ module "db" {
   subnet_ids                    = "${module.network.private_subnets}"
   vpc_security_group_ids        = ["${module.network.rds_db_sg_id}"]
   availability_zone             = "${element(var.availability_zones, 0)}"
-  instance_class                = "db.t4g.medium"  ## postgres db instance type
-  engine_version                = "15.8"   ## postgres version
+  instance_class                = "${var.db_instance_type}"
+  engine_version                = "${var.db_version}"
   storage_type                  = "gp3"
   storage_gb                    = "20"     ## postgres disk size
   backup_retention_days         = "7"
@@ -276,7 +280,7 @@ module "eks_managed_node_group" {
   max_size     = var.max_worker_nodes
   desired_size = var.desired_worker_nodes
   instance_types = var.instance_types
-  capacity_type  = "SPOT"
+  capacity_type  = "${var.instance_reservation}"
   ebs_optimized  = "true"
   enable_monitoring = "true"
   iam_role_additional_policies = {
@@ -320,12 +324,14 @@ resource "aws_eks_addon" "kube_proxy" {
   addon_name        = "kube-proxy"
   resolve_conflicts_on_create = "OVERWRITE"
 }
+
 resource "aws_eks_addon" "core_dns" {
   depends_on = [module.eks_managed_node_group]
   cluster_name      = var.cluster_name
   addon_name        = "coredns"
   resolve_conflicts_on_create = "OVERWRITE"
 }
+
 resource "aws_eks_addon" "aws_ebs_csi_driver" {
   depends_on = [module.eks_managed_node_group]
   cluster_name      = var.cluster_name
@@ -334,9 +340,13 @@ resource "aws_eks_addon" "aws_ebs_csi_driver" {
 }
 
 provider "kubernetes" {
-  host                   = data.aws_eks_cluster.cluster.endpoint
-  cluster_ca_certificate = base64decode(data.aws_eks_cluster.cluster.certificate_authority[0].data)
-  token                  = data.aws_eks_cluster_auth.cluster.token
+  host                   = module.eks.cluster_endpoint
+  cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+  exec {
+    api_version = "client.authentication.k8s.io/v1beta1"
+    args        = ["eks", "get-token", "--cluster-name", var.cluster_name]
+    command     = "aws"
+  }
 }
 
 resource "kubernetes_storage_class" "ebs_csi_encrypted_gp3_storage_class" {

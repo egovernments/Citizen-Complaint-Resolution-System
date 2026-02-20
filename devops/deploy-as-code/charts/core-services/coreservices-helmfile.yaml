@@ -53,10 +53,6 @@ releases:
     installed: true
     <<: *default
 
-  - name: egov-location
-    installed: true
-    <<: *default
-
   - name: egov-indexer
     installed: true
     <<: *default
@@ -110,10 +106,6 @@ releases:
     <<: *default
   
   - name: gateway
-    installed: true
-    <<: *default
-
-  - name: egov-pg-service
     installed: true
     <<: *default
   

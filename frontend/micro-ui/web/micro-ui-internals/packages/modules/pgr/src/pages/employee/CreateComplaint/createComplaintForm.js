@@ -12,7 +12,7 @@
  * - Navigates to complaint response screen after submission
  */
 
-import { FormComposerV2, Toast } from "@egovernments/digit-ui-components";
+import { FormComposerV2, Toast, Loader } from "@egovernments/digit-ui-components";
 import React, { useEffect, useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useHistory } from "react-router-dom";
@@ -99,7 +99,7 @@ const CreateComplaintForm = ({
     for (const item of data) {
       if (!seenMenuPaths.has(item.menuPath)) {
         seenMenuPaths.add(item.menuPath);
-        uniqueItems.push(item);
+        uniqueItems.push({ ...item, i18nKey: "SERVICEDEFS_" + item.menuPath.toUpperCase().replace(/[ -]/g, "_") });
       }
     }
 
@@ -113,7 +113,7 @@ const CreateComplaintForm = ({
       return [];
     }
 
-    return allItems.filter(item => item.department === baseItem.department);
+    return allItems.filter(item => item.department === baseItem.department).map((item) => ({ ...item, i18nKey: "SERVICEDEFS_" + item.serviceCode.toUpperCase() }));
   }
 
 
@@ -146,6 +146,31 @@ const CreateComplaintForm = ({
     if (selectedCity) fetchBoundaryData();
   }, [selectedCity]); // ← this only runs when selectedCity changes
 
+  // Use Custom MDMS hook for fetching Hierarchy Schema
+  const stateId = Digit.ULBService.getStateId();
+  const { isLoading: isHierarchyLoading, data: hierarchyData } = Digit.Hooks.useCustomMDMS(
+    stateId,
+    "CMS-BOUNDARY",
+    [{ name: "HierarchySchema" }],
+    {
+      select: (data) => {
+        const hierarchySchema = data?.["CMS-BOUNDARY"]?.HierarchySchema;
+        if (Array.isArray(hierarchySchema)) {
+          return hierarchySchema.find((item) => item.moduleName === "CMS");
+        }
+        return null;
+      },
+      retry: false,
+      enabled: true,
+    }
+  );
+
+  useEffect(() => {
+   
+    if (hierarchyData) {
+  
+    }
+  }, [hierarchyData, isHierarchyLoading, stateId]);
 
   const processLocalities = (boundaryList = []) => {
     if (!Array.isArray(boundaryList)) return [];
@@ -172,11 +197,11 @@ const CreateComplaintForm = ({
             includeChildren: true,
           }
         });
-             // Add a small delay before setting the state
-      setTimeout(() => {
-        const formatedData = processLocalities(response.TenantBoundary[0].boundary);
-        setLocalitiesOptions(formatedData);
-      }, 300); // 300ms delay
+        // Add a small delay before setting the state
+        setTimeout(() => {
+          const formatedData = processLocalities(response.TenantBoundary[0].boundary);
+          setLocalitiesOptions(formatedData);
+        }, 300); // 300ms delay
       } catch (error) {
         console.error("Error fetching boundary data:", error);
       }
@@ -231,13 +256,30 @@ const CreateComplaintForm = ({
               disable: disabledFields[field.populators.name],
             };
           }
+          if (field.key === "boundaryComponent" && hierarchyData) {
+            return {
+              ...field,
+              populators: {
+                ...field.populators,
+                levelConfig: {
+                  ...field.populators.levelConfig,
+                  lowestLevel: hierarchyData.lowestHierarchy || window?.globalConfigs?.getConfig("PGR_BOUNDARY_LOWEST_LEVEL") || "Ward",
+                  highestLevel: hierarchyData.highestHierarchy || window?.globalConfigs?.getConfig("PGR_BOUNDARY_HIGHEST_LEVEL") || "City",
+                  isSingleSelect: [
+                    hierarchyData.lowestHierarchy || window?.globalConfigs?.getConfig("PGR_BOUNDARY_LOWEST_LEVEL") || "Ward",
+                    hierarchyData.highestHierarchy || window?.globalConfigs?.getConfig("PGR_BOUNDARY_HIGHEST_LEVEL") || "City"]
+                },
+                hierarchyType: hierarchyData.hierarchy || window?.globalConfigs?.getConfig("HIERARCHY_TYPE") || "ADMIN",
+              },
+            };
+          }
           return field;
         }),
       };
     });
 
     return { ...baseConfig, form: updatedForm };
-  }, [createComplaintConfig, serviceDefs, t, disabledFields, subType, selectedCity, localitiesOptions]);
+  }, [createComplaintConfig, serviceDefs, t, disabledFields, subType, selectedCity, localitiesOptions, hierarchyData]);
 
 
 
@@ -276,37 +318,11 @@ const CreateComplaintForm = ({
 
     }
 
-    const ComplainantName = formData?.ComplainantName;
-    const ComplainantContactNumber = formData?.ComplainantContactNumber;
+
     const selectedUser = formData?.complaintUser?.code;
     const prevSelectedUser = sessionFormData?.complaintUser?.code;
 
-    // Validate name
-    if (ComplainantName && !ComplainantName.match(Digit.Utils.getPattern("Name"))) {
-      if (!formState.errors.ComplainantName) {
-        setError("ComplainantName", {
-          type: "custom",
-          message: t("CORE_COMMON_APPLICANT_NAME_INVALID")
-        }, { shouldFocus: false });
-      }
-    } else if (formState.errors.ComplainantName) {
-      clearErrors("ComplainantName");
-    }
 
-    // Validate mobile number
-    const contactFieldConfig = updatedConfig?.form?.flatMap(section => section?.body || [])
-      .find(field => field?.populators?.name === "ComplainantContactNumber");
-
-    if (ComplainantContactNumber && !validatePhoneNumber(ComplainantContactNumber, contactFieldConfig)) {
-      if (!formState.errors.ComplainantContactNumber) {
-        setError("ComplainantContactNumber", {
-          type: "custom",
-          message: t("CORE_COMMON_APPLICANT_MOBILE_NUMBER_INVALID")
-        }, { shouldFocus: false });
-      }
-    } else if (formState.errors.ComplainantContactNumber) {
-      clearErrors("ComplainantContactNumber");
-    }
 
     // Only update if complaint user selection has changed
     if (selectedUser !== prevSelectedUser) {
@@ -364,6 +380,7 @@ const CreateComplaintForm = ({
           );
           clearSessionFormData();
         }
+        clearSessionFormData();
       },
     });
   };
@@ -373,7 +390,7 @@ const CreateComplaintForm = ({
    */
   const sendDataToResponsePage = (message, description, info, responseId) => {
     history.push({
-      pathname: `/${window?.contextPath}/employee/pgr/complaint-failed`, // Redirect path
+      pathname: `/${window?.contextPath}/employee/pgr/complaint-success`, // Redirect path
       state: {
         message,
         description,
@@ -384,6 +401,10 @@ const CreateComplaintForm = ({
   };
 
 
+
+  if (isHierarchyLoading) {
+    return <Loader />;
+  }
 
   return (
     <React.Fragment>

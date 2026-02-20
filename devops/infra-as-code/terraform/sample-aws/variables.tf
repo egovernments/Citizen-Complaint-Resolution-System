@@ -32,7 +32,11 @@ variable "kubernetes_version" {
 variable "instance_types" {
   description = "Arry of instance types for SPOT instances"
   default = ["m5a.xlarge"]
-  
+}
+
+variable "instance_reservation" {
+  description = "instance reservation SPOT or ON_DEMAND"
+  default = "ON_DEMAND"
 }
 
 variable "min_worker_nodes" {
@@ -50,6 +54,15 @@ variable "max_worker_nodes" {
   default = "5" #REPLACE IF NEEDED
 }
 
+variable "db_version" {
+  description = "postgres version"
+  default = "15.8"
+}
+
+variable "db_instance_type" {
+  description = "Instance type for RDS instance"
+  default = "db.t4g.medium"
+}
 
 variable "db_name" {
   description = "RDS DB name. Make sure there are no hyphens or other special characters in the DB name. Else, DB creation will fail"

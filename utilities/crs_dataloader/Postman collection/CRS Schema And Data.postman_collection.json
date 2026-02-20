@@ -1,0 +1,191 @@
+{
+	"info": {
+		"_postman_id": "08782f71-9e4e-491a-816a-36f55042296d",
+		"name": "CRS Schema And Data",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "32666844",
+		"_collection_link": "https://alliance-6129.postman.co/workspace/pgr~18366946-e3e1-4b18-b713-2d4f012bd450/collection/32666844-08782f71-9e4e-491a-816a-36f55042296d?action=share&source=collection_link&creator=32666844"
+	},
+	"item": [
+		{
+			"name": "Localization Excel schema Copy",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"RequestInfo\": {\n      \"apiId\": \"asset-services\",\n      \"msgId\": \"create localization schema\",\n      \"authToken\": \"7c65fcc6-7bb1-43f8-a116-e62392d71576\",\n      \"userInfo\": {\n        \"id\": 30274,\n        \"uuid\": \"bd5f8ea6-a022-4e74-ac2c-edf3392c6fa4\",\n        \"userName\": \"MDMSADMIN\",\n        \"name\": \"MDMSADMIN\",\n        \"mobileNumber\": \"9035169726\",\n        \"type\": \"EMPLOYEE\",\n        \"roles\": [\n          {\n            \"name\": \"MDMS Admin\",\n            \"code\": \"MDMS_ADMIN\",\n            \"tenantId\": \"pg\"\n          }\n        ],\n        \"active\": true,\n        \"tenantId\": \"pg\"\n      }\n    },\n    \"SchemaDefinition\": {\n      \"tenantId\": \"pg\",\n      \"code\": \"localization.master\",\n      \"description\": \"Localization Master Schema for Multi-language Translations\",\n      \"isActive\": true,\n      \"definition\": {\n        \"type\": \"object\",\n        \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n        \"required\": [\n          \"module\",\n          \"code\",\n          \"locale\"\n        ],\n        \"x-unique\": [\n          \"code\",\n          \"locale\"\n        ],\n        \"properties\": {\n          \"module\": {\n            \"type\": \"string\",\n            \"minLength\": 1,\n            \"maxLength\": 100,\n            \"description\": \"Module name (e.g., rainmaker-pgr, rainmaker-common)\"\n          },\n          \"code\": {\n            \"type\": \"string\",\n            \"minLength\": 1,\n            \"maxLength\": 200,\n            \"description\": \"Translation key (e.g., PGR_COMPLAINT_TYPE, CORE_COMMON_SAVE)\"\n          },\n          \"englishMessage\": {\n            \"type\": [\"string\", \"null\"],\n            \"maxLength\": 1000,\n            \"description\": \"English translation message\"\n          },\n          \"locale\": {\n            \"type\": \"string\",\n            \"pattern\": \"^[a-z]{2}_[A-Z]{2}$\",\n            \"description\": \"Locale code in format: language_COUNTRY (e.g., en_IN, hi_IN, ta_IN)\"\n          },\n          \"translation\": {\n            \"type\": [\"string\", \"null\"],\n            \"maxLength\": 1000,\n            \"description\": \"Translated message in the specified locale\"\n          }\n        }\n      }\n    }\n  }",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8094/mdms-v2/schema/v1/_create",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8094",
+					"path": [
+						"mdms-v2",
+						"schema",
+						"v1",
+						"_create"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "New Common Master validation Copy",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"RequestInfo\": {\n      \"apiId\": \"asset-services\",\n      \"msgId\": \"create common master schema for new template\",\n      \"authToken\": \"7c65fcc6-7bb1-43f8-a116-e62392d71576\",\n      \"userInfo\": {\n        \"id\": 30274,\n        \"uuid\": \"bd5f8ea6-a022-4e74-ac2c-edf3392c6fa4\",\n        \"userName\": \"MDMSADMIN\",\n        \"name\": \"MDMSADMIN\",\n        \"mobileNumber\": \"9035169726\",\n        \"type\": \"EMPLOYEE\",\n        \"roles\": [\n          {\n            \"name\": \"MDMS Admin\",\n            \"code\": \"MDMS_ADMIN\",\n            \"tenantId\": \"pg\"\n          }\n        ],\n        \"active\": true,\n        \"tenantId\": \"pg\"\n      }\n    },\n    \"SchemaDefinition\": {\n      \"tenantId\": \"pg\",\n      \"code\": \"common.master\",\n      \"description\": \"Common Master Schema - New Format (Search Words Optional, Priority Removed)\",\n      \"isActive\": true,\n      \"definition\": {\n        \"type\": \"object\",\n        \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n        \"required\": [\n          \"departmentName\",\n          \"designationName\",\n          \"complaintType\",\n          \"complaintSubType\",\n          \"resolutionTimeHours\"\n        ],\n        \"x-unique\": [\"complaintSubType\"],\n        \"properties\": {\n          \"departmentName\": {\n            \"type\": \"string\",\n            \"minLength\": 2,\n            \"maxLength\": 100,\n            \"description\": \"Name of the government department\"\n          },\n          \"designationName\": {\n            \"type\": \"string\",\n            \"minLength\": 2,\n            \"maxLength\": 100,\n            \"description\": \"Job title/position within the department\"\n          },\n          \"complaintType\": {\n            \"type\": \"string\",\n            \"pattern\": \"^[A-Za-z0-9_ &-]+$\",\n            \"minLength\": 2,\n            \"maxLength\": 100,\n            \"description\": \"Parent complaint category\"\n          },\n          \"complaintSubType\": {\n            \"type\": \"string\",\n            \"pattern\": \"^[A-Za-z0-9_ &-]+$\",\n            \"minLength\": 2,\n            \"maxLength\": 100,\n            \"description\": \"Specific complaint sub-type (must be unique)\"\n          },\n          \"resolutionTimeHours\": {\n            \"type\": \"number\",\n            \"minimum\": 0.5,\n            \"maximum\": 720,\n            \"description\": \"SLA hours for resolution\"\n          },\n          \"searchWords\": {\n            \"type\": [\"string\", \"null\"],\n            \"pattern\": \"^[A-Za-z0-9_, &-]*$\",\n            \"maxLength\": 500,\n            \"description\": \"Comma-separated keywords (optional)\"\n          }\n        },\n        \"additionalProperties\": false\n      }\n    }\n  }",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8094/mdms-v2/schema/v1/_create",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8094",
+					"path": [
+						"mdms-v2",
+						"schema",
+						"v1",
+						"_create"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Tenant Excel Schema Copy",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n      \"RequestInfo\": {\n        \"apiId\": \"asset-services\",\n        \"msgId\": \"create tenant master schema for new template\",\n        \"authToken\": \"7c65fcc6-7bb1-43f8-a116-e62392d71576\",\n        \"userInfo\": {\n          \"id\": 30274,\n          \"uuid\": \"bd5f8ea6-a022-4e74-ac2c-edf3392c6fa4\",\n          \"userName\": \"MDMSADMIN\",\n          \"name\": \"MDMSADMIN\",\n          \"mobileNumber\": \"9035169726\",\n          \"type\": \"EMPLOYEE\",\n          \"roles\": [\n            {\n              \"name\": \"MDMS Admin\",\n              \"code\": \"MDMS_ADMIN\",\n              \"tenantId\": \"pg\"\n            }\n          ],\n          \"active\": true,\n          \"tenantId\": \"pg\"\n        }\n      },\n      \"SchemaDefinition\": {\n        \"tenantId\": \"pg\",\n        \"code\": \"tenant.master\",\n        \"description\": \"Tenant Master Schema - Simple format with City and District\",\n        \"isActive\": true,\n        \"definition\": {\n          \"type\": \"object\",\n          \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n          \"required\": [\n            \"tenantDisplayName\",\n            \"tenantCode\",\n            \"tenantType\",\n            \"logoFilePath\"\n          ],\n          \"x-unique\": [\"tenantCode\"],\n          \"properties\": {\n            \"tenantDisplayName\": {\n              \"type\": \"string\",\n              \"minLength\": 2,\n              \"maxLength\": 200\n            },\n            \"tenantCode\": {\n              \"type\": \"string\",\n              \"pattern\": \"^[A-Z]+\\\\.[A-Z]+$|^[A-Z]+$\"\n            },\n            \"tenantType\": {\n              \"type\": \"string\",\n              \"enum\": [\"State\", \"City\"]\n            },\n            \"logoFilePath\": {\n              \"type\": \"string\",\n              \"minLength\": 1,\n              \"maxLength\": 500\n            },\n            \"cityName\": {\n              \"type\": [\"string\", \"null\"],\n              \"maxLength\": 100\n            },\n            \"districtName\": {\n              \"type\": [\"string\", \"null\"],\n              \"maxLength\": 100\n            },\n            \"address\": {\n              \"type\": [\"string\", \"null\"],\n              \"maxLength\": 500\n            },\n            \"tenantWebsite\": {\n              \"type\": [\"string\", \"null\"]\n            },\n            \"latitude\": {\n              \"type\": [\"number\", \"null\"],\n              \"minimum\": -90,\n              \"maximum\": 90\n            },\n            \"longitude\": {\n              \"type\": [\"number\", \"null\"],\n              \"minimum\": -180,\n              \"maximum\": 180\n            }\n          },\n          \"additionalProperties\": false\n        }\n      }\n    }",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8094/mdms-v2/schema/v1/_create",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8094",
+					"path": [
+						"mdms-v2",
+						"schema",
+						"v1",
+						"_create"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Boundary Excel Generation Schema Copy",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n      \"RequestInfo\": {\n        \"apiId\": \"asset-services\",\n        \"msgId\": \"create crs schema definition\",\n        \"authToken\": \"7c65fcc6-7bb1-43f8-a116-e62392d71576\",\n        \"userInfo\": {\n          \"id\": 1,\n          \"uuid\": \"bd5f8ea6-a022-4e74-ac2c-edf3392c6fa4\",\n          \"userName\": \"MDMSADMIN\",\n          \"name\": \"MDMSADMIN\",\n          \"mobileNumber\": \"9035169726\",\n          \"type\": \"EMPLOYEE\",\n          \"roles\": [\n            {\n              \"name\": \"MDMS Admin\",\n              \"code\": \"MDMS_ADMIN\",\n              \"tenantId\": \"pg\"\n            }\n          ],\n          \"active\": true,\n          \"tenantId\": \"pg\"\n        }\n      },\n      \"SchemaDefinition\": {\n        \"tenantId\": \"pg\",\n        \"code\": \"crs-admin-schemas\",\n        \"description\": \"CRS Admin Console Schema for boundary  management\",\n        \"isActive\": true,\n        \"definition\": {\n          \"type\": \"object\",\n          \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n          \"required\": [\n            \"title\",\n            \"campaignType\"\n          ],\n          \"x-unique\": [\n            \"title\"\n          ],\n          \"properties\": {\n            \"title\": {\n              \"type\": \"string\"\n            },\n            \"campaignType\": {\n              \"type\": \"string\"\n            },\n            \"properties\": {\n              \"type\": \"object\",\n              \"properties\": {\n                \"numberProperties\": {\n                  \"type\": \"array\"\n                },\n                \"stringProperties\": {\n                  \"type\": \"array\"\n                }\n              }\n            }\n          }\n        }\n      }\n    }",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8094/mdms-v2/schema/v1/_create",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8094",
+					"path": [
+						"mdms-v2",
+						"schema",
+						"v1",
+						"_create"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Boundary Excel Generation Data Copy",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"RequestInfo\": {\n    \"apiId\": \"asset-services\",\n    \"msgId\": \"create crs mdms data\",\n    \"authToken\": \"7c65fcc6-7bb1-43f8-a116-e62392d71576\",\n    \"userInfo\": {\n      \"id\": 1,\n      \"uuid\": \"bd5f8ea6-a022-4e74-ac2c-edf3392c6fa4\",\n      \"userName\": \"MDMSADMIN\",\n      \"name\": \"MDMSADMIN\",\n      \"mobileNumber\": \"9035169726\",\n      \"type\": \"EMPLOYEE\",\n      \"roles\": [\n        {\n          \"name\": \"MDMS Admin\",\n          \"code\": \"MDMS_ADMIN\",\n          \"tenantId\": \"pg\"\n        }\n      ],\n      \"active\": true,\n      \"tenantId\": \"pg\"\n    }\n  },\n  \"Mdms\": {\n    \"tenantId\": \"pg\",\n    \"schemaCode\": \"crs-admin-schemas\",\n    \"uniqueIdentifier\": \"boundaryManagement\",\n    \"data\": {\n      \"title\": \"boundaryManagement\",\n      \"campaignType\": \"all\",\n      \"properties\": {\n        \"numberProperties\": [\n          {\n            \"name\": \"CRS_LAT\",\n            \"type\": \"number\",\n            \"isRequired\": true,\n            \"description\": \"Latitude\",\n            \"orderNumber\": 2\n          },\n          {\n            \"name\": \"CRS_LONG\",\n            \"type\": \"number\",\n            \"isRequired\": true,\n            \"description\": \"Longitude\",\n            \"orderNumber\": 3\n          }\n        ],\n        \"stringProperties\": [\n          {\n            \"name\": \"CRS_BOUNDARY_CODE\",\n            \"type\": \"string\",\n            \"isRequired\": true,\n            \"description\": \"Boundary Code\",\n            \"orderNumber\": 1,\n            \"freezeColumn\": true\n          }\n        ]\n      }\n    },\n    \"isActive\": true\n  }\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8094/mdms-v2/v2/_create/CRS-ADMIN-CONSOLE.adminSchema",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8094",
+					"path": [
+						"mdms-v2",
+						"v2",
+						"_create",
+						"CRS-ADMIN-CONSOLE.adminSchema"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}

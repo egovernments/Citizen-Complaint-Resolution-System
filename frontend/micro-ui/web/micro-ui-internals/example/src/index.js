@@ -1,6 +1,6 @@
 import React, { Suspense } from "react";
 import ReactDOM from "react-dom";
-import { PGRReducers } from "@egovernments/digit-ui-module-health-pgr";
+import { PGRReducers } from "@egovernments/digit-ui-module-cms";
 import { initLibraries } from "@egovernments/digit-ui-libraries";
 // import { paymentConfigs, PaymentLinks, PaymentModule } from "@egovernments/digit-ui-module-common";
 import "@egovernments/digit-ui-health-css/example/index.css";
@@ -52,7 +52,7 @@ const initTokens = (stateCode) => {
   if (employeeTenantId && employeeTenantId.length) window.Digit.SessionStorage.set("Employee.tenantId", employeeTenantId);
 };
 
-const initDigitUI = async() => {
+const initDigitUI = async () => {
   window.contextPath = window?.globalConfigs?.getConfig("CONTEXT_PATH") || "digit-ui";
   window.Digit.Customizations = {
     commonUiConfig: UICustomizations,
@@ -66,40 +66,40 @@ const initDigitUI = async() => {
   });
   // initUtilitiesComponents();
   // initPGRComponents();
-  
-
-
-// Dynamically import and register modules after initLibraries
-const [
-  { initUtilitiesComponents },
-  { initPGRComponents },
-  // {initWorkbenchComponents},
-  // {initHRMSComponents}
-] = await Promise.all([
-  import("@egovernments/digit-ui-module-utilities"),
-  import("@egovernments/digit-ui-module-health-pgr"),
-  // import("@egovernments/digit-ui-module-workbench"),
-  // import("@egovernments/digit-ui-module-hrms"),
-
-]);
-
-// Initialize them in safe order
-initUtilitiesComponents();
-initPGRComponents();
-initWorkbenchComponents();
-initHRMSComponents();
 
 
 
+  // Dynamically import and register modules after initLibraries
+  const [
+    { initUtilitiesComponents },
+    { initPGRComponents },
+    // {initWorkbenchComponents},
+    // {initHRMSComponents}
+  ] = await Promise.all([
+    import("@egovernments/digit-ui-module-utilities"),
+    import("@egovernments/digit-ui-module-cms"),
+    // import("@egovernments/digit-ui-module-workbench"),
+    // import("@egovernments/digit-ui-module-hrms"),
 
-const moduleReducers = (initData) => ({
-  pgr: PGRReducers(initData),
-});
+  ]);
+
+  // Initialize them in safe order
+  initUtilitiesComponents();
+  initPGRComponents();
+  initWorkbenchComponents();
+  initHRMSComponents();
+
+
+
+
+  const moduleReducers = (initData) => ({
+    pgr: PGRReducers(initData),
+  });
   const stateCode = window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID") || "pb";
   initTokens(stateCode);
-  
+
   ReactDOM.render(<Suspense fallback={<Loader page={true} variant={"PageLoader"} />}>
-    <DigitUI stateCode={stateCode} enabledModules={enabledModules}       defaultLanding="employee"  moduleReducers={moduleReducers} />
+    <DigitUI stateCode={stateCode} enabledModules={enabledModules} defaultLanding="employee" moduleReducers={moduleReducers} />
   </Suspense>, document.getElementById("root"));
 };
 

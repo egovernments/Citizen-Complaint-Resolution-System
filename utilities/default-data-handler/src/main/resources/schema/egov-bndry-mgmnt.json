@@ -1,0 +1,86 @@
+[
+  {
+    "tenantId": "{tenantid}",
+    "code": "CRS-ADMIN-CONSOLE.adminSchema",
+    "description": "CRS Admin Console Schema for boundary management",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "title",
+        "campaignType"
+      ],
+      "x-unique": [
+        "title"
+      ],
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "campaignType": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "properties": {
+          "type": "object",
+          "properties": {
+            "numberProperties": {
+              "type": "array"
+            },
+            "stringProperties": {
+              "type": "array"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "CMS-BOUNDARY.HierarchySchema",
+    "description": "Configuration to show boundary hierarchy levels in CMS UI",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Generated schema for Root",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "moduleName",
+        "department",
+        "hierarchy",
+        "highestHierarchy",
+        "lowestHierarchy"
+      ],
+      "x-unique": [
+        "moduleName",
+        "department"
+      ],
+      "properties": {
+        "moduleName": {
+          "type": "string"
+        },
+        "department": {
+          "type": "string"
+        },
+        "hierarchy": {
+          "type": "string"
+        },
+        "highestHierarchy": {
+          "type": "string"
+        },
+        "lowestHierarchy": {
+          "type": "string"
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  }
+]

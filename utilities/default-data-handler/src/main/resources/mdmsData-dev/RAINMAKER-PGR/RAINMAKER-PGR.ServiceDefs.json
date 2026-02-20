@@ -1,0 +1,65 @@
+[
+  {
+    "name": "Burning of garbage",
+    "active": true,
+    "keywords": "garbage, remove, burn, fire, health, waste, smoke, plastic, illegal",
+    "menuPath": "Garbage",
+    "slaHours": 336,
+    "department": "DEPT_3",
+    "serviceCode": "BurningOfGarbage",
+    "menuPathName": "Garbage"
+  },
+  {
+    "name": "Damaged garbage bin",
+    "active": true,
+    "keywords": "garbage, waste, bin, dustbin, clean, remove, sanitation, overflow, smell, health, throw, dispose",
+    "menuPath": "Garbage",
+    "slaHours": 336,
+    "department": "DEPT_3",
+    "serviceCode": "DamagedGarbageBin",
+    "menuPathName": "Garbage"
+  },
+  {
+    "name": "Garbage needs to be cleared",
+    "order": 4,
+    "active": true,
+    "keywords": "garbage, collect, litter, clean, door, waste, remove, sweeper, sanitation, dump, health, debris, throw",
+    "menuPath": "Garbage",
+    "slaHours": 336,
+    "department": "DEPT_3",
+    "serviceCode": "GarbageNeedsTobeCleared",
+    "menuPathName": "Garbage"
+  },
+  {
+    "name": "No streetlight",
+    "active": true,
+    "keywords": "streetlight, light, repair, work, pole, electric, power, repair, damage, fix",
+    "menuPath": "StreetLights",
+    "slaHours": 336,
+    "department": "DEPT_1",
+    "serviceCode": "NoStreetlight",
+    "menuPathName": "Street Lights"
+  },
+  {
+    "name": "Non sweeping of road",
+    "order": 5,
+    "active": true,
+    "keywords": "garbage, collect, litter, clean, door, waste, remove, sweeper, sanitation, dump, health, debris, throw",
+    "menuPath": "Garbage",
+    "slaHours": 336,
+    "department": "DEPT_3",
+    "serviceCode": "NonSweepingOfRoad",
+    "menuPathName": "Garbage"
+  },
+  {
+    "name": "Streetlight not working",
+    "order": 1,
+    "active": true,
+    "keywords": "streetlight, light, repair, work, pole, electric, power, repair, fix",
+    "menuPath": "StreetLights",
+    "slaHours": 336,
+    "department": "DEPT_1",
+    "serviceCode": "StreetLightNotWorking",
+    "menuPathName": "Street Lights"
+  }
+]

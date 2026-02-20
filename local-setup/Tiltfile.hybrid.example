@@ -1,0 +1,142 @@
+# Hybrid Tiltfile — local dev services + remote core infrastructure
+#
+# Setup:
+#   1. Start core services on the remote server:
+#      ssh dev-server 'cd local-setup && docker compose -f docker-compose.yml -f docker-compose.core.yml up -d'
+#
+#   2. Copy and configure:
+#      cp Tiltfile.hybrid.example Tiltfile
+#      cp .env.hybrid.example .env.hybrid
+#      # Edit .env.hybrid — set DIGIT_REMOTE to your server IP
+#
+#   3. Uncomment the services you're working on below
+#
+#   4. tilt up
+
+load('ext://uibutton', 'cmd_button', 'location')
+
+# ==================== Remote Config ====================
+REMOTE = os.getenv('DIGIT_REMOTE', 'localhost')
+CCRS_PATH = os.getenv('CCRS_PATH', '..')
+
+# Remote service endpoints (shared infrastructure)
+REMOTE_ENV = {
+    # Database
+    'SPRING_DATASOURCE_URL':           'jdbc:postgresql://' + REMOTE + ':15432/egov',
+    'SPRING_DATASOURCE_USERNAME':      'egov',
+    'SPRING_DATASOURCE_PASSWORD':      'egov123',
+    'SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE': '5',
+    'SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE': '2',
+    # Kafka
+    'KAFKA_BOOTSTRAP_SERVERS':         REMOTE + ':19092',
+    'SPRING_KAFKA_BOOTSTRAP_SERVERS':  REMOTE + ':19092',
+    'KAFKA_CONFIG_BOOTSTRAP_SERVER_CONFIG': REMOTE + ':19092',
+    # Redis
+    'SPRING_REDIS_HOST':               REMOTE,
+    'SPRING_REDIS_PORT':               '16379',
+    # Core services
+    'EGOV_MDMS_HOST':                  'http://' + REMOTE + ':18094',
+    'EGOV_USER_HOST':                  'http://' + REMOTE + ':18107',
+    'EGOV_WORKFLOW_HOST':              'http://' + REMOTE + ':18109',
+    'EGOV_LOCALIZATION_HOST':          'http://' + REMOTE + ':18096',
+    'EGOV_IDGEN_HOST':                 'http://' + REMOTE + ':18088',
+    'EGOV_ENC_HOST':                   'http://' + REMOTE + ':11234',
+    'EGOV_ACCESSCONTROL_HOST':         'http://' + REMOTE + ':18090',
+    'EGOV_FILESTORE_HOST':             'http://' + REMOTE + ':18084',
+    'EGOV_HRMS_HOST':                  'http://' + REMOTE + ':18092',
+    'EGOV_BOUNDARY_HOST':              'http://' + REMOTE + ':18081',
+    # Shared
+    'OTEL_TRACES_EXPORTER':            'none',
+    'STATE_LEVEL_TENANT_ID':           'pg',
+    'EGOV_STATE_LEVEL_TENANT_ID':      'pg',
+}
+
+# ==================== Remote Health Dashboard ====================
+# Quick links to verify remote services are running
+
+local_resource('remote-health',
+    cmd='curl -sf http://' + REMOTE + ':18094/mdms-v2/health && echo "MDMS OK" && ' +
+        'curl -sf http://' + REMOTE + ':18107/user/health && echo "User OK" && ' +
+        'curl -sf http://' + REMOTE + ':18088/egov-idgen/health && echo "IDGen OK" && ' +
+        'echo "Remote services healthy"',
+    auto_init=True,
+    labels=['remote'],
+    links=[
+        link('http://' + REMOTE + ':18094/mdms-v2/health', 'MDMS'),
+        link('http://' + REMOTE + ':18107/user/health', 'User'),
+        link('http://' + REMOTE + ':18109/egov-workflow-v2/health', 'Workflow'),
+        link('http://' + REMOTE + ':18096/localization/actuator/health', 'Localization'),
+        link('http://' + REMOTE + ':18088/egov-idgen/health', 'IDGen'),
+        link('http://' + REMOTE + ':18000', 'Kong Gateway'),
+    ],
+)
+
+
+# ======================================================================
+# UNCOMMENT THE SERVICES YOU ARE DEVELOPING
+# Each service runs as a local process with hot reload.
+# ======================================================================
+
+# ==================== PGR Services (Java) ====================
+# Requires: JDK 17, Maven
+#
+# local_resource('pgr-services',
+#     serve_cmd='cd ' + CCRS_PATH + '/backend/pgr-services && mvn spring-boot:run -DskipTests',
+#     serve_env=REMOTE_ENV | {
+#         'SERVER_PORT': '8080',
+#         'SPRING_KAFKA_CONSUMER_GROUP_ID': 'egov-pgr-services-' + os.getenv('USER', 'dev'),
+#     },
+#     deps=[CCRS_PATH + '/backend/pgr-services/src'],
+#     readiness_probe=probe(http_get=http_get_action(port=8080, path='/pgr-services/health')),
+#     links=[link('http://localhost:8080/pgr-services/health', 'Health')],
+#     labels=['dev'],
+# )
+
+# ==================== DIGIT UI (React) ====================
+# Requires: Node.js 14+, Yarn
+#
+# local_resource('digit-ui',
+#     serve_cmd='cd ' + CCRS_PATH + '/frontend/micro-ui/web && yarn install && yarn start',
+#     deps=[CCRS_PATH + '/frontend/micro-ui/web/src'],
+#     links=[link('http://localhost:3000', 'UI')],
+#     labels=['dev'],
+# )
+
+# ==================== HRMS (Java) ====================
+# Requires: JDK 17, Maven
+#
+# local_resource('egov-hrms',
+#     serve_cmd='cd /path/to/egov-hrms && mvn spring-boot:run -DskipTests',
+#     serve_env=REMOTE_ENV | {
+#         'SERVER_PORT': '8092',
+#         'SPRING_KAFKA_CONSUMER_GROUP_ID': 'employee-group1-' + os.getenv('USER', 'dev'),
+#     },
+#     readiness_probe=probe(http_get=http_get_action(port=8092, path='/egov-hrms/actuator/health')),
+#     links=[link('http://localhost:8092/egov-hrms/actuator/health', 'Health')],
+#     labels=['dev'],
+# )
+
+# ==================== Boundary Management (Node.js) ====================
+#
+# local_resource('egov-bndry-mgmnt',
+#     serve_cmd='cd /path/to/egov-bndry-mgmnt && npm start',
+#     serve_env=REMOTE_ENV | {
+#         'DB_HOST': REMOTE,
+#         'DB_PORT': '15432',
+#         'DB_NAME': 'egov',
+#         'DB_USER': 'egov',
+#         'DB_PASSWORD': 'egov123',
+#         'REDIS_HOST': REMOTE,
+#         'REDIS_PORT': '16379',
+#     },
+#     links=[link('http://localhost:8080', 'Service')],
+#     labels=['dev'],
+# )
+
+
+# ==================== Buttons ====================
+cmd_button(
+    name='remote-status',
+    argv=['sh', '-c', 'echo "Checking remote at ' + REMOTE + '..." && curl -sf http://' + REMOTE + ':18094/mdms-v2/health && echo " MDMS OK" && curl -sf http://' + REMOTE + ':18107/user/health && echo " User OK" && echo "Remote is healthy"'],
+    location=location.NAV, icon_name='cloud', text='Remote Status',
+)

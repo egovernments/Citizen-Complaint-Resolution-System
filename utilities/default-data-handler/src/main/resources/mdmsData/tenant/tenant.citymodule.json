@@ -1,18 +1,12 @@
 [
   {
     "code": "Workbench",
-    "order": 13,
+    "order": 1,
     "active": true,
     "module": "Workbench",
     "tenants": [
       {
-        "code": "{tenantid}.cityb"
-      },
-      {
-        "code": "{tenantid}.cityc"
-      },
-      {
-        "code": "{tenantid}.citya"
+        "code": "{tenantid}"
       }
     ]
   },
@@ -23,27 +17,18 @@
     "module": "PGR",
     "tenants": [
       {
-        "code": "{tenantid}.citya"
-      },
-      {
-        "code": "{tenantid}.cityb"
+        "code": "{tenantid}"
       }
     ]
   },
   {
     "code": "HRMS",
-    "order": 2,
+    "order": 3,
     "active": true,
     "module": "HRMS",
     "tenants": [
       {
         "code": "{tenantid}"
-      },
-      {
-        "code": "{tenantid}.citya"
-      },
-      {
-        "code": "{tenantid}.cityb"
       }
     ]
   }

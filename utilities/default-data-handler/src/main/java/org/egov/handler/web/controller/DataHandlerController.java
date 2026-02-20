@@ -7,6 +7,7 @@ import org.egov.handler.util.ResponseInfoFactory;
 import org.egov.handler.web.models.DataSetupRequest;
 import org.egov.handler.web.models.DataSetupResponse;
 import org.egov.handler.web.models.DefaultDataRequest;
+import org.egov.handler.web.models.NewTenantRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -41,6 +42,18 @@ public class DataHandlerController {
 				.module(dataSetupRequest.getModule())
 				.schemaCodes(defaultDataRequest.getSchemaCodes())
 				.onlySchemas(defaultDataRequest.getOnlySchemas())
+				.build();
+		return new ResponseEntity<>(dataSetupResponse, HttpStatus.ACCEPTED);
+	}
+
+	@RequestMapping(value = "/tenant/new", method = RequestMethod.POST)
+	public ResponseEntity<DataSetupResponse> createNewTenant(@Valid @RequestBody NewTenantRequest newTenantRequest) {
+		dataHandlerService.loadNewTenantProductionData(newTenantRequest);
+		ResponseInfo responseInfo = responseInfoFactory.createResponseInfoFromRequestInfo(newTenantRequest.getRequestInfo(), true);
+
+		DataSetupResponse dataSetupResponse = DataSetupResponse.builder()
+				.responseInfo(responseInfo)
+				.targetTenantId(newTenantRequest.getTargetTenantId())
 				.build();
 		return new ResponseEntity<>(dataSetupResponse, HttpStatus.ACCEPTED);
 	}

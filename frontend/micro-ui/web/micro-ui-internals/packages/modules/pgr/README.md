@@ -3,7 +3,7 @@
 ## Install
 
 ```bash
-npm install --save egovernments/digit-ui-module-health-pgr
+npm install --save egovernments/digit-ui-module-cms
 ```
 
 ## Limitation
@@ -21,7 +21,7 @@ frontend/micro-ui/web/package.json
 ```
 
 ```json
-"@egovernments/digit-ui-module-health-pgr" :"0.0.1",
+"@egovernments/digit-ui-module-cms" :"0.0.1",
 ```
 
 then navigate to App.js
@@ -33,7 +33,7 @@ then navigate to App.js
 ```jsx
 /** add this import **/
 
-import { initPGRComponents } from "egovernments/digit-ui-module-health-pgr"
+import { initPGRComponents } from "egovernments/digit-ui-module-cms"
 
 /** inside enabledModules add this new module key **/
 
@@ -56,8 +56,7 @@ const initDigitUI = () => {
 
 ### Contributors
 
-- [ramkrishna-egov](https://github.com/Ramkrishna-egov)
-- [pitabash-eGov](https://github.com/pitabash-eGov)
+- [Hariprasad](https://github.com/hari-egov)
 
 ## License
 
@@ -70,11 +69,11 @@ Documentation Site (https://core.digit.org/guides/developer-guide/ui-developer-g
 
 ## Maintainer
 
-- [ramkrishna-egov](https://www.github.com/ramkrishna-egov)
+- [Hariprasad](https://github.com/hari-egov)
 
 
 ### Published from DIGIT Frontend 
-DIGIT Frontend Repo (https://github.com/egovernments/Digit-Frontend/tree/master)
+DIGIT Frontend Repo (https://github.com/egovernments/Citizen-Complaint-Resolution-System)
 
 
 ![Logo](https://s3.ap-south-1.amazonaws.com/works-dev-asset/mseva-white-logo.png)

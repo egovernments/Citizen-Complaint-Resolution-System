@@ -1,0 +1,115 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pgr-services
+  namespace: digit
+  labels:
+    app: pgr-services
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pgr-services
+  template:
+    metadata:
+      labels:
+        app: pgr-services
+    spec:
+      containers:
+        - name: pgr-services
+          image: pgr-services-dev
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: digit-common-env
+            - secretRef:
+                name: digit-db-credentials
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:postgresql://postgres:5432/egov"
+            - name: SPRING_KAFKA_CONSUMER_GROUP_ID
+              value: egov-pgr-services
+            - name: SERVER_PORT
+              value: "8080"
+            - name: EGOV_IDGEN_HOST
+              value: "http://egov-idgen:8088/"
+            - name: EGOV_WORKFLOW_HOST
+              value: "http://egov-workflow-v2:8109/"
+            - name: EGOV_MDMS_HOST
+              value: "http://egov-mdms-service:8094/"
+            - name: EGOV_LOCALIZATION_HOST
+              value: "http://egov-localization:8096/"
+            - name: EGOV_USER_HOST
+              value: "http://egov-user:8107/"
+            - name: EGOV_LOCATION_HOST
+              value: "http://boundary-service:8081/"
+            - name: EGOV_HRMS_HOST
+              value: "http://egov-user:8107/"
+            - name: EGOV_URL_SHORTNER_HOST
+              value: "http://egov-url-shortening:8080/"
+            - name: EGOV_UI_APP_HOST
+              value: "http://digit-ui:80"
+            - name: NOTIFICATION_SMS_ENABLED
+              value: "false"
+            - name: NOTIFICATION_EMAIL_ENABLED
+              value: "false"
+            - name: NEW_COMPLAINT_ENABLED
+              value: "true"
+            - name: REASSIGN_COMPLAINT_ENABLED
+              value: "true"
+            - name: REOPEN_COMPLAINT_ENABLED
+              value: "true"
+            - name: COMMENT_BY_EMPLOYEE_NOTIF_ENABLED
+              value: "false"
+            - name: NOTIFICATION_ALLOWED_ON_STATUS
+              value: "open,assigned,rejected,resolved"
+            - name: EGOV_USR_EVENTS_NOTIFICATION_ENABLED
+              value: "true"
+            - name: EGOV_USR_EVENTS_CREATE_TOPIC
+              value: persist-user-events-async
+            - name: PGR_STATELEVEL_TENANTID
+              value: pg
+            - name: JAVA_OPTS
+              value: "-Xmx192m -Xms192m"
+          resources:
+            limits:
+              memory: 300Mi
+              cpu: "250m"
+            requests:
+              memory: 192Mi
+              cpu: "100m"
+          readinessProbe:
+            httpGet:
+              path: /pgr-services/health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /pgr-services/health
+              port: 8080
+            initialDelaySeconds: 0
+            periodSeconds: 30
+            timeoutSeconds: 10
+          startupProbe:
+            httpGet:
+              path: /pgr-services/health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 30
+            timeoutSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pgr-services
+  namespace: digit
+spec:
+  selector:
+    app: pgr-services
+  ports:
+    - port: 8080
+      targetPort: 8080

@@ -37,6 +37,11 @@ env: |
       configMapKeyRef:
         name: egov-service-host
         key: egov-workflow-v2
+  - name: SPRING_DATASOURCE_URL
+    valueFrom:
+      configMapKeyRef:
+        name: egov-config
+        key: db-url
   - name: EGOV_VEHICLE_HOST
     valueFrom:
       configMapKeyRef:

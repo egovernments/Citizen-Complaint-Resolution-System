@@ -45,7 +45,17 @@ env: |
     valueFrom:
       configMapKeyRef:
         name: egov-service-host
-        key: egov-localization      
+        key: egov-localization  
+  - name: EGOV_MDMS_HOST
+    valueFrom:
+      configMapKeyRef:
+        name: egov-service-host
+        key: egov-mdms-service
+  - name: EGOV_MDMS_SEARCH_ENDPOINT
+    valueFrom:
+      configMapKeyRef:
+        name: egov-config
+        key: egov-mdms-search-endpoint
   - name: SMS_TOPIC
     value: egov.core.notification.sms
   - name: JAVA_OPTS

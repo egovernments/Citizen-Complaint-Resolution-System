@@ -6,7 +6,10 @@ const SelectImages = ({ t, config, formData, onSelect, onSkip, value = {} }) => 
     return formData?.[config.key] || value?.uploadedImages || null;
   });
 
-  const tenantId = Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code;
+  // Get tenantId from the selected city in previous step (SelectAddress)
+  const selectedCityCode = formData?.SelectAddress?.city?.code;
+  const fallbackTenantId = Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code;
+  const tenantId = selectedCityCode || fallbackTenantId || Digit.ULBService.getCurrentTenantId();
 
   const handleUpload = (ids) => {
     setUploadedImagesIds(ids);
@@ -21,7 +24,7 @@ const SelectImages = ({ t, config, formData, onSelect, onSkip, value = {} }) => 
   return (
     <FormStep config={config} onSelect={handleSubmit} onSkip={onSkip} t={t}>
       <ImageUploadHandler
-        tenantId={value.city_complaint?.code || tenantId}
+        tenantId={tenantId}
         uploadedImages={uploadedImages}
         onPhotoChange={handleUpload}
       />
