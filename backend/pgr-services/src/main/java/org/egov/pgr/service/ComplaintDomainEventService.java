@@ -73,7 +73,7 @@ public class ComplaintDomainEventService {
         event.put("workflow", getWorkflow(action, fromState, service.getApplicationStatus()));
         event.put("stakeholders", getStakeholders(request));
         event.put("context", Collections.singletonMap("locale", config.getComplaintsDomainEventDefaultLocale()));
-        event.put("data", getData(service));
+        event.put("data", getData(request));
         return event;
     }
 
@@ -127,11 +127,43 @@ public class ComplaintDomainEventService {
         return stakeholders;
     }
 
-    private Map<String, Object> getData(org.egov.pgr.web.models.Service service) {
+    private Map<String, Object> getData(ServiceRequest request) {
+        org.egov.pgr.web.models.Service service = request.getService();
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("complaintNo", service.getServiceRequestId());
-        data.put("complaintType", service.getServiceCode());
-        data.put("complaintDescription", service.getDescription());
+        data.put("status", service.getApplicationStatus());
+        data.put("serviceName", service.getServiceCode());
+        data.put("citizenName", getCitizenName(request));
+        data.put("departmentName", getDepartmentName(service));
+        data.put("mobileNumber", getCitizenMobile(request));
         return data;
+    }
+
+    private String getCitizenName(ServiceRequest request) {
+        if (request.getService().getCitizen() != null
+                && StringUtils.hasText(request.getService().getCitizen().getName())) {
+            return request.getService().getCitizen().getName();
+        }
+        if (request.getRequestInfo() != null && request.getRequestInfo().getUserInfo() != null) {
+            return request.getRequestInfo().getUserInfo().getName();
+        }
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private String getDepartmentName(org.egov.pgr.web.models.Service service) {
+        Object additionalDetail = service.getAdditionalDetail();
+        if (additionalDetail instanceof Map) {
+            Object dept = ((Map<String, Object>) additionalDetail).get("department");
+            return dept != null ? dept.toString() : null;
+        }
+        return null;
+    }
+
+    private String getCitizenMobile(ServiceRequest request) {
+        if (request.getService().getCitizen() != null) {
+            return request.getService().getCitizen().getMobileNumber();
+        }
+        return null;
     }
 }
