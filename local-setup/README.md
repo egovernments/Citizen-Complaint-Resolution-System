@@ -40,7 +40,9 @@ open http://localhost:18000/digit-ui/
 |----------|----------|------|--------|-------|
 | `ADMIN` | `eGov@123` | EMPLOYEE | pg | SUPERUSER, EMPLOYEE, PGR-ADMIN, GRO (pg.citya) |
 
-Login at the UI as `ADMIN` with city "City A", or via API:
+Login at the UI at ```https://localhost:18000/digit-ui/employee``` as `ADMIN` with city "City A".
+
+Or to authenticate via API:
 
 ```bash
 curl -X POST "http://localhost:18000/user/oauth/token" \
@@ -53,14 +55,26 @@ curl -X POST "http://localhost:18000/user/oauth/token" \
 
 ```bash
 docker compose down        # Stop (preserves data)
-docker compose down -v     # Stop and delete all data
+docker compose down -v --remove-orphans     # Stop and delete all data
 ```
 
-## Loading Master Data (Jupyter Notebook)
+## Setup a new tenant for Complaints Management (Jupyter Notebook)
 
-The DataLoader notebook (`jupyter/dataloader/DataLoader_v2.ipynb`) lets you set up a new tenant with all the master data needed for PGR. It runs inside a Jupyter Lab instance bundled with the stack.
+The docker compose stack runs with pre-defined masters & configuration data for ease of developer use. However, the DataLoader notebook (`jupyter/dataloader/DataLoader_v2.ipynb`) lets you set up a new tenant with all the master data needed for PGR. It runs inside a Jupyter Lab instance bundled with the stack.
 
-### Starting Jupyter
+### Logging into Jupyter
+
+Access Jupyter at ```http://localhost:18000/jupyter/lab``` 
+
+The default token is ```digit-crs-local```. You can set it to something different by changing the ```JUPYTER_TOKEN``` variable in the ```docker-compose.yml``` file or any other variants you are using. 
+
+Follow the instructions in the notebook to set up a new tenant.
+
+Or if using Tilt, click the "Start Jupyter" button in the dashboard.
+
+#### Starting Jupyter
+
+Jupyter should be up as part of the stack by default. If you need to restart, below are the commands. 
 
 ```bash
 # Start Jupyter Lab (already defined in docker-compose, just needs to be started)
@@ -70,8 +84,6 @@ docker compose up -d jupyter
 # Token: displayed in logs
 docker compose logs jupyter | grep token
 ```
-
-Or if using Tilt, click the "Start Jupyter" button in the dashboard.
 
 ### DataLoader Phases
 
@@ -116,7 +128,7 @@ loader.rollback_common_masters(TARGET_TENANT)  # Just masters
 loader.delete_boundaries(TARGET_TENANT)        # Just boundaries
 ```
 
-## Postman Collections
+## Run the Postman Collections
 
 Two Postman collections are included for API testing:
 
@@ -163,7 +175,7 @@ npx newman run postman/complaints-demo.postman_collection.json \
 
 If `serviceCode` is not set, the collection picks a random complaint type.
 
-### CI DataLoader
+### Setup a pre-configured tenant
 
 For automated testing, use the CI dataloader script instead of the Jupyter notebook. It creates a tenant, loads masters, creates an HRMS employee in the correct department, and outputs the `serviceCode` for Newman:
 
