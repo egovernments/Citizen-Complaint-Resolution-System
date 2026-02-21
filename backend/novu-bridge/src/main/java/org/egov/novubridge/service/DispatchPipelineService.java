@@ -209,6 +209,10 @@ public class DispatchPipelineService {
         if (normalized.startsWith("+")) {
             return "whatsapp:" + normalized;
         }
+        // Assume Indian number if no country code — prepend +91
+        if (normalized.matches("^[6-9]\\d{9}$")) {
+            return "whatsapp:+91" + normalized;
+        }
         return "whatsapp:+" + normalized;
     }
 
