@@ -42,9 +42,15 @@ public class DispatchPipelineService {
     }
 
     public DispatchResult process(ComplaintsDomainEvent event, boolean send) {
+        log.info("Processing domain event: eventId={}, eventName={}, tenant={}, module={}, send={}",
+                event.getEventId(), event.getEventName(), event.getTenantId(), event.getModule(), send);
+
         envelopeValidator.validate(event);
 
         DerivedContext context = deriveContext(event);
+        log.info("Derived context: eventId={}, audience={}, recipientMobile={}, recipientUserId={}, locale={}",
+                event.getEventId(), context.getAudience(), context.getRecipientMobile(),
+                context.getRecipientUserId(), context.getLocale());
         String recipientUuid = userServiceClient.resolveUserUuid(
                 event.getTenantId(), context.getAudience(), context.getRecipientUserId(), context.getRecipientMobile());
         if (!StringUtils.hasText(recipientUuid)) {
@@ -66,6 +72,9 @@ public class DispatchPipelineService {
         }
 
         ResolvedTemplate resolvedTemplate = configServiceClient.resolveTemplate(context, event.getEventName(), event.getModule(), event.getTenantId());
+        log.info("Resolved template: eventId={}, templateKey={}, contentSid={}, requiredVars={}, paramOrder={}",
+                event.getEventId(), resolvedTemplate.getTemplateKey(), resolvedTemplate.getTwilioContentSid(),
+                resolvedTemplate.getRequiredVars(), resolvedTemplate.getParamOrder());
         validateTemplateConfig(resolvedTemplate);
         List<String> missingVars = findMissingRequiredVars(resolvedTemplate, event.getData());
         if (!missingVars.isEmpty()) {
@@ -94,13 +103,28 @@ public class DispatchPipelineService {
                     .build();
         }
 
+        String whatsappPhone = formatWhatsappPhone(context.getRecipientMobile());
+        Map<String, Object> twilioOverrides = buildTwilioTemplateOverrides(resolvedTemplate, event.getData());
+
+        log.info("Dispatching WhatsApp notification: eventId={}, eventName={}, tenant={}, complaintNo={}, " +
+                 "templateKey={}, subscriberId={}, phone={}, recipientMobile={}, contentSid={}",
+                event.getEventId(), event.getEventName(), event.getTenantId(),
+                event.getData() != null ? event.getData().get("complaintNo") : "N/A",
+                resolvedTemplate.getTemplateKey(), subscriberId, whatsappPhone,
+                context.getRecipientMobile(), resolvedTemplate.getTwilioContentSid());
+        log.info("Novu trigger payload: data={}, paramOrder={}, novuBaseUrl={}",
+                event.getData(), resolvedTemplate.getParamOrder(), config.getNovuBaseUrl());
+
         NovuClient.NovuResponse novuResponse = novuClient.trigger(
                 resolvedTemplate.getTemplateKey(),
                 subscriberId,
-                formatWhatsappPhone(context.getRecipientMobile()),
+                whatsappPhone,
                 event.getData(),
                 event.getEventId(),
-                buildTwilioTemplateOverrides(resolvedTemplate, event.getData()));
+                twilioOverrides);
+
+        log.info("Novu trigger response: eventId={}, statusCode={}, response={}",
+                event.getEventId(), novuResponse.getStatusCode(), novuResponse.getResponse());
 
         persist(event, context, resolvedTemplate, "SENT", null, null, novuResponse.getResponse(), 1);
         return DispatchResult.builder()
