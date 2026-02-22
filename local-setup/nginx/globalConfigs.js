@@ -15,6 +15,36 @@ var globalConfigs = (function () {
   var hrmsContext = "egov-hrms";
   var invalidEmployeeRoles = ["SYSTEM"];
 
+  // Runtime locale fallback for local setup: force default language unless user explicitly changes it.
+  try {
+    var parseMaybeJSON = function (value) {
+      if (!value || value === "undefined" || value === "null") return null;
+      try { return JSON.parse(value); } catch (e) { return value; }
+    };
+
+    // Normalize tenant-id keys so DIGIT startup can bind tenant context correctly.
+    var employeeTenant = window.localStorage.getItem("Employee.tenant-id");
+    if (!employeeTenant) {
+      var employeeInfo = parseMaybeJSON(window.localStorage.getItem("Employee.user-info"));
+      var employeeInfoTenant = employeeInfo && (employeeInfo.tenantId || employeeInfo.tenantid);
+      if (employeeInfoTenant) window.localStorage.setItem("Employee.tenant-id", employeeInfoTenant);
+    }
+
+    var citizenTenant = window.localStorage.getItem("Citizen.tenant-id");
+    if (!citizenTenant) {
+      var citizenInfo = parseMaybeJSON(window.localStorage.getItem("Citizen.user-info"));
+      var citizenInfoTenant = citizenInfo && (citizenInfo.tenantId || citizenInfo.tenantid);
+      if (citizenInfoTenant) window.localStorage.setItem("Citizen.tenant-id", citizenInfoTenant);
+    }
+
+    var current = window.localStorage.getItem("selectedLanguage") || window.localStorage.getItem("locale");
+    if (!current || current === "undefined" || current === "null") {
+      window.localStorage.setItem("selectedLanguage", localeDefault);
+      window.localStorage.setItem("locale", localeDefault);
+      window.localStorage.setItem("i18nextLng", localeDefault);
+    }
+  } catch (e) {}
+
   var getConfig = function (key) {
     if (key === "STATE_LEVEL_TENANT_ID") {
       return stateTenantId;

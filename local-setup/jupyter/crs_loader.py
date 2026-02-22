@@ -14,8 +14,19 @@ Usage:
     loader.load_employees("Employee Master.xlsx")
 """
 
-from unified_loader import UnifiedExcelReader, APIUploader
+try:
+    from dataloader.dataloader.unified_loader import UnifiedExcelReader, APIUploader
+except ModuleNotFoundError as exc:
+    if exc.name not in {"dataloader.dataloader.unified_loader", "dataloader.unified_loader", "unified_loader"}:
+        raise
+    try:
+        from dataloader.unified_loader import UnifiedExcelReader, APIUploader
+    except ModuleNotFoundError as inner_exc:
+        if inner_exc.name not in {"dataloader.unified_loader", "unified_loader"}:
+            raise
+        from unified_loader import UnifiedExcelReader, APIUploader
 from typing import Optional, Dict
+from copy import deepcopy
 import os
 import json
 import requests
@@ -106,7 +117,7 @@ class CRSLoader:
                    Default roles: ["EMPLOYEE"]. Type defaults to "EMPLOYEE".
 
         Returns:
-            bool: True if tenant exists or was created successfully
+            bool: True if tenant exists/was created and StateInfo is present
 
         Example:
             loader.login(username="ADMIN", password="eGov@123", tenant_id="pg")
@@ -141,7 +152,8 @@ class CRSLoader:
 
         if tenant_code.lower() in existing_tenants:
             print(f"✅ Tenant '{tenant_code}' already exists")
-            return True
+            # Ensure branding entry exists even for pre-existing tenants
+            return self._ensure_stateinfo_for_tenant(tenant_code, display_name)
 
         print(f"📝 Creating tenant '{tenant_code}'...")
 
@@ -182,6 +194,11 @@ class CRSLoader:
         if resp.ok:
             print(f"✅ Tenant '{tenant_code}' created successfully!")
 
+            # Ensure tenant has branding metadata used by UI localization bootstrap
+            if not self._ensure_stateinfo_for_tenant(tenant_code, display_name):
+                print(f"❌ Failed to ensure StateInfo for '{tenant_code}'")
+                return False
+
             # Enable modules for the tenant
             for module in enable_modules:
                 self._enable_module_for_tenant(tenant_code, module)
@@ -205,6 +222,68 @@ class CRSLoader:
             except:
                 print(f"   Response: {resp.text[:200]}")
             return False
+
+    def _ensure_stateinfo_for_tenant(self, tenant_code: str, display_name: str = None) -> bool:
+        """Ensure common-masters.StateInfo exists for tenant.
+
+        DIGIT UI depends on StateInfo (especially localizationModules/languages)
+        during login/bootstrap. Missing StateInfo can lead to raw i18n codes in UI.
+        """
+        # Already present for tenant -> nothing to do
+        existing_records = self.uploader.search_mdms_data(
+            schema_code='common-masters.StateInfo',
+            tenant=tenant_code,
+            limit=5
+        )
+        existing = any((r.get('code') or '').lower() == tenant_code.lower() for r in existing_records)
+        if existing:
+            print(f"   ✅ StateInfo already present for '{tenant_code}'")
+            return True
+
+        # Try to clone a baseline template from parent/root tenants
+        candidate_tenants = []
+        parent_tenant = tenant_code.split('.')[0] if '.' in tenant_code else tenant_code
+        for candidate in [parent_tenant, self.tenant_id, "pg"]:
+            if candidate and candidate not in candidate_tenants:
+                candidate_tenants.append(candidate)
+
+        template = None
+        for candidate in candidate_tenants:
+            records = self.uploader.search_mdms_data(
+                schema_code='common-masters.StateInfo',
+                tenant=candidate,
+                limit=5
+            )
+            if records:
+                matched = next((r for r in records if (r.get('code') or '').lower() == candidate.lower()), None)
+                template = matched or records[0]
+                break
+
+        if not template:
+            print(f"   ⚠️  Could not find a StateInfo template in tenants: {candidate_tenants}")
+            print("   ⚠️  Run load_tenant() with Tenant And Branding Master to create branding manually.")
+            return False
+
+        stateinfo = deepcopy(template)
+        stateinfo.pop('_isActive', None)
+        stateinfo.pop('_uniqueIdentifier', None)
+        stateinfo['code'] = tenant_code
+        if display_name:
+            stateinfo['name'] = display_name
+
+        result = self.uploader.create_mdms_data(
+            schema_code='common-masters.StateInfo',
+            data_list=[stateinfo],
+            tenant=tenant_code
+        )
+        created = result.get('created', 0)
+        exists = result.get('exists', 0)
+        if created > 0 or exists > 0:
+            print(f"   ✅ StateInfo ensured for '{tenant_code}'")
+            return True
+
+        print(f"   ❌ Failed to create StateInfo for '{tenant_code}'")
+        return False
 
     def _enable_module_for_tenant(self, tenant_code: str, module_code: str):
         """Add tenant to citymodule for a specific module (internal)
