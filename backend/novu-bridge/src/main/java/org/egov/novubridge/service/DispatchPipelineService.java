@@ -112,8 +112,8 @@ public class DispatchPipelineService {
                 event.getData() != null ? event.getData().get("complaintNo") : "N/A",
                 resolvedTemplate.getTemplateKey(), subscriberId, whatsappPhone,
                 context.getRecipientMobile(), resolvedTemplate.getTwilioContentSid());
-        log.info("Novu trigger payload: data={}, paramOrder={}, novuBaseUrl={}",
-                event.getData(), resolvedTemplate.getParamOrder(), config.getNovuBaseUrl());
+        log.info("Novu trigger payload: data={}, paramOrder={}, novuBaseUrl={}, twilioOverrides={}",
+                event.getData(), resolvedTemplate.getParamOrder(), config.getNovuBaseUrl(), twilioOverrides);
 
         NovuClient.NovuResponse novuResponse = novuClient.trigger(
                 resolvedTemplate.getTemplateKey(),
