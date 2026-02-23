@@ -180,13 +180,13 @@ public class DispatchPipelineService {
         }
         validateTwilioContentSid(contentSid);
 
-        // Twilio API expects PascalCase keys and ContentVariables as a JSON string
+        // Novu passthrough uses camelCase; contentVariables must be a JSON string for Twilio
         Map<String, Object> body = new HashMap<>();
-        body.put("ContentSid", contentSid);
+        body.put("contentSid", contentSid);
         try {
             String cvJson = new com.fasterxml.jackson.databind.ObjectMapper()
                     .writeValueAsString(contentVariables == null ? Collections.emptyMap() : contentVariables);
-            body.put("ContentVariables", cvJson);
+            body.put("contentVariables", cvJson);
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
             throw new CustomException("NB_CONTENT_VARS_SERIALIZE", "Failed to serialize contentVariables to JSON");
         }
