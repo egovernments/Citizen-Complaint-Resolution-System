@@ -180,9 +180,16 @@ public class DispatchPipelineService {
         }
         validateTwilioContentSid(contentSid);
 
+        // Twilio API expects PascalCase keys and ContentVariables as a JSON string
         Map<String, Object> body = new HashMap<>();
-        body.put("contentSid", contentSid);
-        body.put("contentVariables", contentVariables == null ? Collections.emptyMap() : contentVariables);
+        body.put("ContentSid", contentSid);
+        try {
+            String cvJson = new com.fasterxml.jackson.databind.ObjectMapper()
+                    .writeValueAsString(contentVariables == null ? Collections.emptyMap() : contentVariables);
+            body.put("ContentVariables", cvJson);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new CustomException("NB_CONTENT_VARS_SERIALIZE", "Failed to serialize contentVariables to JSON");
+        }
 
         Map<String, Object> passthrough = new HashMap<>();
         passthrough.put("body", body);
