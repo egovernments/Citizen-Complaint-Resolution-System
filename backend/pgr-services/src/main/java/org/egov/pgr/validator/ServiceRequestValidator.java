@@ -71,7 +71,7 @@ public class ServiceRequestValidator {
         String id = request.getService().getId();
         String tenantId = request.getService().getTenantId();
         validateSource(request.getService().getSource());
-        validateMDMS(request, mdmsData);
+//        validateMDMS(request, mdmsData);
         validateDepartment(request, mdmsData);
         validateReOpen(request);
         RequestSearchCriteria criteria = RequestSearchCriteria.builder().ids(Collections.singleton(id)).tenantId(tenantId).build();
