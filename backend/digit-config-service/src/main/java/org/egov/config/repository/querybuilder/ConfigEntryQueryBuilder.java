@@ -32,8 +32,8 @@ public class ConfigEntryQueryBuilder {
         return sql.toString();
     }
 
-    public String buildResolveQuery(String configCode, String module,
-                                     List<String> tenantChain, List<String> localeChain,
+    public String buildResolveQuery(String configCode, String module, String eventType,
+                                     String channel, List<String> tenantChain, List<String> localeChain,
                                      List<Object> params) {
         StringBuilder sql = new StringBuilder(BASE_SELECT);
         sql.append(" WHERE config_code = ? AND enabled = true");
@@ -42,6 +42,16 @@ public class ConfigEntryQueryBuilder {
         if (module != null) {
             sql.append(" AND module = ?");
             params.add(module);
+        }
+
+        if (eventType != null) {
+            sql.append(" AND event_type = ?");
+            params.add(eventType);
+        }
+
+        if (channel != null) {
+            sql.append(" AND channel = ?");
+            params.add(channel);
         }
 
         // tenant_id IN (?, ?, ...)

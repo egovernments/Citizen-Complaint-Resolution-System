@@ -37,6 +37,8 @@ public class ConfigServiceClient {
         Map<String, Object> resolveRequest = new HashMap<>();
         resolveRequest.put("configCode", "NOTIF_TEMPLATE_MAP");
         resolveRequest.put("module", module);
+        resolveRequest.put("eventType", eventName);
+        resolveRequest.put("channel", context.getChannel());
         resolveRequest.put("tenantId", tenantId);
         resolveRequest.put("locale", context.getLocale());
         resolveRequest.put("selectors", selectors);

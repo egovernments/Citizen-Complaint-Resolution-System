@@ -89,10 +89,10 @@ public class ConfigEntryRepository {
         return count != null ? count : 0;
     }
 
-    public ConfigEntry resolve(String configCode, String module,
-                               List<String> tenantChain, List<String> localeChain) {
+    public ConfigEntry resolve(String configCode, String module, String eventType,
+                               String channel, List<String> tenantChain, List<String> localeChain) {
         List<Object> params = new ArrayList<>();
-        String sql = queryBuilder.buildResolveQuery(configCode, module, tenantChain, localeChain, params);
+        String sql = queryBuilder.buildResolveQuery(configCode, module, eventType, channel, tenantChain, localeChain, params);
         List<ConfigEntry> results = jdbcTemplate.query(sql, params.toArray(), rowMapper);
         return results.isEmpty() ? null : results.get(0);
     }

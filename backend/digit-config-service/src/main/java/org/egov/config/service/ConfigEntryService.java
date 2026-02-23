@@ -50,11 +50,14 @@ public class ConfigEntryService {
         List<String> localeChain = buildLocaleChain(params.getLocale());
 
         ConfigEntry entry = repository.resolve(
-                params.getConfigCode(), params.getModule(), tenantChain, localeChain);
+                params.getConfigCode(), params.getModule(), params.getEventType(),
+                params.getChannel(), tenantChain, localeChain);
 
         if (entry == null) {
             throw new CustomException("CONFIG_NOT_RESOLVED",
                     "No config entry found for configCode=" + params.getConfigCode()
+                            + " eventType=" + params.getEventType()
+                            + " channel=" + params.getChannel()
                             + " tenantId=" + params.getTenantId());
         }
 

@@ -45,6 +45,12 @@ public class ConfigResolveRequest {
         @JsonProperty("locale")
         private String locale;
 
+        @JsonProperty("eventType")
+        private String eventType;
+
+        @JsonProperty("channel")
+        private String channel;
+
         @JsonProperty("selectors")
         private JsonNode selectors;
 
