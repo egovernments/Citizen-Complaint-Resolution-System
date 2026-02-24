@@ -1675,7 +1675,7 @@ export const UICustomizations = {
             <div style={{ display: "grid" }}>
               <span className="link" style={{ display: "grid" }}>
                 <Link
-                  to={`/${window.contextPath}/employee/pgr/complaint-details/${value}`}
+                  to={`/${window.contextPath}/employee/pgr/complaint/details/${value}`}
                 >
                   {String(value ? (column.translate ? t(column.prefix ? `${column.prefix}${value}` : value) : value) : t("ES_COMMON_NA"))}
                 </Link>

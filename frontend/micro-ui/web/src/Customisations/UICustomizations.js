@@ -182,7 +182,7 @@ export const UICustomizations = {
     }
   },
 
-    PGRInboxConfig: {
+  PGRInboxConfig: {
     preProcess: (data) => {
       data.body.inbox.tenantId = Digit.ULBService.getCurrentTenantId();
       data.body.inbox.processSearchCriteria.tenantId = Digit.ULBService.getCurrentTenantId();
@@ -196,22 +196,22 @@ export const UICustomizations = {
         data.body.inbox.moduleSearchCriteria.fromDate = fromDate;
         data.body.inbox.moduleSearchCriteria.toDate = toDate;
       }
-      else{
+      else {
         delete data.body.inbox.moduleSearchCriteria.fromDate;
         delete data.body.inbox.moduleSearchCriteria.toDate;
       }
 
       // Always delete the full range object if it exists
       delete data.body.inbox.moduleSearchCriteria.range;
-    
+
       const assignee = _.clone(data.body.inbox.moduleSearchCriteria.assignedToMe);
       delete data.body.inbox.moduleSearchCriteria.assignedToMe;
       delete data.body.inbox.moduleSearchCriteria.assignee;
-    
+
       if (assignee?.code === "ASSIGNED_TO_ME" || data?.state?.filterForm?.assignedToMe?.code === "ASSIGNED_TO_ME") {
         data.body.inbox.moduleSearchCriteria.assignee = Digit.UserService.getUser().info.uuid;
       }
-    
+
       // --- Handle serviceCode ---
       let serviceCodes = _.clone(data.body.inbox.moduleSearchCriteria.serviceCode || null);
       serviceCodes = serviceCodes?.serviceCode;
@@ -232,43 +232,43 @@ export const UICustomizations = {
           localityArray = [rawLocality.code];
         }
       }
-      
+
       if (localityArray.length > 0) {
         delete data.body.inbox.moduleSearchCriteria.locality;
         data.body.inbox.moduleSearchCriteria.area = localityArray;
       } else {
         delete data.body.inbox.moduleSearchCriteria.area;
       }
-    
+
       // --- Handle status from state.filterForm ---
       const rawStatuses = _.clone(data?.state?.filterForm?.status || {});
       const statuses = Object.keys(rawStatuses).filter((key) => rawStatuses[key] === true);
-    
+
       if (statuses.length > 0) {
         data.body.inbox.moduleSearchCriteria.status = statuses;
       } else {
         delete data.body.inbox.moduleSearchCriteria.status;
       }
-    
+
       return data;
     },
     additionalCustomizations: (row, key, column, value, t, searchResult) => {
       switch (key) {
         case "CS_COMMON_COMPLAINT_NO":
           return (
-            <div style={{display:"grid"}}>
-            <span className="link" style={{display:"grid"}}>
-            <Link
-              to={ `/${window.contextPath}/employee/pgr/complaint-details/${value}`}
-            >
-              {String(value ? (column.translate ? t(column.prefix ? `${column.prefix}${value}` : value) : value) : t("ES_COMMON_NA"))}
-            </Link>
-          </span>
-          <span>{t(`SERVICEDEFS.${row?.businessObject?.service?.serviceCode?.toUpperCase()}`)}</span>
-          </div>
+            <div style={{ display: "grid" }}>
+              <span className="link" style={{ display: "grid" }}>
+                <Link
+                  to={`/${window.contextPath}/employee/pgr/complaint/details/${value}`}
+                >
+                  {String(value ? (column.translate ? t(column.prefix ? `${column.prefix}${value}` : value) : value) : t("ES_COMMON_NA"))}
+                </Link>
+              </span>
+              <span>{t(`SERVICEDEFS.${row?.businessObject?.service?.serviceCode?.toUpperCase()}`)}</span>
+            </div>
           );
 
-          case "WF_INBOX_HEADER_LOCALITY":
+        case "WF_INBOX_HEADER_LOCALITY":
           return value ? <span>{t(`${value}`)}</span> : <span>{t("NA")}</span>;
 
         case "CS_COMPLAINT_DETAILS_CURRENT_STATUS":

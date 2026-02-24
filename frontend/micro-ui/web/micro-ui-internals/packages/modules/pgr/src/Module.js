@@ -78,7 +78,7 @@ const PGRLinks = ({ matchPath }) => {
 
   const links = [
     {
-      link: `${matchPath}/create-complaint/complaint-type`,
+      link: `${matchPath}/complaint/create/complaint-type`,
       i18nKey: t("CS_COMMON_FILE_A_COMPLAINT"),
     },
     {

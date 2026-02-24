@@ -47,19 +47,19 @@ const EmployeeApp = ({ path, stateCode, userType, tenants }) => {
                 show: true,
               },
               {
-                internalLink: `/${window?.contextPath}/employee/pgr/create-complaint`,
+                internalLink: `/${window?.contextPath}/employee/pgr/complaint/create`,
                 content: t("ACTION_TEST_CREATE_COMPLAINT"),
-                show: location.pathname.includes("create-complaint"),
+                show: location.pathname.includes("complaint/create"),
               },
               {
-                internalLink: `/${window?.contextPath}/employee/pgr/inbox-v2`,
+                internalLink: `/${window?.contextPath}/employee/pgr/inbox`,
                 content: t("PGR_INBOX"),
                 show: location.pathname.includes("inbox"),
               },
               {
-                internalLink: `/${window?.contextPath}/employee/pgr/complaint-details`,
+                internalLink: `/${window?.contextPath}/employee/pgr/complaint/details`,
                 content: t("CS_COMPLAINT_DETAILS_COMPLAINT_DETAILS"),
-                show: location.pathname.includes("complaint-details"),
+                show: location.pathname.includes("complaint/details"),
               }
             ]}
           />
@@ -67,7 +67,7 @@ const EmployeeApp = ({ path, stateCode, userType, tenants }) => {
 
         {/* Route for Create Complaint Form */}
         <PrivateRoute
-          path={`${path}/create-complaint`}
+          path={`${path}/complaint/create`}
           component={() => <PGRCreateComplaint />}
         />
 
@@ -83,13 +83,13 @@ const EmployeeApp = ({ path, stateCode, userType, tenants }) => {
 
         {/* Route for Complaint Details view by complaint ID */}
         <PrivateRoute
-          path={`${path}/complaint-details/:id`}
+          path={`${path}/complaint/details/:id`}
           component={() => <PGRComplaintDetails />}
         />
 
         {/* Route for Complaint Search Inbox */}
         <PrivateRoute
-          path={`${path}/inbox-v2`}
+          path={`${path}/inbox`}
           component={() => <PGRSearchInbox />}
         />
 
