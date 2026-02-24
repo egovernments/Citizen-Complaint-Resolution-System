@@ -1,0 +1,161 @@
+{
+  "info": {
+    "name": "DIGIT Core Services - Local Validation",
+    "description": "Smoke tests and health checks for the DIGIT core services running via docker compose on localhost. Update the baseUrl variable if you are not using localhost.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Checks",
+      "description": "Quick liveness checks for all HTTP services in the compose file.",
+      "item": [
+        {
+          "name": "MDMS health",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}:18094/mdms-v2/health",
+            "description": "Verifies the MDMS service is up and responding."
+          }
+        },
+        {
+          "name": "ENC service health",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}:11234/egov-enc-service/actuator/health",
+            "description": "Checks egov-enc-service actuator health."
+          }
+        },
+        {
+          "name": "IDGEN health",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}:18088/egov-idgen/health",
+            "description": "Checks egov-idgen health endpoint."
+          }
+        },
+        {
+          "name": "User health",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}:18107/user/health",
+            "description": "Checks egov-user health endpoint."
+          }
+        },
+        {
+          "name": "Workflow v2 health",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}:18109/egov-workflow-v2/health",
+            "description": "Checks egov-workflow-v2 health endpoint."
+          }
+        },
+        {
+          "name": "Localization health",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}:18096/localization/actuator/health",
+            "description": "Checks localization service actuator health."
+          }
+        },
+        {
+          "name": "Boundary-service health",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}:18081/boundary-service/actuator/health",
+            "description": "Checks boundary-service (v2) actuator health."
+          }
+        },
+        {
+          "name": "Accesscontrol health",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}:18090/access/health",
+            "description": "Checks egov-accesscontrol health endpoint."
+          }
+        },
+        {
+          "name": "Persister health",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}:18091/common-persist/actuator/health",
+            "description": "Checks egov-persister actuator health."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Smoke Tests",
+      "description": "Minimal functional checks that validate common data paths using seeded data.",
+      "item": [
+        {
+          "name": "MDMS search (tenant master)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"RequestInfo\": { \"apiId\": \"digit\", \"ver\": \"1.0\", \"ts\": 0 },\n  \"MdmsCriteria\": {\n    \"tenantId\": \"pg\",\n    \"moduleDetails\": [\n      { \"moduleName\": \"tenant\", \"masterDetails\": [ { \"name\": \"tenants\" } ] }\n    ]\n  }\n}"
+            },
+            "url": "{{baseUrl}}:18094/mdms-v2/v1/_search",
+            "description": "Queries tenant master data from MDMS using seeded data (tenantId pg)."
+          }
+        },
+        {
+          "name": "Localization search (v1)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"RequestInfo\": { \"apiId\": \"Rainmaker\", \"ver\": \".01\", \"ts\": \"\" }\n}"
+            },
+            "url": "{{baseUrl}}:18096/localization/messages/v1/_search?locale=en_IN&module=rainmaker-workbench&tenantId=pg",
+            "description": "Fetches localization messages (v1). If empty, run the cache-bust request first."
+          }
+        },
+        {
+          "name": "Localization cache-bust",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}:18096/localization/messages/cache-bust",
+            "description": "Clears Redis cache for localization messages."
+          }
+        },
+        {
+          "name": "Boundary-service hierarchy search",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"RequestInfo\": { \"apiId\": \"digit\", \"ver\": \"1.0\", \"ts\": 0 }\n}"
+            },
+            "url": "{{baseUrl}}:18081/boundary-service/boundary-hierarchy-definition/_search?tenantId=pg",
+            "description": "Fetches boundary hierarchy definitions from boundary-service v2."
+          }
+        }
+      ]
+    }
+  ]
+}

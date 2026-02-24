@@ -1,0 +1,351 @@
+# DIGIT Core Services - Tiltfile
+# Run with: tilt up
+
+# Allow any k8s context since we're using docker-compose, not k8s
+allow_k8s_contexts(k8s_context())
+
+# Load extensions
+load('ext://uibutton', 'cmd_button', 'location')
+# Note: restart_process extension removed - not compatible with docker-compose
+
+# ==================== Configuration ====================
+# Path to CCRS code (for live UI and PGR development)
+CCRS_PATH = os.getenv('CCRS_PATH', '..')
+
+FRONTEND_PATH = CCRS_PATH + '/frontend/micro-ui'
+PGR_PATH = CCRS_PATH + '/backend/pgr-services'
+
+# Detect CI mode - use full Docker builds without live reload
+# GitHub Actions sets CI=true, or manually set TILT_CI=1 for CI-style builds
+CI_MODE = os.getenv('CI', '') != '' or os.getenv('TILT_CI', '') != ''
+
+# ==================== PGR Services ====================
+if CI_MODE:
+    # CI Mode: Use pre-built images from Docker Hub (much faster)
+    # Images should be pulled and tagged before running Tilt
+    # If not available, fall back to building
+    pgr_image_exists = str(local('docker images -q pgr-services-dev:latest 2>/dev/null || echo "missing"', quiet=True)).strip()
+    if pgr_image_exists == '' or 'missing' in pgr_image_exists:
+        print('pgr-services-dev not found, pulling from Docker Hub...')
+        local('docker pull egovio/pgr-services:crs_dataseeder-084b7cc && docker tag egovio/pgr-services:crs_dataseeder-084b7cc pgr-services-dev:latest')
+else:
+    # Local Dev Mode: Compile Java locally, then sync to container for fast hot reload
+    # Requires: mvn installed locally
+    # Check if Maven is available
+    maven_check = str(local('which mvn || echo "not_found"', quiet=True))
+    if 'not_found' in maven_check:
+        fail('''
+Maven not found! For local development with hot reload, install Maven:
+  - macOS: brew install maven
+  - Ubuntu: sudo apt install maven
+
+Or run in CI mode without hot reload:
+  TILT_CI=1 tilt up
+''')
+
+    # Initial Maven build if target/extracted doesn't exist yet
+    # This ensures the docker build context exists on first run
+    pgr_target_exists = str(local('test -d "' + PGR_PATH + '/target/extracted" && echo "exists" || echo "missing"', quiet=True))
+    if 'missing' in pgr_target_exists:
+        print('PGR target not found, running initial Maven build...')
+        local('cd ' + PGR_PATH + ' && mvn package -DskipTests -q && unzip -o target/pgr-services-*.jar -d target/extracted')
+        print('PGR initial build completed')
+
+    local_resource(
+        'pgr-compile',
+        'cd ' + PGR_PATH + ' && mvn package -DskipTests -q && ' +
+        'unzip -o target/pgr-services-*.jar -d target/extracted',
+        deps=[PGR_PATH + '/src', PGR_PATH + '/pom.xml'],
+        labels=['pgr'],
+    )
+
+    docker_build(
+        'pgr-services-dev',
+        context=PGR_PATH + '/target/extracted',
+        dockerfile_contents='''
+FROM eclipse-temurin:17-jre-jammy
+WORKDIR /app
+COPY . /app
+ENTRYPOINT ["java", "-cp", ".:BOOT-INF/lib/*:BOOT-INF/classes", "org.egov.pgr.PGRApp"]
+''',
+        live_update=[
+            sync(PGR_PATH + '/target/extracted/BOOT-INF/lib', '/app/BOOT-INF/lib'),
+            sync(PGR_PATH + '/target/extracted/BOOT-INF/classes', '/app/BOOT-INF/classes'),
+            sync(PGR_PATH + '/target/extracted/META-INF', '/app/META-INF'),
+        ],
+    )
+
+# ==================== DIGIT UI ====================
+if CI_MODE:
+    # CI Mode: Use pre-built images from Docker Hub (much faster)
+    digit_ui_exists = str(local('docker images -q digit-ui-dev:latest 2>/dev/null || echo "missing"', quiet=True)).strip()
+    if digit_ui_exists == '' or 'missing' in digit_ui_exists:
+        print('digit-ui-dev not found, pulling from Docker Hub...')
+        local('docker pull egovio/digit-ui:master-e58961a && docker tag egovio/digit-ui:master-e58961a digit-ui-dev:latest')
+else:
+    # Local Dev Mode: Build with live sync for hot reload
+    # Check if yarn is available for UI watching
+    yarn_check = str(local('which yarn || echo "not_found"', quiet=True))
+    if 'not_found' not in yarn_check:
+        # UI watcher - recompiles on source changes
+        # This runs webpack in watch mode for hot reload
+        local_resource(
+            'ui-watch',
+            serve_cmd='cd ' + FRONTEND_PATH + '/web && yarn build:webpack --watch',
+            deps=[FRONTEND_PATH + '/web/src'],
+            labels=['frontend'],
+            resource_deps=['digit-ui'],
+            auto_init=False,  # Don't auto-start, trigger manually or enable via Tilt UI
+        )
+
+    docker_build(
+        'digit-ui-dev',
+        context=FRONTEND_PATH,
+        dockerfile=FRONTEND_PATH + '/web/docker/Dockerfile',
+        build_args={'WORK_DIR': '.'},
+        live_update=[
+            # Sync built JS/CSS (after local webpack build --watch)
+            # Note: Don't sync public/ - it would overwrite the built index.html which has bundle script tags
+            sync(FRONTEND_PATH + '/web/build/', '/var/web/digit-ui/'),
+        ],
+    )
+
+# Load docker-compose configuration
+# Note: wait=True blocks until ALL containers are healthy, which is too slow
+# Instead, rely on docker-compose depends_on with service_healthy conditions
+docker_compose('./docker-compose.yml')
+
+# ==================== Infrastructure ====================
+dc_resource('postgres-db', labels=['infrastructure'])
+dc_resource('pgbouncer', labels=['infrastructure'])
+dc_resource('redis', labels=['infrastructure'])
+dc_resource('redpanda', labels=['infrastructure'])
+# Elasticsearch disabled by default (uses profiles: tools in docker-compose)
+# dc_resource('elasticsearch', labels=['infrastructure'])
+dc_resource('gatus', labels=['infrastructure'], auto_init=True,
+    links=[
+        link('http://localhost:18889', 'Health Dashboard'),
+    ])
+
+# ==================== Core Services ====================
+dc_resource('mdms-backend', labels=['core-services'],
+    resource_deps=['pgbouncer', 'redpanda'],
+)
+
+dc_resource('egov-mdms-service', labels=['core-services'],
+    resource_deps=['mdms-backend'],
+    links=[
+        link('http://localhost:18094/mdms-v2/health', 'Health'),
+    ])
+
+dc_resource('egov-enc-service', labels=['core-services'],
+    resource_deps=['egov-mdms-service'],
+    links=[
+        link('http://localhost:11234/egov-enc-service/actuator/health', 'Health'),
+    ])
+
+dc_resource('egov-idgen', labels=['core-services'],
+    resource_deps=['egov-mdms-service'],
+    links=[
+        link('http://localhost:18088/egov-idgen/health', 'Health'),
+    ])
+
+dc_resource('egov-user', labels=['core-services'],
+    resource_deps=['egov-enc-service'],
+    links=[
+        link('http://localhost:18107/user/health', 'Health'),
+    ])
+
+dc_resource('egov-workflow-v2', labels=['core-services'],
+    resource_deps=['egov-idgen'],
+    links=[
+        link('http://localhost:18109/egov-workflow-v2/health', 'Health'),
+    ])
+
+dc_resource('egov-localization', labels=['core-services'],
+    resource_deps=['egov-mdms-service'],
+    links=[
+        link('http://localhost:18096/localization/actuator/health', 'Health'),
+    ])
+
+dc_resource('boundary-service', labels=['core-services'],
+    resource_deps=['egov-mdms-service'],
+    links=[
+        link('http://localhost:18081/boundary-service/actuator/health', 'Health'),
+    ])
+
+dc_resource('egov-accesscontrol', labels=['core-services'],
+    resource_deps=['egov-mdms-service'],
+    links=[
+        link('http://localhost:18090/access/health', 'Health'),
+    ])
+
+dc_resource('egov-persister', labels=['core-services'],
+    resource_deps=['egov-mdms-service'],
+    links=[
+        link('http://localhost:18091/common-persist/actuator/health', 'Health'),
+    ])
+
+# ==================== API Gateway ====================
+dc_resource('kong', labels=['gateway'],
+    links=[
+        link('http://localhost:18000', 'Proxy'),
+        link('http://localhost:18001', 'Admin API'),
+        link('http://localhost:18002', 'Manager GUI'),
+    ])
+
+# ==================== PGR Services ====================
+dc_resource('pgr-services', labels=['pgr'],
+    resource_deps=['egov-idgen', 'egov-user', 'egov-workflow-v2', 'egov-localization'],
+    links=[
+        link('http://localhost:18083/pgr-services/health', 'Health'),
+    ])
+
+dc_resource('jupyter', labels=['pgr'], auto_init=True,
+    links=[
+        link('http://localhost:18888/lab', 'Jupyter Lab'),
+    ])
+
+dc_resource('digit-ui', labels=['frontend'],
+    resource_deps=['kong'],  # Wait for Kong gateway to be ready
+    links=[
+        link('http://localhost:18000/digit-ui/', 'UI via Kong'),
+    ])
+
+# ==================== HRMS ====================
+dc_resource('egov-hrms', labels=['hrms'],
+    resource_deps=['egov-mdms-service', 'egov-idgen', 'egov-user'],
+    links=[
+        link('http://localhost:18092/egov-hrms/employees/_search', 'Health'),
+    ])
+
+# ==================== Additional Services ====================
+dc_resource('minio', labels=['infrastructure'])
+dc_resource('minio-init', labels=['infrastructure'],
+    resource_deps=['minio'],
+)
+dc_resource('egov-filestore', labels=['core-services'],
+    resource_deps=['minio-init', 'egov-mdms-service'],
+    links=[
+        link('http://localhost:18083/filestore/health', 'Health'),
+    ])
+dc_resource('egov-bndry-mgmnt', labels=['core-services'],
+    resource_deps=['boundary-service', 'egov-filestore'],
+    links=[
+        link('http://localhost:18081/boundary-management/actuator/health', 'Health'),
+    ])
+
+# ==================== Local Resources ====================
+
+# Database reset - manually triggered only
+local_resource(
+    'nuke-db',
+    cmd='docker compose down -v && docker compose up -d postgres redis redpanda',
+    auto_init=False,
+    labels=['maintenance'],
+)
+
+# ==================== Custom Buttons ====================
+
+# Nuke Database button - removes all data and restarts infrastructure
+cmd_button(
+    name='nuke-db-btn',
+    argv=['sh', '-c', 'docker compose down -v && docker compose up -d postgres redis redpanda'],
+    location=location.NAV,
+    icon_name='delete_forever',
+    text='Nuke DB',
+)
+
+# Health Check button in the nav bar
+cmd_button(
+    name='health-check',
+    argv=['./scripts/health-check.sh'],
+    location=location.NAV,
+    icon_name='favorite',
+    text='Health Check',
+)
+
+# Smoke Tests button in the nav bar
+cmd_button(
+    name='smoke-tests',
+    argv=['./scripts/smoke-tests.sh'],
+    location=location.NAV,
+    icon_name='science',
+    text='Smoke Tests',
+)
+
+# Re-seed MDMS button (useful after restart)
+cmd_button(
+    name='reseed-mdms',
+    argv=['sh', '-c', 'docker exec -i docker-postgres psql -U egov -d egov < ./db/seed.sql'],
+    location=location.NAV,
+    icon_name='refresh',
+    text='Re-seed MDMS',
+)
+
+# Kong API Gateway test button
+cmd_button(
+    name='kong-test',
+    argv=['./scripts/kong-test.sh', 'test'],
+    location=location.NAV,
+    icon_name='security',
+    text='Kong Test',
+)
+
+# Test idgen button
+cmd_button(
+    name='idgen-test',
+    argv=['sh', '-c', '''curl -s -X POST "http://localhost:18088/egov-idgen/id/_generate" \
+      -H "Content-Type: application/json" \
+      -d '{"RequestInfo":{"apiId":"digit","ver":"1.0"},"idRequests":[{"tenantId":"pg","idName":"pgr.servicerequestid"}]}' | jq .'''],
+    location=location.NAV,
+    icon_name='tag',
+    text='Test idgen',
+)
+
+# Start Jupyter Lab button
+cmd_button(
+    name='jupyter-start',
+    argv=['sh', '-c', 'docker compose --profile tools up -d jupyter && echo "Jupyter Lab: http://localhost:18888"'],
+    location=location.NAV,
+    icon_name='science',
+    text='Start Jupyter',
+)
+
+# Start Gatus Health Dashboard button
+cmd_button(
+    name='gatus-start',
+    argv=['sh', '-c', 'docker compose --profile tools up -d gatus && echo "Gatus Dashboard: http://localhost:18889"'],
+    location=location.NAV,
+    icon_name='monitor_heart',
+    text='Start Gatus',
+)
+
+# ==================== Port Summary ====================
+# Infrastructure:
+#   - Postgres:      15432
+#   - Redis:         16379
+#   - Redpanda:      19092
+#   - Elasticsearch: 19200
+#
+# API Gateway (Kong):
+#   - Proxy:         18000 (external access point)
+#   - Admin API:     18001
+#   - Manager GUI:   18002
+#   - Status:        18100
+#
+# Core Services:
+#   - MDMS:          18094
+#   - ENC:           11234
+#   - IDGEN:         18088
+#   - User:          18107
+#   - Workflow:      18109
+#   - Localization:  18096
+#   - Location:      18084
+#   - Boundary-v2:   18081
+#   - AccessControl: 18090
+#   - Persister:     18091
+#
+# PGR & Frontend:
+#   - PGR-Services:  18083
+#   - DIGIT-UI:      18080

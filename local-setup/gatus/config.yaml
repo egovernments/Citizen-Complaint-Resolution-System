@@ -1,0 +1,189 @@
+# Gatus Configuration for DIGIT Core Services
+# https://github.com/TwiN/gatus
+
+storage:
+  type: memory
+
+ui:
+  title: DIGIT Core Services - Health Dashboard
+  description: Real-time health monitoring for all DIGIT microservices
+
+# Alerting (optional - configure as needed)
+# alerting:
+#   slack:
+#     webhook-url: "https://hooks.slack.com/services/xxx/yyy/zzz"
+
+endpoints:
+  # ==================== Infrastructure ====================
+  - name: PostgreSQL
+    group: Infrastructure
+    url: "tcp://postgres:5432"
+    interval: 30s
+    conditions:
+      - "[CONNECTED] == true"
+
+  - name: Redis
+    group: Infrastructure
+    url: "tcp://redis:6379"
+    interval: 30s
+    conditions:
+      - "[CONNECTED] == true"
+
+  - name: Redpanda (Kafka)
+    group: Infrastructure
+    url: "tcp://redpanda:9092"
+    interval: 30s
+    conditions:
+      - "[CONNECTED] == true"
+
+  # ==================== Core Services ====================
+  - name: MDMS Service
+    group: Core Services
+    url: "http://egov-mdms-service:8094/mdms-v2/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Encryption Service
+    group: Core Services
+    url: "http://egov-enc-service:1234/egov-enc-service/actuator/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: ID Generation Service
+    group: Core Services
+    url: "http://egov-idgen:8088/egov-idgen/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: User Service
+    group: Core Services
+    url: "http://egov-user:8107/user/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Workflow Service
+    group: Core Services
+    url: "http://egov-workflow-v2:8109/egov-workflow-v2/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Localization Service
+    group: Core Services
+    url: "http://egov-localization:8096/localization/actuator/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Boundary Service
+    group: Core Services
+    url: "http://boundary-service:8081/boundary-service/actuator/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Access Control Service
+    group: Core Services
+    url: "http://egov-accesscontrol:8090/access/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Persister Service
+    group: Core Services
+    url: "http://egov-persister:8091/common-persist/actuator/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  # ==================== API Gateway ====================
+  - name: Kong Gateway (Proxy)
+    group: API Gateway
+    url: "http://kong:8000/"
+    interval: 30s
+    conditions:
+      - "[STATUS] < 500"
+
+  - name: Kong Admin API
+    group: API Gateway
+    url: "http://kong:8001/"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Kong Status
+    group: API Gateway
+    url: "http://kong:8100/status"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  # ==================== Application Services ====================
+  - name: PGR Services
+    group: Application
+    url: "http://pgr-services:8080/pgr-services/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].status == UP"
+
+  - name: DIGIT UI
+    group: Application
+    url: "http://digit-ui:80/digit-ui/"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  # ==================== API Functionality Tests ====================
+  - name: MDMS API - Tenant Search
+    group: API Tests
+    url: "http://egov-mdms-service:8094/mdms-v2/v1/_search"
+    method: POST
+    headers:
+      Content-Type: application/json
+    body: |
+      {
+        "RequestInfo": {"apiId": "digit", "ver": "1.0", "ts": 0},
+        "MdmsCriteria": {
+          "tenantId": "pg",
+          "moduleDetails": [{"moduleName": "tenant", "masterDetails": [{"name": "tenants"}]}]
+        }
+      }
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: IDGen API - Generate ID
+    group: API Tests
+    url: "http://egov-idgen:8088/egov-idgen/id/_generate"
+    method: POST
+    headers:
+      Content-Type: application/json
+    body: |
+      {
+        "RequestInfo": {"apiId": "digit", "ver": "1.0"},
+        "idRequests": [{"tenantId": "pg", "idName": "pgr.servicerequestid"}]
+      }
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].responseInfo.status == SUCCESSFUL"
+
+  - name: Localization API - Search
+    group: API Tests
+    url: "http://egov-localization:8096/localization/messages/v1/_search"
+    method: POST
+    headers:
+      Content-Type: application/json
+    body: |
+      {
+        "RequestInfo": {"apiId": "digit", "ver": "1.0", "ts": 0},
+        "MsgCriteria": {"tenantId": "pg", "locale": "en_IN", "module": "rainmaker-common"}
+      }
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"

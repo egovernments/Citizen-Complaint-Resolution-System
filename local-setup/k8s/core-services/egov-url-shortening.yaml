@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: egov-url-shortening
+  namespace: digit
+  labels:
+    app: egov-url-shortening
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: egov-url-shortening
+  template:
+    metadata:
+      labels:
+        app: egov-url-shortening
+    spec:
+      containers:
+        - name: egov-url-shortening
+          image: localhost:5000/egovio/egov-url-shortening:v2.9.2-4a60f20
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: digit-common-env
+            - secretRef:
+                name: digit-db-credentials
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:otel:postgresql://postgres:5432/egov"
+            - name: SERVER_PORT
+              value: "8080"
+            - name: JAVA_TOOL_OPTIONS
+              value: "-Xms64m -Xmx128m"
+          resources:
+            limits:
+              memory: 192Mi
+              cpu: "250m"
+            requests:
+              memory: 96Mi
+              cpu: "100m"
+          readinessProbe:
+            httpGet:
+              path: /egov-url-shortening/actuator/health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /egov-url-shortening/actuator/health
+              port: 8080
+            initialDelaySeconds: 0
+            periodSeconds: 30
+            timeoutSeconds: 10
+          startupProbe:
+            httpGet:
+              path: /egov-url-shortening/actuator/health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 30
+            timeoutSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: egov-url-shortening
+  namespace: digit
+spec:
+  selector:
+    app: egov-url-shortening
+  ports:
+    - port: 8080
+      targetPort: 8080
