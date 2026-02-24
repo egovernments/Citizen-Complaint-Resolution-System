@@ -1,14 +1,16 @@
 ---
 name: User Story Template
 about: This template provides a basic structure for user stories.
-title: "[Story] As a -----, I should be able to...."
+title: "Broad Set Template"
 labels: user-story
 assignees: ''
 
 ---
 
 # User story
-As a ..., I want to ..., so I can ...
+Role: As a ....
+Ability: I want...
+Rationale: so that I can...
 
 *Add links to PRDs where applicable*
 

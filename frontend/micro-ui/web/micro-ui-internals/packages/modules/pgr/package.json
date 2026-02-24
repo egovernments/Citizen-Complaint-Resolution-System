@@ -1,6 +1,6 @@
 {
   "name": "@egovernments/digit-ui-module-cms",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "CMS Module UI for DIGIT Platform",
   "main": "dist/index.js",
   "module": "dist/index.modern.js",
