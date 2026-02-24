@@ -1575,8 +1575,18 @@ export const UICustomizations = {
       data.body.inbox.tenantId = Digit.ULBService.getCurrentTenantId();
       data.body.inbox.processSearchCriteria.tenantId = Digit.ULBService.getCurrentTenantId();
       // delete data.body.inbox.moduleSearchCriteria.assignedToMe
-      // delete data.body.inbox.moduleSearchCriteria.assignee
+      // Remove top-level sortOrder added by the table column sort (not required by backend).
+      // Also delete from state.tableForm so the framework cannot re-inject it after preProcess.
       delete data.body.inbox.sortOrder;
+      if (data.state && data.state.tableForm) {
+        delete data.state.tableForm.sortOrder;
+      }
+
+      // Manage limit and offset: ensure they are valid numbers with defaults
+      data.body.inbox.limit = data?.state?.tableForm?.limit || data.body.inbox.limit || 10;
+      var _tableOffset = data?.state?.tableForm?.offset;
+      var _bodyOffset = data.body.inbox.offset;
+      data.body.inbox.offset = _tableOffset != null ? _tableOffset : (_bodyOffset != null ? _bodyOffset : 0);
 
       const requestDate = data?.body?.inbox?.moduleSearchCriteria?.range?.requestDate;
 
@@ -1595,17 +1605,25 @@ export const UICustomizations = {
       // Always delete the full range object if it exists
       delete data.body.inbox.moduleSearchCriteria.range;
 
-      // deleting them for now(assignee-> need clarity from pintu,ward-> static for now,not implemented BE side)
-      const assignee = _.clone(data.body.inbox.moduleSearchCriteria.assignedToMe);
+      // Read assignedToMe from body first, fall back to filterForm state
+      // (framework may inject filterForm AFTER preProcess, so we read state as fallback)
+      const assignee = _.clone(data.body.inbox.moduleSearchCriteria.assignedToMe)
+        || _.clone(data?.state?.filterForm?.assignedToMe);
+
+      // Delete from body
       delete data.body.inbox.moduleSearchCriteria.assignee;
       delete data.body.inbox.moduleSearchCriteria.assignedToMe;
-      
 
-      if (assignee?.code === "ASSIGNED_TO_ME") {
+      // Also delete from filterForm state to prevent framework re-injecting it after preProcess
+      if (data.state && data.state.filterForm) {
+        delete data.state.filterForm.assignedToMe;
+      }
+
+      if (assignee && assignee.code === "ASSIGNED_TO_ME") {
         data.body.inbox.moduleSearchCriteria.assignee = Digit.UserService.getUser().info.uuid;
       }
-      if (assignee?.code === "ASSIGNED_TO_ALL") {
-      delete data.body.inbox.moduleSearchCriteria.assignee;
+      if (assignee && assignee.code === "ASSIGNED_TO_ALL") {
+        delete data.body.inbox.moduleSearchCriteria.assignee;
       }
 
 
@@ -1657,7 +1675,7 @@ export const UICustomizations = {
             <div style={{ display: "grid" }}>
               <span className="link" style={{ display: "grid" }}>
                 <Link
-                  to={`/${window.contextPath}/employee/pgr/complaint-details/${value}`}
+                  to={`/${window.contextPath}/employee/pgr/complaint/details/${value}`}
                 >
                   {String(value ? (column.translate ? t(column.prefix ? `${column.prefix}${value}` : value) : value) : t("ES_COMMON_NA"))}
                 </Link>
