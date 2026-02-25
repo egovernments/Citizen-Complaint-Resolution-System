@@ -36,7 +36,7 @@ echo "=== Deploying PR #${PR_NUMBER} Preview ==="
 echo ""
 
 # 1. Check concurrent PR limit
-ACTIVE_COUNT=$(ls "$STATE_DIR"/pr-*.json 2>/dev/null | wc -l || echo 0)
+ACTIVE_COUNT=$(find "$STATE_DIR" -name 'pr-*.json' 2>/dev/null | wc -l)
 if [ "$ACTIVE_COUNT" -ge 10 ]; then
     echo "ERROR: Maximum 10 concurrent PR previews reached ($ACTIVE_COUNT active)"
     echo "Run 'list-prs.sh' to see active previews, or 'cleanup-pr.sh <N>' to remove one."
