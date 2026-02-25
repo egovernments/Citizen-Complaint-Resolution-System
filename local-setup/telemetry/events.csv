@@ -1,0 +1,18 @@
+category,action,name,description
+setup,start,docker-compose,Stack started
+setup,stop,docker-compose,Stack stopped
+setup,start,tilt,Tilt started
+setup,stop,tilt,Tilt stopped
+setup,first-boot,local-setup,First time starting
+setup,healthy,all-services,All health checks pass
+dataloader,create,tenant,New tenant created
+dataloader,load,boundaries,Boundaries loaded
+dataloader,load,common-masters,Common masters loaded
+dataloader,create,employee,HRMS employee created
+dataloader,load,localizations,Localizations uploaded
+dataloader,load,workflow,Workflow configured
+testing,run,newman-core,Core validation executed
+testing,run,newman-pgr,Complaints demo executed
+testing,run,smoke-tests,Smoke tests executed
+testing,run,health-check,Health check executed
+testing,run,ci,CI pipeline executed

@@ -6,7 +6,7 @@ on:
     paths:
       - 'local-setup/**'
   pull_request:
-    branches: [main, master]
+    branches: [main, master, develop]
     paths:
       - 'local-setup/**'
   workflow_dispatch:
@@ -207,8 +207,16 @@ jobs:
           pip install requests openpyxl pandas python-dotenv --quiet
 
           # Run CI dataloader to create tenant, HRMS employee, and load masters
-          CI_OUTPUT=$(DIGIT_URL=http://localhost:18000 TARGET_TENANT=pg.citest python3 scripts/ci-dataloader.py)
+          # Use set +e so bash -e doesn't swallow stdout on failure
+          set +e
+          CI_OUTPUT=$(DIGIT_URL=http://localhost:18000 TARGET_TENANT=pg.citest python3 scripts/ci-dataloader.py 2>&1)
+          CI_RC=$?
+          set -e
           echo "$CI_OUTPUT"
+          if [ $CI_RC -ne 0 ]; then
+            echo "FATAL: ci-dataloader failed (exit code $CI_RC)"
+            exit 1
+          fi
 
           # Parse output for service code
           CI_SERVICE_CODE=$(echo "$CI_OUTPUT" | grep '^CI_SERVICE_CODE=' | cut -d= -f2)
@@ -228,6 +236,118 @@ jobs:
             --env-var "userType=EMPLOYEE" \
             --env-var "authorization=Basic ZWdvdi11c2VyLWNsaWVudDo=" \
             --env-var "serviceCode=${CI_SERVICE_CODE}"
+
+      - name: Run cross-root bootstrap test
+        run: |
+          # Test that create_tenant auto-bootstraps a new tenant root (issue #225).
+          # Creates "ciboot.citya" which forces bootstrap of the "ciboot" root from "pg".
+          # Use set +e to capture output even on failure (bash -e would swallow stdout)
+          set +e
+          BOOT_OUTPUT=$(DIGIT_URL=http://localhost:18000 BOOT_TENANT=ciboot.citya python3 scripts/ci-dataloader-crossroot.py 2>&1)
+          BOOT_RC=$?
+          set -e
+          echo "$BOOT_OUTPUT"
+          if [ $BOOT_RC -ne 0 ]; then
+            echo "FATAL: cross-root bootstrap script failed (exit code $BOOT_RC)"
+            exit 1
+          fi
+
+          # Parse output for service code
+          BOOT_SERVICE_CODE=$(echo "$BOOT_OUTPUT" | grep '^BOOT_SERVICE_CODE=' | cut -d= -f2)
+          if [ -z "$BOOT_SERVICE_CODE" ]; then
+            echo "FATAL: cross-root bootstrap did not output BOOT_SERVICE_CODE"
+            exit 1
+          fi
+          echo "Using serviceCode: $BOOT_SERVICE_CODE"
+
+          # ── Verify bootstrap data integrity ──────────────────────────────
+          echo ""
+          echo "=== Verifying bootstrap data integrity on ciboot ==="
+          MDMS_URL="http://localhost:18000/mdms-v2/v1/_search"
+          FAIL=0
+
+          # 1. Verify IdFormat records were copied
+          echo -n "1. IdFormat records on ciboot... "
+          IDFORMAT=$(curl -sS -X POST "$MDMS_URL" -H 'Content-Type: application/json' \
+            -d '{"RequestInfo":{"apiId":"Rainmaker"},"MdmsCriteria":{"tenantId":"ciboot","moduleDetails":[{"moduleName":"common-masters","masterDetails":[{"name":"IdFormat"}]}]}}')
+          IDFORMAT_COUNT=$(echo "$IDFORMAT" | jq '[.MdmsRes."common-masters".IdFormat // [] | length] | .[0]')
+          if [ "$IDFORMAT_COUNT" -gt 0 ]; then
+            echo "OK ($IDFORMAT_COUNT records)"
+          else
+            echo "FAIL (expected >0, got $IDFORMAT_COUNT)"
+            FAIL=1
+          fi
+
+          # 2. Verify Department records were copied
+          echo -n "2. Department records on ciboot... "
+          DEPT=$(curl -sS -X POST "$MDMS_URL" -H 'Content-Type: application/json' \
+            -d '{"RequestInfo":{"apiId":"Rainmaker"},"MdmsCriteria":{"tenantId":"ciboot","moduleDetails":[{"moduleName":"common-masters","masterDetails":[{"name":"Department"}]}]}}')
+          DEPT_COUNT=$(echo "$DEPT" | jq '[.MdmsRes."common-masters".Department // [] | length] | .[0]')
+          if [ "$DEPT_COUNT" -gt 0 ]; then
+            echo "OK ($DEPT_COUNT records)"
+          else
+            echo "FAIL (expected >0, got $DEPT_COUNT)"
+            FAIL=1
+          fi
+
+          # 3. Verify ServiceDefs were copied
+          echo -n "3. ServiceDefs on ciboot... "
+          SVCDEFS=$(curl -sS -X POST "$MDMS_URL" -H 'Content-Type: application/json' \
+            -d '{"RequestInfo":{"apiId":"Rainmaker"},"MdmsCriteria":{"tenantId":"ciboot","moduleDetails":[{"moduleName":"RAINMAKER-PGR","masterDetails":[{"name":"ServiceDefs"}]}]}}')
+          SVCDEF_COUNT=$(echo "$SVCDEFS" | jq '[.MdmsRes."RAINMAKER-PGR".ServiceDefs // [] | length] | .[0]')
+          if [ "$SVCDEF_COUNT" -gt 0 ]; then
+            echo "OK ($SVCDEF_COUNT complaint types)"
+          else
+            echo "FAIL (expected >0, got $SVCDEF_COUNT)"
+            FAIL=1
+          fi
+
+          # 4. Verify workflow has all required states
+          echo -n "4. PGR workflow states on ciboot... "
+          WF=$(curl -sS "http://localhost:18000/egov-workflow-v2/egov-wf/businessservice/_search?tenantId=ciboot&businessServices=PGR" \
+            -H 'Content-Type: application/json' \
+            -d '{"RequestInfo":{"apiId":"Rainmaker"}}')
+          WF_STATES=$(echo "$WF" | jq '[.BusinessServices[0].states // [] | length] | .[0]')
+          if [ "$WF_STATES" -ge 6 ]; then
+            echo "OK ($WF_STATES states)"
+          else
+            echo "FAIL (expected >=6 states, got $WF_STATES)"
+            echo "$WF" | jq '.BusinessServices[0].states[].state' 2>/dev/null || true
+            FAIL=1
+          fi
+
+          # 5. Verify idgen works on bootstrapped root
+          echo -n "5. ID generation on ciboot.citya... "
+          IDGEN=$(curl -sS -X POST 'http://localhost:18000/egov-idgen/id/_generate' \
+            -H 'Content-Type: application/json' \
+            -d '{"RequestInfo":{"apiId":"Rainmaker"},"idRequests":[{"tenantId":"ciboot.citya","idName":"pgr.servicerequestid"}]}')
+          GENERATED_ID=$(echo "$IDGEN" | jq -r '.idResponses[0].id // empty')
+          if [ -n "$GENERATED_ID" ]; then
+            echo "OK (generated: $GENERATED_ID)"
+          else
+            echo "FAIL (no ID generated)"
+            echo "$IDGEN" | jq . 2>/dev/null || echo "$IDGEN"
+            FAIL=1
+          fi
+
+          if [ "$FAIL" -ne 0 ]; then
+            echo ""
+            echo "FATAL: Bootstrap data integrity checks failed"
+            exit 1
+          fi
+          echo "=== All bootstrap data integrity checks passed ==="
+          echo ""
+
+          # Run the same complaints-demo collection against the bootstrapped tenant
+          npx newman@latest run postman/complaints-demo.postman_collection.json \
+            --env-var "url=http://localhost:18000" \
+            --env-var "username=BOOT-ADMIN" \
+            --env-var "password=eGov@123" \
+            --env-var "cityTenant=ciboot.citya" \
+            --env-var "stateTenant=ciboot" \
+            --env-var "userType=EMPLOYEE" \
+            --env-var "authorization=Basic ZWdvdi11c2VyLWNsaWVudDo=" \
+            --env-var "serviceCode=${BOOT_SERVICE_CODE}"
 
       - name: Show service logs on failure
         if: failure()

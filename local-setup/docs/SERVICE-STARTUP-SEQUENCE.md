@@ -96,7 +96,6 @@ This document describes the startup sequence and dependencies for DIGIT core ser
 | postgres | 15432 | `pg_isready` | Creates `egov` database |
 | redis | 16379 | `redis-cli ping` | Session/cache store |
 | redpanda | 19092 | `rpk cluster health` | Kafka-compatible broker |
-| elasticsearch | 19200 | `/_cluster/health` | Search/indexing |
 
 ### Phase 2: Core Services (No MDMS dependencies)
 | Service | Port | Depends On | Flyway Table |
@@ -162,7 +161,6 @@ done;
 | 15432 | Postgres |
 | 16379 | Redis |
 | 19092 | Redpanda (Kafka) |
-| 19200 | Elasticsearch |
 | 18000-18002 | Kong Gateway |
 | 18080 | DIGIT UI |
 | 18081-18109 | Core Services |
@@ -243,7 +241,7 @@ Access Tilt UI at: http://localhost:10350
 
 | Label | Resources |
 |-------|-----------|
-| infrastructure | postgres, redis, redpanda, elasticsearch |
+| infrastructure | postgres, redis, redpanda |
 | core-services | egov-mdms-service, egov-enc-service, egov-idgen, egov-user, egov-workflow-v2, egov-localization, egov-location, boundary-service, egov-accesscontrol, egov-persister |
 | gateway | kong |
 | pgr | pgr-services |
@@ -383,7 +381,7 @@ Access Gatus Dashboard at: **http://localhost:18889**
 
 | Group | Services |
 |-------|----------|
-| Infrastructure | PostgreSQL, Redis, Redpanda, Elasticsearch |
+| Infrastructure | PostgreSQL, Redis, Redpanda |
 | Core Services | MDMS, Encryption, IDGen, User, Workflow, Localization, Location, Boundary, Access Control, Persister |
 | API Gateway | Kong Proxy, Admin API, Status |
 | Application | PGR Services, DIGIT UI |
