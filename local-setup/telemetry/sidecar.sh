@@ -6,8 +6,6 @@
 #
 # Opt-out: TELEMETRY=false  (same env var as telemetry.sh / telemetry.py)
 
-set -e
-
 # ── Configuration ─────────────────────────────────────────────────
 MATOMO_URL="https://unified-demo.digit.org/matomo/matomo.php"
 MATOMO_SITE_ID="${MATOMO_SITE_ID:-5}"
@@ -24,7 +22,7 @@ VISITOR_ID=$(printf '%s%s' \
   "$(cat /sys/class/net/eth0/address 2>/dev/null || echo none)" \
   | sha256sum | cut -c1-16)
 
-# ── Telemetry sender (fire-and-forget) ────────────────────────────
+# ── Telemetry sender (fire-and-forget, backgrounded) ─────────────
 send_event() {
   [ "${TELEMETRY:-true}" = "false" ] && return 0
   local category="$1" action="$2" name="$3"
@@ -34,6 +32,18 @@ send_event() {
     -d "_id=$VISITOR_ID" \
     -d "url=app://local-setup/${category}/${action}" \
     -d "apiv=1" 2>/dev/null &
+}
+
+# ── Telemetry sender (blocking — used in shutdown handler) ────────
+send_event_sync() {
+  [ "${TELEMETRY:-true}" = "false" ] && return 0
+  local category="$1" action="$2" name="$3"
+  curl -s -o /dev/null --max-time 5 "$MATOMO_URL" \
+    -d "idsite=$MATOMO_SITE_ID" -d "rec=1" \
+    -d "e_c=${category}" -d "e_a=${action}" -d "e_n=${name}" \
+    -d "_id=$VISITOR_ID" \
+    -d "url=app://local-setup/${category}/${action}" \
+    -d "apiv=1" 2>/dev/null || true
 }
 
 # ── Docker Engine API helper (via unix socket) ───────────────────
@@ -60,10 +70,18 @@ touch /tmp/healthy
 send_event "setup" "start" "docker-compose|files=${COMPOSE_FILES}|containers=${CONTAINER_COUNT}"
 
 # ── Shutdown handler (docker compose down → SIGTERM) ──────────────
+# Uses send_event_sync (foreground curl) so exit doesn't kill it.
+EVENTS_PID=""
 shutdown() {
   echo "[telemetry] Shutting down — sending stop event"
-  send_event "setup" "stop" "docker-compose|files=${COMPOSE_FILES}"
-  sleep 1  # give curl a moment to fire
+  # Kill the events monitor first
+  [ -n "$EVENTS_PID" ] && kill "$EVENTS_PID" 2>/dev/null
+  # Count containers still running at shutdown time
+  STOP_COUNT=$(docker_api "/containers/json" \
+    | jq "[.[] | select(.Labels[\"com.docker.compose.project\"]==\"$COMPOSE_PROJECT\")] | length" 2>/dev/null || echo "?")
+  # Synchronous send — blocks until curl completes (max 5s)
+  send_event_sync "setup" "stop" "docker-compose|files=${COMPOSE_FILES}|containers=${STOP_COUNT}"
+  echo "[telemetry] Stop event sent"
   exit 0
 }
 trap shutdown TERM INT
@@ -95,9 +113,11 @@ docker_api "/events?filters=${FILTER}" | while IFS= read -r line; do
       ;;
     health_status:healthy)
       echo "[telemetry] . $SERVICE healthy"
+      send_event "container" "healthy" "$SERVICE"
       ;;
   esac
 done &
+EVENTS_PID=$!
 
 # Wait for signal (sleep in a loop so trap can fire)
 while true; do

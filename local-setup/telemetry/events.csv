@@ -6,6 +6,7 @@ setup,stop,tilt,Tilt stopped
 setup,first-boot,local-setup,First time starting
 setup,healthy,all-services,All health checks pass
 container,start,<service>,Individual container started (auto-detected via Docker socket)
+container,healthy,<service>,Container health check passed
 container,die,<service>,Individual container died (includes exit code)
 container,unhealthy,<service>,Container health check failed
 dataloader,create,tenant,New tenant created
