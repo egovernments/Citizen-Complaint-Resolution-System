@@ -93,11 +93,11 @@ FILTER=$(printf '{"label":["com.docker.compose.project=%s"],"type":["container"]
 echo "[telemetry] Monitoring container events..."
 
 docker_api "/events?filters=${FILTER}" | while IFS= read -r line; do
-  STATUS=$(echo "$line" | jq -r '.status // empty' 2>/dev/null)
+  ACTION=$(echo "$line" | jq -r '.Action // empty' 2>/dev/null)
   SERVICE=$(echo "$line" | jq -r '.Actor.Attributes["com.docker.compose.service"] // empty' 2>/dev/null)
   [ -z "$SERVICE" ] && continue
 
-  case "$STATUS" in
+  case "$ACTION" in
     start)
       echo "[telemetry] + $SERVICE started"
       send_event "container" "start" "$SERVICE"
@@ -107,11 +107,11 @@ docker_api "/events?filters=${FILTER}" | while IFS= read -r line; do
       echo "[telemetry] - $SERVICE died (exit=$CODE)"
       send_event "container" "die" "$SERVICE|exit=$CODE"
       ;;
-    health_status:unhealthy)
+    "health_status: unhealthy")
       echo "[telemetry] ! $SERVICE unhealthy"
       send_event "container" "unhealthy" "$SERVICE"
       ;;
-    health_status:healthy)
+    "health_status: healthy")
       echo "[telemetry] . $SERVICE healthy"
       send_event "container" "healthy" "$SERVICE"
       ;;
