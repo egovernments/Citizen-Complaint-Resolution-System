@@ -52,15 +52,15 @@ jobs:
       - name: Wait for all containers healthy
         run: |
           echo "Waiting for all containers to be healthy (up to 15 minutes)..."
-          # Skip digit-ui for now - it's not required for API tests
-          SKIP_CONTAINERS="digit-ui"
+          # Skip containers not required for API tests
+          SKIP_REGEX="digit-ui|digit-telemetry"
           # Wait for all services to report healthy via Docker
           timeout 900 bash -c '
             while true; do
-              UNHEALTHY_NAMES=$(docker compose ps --format json | jq -r "select(.Health != \"healthy\" and .Health != \"\" and .State == \"running\") | .Name" | grep -v "digit-ui" || true)
+              UNHEALTHY_NAMES=$(docker compose ps --format json | jq -r "select(.Health != \"healthy\" and .Health != \"\" and .State == \"running\") | .Name" | grep -vE "digit-ui|digit-telemetry" || true)
               UNHEALTHY=$(echo "$UNHEALTHY_NAMES" | grep -c . || true)
-              TOTAL=$(docker compose ps --format json | jq -r "select(.State == \"running\") | .Name" | grep -v "digit-ui" | wc -l)
-              echo "Healthy containers: $((TOTAL - UNHEALTHY))/$TOTAL (skipping digit-ui)"
+              TOTAL=$(docker compose ps --format json | jq -r "select(.State == \"running\") | .Name" | grep -vE "digit-ui|digit-telemetry" | wc -l)
+              echo "Healthy containers: $((TOTAL - UNHEALTHY))/$TOTAL (skipping digit-ui, digit-telemetry)"
               if [ "$UNHEALTHY" -gt 0 ]; then
                 echo "  Waiting on: $UNHEALTHY_NAMES" | tr "\n" " "
                 echo ""

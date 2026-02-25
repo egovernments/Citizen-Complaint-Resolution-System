@@ -4,7 +4,7 @@
 # Opt-out: export TELEMETRY=false
 
 MATOMO_URL="https://unified-demo.digit.org/matomo/matomo.php"
-MATOMO_SITE_ID="${MATOMO_SITE_ID:-1}"
+MATOMO_SITE_ID="${MATOMO_SITE_ID:-5}"
 
 _telemetry_visitor_id() {
   # Stable visitor ID: SHA256(hostname + first MAC address), truncated to 16 hex chars

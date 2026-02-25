@@ -1,10 +1,13 @@
 category,action,name,description
-setup,start,docker-compose,Stack started
-setup,stop,docker-compose,Stack stopped
+setup,start,docker-compose,Stack started (includes compose file names and container count)
+setup,stop,docker-compose,Stack stopped (sent on SIGTERM / docker compose down)
 setup,start,tilt,Tilt started
 setup,stop,tilt,Tilt stopped
 setup,first-boot,local-setup,First time starting
 setup,healthy,all-services,All health checks pass
+container,start,<service>,Individual container started (auto-detected via Docker socket)
+container,die,<service>,Individual container died (includes exit code)
+container,unhealthy,<service>,Container health check failed
 dataloader,create,tenant,New tenant created
 dataloader,load,boundaries,Boundaries loaded
 dataloader,load,common-masters,Common masters loaded

@@ -16,7 +16,7 @@ import uuid
 import requests
 
 MATOMO_URL = "https://unified-demo.digit.org/matomo/matomo.php"
-MATOMO_SITE_ID = os.environ.get("MATOMO_SITE_ID", "1")
+MATOMO_SITE_ID = os.environ.get("MATOMO_SITE_ID", "5")
 
 
 def _get_visitor_id() -> str:
