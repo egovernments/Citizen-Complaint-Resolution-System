@@ -46,7 +46,12 @@ fi
 # 2. Fetch PR branch
 echo "Fetching PR #${PR_NUMBER}..."
 cd "$REPO_ROOT"
-git fetch origin "pull/${PR_NUMBER}/head:pr-${PR_NUMBER}" --force
+# Determine remote: use PR_MONITOR_REPO remote if set, fall back to upstream, then origin
+PR_REMOTE="upstream"
+if ! git remote | grep -q "^upstream$"; then
+    PR_REMOTE="origin"
+fi
+git fetch "$PR_REMOTE" "pull/${PR_NUMBER}/head:pr-${PR_NUMBER}" --force
 git checkout "pr-${PR_NUMBER}"
 COMMIT_SHA="${COMMIT_SHA:-$(git rev-parse --short HEAD)}"
 echo "  Commit: $COMMIT_SHA"

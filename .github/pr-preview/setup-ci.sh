@@ -81,10 +81,17 @@ else
     echo "Cleanup cron job already installed."
 fi
 
+# 6. Install PR monitor service (polls GitHub, auto-deploys/cleans PRs)
+echo ""
+echo "Installing PR monitor service..."
+bash "$PR_PREVIEW/pr-monitor.sh" --install
+
 echo ""
 echo "=== Setup Complete ==="
 echo ""
 echo "Core services:  docker compose -f docker-compose.yml -f $PR_PREVIEW/docker-compose.core.yml ps"
-echo "Deploy a PR:    bash $PR_PREVIEW/deploy-pr.sh <pr-number>"
+echo "PR monitor:     systemctl status pr-monitor"
+echo "Monitor logs:   journalctl -u pr-monitor -f"
+echo "Deploy manual:  bash $PR_PREVIEW/deploy-pr.sh <pr-number>"
 echo "List active:    bash $PR_PREVIEW/list-prs.sh"
 echo "Grafana:        https://grafana.preview.egov.theflywheel.in/"

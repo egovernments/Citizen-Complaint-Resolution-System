@@ -54,7 +54,8 @@ fi
 
 # 5. Clean git branch
 cd "$REPO_ROOT"
-git checkout main 2>/dev/null || git checkout - 2>/dev/null || true
+DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "master")
+git checkout "$DEFAULT_BRANCH" 2>/dev/null || git checkout - 2>/dev/null || true
 git branch -D "pr-${PR_NUMBER}" 2>/dev/null || true
 
 echo ""
