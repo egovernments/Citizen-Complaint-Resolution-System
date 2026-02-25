@@ -70,12 +70,20 @@ touch /tmp/healthy
 send_event "setup" "start" "docker-compose|files=${COMPOSE_FILES}|containers=${CONTAINER_COUNT}"
 
 # ── Shutdown handler (docker compose down → SIGTERM) ──────────────
-# Uses send_event_sync (foreground curl) so exit doesn't kill it.
+# On SIGTERM, keep listening for die events from other containers for
+# a few seconds so we capture them, then send the stop summary and exit.
 EVENTS_PID=""
+SHUTTING_DOWN=""
 shutdown() {
-  echo "[telemetry] Shutting down — sending stop event"
-  # Kill the events monitor first
+  SHUTTING_DOWN=1
+  echo "[telemetry] Shutting down — waiting for container die events..."
+  # Let the events stream keep running to capture die events from other
+  # containers being stopped by "docker compose down". Sleep up to the
+  # stop_grace_period minus a small margin.
+  sleep 3
+  # Kill the events monitor
   [ -n "$EVENTS_PID" ] && kill "$EVENTS_PID" 2>/dev/null
+  wait "$EVENTS_PID" 2>/dev/null
   # Count containers still running at shutdown time
   STOP_COUNT=$(docker_api "/containers/json" \
     | jq "[.[] | select(.Labels[\"com.docker.compose.project\"]==\"$COMPOSE_PROJECT\")] | length" 2>/dev/null || echo "?")
