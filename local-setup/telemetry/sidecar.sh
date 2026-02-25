@@ -23,14 +23,17 @@ VISITOR_ID=$(printf '%s%s' \
   | sha256sum | cut -c1-16)
 
 # ── Telemetry sender (fire-and-forget, backgrounded) ─────────────
+# Uses a real user-agent so Matomo doesn't filter it as bot traffic.
+UA="DIGIT-LocalSetup/1.0"
+
 send_event() {
   [ "${TELEMETRY:-true}" = "false" ] && return 0
   local category="$1" action="$2" name="$3"
-  curl -s -o /dev/null --max-time 5 "$MATOMO_URL" \
+  curl -s -o /dev/null --max-time 5 -A "$UA" "$MATOMO_URL" \
     -d "idsite=$MATOMO_SITE_ID" -d "rec=1" \
     -d "e_c=${category}" -d "e_a=${action}" -d "e_n=${name}" \
     -d "_id=$VISITOR_ID" \
-    -d "url=app://local-setup/${category}/${action}" \
+    -d "url=https://local-setup.digit.org/${category}/${action}" \
     -d "apiv=1" 2>/dev/null &
 }
 
@@ -38,11 +41,11 @@ send_event() {
 send_event_sync() {
   [ "${TELEMETRY:-true}" = "false" ] && return 0
   local category="$1" action="$2" name="$3"
-  curl -s -o /dev/null --max-time 5 "$MATOMO_URL" \
+  curl -s -o /dev/null --max-time 5 -A "$UA" "$MATOMO_URL" \
     -d "idsite=$MATOMO_SITE_ID" -d "rec=1" \
     -d "e_c=${category}" -d "e_a=${action}" -d "e_n=${name}" \
     -d "_id=$VISITOR_ID" \
-    -d "url=app://local-setup/${category}/${action}" \
+    -d "url=https://local-setup.digit.org/${category}/${action}" \
     -d "apiv=1" 2>/dev/null || true
 }
 

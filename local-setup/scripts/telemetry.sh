@@ -26,7 +26,7 @@ send_event() {
   visitor_id=$(_telemetry_visitor_id)
 
   # Fire-and-forget: don't block the caller, ignore errors
-  curl -s -o /dev/null --max-time 5 \
+  curl -s -o /dev/null --max-time 5 -A "DIGIT-LocalSetup/1.0" \
     "${MATOMO_URL}" \
     -d "idsite=${MATOMO_SITE_ID}" \
     -d "rec=1" \
@@ -34,7 +34,7 @@ send_event() {
     -d "e_a=${action}" \
     -d "e_n=${name}" \
     -d "_id=${visitor_id}" \
-    -d "url=app://local-setup/${category}/${action}" \
+    -d "url=https://local-setup.digit.org/${category}/${action}" \
     -d "apiv=1" \
     2>/dev/null &
 }

@@ -41,9 +41,10 @@ def send_event(category: str, action: str, name: str = "") -> None:
                     "e_a": action,
                     "e_n": name,
                     "_id": _get_visitor_id(),
-                    "url": f"app://local-setup/{category}/{action}",
+                    "url": f"https://local-setup.digit.org/{category}/{action}",
                     "apiv": "1",
                 },
+                headers={"User-Agent": "DIGIT-LocalSetup/1.0"},
                 timeout=5,
             )
         except Exception:
