@@ -363,6 +363,12 @@ jobs:
             exit 1
           fi
 
+      - name: Show telemetry events
+        if: always()
+        run: |
+          echo "=== Telemetry Sidecar Logs ==="
+          docker compose logs telemetry 2>&1 || echo "(no telemetry container)"
+
       - name: Show service logs on failure
         if: failure()
         run: |
