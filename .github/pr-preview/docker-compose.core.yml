@@ -152,10 +152,7 @@ services:
       - "4318:4318"
       - "13133:13133"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:13133/ >/dev/null 2>&1 || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      disable: true
     deploy:
       resources:
         limits:
@@ -239,9 +236,13 @@ services:
       - egov-network
 
   # --- Caddy (TLS termination with on-demand certs) ---
+  # Only needed if no host-level nginx/TLS is available.
+  # On servers with existing nginx on 80/443, use the host nginx config
+  # (.github/pr-preview/nginx/host-nginx-preview.conf) instead.
   caddy:
     image: caddy:2-alpine
     container_name: pr-caddy
+    profiles: [caddy]
     volumes:
       - ../.github/pr-preview/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -262,14 +263,18 @@ services:
       - egov-network
 
   # --- nginx (dynamic PR routing via regex server_name) ---
+  # Host port 18090 allows host nginx to proxy to this container.
+  # On Caddy-only setups, Caddy connects directly via Docker network.
   pr-nginx-proxy:
     image: nginx:alpine
     container_name: pr-nginx-proxy
     volumes:
       - ../.github/pr-preview/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ../.github/pr-preview/nginx/preview.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "18900:80"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost/tls-check?domain=grafana.preview.egov.theflywheel.in >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/tls-check?domain=grafana.preview.egov.theflywheel.in >/dev/null 2>&1 || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3

@@ -60,7 +60,7 @@ services:
     volumes:
       - ./otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/pgr-services/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/pgr-services/health >/dev/null 2>&1 || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 20
@@ -80,7 +80,7 @@ services:
       - ../../local-setup/nginx/digit-ui.conf:/etc/nginx/conf.d/default.conf:ro
       - ../../local-setup/nginx/globalConfigs.js:/var/web/digit-ui/globalConfigs.js:ro
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:80/digit-ui/ >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/digit-ui/ >/dev/null 2>&1 || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
