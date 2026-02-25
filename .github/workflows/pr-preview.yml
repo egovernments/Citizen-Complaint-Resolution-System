@@ -1,0 +1,136 @@
+name: PR Preview Environment
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    paths:
+      - 'backend/pgr-services/**'
+      - 'frontend/micro-ui/**'
+      - 'local-setup/jupyter/**'
+      - '.github/pr-preview/**'
+
+concurrency:
+  group: pr-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Deploy PR Preview
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.CI_MACHINE_HOST }}
+          username: root
+          key: ${{ secrets.CI_MACHINE_SSH_KEY }}
+          port: 22
+          command_timeout: 15m
+          script: |
+            cd /root/code/Citizen-Complaint-Resolution-System
+            git fetch origin
+            git checkout main
+            git pull origin main
+            bash .github/pr-preview/deploy-pr.sh ${{ github.event.pull_request.number }} \
+              --sha ${{ github.event.pull_request.head.sha }}
+
+      - name: Comment PR with preview URLs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const sha = context.payload.pull_request.head.sha.substring(0, 7);
+            const body = [
+              `## 🔗 Preview Environment Ready`,
+              ``,
+              `| Service | URL |`,
+              `|---------|-----|`,
+              `| **UI** | [pr-${prNumber}.preview.egov.theflywheel.in/digit-ui/](https://pr-${prNumber}.preview.egov.theflywheel.in/digit-ui/) |`,
+              `| **API** | [pr-${prNumber}.preview.egov.theflywheel.in/pgr-services/](https://pr-${prNumber}.preview.egov.theflywheel.in/pgr-services/) |`,
+              `| **Jupyter** | [pr-${prNumber}.preview.egov.theflywheel.in/jupyter/](https://pr-${prNumber}.preview.egov.theflywheel.in/jupyter/?token=pr${prNumber}) |`,
+              `| **Grafana** | [grafana.preview.egov.theflywheel.in](https://grafana.preview.egov.theflywheel.in/) |`,
+              ``,
+              `**Login:** \`ADMIN\` / \`eGov@123\`  `,
+              `**Commit:** \`${sha}\`  `,
+              `**Traces:** Search for service \`pgr-services-pr${prNumber}\` in Grafana`,
+              ``,
+              `> Preview auto-expires after 48 hours. Push new commits to redeploy.`,
+            ].join('\n');
+
+            // Find existing preview comment to update (avoid spam)
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+            });
+            const existing = comments.find(c =>
+              c.user.type === 'Bot' && c.body.includes('Preview Environment Ready')
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body,
+              });
+            }
+
+  cleanup:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Cleanup PR Preview
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.CI_MACHINE_HOST }}
+          username: root
+          key: ${{ secrets.CI_MACHINE_SSH_KEY }}
+          port: 22
+          command_timeout: 3m
+          script: |
+            cd /root/code/Citizen-Complaint-Resolution-System
+            bash .github/pr-preview/cleanup-pr.sh ${{ github.event.pull_request.number }}
+
+      - name: Comment cleanup confirmation
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+
+            // Find and update existing preview comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+            });
+            const existing = comments.find(c =>
+              c.user.type === 'Bot' && c.body.includes('Preview Environment')
+            );
+
+            const body = `## Preview Environment Cleaned Up\n\nPR #${prNumber} preview has been removed.`;
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body,
+              });
+            }
