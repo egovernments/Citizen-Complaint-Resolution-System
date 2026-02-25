@@ -2223,7 +2223,14 @@ class APIUploader:
             if _in_container():
                 # From docker network, service DNS names are preferred.
                 if host in {"localhost", "127.0.0.1"}:
-                    candidate_urls.append(_replace_netloc(file_url, "kong:8000"))
+                    port = parsed.port
+                    if port == 19000:
+                        # MinIO S3 URL — use internal container name
+                        candidate_urls.append(_replace_netloc(file_url, "minio:9000"))
+                    else:
+                        candidate_urls.append(_replace_netloc(file_url, "kong:8000"))
+                if host == "minio" and parsed.port != 9000:
+                    candidate_urls.append(_replace_netloc(file_url, "minio:9000"))
             else:
                 # From host machine, mapped ports are preferred.
                 if host == "minio":
