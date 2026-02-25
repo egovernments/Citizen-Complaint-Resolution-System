@@ -349,6 +349,20 @@ jobs:
             --env-var "authorization=Basic ZWdvdi11c2VyLWNsaWVudDo=" \
             --env-var "serviceCode=${BOOT_SERVICE_CODE}"
 
+      - name: Run boundary template end-to-end test
+        run: |
+          # Tests the full boundary lifecycle:
+          # hierarchy creation → template generation → download → fill → upload → verify
+          set +e
+          BND_OUTPUT=$(DIGIT_URL=http://localhost:18000 TARGET_TENANT=pg.bndtest python3 scripts/ci-boundary-test.py 2>&1)
+          BND_RC=$?
+          set -e
+          echo "$BND_OUTPUT"
+          if [ $BND_RC -ne 0 ]; then
+            echo "FATAL: boundary end-to-end test failed (exit code $BND_RC)"
+            exit 1
+          fi
+
       - name: Show service logs on failure
         if: failure()
         run: |
