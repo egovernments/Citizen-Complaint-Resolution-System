@@ -5,6 +5,9 @@
 
 set -o pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/telemetry.sh" 2>/dev/null || true
+
 BASE_URL="${1:-http://0.0.0.0}"
 DB_CONTAINER="${DB_CONTAINER:-docker-postgres}"
 TIMESTAMP=$(date +%s)
@@ -60,10 +63,7 @@ curl -sf "$BASE_URL:11234/egov-enc-service/actuator/health" > /dev/null 2>&1 && 
 echo -n "8. PostgreSQL... "
 db_query "SELECT 1" > /dev/null 2>&1 && test_result pass || test_result fail "cannot connect"
 
-echo -n "9. Elasticsearch... "
-curl -sf "$BASE_URL:19200/_cluster/health" 2>&1 | grep -qE "green|yellow" && test_result pass || test_result fail "cluster unhealthy"
-
-echo -n "10. Kong Gateway... "
+echo -n "9. Kong Gateway... "
 curl -sf "$BASE_URL:18000/user/health" > /dev/null 2>&1 && test_result pass || test_result fail "not routing"
 
 echo ""
@@ -204,6 +204,8 @@ if [ -n "$USER_UUID" ]; then
   echo "Test data created:"
   echo "  - User: $TEST_USER (uuid: $USER_UUID)"
 fi
+
+send_event testing run smoke-tests
 
 if [[ $failed -eq 0 ]]; then
   exit 0

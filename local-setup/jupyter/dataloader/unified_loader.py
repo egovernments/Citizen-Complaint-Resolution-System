@@ -2181,6 +2181,7 @@ class APIUploader:
             Path to downloaded file OR dict with 'path' and 'url' if return_url=True
         """
         import os
+        from urllib.parse import urlparse, urlunparse, urljoin
         url = f"{self.filestore_url}/v1/files/url"
 
         params = {
@@ -2204,20 +2205,65 @@ class APIUploader:
                 print("❌ Invalid file URL")
                 return None
 
-            # Fix MinIO URL for external access (outside Docker)
-            # minio:9000 -> localhost:19000
-            if 'minio:9000' in file_url:
-                file_url = file_url.replace('minio:9000', 'localhost:19000')
-            elif 'minio:' in file_url:
-                # Handle other port configurations
-                import re
-                file_url = re.sub(r'minio:(\d+)', r'localhost:19000', file_url)
+            # Normalize possible URL styles returned by filestore and try sensible fallbacks.
+            def _in_container() -> bool:
+                return os.path.exists("/.dockerenv")
 
-            print(f"\n📥 Downloading from S3...")
+            def _replace_netloc(raw_url: str, netloc: str) -> str:
+                parsed = urlparse(raw_url)
+                return urlunparse((parsed.scheme or "http", netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
 
-            # Download the file
-            file_response = requests.get(file_url)
-            file_response.raise_for_status()
+            if file_url.startswith("/"):
+                file_url = urljoin(self.base_url + "/", file_url.lstrip("/"))
+
+            parsed = urlparse(file_url)
+            host = parsed.hostname or ""
+
+            candidate_urls = [file_url]
+            if _in_container():
+                # From docker network, service DNS names are preferred.
+                if host in {"localhost", "127.0.0.1"}:
+                    port = parsed.port
+                    if port == 19000:
+                        # MinIO S3 URL — use internal container name
+                        candidate_urls.append(_replace_netloc(file_url, "minio:9000"))
+                    else:
+                        candidate_urls.append(_replace_netloc(file_url, "kong:8000"))
+                if host == "minio" and parsed.port != 9000:
+                    candidate_urls.append(_replace_netloc(file_url, "minio:9000"))
+            else:
+                # From host machine, mapped ports are preferred.
+                if host == "minio":
+                    candidate_urls.append(_replace_netloc(file_url, "localhost:19000"))
+                if host in {"egov-filestore", "kong"}:
+                    mapped = "localhost:18084" if host == "egov-filestore" else "localhost:18000"
+                    candidate_urls.append(_replace_netloc(file_url, mapped))
+
+            # De-duplicate while preserving order.
+            deduped = []
+            seen = set()
+            for u in candidate_urls:
+                if u not in seen:
+                    deduped.append(u)
+                    seen.add(u)
+
+            print(f"\n📥 Downloading template...")
+            file_response = None
+            last_error = None
+            for attempt_url in deduped:
+                try:
+                    print(f"   Trying: {attempt_url}")
+                    resp = requests.get(attempt_url, timeout=60)
+                    resp.raise_for_status()
+                    file_response = resp
+                    file_url = attempt_url
+                    break
+                except Exception as e:
+                    last_error = e
+                    continue
+
+            if file_response is None:
+                raise RuntimeError(f"All download URL attempts failed. Last error: {last_error}")
 
             # Determine output path
             if not output_path:
@@ -3829,4 +3875,3 @@ class APIUploader:
                 'error': str(e),
                 'data': None
             }
-

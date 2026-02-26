@@ -326,7 +326,6 @@ cmd_button(
 #   - Postgres:      15432
 #   - Redis:         16379
 #   - Redpanda:      19092
-#   - Elasticsearch: 19200
 #
 # API Gateway (Kong):
 #   - Proxy:         18000 (external access point)
