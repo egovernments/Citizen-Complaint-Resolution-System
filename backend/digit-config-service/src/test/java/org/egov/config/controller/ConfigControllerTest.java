@@ -38,16 +38,15 @@ class ConfigControllerTest {
         ObjectNode value = objectMapper.createObjectNode();
         value.put("templateId", "bill_tpl_001");
         value.put("workflowId", "whatsapp-bill");
+        value.put("eventName", "BILL_GENERATED");
 
         ConfigEntryCreateRequest req = ConfigEntryCreateRequest.builder()
                 .requestInfo(buildRequestInfo())
                 .entry(ConfigEntry.builder()
                         .configCode("NOTIF_TEMPLATE_MAP")
                         .module("billing")
-                        .eventType("BILL_GENERATED")
                         .channel("WHATSAPP")
                         .tenantId("pb.amritsar")
-                        .locale("en_IN")
                         .value(value)
                         .build())
                 .build();
@@ -58,7 +57,6 @@ class ConfigControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.entry.id", notNullValue()))
                 .andExpect(jsonPath("$.entry.configCode", is("NOTIF_TEMPLATE_MAP")))
-                .andExpect(jsonPath("$.entry.eventType", is("BILL_GENERATED")))
                 .andExpect(jsonPath("$.entry.channel", is("WHATSAPP")))
                 .andExpect(jsonPath("$.entry.revision", is(1)));
     }
@@ -89,16 +87,15 @@ class ConfigControllerTest {
     void search_byConfigCodeAndTenant() throws Exception {
         ObjectNode value = objectMapper.createObjectNode();
         value.put("template", "payment_tpl");
+        value.put("eventName", "PAYMENT_DONE");
 
         ConfigEntryCreateRequest createReq = ConfigEntryCreateRequest.builder()
                 .requestInfo(buildRequestInfo())
                 .entry(ConfigEntry.builder()
                         .configCode("NOTIF_TEMPLATE_MAP")
                         .module("payments")
-                        .eventType("PAYMENT_DONE")
                         .channel("WHATSAPP")
                         .tenantId("pb.jalandhar")
-                        .locale("en_IN")
                         .value(value)
                         .build())
                 .build();
@@ -124,16 +121,16 @@ class ConfigControllerTest {
     }
 
     @Test
-    void search_byEventTypeAndChannel() throws Exception {
+    void search_byEventNameAndChannel() throws Exception {
         ObjectNode value = objectMapper.createObjectNode();
         value.put("template", "sms_water");
+        value.put("eventName", "WATER_BILL");
 
         ConfigEntryCreateRequest createReq = ConfigEntryCreateRequest.builder()
                 .requestInfo(buildRequestInfo())
                 .entry(ConfigEntry.builder()
                         .configCode("NOTIF_TEMPLATE_MAP")
                         .module("ws")
-                        .eventType("WATER_BILL")
                         .channel("SMS")
                         .tenantId("pb.mohali")
                         .value(value)
@@ -147,7 +144,7 @@ class ConfigControllerTest {
         ConfigEntrySearchRequest searchReq = ConfigEntrySearchRequest.builder()
                 .requestInfo(buildRequestInfo())
                 .criteria(ConfigEntrySearchCriteria.builder()
-                        .eventType("WATER_BILL")
+                        .eventName("WATER_BILL")
                         .channel("SMS")
                         .build())
                 .build();
@@ -157,7 +154,6 @@ class ConfigControllerTest {
                         .content(objectMapper.writeValueAsString(searchReq)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.entries", hasSize(greaterThanOrEqualTo(1))))
-                .andExpect(jsonPath("$.entries[0].eventType", is("WATER_BILL")))
                 .andExpect(jsonPath("$.entries[0].channel", is("SMS")));
     }
 
@@ -167,13 +163,13 @@ class ConfigControllerTest {
     void update_changesValueAndIncrementsRevision() throws Exception {
         ObjectNode originalValue = objectMapper.createObjectNode();
         originalValue.put("template", "licence_v1");
+        originalValue.put("eventName", "LICENCE_ISSUED");
 
         ConfigEntryCreateRequest createReq = ConfigEntryCreateRequest.builder()
                 .requestInfo(buildRequestInfo())
                 .entry(ConfigEntry.builder()
                         .configCode("NOTIF_TEMPLATE_MAP")
                         .module("tl")
-                        .eventType("LICENCE_ISSUED")
                         .channel("WHATSAPP")
                         .tenantId("pb.ludhiana")
                         .value(originalValue)
@@ -211,13 +207,13 @@ class ConfigControllerTest {
     void update_revisionMismatch_returns400() throws Exception {
         ObjectNode value = objectMapper.createObjectNode();
         value.put("template", "pt_v1");
+        value.put("eventName", "PT_ASSESSMENT");
 
         ConfigEntryCreateRequest createReq = ConfigEntryCreateRequest.builder()
                 .requestInfo(buildRequestInfo())
                 .entry(ConfigEntry.builder()
                         .configCode("NOTIF_TEMPLATE_MAP")
                         .module("pt")
-                        .eventType("PT_ASSESSMENT")
                         .channel("WHATSAPP")
                         .tenantId("pb.bathinda")
                         .value(value)
@@ -253,16 +249,15 @@ class ConfigControllerTest {
     void resolve_exactTenantMatch() throws Exception {
         ObjectNode value = objectMapper.createObjectNode();
         value.put("template", "ws_bill_tpl");
+        value.put("eventName", "WS_BILL");
 
         ConfigEntryCreateRequest createReq = ConfigEntryCreateRequest.builder()
                 .requestInfo(buildRequestInfo())
                 .entry(ConfigEntry.builder()
                         .configCode("NOTIF_TEMPLATE_MAP")
                         .module("ws")
-                        .eventType("WS_BILL")
                         .channel("WHATSAPP")
                         .tenantId("pb.patiala")
-                        .locale("en_IN")
                         .value(value)
                         .build())
                 .build();
@@ -277,7 +272,7 @@ class ConfigControllerTest {
                         .configCode("NOTIF_TEMPLATE_MAP")
                         .module("ws")
                         .tenantId("pb.patiala")
-                        .locale("en_IN")
+                        .eventName("WS_BILL")
                         .build())
                 .build();
 
@@ -293,16 +288,15 @@ class ConfigControllerTest {
     void resolve_tenantFallback() throws Exception {
         ObjectNode value = objectMapper.createObjectNode();
         value.put("template", "state_tl_tpl");
+        value.put("eventName", "TL_RENEWAL");
 
         ConfigEntryCreateRequest createReq = ConfigEntryCreateRequest.builder()
                 .requestInfo(buildRequestInfo())
                 .entry(ConfigEntry.builder()
                         .configCode("NOTIF_TEMPLATE_MAP")
                         .module("tl")
-                        .eventType("TL_RENEWAL")
                         .channel("WHATSAPP")
                         .tenantId("hr")
-                        .locale("*")
                         .value(value)
                         .build())
                 .build();
@@ -317,7 +311,7 @@ class ConfigControllerTest {
                         .configCode("NOTIF_TEMPLATE_MAP")
                         .module("tl")
                         .tenantId("hr.gurugram")
-                        .locale("hi_IN")
+                        .eventName("TL_RENEWAL")
                         .build())
                 .build();
 
