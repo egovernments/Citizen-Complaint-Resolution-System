@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # deploy-pr.sh — Deploy a PR preview environment
 #
-# Builds PR-specific images (pgr-services, digit-ui, jupyter) and starts them
-# on the shared egov-network. nginx auto-discovers them via Docker DNS.
+# Checks out the PR branch and starts pgr-services, digit-ui, and jupyter
+# using the PR's own local-setup/docker-compose.yml. Core services must
+# already be running (see setup-ci.sh).
 #
 # Usage: bash .github/pr-preview/deploy-pr.sh <pr-number> [--sha <commit-sha>]
 
@@ -27,7 +28,6 @@ if [ -z "$PR_NUMBER" ] || ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]] || [ "$PR_NUMBER" -gt
 fi
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-PR_PREVIEW="$REPO_ROOT/.github/pr-preview"
 LOCAL_SETUP="$REPO_ROOT/local-setup"
 STATE_DIR="/etc/pr-preview/state"
 STATE_FILE="$STATE_DIR/pr-${PR_NUMBER}.json"
@@ -35,18 +35,21 @@ STATE_FILE="$STATE_DIR/pr-${PR_NUMBER}.json"
 echo "=== Deploying PR #${PR_NUMBER} Preview ==="
 echo ""
 
-# 1. Check concurrent PR limit
-ACTIVE_COUNT=$(find "$STATE_DIR" -name 'pr-*.json' 2>/dev/null | wc -l)
-if [ "$ACTIVE_COUNT" -ge 10 ]; then
-    echo "ERROR: Maximum 10 concurrent PR previews reached ($ACTIVE_COUNT active)"
-    echo "Run 'list-prs.sh' to see active previews, or 'cleanup-pr.sh <N>' to remove one."
-    exit 1
+# 1. Check if another PR is already deployed (one at a time)
+ACTIVE=$(find "$STATE_DIR" -name 'pr-*.json' 2>/dev/null || true)
+if [ -n "$ACTIVE" ]; then
+    ACTIVE_PR=$(basename "$ACTIVE" .json | sed 's/pr-//')
+    if [ "$ACTIVE_PR" != "$PR_NUMBER" ]; then
+        echo "Another PR (#${ACTIVE_PR}) is currently deployed."
+        echo "Cleaning it up first..."
+        bash "$(dirname "$0")/cleanup-pr.sh" "$ACTIVE_PR"
+    fi
 fi
 
 # 2. Fetch PR branch
 echo "Fetching PR #${PR_NUMBER}..."
 cd "$REPO_ROOT"
-# Determine remote: use PR_MONITOR_REPO remote if set, fall back to upstream, then origin
+# Determine remote: prefer upstream, fall back to origin
 PR_REMOTE="upstream"
 if ! git remote | grep -q "^upstream$"; then
     PR_REMOTE="origin"
@@ -54,95 +57,77 @@ fi
 git fetch "$PR_REMOTE" "pull/${PR_NUMBER}/head:pr-${PR_NUMBER}" --force
 git checkout "pr-${PR_NUMBER}"
 COMMIT_SHA="${COMMIT_SHA:-$(git rev-parse --short HEAD)}"
+echo "  Branch: pr-${PR_NUMBER}"
 echo "  Commit: $COMMIT_SHA"
 
-# 3. Build images (in parallel where possible)
+# 3. Stop any existing app services (pgr-services, digit-ui, jupyter)
 echo ""
-echo "Building images..."
-
-echo "  Building pgr-services (this may take 3-5 minutes)..."
-docker build \
-    -t "ccrs/pgr-services:pr-${PR_NUMBER}" \
-    -f backend/pgr-services/Dockerfile \
-    backend/pgr-services/ &
-PGR_PID=$!
-
-echo "  Building digit-ui (this may take 3-5 minutes)..."
-docker build \
-    -t "ccrs/digit-ui:pr-${PR_NUMBER}" \
-    -f frontend/micro-ui/web/docker/Dockerfile \
-    --build-arg WORK_DIR=. \
-    frontend/micro-ui/ &
-UI_PID=$!
-
-echo "  Building jupyter..."
-docker build \
-    -t "ccrs/jupyter:pr-${PR_NUMBER}" \
-    -f local-setup/jupyter/Dockerfile \
-    local-setup/jupyter/ &
-JUP_PID=$!
-
-# Wait for all builds
-FAILED=0
-wait $PGR_PID || { echo "ERROR: pgr-services build failed"; FAILED=1; }
-wait $UI_PID || { echo "ERROR: digit-ui build failed"; FAILED=1; }
-wait $JUP_PID || { echo "ERROR: jupyter build failed"; FAILED=1; }
-
-if [ $FAILED -ne 0 ]; then
-    echo "Build failed. Cleaning up..."
-    exit 1
-fi
-echo "  All images built successfully."
-
-# 4. Start PR services
-echo ""
-echo "Starting PR #${PR_NUMBER} services..."
+echo "Stopping existing app services..."
 cd "$LOCAL_SETUP"
+docker compose -f docker-compose.yml down pgr-services digit-ui jupyter 2>/dev/null || true
+# Force-remove in case compose down didn't catch them
+docker rm -f pgr-services digit-ui digit-jupyter 2>/dev/null || true
 
-PR_NUMBER="$PR_NUMBER" docker compose \
-    -f "$PR_PREVIEW/docker-compose.pr.yml" \
-    -p "pr-${PR_NUMBER}" \
-    up -d
+# 4. Start app services from the PR's own compose
+echo ""
+echo "Starting PR #${PR_NUMBER} services from local-setup/docker-compose.yml..."
+docker compose -f docker-compose.yml build jupyter 2>&1 || true
+docker compose -f docker-compose.yml up -d --no-deps pgr-services digit-ui jupyter
 
 # 5. Wait for health
 echo ""
 echo "Waiting for services to become healthy..."
 
 # PGR services (Java, takes longest)
-echo -n "  pgr-services-pr${PR_NUMBER}..."
+echo -n "  pgr-services..."
 TIMEOUT=180
 elapsed=0
 while [ $elapsed -lt $TIMEOUT ]; do
-    status=$(docker inspect --format='{{.State.Health.Status}}' "pgr-services-pr${PR_NUMBER}" 2>/dev/null || echo "starting")
+    status=$(docker inspect --format='{{.State.Health.Status}}' pgr-services 2>/dev/null || echo "missing")
     if [ "$status" = "healthy" ]; then
         echo " OK"
         break
+    fi
+    # If container isn't running, try starting it
+    if [ "$status" = "missing" ]; then
+        docker compose -f docker-compose.yml up -d --no-deps pgr-services 2>/dev/null || true
     fi
     sleep 5
     elapsed=$((elapsed + 5))
     echo -n "."
 done
 if [ $elapsed -ge $TIMEOUT ]; then
-    echo " TIMEOUT (status: $status)"
-    echo "  Check logs: docker logs pgr-services-pr${PR_NUMBER}"
+    echo " TIMEOUT (status: $status — may still be starting)"
+    echo "  Check logs: docker logs pgr-services"
 fi
 
-# digit-ui (fast)
-echo -n "  digit-ui-pr${PR_NUMBER}..."
+# digit-ui (fast, but healthcheck may fail due to Alpine IPv6 localhost issue)
+echo -n "  digit-ui..."
 elapsed=0
-while [ $elapsed -lt 60 ]; do
-    status=$(docker inspect --format='{{.State.Health.Status}}' "digit-ui-pr${PR_NUMBER}" 2>/dev/null || echo "starting")
-    if [ "$status" = "healthy" ]; then
-        echo " OK"
+while [ $elapsed -lt 30 ]; do
+    running=$(docker inspect --format='{{.State.Running}}' digit-ui 2>/dev/null || echo "false")
+    if [ "$running" = "true" ]; then
+        echo " OK (running)"
         break
     fi
     sleep 3
     elapsed=$((elapsed + 3))
     echo -n "."
 done
-if [ $elapsed -ge 60 ]; then
-    echo " TIMEOUT"
-fi
+
+# jupyter
+echo -n "  jupyter..."
+elapsed=0
+while [ $elapsed -lt 30 ]; do
+    running=$(docker inspect --format='{{.State.Running}}' digit-jupyter 2>/dev/null || echo "false")
+    if [ "$running" = "true" ]; then
+        echo " OK (running)"
+        break
+    fi
+    sleep 3
+    elapsed=$((elapsed + 3))
+    echo -n "."
+done
 
 # 6. Write state file
 mkdir -p "$STATE_DIR"
@@ -154,7 +139,7 @@ cat > "$STATE_FILE" <<EOF
   "deployed_at_epoch": $(date +%s),
   "url": "https://pr-${PR_NUMBER}.preview.egov.theflywheel.in/digit-ui/",
   "api_url": "https://pr-${PR_NUMBER}.preview.egov.theflywheel.in/pgr-services/",
-  "jupyter_url": "https://pr-${PR_NUMBER}.preview.egov.theflywheel.in/jupyter/?token=pr${PR_NUMBER}",
+  "jupyter_url": "https://pr-${PR_NUMBER}.preview.egov.theflywheel.in/jupyter/",
   "grafana_url": "https://grafana.preview.egov.theflywheel.in/"
 }
 EOF
@@ -164,8 +149,8 @@ echo "=== PR #${PR_NUMBER} Preview Deployed ==="
 echo ""
 echo "  UI:       https://pr-${PR_NUMBER}.preview.egov.theflywheel.in/digit-ui/"
 echo "  API:      https://pr-${PR_NUMBER}.preview.egov.theflywheel.in/pgr-services/"
-echo "  Jupyter:  https://pr-${PR_NUMBER}.preview.egov.theflywheel.in/jupyter/?token=pr${PR_NUMBER}"
+echo "  Jupyter:  https://pr-${PR_NUMBER}.preview.egov.theflywheel.in/jupyter/"
 echo "  Grafana:  https://grafana.preview.egov.theflywheel.in/"
-echo "  Traces:   Search for service 'pgr-services-pr${PR_NUMBER}'"
 echo ""
 echo "  Login:    ADMIN / eGov@123"
+echo ""

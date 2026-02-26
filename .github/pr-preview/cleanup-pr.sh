@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # cleanup-pr.sh — Remove a PR preview environment
 #
-# Stops and removes PR-specific containers, images, and state.
-# No nginx/Caddy cleanup needed — nginx simply gets DNS errors for removed
-# containers (returns 502, which is correct behavior).
+# Stops pgr-services, digit-ui, jupyter containers and cleans up state.
+# Core services are left running.
 #
 # Usage: bash .github/pr-preview/cleanup-pr.sh <pr-number>
 
@@ -17,45 +16,36 @@ if [ -z "$PR_NUMBER" ] || ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
 fi
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-PR_PREVIEW="$REPO_ROOT/.github/pr-preview"
 LOCAL_SETUP="$REPO_ROOT/local-setup"
 STATE_DIR="/etc/pr-preview/state"
 STATE_FILE="$STATE_DIR/pr-${PR_NUMBER}.json"
 
 echo "=== Cleaning up PR #${PR_NUMBER} Preview ==="
 
-# 1. Stop and remove containers via compose
-echo "Stopping containers..."
+# 1. Stop app services
+echo "Stopping app services..."
 cd "$LOCAL_SETUP"
-PR_NUMBER="$PR_NUMBER" docker compose \
-    -f "$PR_PREVIEW/docker-compose.pr.yml" \
-    -p "pr-${PR_NUMBER}" \
-    down --remove-orphans 2>/dev/null || true
+docker compose -f docker-compose.yml stop pgr-services digit-ui jupyter 2>/dev/null || true
+docker compose -f docker-compose.yml rm -f pgr-services digit-ui jupyter 2>/dev/null || true
 
-# 2. Force-remove any orphan containers (safety net)
-for name in "pgr-services-pr${PR_NUMBER}" "digit-ui-pr${PR_NUMBER}" "jupyter-pr${PR_NUMBER}"; do
+# 2. Force-remove in case compose didn't catch them
+for name in pgr-services digit-ui digit-jupyter; do
     if docker ps -a --format '{{.Names}}' | grep -q "^${name}$"; then
-        echo "  Force-removing orphan: $name"
+        echo "  Force-removing: $name"
         docker rm -f "$name" 2>/dev/null || true
     fi
 done
 
-# 3. Remove images
-echo "Removing images..."
-docker rmi "ccrs/pgr-services:pr-${PR_NUMBER}" 2>/dev/null || true
-docker rmi "ccrs/digit-ui:pr-${PR_NUMBER}" 2>/dev/null || true
-docker rmi "ccrs/jupyter:pr-${PR_NUMBER}" 2>/dev/null || true
-
-# 4. Remove state file
+# 3. Remove state file
 if [ -f "$STATE_FILE" ]; then
     rm "$STATE_FILE"
     echo "State file removed."
 fi
 
-# 5. Clean git branch
+# 4. Clean git branch
 cd "$REPO_ROOT"
-DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "master")
-git checkout "$DEFAULT_BRANCH" 2>/dev/null || git checkout - 2>/dev/null || true
+DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "main")
+git checkout "$DEFAULT_BRANCH" 2>/dev/null || git checkout main 2>/dev/null || true
 git branch -D "pr-${PR_NUMBER}" 2>/dev/null || true
 
 echo ""

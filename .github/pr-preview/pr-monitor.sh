@@ -38,12 +38,11 @@ comment_deploy() {
 |---------|-----|
 | **UI** | [pr-${pr}.preview.egov.theflywheel.in/digit-ui/](https://pr-${pr}.preview.egov.theflywheel.in/digit-ui/) |
 | **API** | [pr-${pr}.preview.egov.theflywheel.in/pgr-services/](https://pr-${pr}.preview.egov.theflywheel.in/pgr-services/) |
-| **Jupyter** | [pr-${pr}.preview.egov.theflywheel.in/jupyter/](https://pr-${pr}.preview.egov.theflywheel.in/jupyter/?token=pr${pr}) |
+| **Jupyter** | [pr-${pr}.preview.egov.theflywheel.in/jupyter/](https://pr-${pr}.preview.egov.theflywheel.in/jupyter/) |
 | **Grafana** | [grafana.preview.egov.theflywheel.in](https://grafana.preview.egov.theflywheel.in/) |
 
 **Login:** \`ADMIN\` / \`eGov@123\`
 **Commit:** \`${short_sha}\`
-**Traces:** Search for service \`pgr-services-pr${pr}\` in Grafana
 
 > Preview auto-expires after 48 hours. Push new commits to redeploy.
 COMMENT

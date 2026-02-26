@@ -26,13 +26,13 @@ for state_file in "$STATE_DIR"/pr-*.json; do
     COMMIT=$(jq -r '.commit_sha' "$state_file")
     DEPLOYED=$(jq -r '.deployed_at' "$state_file" | cut -c1-19 | tr 'T' ' ')
 
-    # Container status
-    PGR_STATUS=$(docker inspect --format='{{.State.Health.Status}}' "pgr-services-pr${PR_NUM}" 2>/dev/null || echo "gone")
-    UI_STATUS=$(docker inspect --format='{{.State.Health.Status}}' "digit-ui-pr${PR_NUM}" 2>/dev/null || echo "gone")
+    # Container status (standard names since we use PR's own compose)
+    PGR_STATUS=$(docker inspect --format='{{.State.Health.Status}}' pgr-services 2>/dev/null || echo "gone")
+    UI_STATUS=$(docker inspect --format='{{.State.Running}}' digit-ui 2>/dev/null || echo "gone")
 
     # Memory usage (sum of all PR containers)
     MEM_TOTAL=0
-    for cname in "pgr-services-pr${PR_NUM}" "digit-ui-pr${PR_NUM}" "jupyter-pr${PR_NUM}"; do
+    for cname in pgr-services digit-ui digit-jupyter; do
         mem=$(docker stats --no-stream --format '{{.MemUsage}}' "$cname" 2>/dev/null | grep -oP '[\d.]+(?=MiB)' || echo "0")
         MEM_TOTAL=$(echo "$MEM_TOTAL + ${mem:-0}" | bc 2>/dev/null || echo "$MEM_TOTAL")
     done
