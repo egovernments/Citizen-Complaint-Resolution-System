@@ -1,7 +1,7 @@
 """Telemetry for DIGIT local-setup via Matomo HTTP Tracking API.
 
 Usage:
-    from telemetry import send_event
+    from dataloader.telemetry import send_event
     send_event("dataloader", "create", "tenant")
 
 Opt-out: set environment variable TELEMETRY=false
