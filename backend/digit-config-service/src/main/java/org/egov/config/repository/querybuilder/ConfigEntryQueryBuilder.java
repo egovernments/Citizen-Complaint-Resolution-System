@@ -48,7 +48,7 @@ public class ConfigEntryQueryBuilder {
         }
 
         if (eventName != null) {
-            sql.append(" AND \"value\"::jsonb->>'eventName' = ?");
+            sql.append(" AND CAST(\"value\" AS JSON)->>'eventName' = ?");
             params.add(eventName);
         }
 
@@ -110,7 +110,7 @@ public class ConfigEntryQueryBuilder {
 
         if (criteria.getEventName() != null) {
             sql.append(hasWhere ? " AND" : " WHERE");
-            sql.append(" \"value\"::jsonb->>'eventName' = ?");
+            sql.append(" CAST(\"value\" AS JSON)->>'eventName' = ?");
             params.add(criteria.getEventName());
             hasWhere = true;
         }
@@ -142,7 +142,7 @@ public class ConfigEntryQueryBuilder {
             while (fields.hasNext()) {
                 Map.Entry<String, JsonNode> field = fields.next();
                 sql.append(hasWhere ? " AND" : " WHERE");
-                sql.append(" \"value\"::jsonb->>'").append(field.getKey().replaceAll("[^a-zA-Z0-9_]", "")).append("' = ?");
+                sql.append(" CAST(\"value\" AS JSON)->>'").append(field.getKey().replaceAll("[^a-zA-Z0-9_]", "")).append("' = ?");
                 params.add(field.getValue().isTextual() ? field.getValue().asText() : field.getValue().toString());
                 hasWhere = true;
             }

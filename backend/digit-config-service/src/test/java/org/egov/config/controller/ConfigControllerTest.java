@@ -121,10 +121,9 @@ class ConfigControllerTest {
     }
 
     @Test
-    void search_byEventNameAndChannel() throws Exception {
+    void search_byModuleAndChannel() throws Exception {
         ObjectNode value = objectMapper.createObjectNode();
         value.put("template", "sms_water");
-        value.put("eventName", "WATER_BILL");
 
         ConfigEntryCreateRequest createReq = ConfigEntryCreateRequest.builder()
                 .requestInfo(buildRequestInfo())
@@ -144,8 +143,9 @@ class ConfigControllerTest {
         ConfigEntrySearchRequest searchReq = ConfigEntrySearchRequest.builder()
                 .requestInfo(buildRequestInfo())
                 .criteria(ConfigEntrySearchCriteria.builder()
-                        .eventName("WATER_BILL")
+                        .module("ws")
                         .channel("SMS")
+                        .tenantId("pb.mohali")
                         .build())
                 .build();
 
@@ -249,12 +249,11 @@ class ConfigControllerTest {
     void resolve_exactTenantMatch() throws Exception {
         ObjectNode value = objectMapper.createObjectNode();
         value.put("template", "ws_bill_tpl");
-        value.put("eventName", "WS_BILL");
 
         ConfigEntryCreateRequest createReq = ConfigEntryCreateRequest.builder()
                 .requestInfo(buildRequestInfo())
                 .entry(ConfigEntry.builder()
-                        .configCode("NOTIF_TEMPLATE_MAP")
+                        .configCode("RESOLVE_TEST_EXACT")
                         .module("ws")
                         .channel("WHATSAPP")
                         .tenantId("pb.patiala")
@@ -269,10 +268,9 @@ class ConfigControllerTest {
         ConfigResolveRequest resolveReq = ConfigResolveRequest.builder()
                 .requestInfo(buildRequestInfo())
                 .resolveRequest(ConfigResolveRequest.ResolveParams.builder()
-                        .configCode("NOTIF_TEMPLATE_MAP")
+                        .configCode("RESOLVE_TEST_EXACT")
                         .module("ws")
                         .tenantId("pb.patiala")
-                        .eventName("WS_BILL")
                         .build())
                 .build();
 
@@ -288,12 +286,11 @@ class ConfigControllerTest {
     void resolve_tenantFallback() throws Exception {
         ObjectNode value = objectMapper.createObjectNode();
         value.put("template", "state_tl_tpl");
-        value.put("eventName", "TL_RENEWAL");
 
         ConfigEntryCreateRequest createReq = ConfigEntryCreateRequest.builder()
                 .requestInfo(buildRequestInfo())
                 .entry(ConfigEntry.builder()
-                        .configCode("NOTIF_TEMPLATE_MAP")
+                        .configCode("RESOLVE_TEST_FALLBACK")
                         .module("tl")
                         .channel("WHATSAPP")
                         .tenantId("hr")
@@ -308,10 +305,9 @@ class ConfigControllerTest {
         ConfigResolveRequest resolveReq = ConfigResolveRequest.builder()
                 .requestInfo(buildRequestInfo())
                 .resolveRequest(ConfigResolveRequest.ResolveParams.builder()
-                        .configCode("NOTIF_TEMPLATE_MAP")
+                        .configCode("RESOLVE_TEST_FALLBACK")
                         .module("tl")
                         .tenantId("hr.gurugram")
-                        .eventName("TL_RENEWAL")
                         .build())
                 .build();
 
