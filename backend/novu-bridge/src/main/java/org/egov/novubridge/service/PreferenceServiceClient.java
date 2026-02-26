@@ -73,9 +73,9 @@ public class PreferenceServiceClient {
             if (!"GRANTED".equalsIgnoreCase(status)) {
                 return false;
             }
-            if ("TENANT".equalsIgnoreCase(scope)) {
-                return tenantId.equalsIgnoreCase(scopeTenant);
-            }
+//            if ("TENANT".equalsIgnoreCase(scope)) {
+//                return tenantId.equalsIgnoreCase(scopeTenant);
+//            }
             return true;
         } catch (Exception e) {
             log.warn("Preference check failed. tenantId={} userId={} mobile={}", tenantId, userId, mobile, e);

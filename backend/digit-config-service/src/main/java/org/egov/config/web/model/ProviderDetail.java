@@ -11,16 +11,13 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class ConfigEntry {
+public class ProviderDetail {
 
     @JsonProperty("id")
     private String id;
 
-    @JsonProperty("configCode")
-    private String configCode;
-
-    @JsonProperty("module")
-    private String module;
+    @JsonProperty("providerName")
+    private String providerName;
 
     @JsonProperty("channel")
     private String channel;
@@ -34,9 +31,6 @@ public class ConfigEntry {
 
     @JsonProperty("value")
     private JsonNode value;
-
-    @JsonProperty("revision")
-    private Integer revision;
 
     @JsonProperty("auditDetails")
     private AuditDetails auditDetails;

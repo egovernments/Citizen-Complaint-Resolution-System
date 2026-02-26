@@ -1,14 +1,17 @@
 package org.egov.config.repository.querybuilder;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Component;
 
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 @Component
 public class ConfigEntryQueryBuilder {
 
-    private static final String BASE_SELECT = "SELECT id, config_code, module, event_type, channel, " +
-            "tenant_id, locale, enabled, \"value\", revision, " +
+    private static final String BASE_SELECT = "SELECT id, config_code, module, channel, " +
+            "tenant_id, enabled, \"value\", revision, " +
             "created_by, created_time, last_modified_by, last_modified_time " +
             "FROM config_entry";
 
@@ -32,8 +35,8 @@ public class ConfigEntryQueryBuilder {
         return sql.toString();
     }
 
-    public String buildResolveQuery(String configCode, String module, String eventType,
-                                     String channel, List<String> tenantChain, List<String> localeChain,
+    public String buildResolveQuery(String configCode, String module, String eventName,
+                                     String channel, List<String> tenantChain,
                                      List<Object> params) {
         StringBuilder sql = new StringBuilder(BASE_SELECT);
         sql.append(" WHERE config_code = ? AND enabled = true");
@@ -44,9 +47,9 @@ public class ConfigEntryQueryBuilder {
             params.add(module);
         }
 
-        if (eventType != null) {
-            sql.append(" AND event_type = ?");
-            params.add(eventType);
+        if (eventName != null) {
+            sql.append(" AND \"value\"::jsonb->>'eventName' = ?");
+            params.add(eventName);
         }
 
         if (channel != null) {
@@ -63,29 +66,13 @@ public class ConfigEntryQueryBuilder {
         }
         sql.append(")");
 
-        // locale IN (?, ?) or locale IS NULL for wildcard
-        sql.append(" AND (locale IN (");
-        for (int i = 0; i < localeChain.size(); i++) {
-            if (i > 0) sql.append(", ");
-            sql.append("?");
-            params.add(localeChain.get(i));
-        }
-        sql.append(") OR locale IS NULL)");
-
-        // ORDER BY priority: tenant specificity first, then locale specificity
+        // ORDER BY priority: tenant specificity
         sql.append(" ORDER BY CASE tenant_id");
         for (int i = 0; i < tenantChain.size(); i++) {
             sql.append(" WHEN ? THEN ").append(i);
             params.add(tenantChain.get(i));
         }
         sql.append(" ELSE ").append(tenantChain.size()).append(" END");
-
-        sql.append(", CASE locale");
-        for (int i = 0; i < localeChain.size(); i++) {
-            sql.append(" WHEN ? THEN ").append(i);
-            params.add(localeChain.get(i));
-        }
-        sql.append(" ELSE ").append(localeChain.size()).append(" END");
 
         sql.append(" LIMIT 1");
         return sql.toString();
@@ -121,10 +108,10 @@ public class ConfigEntryQueryBuilder {
             hasWhere = true;
         }
 
-        if (criteria.getEventType() != null) {
+        if (criteria.getEventName() != null) {
             sql.append(hasWhere ? " AND" : " WHERE");
-            sql.append(" event_type = ?");
-            params.add(criteria.getEventType());
+            sql.append(" \"value\"::jsonb->>'eventName' = ?");
+            params.add(criteria.getEventName());
             hasWhere = true;
         }
 
@@ -142,18 +129,23 @@ public class ConfigEntryQueryBuilder {
             hasWhere = true;
         }
 
-        if (criteria.getLocale() != null) {
-            sql.append(hasWhere ? " AND" : " WHERE");
-            sql.append(" locale = ?");
-            params.add(criteria.getLocale());
-            hasWhere = true;
-        }
-
         if (criteria.getEnabled() != null) {
             sql.append(hasWhere ? " AND" : " WHERE");
             sql.append(" enabled = ?");
             params.add(criteria.getEnabled());
             hasWhere = true;
+        }
+
+        // valueFilter: arbitrary JSON field filtering
+        if (criteria.getValueFilter() != null && criteria.getValueFilter().isObject()) {
+            Iterator<Map.Entry<String, JsonNode>> fields = criteria.getValueFilter().fields();
+            while (fields.hasNext()) {
+                Map.Entry<String, JsonNode> field = fields.next();
+                sql.append(hasWhere ? " AND" : " WHERE");
+                sql.append(" \"value\"::jsonb->>'").append(field.getKey().replaceAll("[^a-zA-Z0-9_]", "")).append("' = ?");
+                params.add(field.getValue().isTextual() ? field.getValue().asText() : field.getValue().toString());
+                hasWhere = true;
+            }
         }
     }
 }

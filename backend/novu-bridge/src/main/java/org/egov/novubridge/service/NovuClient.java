@@ -27,7 +27,7 @@ public class NovuClient {
     }
 
     public NovuResponse trigger(String templateKey, String subscriberId, String phone, Map<String, Object> payload,
-                                String transactionId, Map<String, Object> overrides) {
+                                String transactionId, Map<String, Object> overrides, String novuApiKey) {
         try {
             Map<String, Object> request = new HashMap<>();
             request.put("name", templateKey);
@@ -43,8 +43,9 @@ public class NovuClient {
                 request.put("overrides", overrides);
             }
 
+            String apiKey = (novuApiKey != null && !novuApiKey.isBlank()) ? novuApiKey : config.getNovuApiKey();
             HttpHeaders headers = new HttpHeaders();
-            headers.set("Authorization", "ApiKey " + config.getNovuApiKey());
+            headers.set("Authorization", "ApiKey " + apiKey);
             headers.setContentType(MediaType.APPLICATION_JSON);
 
             String url = config.getNovuBaseUrl() + "/v1/events/trigger";
@@ -59,8 +60,13 @@ public class NovuClient {
         }
     }
 
+    public NovuResponse trigger(String templateKey, String subscriberId, String phone, Map<String, Object> payload,
+                                String transactionId, Map<String, Object> overrides) {
+        return trigger(templateKey, subscriberId, phone, payload, transactionId, overrides, null);
+    }
+
     public NovuResponse trigger(String templateKey, String subscriberId, Map<String, Object> payload, String transactionId) {
-        return trigger(templateKey, subscriberId, null, payload, transactionId, null);
+        return trigger(templateKey, subscriberId, null, payload, transactionId, null, null);
     }
 
     @Data

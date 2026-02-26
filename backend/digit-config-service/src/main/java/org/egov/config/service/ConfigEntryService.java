@@ -47,16 +47,15 @@ public class ConfigEntryService {
         ConfigResolveRequest.ResolveParams params = request.getResolveRequest();
 
         List<String> tenantChain = buildTenantChain(params.getTenantId());
-        List<String> localeChain = buildLocaleChain(params.getLocale());
 
         ConfigEntry entry = repository.resolve(
-                params.getConfigCode(), params.getModule(), params.getEventType(),
-                params.getChannel(), tenantChain, localeChain);
+                params.getConfigCode(), params.getModule(), params.getEventName(),
+                params.getChannel(), tenantChain);
 
         if (entry == null) {
             throw new CustomException("CONFIG_NOT_RESOLVED",
                     "No config entry found for configCode=" + params.getConfigCode()
-                            + " eventType=" + params.getEventType()
+                            + " eventName=" + params.getEventName()
                             + " channel=" + params.getChannel()
                             + " tenantId=" + params.getTenantId());
         }
@@ -67,7 +66,6 @@ public class ConfigEntryService {
                         .entry(entry)
                         .resolutionMeta(ConfigResolveResponse.ResolutionMeta.builder()
                                 .matchedTenant(entry.getTenantId())
-                                .matchedLocale(entry.getLocale())
                                 .build())
                         .build())
                 .build();
@@ -85,18 +83,6 @@ public class ConfigEntryService {
                 t = t.substring(0, t.lastIndexOf('.'));
                 chain.add(t);
             }
-        }
-        chain.add("*");
-        return chain;
-    }
-
-    /**
-     * Builds locale fallback chain: "hi_IN" -> ["hi_IN", "*"]
-     */
-    private List<String> buildLocaleChain(String locale) {
-        List<String> chain = new ArrayList<>();
-        if (locale != null && !locale.isEmpty()) {
-            chain.add(locale);
         }
         chain.add("*");
         return chain;

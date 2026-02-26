@@ -47,7 +47,7 @@ public class NovuBridgeConfiguration {
     @Value("${novu.bridge.config.host:http://localhost:9000}")
     private String configHost;
 
-    @Value("${novu.bridge.config.resolve.path:/config-service/config/v1/entry/_resolve}")
+    @Value("${novu.bridge.config.resolve.path:/config-service/config/v1/template-binding/_resolve}")
     private String configResolvePath;
 
     @Value("${novu.bridge.preference.code:USER_NOTIFICATION_PREFERENCES}")

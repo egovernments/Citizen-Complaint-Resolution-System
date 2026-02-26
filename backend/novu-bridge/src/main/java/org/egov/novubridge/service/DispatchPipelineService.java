@@ -121,7 +121,8 @@ public class DispatchPipelineService {
                 whatsappPhone,
                 event.getData(),
                 event.getEventId(),
-                twilioOverrides);
+                twilioOverrides,
+                resolvedTemplate.getNovuApiKey());
 
         log.info("Novu trigger response: eventId={}, statusCode={}, response={}",
                 event.getEventId(), novuResponse.getStatusCode(), novuResponse.getResponse());

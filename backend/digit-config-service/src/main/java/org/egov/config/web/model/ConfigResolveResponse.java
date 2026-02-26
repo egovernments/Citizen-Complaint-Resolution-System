@@ -39,8 +39,5 @@ public class ConfigResolveResponse {
 
         @JsonProperty("matchedTenant")
         private String matchedTenant;
-
-        @JsonProperty("matchedLocale")
-        private String matchedLocale;
     }
 }

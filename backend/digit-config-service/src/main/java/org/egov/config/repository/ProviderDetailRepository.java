@@ -2,10 +2,10 @@ package org.egov.config.repository;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
-import org.egov.config.repository.querybuilder.ConfigEntryQueryBuilder;
-import org.egov.config.repository.rowmapper.ConfigEntryRowMapper;
-import org.egov.config.web.model.ConfigEntry;
-import org.egov.config.web.model.ConfigEntrySearchCriteria;
+import org.egov.config.repository.querybuilder.ProviderDetailQueryBuilder;
+import org.egov.config.repository.rowmapper.ProviderDetailRowMapper;
+import org.egov.config.web.model.ProviderDetail;
+import org.egov.config.web.model.ProviderDetailSearchCriteria;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -14,27 +14,25 @@ import java.util.List;
 
 @Repository
 @RequiredArgsConstructor
-public class ConfigEntryRepository {
+public class ProviderDetailRepository {
 
     private final JdbcTemplate jdbcTemplate;
-    private final ConfigEntryQueryBuilder queryBuilder;
-    private final ConfigEntryRowMapper rowMapper;
+    private final ProviderDetailQueryBuilder queryBuilder;
+    private final ProviderDetailRowMapper rowMapper;
     private final ObjectMapper objectMapper;
 
-    public void save(ConfigEntry entry) {
-        String sql = "INSERT INTO config_entry (id, config_code, module, channel, tenant_id, enabled, " +
-                "\"value\", revision, created_by, created_time, last_modified_by, last_modified_time) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    public void save(ProviderDetail entry) {
+        String sql = "INSERT INTO provider_detail (id, provider_name, channel, tenant_id, enabled, " +
+                "\"value\", created_by, created_time, last_modified_by, last_modified_time) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         jdbcTemplate.update(sql,
                 entry.getId(),
-                entry.getConfigCode(),
-                entry.getModule(),
+                entry.getProviderName(),
                 entry.getChannel(),
                 entry.getTenantId(),
                 entry.getEnabled(),
                 toJson(entry.getValue()),
-                entry.getRevision(),
                 entry.getAuditDetails().getCreatedBy(),
                 entry.getAuditDetails().getCreatedTime(),
                 entry.getAuditDetails().getLastModifiedBy(),
@@ -42,12 +40,11 @@ public class ConfigEntryRepository {
         );
     }
 
-    public void update(ConfigEntry entry) {
-        StringBuilder sql = new StringBuilder("UPDATE config_entry SET ");
+    public void update(ProviderDetail entry) {
+        StringBuilder sql = new StringBuilder("UPDATE provider_detail SET ");
         List<Object> params = new ArrayList<>();
 
-        sql.append("revision = ?, last_modified_by = ?, last_modified_time = ?");
-        params.add(entry.getRevision());
+        sql.append("last_modified_by = ?, last_modified_time = ?");
         params.add(entry.getAuditDetails().getLastModifiedBy());
         params.add(entry.getAuditDetails().getLastModifiedTime());
 
@@ -58,6 +55,10 @@ public class ConfigEntryRepository {
         if (entry.getChannel() != null) {
             sql.append(", channel = ?");
             params.add(entry.getChannel());
+        }
+        if (entry.getProviderName() != null) {
+            sql.append(", provider_name = ?");
+            params.add(entry.getProviderName());
         }
         if (entry.getValue() != null) {
             sql.append(", \"value\" = ?");
@@ -70,25 +71,17 @@ public class ConfigEntryRepository {
         jdbcTemplate.update(sql.toString(), params.toArray());
     }
 
-    public List<ConfigEntry> search(ConfigEntrySearchCriteria criteria) {
+    public List<ProviderDetail> search(ProviderDetailSearchCriteria criteria) {
         List<Object> params = new ArrayList<>();
         String sql = queryBuilder.buildSearchQuery(criteria, params);
         return jdbcTemplate.query(sql, params.toArray(), rowMapper);
     }
 
-    public long count(ConfigEntrySearchCriteria criteria) {
+    public long count(ProviderDetailSearchCriteria criteria) {
         List<Object> params = new ArrayList<>();
         String sql = queryBuilder.buildCountQuery(criteria, params);
         Long count = jdbcTemplate.queryForObject(sql, params.toArray(), Long.class);
         return count != null ? count : 0;
-    }
-
-    public ConfigEntry resolve(String configCode, String module, String eventName,
-                               String channel, List<String> tenantChain) {
-        List<Object> params = new ArrayList<>();
-        String sql = queryBuilder.buildResolveQuery(configCode, module, eventName, channel, tenantChain, params);
-        List<ConfigEntry> results = jdbcTemplate.query(sql, params.toArray(), rowMapper);
-        return results.isEmpty() ? null : results.get(0);
     }
 
     private String toJson(Object obj) {

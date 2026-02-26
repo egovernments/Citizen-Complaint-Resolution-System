@@ -20,4 +20,5 @@ public class ResolvedTemplate {
     private List<String> paramOrder;
     private String fallbackTemplateKey;
     private String fallbackTemplateVersion;
+    private String novuApiKey;
 }

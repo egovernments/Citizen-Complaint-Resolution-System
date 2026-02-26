@@ -28,20 +28,9 @@ public class ConfigServiceClient {
     }
 
     public ResolvedTemplate resolveTemplate(DerivedContext context, String eventName, String module, String tenantId) {
-        Map<String, Object> selectors = new HashMap<>();
-        selectors.put("eventName", eventName);
-        selectors.put("audience", context.getAudience());
-        selectors.put("workflowState", context.getWorkflowState());
-        selectors.put("channel", context.getChannel());
-
         Map<String, Object> resolveRequest = new HashMap<>();
-        resolveRequest.put("configCode", "NOTIF_TEMPLATE_MAP");
-        resolveRequest.put("module", module);
-        resolveRequest.put("eventType", eventName);
-        resolveRequest.put("channel", context.getChannel());
+        resolveRequest.put("eventName", eventName);
         resolveRequest.put("tenantId", tenantId);
-        resolveRequest.put("locale", context.getLocale());
-        resolveRequest.put("selectors", selectors);
 
         Map<String, Object> payload = new HashMap<>();
         payload.put("RequestInfo", new HashMap<>());
@@ -53,27 +42,29 @@ public class ConfigServiceClient {
             if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
                 throw new CustomException("NB_CONFIG_RESOLVE_FAILED", "Template resolve returned non-success response");
             }
-            Map<String, Object> resolved = (Map<String, Object>) response.getBody().get("resolved");
-            if (resolved == null) {
-                throw new CustomException("NB_CONFIG_NOT_FOUND", "No template mapping found for event");
+            Map<String, Object> binding = (Map<String, Object>) response.getBody().get("templateBinding");
+            if (binding == null) {
+                throw new CustomException("NB_CONFIG_NOT_FOUND", "No template binding found for event");
             }
-            Map<String, Object> entry = (Map<String, Object>) resolved.get("entry");
-            if (entry == null) {
-                throw new CustomException("NB_CONFIG_NOT_FOUND", "Resolved mapping does not contain entry object");
+
+            String templateId = (String) binding.get("templateId");
+            String contentSid = (String) binding.get("contentSid");
+            List<String> paramOrder = (List<String>) binding.get("paramOrder");
+            List<String> requiredVars = (List<String>) binding.get("requiredVars");
+
+            // Extract novuApiKey from providerDetail.value if available
+            String novuApiKey = null;
+            Map<String, Object> providerDetail = (Map<String, Object>) binding.get("providerDetail");
+            if (providerDetail != null && providerDetail.get("value") instanceof Map) {
+                novuApiKey = (String) ((Map<String, Object>) providerDetail.get("value")).get("novuApiKey");
             }
-            Map<String, Object> value = (Map<String, Object>) entry.get("value");
-            if (value == null) {
-                throw new CustomException("NB_CONFIG_NOT_FOUND", "Resolved entry does not contain value object");
-            }
+
             return ResolvedTemplate.builder()
-                    .templateKey((String) value.get("templateKey"))
-                    .templateVersion((String) value.get("templateVersion"))
-                    .twilioContentSid((String) value.get("twilioContentSid"))
-                    .requiredVars((List<String>) value.get("requiredVars"))
-                    .optionalVars((List<String>) value.get("optionalVars"))
-                    .paramOrder((List<String>) value.get("paramOrder"))
-                    .fallbackTemplateKey((String) value.get("fallbackTemplateKey"))
-                    .fallbackTemplateVersion((String) value.get("fallbackTemplateVersion"))
+                    .templateKey(templateId)
+                    .twilioContentSid(contentSid)
+                    .paramOrder(paramOrder)
+                    .requiredVars(requiredVars)
+                    .novuApiKey(novuApiKey)
                     .build();
         } catch (CustomException e) {
             throw e;

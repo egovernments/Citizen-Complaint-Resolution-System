@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.egov.config.web.model.AuditDetails;
-import org.egov.config.web.model.ConfigEntry;
+import org.egov.config.web.model.ProviderDetail;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Component;
 
@@ -13,21 +13,19 @@ import java.sql.SQLException;
 
 @Component
 @RequiredArgsConstructor
-public class ConfigEntryRowMapper implements RowMapper<ConfigEntry> {
+public class ProviderDetailRowMapper implements RowMapper<ProviderDetail> {
 
     private final ObjectMapper objectMapper;
 
     @Override
-    public ConfigEntry mapRow(ResultSet rs, int rowNum) throws SQLException {
-        return ConfigEntry.builder()
+    public ProviderDetail mapRow(ResultSet rs, int rowNum) throws SQLException {
+        return ProviderDetail.builder()
                 .id(rs.getString("id"))
-                .configCode(rs.getString("config_code"))
-                .module(rs.getString("module"))
+                .providerName(rs.getString("provider_name"))
                 .channel(rs.getString("channel"))
                 .tenantId(rs.getString("tenant_id"))
                 .enabled(rs.getBoolean("enabled"))
                 .value(parseJson(rs.getString("value")))
-                .revision(rs.getInt("revision"))
                 .auditDetails(AuditDetails.builder()
                         .createdBy(rs.getString("created_by"))
                         .createdTime(rs.getLong("created_time"))
