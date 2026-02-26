@@ -39,7 +39,7 @@ const setupLibraries = (Library, service, method) => {
 
 /* To Overide any existing config/middlewares  we need to use similar method */
 export const updateCustomConfigs = () => {
-  setupLibraries("Customizations", "commonUiConfig", { ...window?.Digit?.Customizations?.commonUiConfig, ...UICustomizations });
+setupLibraries("Customizations", "commonUiConfig", { ...window?.Digit?.Customizations?.commonUiConfig, ...UICustomizations });
 };
 
 /// Util function to downloads files with type as pdf or excel
@@ -151,7 +151,7 @@ export const convertEpochFormateToDate = (dateEpoch) => {
 };
 
 
-const getEffectiveServiceCode = (mainType, subType) => {
+  const getEffectiveServiceCode = (mainType, subType) => {
   if (
     subType &&
     subType.department === mainType.department &&
@@ -167,20 +167,20 @@ const getEffectiveServiceCode = (mainType, subType) => {
 
 
 export const formPayloadToCreateComplaint = (formData, tenantId, user) => {
-  const userInfo = {
+  const userInfo =  {
     "name": formData?.ComplainantName?.trim()?.length > 0 ? formData?.ComplainantName?.trim() : null,
     "mobileNumber": formData?.ComplainantContactNumber?.trim()?.length > 0 ? formData?.ComplainantContactNumber?.trim() : null,
     "userName": formData?.ComplainantContactNumber?.trim()?.length > 0 ? formData?.ComplainantContactNumber?.trim() : null,
     "type": "EMPLOYEE",
     "tenantId": tenantId,
   };
-  const additionalDetail = { supervisorName: formData?.SupervisorName?.trim()?.length > 0 ? formData?.SupervisorName?.trim() : null, supervisorContactNumber: formData?.SupervisorContactNumber?.trim()?.length > 0 ? formData?.SupervisorContactNumber?.trim() : null };
+  const additionalDetail = { supervisorName : formData?.SupervisorName?.trim()?.length > 0 ? formData?.SupervisorName?.trim() : null, supervisorContactNumber : formData?.SupervisorContactNumber?.trim()?.length > 0 ? formData?.SupervisorContactNumber?.trim() : null };
   const timestamp = Date.now();
   let complaint = {
     "service": {
       "active": true,
       "tenantId": tenantId,
-      "serviceCode": getEffectiveServiceCode(formData?.SelectComplaintType, formData?.SelectSubComplaintType),
+      "serviceCode": getEffectiveServiceCode(formData?.SelectComplaintType,formData?.SelectSubComplaintType),
       "description": formData?.description,
       "applicationStatus": "CREATED",
       "source": "web",
@@ -193,7 +193,7 @@ export const formPayloadToCreateComplaint = (formData, tenantId, user) => {
         "street": formData?.AddressTwo,
         "pincode": formData?.postalCode,
         "locality": {
-          "code": formData?.SelectLocality?.code || (Array.isArray(formData?.boundaryComponent) ? formData?.boundaryComponent[formData?.boundaryComponent.length - 1] : null),
+          "code": formData?.SelectLocality?.code,
         },
         "geoLocation": {}
       },
