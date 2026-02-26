@@ -21,8 +21,11 @@ The adapter will:
 - Channel: `WHATSAPP` outbound only.
 - Producer: initially `complaints-service` but adapter remains module-agnostic.
 - Config codes only:
-  - `NOTIF_TEMPLATE_MAP`
-  - `NOTIF_EVENT_SCHEMA`
+  - `NOTIFICATIONS_WHATSAPP_TEMPLATES` - Stores the default templates for each channel
+  - `NOTIFICATIONS_WHATSAPP_PROVIDERS`- Stores the Whatsapp providers and their credentials
+  - `NOTIFICATIONS_TEMPLATE_BINDINGS` - Stores the templateId -> providerTemplateId mappings
+- MDMS schemas:
+  `NOTIFICATIONS_EVENT_SCHEMA` - JSON schema of payload emitted by the PGR service. Needs to be registered up-front.
 - Deterministic resolution is done in novu-bridge through Config Service.
 - Preference gating is mandatory before dispatch.
 - Self-hosted Novu only.
