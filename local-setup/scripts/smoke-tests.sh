@@ -205,10 +205,10 @@ if [ -n "$USER_UUID" ]; then
   echo "  - User: $TEST_USER (uuid: $USER_UUID)"
 fi
 
-send_event testing run smoke-tests
-
 if [[ $failed -eq 0 ]]; then
+  send_event testing run "smoke-tests status=pass"
   exit 0
 else
+  send_event testing run "smoke-tests status=fail"
   exit 1
 fi
