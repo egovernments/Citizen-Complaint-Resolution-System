@@ -12,6 +12,8 @@ import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 @Service
@@ -73,7 +75,7 @@ public class ComplaintDomainEventService {
         event.put("workflow", getWorkflow(action, fromState, service.getApplicationStatus()));
         event.put("stakeholders", getStakeholders(request));
         event.put("context", Collections.singletonMap("locale", config.getComplaintsDomainEventDefaultLocale()));
-        event.put("data", getData(service));
+        event.put("data", getData(request));
         return event;
     }
 
@@ -127,11 +129,73 @@ public class ComplaintDomainEventService {
         return stakeholders;
     }
 
-    private Map<String, Object> getData(org.egov.pgr.web.models.Service service) {
+    private Map<String, Object> getData(ServiceRequest request) {
+        org.egov.pgr.web.models.Service service = request.getService();
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("complaintNo", service.getServiceRequestId());
-        data.put("complaintType", service.getServiceCode());
-        data.put("complaintDescription", service.getDescription());
+        data.put("status", service.getApplicationStatus());
+        data.put("serviceName", service.getServiceCode());
+        data.put("citizenName", getCitizenName(request));
+        data.put("departmentName", getDepartmentName(service));
+        data.put("mobileNumber", getCitizenMobile(request));
+        data.put("submittedDate", getSubmittedDate(service));
+        data.put("assigneeName", getAssigneeName(request));
+        data.put("assigneeDesignation", getAssigneeDesignation(request));
         return data;
+    }
+
+    private String getCitizenName(ServiceRequest request) {
+        if (request.getService().getCitizen() != null
+                && StringUtils.hasText(request.getService().getCitizen().getName())) {
+            return request.getService().getCitizen().getName();
+        }
+        if (request.getRequestInfo() != null && request.getRequestInfo().getUserInfo() != null) {
+            return request.getRequestInfo().getUserInfo().getName();
+        }
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private String getDepartmentName(org.egov.pgr.web.models.Service service) {
+        Object additionalDetail = service.getAdditionalDetail();
+        if (additionalDetail instanceof Map) {
+            Object dept = ((Map<String, Object>) additionalDetail).get("department");
+            return dept != null ? dept.toString() : null;
+        }
+        return null;
+    }
+
+    private String getCitizenMobile(ServiceRequest request) {
+        if (request.getService().getCitizen() != null) {
+            return request.getService().getCitizen().getMobileNumber();
+        }
+        return null;
+    }
+
+    private static final DateTimeFormatter DATE_FORMATTER =
+            DateTimeFormatter.ofPattern("dd-MMM-yyyy hh:mma", Locale.ENGLISH);
+
+    private String getSubmittedDate(org.egov.pgr.web.models.Service service) {
+        if (service.getAuditDetails() != null && service.getAuditDetails().getCreatedTime() != null) {
+            return Instant.ofEpochMilli(service.getAuditDetails().getCreatedTime())
+                    .atZone(ZoneId.of("Asia/Kolkata"))
+                    .format(DATE_FORMATTER);
+        }
+        return null;
+    }
+
+    private String getAssigneeName(ServiceRequest request) {
+        if (request.getWorkflow() != null && !CollectionUtils.isEmpty(request.getWorkflow().getAssignes())) {
+            // Assignee name would need user-service lookup; for now pass the UUID
+            // The actual name resolution happens downstream or via enrichment
+            return request.getWorkflow().getAssignes().get(0);
+        }
+        return "Unassigned";
+    }
+
+    private String getAssigneeDesignation(ServiceRequest request) {
+        // Designation is not directly available on the workflow model
+        // Can be enriched via HRMS lookup if needed
+        return "Officer";
     }
 }

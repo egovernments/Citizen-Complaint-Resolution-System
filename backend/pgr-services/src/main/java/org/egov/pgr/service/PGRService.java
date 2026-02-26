@@ -2,6 +2,7 @@ package org.egov.pgr.service;
 
 
 import com.jayway.jsonpath.JsonPath;
+import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.producer.Producer;
@@ -20,6 +21,7 @@ import java.util.*;
 
 import static org.egov.pgr.util.PGRConstants.MDMS_DEPARTMENT_SEARCH;
 
+@Slf4j
 @org.springframework.stereotype.Service
 public class PGRService {
 
@@ -227,12 +229,14 @@ public class PGRService {
             List<String> department = JsonPath.read(mdmsData, jsonPath);
 
             if (department == null || department.isEmpty()) {
-                throw new CustomException("DEPARTMENT_NOT_FOUND", "No department found for service: " + serviceCode);
+                log.warn("No department found in MDMS for service: {}. Defaulting to UNKNOWN.", serviceCode);
+                return "UNKNOWN";
             }
 
             return department.get(0);
         } catch (Exception e) {
-            throw new CustomException("JSONPATH_ERROR", "Failed to parse mdms response for service: " + serviceCode);
+            log.warn("Failed to parse MDMS response for department lookup, service: {}. Defaulting to UNKNOWN.", serviceCode, e);
+            return "UNKNOWN";
         }
     }
 

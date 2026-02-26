@@ -42,9 +42,15 @@ public class DispatchPipelineService {
     }
 
     public DispatchResult process(ComplaintsDomainEvent event, boolean send) {
+        log.info("Processing domain event: eventId={}, eventName={}, tenant={}, module={}, send={}",
+                event.getEventId(), event.getEventName(), event.getTenantId(), event.getModule(), send);
+
         envelopeValidator.validate(event);
 
         DerivedContext context = deriveContext(event);
+        log.info("Derived context: eventId={}, audience={}, recipientMobile={}, recipientUserId={}, locale={}",
+                event.getEventId(), context.getAudience(), context.getRecipientMobile(),
+                context.getRecipientUserId(), context.getLocale());
         String recipientUuid = userServiceClient.resolveUserUuid(
                 event.getTenantId(), context.getAudience(), context.getRecipientUserId(), context.getRecipientMobile());
         if (!StringUtils.hasText(recipientUuid)) {
@@ -66,6 +72,9 @@ public class DispatchPipelineService {
         }
 
         ResolvedTemplate resolvedTemplate = configServiceClient.resolveTemplate(context, event.getEventName(), event.getModule(), event.getTenantId());
+        log.info("Resolved template: eventId={}, templateKey={}, contentSid={}, requiredVars={}, paramOrder={}",
+                event.getEventId(), resolvedTemplate.getTemplateKey(), resolvedTemplate.getTwilioContentSid(),
+                resolvedTemplate.getRequiredVars(), resolvedTemplate.getParamOrder());
         validateTemplateConfig(resolvedTemplate);
         List<String> missingVars = findMissingRequiredVars(resolvedTemplate, event.getData());
         if (!missingVars.isEmpty()) {
@@ -94,13 +103,28 @@ public class DispatchPipelineService {
                     .build();
         }
 
+        String whatsappPhone = formatWhatsappPhone(context.getRecipientMobile());
+        Map<String, Object> twilioOverrides = buildTwilioTemplateOverrides(resolvedTemplate, event.getData());
+
+        log.info("Dispatching WhatsApp notification: eventId={}, eventName={}, tenant={}, complaintNo={}, " +
+                 "templateKey={}, subscriberId={}, phone={}, recipientMobile={}, contentSid={}",
+                event.getEventId(), event.getEventName(), event.getTenantId(),
+                event.getData() != null ? event.getData().get("complaintNo") : "N/A",
+                resolvedTemplate.getTemplateKey(), subscriberId, whatsappPhone,
+                context.getRecipientMobile(), resolvedTemplate.getTwilioContentSid());
+        log.info("Novu trigger payload: data={}, paramOrder={}, novuBaseUrl={}, twilioOverrides={}",
+                event.getData(), resolvedTemplate.getParamOrder(), config.getNovuBaseUrl(), twilioOverrides);
+
         NovuClient.NovuResponse novuResponse = novuClient.trigger(
                 resolvedTemplate.getTemplateKey(),
                 subscriberId,
-                formatWhatsappPhone(context.getRecipientMobile()),
+                whatsappPhone,
                 event.getData(),
                 event.getEventId(),
-                buildTwilioTemplateOverrides(resolvedTemplate, event.getData()));
+                twilioOverrides);
+
+        log.info("Novu trigger response: eventId={}, statusCode={}, response={}",
+                event.getEventId(), novuResponse.getStatusCode(), novuResponse.getResponse());
 
         persist(event, context, resolvedTemplate, "SENT", null, null, novuResponse.getResponse(), 1);
         return DispatchResult.builder()
@@ -156,9 +180,16 @@ public class DispatchPipelineService {
         }
         validateTwilioContentSid(contentSid);
 
+        // Novu passthrough uses camelCase; contentVariables must be a JSON string for Twilio
         Map<String, Object> body = new HashMap<>();
         body.put("contentSid", contentSid);
-        body.put("contentVariables", contentVariables == null ? Collections.emptyMap() : contentVariables);
+        try {
+            String cvJson = new com.fasterxml.jackson.databind.ObjectMapper()
+                    .writeValueAsString(contentVariables == null ? Collections.emptyMap() : contentVariables);
+            body.put("contentVariables", cvJson);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new CustomException("NB_CONTENT_VARS_SERIALIZE", "Failed to serialize contentVariables to JSON");
+        }
 
         Map<String, Object> passthrough = new HashMap<>();
         passthrough.put("body", body);
@@ -184,6 +215,10 @@ public class DispatchPipelineService {
         }
         if (normalized.startsWith("+")) {
             return "whatsapp:" + normalized;
+        }
+        // Assume Indian number if no country code — prepend +91
+        if (normalized.matches("^[6-9]\\d{9}$")) {
+            return "whatsapp:+91" + normalized;
         }
         return "whatsapp:+" + normalized;
     }

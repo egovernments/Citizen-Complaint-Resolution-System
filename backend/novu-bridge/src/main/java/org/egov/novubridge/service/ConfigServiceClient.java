@@ -37,12 +37,14 @@ public class ConfigServiceClient {
         Map<String, Object> resolveRequest = new HashMap<>();
         resolveRequest.put("configCode", "NOTIF_TEMPLATE_MAP");
         resolveRequest.put("module", module);
+        resolveRequest.put("eventType", eventName);
+        resolveRequest.put("channel", context.getChannel());
         resolveRequest.put("tenantId", tenantId);
         resolveRequest.put("locale", context.getLocale());
         resolveRequest.put("selectors", selectors);
 
         Map<String, Object> payload = new HashMap<>();
-        payload.put("requestInfo", new HashMap<>());
+        payload.put("RequestInfo", new HashMap<>());
         payload.put("resolveRequest", resolveRequest);
 
         try {
@@ -55,9 +57,13 @@ public class ConfigServiceClient {
             if (resolved == null) {
                 throw new CustomException("NB_CONFIG_NOT_FOUND", "No template mapping found for event");
             }
-            Map<String, Object> value = (Map<String, Object>) resolved.get("value");
+            Map<String, Object> entry = (Map<String, Object>) resolved.get("entry");
+            if (entry == null) {
+                throw new CustomException("NB_CONFIG_NOT_FOUND", "Resolved mapping does not contain entry object");
+            }
+            Map<String, Object> value = (Map<String, Object>) entry.get("value");
             if (value == null) {
-                throw new CustomException("NB_CONFIG_NOT_FOUND", "Resolved mapping does not contain value object");
+                throw new CustomException("NB_CONFIG_NOT_FOUND", "Resolved entry does not contain value object");
             }
             return ResolvedTemplate.builder()
                     .templateKey((String) value.get("templateKey"))
