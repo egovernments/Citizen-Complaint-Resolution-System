@@ -34,10 +34,10 @@ const PGRCard = () => {
   }
 
   let links = [
-    generateLink("ACTION_TEST_CREATE_COMPLAINT", "create-complaint", ["CSR"]),
-    generateLink("ACTION_TEST_SEARCH_COMPLAINT", "inbox-v2"),
+    generateLink("ACTION_TEST_CREATE_COMPLAINT", "complaint/create", ["CSR"]),
+    generateLink("ACTION_TEST_SEARCH_COMPLAINT", "inbox"),
   ];
-  const hasRequiredRoles = (link) => { 
+  const hasRequiredRoles = (link) => {
     if (!link?.roles?.length) return true;
     return Digit.Utils.didEmployeeHasAtleastOneRole(link.roles);
   };

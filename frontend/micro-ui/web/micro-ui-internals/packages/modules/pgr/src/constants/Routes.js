@@ -1,6 +1,6 @@
 export const PGR_BASE = `/${window?.contextPath}/pgr/citizen/`;
 
-const CREATE_COMPLAINT_PATH = "/create-complaint/";
+const CREATE_COMPLAINT_PATH = "/complaint/create/";
 const REOPEN_COMPLAINT_PATH = "/reopen/";
 
 export const PgrRoutes = {
@@ -10,7 +10,7 @@ export const PgrRoutes = {
   ReasonPage: `/:id`,
   UploadPhoto: `/upload-photo/:id`,
   AddtionalDetails: `/addional-details/:id`,
-  CreateComplaint: "/create-complaint",
+  CreateComplaint: "/complaint/create",
   ReopenComplaint: "/reopen",
   Response: "/response",
 
