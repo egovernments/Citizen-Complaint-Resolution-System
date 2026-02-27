@@ -13,9 +13,9 @@ public class ConfigEntryQueryBuilder {
     private static final String BASE_SELECT = "SELECT id, config_code, module, channel, " +
             "tenant_id, enabled, \"value\", revision, " +
             "created_by, created_time, last_modified_by, last_modified_time " +
-            "FROM config_entry";
+            "FROM config_data";
 
-    private static final String COUNT_SELECT = "SELECT COUNT(*) FROM config_entry";
+    private static final String COUNT_SELECT = "SELECT COUNT(*) FROM config_data";
 
     public String buildSearchQuery(org.egov.config.web.model.ConfigEntrySearchCriteria criteria, List<Object> params) {
         StringBuilder sql = new StringBuilder(BASE_SELECT);

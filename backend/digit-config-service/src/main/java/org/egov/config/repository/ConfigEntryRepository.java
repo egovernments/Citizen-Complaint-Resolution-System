@@ -22,7 +22,7 @@ public class ConfigEntryRepository {
     private final ObjectMapper objectMapper;
 
     public void save(ConfigEntry entry) {
-        String sql = "INSERT INTO config_entry (id, config_code, module, channel, tenant_id, enabled, " +
+        String sql = "INSERT INTO config_data (id, config_code, module, channel, tenant_id, enabled, " +
                 "\"value\", revision, created_by, created_time, last_modified_by, last_modified_time) " +
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
@@ -43,7 +43,7 @@ public class ConfigEntryRepository {
     }
 
     public void update(ConfigEntry entry) {
-        StringBuilder sql = new StringBuilder("UPDATE config_entry SET ");
+        StringBuilder sql = new StringBuilder("UPDATE config_data SET ");
         List<Object> params = new ArrayList<>();
 
         sql.append("revision = ?, last_modified_by = ?, last_modified_time = ?");

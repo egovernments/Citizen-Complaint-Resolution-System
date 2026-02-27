@@ -25,6 +25,8 @@ CREATE TABLE template_binding (
     event_name         VARCHAR(256) NOT NULL,
     content_sid        VARCHAR(128),
     locale             VARCHAR(16),
+    param_order        TEXT,
+    required_vars      TEXT,
     tenant_id          VARCHAR(256) NOT NULL,
     enabled            BOOLEAN DEFAULT TRUE,
     created_by         VARCHAR(64),

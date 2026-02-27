@@ -1,6 +1,6 @@
 -- H2-compatible schema for tests
 
-CREATE TABLE IF NOT EXISTS config_entry (
+CREATE TABLE IF NOT EXISTS config_data (
     id VARCHAR(64) PRIMARY KEY,
     config_code VARCHAR(128) NOT NULL,
     module VARCHAR(128),
@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS config_entry (
     created_time BIGINT,
     last_modified_by VARCHAR(64),
     last_modified_time BIGINT,
-    CONSTRAINT uq_config_entry UNIQUE (tenant_id, config_code, module, channel)
+    CONSTRAINT uq_config_data UNIQUE (tenant_id, config_code, module, channel)
 );
 
 CREATE TABLE IF NOT EXISTS provider_detail (
