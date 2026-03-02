@@ -12,13 +12,13 @@ import java.util.List;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class ProviderDetailSearchResponse {
+public class ConfigDataResponse {
 
     @JsonProperty("ResponseInfo")
     private ResponseInfo responseInfo;
 
-    @JsonProperty("providerDetails")
-    private List<ProviderDetail> providerDetails;
+    @JsonProperty("configData")
+    private List<ConfigData> configData;
 
     @JsonProperty("pagination")
     private Pagination pagination;

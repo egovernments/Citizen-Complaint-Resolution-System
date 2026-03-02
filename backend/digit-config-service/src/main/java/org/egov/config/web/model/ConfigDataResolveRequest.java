@@ -1,7 +1,6 @@
 package org.egov.config.web.model;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -9,11 +8,13 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.Map;
+
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class ConfigResolveRequest {
+public class ConfigDataResolveRequest {
 
     @JsonProperty("RequestInfo")
     @NotNull
@@ -31,27 +32,15 @@ public class ConfigResolveRequest {
     @Builder
     public static class ResolveParams {
 
-        @JsonProperty("configCode")
+        @JsonProperty("schemaCode")
         @NotNull
-        private String configCode;
-
-        @JsonProperty("module")
-        private String module;
+        private String schemaCode;
 
         @JsonProperty("tenantId")
         @NotNull
         private String tenantId;
 
-        @JsonProperty("eventName")
-        private String eventName;
-
-        @JsonProperty("channel")
-        private String channel;
-
-        @JsonProperty("selectors")
-        private JsonNode selectors;
-
-        @JsonProperty("decryptSensitive")
-        private Boolean decryptSensitive;
+        @JsonProperty("filters")
+        private Map<String, String> filters;
     }
 }

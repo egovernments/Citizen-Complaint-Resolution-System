@@ -12,15 +12,15 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class TemplateBindingRequest {
+public class ConfigDataSearchRequest {
 
     @JsonProperty("RequestInfo")
     @NotNull
     @Valid
     private RequestInfo requestInfo;
 
-    @JsonProperty("templateBinding")
+    @JsonProperty("criteria")
     @NotNull
     @Valid
-    private TemplateBinding templateBinding;
+    private ConfigDataCriteria criteria;
 }
