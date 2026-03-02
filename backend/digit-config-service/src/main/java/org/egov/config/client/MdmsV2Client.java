@@ -37,9 +37,14 @@ public class MdmsV2Client {
 
         try {
             String url = mdmsHost + schemaSearchPath;
+            // MDMS v2 normalizes tenantId to state-level; extract root tenant
+            String stateTenantId = tenantId.contains(".")
+                    ? tenantId.substring(0, tenantId.indexOf('.'))
+                    : tenantId;
             Map<String, Object> request = Map.of(
+                    "RequestInfo", Map.of(),
                     "SchemaDefCriteria", Map.of(
-                            "tenantId", tenantId,
+                            "tenantId", stateTenantId,
                             "codes", new String[]{configCode}
                     )
             );

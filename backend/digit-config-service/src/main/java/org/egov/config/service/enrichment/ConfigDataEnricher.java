@@ -2,6 +2,7 @@ package org.egov.config.service.enrichment;
 
 import lombok.RequiredArgsConstructor;
 import org.egov.config.config.ApplicationConfig;
+import org.egov.config.utils.CustomException;
 import org.egov.config.utils.UniqueIdentifierUtil;
 import org.egov.config.web.model.*;
 import org.json.JSONObject;
@@ -27,6 +28,9 @@ public class ConfigDataEnricher {
         if (schema != null) {
             entry.setUniqueIdentifier(
                     UniqueIdentifierUtil.computeFromSchema(schema, entry.getData()));
+        } else if (entry.getUniqueIdentifier() == null || entry.getUniqueIdentifier().isBlank()) {
+            throw new CustomException("MISSING_UNIQUE_IDENTIFIER",
+                    "uniqueIdentifier is required when schema validation is disabled");
         }
 
         String userId = resolveUserId(request.getRequestInfo());
