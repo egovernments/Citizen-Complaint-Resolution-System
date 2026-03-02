@@ -11,26 +11,25 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class ProviderDetail {
+public class ConfigData {
 
     @JsonProperty("id")
     private String id;
 
-    @JsonProperty("providerName")
-    private String providerName;
-
-    @JsonProperty("channel")
-    private String channel;
-
     @JsonProperty("tenantId")
     private String tenantId;
 
-    @JsonProperty("enabled")
-    @Builder.Default
-    private Boolean enabled = true;
+    @JsonProperty("schemaCode")
+    private String schemaCode;
 
-    @JsonProperty("value")
-    private JsonNode value;
+    @JsonProperty("uniqueIdentifier")
+    private String uniqueIdentifier;
+
+    @JsonProperty("data")
+    private JsonNode data;
+
+    @JsonProperty("isActive")
+    private Boolean isActive;
 
     @JsonProperty("auditDetails")
     private AuditDetails auditDetails;

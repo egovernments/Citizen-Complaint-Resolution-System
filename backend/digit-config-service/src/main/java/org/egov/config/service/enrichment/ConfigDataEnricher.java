@@ -2,29 +2,34 @@ package org.egov.config.service.enrichment;
 
 import lombok.RequiredArgsConstructor;
 import org.egov.config.config.ApplicationConfig;
+import org.egov.config.utils.UniqueIdentifierUtil;
 import org.egov.config.web.model.*;
+import org.json.JSONObject;
 import org.springframework.stereotype.Component;
 
 import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
-public class ConfigEntryEnricher {
+public class ConfigDataEnricher {
 
     private final ApplicationConfig applicationConfig;
 
-    public void enrichCreate(ConfigEntryCreateRequest request) {
-        ConfigEntry entry = request.getEntry();
-        RequestInfo requestInfo = request.getRequestInfo();
+    public void enrichCreate(ConfigDataRequest request, JSONObject schema) {
+        ConfigData entry = request.getConfigData();
 
         entry.setId(UUID.randomUUID().toString());
-        entry.setRevision(1);
 
-        if (entry.getEnabled() == null) {
-            entry.setEnabled(true);
+        if (entry.getIsActive() == null) {
+            entry.setIsActive(true);
         }
 
-        String userId = requestInfo.getUserInfo() != null ? requestInfo.getUserInfo().getUuid() : null;
+        if (schema != null) {
+            entry.setUniqueIdentifier(
+                    UniqueIdentifierUtil.computeFromSchema(schema, entry.getData()));
+        }
+
+        String userId = resolveUserId(request.getRequestInfo());
         long now = System.currentTimeMillis();
         entry.setAuditDetails(AuditDetails.builder()
                 .createdBy(userId)
@@ -34,13 +39,10 @@ public class ConfigEntryEnricher {
                 .build());
     }
 
-    public void enrichUpdate(ConfigEntryUpdateRequest request) {
-        ConfigEntry entry = request.getEntry();
-        RequestInfo requestInfo = request.getRequestInfo();
+    public void enrichUpdate(ConfigDataRequest request) {
+        ConfigData entry = request.getConfigData();
 
-        entry.setRevision(entry.getRevision() + 1);
-
-        String userId = requestInfo.getUserInfo() != null ? requestInfo.getUserInfo().getUuid() : null;
+        String userId = resolveUserId(request.getRequestInfo());
         long now = System.currentTimeMillis();
 
         AuditDetails audit = entry.getAuditDetails();
@@ -52,12 +54,19 @@ public class ConfigEntryEnricher {
         entry.setAuditDetails(audit);
     }
 
-    public void enrichSearchCriteria(ConfigEntrySearchCriteria criteria) {
+    public void enrichSearchDefaults(ConfigDataCriteria criteria) {
         if (criteria.getLimit() == null) {
             criteria.setLimit(applicationConfig.getDefaultLimit());
         }
         if (criteria.getOffset() == null) {
             criteria.setOffset(applicationConfig.getDefaultOffset());
         }
+    }
+
+    private String resolveUserId(RequestInfo requestInfo) {
+        if (requestInfo != null && requestInfo.getUserInfo() != null) {
+            return requestInfo.getUserInfo().getUuid();
+        }
+        return null;
     }
 }

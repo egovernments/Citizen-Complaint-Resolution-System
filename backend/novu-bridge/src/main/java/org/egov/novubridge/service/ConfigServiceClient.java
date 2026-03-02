@@ -29,8 +29,9 @@ public class ConfigServiceClient {
 
     public ResolvedTemplate resolveTemplate(DerivedContext context, String eventName, String module, String tenantId) {
         Map<String, Object> resolveRequest = new HashMap<>();
-        resolveRequest.put("eventName", eventName);
+        resolveRequest.put("schemaCode", "TemplateBinding");
         resolveRequest.put("tenantId", tenantId);
+        resolveRequest.put("filters", Map.of("eventName", eventName));
 
         Map<String, Object> payload = new HashMap<>();
         payload.put("RequestInfo", new HashMap<>());
@@ -38,26 +39,32 @@ public class ConfigServiceClient {
 
         try {
             String url = config.getConfigHost() + config.getConfigResolvePath();
+            log.info("Config resolve request: url={}, schemaCode=TemplateBinding, eventName={}, tenantId={}",
+                    url, eventName, tenantId);
+
             ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(payload), Map.class);
             if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
                 throw new CustomException("NB_CONFIG_RESOLVE_FAILED", "Template resolve returned non-success response");
             }
-            Map<String, Object> binding = (Map<String, Object>) response.getBody().get("templateBinding");
-            if (binding == null) {
-                throw new CustomException("NB_CONFIG_NOT_FOUND", "No template binding found for event");
+
+            Map<String, Object> configData = (Map<String, Object>) response.getBody().get("configData");
+            if (configData == null) {
+                throw new CustomException("NB_CONFIG_NOT_FOUND", "No config data found for event");
             }
 
-            String templateId = (String) binding.get("templateId");
-            String contentSid = (String) binding.get("contentSid");
-            List<String> paramOrder = (List<String>) binding.get("paramOrder");
-            List<String> requiredVars = (List<String>) binding.get("requiredVars");
-
-            // Extract novuApiKey from providerDetail.value if available
-            String novuApiKey = null;
-            Map<String, Object> providerDetail = (Map<String, Object>) binding.get("providerDetail");
-            if (providerDetail != null && providerDetail.get("value") instanceof Map) {
-                novuApiKey = (String) ((Map<String, Object>) providerDetail.get("value")).get("novuApiKey");
+            Map<String, Object> data = (Map<String, Object>) configData.get("data");
+            if (data == null) {
+                throw new CustomException("NB_CONFIG_NOT_FOUND", "Config data payload is empty");
             }
+
+            String templateId = (String) data.get("templateId");
+            String contentSid = (String) data.get("contentSid");
+            List<String> paramOrder = (List<String>) data.get("paramOrder");
+            List<String> requiredVars = (List<String>) data.get("requiredVars");
+            String novuApiKey = (String) data.get("novuApiKey");
+
+            log.info("Config resolve result: templateId={}, contentSid={}, paramOrder={}, novuApiKey={}",
+                    templateId, contentSid, paramOrder, novuApiKey != null ? "***" : "null");
 
             return ResolvedTemplate.builder()
                     .templateKey(templateId)

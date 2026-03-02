@@ -10,26 +10,16 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class ConfigResolveResponse {
+public class ConfigDataResolveResponse {
 
     @JsonProperty("ResponseInfo")
     private ResponseInfo responseInfo;
 
-    @JsonProperty("resolved")
-    private ResolvedEntry resolved;
+    @JsonProperty("configData")
+    private ConfigData configData;
 
-    @Data
-    @AllArgsConstructor
-    @NoArgsConstructor
-    @Builder
-    public static class ResolvedEntry {
-
-        @JsonProperty("entry")
-        private ConfigEntry entry;
-
-        @JsonProperty("resolutionMeta")
-        private ResolutionMeta resolutionMeta;
-    }
+    @JsonProperty("resolutionMeta")
+    private ResolutionMeta resolutionMeta;
 
     @Data
     @AllArgsConstructor

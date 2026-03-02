@@ -12,15 +12,15 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class ConfigEntryCreateRequest {
+public class ConfigDataRequest {
 
     @JsonProperty("RequestInfo")
     @NotNull
     @Valid
     private RequestInfo requestInfo;
 
-    @JsonProperty("entry")
+    @JsonProperty("configData")
     @NotNull
     @Valid
-    private ConfigEntry entry;
+    private ConfigData configData;
 }
