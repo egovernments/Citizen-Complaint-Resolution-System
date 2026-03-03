@@ -26,7 +26,7 @@ public class ConfigDataValidator {
     private final MdmsV2Client mdmsV2Client;
     private final ConfigDataRepository repository;
 
-    @Value("${mdms.v2.validation.enabled:false}")
+    @Value("${mdms.v2.validation.enabled:true}")
     private boolean schemaValidationEnabled;
 
     public JSONObject validateCreate(ConfigDataRequest request) {
