@@ -235,6 +235,9 @@ dc_resource('egov-bndry-mgmnt', labels=['core-services'],
         link('http://localhost:18081/boundary-management/actuator/health', 'Health'),
     ])
 
+# ==================== Telemetry ====================
+dc_resource('telemetry', labels=['infrastructure'])
+
 # ==================== Local Resources ====================
 
 # Database reset - manually triggered only

@@ -24,7 +24,7 @@ VISITOR_ID=$(printf '%s%s' \
 
 # ── Telemetry sender (fire-and-forget, backgrounded) ─────────────
 # Uses a real user-agent so Matomo doesn't filter it as bot traffic.
-UA="DIGIT-LocalSetup/1.0"
+UA="Mozilla/5.0 (DIGIT-LocalSetup/1.0; Linux) AppleWebKit/537.36"
 
 send_event() {
   [ "${TELEMETRY:-true}" = "false" ] && return 0
