@@ -26,7 +26,7 @@ send_event() {
   visitor_id=$(_telemetry_visitor_id)
 
   # Fire-and-forget: don't block the caller, ignore errors
-  curl -s -o /dev/null --max-time 5 -A "DIGIT-LocalSetup/1.0" \
+  curl -s -o /dev/null --max-time 5 -A "Mozilla/5.0 (DIGIT-LocalSetup/1.0; Linux) AppleWebKit/537.36" \
     "${MATOMO_URL}" \
     -d "idsite=${MATOMO_SITE_ID}" \
     -d "rec=1" \

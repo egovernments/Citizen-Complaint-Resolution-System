@@ -44,7 +44,7 @@ def send_event(category: str, action: str, name: str = "") -> None:
                     "url": f"https://local-setup.digit.org/{category}/{action}",
                     "apiv": "1",
                 },
-                headers={"User-Agent": "DIGIT-LocalSetup/1.0"},
+                headers={"User-Agent": "Mozilla/5.0 (DIGIT-LocalSetup/1.0; Linux) AppleWebKit/537.36"},
                 timeout=5,
             )
         except Exception:
