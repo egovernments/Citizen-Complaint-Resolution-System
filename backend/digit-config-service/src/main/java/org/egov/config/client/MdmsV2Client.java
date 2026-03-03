@@ -18,10 +18,10 @@ public class MdmsV2Client {
 
     private final RestTemplate restTemplate;
 
-    @Value("${mdms.v2.host:}")
+    @Value("${mdms.v2.host:http://mdms-v2.egov:8080}")
     private String mdmsHost;
 
-    @Value("${mdms.v2.schema.search.path:/schema/v1/_search}")
+    @Value("${mdms.v2.schema.search.path:/egov-mdms-service/schema/v1/_search}")
     private String schemaSearchPath;
 
     /**
