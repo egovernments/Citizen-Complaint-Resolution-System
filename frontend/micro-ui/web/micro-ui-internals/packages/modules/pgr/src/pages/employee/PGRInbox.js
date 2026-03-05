@@ -60,122 +60,92 @@ const PGRSearchInbox = () => {
   );
 
   // Fallback to static config if MDMS is not available
-  let configs = mdmsData || PGRSearchInboxConfig();
-
-  // Inject mobile validation rules from MDMS into the search config
-  if (configs && validationRules && configs.sections?.search?.uiConfig?.fields) {
-    const { min, max } = getMinMaxValues();
-    configs = {
-      ...configs,
-      sections: {
-        ...configs.sections,
-        search: {
-          ...configs.sections.search,
-          uiConfig: {
-            ...configs.sections.search.uiConfig,
-            fields: configs.sections.search.uiConfig.fields.map((field) => {
-              if (field.label === "CS_COMMON_MOBILE_NO" && field.populators?.name === "mobileNumber") {
-                return {
-                  ...field,
-                  populators: {
-                    ...field.populators,
-                    prefix: validationRules.prefix,
-                    validation: {
-                      minlength: validationRules.minLength,
-                      maxlength: validationRules.maxLength,
-                      min: min,
-                      max: max,
-                      pattern: validationRules.pattern,
-                    },
-                    error: validationRules.errorMessage || field.populators.error,
-                  },
-                };
-              }
-              return field;
-            }),
-          },
-        },
-      },
-    };
-  }
+  const configs = useMemo(() => {
+    return mdmsData || PGRSearchInboxConfig();
+  }, [mdmsData]);
 
   // Fetch the list of service definitions (e.g., complaint types) for current tenant
   const serviceDefs = Digit.Hooks.pgr.useServiceDefs(tenantId, "PGR");
 
   /**
-   * Preprocess config using translation and inject complaint types into the serviceCode dropdown
-   */
-  var updatedConfig = useMemo(
-    () =>
-      Digit.Utils.preProcessMDMSConfigInboxSearch(
-        t,
-        pageConfig,
-        "sections.filter.uiConfig.fields",
-        {
-          updateDependent: [
-            {
-              key: "serviceCode",
-              value: serviceDefs ? [...serviceDefs] : [],
-            },
-          ],
-        }
-      ),
-    [pageConfig, serviceDefs]
-  );
-
-  /**
    * Reset or refresh config when the route changes
    */
   useEffect(() => {
-    setPageConfig(_.cloneDeep(configs));
-  }, [location]);
+    if (configs) {
+      setPageConfig(_.cloneDeep(configs));
+    }
+  }, [location.pathname, configs]);
+
+  /**
+   * Preprocess config: inject service codes, mobile validation, and apply translations
+   */
+  const updatedConfig = useMemo(() => {
+    if (!pageConfig || !serviceDefs || serviceDefs.length === 0) return null;
+
+    // Step 1: Inject service codes into filter dropdown
+    let processedConfig = Digit.Utils.preProcessMDMSConfigInboxSearch(
+      t,
+      pageConfig,
+      "sections.filter.uiConfig.fields",
+      {
+        updateDependent: [
+          {
+            key: "serviceCode",
+            value: serviceDefs ? [...serviceDefs] : [],
+          },
+        ],
+      }
+    );
+
+    // Step 2: Inject mobile validation rules into search section
+    if (processedConfig && validationRules && processedConfig.sections?.search?.uiConfig?.fields) {
+      const { min, max } = getMinMaxValues();
+      processedConfig = {
+        ...processedConfig,
+        sections: {
+          ...processedConfig.sections,
+          search: {
+            ...processedConfig.sections.search,
+            uiConfig: {
+              ...processedConfig.sections.search.uiConfig,
+              fields: processedConfig.sections.search.uiConfig.fields.map((field) => {
+                if (field.label === "CS_COMMON_MOBILE_NO" && field.populators?.name === "mobileNumber") {
+                  return {
+                    ...field,
+                    populators: {
+                      ...field.populators,
+                      prefix: validationRules.prefix,
+                      validation: {
+                        minlength: validationRules.minLength,
+                        maxlength: validationRules.maxLength,
+                        min: min,
+                        max: max,
+                        pattern: validationRules.pattern,
+                      },
+                      error: validationRules.errorMessage || field.populators.error,
+                    },
+                  };
+                }
+                return field;
+              }),
+            },
+          },
+        },
+      };
+    }
+
+    return processedConfig;
+  }, [pageConfig, serviceDefs, validationRules, t]);
 
   /**
    * Show loader until necessary data is available
    */
-  if (isLoading || isValidationLoading || !pageConfig || serviceDefs?.length === 0) {
+  if (isLoading || isValidationLoading || !pageConfig || !updatedConfig || serviceDefs?.length === 0) {
     return <Loader />;
   }
 
   console.log("*** Log ===> 1", configs);
   console.log("*** Log ===> 11", updatedConfig);
-
-   // Inject mobile validation rules from MDMS into the search config
-  if (updatedConfig && validationRules && updatedConfig.sections?.search?.uiConfig?.fields) {
-    const { min, max } = getMinMaxValues();
-    updatedConfig = {
-      ...updatedConfig,
-      sections: {
-        ...updatedConfig.sections,
-        search: {
-          ...updatedConfig.sections.search,
-          uiConfig: {
-            ...updatedConfig.sections.search.uiConfig,
-            fields: updatedConfig.sections.search.uiConfig.fields.map((field) => {
-              if (field.label === "CS_COMMON_MOBILE_NO" && field.populators?.name === "mobileNumber") {
-                return {
-                  ...field,
-                  populators: {
-                    ...field.populators,
-                    prefix: validationRules.prefix,
-                    validation: {
-                      minlength: validationRules.minLength,
-                      maxlength: validationRules.maxLength,
-                      min: min,
-                      max: max,
-                      pattern: validationRules.pattern,
-                    },
-                    error: validationRules.errorMessage || field.populators.error,
-                  },
-                };
-              }
-              return field;
-            }),
-          },
-        },
-      },
-    };
-  }
 
   return (
     <div style={{ marginBottom: "80px" }}>
