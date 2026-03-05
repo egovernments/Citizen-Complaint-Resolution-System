@@ -201,6 +201,12 @@ dc_resource('pgr-services', labels=['pgr'],
         link('http://localhost:18083/pgr-services/health', 'Health'),
     ])
 
+# One-shot seed container — auto_init=False prevents tilt ci from failing on exit
+dc_resource('pgr-workflow-seed', labels=['pgr'],
+    resource_deps=['egov-workflow-v2'],
+    auto_init=False,
+)
+
 dc_resource('jupyter', labels=['pgr'], auto_init=True,
     links=[
         link('http://localhost:18888/lab', 'Jupyter Lab'),
