@@ -225,7 +225,9 @@ jobs:
                 "http://localhost:18083/pgr-services/v2/request/_search?tenantId=pg.citya" \
                 -H "Content-Type: application/json" \
                 -d "{\"RequestInfo\":{\"apiId\":\"Rainmaker\"}}" 2>/dev/null)
-              if [ "$HTTP_CODE" = "200" ]; then
+              # Any response (200, 400, etc) means PGR is processing requests.
+              # Only 000 (connection refused) or 5xx means it is not ready.
+              if [ "$HTTP_CODE" != "000" ] && [ "${HTTP_CODE:0:1}" != "5" ]; then
                 echo "PGR is functionally ready (HTTP $HTTP_CODE)"
                 break
               fi
