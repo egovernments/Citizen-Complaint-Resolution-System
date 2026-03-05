@@ -1,0 +1,294 @@
+# PR Preview — Core services overlay
+#
+# Extends the base docker-compose.yml to:
+# 1. Disable per-PR services (pgr, ui, jupyter) via profiles
+# 2. Enable OTEL tracing on all shared Java services
+# 3. Add observability stack (OTEL Collector, Tempo, Grafana, Elasticsearch)
+# 4. Add Caddy (TLS termination) + nginx (dynamic PR routing)
+#
+# IMPORTANT: Relative paths are resolved from the first -f file's directory
+# (local-setup/), so paths to pr-preview files use ../.github/pr-preview/
+#
+# Usage (from repo root):
+#   docker compose -f local-setup/docker-compose.yml \
+#     -f .github/pr-preview/docker-compose.core.yml up -d
+
+services:
+  # --- Disable per-PR services (handled by docker-compose.pr.yml per PR) ---
+  pgr-services:
+    profiles: [disabled]
+  digit-ui:
+    profiles: [disabled]
+  jupyter:
+    profiles: [disabled]
+  # Gatus not needed in preview mode
+  gatus:
+    profiles: [disabled]
+  # Telemetry sidecar not needed
+  telemetry:
+    profiles: [disabled]
+  # pgr-workflow-seed: keep enabled — runs once to seed workflow config
+
+  # --- Enable OTEL on shared Java services ---
+  # Each service gets the OTEL Java agent mounted and configured to export
+  # traces to the OTEL Collector via gRPC.
+  mdms-backend:
+    environment:
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_SERVICE_NAME: mdms-backend
+      JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar -Xms64m -Xmx192m
+    volumes:
+      - ../.github/pr-preview/otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
+
+  egov-enc-service:
+    environment:
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_SERVICE_NAME: egov-enc-service
+      JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar -Xms64m -Xmx192m
+    volumes:
+      - ../.github/pr-preview/otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
+
+  egov-idgen:
+    environment:
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_SERVICE_NAME: egov-idgen
+      JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar -Xms64m -Xmx192m
+    volumes:
+      - ../.github/pr-preview/otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
+
+  egov-user:
+    environment:
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_SERVICE_NAME: egov-user
+      JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar -Xms128m -Xmx384m
+    volumes:
+      - ../.github/pr-preview/otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
+
+  egov-workflow-v2:
+    environment:
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_SERVICE_NAME: egov-workflow-v2
+      JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar -Xms64m -Xmx256m
+    volumes:
+      - ../.github/pr-preview/otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
+
+  egov-localization:
+    environment:
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_SERVICE_NAME: egov-localization
+      JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar -Xms128m -Xmx1024m
+    volumes:
+      - ../.github/pr-preview/otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
+
+  boundary-service:
+    environment:
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_SERVICE_NAME: boundary-service
+      JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar -Xms64m -Xmx192m
+    volumes:
+      - ../.github/pr-preview/otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
+
+  egov-accesscontrol:
+    environment:
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_SERVICE_NAME: egov-accesscontrol
+      JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar -Xms64m -Xmx192m
+    volumes:
+      - ../.github/pr-preview/otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
+
+  egov-persister:
+    environment:
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_SERVICE_NAME: egov-persister
+      JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar -Xms64m -Xmx192m
+    volumes:
+      - ../.github/pr-preview/otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
+
+  egov-filestore:
+    environment:
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_SERVICE_NAME: egov-filestore
+      JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar -Xms64m -Xmx192m
+    volumes:
+      - ../.github/pr-preview/otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
+
+  egov-hrms:
+    environment:
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_SERVICE_NAME: egov-hrms
+      JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar -Xms64m -Xmx192m
+    volumes:
+      - ../.github/pr-preview/otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
+
+  egov-url-shortening:
+    environment:
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_SERVICE_NAME: egov-url-shortening
+      JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar -Xms64m -Xmx128m
+    volumes:
+      - ../.github/pr-preview/otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
+
+  # --- Observability stack ---
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.96.0
+    container_name: otel-collector
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ../.github/pr-preview/otel/otel-collector-config.yaml:/etc/otel/config.yaml:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "13133:13133"
+    healthcheck:
+      disable: true
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.25'
+    networks:
+      - egov-network
+
+  tempo:
+    image: grafana/tempo:2.4.1
+    container_name: tempo
+    command: ["-config.file=/etc/tempo/config.yaml"]
+    volumes:
+      - ../.github/pr-preview/otel/tempo-config.yaml:/etc/tempo/config.yaml:ro
+      - tempo_data:/var/tempo
+    ports:
+      - "3200:3200"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3200/ready >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+    networks:
+      - egov-network
+
+  grafana:
+    image: grafana/grafana:10.4.1
+    container_name: grafana
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_SERVER_ROOT_URL: "https://grafana.preview.egov.theflywheel.in/"
+    volumes:
+      - ../.github/pr-preview/otel/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+    networks:
+      - egov-network
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.3
+    container_name: elasticsearch
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms256m -Xmx256m"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    ports:
+      - "19200:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+    networks:
+      - egov-network
+
+  # --- Caddy (TLS termination with on-demand certs) ---
+  # Only needed if no host-level nginx/TLS is available.
+  # On servers with existing nginx on 80/443, use the host nginx config
+  # (.github/pr-preview/nginx/host-nginx-preview.conf) instead.
+  caddy:
+    image: caddy:2-alpine
+    container_name: pr-caddy
+    profiles: [caddy]
+    volumes:
+      - ../.github/pr-preview/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      pr-nginx-proxy:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.25'
+    restart: unless-stopped
+    networks:
+      - egov-network
+
+  # --- nginx (dynamic PR routing via regex server_name) ---
+  # Host port 18090 allows host nginx to proxy to this container.
+  # On Caddy-only setups, Caddy connects directly via Docker network.
+  pr-nginx-proxy:
+    image: nginx:alpine
+    container_name: pr-nginx-proxy
+    volumes:
+      - ../.github/pr-preview/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../.github/pr-preview/nginx/preview.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "18900:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/tls-check?domain=grafana.preview.egov.theflywheel.in >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.1'
+    networks:
+      - egov-network
+
+volumes:
+  tempo_data:
+  grafana_data:
+  es_data:
+  caddy_data:
+  caddy_config:

@@ -14,13 +14,25 @@ Usage:
     loader.load_employees("Employee Master.xlsx")
 """
 
-from unified_loader import UnifiedExcelReader, APIUploader
+try:
+    from .unified_loader import UnifiedExcelReader, APIUploader
+except (ImportError, ModuleNotFoundError):
+    from unified_loader import UnifiedExcelReader, APIUploader
 from typing import Optional, Dict
+from copy import deepcopy
 import os
 import json
 import requests
 
 REQUEST_TIMEOUT = 30  # seconds - prevent indefinite hangs on unresponsive services
+
+try:
+    from .telemetry import send_event as _send_telemetry
+except Exception:
+    try:
+        from telemetry import send_event as _send_telemetry
+    except Exception:
+        def _send_telemetry(*a, **kw): pass
 
 # kubectl API server URL (for environments without kubectl access)
 KUBECTL_API_URL = os.environ.get('KUBECTL_API_URL', 'http://localhost:8765')
@@ -96,8 +108,13 @@ class CRSLoader:
                       enable_modules: list = None, users: list = None) -> bool:
         """Create a tenant if it doesn't exist
 
+        Automatically bootstraps new tenant roots. When creating a tenant like
+        "ethiopia.kenya", detects that "ethiopia" is a new root (not "pg") and
+        copies all required schema definitions and essential MDMS data from "pg"
+        before creating the tenant.
+
         Args:
-            tenant_code: Tenant code (e.g., "statea.chakshu", "pg.citya")
+            tenant_code: Tenant code (e.g., "pg.citya", "ethiopia.kenya")
             display_name: Display name (derived from code if not provided)
             enable_modules: List of modules to enable (default: ["PGR", "HRMS"])
             users: List of users to create for this tenant. Each user is a dict:
@@ -106,7 +123,7 @@ class CRSLoader:
                    Default roles: ["EMPLOYEE"]. Type defaults to "EMPLOYEE".
 
         Returns:
-            bool: True if tenant exists or was created successfully
+            bool: True if tenant exists/was created and StateInfo is present
 
         Example:
             loader.login(username="ADMIN", password="eGov@123", tenant_id="pg")
@@ -116,32 +133,28 @@ class CRSLoader:
             ])
         """
         self._check_auth()
+        _send_telemetry("dataloader", "create", "tenant")
 
         if enable_modules is None:
             enable_modules = ["PGR", "HRMS"]
 
-        # Check if tenant exists
-        search_url = f"{self.base_url}/mdms-v2/v1/_search"
-        search_payload = {
-            "MdmsCriteria": {
-                "tenantId": "pg",
-                "moduleDetails": [{"moduleName": "tenant", "masterDetails": [{"name": "tenants"}]}]
-            },
-            "RequestInfo": {"apiId": "Rainmaker"}
-        }
+        # Determine root tenant: "ethiopia.kenya" -> "ethiopia", "pg.citya" -> "pg"
+        root_tenant = tenant_code.split(".")[0] if "." in tenant_code else tenant_code
 
-        resp = requests.post(search_url, json=search_payload, headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
-        existing_tenants = []
-        if resp.ok:
-            try:
-                tenants = resp.json().get("MdmsRes", {}).get("tenant", {}).get("tenants", [])
-                existing_tenants = [t.get("code", "").lower() for t in tenants]
-            except:
-                pass
+        # Check if tenant exists (search under both pg and the target root)
+        existing_tenants = set()
+        for search_root in {self.tenant_id, root_tenant}:
+            records = self.uploader.search_mdms_data(
+                schema_code='tenant.tenants', tenant=search_root, limit=500
+            )
+            for r in records:
+                code = r.get('code', '')
+                if code:
+                    existing_tenants.add(code.lower())
 
         if tenant_code.lower() in existing_tenants:
             print(f"✅ Tenant '{tenant_code}' already exists")
-            return True
+            return self._ensure_stateinfo_for_tenant(tenant_code, display_name)
 
         print(f"📝 Creating tenant '{tenant_code}'...")
 
@@ -149,7 +162,13 @@ class CRSLoader:
         if not display_name:
             display_name = tenant_code.replace(".", " ").title()
 
-        # Create tenant via MDMS v2 API
+        # Bootstrap new root if needed (e.g. "ethiopia" when creating "ethiopia.kenya")
+        if root_tenant != self.tenant_id:
+            if not self._bootstrap_tenant_root(root_tenant, source_tenant=self.tenant_id):
+                print(f"❌ Failed to bootstrap root '{root_tenant}'")
+                return False
+
+        # Create tenant record under its own root
         create_url = f"{self.base_url}/mdms-v2/v2/_create/tenant.tenants"
         tenant_data = {
             "code": tenant_code,
@@ -170,7 +189,7 @@ class CRSLoader:
                 "userInfo": self.user_info
             },
             "Mdms": {
-                "tenantId": "pg",
+                "tenantId": root_tenant,
                 "schemaCode": "tenant.tenants",
                 "data": tenant_data,
                 "isActive": True
@@ -181,6 +200,11 @@ class CRSLoader:
 
         if resp.ok:
             print(f"✅ Tenant '{tenant_code}' created successfully!")
+
+            # Ensure tenant has branding metadata used by UI localization bootstrap
+            if not self._ensure_stateinfo_for_tenant(tenant_code, display_name):
+                print(f"❌ Failed to ensure StateInfo for '{tenant_code}'")
+                return False
 
             # Enable modules for the tenant
             for module in enable_modules:
@@ -205,6 +229,272 @@ class CRSLoader:
             except:
                 print(f"   Response: {resp.text[:200]}")
             return False
+
+    def _bootstrap_tenant_root(self, target_root: str, source_tenant: str = "pg") -> bool:
+        """Bootstrap a new tenant root by copying schemas and essential data from an existing root.
+
+        When creating a tenant like "ethiopia.kenya", the "ethiopia" root needs all
+        MDMS schema definitions and essential data (departments, designations, roles,
+        ID formats, etc.) before any services can operate on it.
+
+        This mirrors the MCP server's tenant_bootstrap tool.
+
+        Args:
+            target_root: New root tenant to bootstrap (e.g., "ethiopia")
+            source_tenant: Existing root to copy from (default: "pg")
+
+        Returns:
+            bool: True if bootstrap succeeded
+        """
+        print(f"\n🔧 Bootstrapping new tenant root '{target_root}' from '{source_tenant}'...")
+
+        # Step 1: Copy all schema definitions from source to target
+        schema_search_url = f"{self.base_url}/mdms-v2/schema/v1/_search"
+        schema_create_url = f"{self.base_url}/mdms-v2/schema/v1/_create"
+
+        search_payload = {
+            "RequestInfo": {
+                "apiId": "Rainmaker",
+                "authToken": self.auth_token,
+                "userInfo": self.user_info
+            },
+            "SchemaDefCriteria": {
+                "tenantId": source_tenant,
+                "limit": 500,
+                "offset": 0
+            }
+        }
+
+        resp = requests.post(schema_search_url, json=search_payload,
+                             headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
+        if not resp.ok:
+            print(f"   ❌ Failed to fetch schemas from '{source_tenant}': {resp.status_code}")
+            return False
+
+        schemas = resp.json().get("SchemaDefinitions", [])
+        copied = 0
+        skipped = 0
+        failed = 0
+
+        for schema in schemas:
+            code = schema.get("code", "")
+            create_payload = {
+                "RequestInfo": {
+                    "apiId": "Rainmaker",
+                    "authToken": self.auth_token,
+                    "userInfo": self.user_info
+                },
+                "SchemaDefinition": {
+                    "tenantId": target_root,
+                    "code": code,
+                    "description": schema.get("description", code),
+                    "definition": schema.get("definition", {})
+                }
+            }
+            try:
+                r = requests.post(schema_create_url, json=create_payload,
+                                  headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
+                if r.ok:
+                    copied += 1
+                elif any(kw in r.text.lower() for kw in ["duplicate", "already exists", "unique"]):
+                    skipped += 1
+                else:
+                    failed += 1
+            except Exception:
+                failed += 1
+
+        print(f"   📋 Schemas: {copied} copied, {skipped} already existed, {failed} failed (of {len(schemas)} total)")
+
+        if failed > 0:
+            print(f"   ⚠️  Some schemas failed but continuing — non-critical schemas may be optional")
+
+        # Step 2: Create root self-record (required by idgen for city code resolution)
+        root_data = {
+            "code": target_root,
+            "name": target_root.title(),
+            "description": f"State tenant root: {target_root}",
+            "city": {
+                "code": target_root.upper(),
+                "name": target_root.title(),
+                "districtCode": target_root.upper(),
+                "districtName": target_root.title()
+            }
+        }
+        result = self.uploader.create_mdms_data(
+            schema_code='tenant.tenants', data_list=[root_data], tenant=target_root
+        )
+        root_created = result.get('created', 0) + result.get('exists', 0)
+        if root_created > 0:
+            print(f"   ✅ Root tenant record created for '{target_root}'")
+        else:
+            print(f"   ⚠️  Could not create root tenant record (may need manual setup)")
+
+        # Step 3: Copy essential MDMS data records from source
+        essential_schemas = [
+            'common-masters.IdFormat',
+            'common-masters.Department',
+            'common-masters.Designation',
+            'common-masters.GenderType',
+            'egov-hrms.EmployeeStatus',
+            'egov-hrms.EmployeeType',
+            'egov-hrms.DeactivationReason',
+            'ACCESSCONTROL-ROLES.roles',
+            'RAINMAKER-PGR.ServiceDefs',
+        ]
+
+        data_copied = 0
+        data_skipped = 0
+        for schema_code in essential_schemas:
+            records = self.uploader.search_mdms_data(
+                schema_code=schema_code, tenant=source_tenant, limit=500
+            )
+            if not records:
+                continue
+
+            # Strip internal fields before copying
+            clean_records = []
+            for r in records:
+                rec = {k: v for k, v in r.items() if not k.startswith('_')}
+                clean_records.append(rec)
+
+            result = self.uploader.create_mdms_data(
+                schema_code=schema_code, data_list=clean_records, tenant=target_root
+            )
+            data_copied += result.get('created', 0)
+            data_skipped += result.get('exists', 0)
+
+        print(f"   📦 Data: {data_copied} records copied, {data_skipped} already existed")
+
+        # Step 4: Copy workflow business service definitions
+        # Note: workflow search requires tenantId as a query parameter, not in body
+        wf_search_url = f"{self.base_url}/egov-workflow-v2/egov-wf/businessservice/_search"
+        wf_create_url = f"{self.base_url}/egov-workflow-v2/egov-wf/businessservice/_create"
+
+        wf_request_info = {
+            "RequestInfo": {
+                "apiId": "Rainmaker",
+                "authToken": self.auth_token,
+                "userInfo": self.user_info
+            }
+        }
+
+        try:
+            wf_resp = requests.post(
+                wf_search_url, json=wf_request_info,
+                params={"tenantId": source_tenant},
+                headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
+            if wf_resp.ok:
+                business_services = wf_resp.json().get("BusinessServices", [])
+                wf_copied = 0
+                for bs in business_services:
+                    # Clone for target root: strip IDs, update tenant
+                    bs_copy = deepcopy(bs)
+                    bs_copy.pop("uuid", None)
+                    bs_copy.pop("auditDetails", None)
+                    bs_copy["tenantId"] = target_root
+                    for state in bs_copy.get("states", []):
+                        state.pop("uuid", None)
+                        state.pop("auditDetails", None)
+                        state["tenantId"] = target_root
+                        for action in state.get("actions", []):
+                            action.pop("uuid", None)
+                            action.pop("auditDetails", None)
+                            action.pop("currentState", None)
+                            action.pop("nextState", None)
+
+                    create_wf = {
+                        "RequestInfo": {
+                            "apiId": "Rainmaker",
+                            "authToken": self.auth_token,
+                            "userInfo": self.user_info
+                        },
+                        "BusinessServices": [bs_copy]
+                    }
+                    try:
+                        r = requests.post(wf_create_url, json=create_wf,
+                                          headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
+                        if r.ok:
+                            wf_copied += 1
+                        else:
+                            print(f"   ⚠️  Workflow create for '{bs.get('businessService', '?')}': {r.text[:150]}")
+                    except Exception as e:
+                        print(f"   ⚠️  Workflow create error: {e}")
+
+                if wf_copied > 0:
+                    print(f"   ✅ Workflow: {wf_copied} business service(s) copied")
+                elif business_services:
+                    print(f"   ⚠️  Workflow: could not copy (may already exist)")
+                else:
+                    print(f"   ⚠️  Workflow: no business services found on '{source_tenant}'")
+            else:
+                print(f"   ⚠️  Workflow search failed: {wf_resp.text[:150]}")
+        except Exception as e:
+            print(f"   ⚠️  Workflow copy skipped (service may not be ready): {e}")
+
+        print(f"   ✅ Bootstrap complete for '{target_root}'\n")
+        return True
+
+    def _ensure_stateinfo_for_tenant(self, tenant_code: str, display_name: str = None) -> bool:
+        """Ensure common-masters.StateInfo exists for tenant.
+
+        DIGIT UI depends on StateInfo (especially localizationModules/languages)
+        during login/bootstrap. Missing StateInfo can lead to raw i18n codes in UI.
+        """
+        # Already present for tenant -> nothing to do
+        existing_records = self.uploader.search_mdms_data(
+            schema_code='common-masters.StateInfo',
+            tenant=tenant_code,
+            limit=5
+        )
+        existing = any((r.get('code') or '').lower() == tenant_code.lower() for r in existing_records)
+        if existing:
+            print(f"   ✅ StateInfo already present for '{tenant_code}'")
+            return True
+
+        # Try to clone a baseline template from parent/root tenants
+        candidate_tenants = []
+        parent_tenant = tenant_code.split('.')[0] if '.' in tenant_code else tenant_code
+        for candidate in [parent_tenant, self.tenant_id, "pg"]:
+            if candidate and candidate not in candidate_tenants:
+                candidate_tenants.append(candidate)
+
+        template = None
+        for candidate in candidate_tenants:
+            records = self.uploader.search_mdms_data(
+                schema_code='common-masters.StateInfo',
+                tenant=candidate,
+                limit=5
+            )
+            if records:
+                matched = next((r for r in records if (r.get('code') or '').lower() == candidate.lower()), None)
+                template = matched or records[0]
+                break
+
+        if not template:
+            print(f"   ⚠️  Could not find a StateInfo template in tenants: {candidate_tenants}")
+            print("   ⚠️  Run load_tenant() with Tenant And Branding Master to create branding manually.")
+            return False
+
+        stateinfo = deepcopy(template)
+        stateinfo.pop('_isActive', None)
+        stateinfo.pop('_uniqueIdentifier', None)
+        stateinfo['code'] = tenant_code
+        if display_name:
+            stateinfo['name'] = display_name
+
+        result = self.uploader.create_mdms_data(
+            schema_code='common-masters.StateInfo',
+            data_list=[stateinfo],
+            tenant=tenant_code
+        )
+        created = result.get('created', 0)
+        exists = result.get('exists', 0)
+        if created > 0 or exists > 0:
+            print(f"   ✅ StateInfo ensured for '{tenant_code}'")
+            return True
+
+        print(f"   ❌ Failed to create StateInfo for '{tenant_code}'")
+        return False
 
     def _enable_module_for_tenant(self, tenant_code: str, module_code: str):
         """Add tenant to citymodule for a specific module (internal)
@@ -709,6 +999,7 @@ class CRSLoader:
             dict: Summary of operations for each master type
         """
         self._check_auth()
+        _send_telemetry("dataloader", "load", "common-masters")
 
         print(f"\n{'='*60}")
         print(f"PHASE 3: COMMON MASTERS")
@@ -798,6 +1089,7 @@ class CRSLoader:
             bool: True if employee was created or already exists
         """
         self._check_auth()
+        _send_telemetry("dataloader", "create", "employee")
 
         state_tenant = tenant.split(".")[0] if "." in tenant else tenant
         name = name or username
@@ -921,6 +1213,7 @@ class CRSLoader:
             dict: Summary of localization upload and StateInfo update
         """
         self._check_auth()
+        _send_telemetry("dataloader", "load", "localizations")
 
         print(f"\n{'='*60}")
         print(f"PHASE 5: LOCALIZATIONS")
@@ -985,6 +1278,7 @@ class CRSLoader:
             dict: {status: 'created'|'updated'|'exists'|'failed', error: str or None}
         """
         self._check_auth()
+        _send_telemetry("dataloader", "load", "workflow")
 
         print(f"\n{'='*60}")
         print(f"PHASE 6: WORKFLOW")
