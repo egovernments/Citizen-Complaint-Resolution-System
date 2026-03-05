@@ -970,7 +970,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./telemetry:/telemetry:ro
     environment:
-      TELEMETRY: "${TELEMETRY:-true}"
+      TELEMETRY: "${TELEMETRY:-false}"
       MATOMO_SITE_ID: "${MATOMO_SITE_ID:-5}"
     healthcheck:
       test: ["CMD", "test", "-f", "/tmp/healthy"]

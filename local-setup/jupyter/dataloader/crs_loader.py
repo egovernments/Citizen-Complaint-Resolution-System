@@ -163,7 +163,8 @@ class CRSLoader:
             display_name = tenant_code.replace(".", " ").title()
 
         # Bootstrap new root if needed (e.g. "ethiopia" when creating "ethiopia.kenya")
-        if root_tenant != self.tenant_id:
+        session_root = self.tenant_id.split(".")[0] if "." in self.tenant_id else self.tenant_id
+        if root_tenant != session_root:
             if not self._bootstrap_tenant_root(root_tenant, source_tenant=self.tenant_id):
                 print(f"❌ Failed to bootstrap root '{root_tenant}'")
                 return False
@@ -327,7 +328,8 @@ class CRSLoader:
         if root_created > 0:
             print(f"   ✅ Root tenant record created for '{target_root}'")
         else:
-            print(f"   ⚠️  Could not create root tenant record (may need manual setup)")
+            print(f"   ❌ Could not create root tenant record (required for ID generation)")
+            return False
 
         # Step 3: Copy essential MDMS data records from source
         essential_schemas = [

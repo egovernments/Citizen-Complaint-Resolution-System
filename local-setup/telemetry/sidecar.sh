@@ -13,8 +13,19 @@ DOCKER_SOCKET="/var/run/docker.sock"
 
 # Install curl + jq if missing (alpine base image)
 for cmd in curl jq; do
-  command -v "$cmd" >/dev/null 2>&1 || apk add --no-cache "$cmd" >/dev/null 2>&1
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    if ! apk add --no-cache "$cmd" >/dev/null 2>&1; then
+      echo "[telemetry] FATAL: failed to install $cmd"
+      exit 1
+    fi
+  fi
 done
+
+# Verify Docker socket is accessible
+if [ ! -S "$DOCKER_SOCKET" ]; then
+  echo "[telemetry] FATAL: Docker socket not found at $DOCKER_SOCKET"
+  exit 1
+fi
 
 # ── Stable visitor ID (matches telemetry.sh algorithm) ────────────
 VISITOR_ID=$(printf '%s%s' \
@@ -66,7 +77,13 @@ echo "[telemetry] project=$COMPOSE_PROJECT"
 echo "[telemetry] files=$COMPOSE_FILES"
 echo "[telemetry] running=$CONTAINER_COUNT containers"
 
-# Mark healthy for Docker healthcheck
+# Verify we could actually talk to the Docker socket
+if [ "$CONTAINER_COUNT" = "?" ] || [ -z "$CONTAINER_COUNT" ]; then
+  echo "[telemetry] FATAL: could not query Docker API via socket"
+  exit 1
+fi
+
+# Mark healthy for Docker healthcheck (only after successful setup)
 touch /tmp/healthy
 
 # ── Send start event ──────────────────────────────────────────────

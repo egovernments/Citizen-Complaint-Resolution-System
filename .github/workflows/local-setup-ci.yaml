@@ -93,7 +93,7 @@ jobs:
 
       - name: Start services
         run: |
-          docker compose up -d
+          TELEMETRY=true docker compose up -d
           echo "Waiting for services to start..."
 
       - name: Wait for infrastructure

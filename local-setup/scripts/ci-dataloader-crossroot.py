@@ -139,6 +139,7 @@ def create_boundary(loader, tenant):
     # Step 3: Create parent-child relationships (boundaryType goes here, not in entity)
     print("   Creating boundary relationships...")
     relation_url = f"{loader.base_url}/boundary-service/boundary-relationships/_create"
+    relationship_failures = 0
     for bnd in boundaries:
         rel_payload = {
             "RequestInfo": auth_info,
@@ -154,8 +155,12 @@ def create_boundary(loader, tenant):
             rel_payload["BoundaryRelationship"]["parent"] = bnd["parent"]
         resp = requests.post(relation_url, json=rel_payload, headers=headers, timeout=REQUEST_TIMEOUT)
         if not resp.ok and "already exists" not in resp.text.lower() and "duplicate" not in resp.text.lower():
-            print(f"   Warning: relationship {bnd['code']}: {resp.text[:150]}")
+            print(f"   Error: relationship {bnd['code']}: {resp.text[:150]}")
+            relationship_failures += 1
 
+    if relationship_failures > 0:
+        print(f"   FATAL: {relationship_failures} boundary relationship(s) failed")
+        return False
     print(f"   Boundary tree created with locality {LOCALITY_CODE}")
     return True
 
@@ -298,7 +303,10 @@ def main():
     if not os.path.exists(workflow_file):
         print(f"FATAL: {workflow_file} not found")
         return 1
-    loader.load_workflow(workflow_file, target_tenant=BOOT_ROOT)
+    wf_result = loader.load_workflow(workflow_file, target_tenant=BOOT_ROOT)
+    if wf_result.get('status') == 'failed':
+        print(f"FATAL: Workflow load failed: {wf_result.get('error', 'unknown')}")
+        return 1
 
     print("\n" + "=" * 60)
     print("BOOTSTRAP TEST PASSED")

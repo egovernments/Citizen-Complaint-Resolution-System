@@ -2247,7 +2247,7 @@ class APIUploader:
                     deduped.append(u)
                     seen.add(u)
 
-            print(f"\n📥 Downloading template...")
+            print("\n📥 Downloading template...")
             file_response = None
             last_error = None
             for attempt_url in deduped:

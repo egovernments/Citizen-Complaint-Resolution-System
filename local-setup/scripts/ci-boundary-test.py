@@ -126,7 +126,7 @@ def fill_boundary_template(template_path: str, output_path: str) -> str:
                 parent_code = current.get("parentCode")
                 current = code_to_bnd.get(parent_code) if parent_code else None
     else:
-        print(f"   WARNING: Unknown template format, writing standard format")
+        print("   WARNING: Unknown template format, writing standard format")
         # Overwrite with standard format
         ws.delete_rows(1, ws.max_row)
         ws.append(["code", "name", "boundaryType", "parentCode"])
@@ -203,7 +203,7 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix="bnd-test-") as tmpdir:
         # Step 1: Login
-        print(f"\n[1/8] Login as superuser")
+        print("\n[1/8] Login as superuser")
         loader = CRSLoader(BASE_URL)
         if not loader.login(username=USERNAME, password=PASSWORD, tenant_id=ROOT_TENANT):
             print("FATAL: Login failed")
@@ -229,7 +229,7 @@ def main():
             print("   Falling back to manual boundary creation...")
 
             # Fallback: create boundaries directly via API (skip template flow)
-            print(f"\n[3b/8] Creating boundaries directly via API...")
+            print("\n[3b/8] Creating boundaries directly via API...")
             from unified_loader import APIUploader
             uploader = loader.uploader
 
@@ -240,7 +240,7 @@ def main():
                     bnd["boundaryType"], bnd.get("parentCode")
                 )
 
-            print(f"\n[8/8] Verify boundaries")
+            print("\n[8/8] Verify boundaries")
             if verify_boundaries(BASE_URL, loader, TARGET_TENANT, HIERARCHY_TYPE):
                 print("\nBOUNDARY TEST PASSED (direct API fallback)")
                 return 0
@@ -249,7 +249,7 @@ def main():
                 return 1
 
         # Step 4: Inspect downloaded template
-        print(f"\n[4/8] Inspect downloaded template")
+        print("\n[4/8] Inspect downloaded template")
         wb = openpyxl.load_workbook(template_path)
         ws = wb.active
         print(f"   Sheet: {ws.title}")
@@ -259,12 +259,12 @@ def main():
         wb.close()
 
         # Step 5: Fill template with test data
-        print(f"\n[5/8] Fill template with test boundary data")
+        print("\n[5/8] Fill template with test boundary data")
         filled_path = os.path.join(tmpdir, "filled_boundaries.xlsx")
         fill_boundary_template(template_path, filled_path)
 
         # Step 6: Upload filled template
-        print(f"\n[6/8] Upload filled boundary data")
+        print("\n[6/8] Upload filled boundary data")
         result = loader.load_boundaries(
             excel_path=filled_path,
             target_tenant=TARGET_TENANT,
@@ -273,23 +273,24 @@ def main():
 
         status = result.get("status", "unknown")
         if status != "completed":
-            print(f"   WARNING: boundary processing status = {status}")
+            print(f"   FATAL: boundary processing status = {status}")
             errors = result.get("errors", [])
             if errors:
                 for e in errors:
                     print(f"   Error: {e}")
+            return 1
 
         # Step 7: Wait a moment for async processing
-        print(f"\n[7/8] Wait for boundary data to settle...")
+        print("\n[7/8] Wait for boundary data to settle...")
         time.sleep(3)
 
         # Step 8: Verify boundaries exist
-        print(f"\n[8/8] Verify boundaries via boundary-service API")
+        print("\n[8/8] Verify boundaries via boundary-service API")
         if verify_boundaries(BASE_URL, loader, TARGET_TENANT, HIERARCHY_TYPE):
             created = result.get("boundaries_created", "?")
             relationships = result.get("relationships_created", "?")
             print(f"\n{'=' * 60}")
-            print(f"BOUNDARY TEST PASSED")
+            print("BOUNDARY TEST PASSED")
             print(f"  Boundaries created: {created}")
             print(f"  Relationships created: {relationships}")
             print(f"  Template format: {headers}")
