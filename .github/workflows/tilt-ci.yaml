@@ -55,19 +55,23 @@ jobs:
           echo "=== Telemetry Event Verification ==="
           FAIL=0
 
-          # Must have start events
+          # tilt ci exits as soon as resources are healthy, so the sidecar
+          # captures fewer events than the long-running docker compose job.
+          # Verify the sidecar started and is capturing events (>=1 each).
+
+          # Must have at least 1 start event
           START_COUNT=$(echo "$LOGS" | grep -c '\[telemetry\] +' || true)
           echo "  Container start events: $START_COUNT"
-          if [ "$START_COUNT" -lt 10 ]; then
-            echo "  FAIL: expected at least 10 start events"
+          if [ "$START_COUNT" -lt 1 ]; then
+            echo "  FAIL: expected at least 1 start event"
             FAIL=1
           fi
 
-          # Must have healthy events
+          # Must have at least 1 healthy event
           HEALTHY_COUNT=$(echo "$LOGS" | grep -c '\[telemetry\] \.' || true)
           echo "  Container healthy events: $HEALTHY_COUNT"
-          if [ "$HEALTHY_COUNT" -lt 10 ]; then
-            echo "  FAIL: expected at least 10 healthy events"
+          if [ "$HEALTHY_COUNT" -lt 1 ]; then
+            echo "  FAIL: expected at least 1 healthy event"
             FAIL=1
           fi
 
