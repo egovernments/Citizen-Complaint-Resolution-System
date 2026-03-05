@@ -216,6 +216,24 @@ jobs:
         run: |
           bash scripts/health-check.sh http://localhost
 
+      - name: Wait for PGR functional readiness
+        run: |
+          echo "Waiting for PGR to handle API requests (not just Spring actuator)..."
+          timeout 120 bash -c '
+            while true; do
+              HTTP_CODE=$(curl -sS -o /dev/null -w "%{http_code}" -X POST \
+                "http://localhost:18083/pgr-services/v2/request/_search?tenantId=pg.citya" \
+                -H "Content-Type: application/json" \
+                -d "{\"RequestInfo\":{\"apiId\":\"Rainmaker\"}}" 2>/dev/null)
+              if [ "$HTTP_CODE" = "200" ]; then
+                echo "PGR is functionally ready (HTTP $HTTP_CODE)"
+                break
+              fi
+              echo "  PGR not ready yet (HTTP $HTTP_CODE), retrying..."
+              sleep 5
+            done
+          '
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
