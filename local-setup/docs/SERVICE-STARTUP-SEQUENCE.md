@@ -1,6 +1,7 @@
 # DIGIT Core Services - Startup Sequence
 
 This document describes the startup sequence and dependencies for DIGIT core services.
+<!-- CI: tilt-ci workflow added -->
 
 ## Dependency Graph
 
