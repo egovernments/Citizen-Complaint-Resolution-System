@@ -171,7 +171,8 @@ describe('PGR End-to-End Workflow', () => {
           workflow: {
             action: 'APPLY',
           },
-        }
+        },
+        { timeout: 30000 },
       );
 
       expect(response.ok).toBe(true);
