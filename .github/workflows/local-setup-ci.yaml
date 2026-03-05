@@ -33,6 +33,64 @@ jobs:
           sudo rm -rf /usr/local/share/boost
           df -h
 
+      - name: Verify telemetry in all compose files and Tiltfile
+        run: |
+          echo "=== Verifying telemetry sidecar is present in all compose files ==="
+          FAIL=0
+
+          for f in docker-compose.yml docker-compose.deploy.yaml; do
+            echo -n "  $f ... "
+            if docker compose -f "$f" config --services 2>/dev/null | grep -q '^telemetry$'; then
+              echo "OK"
+            else
+              echo "FAIL (telemetry service missing)"
+              FAIL=1
+            fi
+          done
+
+          # Verify Tiltfile references telemetry
+          echo -n "  Tiltfile ... "
+          if grep -q "dc_resource('telemetry'" Tiltfile; then
+            echo "OK"
+          else
+            echo "FAIL (dc_resource('telemetry') missing)"
+            FAIL=1
+          fi
+
+          # Verify sidecar.sh exists and has browser-like UA
+          echo -n "  sidecar.sh user-agent ... "
+          if grep -q 'Mozilla' telemetry/sidecar.sh; then
+            echo "OK"
+          else
+            echo "FAIL (browser-like user-agent missing)"
+            FAIL=1
+          fi
+
+          # Verify telemetry.py has browser-like UA
+          echo -n "  telemetry.py user-agent ... "
+          if grep -q 'Mozilla' jupyter/dataloader/telemetry.py; then
+            echo "OK"
+          else
+            echo "FAIL (browser-like user-agent missing)"
+            FAIL=1
+          fi
+
+          # Verify telemetry.sh has browser-like UA
+          echo -n "  telemetry.sh user-agent ... "
+          if grep -q 'Mozilla' scripts/telemetry.sh; then
+            echo "OK"
+          else
+            echo "FAIL (browser-like user-agent missing)"
+            FAIL=1
+          fi
+
+          if [ "$FAIL" -ne 0 ]; then
+            echo ""
+            echo "FATAL: Telemetry checks failed. Every compose file must include the telemetry sidecar."
+            exit 1
+          fi
+          echo "=== All telemetry checks passed ==="
+
       - name: Start services
         run: |
           docker compose up -d
@@ -363,11 +421,47 @@ jobs:
             exit 1
           fi
 
-      - name: Show telemetry events
+      - name: Verify telemetry events captured
         if: always()
         run: |
           echo "=== Telemetry Sidecar Logs ==="
-          docker compose logs telemetry 2>&1 || echo "(no telemetry container)"
+          LOGS=$(docker compose logs telemetry 2>&1 || echo "(no telemetry container)")
+          echo "$LOGS"
+
+          echo ""
+          echo "=== Telemetry Event Verification ==="
+          FAIL=0
+
+          # Must have start events
+          START_COUNT=$(echo "$LOGS" | grep -c '\[telemetry\] +' || true)
+          echo "  Container start events: $START_COUNT"
+          if [ "$START_COUNT" -lt 10 ]; then
+            echo "  FAIL: expected at least 10 start events"
+            FAIL=1
+          fi
+
+          # Must have healthy events
+          HEALTHY_COUNT=$(echo "$LOGS" | grep -c '\[telemetry\] \.' || true)
+          echo "  Container healthy events: $HEALTHY_COUNT"
+          if [ "$HEALTHY_COUNT" -lt 10 ]; then
+            echo "  FAIL: expected at least 10 healthy events"
+            FAIL=1
+          fi
+
+          # Must have the setup start event
+          if echo "$LOGS" | grep -q "project=local-setup"; then
+            echo "  Setup start event: OK"
+          else
+            echo "  FAIL: no setup start event"
+            FAIL=1
+          fi
+
+          if [ "$FAIL" -ne 0 ]; then
+            echo ""
+            echo "FATAL: Telemetry event verification failed"
+            exit 1
+          fi
+          echo "=== All telemetry event checks passed ==="
 
       - name: Show service logs on failure
         if: failure()
