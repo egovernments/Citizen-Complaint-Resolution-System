@@ -17,6 +17,7 @@ public class DispatchResult {
     private Boolean preferenceAllowed;
     private DerivedContext derivedContext;
     private ResolvedTemplate resolvedTemplate;
+    private ResolvedProvider resolvedProvider;
     private List<String> missingRequiredVars;
     private Boolean novuTriggered;
     private Integer novuStatusCode;
