@@ -1,10 +1,11 @@
 {
   "info": {
-    "_postman_id": "f860e852-9489-43de-96d0-288a3285a86f",
+    "_postman_id": "d62fe75f-febe-44c3-b8d2-3ae10cf35fb4",
     "name": "PGR-Demo",
-    "description": "Mandatory Variables\n\n- url\n    \n- username\n    \n- password\n    \n- cityTenant (also used for employee auth token)\n    \n- stateTenant\n    \n\nWorkflow:\n\nEmployee Auth Token > MDMSv2 PGR Search > File upload > PGR Create > PGR Update (Assign) > PGR Update (Resolve) > PGR Search (final verification of resolved status)\n\nIf using filestore id, then the PGR Update request body needs to be updated with correct variable.",
+    "description": "PGR-Demo: End-to-end Postman collection for testing PGR complaint lifecycle.\n\n**Mandatory Variables:**\n- url (default: http://localhost:18000)\n- username / password (default: ADMIN / eGov@123)\n- cityTenant (default: pg.citya)\n- stateTenant (default: pg)\n\n**Workflow:**\nEmployee Auth Token > MDMSv2 PGR Search > PGR Create > PGR Update (Assign) > PGR Update (Resolve) > PGR Update (Rate&Close) > PGR Search (verify CLOSEDAFTERRESOLUTION)\n\n**Optional requests (not in main flow):**\n- File Upload (Attachment) - upload a file to filestore\n- Citizen Auth Token - get a citizen auth token (uses citizen phone 9999009999)\n- PGR Update (Re-Assign / Reject / Reopen) - alternative workflow steps\n\n**Running with Newman (CI):**\n```\nnpx newman run postman/complaints-demo.postman_collection.json\n```",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "_exporter_id": "27625854"
+    "_exporter_id": "52225596",
+    "_collection_link": "https://go.postman.co/collection/52225596-d62fe75f-febe-44c3-b8d2-3ae10cf35fb4?source=collection_link"
   },
   "item": [
     {
@@ -14,21 +15,28 @@
           "listen": "test",
           "script": {
             "exec": [
+              "pm.test(\"Auth returns 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
               "var jsonData = pm.response.json();",
+              "",
+              "pm.test(\"Access token received\", function () {",
+              "    pm.expect(jsonData.access_token).to.be.a(\"string\").and.not.empty;",
+              "});",
               "",
               "pm.collectionVariables.set(\"authToken\", jsonData.access_token);",
               "",
               "var userInfo, userReqInfo;",
               "for (let key in jsonData) {",
-              "    if (key.includes('UserRequest')) {",
+              "    if (key.includes(\"UserRequest\")) {",
               "        console.log(JSON.stringify(jsonData[key]));",
               "        userInfo = JSON.stringify(jsonData[key])",
               "    }",
               "}",
               "pm.collectionVariables.set(\"userReqInfo\", userInfo);",
               "",
-              "pm.execution.setNextRequest(\"MDMSv2 PGR Search\");",
-              ""
+              "pm.execution.setNextRequest(\"MDMSv2 PGR Search\");"
             ],
             "type": "text/javascript",
             "packages": {}
@@ -168,80 +176,29 @@
               "",
               "console.log(\"Total ServiceDefs:\", serviceDefs.length);",
               "",
-              "// If serviceCode env var is set, use that; otherwise pick random",
+              "// If serviceCode is set (e.g. by CI via --env-var), use that specific one.",
+              "// Otherwise pick a random ServiceDef.",
+              "var overrideCode = pm.variables.get(\"serviceCode\");",
               "var selected = null;",
-              "var envCode = pm.variables.get('serviceCode');",
-              "if (envCode && serviceDefs.length > 0) {",
-              "    selected = serviceDefs.find(function(s) { return s.serviceCode === envCode; });",
+              "",
+              "if (overrideCode) {",
+              "    selected = serviceDefs.find(function(s) { return s.serviceCode === overrideCode; });",
+              "    if (selected) {",
+              "        console.log(\"Using serviceCode override:\", overrideCode);",
+              "    } else {",
+              "        console.warn(\"serviceCode '\" + overrideCode + \"' not found in ServiceDefs, falling back to random\");",
+              "    }",
               "}",
+              "",
               "if (!selected && serviceDefs.length > 0) {",
-              "    selected = serviceDefs[Math.floor(Math.random() * serviceDefs.length)];",
+              "    var randomIndex = Math.floor(Math.random() * serviceDefs.length);",
+              "    selected = serviceDefs[randomIndex];",
+              "    console.log(\"Randomly picked:\", selected.serviceCode);",
               "}",
+              "",
               "if (selected) {",
-              "    pm.collectionVariables.set('ServiceDef', JSON.stringify(selected));",
+              "    pm.collectionVariables.set(\"ServiceDef\", JSON.stringify(selected));",
               "}",
-              "console.log('ServiceDef:', selected ? selected.serviceCode : 'none');",
-              "",
-              "pm.execution.setNextRequest(\"PGR Create\");"
-            ],
-            "type": "text/javascript",
-            "packages": {}
-          }
-        }
-      ],
-      "request": {
-        "method": "POST",
-        "header": [],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n    \"RequestInfo\": {\n        \"apiId\": \"asset-services\",\n        \"ver\": null,\n        \"ts\": null,\n        \"action\": null,\n        \"did\": null,\n        \"key\": null,\n        \"msgId\": \"search with from and to values\",\n        \"authToken\": \"{{authToken}}\",\n        \"correlationId\": null,\n        \"userInfo\": {{userReqInfo}}\n    },\n    \"MdmsCriteria\": {\n        \"tenantId\": \"{{stateTenant}}\",\n        \"moduleDetails\": [\n            {\n                \"moduleName\": \"RAINMAKER-PGR\",\n                \"masterDetails\": [\n                    {\n                        \"name\": \"ServiceDefs\"\n                    }\n                ]\n            }\n        ]\n    }\n}",
-          "options": {
-            "raw": {
-              "language": "json"
-            }
-          }
-        },
-        "url": {
-          "raw": "{{url}}/mdms-v2/v1/_search",
-          "host": [
-            "{{url}}"
-          ],
-          "path": [
-            "mdms-v2",
-            "v1",
-            "_search"
-          ]
-        }
-      },
-      "response": []
-    },
-    {
-      "name": "MDMSv2 Tenant Schema",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "var jsonData = pm.response.json();",
-              "",
-              "// Get the list of ServiceDefs",
-              "var serviceDefs = jsonData.MdmsRes['RAINMAKER-PGR'].ServiceDefs;",
-              "",
-              "console.log(\"Total ServiceDefs:\", serviceDefs.length);",
-              "",
-              "// If serviceCode env var is set, use that; otherwise pick random",
-              "var selected = null;",
-              "var envCode = pm.variables.get('serviceCode');",
-              "if (envCode && serviceDefs.length > 0) {",
-              "    selected = serviceDefs.find(function(s) { return s.serviceCode === envCode; });",
-              "}",
-              "if (!selected && serviceDefs.length > 0) {",
-              "    selected = serviceDefs[Math.floor(Math.random() * serviceDefs.length)];",
-              "}",
-              "if (selected) {",
-              "    pm.collectionVariables.set('ServiceDef', JSON.stringify(selected));",
-              "}",
-              "console.log('ServiceDef:', selected ? selected.serviceCode : 'none');",
               "",
               "pm.execution.setNextRequest(\"PGR Create\");"
             ],
@@ -298,9 +255,25 @@
           "listen": "test",
           "script": {
             "exec": [
+              "pm.test(\"PGR Create returns 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
               "var response = pm.response.json()",
               "",
+              "pm.test(\"ServiceWrappers present\", function () {",
+              "    pm.expect(response.ServiceWrappers).to.be.an(\"array\").with.length.greaterThan(0);",
+              "});",
+              "",
               "var serviceRequest = response.ServiceWrappers[0].service",
+              "",
+              "pm.test(\"Service request ID generated\", function () {",
+              "    pm.expect(serviceRequest.serviceRequestId).to.be.a(\"string\").and.not.empty;",
+              "});",
+              "",
+              "pm.test(\"Status is PENDINGFORASSIGNMENT\", function () {",
+              "    pm.expect(serviceRequest.applicationStatus).to.eql(\"PENDINGFORASSIGNMENT\");",
+              "});",
               "",
               "pm.collectionVariables.set(\"Service\", JSON.stringify(serviceRequest))",
               "",
@@ -425,9 +398,21 @@
           "listen": "test",
           "script": {
             "exec": [
+              "pm.test(\"Assign returns 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
               "var response = pm.response.json()",
               "",
+              "pm.test(\"ServiceWrappers present\", function () {",
+              "    pm.expect(response.ServiceWrappers).to.be.an(\"array\").with.length.greaterThan(0);",
+              "});",
+              "",
               "var serviceRequest = response.ServiceWrappers[0].service",
+              "",
+              "pm.test(\"Status is PENDINGATLME\", function () {",
+              "    pm.expect(serviceRequest.applicationStatus).to.eql(\"PENDINGATLME\");",
+              "});",
               "",
               "pm.collectionVariables.set(\"Service\", JSON.stringify(serviceRequest))",
               "",
@@ -499,7 +484,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"workflow\": {\n        \n        \"action\": \"ASSIGN\",\n        \"assignes\": [\"{{empUUID_data}}\"],\n        \"comments\": \"Test Comment\",\n        \"verificationDocuments\": [\n            {\n                \"documentType\": \"PHOTO\",\n                \n                \"fileStoreId\": \"\",\n                \"documentUid\": \"\",\n                \"additionalDetails\": {}\n            }\n        ]\n    },\n    \"service\": {{Service}},\n    \"audit\": {\n        \"citizen\": {{citizen_data}},\n        \"details\": {{audit_data}},\n        \"source\": \"web\",\n        \"rating\": null,\n        \"serviceCode\": \"{{serviceCode_data}}\"\n    },\n    \"RequestInfo\": {\n        \"apiId\": \"Rainmaker\",\n        \"authToken\": \"{{authToken}}\",\n        \"userInfo\": {{userReqInfo}},\n        \"msgId\": \"1751903352532|en_IN\",\n        \"plainAccessRequest\": {}\n    }\n}",
+          "raw": "{\n    \"workflow\": {\n        \"action\": \"ASSIGN\",\n        \"assignes\": [\"{{empUUID_data}}\"],\n        \"comments\": \"Test Comment\",\n        \"verificationDocuments\": [\n            {\n                \"documentType\": \"PHOTO\",\n                \"fileStoreId\": \"\",\n                \"documentUid\": \"\",\n                \"additionalDetails\": {}\n            }\n        ]\n    },\n    \"service\": {{Service}},\n    \"RequestInfo\": {\n        \"apiId\": \"Rainmaker\",\n        \"authToken\": \"{{authToken}}\",\n        \"userInfo\": {{userReqInfo}},\n        \"msgId\": \"1751903352532|en_IN\",\n        \"plainAccessRequest\": {}\n    }\n}",
           "options": {
             "raw": {
               "language": "json"
@@ -622,7 +607,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"workflow\": {\n        \n        \"action\": \"REASSIGN\",\n        \"assignes\": [\"{{empUUID_data}}\"],\n        \"comments\": \"Test Comment\",\n        \"verificationDocuments\": [\n            {\n                \"documentType\": \"PHOTO\",\n                \n                \"fileStoreId\": \"\",\n                \"documentUid\": \"\",\n                \"additionalDetails\": {}\n            }\n        ]\n    },\n    \"service\": {{Service}},\n    \"audit\": {\n        \"citizen\": {{citizen_data}},\n        \"details\": {{audit_data}},\n        \"source\": \"web\",\n        \"rating\": null,\n        \"serviceCode\": \"{{serviceCode_data}}\"\n    },\n    \"RequestInfo\": {\n        \"apiId\": \"Rainmaker\",\n        \"authToken\": \"{{authToken}}\",\n        \"userInfo\": {{userReqInfo}},\n        \"msgId\": \"1751903352532|en_IN\",\n        \"plainAccessRequest\": {}\n    }\n}",
+          "raw": "{\n    \"workflow\": {\n        \"action\": \"REASSIGN\",\n        \"assignes\": [\"{{empUUID_data}}\"],\n        \"comments\": \"Test Comment\",\n        \"verificationDocuments\": [\n            {\n                \"documentType\": \"PHOTO\",\n                \"fileStoreId\": \"\",\n                \"documentUid\": \"\",\n                \"additionalDetails\": {}\n            }\n        ]\n    },\n    \"service\": {{Service}},\n    \"RequestInfo\": {\n        \"apiId\": \"Rainmaker\",\n        \"authToken\": \"{{authToken}}\",\n        \"userInfo\": {{userReqInfo}},\n        \"msgId\": \"1751903352532|en_IN\",\n        \"plainAccessRequest\": {}\n    }\n}",
           "options": {
             "raw": {
               "language": "json"
@@ -671,9 +656,21 @@
           "listen": "test",
           "script": {
             "exec": [
+              "pm.test(\"Resolve returns 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
               "var response = pm.response.json()",
               "",
+              "pm.test(\"ServiceWrappers present\", function () {",
+              "    pm.expect(response.ServiceWrappers).to.be.an(\"array\").with.length.greaterThan(0);",
+              "});",
+              "",
               "var serviceRequest = response.ServiceWrappers[0].service",
+              "",
+              "pm.test(\"Status is RESOLVED\", function () {",
+              "    pm.expect(serviceRequest.applicationStatus).to.eql(\"RESOLVED\");",
+              "});",
               "",
               "pm.collectionVariables.set(\"Service\", JSON.stringify(serviceRequest))",
               "",
@@ -745,7 +742,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"workflow\": {\n        \n        \"action\": \"RESOLVE\",\n        \"assignes\": [\"{{empUUID_data}}\"],\n        \"comments\": \"Test Comment\",\n        \"verificationDocuments\": [\n            {\n                \"documentType\": \"PHOTO\",\n                \n                \"fileStoreId\": \"\",\n                \"documentUid\": \"\",\n                \"additionalDetails\": {}\n            }\n        ]\n    },\n    \"service\": {{Service}},\n    \"audit\": {\n        \"citizen\": {{citizen_data}},\n        \"details\": {{audit_data}},\n        \"source\": \"web\",\n        \"rating\": null,\n        \"serviceCode\": \"{{serviceCode_data}}\"\n    },\n    \"RequestInfo\": {\n        \"apiId\": \"Rainmaker\",\n        \"authToken\": \"{{authToken}}\",\n        \"userInfo\": {{userReqInfo}},\n        \"msgId\": \"1751903352532|en_IN\",\n        \"plainAccessRequest\": {}\n    }\n}",
+          "raw": "{\n    \"workflow\": {\n        \"action\": \"RESOLVE\",\n        \"assignes\": [\"{{empUUID_data}}\"],\n        \"comments\": \"Test Comment\",\n        \"verificationDocuments\": [\n            {\n                \"documentType\": \"PHOTO\",\n                \"fileStoreId\": \"\",\n                \"documentUid\": \"\",\n                \"additionalDetails\": {}\n            }\n        ]\n    },\n    \"service\": {{Service}},\n    \"RequestInfo\": {\n        \"apiId\": \"Rainmaker\",\n        \"authToken\": \"{{authToken}}\",\n        \"userInfo\": {{userReqInfo}},\n        \"msgId\": \"1751903352532|en_IN\",\n        \"plainAccessRequest\": {}\n    }\n}",
           "options": {
             "raw": {
               "language": "json"
@@ -868,7 +865,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"workflow\": {\n        \n        \"action\": \"REJECT\",\n        \"assignes\": [\"{{empUUID_data}}\"],\n        \"comments\": \"Test Comment\",\n        \"verificationDocuments\": [\n            {\n                \"documentType\": \"PHOTO\",\n                \n                \"fileStoreId\": \"\",\n                \"documentUid\": \"\",\n                \"additionalDetails\": {}\n            }\n        ]\n    },\n    \"service\": {{Service}},\n    \"audit\": {\n        \"citizen\": {{citizen_data}},\n        \"details\": {{audit_data}},\n        \"source\": \"web\",\n        \"rating\": null,\n        \"serviceCode\": \"{{serviceCode_data}}\"\n    },\n    \"RequestInfo\": {\n        \"apiId\": \"Rainmaker\",\n        \"authToken\": \"{{authToken}}\",\n        \"userInfo\": {{userReqInfo}},\n        \"msgId\": \"1751903352532|en_IN\",\n        \"plainAccessRequest\": {}\n    }\n}",
+          "raw": "{\n    \"workflow\": {\n        \"action\": \"REJECT\",\n        \"assignes\": [\"{{empUUID_data}}\"],\n        \"comments\": \"Test Comment\",\n        \"verificationDocuments\": [\n            {\n                \"documentType\": \"PHOTO\",\n                \"fileStoreId\": \"\",\n                \"documentUid\": \"\",\n                \"additionalDetails\": {}\n            }\n        ]\n    },\n    \"service\": {{Service}},\n    \"RequestInfo\": {\n        \"apiId\": \"Rainmaker\",\n        \"authToken\": \"{{authToken}}\",\n        \"userInfo\": {{userReqInfo}},\n        \"msgId\": \"1751903352532|en_IN\",\n        \"plainAccessRequest\": {}\n    }\n}",
           "options": {
             "raw": {
               "language": "json"
@@ -991,7 +988,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"workflow\": {\n        \n        \"action\": \"REOPEN\",\n        \"assignes\": [\"{{empUUID_data}}\"],\n        \"comments\": \"Test reopen comments\",\n        \"verificationDocuments\": [\n            {\n                \"documentType\": \"PHOTO\",\n                \n                \"fileStoreId\": \"\",\n                \"documentUid\": \"\",\n                \"additionalDetails\": {}\n            }\n        ]\n    },\n    \"service\": {{Service}},\n    \"audit\": {\n        \"citizen\": {{citizen_data}},\n        \"details\": {{audit_data}},\n        \"source\": \"web\",\n        \"rating\": null,\n        \"serviceCode\": \"{{serviceCode_data}}\"\n    },\n    \"RequestInfo\": {\n        \"apiId\": \"Rainmaker\",\n        \"authToken\": \"{{authToken}}\",\n        \"userInfo\": {{userReqInfo}},\n        \"msgId\": \"1751903352532|en_IN\",\n        \"plainAccessRequest\": {}\n    }\n}",
+          "raw": "{\n    \"workflow\": {\n        \"action\": \"REOPEN\",\n        \"assignes\": [\"{{empUUID_data}}\"],\n        \"comments\": \"Test reopen comments\",\n        \"verificationDocuments\": [\n            {\n                \"documentType\": \"PHOTO\",\n                \"fileStoreId\": \"\",\n                \"documentUid\": \"\",\n                \"additionalDetails\": {}\n            }\n        ]\n    },\n    \"service\": {{Service}},\n    \"RequestInfo\": {\n        \"apiId\": \"Rainmaker\",\n        \"authToken\": \"{{authToken}}\",\n        \"userInfo\": {{userReqInfo}},\n        \"msgId\": \"1751903352532|en_IN\",\n        \"plainAccessRequest\": {}\n    }\n}",
           "options": {
             "raw": {
               "language": "json"
@@ -1040,9 +1037,21 @@
           "listen": "test",
           "script": {
             "exec": [
+              "pm.test(\"Rate&Close returns 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
               "var response = pm.response.json()",
               "",
+              "pm.test(\"ServiceWrappers present\", function () {",
+              "    pm.expect(response.ServiceWrappers).to.be.an(\"array\").with.length.greaterThan(0);",
+              "});",
+              "",
               "var serviceRequest = response.ServiceWrappers[0].service",
+              "",
+              "pm.test(\"Status is CLOSEDAFTERRESOLUTION\", function () {",
+              "    pm.expect(serviceRequest.applicationStatus).to.eql(\"CLOSEDAFTERRESOLUTION\");",
+              "});",
               "",
               "pm.collectionVariables.set(\"Service\", JSON.stringify(serviceRequest))",
               "",
@@ -1114,7 +1123,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"workflow\": {\n        \n        \"action\": \"RATE\",\n        \"assignes\": [],\n        \"comments\": \"Test citizen comment for closure\",\n        \"verificationDocuments\": [\n            {\n                \"documentType\": \"PHOTO\",\n                \n                \"fileStoreId\": \"\",\n                \"documentUid\": \"\",\n                \"additionalDetails\": {}\n            }\n        ]\n    },\n    \"service\": {{Service}},\n    \"audit\": {\n        \"citizen\": {{citizen_data}},\n        \"details\": {{audit_data}},\n        \"source\": \"web\",\n        \"rating\": null,\n        \"serviceCode\": \"{{serviceCode_data}}\"\n    },\n    \"RequestInfo\": {\n        \"apiId\": \"Rainmaker\",\n        \"authToken\": \"{{authToken}}\",\n        \"userInfo\": {{userReqInfo}},\n        \"msgId\": \"1751903352532|en_IN\",\n        \"plainAccessRequest\": {}\n    }\n}",
+          "raw": "{\n    \"workflow\": {\n        \"action\": \"RATE\",\n        \"assignes\": [],\n        \"comments\": \"Test citizen comment for closure\",\n        \"verificationDocuments\": [\n            {\n                \"documentType\": \"PHOTO\",\n                \"fileStoreId\": \"\",\n                \"documentUid\": \"\",\n                \"additionalDetails\": {}\n            }\n        ]\n    },\n    \"service\": {{Service}},\n    \"RequestInfo\": {\n        \"apiId\": \"Rainmaker\",\n        \"authToken\": \"{{authToken}}\",\n        \"userInfo\": {{userReqInfo}},\n        \"msgId\": \"1751903352532|en_IN\",\n        \"plainAccessRequest\": {}\n    }\n}",
           "options": {
             "raw": {
               "language": "json"
@@ -1150,8 +1159,7 @@
               "console.log(pm.variables.get(\"serviceRequestId\"));"
             ],
             "type": "text/javascript",
-            "packages": {},
-            "requests": {}
+            "packages": {}
           }
         },
         {
@@ -1171,8 +1179,7 @@
               "pm.execution.setNextRequest(null); // Stop the execution after the test"
             ],
             "type": "text/javascript",
-            "packages": {},
-            "requests": {}
+            "packages": {}
           }
         }
       ],
@@ -1242,7 +1249,7 @@
           }
         },
         "url": {
-          "raw": "{{url}}/pgr-services/v2/request/_search?tenantId={{cityTenant}}&serviceRequestId={{serviceRequestId}}&_=1751901786702",
+          "raw": "{{url}}/pgr-services/v2/request/_search?tenantId={{cityTenant}}&serviceRequestId={{serviceRequestId}}",
           "host": [
             "{{url}}"
           ],
@@ -1302,7 +1309,7 @@
           },
           {
             "key": "auth-token",
-            "value": "93c17074-12f1-4022-b7ae-2e7ba10eaaff"
+            "value": "{{authToken}}"
           },
           {
             "key": "origin",
@@ -1351,7 +1358,8 @@
             {
               "key": "file",
               "type": "file",
-              "src": "/home/moolya/Downloads/Apps/IMG.jpg"
+              "src": "",
+              "description": "Select a local file to upload"
             },
             {
               "key": "tenantId",
@@ -1360,7 +1368,7 @@
             },
             {
               "key": "module",
-              "value": "property-upload",
+              "value": "pgr-upload",
               "type": "text"
             }
           ]
@@ -1388,7 +1396,7 @@
             "exec": [
               "var jsonData = pm.response.json();",
               "",
-              "pm.environment.set(\"authToken\", jsonData.access_token);",
+              "pm.collectionVariables.set(\"authToken\", jsonData.access_token);",
               "",
               "var userInfo, userReqInfo;",
               "for(let key in jsonData)",
@@ -1398,7 +1406,7 @@
               "   userInfo = JSON.stringify(jsonData[key])",
               "}",
               "}",
-              "pm.environment.set(\"userReqInfo\", userInfo);",
+              "pm.collectionVariables.set(\"userReqInfo\", userInfo);",
               "",
               ""
             ],
@@ -1472,12 +1480,12 @@
           "urlencoded": [
             {
               "key": "username",
-              "value": "{{phone}}",
+              "value": "9999009999",
               "type": "text"
             },
             {
               "key": "password",
-              "value": "{{cpassword}}",
+              "value": "123456",
               "type": "text"
             },
             {
@@ -1492,7 +1500,7 @@
             },
             {
               "key": "tenantId",
-              "value": "{{ctenantid}}",
+              "value": "{{cityTenant}}",
               "type": "text"
             },
             {
@@ -1551,11 +1559,11 @@
   "variable": [
     {
       "key": "url",
-      "value": "https://pgr-demo.digit.org"
+      "value": "http://localhost:18000"
     },
     {
       "key": "username",
-      "value": "GRO"
+      "value": "ADMIN"
     },
     {
       "key": "password",
@@ -1563,7 +1571,7 @@
     },
     {
       "key": "cityTenant",
-      "value": "statea.citya"
+      "value": "pg.citya"
     },
     {
       "key": "userType",
@@ -1571,7 +1579,7 @@
     },
     {
       "key": "stateTenant",
-      "value": "statea"
+      "value": "pg"
     },
     {
       "key": "authToken",
@@ -1592,6 +1600,15 @@
     {
       "key": "authorization",
       "value": "Basic ZWdvdi11c2VyLWNsaWVudDo="
+    },
+    {
+      "key": "fileStoreId",
+      "value": ""
+    },
+    {
+      "key": "serviceCode",
+      "value": "",
+      "description": "Optional: override ServiceDef code for CI"
     }
   ]
 }
