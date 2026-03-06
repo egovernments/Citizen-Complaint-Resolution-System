@@ -3,6 +3,7 @@ package org.egov.novubridge.service;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.web.models.DerivedContext;
+import org.egov.novubridge.web.models.ResolvedProvider;
 import org.egov.novubridge.web.models.ResolvedTemplate;
 import org.egov.tracer.model.CustomException;
 import org.springframework.http.HttpEntity;
@@ -31,7 +32,10 @@ public class ConfigServiceClient {
         Map<String, Object> resolveRequest = new HashMap<>();
         resolveRequest.put("schemaCode", "TemplateBinding");
         resolveRequest.put("tenantId", tenantId);
-        resolveRequest.put("filters", Map.of("eventName", eventName));
+        resolveRequest.put("filters", Map.of(
+            "eventName", eventName,
+            "channel", context.getChannel()  // Include channel in template resolution
+        ));
 
         Map<String, Object> payload = new HashMap<>();
         payload.put("RequestInfo", new HashMap<>());
@@ -39,8 +43,8 @@ public class ConfigServiceClient {
 
         try {
             String url = config.getConfigHost() + config.getConfigResolvePath();
-            log.info("Config resolve request: url={}, schemaCode=TemplateBinding, eventName={}, tenantId={}",
-                    url, eventName, tenantId);
+            log.info("Config resolve request: url={}, schemaCode=TemplateBinding, eventName={}, channel={}, tenantId={}",
+                    url, eventName, context.getChannel(), tenantId);
 
             ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(payload), Map.class);
             if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
@@ -78,6 +82,67 @@ public class ConfigServiceClient {
         } catch (Exception e) {
             log.error("Config resolve failed for eventName={} module={} tenantId={}", eventName, module, tenantId, e);
             throw new CustomException("NB_CONFIG_RESOLVE_FAILED", "Failed resolving template config");
+        }
+    }
+
+    public ResolvedProvider resolveProvider(String tenantId, String providerName, String channel) {
+        Map<String, Object> resolveRequest = new HashMap<>();
+        resolveRequest.put("schemaCode", "ProviderDetail");
+        resolveRequest.put("tenantId", tenantId);
+        resolveRequest.put("filters", Map.of(
+            "providerName", providerName,
+            "channel", channel
+        ));
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("RequestInfo", new HashMap<>());
+        payload.put("resolveRequest", resolveRequest);
+
+        try {
+            String url = config.getConfigHost() + config.getConfigResolvePath();
+            log.info("Provider resolve request: url={}, schemaCode=ProviderDetail, providerName={}, channel={}, tenantId={}",
+                    url, providerName, channel, tenantId);
+
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(payload), Map.class);
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                throw new CustomException("NB_PROVIDER_RESOLVE_FAILED", "Provider resolve returned non-success response");
+            }
+
+            Map<String, Object> configData = (Map<String, Object>) response.getBody().get("configData");
+            if (configData == null) {
+                throw new CustomException("NB_PROVIDER_NOT_FOUND", "No provider config found");
+            }
+
+            Map<String, Object> data = (Map<String, Object>) configData.get("data");
+            if (data == null) {
+                throw new CustomException("NB_PROVIDER_NOT_FOUND", "Provider config data payload is empty");
+            }
+
+            String resolvedProvider = (String) data.get("providerName");
+            String resolvedChannel = (String) data.get("channel");
+            Map<String, Object> credentials = (Map<String, Object>) data.get("credentials");
+            String novuApiKey = (String) data.get("novuApiKey");
+            Boolean isActive = (Boolean) data.get("isActive");
+            Integer priority = (Integer) data.get("priority");
+
+            log.info("Provider resolve result: provider={}, channel={}, credentialKeys={}, priority={}, isActive={}",
+                    resolvedProvider, resolvedChannel, 
+                    credentials != null ? credentials.keySet() : "null",
+                    priority, isActive);
+
+            return ResolvedProvider.builder()
+                    .providerName(resolvedProvider)
+                    .channel(resolvedChannel)
+                    .credentials(credentials)
+                    .novuApiKey(novuApiKey)
+                    .isActive(isActive != null ? isActive : true)
+                    .priority(priority != null ? priority : 0)
+                    .build();
+        } catch (CustomException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Provider resolve failed for providerName={} channel={} tenantId={}", providerName, channel, tenantId, e);
+            throw new CustomException("NB_PROVIDER_RESOLVE_FAILED", "Failed resolving provider config");
         }
     }
 }
