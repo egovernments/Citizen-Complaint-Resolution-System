@@ -76,6 +76,27 @@ public class DispatchPipelineService {
                 event.getEventId(), resolvedTemplate.getTemplateKey(), resolvedTemplate.getTwilioContentSid(),
                 resolvedTemplate.getRequiredVars(), resolvedTemplate.getParamOrder());
         validateTemplateConfig(resolvedTemplate);
+        
+        // Resolve provider configuration dynamically - use generic provider name, not hardcoded "twilio"
+        ResolvedProvider resolvedProvider = configServiceClient.resolveProvider(event.getTenantId(), "whatsapp-provider", context.getChannel());
+        log.info("Resolved provider: eventId={}, provider={}, channel={}, isActive={}, priority={}, credentialKeys={}",
+                event.getEventId(), resolvedProvider.getProviderName(), resolvedProvider.getChannel(),
+                resolvedProvider.getIsActive(), resolvedProvider.getPriority(), 
+                resolvedProvider.getCredentials() != null ? resolvedProvider.getCredentials().keySet() : "null");
+        
+        if (!resolvedProvider.getIsActive()) {
+            persist(event, context, resolvedTemplate, "FAILED", "NB_PROVIDER_INACTIVE", "Provider is inactive", null, 1);
+            return DispatchResult.builder()
+                    .valid(false)
+                    .preferenceAllowed(true)
+                    .derivedContext(context)
+                    .resolvedTemplate(resolvedTemplate)
+                    .resolvedProvider(resolvedProvider)
+                    .novuTriggered(false)
+                    .diagnostics(Collections.singletonList("Provider inactive"))
+                    .build();
+        }
+        
         List<String> missingVars = findMissingRequiredVars(resolvedTemplate, event.getData());
         if (!missingVars.isEmpty()) {
             persist(event, context, resolvedTemplate, "FAILED", "NB_REQUIRED_VARS_MISSING", "Missing required vars", null, 1);
@@ -84,6 +105,7 @@ public class DispatchPipelineService {
                     .preferenceAllowed(true)
                     .derivedContext(context)
                     .resolvedTemplate(resolvedTemplate)
+                    .resolvedProvider(resolvedProvider)
                     .missingRequiredVars(missingVars)
                     .novuTriggered(false)
                     .diagnostics(Collections.singletonList("Missing required vars"))
@@ -97,6 +119,7 @@ public class DispatchPipelineService {
                     .preferenceAllowed(true)
                     .derivedContext(context)
                     .resolvedTemplate(resolvedTemplate)
+                    .resolvedProvider(resolvedProvider)
                     .missingRequiredVars(Collections.emptyList())
                     .novuTriggered(false)
                     .diagnostics(Collections.singletonList("Validation only mode"))
@@ -104,25 +127,31 @@ public class DispatchPipelineService {
         }
 
         String whatsappPhone = formatWhatsappPhone(context.getRecipientMobile());
-        Map<String, Object> twilioOverrides = buildTwilioTemplateOverrides(resolvedTemplate, event.getData());
 
-        log.info("Dispatching WhatsApp notification: eventId={}, eventName={}, tenant={}, complaintNo={}, " +
-                 "templateKey={}, subscriberId={}, phone={}, recipientMobile={}, contentSid={}",
+        log.info("Dispatching notification: eventId={}, eventName={}, tenant={}, complaintNo={}, " +
+                 "templateKey={}, subscriberId={}, phone={}, recipientMobile={}, provider={}, channel={}",
                 event.getEventId(), event.getEventName(), event.getTenantId(),
                 event.getData() != null ? event.getData().get("complaintNo") : "N/A",
                 resolvedTemplate.getTemplateKey(), subscriberId, whatsappPhone,
-                context.getRecipientMobile(), resolvedTemplate.getTwilioContentSid());
-        log.info("Novu trigger payload: data={}, paramOrder={}, novuBaseUrl={}, twilioOverrides={}",
-                event.getData(), resolvedTemplate.getParamOrder(), config.getNovuBaseUrl(), twilioOverrides);
+                context.getRecipientMobile(), resolvedProvider.getProviderName(), resolvedProvider.getChannel());
+        log.info("Novu trigger payload: data={}, paramOrder={}, novuBaseUrl={}, providerCredentials={}",
+                event.getData(), resolvedTemplate.getParamOrder(), config.getNovuBaseUrl(), 
+                resolvedProvider.getCredentials() != null ? "[REDACTED]" : "null");
 
-        NovuClient.NovuResponse novuResponse = novuClient.trigger(
+        // Use provider-specific Novu API key if available, otherwise use template-specific key
+        String novuApiKey = resolvedProvider.getNovuApiKey() != null ? 
+                resolvedProvider.getNovuApiKey() : resolvedTemplate.getNovuApiKey();
+
+        // Use direct provider credential pass-through instead of hardcoded Twilio overrides
+        NovuClient.NovuResponse novuResponse = novuClient.triggerWithProviderCredentials(
                 resolvedTemplate.getTemplateKey(),
                 subscriberId,
                 whatsappPhone,
                 event.getData(),
                 event.getEventId(),
-                twilioOverrides,
-                resolvedTemplate.getNovuApiKey());
+                resolvedProvider.getProviderName(),
+                resolvedProvider.getCredentials(),
+                novuApiKey);
 
         log.info("Novu trigger response: eventId={}, statusCode={}, response={}",
                 event.getEventId(), novuResponse.getStatusCode(), novuResponse.getResponse());
@@ -133,6 +162,7 @@ public class DispatchPipelineService {
                 .preferenceAllowed(true)
                 .derivedContext(context)
                 .resolvedTemplate(resolvedTemplate)
+                .resolvedProvider(resolvedProvider)
                 .missingRequiredVars(Collections.emptyList())
                 .novuTriggered(true)
                 .novuStatusCode(novuResponse.getStatusCode())
@@ -144,6 +174,7 @@ public class DispatchPipelineService {
     public NovuClient.NovuResponse testTrigger(String templateKey, String subscriberId, String phone,
                                                Map<String, Object> payload, String transactionId,
                                                String contentSid, Map<String, String> contentVariables) {
+        // Backward compatibility method for testing with Twilio-specific overrides
         return novuClient.trigger(
                 templateKey,
                 subscriberId,

@@ -31,6 +31,7 @@ public class NovuClient {
         try {
             Map<String, Object> request = new HashMap<>();
             request.put("name", templateKey);
+            
             Map<String, Object> to = new HashMap<>();
             to.put("subscriberId", subscriberId);
             if (phone != null && !phone.isBlank()) {
@@ -39,16 +40,21 @@ public class NovuClient {
             request.put("to", to);
             request.put("payload", payload);
             request.put("transactionId", transactionId);
+            
             if (overrides != null && !overrides.isEmpty()) {
                 request.put("overrides", overrides);
             }
 
             String apiKey = (novuApiKey != null && !novuApiKey.isBlank()) ? novuApiKey : config.getNovuApiKey();
             HttpHeaders headers = new HttpHeaders();
-            headers.set("Authorization", "ApiKey " + apiKey);
+            headers.set("Authorization", apiKey);
             headers.setContentType(MediaType.APPLICATION_JSON);
 
             String url = config.getNovuBaseUrl() + "/v1/events/trigger";
+            
+            log.debug("Novu trigger request: templateKey={}, subscriberId={}, overrides={}", 
+                    templateKey, subscriberId, overrides);
+            
             ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(request, headers), Map.class);
             return NovuResponse.builder()
                     .statusCode(response.getStatusCodeValue())
@@ -56,8 +62,32 @@ public class NovuClient {
                     .build();
         } catch (Exception e) {
             log.error("Novu trigger failed for templateKey={} subscriberId={}", templateKey, subscriberId, e);
-            throw new CustomException("NB_NOVU_TRIGGER_FAILED", "Failed triggering Novu event");
+            log.error("Request was: templateKey={}, subscriberId={}, phone={}, payload={}, transactionId={}, overrides={}", 
+                    templateKey, subscriberId, phone, payload, transactionId, overrides);
+            throw new CustomException("NB_NOVU_TRIGGER_FAILED", "Failed triggering Novu event: " + e.getMessage());
         }
+    }
+
+    /**
+     * Trigger with provider credentials passed directly in overrides
+     */
+    public NovuResponse triggerWithProviderCredentials(String templateKey, String subscriberId, String phone, 
+                                                       Map<String, Object> payload, String transactionId,
+                                                       String providerName, Map<String, Object> providerCredentials,
+                                                       String novuApiKey) {
+        
+        // Build provider overrides - pass credentials directly to Novu
+        Map<String, Object> providerOverrides = new HashMap<>();
+        if (providerCredentials != null && !providerCredentials.isEmpty()) {
+            providerOverrides.put(providerName, Map.of("credentials", providerCredentials));
+        }
+        
+        Map<String, Object> overrides = Map.of("providers", providerOverrides);
+        
+        log.info("Triggering Novu with provider credentials: templateKey={}, provider={}, credentialKeys={}", 
+                templateKey, providerName, providerCredentials != null ? providerCredentials.keySet() : "none");
+        
+        return trigger(templateKey, subscriberId, phone, payload, transactionId, overrides, novuApiKey);
     }
 
     public NovuResponse trigger(String templateKey, String subscriberId, String phone, Map<String, Object> payload,

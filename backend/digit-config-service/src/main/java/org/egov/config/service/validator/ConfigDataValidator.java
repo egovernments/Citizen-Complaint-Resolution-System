@@ -50,7 +50,7 @@ public class ConfigDataValidator {
         return schema;
     }
 
-    public void validateUpdate(ConfigDataRequest request) {
+    public JSONObject validateUpdate(ConfigDataRequest request) {
         ConfigData entry = request.getConfigData();
 
         if (entry.getId() == null || entry.getId().isBlank()) {
@@ -78,12 +78,15 @@ public class ConfigDataValidator {
             entry.setAuditDetails(current.getAuditDetails());
         }
 
+        JSONObject schema = null;
         if (schemaValidationEnabled && entry.getData() != null) {
-            JSONObject schema = mdmsV2Client.fetchSchemaDefinition(entry.getTenantId(), entry.getSchemaCode());
+            schema = mdmsV2Client.fetchSchemaDefinition(entry.getTenantId(), entry.getSchemaCode());
             if (schema != null) {
                 validateDataAgainstSchema(entry.getData(), schema);
             }
         }
+        
+        return schema;
     }
 
     public void checkDuplicate(ConfigData entry) {
