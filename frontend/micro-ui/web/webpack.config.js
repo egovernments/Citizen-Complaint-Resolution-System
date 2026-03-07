@@ -34,6 +34,27 @@ module.exports = {
       },
     ],
   },
+  resolve: {
+    modules: [
+      "node_modules",
+      path.resolve(__dirname, "micro-ui-internals/node_modules"),
+    ],
+    alias: {
+      // Use local source instead of npm-published package so our
+      // Module.js / App.js changes are included in the build
+      "@egovernments/digit-ui-module-core": path.resolve(
+        __dirname,
+        "micro-ui-internals/packages/modules/core"
+      ),
+      // Force single React instance to prevent "Invalid hook call" errors
+      // when the core module alias resolves from a different path
+      "react": path.resolve(__dirname, "node_modules/react"),
+      "react-dom": path.resolve(__dirname, "node_modules/react-dom"),
+      "react-router-dom": path.resolve(__dirname, "node_modules/react-router-dom"),
+      "react-redux": path.resolve(__dirname, "node_modules/react-redux"),
+      "react-query": path.resolve(__dirname, "node_modules/react-query"),
+    },
+  },
   output: {
     filename: "[name].bundle.js",
     path: path.resolve(__dirname, "build"),
