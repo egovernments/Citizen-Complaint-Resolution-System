@@ -1,15 +1,21 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useMemo } from "react";
 import { useHistory, useLocation } from "react-router-dom";
-import { Toast } from "@egovernments/digit-ui-components";
+import {
+  AppContainer,
+  Button,
+  CardText,
+  FieldV1,
+  InputCard,
+  LinkLabel,
+  Toast,
+} from "@egovernments/digit-ui-components";
 import { getAuthAdapter } from "@egovernments/digit-ui-libraries";
 
 const DEFAULT_REDIRECT = (contextPath) => `/${contextPath}/citizen`;
 
-const UnifiedLogin = ({ stateCode }) => {
-  const history = useHistory();
-  const location = useLocation();
-  // Hardcode labels — this page renders before DIGIT's i18n loads
-  const t = (key) => ({
+// Hardcode labels — this page renders before DIGIT's i18n loads
+const t = (key) =>
+  ({
     CORE_COMMON_LOGIN: "Login",
     CORE_COMMON_SIGNUP: "Sign Up",
     CORE_COMMON_EMAIL: "Email",
@@ -18,7 +24,15 @@ const UnifiedLogin = ({ stateCode }) => {
     CORE_COMMON_FORGOT_PASSWORD: "Forgot password?",
     CORE_COMMON_SSO_GOOGLE: "Sign in with Google",
     CORE_COMMON_SSO_GITHUB: "Sign in with GitHub",
+    CORE_SSO_DIVIDER: "or",
+    CORE_CHECKING_EMAIL: "Checking...",
+    CORE_AUTH_FAILED: "Authentication failed",
+    CORE_NAME_REQUIRED: "Please enter your name",
   })[key] || key;
+
+const UnifiedLogin = ({ stateCode }) => {
+  const history = useHistory();
+  const location = useLocation();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -59,15 +73,14 @@ const UnifiedLogin = ({ stateCode }) => {
     checkEmail(email);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
     setError(null);
     setLoading(true);
 
     try {
       if (emailStatus === "new") {
         if (!name.trim()) {
-          setError("Please enter your name");
+          setError(t("CORE_NAME_REQUIRED"));
           setLoading(false);
           return;
         }
@@ -77,7 +90,7 @@ const UnifiedLogin = ({ stateCode }) => {
       }
       history.replace(from);
     } catch (err) {
-      setError(err.message || "Authentication failed");
+      setError(err.message || t("CORE_AUTH_FAILED"));
     } finally {
       setLoading(false);
     }
@@ -87,174 +100,116 @@ const UnifiedLogin = ({ stateCode }) => {
     adapter.loginWithProvider(provider);
   };
 
-  const isSubmitDisabled =
-    !email || !password || emailStatus === "checking" || loading;
+  const isSignup = emailStatus === "new";
+
+  const isSubmitDisabled = useMemo(
+    () => !email || !password || emailStatus === "checking" || loading,
+    [email, password, emailStatus, loading]
+  );
+
+  const inputCardTexts = useMemo(
+    () => ({
+      header: isSignup ? t("CORE_COMMON_SIGNUP") : t("CORE_COMMON_LOGIN"),
+      submitBarLabel: loading
+        ? "..."
+        : isSignup
+        ? t("CORE_COMMON_SIGNUP")
+        : t("CORE_COMMON_LOGIN"),
+    }),
+    [isSignup, loading]
+  );
 
   return (
-    <div
-      className="unified-login-container"
-      style={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        minHeight: "100vh",
-        padding: "1rem",
-      }}
-    >
-      <form
-        onSubmit={handleSubmit}
-        style={{
-          width: "100%",
-          maxWidth: "400px",
-          padding: "2rem",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          backgroundColor: "#fff",
-        }}
-      >
-        <h2 style={{ marginBottom: "1.5rem", textAlign: "center" }}>
-          {emailStatus === "new" ? t("CORE_COMMON_SIGNUP") || "Sign Up" : t("CORE_COMMON_LOGIN") || "Log In"}
-        </h2>
-
-        <div style={{ marginBottom: "1rem" }}>
-          <label style={{ display: "block", marginBottom: "0.25rem", fontWeight: 600 }}>
-            {t("CORE_COMMON_EMAIL") || "Email"}
-          </label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            onBlur={handleEmailBlur}
-            placeholder="you@example.com"
-            required
-            style={{
-              width: "100%",
-              padding: "0.75rem",
-              border: "1px solid #ccc",
-              borderRadius: "4px",
-              fontSize: "1rem",
-            }}
-          />
-          {emailStatus === "checking" && (
-            <span style={{ fontSize: "0.8rem", color: "#666" }}>Checking...</span>
-          )}
-        </div>
-
-        {providers.length > 0 && (
-          <div style={{ marginBottom: "1rem" }}>
-            {providers.map((provider) => (
-              <button
-                key={provider}
-                type="button"
-                onClick={() => handleSSO(provider)}
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #ddd",
-                  borderRadius: "4px",
-                  backgroundColor: "#fff",
-                  cursor: "pointer",
-                  fontSize: "1rem",
-                  marginBottom: "0.5rem",
-                }}
-              >
-                {t(`CORE_COMMON_SSO_${provider.toUpperCase()}`) || `Sign in with ${provider}`}
-              </button>
-            ))}
-            <div
-              style={{
-                textAlign: "center",
-                margin: "1rem 0",
-                color: "#999",
-                fontSize: "0.85rem",
-              }}
-            >
-              &mdash; or &mdash;
+    <div className="citizen-form-wrapper">
+      <AppContainer>
+        <InputCard
+          t={t}
+          texts={inputCardTexts}
+          submit
+          onNext={handleSubmit}
+          isDisable={isSubmitDisabled}
+        >
+          {/* SSO providers */}
+          {providers.length > 0 && (
+            <div style={{ marginBottom: "16px" }}>
+              {providers.map((provider) => (
+                <Button
+                  key={provider}
+                  label={t(`CORE_COMMON_SSO_${provider.toUpperCase()}`) || `Sign in with ${provider}`}
+                  onButtonClick={() => handleSSO(provider)}
+                  variation="secondary"
+                  style={{ width: "100%", marginBottom: "8px" }}
+                />
+              ))}
+              <CardText style={{ textAlign: "center" }}>
+                &mdash; {t("CORE_SSO_DIVIDER")} &mdash;
+              </CardText>
             </div>
-          </div>
-        )}
+          )}
 
-        <div style={{ marginBottom: "1rem" }}>
-          <label style={{ display: "block", marginBottom: "0.25rem", fontWeight: 600 }}>
-            {t("CORE_COMMON_PASSWORD") || "Password"}
-          </label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="********"
-            required
-            minLength={8}
-            style={{
-              width: "100%",
-              padding: "0.75rem",
-              border: "1px solid #ccc",
-              borderRadius: "4px",
-              fontSize: "1rem",
-            }}
-          />
-        </div>
-
-        {emailStatus === "new" && (
-          <div style={{ marginBottom: "1rem" }}>
-            <label style={{ display: "block", marginBottom: "0.25rem", fontWeight: 600 }}>
-              {t("CORE_COMMON_NAME") || "Name"}
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Your name"
-              required
-              style={{
-                width: "100%",
-                padding: "0.75rem",
-                border: "1px solid #ccc",
-                borderRadius: "4px",
-                fontSize: "1rem",
+          {/* Email field */}
+          <div>
+            <FieldV1
+              withoutLabel
+              error={emailStatus === "checking" ? t("CORE_CHECKING_EMAIL") : ""}
+              onChange={(e) => setEmail(e.target.value)}
+              onBlur={handleEmailBlur}
+              placeholder="you@example.com"
+              populators={{
+                name: "email",
+                validation: { maxlength: 256 },
               }}
+              props={{ fieldStyle: { width: "100%" } }}
+              type="text"
+              value={email}
             />
           </div>
-        )}
 
-        <button
-          type="submit"
-          disabled={isSubmitDisabled}
-          style={{
-            width: "100%",
-            padding: "0.75rem",
-            backgroundColor: isSubmitDisabled ? "#ccc" : "#F47738",
-            color: "#fff",
-            border: "none",
-            borderRadius: "4px",
-            fontSize: "1rem",
-            cursor: isSubmitDisabled ? "not-allowed" : "pointer",
-            fontWeight: 600,
-          }}
-        >
-          {loading
-            ? "..."
-            : emailStatus === "new"
-            ? t("CORE_COMMON_SIGNUP") || "Sign Up"
-            : t("CORE_COMMON_LOGIN") || "Log In"}
-        </button>
-
-        {emailStatus === "exists" && (
-          <div style={{ textAlign: "center", marginTop: "1rem" }}>
-            <a
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
+          {/* Password field */}
+          <div>
+            <FieldV1
+              withoutLabel
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="********"
+              populators={{
+                name: "password",
+                validation: { minlength: 8 },
               }}
-              style={{ color: "#F47738", fontSize: "0.9rem" }}
-            >
-              {t("CORE_COMMON_FORGOT_PASSWORD") || "Forgot password?"}
-            </a>
+              props={{ fieldStyle: { width: "100%" } }}
+              type="password"
+              value={password}
+            />
           </div>
-        )}
+
+          {/* Name field (signup only) */}
+          {isSignup && (
+            <div>
+              <FieldV1
+                withoutLabel
+                onChange={(e) => setName(e.target.value)}
+                placeholder={t("CORE_COMMON_NAME")}
+                populators={{
+                  name: "name",
+                }}
+                props={{ fieldStyle: { width: "100%" } }}
+                type="text"
+                value={name}
+              />
+            </div>
+          )}
+
+          {/* Forgot password link */}
+          {emailStatus === "exists" && (
+            <div style={{ textAlign: "center", marginTop: "8px" }}>
+              <LinkLabel onClick={() => {}}>
+                {t("CORE_COMMON_FORGOT_PASSWORD")}
+              </LinkLabel>
+            </div>
+          )}
+        </InputCard>
 
         {error && <Toast type="error" label={error} onClose={() => setError(null)} />}
-      </form>
+      </AppContainer>
     </div>
   );
 };
