@@ -1,11 +1,11 @@
 import React, { Suspense } from "react";
+import { initLibraries } from "@egovernments/digit-ui-libraries";
 import { UICustomizations } from "./Customisations/UICustomizations";
 
 window.contextPath = window?.globalConfigs?.getConfig("CONTEXT_PATH");
 
 // Inline fallback spinner — avoids a static import of @egovernments/digit-ui-components
-// which would pull 5MB of transitive deps (pdfmake, jspdf, lottie, SVG icons) into
-// the critical path. The real Loader renders once DigitUI resolves.
+// which would pull 1MB+ of transitive deps into the critical path.
 const Spinner = () => (
   <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh" }}>
     <div style={{
@@ -17,10 +17,11 @@ const Spinner = () => (
   </div>
 );
 
-// Lazy load DigitUI
+// Lazy load DigitUI — defers the core module (and its deps) out of the critical path.
+// CJS modules expose exports under .default when bundled as ESM by esbuild.
 const DigitUI = React.lazy(() =>
   import("@egovernments/digit-ui-module-core").then((mod) => ({
-    default: mod.DigitUI,
+    default: (mod.default || mod).DigitUI,
   }))
 );
 
@@ -35,13 +36,9 @@ const enabledModules = [
 // once the dynamic import resolves.
 let _PGRReducers = () => ({});
 
-// initLibraries is already called synchronously in index.js (sets up window.Digit).
-// Here we just wait for any async init, then load modules.
-// Using dynamic import avoids pulling digit-ui-libraries into the entry's static deps
-// (index.js already has the static import).
-import("@egovernments/digit-ui-libraries").then((m) =>
-  m.initLibraries()
-).then(() => {
+// initLibraries is also called in index.js (synchronous setup).
+// This second call waits for any async init to complete, then loads modules.
+initLibraries().then(() => {
   initDigitUI();
 });
 
@@ -56,13 +53,19 @@ const initDigitUI = async () => {
     commonUiConfig: UICustomizations,
   };
 
-  // Dynamic imports — each module gets its own chunk, loaded in parallel
-  const [pgr, utilities, workbench, hrms] = await Promise.all([
+  // Dynamic imports — each module gets its own chunk, loaded in parallel.
+  // CJS modules expose exports under .default when bundled as ESM.
+  const resolve = (m) => m.default || m;
+  const [pgrRaw, utilRaw, wbRaw, hrmsRaw] = await Promise.all([
     import("@egovernments/digit-ui-module-cms"),
     import("@egovernments/digit-ui-module-utilities"),
     import("@egovernments/digit-ui-module-workbench"),
     import("@egovernments/digit-ui-module-hrms"),
   ]);
+  const pgr = resolve(pgrRaw);
+  const utilities = resolve(utilRaw);
+  const workbench = resolve(wbRaw);
+  const hrms = resolve(hrmsRaw);
 
   _PGRReducers = pgr.PGRReducers;
   pgr.initPGRComponents();

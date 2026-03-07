@@ -11,7 +11,7 @@ const cdnGlobalsPlugin = {
   name: "cdn-globals",
   setup(build) {
     const globals = {
-      // Spreadsheet (2.2MB)
+      // Spreadsheet (2.2MB) — xlsx CDN loaded via <script> in index.html
       "xlsx": "XLSX",
       "xlsx/dist/xlsx.full.min": "XLSX",
       "exceljs": "ExcelJS",
@@ -23,8 +23,8 @@ const cdnGlobalsPlugin = {
       // Screenshot/image (209KB)
       "html2canvas": "html2canvas",
       "dom-to-image": "domtoimage",
-      // Animation (303KB)
-      "react-lottie": "Lottie",
+      // NOTE: react-lottie excluded — it's a React component (303KB) used by
+      // digit-ui-components Loader. Replacing it with {} causes React #130.
     };
     for (const [pkg, globalName] of Object.entries(globals)) {
       const escaped = pkg.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
