@@ -30,8 +30,10 @@ RUN chmod +x ./install-deps.sh
 RUN ./install-deps.sh
 RUN yarn config set network-timeout 600000
 
-# Use frozen-lockfile for deterministic installs in CI
-RUN yarn install --frozen-lockfile
+# Allow lockfile updates for new dependencies (keycloak-js)
+RUN yarn install
+# Rebuild node-sass native binary (fails to download prebuild on some archs)
+RUN cd micro-ui-internals && npx node-sass --version || npm rebuild node-sass --force
 RUN yarn build:webpack
 
 FROM nginx:mainline-alpine
