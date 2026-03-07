@@ -5,21 +5,36 @@ const fs = require("fs");
 const OUTDIR = path.resolve(__dirname, "build");
 const PUBLIC_PATH = "/digit-ui/";
 
-// Plugin: map CDN-loaded globals so require("xlsx") → window.XLSX etc.
+// Plugin: replace heavy packages with window globals (loaded from CDN or deferred).
+// Keeps these multi-MB libraries out of the critical-path bundle.
 const cdnGlobalsPlugin = {
   name: "cdn-globals",
   setup(build) {
     const globals = {
-      xlsx: "XLSX",
+      // Spreadsheet (2.2MB)
+      "xlsx": "XLSX",
+      "xlsx/dist/xlsx.full.min": "XLSX",
+      "exceljs": "ExcelJS",
+      // PDF generation/viewing (2.3MB)
+      "pdfmake/build/pdfmake": "pdfMake",
+      "pdfmake/build/pdfmake.js": "pdfMake",
+      "jspdf": "jsPDF",
+      "pdfjs-dist": "pdfjsLib",
+      // Screenshot/image (209KB)
+      "html2canvas": "html2canvas",
+      "dom-to-image": "domtoimage",
+      // Animation (303KB)
+      "react-lottie": "Lottie",
     };
     for (const [pkg, globalName] of Object.entries(globals)) {
-      build.onResolve({ filter: new RegExp("^" + pkg + "$") }, () => ({
+      const escaped = pkg.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      build.onResolve({ filter: new RegExp("^" + escaped + "$") }, () => ({
         path: pkg,
         namespace: "cdn-global",
       }));
     }
     build.onLoad({ filter: /.*/, namespace: "cdn-global" }, (args) => ({
-      contents: `module.exports = window.${globals[args.path]};`,
+      contents: `module.exports = typeof window !== "undefined" && window.${globals[args.path]} || {};`,
       loader: "js",
     }));
   },
@@ -140,6 +155,9 @@ async function build() {
     .replace("</body>", `${scriptTags}\n</body>`);
 
   fs.writeFileSync(path.resolve(OUTDIR, "index.html"), injected);
+
+  // Save metafile for analysis (e.g. `node -e "..."` or esbuild-visualizer)
+  fs.writeFileSync(path.resolve(OUTDIR, "meta.json"), JSON.stringify(result.metafile));
 
   const elapsed = ((Date.now() - start) / 1000).toFixed(1);
   console.log(`\nesbuild done in ${elapsed}s`);

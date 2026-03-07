@@ -1,9 +1,21 @@
 import React, { Suspense } from "react";
-import { initLibraries } from "@egovernments/digit-ui-libraries";
 import { UICustomizations } from "./Customisations/UICustomizations";
-import { Loader } from "@egovernments/digit-ui-components";
 
 window.contextPath = window?.globalConfigs?.getConfig("CONTEXT_PATH");
+
+// Inline fallback spinner — avoids a static import of @egovernments/digit-ui-components
+// which would pull 5MB of transitive deps (pdfmake, jspdf, lottie, SVG icons) into
+// the critical path. The real Loader renders once DigitUI resolves.
+const Spinner = () => (
+  <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh" }}>
+    <div style={{
+      width: 48, height: 48, border: "4px solid #e0e0e0",
+      borderTop: "4px solid #f47738", borderRadius: "50%",
+      animation: "spin 0.8s linear infinite",
+    }} />
+    <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+  </div>
+);
 
 // Lazy load DigitUI
 const DigitUI = React.lazy(() =>
@@ -23,7 +35,13 @@ const enabledModules = [
 // once the dynamic import resolves.
 let _PGRReducers = () => ({});
 
-initLibraries().then(() => {
+// initLibraries is already called synchronously in index.js (sets up window.Digit).
+// Here we just wait for any async init, then load modules.
+// Using dynamic import avoids pulling digit-ui-libraries into the entry's static deps
+// (index.js already has the static import).
+import("@egovernments/digit-ui-libraries").then((m) =>
+  m.initLibraries()
+).then(() => {
   initDigitUI();
 });
 
@@ -62,7 +80,7 @@ function App() {
     return <h1>stateCode is not defined</h1>;
   }
   return (
-    <Suspense fallback={<Loader page={true} variant={"PageLoader"} />}>
+    <Suspense fallback={<Spinner />}>
       <DigitUI
         stateCode={stateCode}
         enabledModules={enabledModules}
