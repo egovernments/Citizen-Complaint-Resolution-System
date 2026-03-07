@@ -76,22 +76,29 @@ async function build() {
       ".svg": "file",
     },
     alias: {
-      // Resolve core module from LOCAL SOURCE (not npm dist) so our
-      // Module.js / App.js changes are included without microbundle
-      "@egovernments/digit-ui-module-core": path.resolve(
-        __dirname,
-        "micro-ui-internals/packages/modules/core/src/Module.js"
-      ),
-      // Use local library source so auth adapter exports are available
-      "@egovernments/digit-ui-libraries": path.resolve(
-        __dirname,
-        "micro-ui-internals/packages/libraries/src/index.js"
-      ),
-      // Force single React instance to prevent "Invalid hook call" errors
-      // when core module source resolves React from micro-ui-internals/node_modules
+      // Force single instance of shared packages to prevent duplication
+      // (each @egovernments module bundles its own copy otherwise)
       react: path.resolve(__dirname, "node_modules/react"),
       "react-dom": path.resolve(__dirname, "node_modules/react-dom"),
       "react-router-dom": path.resolve(__dirname, "node_modules/react-router-dom"),
+      "react-redux": path.resolve(__dirname, "node_modules/react-redux"),
+      "react-query": path.resolve(__dirname, "node_modules/react-query"),
+      "@egovernments/digit-ui-components": path.resolve(
+        __dirname,
+        "micro-ui-internals/node_modules/@egovernments/digit-ui-components"
+      ),
+      "@egovernments/digit-ui-react-components": path.resolve(
+        __dirname,
+        "micro-ui-internals/node_modules/@egovernments/digit-ui-react-components"
+      ),
+      "@egovernments/digit-ui-svg-components": path.resolve(
+        __dirname,
+        "micro-ui-internals/node_modules/@egovernments/digit-ui-svg-components"
+      ),
+      "@egovernments/digit-ui-libraries": path.resolve(
+        __dirname,
+        "micro-ui-internals/node_modules/@egovernments/digit-ui-libraries"
+      ),
     },
     nodePaths: [
       path.resolve(__dirname, "node_modules"),

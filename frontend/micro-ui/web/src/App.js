@@ -1,20 +1,7 @@
-/**
- * The above code initializes various Digit UI modules and components, sets up customizations, and
- * renders the DigitUI component based on the enabled modules and state code.
- * @returns The `App` component is being returned, which renders the `DigitUI` component with the
- * specified props such as `stateCode`, `enabledModules`, `moduleReducers`, and `defaultLanding`. The
- * `DigitUI` component is responsible for rendering the UI based on the provided configuration and
- * modules.
- */
 import React, { Suspense } from "react";
 import { initLibraries } from "@egovernments/digit-ui-libraries";
-// import { initHRMSComponents } from "@egovernments/digit-ui-module-hrms";
 import { UICustomizations } from "./Customisations/UICustomizations";
-import { initUtilitiesComponents } from "@egovernments/digit-ui-module-utilities";
-import { initPGRComponents, PGRReducers, } from "@egovernments/digit-ui-module-cms";
 import { Loader } from "@egovernments/digit-ui-components";
-import { initWorkbenchComponents } from "@egovernments/digit-ui-module-workbench";
-import { initHRMSComponents } from "@egovernments/digit-ui-module-hrms";
 
 window.contextPath = window?.globalConfigs?.getConfig("CONTEXT_PATH");
 
@@ -32,25 +19,38 @@ const enabledModules = [
   "HRMS",
 ];
 
+// PGRReducers is needed synchronously by moduleReducers, so we store it
+// once the dynamic import resolves.
+let _PGRReducers = () => ({});
+
 initLibraries().then(() => {
   initDigitUI();
 });
 
 const moduleReducers = (initData) => ({
   initData,
-  pgr: PGRReducers(initData)
+  pgr: _PGRReducers(initData),
 });
 
-const initDigitUI = () => {
+const initDigitUI = async () => {
   window.Digit.ComponentRegistryService.setupRegistry({});
   window.Digit.Customizations = {
     commonUiConfig: UICustomizations,
   };
 
-  initUtilitiesComponents();
-  initPGRComponents();
-  initWorkbenchComponents();
-  initHRMSComponents();
+  // Dynamic imports — each module gets its own chunk, loaded in parallel
+  const [pgr, utilities, workbench, hrms] = await Promise.all([
+    import("@egovernments/digit-ui-module-cms"),
+    import("@egovernments/digit-ui-module-utilities"),
+    import("@egovernments/digit-ui-module-workbench"),
+    import("@egovernments/digit-ui-module-hrms"),
+  ]);
+
+  _PGRReducers = pgr.PGRReducers;
+  pgr.initPGRComponents();
+  utilities.initUtilitiesComponents();
+  workbench.initWorkbenchComponents();
+  hrms.initHRMSComponents();
 };
 
 function App() {
