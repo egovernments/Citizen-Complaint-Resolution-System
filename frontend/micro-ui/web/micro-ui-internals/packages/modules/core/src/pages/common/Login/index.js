@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo } from "react";
 import { useHistory, useLocation } from "react-router-dom";
 import {
-  AppContainer,
   Button,
   CardText,
   FieldV1,
@@ -9,7 +8,7 @@ import {
   LinkLabel,
   Toast,
 } from "@egovernments/digit-ui-components";
-import { getAuthAdapter } from "@egovernments/digit-ui-libraries";
+import { getAuthAdapter } from "../../../../../../libraries/src/services/auth/index";
 
 const DEFAULT_REDIRECT = (contextPath) => `/${contextPath}/citizen`;
 
@@ -120,96 +119,94 @@ const UnifiedLogin = ({ stateCode }) => {
   );
 
   return (
-    <div className="citizen-form-wrapper">
-      <AppContainer>
-        <InputCard
-          t={t}
-          texts={inputCardTexts}
-          submit
-          onNext={handleSubmit}
-          isDisable={isSubmitDisabled}
-        >
-          {/* SSO providers */}
-          {providers.length > 0 && (
-            <div style={{ marginBottom: "16px" }}>
-              {providers.map((provider) => (
-                <Button
-                  key={provider}
-                  label={t(`CORE_COMMON_SSO_${provider.toUpperCase()}`) || `Sign in with ${provider}`}
-                  onButtonClick={() => handleSSO(provider)}
-                  variation="secondary"
-                  style={{ width: "100%", marginBottom: "8px" }}
-                />
-              ))}
-              <CardText style={{ textAlign: "center" }}>
-                &mdash; {t("CORE_SSO_DIVIDER")} &mdash;
-              </CardText>
-            </div>
-          )}
+    <div className="banner banner-container">
+      <InputCard
+        t={t}
+        texts={inputCardTexts}
+        submit
+        onNext={handleSubmit}
+        isDisable={isSubmitDisabled}
+      >
+        {/* SSO providers */}
+        {providers.length > 0 && (
+          <div style={{ marginBottom: "16px" }}>
+            {providers.map((provider) => (
+              <Button
+                key={provider}
+                label={t(`CORE_COMMON_SSO_${provider.toUpperCase()}`) || `Sign in with ${provider}`}
+                onButtonClick={() => handleSSO(provider)}
+                variation="secondary"
+                style={{ width: "100%", marginBottom: "8px" }}
+              />
+            ))}
+            <CardText style={{ textAlign: "center" }}>
+              &mdash; {t("CORE_SSO_DIVIDER")} &mdash;
+            </CardText>
+          </div>
+        )}
 
-          {/* Email field */}
+        {/* Email field */}
+        <div>
+          <FieldV1
+            withoutLabel
+            error={emailStatus === "checking" ? t("CORE_CHECKING_EMAIL") : ""}
+            onChange={(e) => setEmail(e.target.value)}
+            onBlur={handleEmailBlur}
+            placeholder="you@example.com"
+            populators={{
+              name: "email",
+              validation: { maxlength: 256 },
+            }}
+            props={{ fieldStyle: { width: "100%" } }}
+            type="text"
+            value={email}
+          />
+        </div>
+
+        {/* Password field */}
+        <div>
+          <FieldV1
+            withoutLabel
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="********"
+            populators={{
+              name: "password",
+              validation: { minlength: 8 },
+            }}
+            props={{ fieldStyle: { width: "100%" } }}
+            type="password"
+            value={password}
+          />
+        </div>
+
+        {/* Name field (signup only) */}
+        {isSignup && (
           <div>
             <FieldV1
               withoutLabel
-              error={emailStatus === "checking" ? t("CORE_CHECKING_EMAIL") : ""}
-              onChange={(e) => setEmail(e.target.value)}
-              onBlur={handleEmailBlur}
-              placeholder="you@example.com"
+              onChange={(e) => setName(e.target.value)}
+              placeholder={t("CORE_COMMON_NAME")}
               populators={{
-                name: "email",
-                validation: { maxlength: 256 },
+                name: "name",
               }}
               props={{ fieldStyle: { width: "100%" } }}
               type="text"
-              value={email}
+              value={name}
             />
           </div>
+        )}
 
-          {/* Password field */}
-          <div>
-            <FieldV1
-              withoutLabel
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="********"
-              populators={{
-                name: "password",
-                validation: { minlength: 8 },
-              }}
-              props={{ fieldStyle: { width: "100%" } }}
-              type="password"
-              value={password}
-            />
+        {/* Forgot password link */}
+        {emailStatus === "exists" && (
+          <div style={{ textAlign: "center", marginTop: "8px" }}>
+            <LinkLabel onClick={() => {}}>
+              {t("CORE_COMMON_FORGOT_PASSWORD")}
+            </LinkLabel>
           </div>
+        )}
+      </InputCard>
 
-          {/* Name field (signup only) */}
-          {isSignup && (
-            <div>
-              <FieldV1
-                withoutLabel
-                onChange={(e) => setName(e.target.value)}
-                placeholder={t("CORE_COMMON_NAME")}
-                populators={{
-                  name: "name",
-                }}
-                props={{ fieldStyle: { width: "100%" } }}
-                type="text"
-                value={name}
-              />
-            </div>
-          )}
-
-          {/* Forgot password link */}
-          {emailStatus === "exists" && (
-            <div style={{ textAlign: "center", marginTop: "8px" }}>
-              <LinkLabel onClick={() => {}}>
-                {t("CORE_COMMON_FORGOT_PASSWORD")}
-              </LinkLabel>
-            </div>
-          )}
-        </InputCard>
-
-        {error && <Toast type="error" label={error} onClose={() => setError(null)} />}
-      </AppContainer>
+      {error && <Toast type="error" label={error} onClose={() => setError(null)} />}
     </div>
   );
 };

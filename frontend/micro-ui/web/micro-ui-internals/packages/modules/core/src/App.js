@@ -123,6 +123,12 @@ export const DigitAppWrapper = ({ stateCode, modules, appTenants, logoUrl, logoU
             <UnifiedLogin stateCode={stateCode} />
           </Route>
         )}
+        {/* Intercept employee/citizen login paths and redirect to unified keycloak login */}
+        {window?.globalConfigs?.getConfig("AUTH_PROVIDER") === "keycloak" && (
+          <Route path={`/${window?.contextPath}/:type/user/login`}>
+            <Redirect to={`/${window?.globalPath}/user/login`} />
+          </Route>
+        )}
         {window?.globalConfigs?.getConfig("AUTH_PROVIDER") !== "keycloak" && (
           <Route exact path={`/${window?.globalPath}/user/sign-up`}>
             <SignUpV2 stateCode={stateCode} />
