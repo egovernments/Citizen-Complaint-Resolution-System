@@ -120,6 +120,7 @@ const UnifiedLogin = ({ stateCode }) => {
 
   return (
     <div className="banner banner-container">
+      <div style={{ width: "100%", maxWidth: "480px" }}>
       <InputCard
         t={t}
         texts={inputCardTexts}
@@ -205,6 +206,7 @@ const UnifiedLogin = ({ stateCode }) => {
           </div>
         )}
       </InputCard>
+      </div>
 
       {error && <Toast type="error" label={error} onClose={() => setError(null)} />}
     </div>
