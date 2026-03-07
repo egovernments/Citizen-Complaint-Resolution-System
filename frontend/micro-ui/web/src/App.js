@@ -17,6 +17,7 @@ import { initWorkbenchComponents } from "@egovernments/digit-ui-module-workbench
 import { initHRMSComponents } from "@egovernments/digit-ui-module-hrms";
 
 window.contextPath = window?.globalConfigs?.getConfig("CONTEXT_PATH");
+window.globalPath = window?.globalConfigs?.getConfig("CONTEXT_PATH") || "digit-ui";
 
 // Lazy load DigitUI
 const DigitUI = React.lazy(() =>
