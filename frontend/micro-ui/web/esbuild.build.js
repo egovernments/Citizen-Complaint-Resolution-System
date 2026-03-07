@@ -81,10 +81,29 @@ async function build() {
         __dirname,
         "micro-ui-internals/packages/modules/core/src/Module.js"
       ),
-      // Force single React instance to prevent "Invalid hook call" errors
+      // Force single instance of shared packages to prevent duplication
+      // (each @egovernments module bundles its own copy otherwise)
       react: path.resolve(__dirname, "node_modules/react"),
       "react-dom": path.resolve(__dirname, "node_modules/react-dom"),
       "react-router-dom": path.resolve(__dirname, "node_modules/react-router-dom"),
+      "react-redux": path.resolve(__dirname, "node_modules/react-redux"),
+      "react-query": path.resolve(__dirname, "node_modules/react-query"),
+      "@egovernments/digit-ui-components": path.resolve(
+        __dirname,
+        "micro-ui-internals/node_modules/@egovernments/digit-ui-components"
+      ),
+      "@egovernments/digit-ui-react-components": path.resolve(
+        __dirname,
+        "micro-ui-internals/node_modules/@egovernments/digit-ui-react-components"
+      ),
+      "@egovernments/digit-ui-svg-components": path.resolve(
+        __dirname,
+        "micro-ui-internals/node_modules/@egovernments/digit-ui-svg-components"
+      ),
+      "@egovernments/digit-ui-libraries": path.resolve(
+        __dirname,
+        "micro-ui-internals/node_modules/@egovernments/digit-ui-libraries"
+      ),
     },
     nodePaths: [
       path.resolve(__dirname, "node_modules"),
