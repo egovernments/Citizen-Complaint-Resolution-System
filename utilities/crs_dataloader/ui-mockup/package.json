@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@digit-mcp/data-provider": "file:../../../../../DIGIT-MCP/packages/data-provider",
+    "@digit-ui/datagrid": "file:../../../packages/digit-datagrid",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
