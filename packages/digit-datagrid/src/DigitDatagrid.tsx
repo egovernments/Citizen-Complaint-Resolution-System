@@ -19,8 +19,8 @@ import {
   TableHead,
   TableRow,
   TableCell,
-} from '@/primitives/table';
-import { Button } from '@/primitives/button';
+} from './primitives/table';
+import { Button } from './primitives/button';
 import type { RaRecord } from 'ra-core';
 import type {
   DigitColumn,

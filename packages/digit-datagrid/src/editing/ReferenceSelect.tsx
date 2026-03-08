@@ -6,7 +6,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/primitives/select';
+} from '../primitives/select';
 import { Loader2 } from 'lucide-react';
 
 export interface ReferenceSelectProps {

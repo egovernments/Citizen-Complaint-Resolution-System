@@ -1,8 +1,8 @@
 import React from 'react';
 import type { RaRecord } from 'ra-core';
-import { TableCell } from '@/primitives/table';
+import { TableCell } from '../primitives/table';
 import { InlineDelete } from './InlineDelete';
-import type { MutationMode } from '@/columns/types';
+import type { MutationMode } from '../columns/types';
 
 export interface RowActionsProps<T extends RaRecord = RaRecord> {
   record: T;

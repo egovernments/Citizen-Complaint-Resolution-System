@@ -3,7 +3,7 @@ import type { UpdateParams, DeleteParams } from 'ra-core';
 import { useRef, useCallback } from 'react';
 import type { MutationMode } from '../columns/types';
 import { toast } from '../hooks/use-toast';
-import { ToastAction } from '@/primitives/toast';
+import { ToastAction } from '../primitives/toast';
 import * as React from 'react';
 
 interface PendingMutation {

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Trash2, Loader2 } from 'lucide-react';
-import { Button } from '@/primitives/button';
+import { Button } from '../primitives/button';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -10,8 +10,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/primitives/alert-dialog';
-import type { MutationMode } from '@/columns/types';
+} from '../primitives/alert-dialog';
+import type { MutationMode } from '../columns/types';
 
 export interface InlineDeleteProps {
   itemName?: string;

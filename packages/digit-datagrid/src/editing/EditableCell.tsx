@@ -2,18 +2,18 @@
 
 import * as React from "react"
 import { Pencil, Check, X } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { Input } from "@/primitives/input"
-import { Button } from "@/primitives/button"
-import { Switch } from "@/primitives/switch"
+import { cn } from "../lib/utils"
+import { Input } from "../primitives/input"
+import { Button } from "../primitives/button"
+import { Switch } from "../primitives/switch"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/primitives/select"
-import type { EditableCellType, ValidationRule } from "@/columns/types"
+} from "../primitives/select"
+import type { EditableCellType, ValidationRule } from "../columns/types"
 
 export interface EditableCellProps {
   value: string;

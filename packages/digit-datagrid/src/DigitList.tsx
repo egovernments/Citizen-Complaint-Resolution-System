@@ -7,10 +7,10 @@ import {
   type FilterPayload,
 } from 'ra-core';
 import { RefreshCw, Plus, Search, Settings2 } from 'lucide-react';
-import { Badge } from '@/primitives/badge';
-import { Button } from '@/primitives/button';
-import { Input } from '@/primitives/input';
-import { Popover, PopoverTrigger, PopoverContent } from '@/primitives/popover';
+import { Badge } from './primitives/badge';
+import { Button } from './primitives/button';
+import { Input } from './primitives/input';
+import { Popover, PopoverTrigger, PopoverContent } from './primitives/popover';
 import { useColumnConfig } from './editing/useColumnConfig';
 import type { DigitColumn } from './columns/types';
 
