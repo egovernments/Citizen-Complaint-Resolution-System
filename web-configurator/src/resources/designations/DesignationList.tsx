@@ -4,7 +4,7 @@ import { StatusChip } from '@/admin/fields';
 
 const columns: DigitColumn[] = [
   { source: 'code', label: 'Code' },
-  { source: 'name', label: 'Name' },
+  { source: 'name', label: 'Name', editable: true },
   {
     source: 'active',
     label: 'Status',
@@ -12,7 +12,7 @@ const columns: DigitColumn[] = [
       <StatusChip value={record.active} labels={{ true: 'Active', false: 'Inactive' }} />
     ),
   },
-  { source: 'description', label: 'Description' },
+  { source: 'description', label: 'Description', editable: true },
 ];
 
 export function DesignationList() {

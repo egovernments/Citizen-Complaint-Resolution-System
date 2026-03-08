@@ -99,6 +99,7 @@ export function generateColumns(
 ): DigitColumn[] {
   const props = schema.properties ?? {};
   const ordered = orderFields(schema);
+  const unique = new Set(schema['x-unique'] ?? []);
 
   const columns: DigitColumn[] = [];
 
@@ -124,6 +125,15 @@ export function generateColumns(
           id: String(value),
         });
       };
+    }
+
+    // Auto-set editable for non-key, non-ref fields
+    if (!unique.has(fieldName) && !ref) {
+      if (prop.type === 'number' || prop.type === 'integer') {
+        col.editable = { type: 'number' };
+      } else {
+        col.editable = true;
+      }
     }
 
     columns.push(col);

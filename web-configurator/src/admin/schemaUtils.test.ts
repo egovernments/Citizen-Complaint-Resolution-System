@@ -140,6 +140,40 @@ describe('generateColumns', () => {
     const tenantCol = cols.find((c) => c.source === 'tenantId');
     expect(tenantCol?.render).toBeUndefined();
   });
+
+  it('sets editable on non-key, non-ref columns', () => {
+    const mockLookup = (schema: string) => {
+      if (schema === 'ACCESSCONTROL-ROLES.roles') return 'roles';
+      if (schema === 'ACCESSCONTROL-ACTIONS-TEST.actions-test') return 'action-mappings';
+      return undefined;
+    };
+    const refMap = getRefMap(ROLEACTIONS_SCHEMA, mockLookup);
+    const cols = generateColumns(ROLEACTIONS_SCHEMA, refMap);
+    const tenantCol = cols.find((c) => c.source === 'tenantId');
+    const actioncodeCol = cols.find((c) => c.source === 'actioncode');
+    const rolecodeCol = cols.find((c) => c.source === 'rolecode');
+    expect(tenantCol?.editable).toBe(true);
+    expect(actioncodeCol?.editable).toBe(true);
+    expect(rolecodeCol?.editable).toBeFalsy();
+  });
+
+  it('sets editable with type number for number fields', () => {
+    const schema: SchemaDefinition = {
+      type: 'object',
+      properties: {
+        code: { type: 'string' },
+        count: { type: 'number' },
+        score: { type: 'integer' },
+      },
+      required: ['code', 'count'],
+      'x-unique': ['code'],
+    };
+    const cols = generateColumns(schema, {});
+    const countCol = cols.find((c) => c.source === 'count');
+    const scoreCol = cols.find((c) => c.source === 'score');
+    expect(countCol?.editable).toEqual({ type: 'number' });
+    expect(scoreCol?.editable).toEqual({ type: 'number' });
+  });
 });
 
 describe('groupShowFields', () => {

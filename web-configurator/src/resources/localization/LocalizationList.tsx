@@ -6,6 +6,7 @@ const columns: DigitColumn[] = [
   {
     source: 'message',
     label: 'Message',
+    editable: true,
     render: (record) => {
       const msg = String(record.message ?? '');
       return <span className="truncate max-w-[300px] block">{msg.length > 80 ? msg.slice(0, 80) + '...' : msg}</span>;

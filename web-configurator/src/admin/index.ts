@@ -2,7 +2,7 @@ export { DigitList } from './DigitList';
 export type { DigitListProps } from './DigitList';
 
 export { DigitDatagrid } from './DigitDatagrid';
-export type { DigitDatagridProps, DigitColumn } from './DigitDatagrid';
+export type { DigitDatagridProps, DigitColumn, EditableColumnConfig } from './DigitDatagrid';
 
 export { DigitShow } from './DigitShow';
 export type { DigitShowProps } from './DigitShow';
