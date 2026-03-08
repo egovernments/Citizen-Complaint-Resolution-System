@@ -23,6 +23,7 @@ export interface EditableCellProps {
   displayClassName?: string;
   inputClassName?: string;
   type?: 'text' | 'email' | 'tel' | 'number';
+  initialEditing?: boolean;
 }
 
 export function EditableCell({
@@ -35,8 +36,9 @@ export function EditableCell({
   displayClassName,
   inputClassName,
   type = 'text',
+  initialEditing = false,
 }: EditableCellProps) {
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(initialEditing);
   const [editValue, setEditValue] = useState(value);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);

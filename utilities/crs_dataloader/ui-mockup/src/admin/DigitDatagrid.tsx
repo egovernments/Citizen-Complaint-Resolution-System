@@ -1,5 +1,5 @@
-import React, { useCallback } from 'react';
-import { useListContext, useResourceContext } from 'ra-core';
+import React, { useCallback, useRef, useState } from 'react';
+import { useListContext, useResourceContext, useUpdate } from 'ra-core';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowUp,
@@ -7,7 +7,10 @@ import {
   ArrowUpDown,
   ChevronLeft,
   ChevronRight,
+  Pencil,
 } from 'lucide-react';
+import { EditableCell } from '@/components/ui/editable-cell';
+import type { ValidationRule } from '@/components/ui/editable-cell';
 import {
   Table,
   TableHeader,
@@ -19,6 +22,11 @@ import {
 import { Button } from '@/components/ui/button';
 import type { RaRecord } from 'ra-core';
 
+export interface EditableColumnConfig {
+  type?: 'text' | 'number';
+  validation?: ValidationRule;
+}
+
 export interface DigitColumn<RecordType extends RaRecord = RaRecord> {
   /** The field name on the record to display */
   source: string;
@@ -28,6 +36,8 @@ export interface DigitColumn<RecordType extends RaRecord = RaRecord> {
   sortable?: boolean;
   /** Custom render function for cell content */
   render?: (record: RecordType) => React.ReactNode;
+  /** Enable inline editing. true = text input. Object = config with type/validation. */
+  editable?: boolean | EditableColumnConfig;
 }
 
 export interface DigitDatagridProps<RecordType extends RaRecord = RaRecord> {
@@ -54,6 +64,12 @@ function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
   }, obj);
 }
 
+function getTypedValue(col: Pick<DigitColumn, 'editable'>, rawValue: string): unknown {
+  const config = typeof col.editable === 'object' ? col.editable : {};
+  if (config.type === 'number') return Number(rawValue);
+  return rawValue;
+}
+
 export function DigitDatagrid<RecordType extends RaRecord = RaRecord>({
   columns,
   rowClick,
@@ -72,6 +88,12 @@ export function DigitDatagrid<RecordType extends RaRecord = RaRecord>({
   } = useListContext<RecordType>();
   const resource = useResourceContext();
   const navigate = useNavigate();
+  const [editingCell, setEditingCell] = useState<{ recordId: string | number; source: string } | null>(null);
+  const [update] = useUpdate();
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Check if any column is editable (enables delayed row click)
+  const hasEditableColumns = columns.some((col) => Boolean(col.editable));
 
   const handleSort = useCallback(
     (source: string) => {
@@ -87,7 +109,7 @@ export function DigitDatagrid<RecordType extends RaRecord = RaRecord>({
     [sort, setSort]
   );
 
-  const handleRowClick = useCallback(
+  const doNavigate = useCallback(
     (record: RecordType) => {
       if (onRowClick) {
         onRowClick(record);
@@ -99,13 +121,28 @@ export function DigitDatagrid<RecordType extends RaRecord = RaRecord>({
         } else if (rowClick === 'edit') {
           navigate(`/manage/${resource}/${record.id}/edit`);
         } else {
-          // Custom path template — replace :id with actual id
           const path = rowClick.replace(':id', String(record.id));
           navigate(path);
         }
       }
     },
     [onRowClick, rowClick, resource, navigate]
+  );
+
+  const handleRowClick = useCallback(
+    (record: RecordType) => {
+      if (hasEditableColumns) {
+        // Delay navigation so double-click can cancel it
+        if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+        clickTimerRef.current = setTimeout(() => {
+          clickTimerRef.current = null;
+          doNavigate(record);
+        }, 250);
+      } else {
+        doNavigate(record);
+      }
+    },
+    [hasEditableColumns, doNavigate]
   );
 
   const isClickable = Boolean(rowClick || onRowClick);
@@ -166,13 +203,58 @@ export function DigitDatagrid<RecordType extends RaRecord = RaRecord>({
               onClick={isClickable ? () => handleRowClick(record) : undefined}
               className={isClickable ? 'cursor-pointer' : ''}
             >
-              {columns.map((col) => (
-                <TableCell key={col.source}>
-                  {col.render
-                    ? col.render(record)
-                    : renderCellValue(getNestedValue(record as Record<string, unknown>, col.source))}
-                </TableCell>
-              ))}
+              {columns.map((col) => {
+                const isEditing = editingCell?.recordId === record.id && editingCell?.source === col.source;
+                const isEditable = Boolean(col.editable);
+
+                return (
+                  <TableCell
+                    key={col.source}
+                    onDoubleClick={isEditable ? (e) => {
+                      e.stopPropagation();
+                      // Cancel pending row-click navigation
+                      if (clickTimerRef.current) {
+                        clearTimeout(clickTimerRef.current);
+                        clickTimerRef.current = null;
+                      }
+                      setEditingCell({ recordId: record.id, source: col.source });
+                    } : undefined}
+                    className={isEditable ? 'group/cell' : ''}
+                  >
+                    {isEditing ? (
+                      <EditableCell
+                        value={String(getNestedValue(record as Record<string, unknown>, col.source) ?? '')}
+                        onSave={async (val) => {
+                          const typedVal = getTypedValue(col, val);
+                          await update(resource!, {
+                            id: record.id,
+                            data: { ...record, [col.source]: typedVal },
+                            previousData: record,
+                          });
+                          setEditingCell(null);
+                        }}
+                        type={typeof col.editable === 'object' && col.editable.type === 'number' ? 'number' : 'text'}
+                        validation={typeof col.editable === 'object' ? col.editable.validation : undefined}
+                        initialEditing
+                      />
+                    ) : col.render ? (
+                      <span className="flex items-center gap-1">
+                        {col.render(record)}
+                        {isEditable && (
+                          <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover/cell:opacity-100 transition-opacity flex-shrink-0" />
+                        )}
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1">
+                        {renderCellValue(getNestedValue(record as Record<string, unknown>, col.source))}
+                        {isEditable && (
+                          <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover/cell:opacity-100 transition-opacity flex-shrink-0" />
+                        )}
+                      </span>
+                    )}
+                  </TableCell>
+                );
+              })}
               {actions && (
                 <TableCell className="text-right">
                   {actions(record)}

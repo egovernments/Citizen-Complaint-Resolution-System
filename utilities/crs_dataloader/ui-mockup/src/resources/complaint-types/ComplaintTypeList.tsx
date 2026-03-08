@@ -5,7 +5,7 @@ import { EntityLink } from '@/components/ui/EntityLink';
 
 const columns: DigitColumn[] = [
   { source: 'serviceCode', label: 'Service Code' },
-  { source: 'name', label: 'Name' },
+  { source: 'name', label: 'Name', editable: true },
   {
     source: 'department',
     label: 'Department',
@@ -14,7 +14,7 @@ const columns: DigitColumn[] = [
       return dept ? <EntityLink resource="departments" id={dept} /> : <span className="text-muted-foreground">--</span>;
     },
   },
-  { source: 'slaHours', label: 'SLA (hrs)' },
+  { source: 'slaHours', label: 'SLA (hrs)', editable: { type: 'number' } },
   {
     source: 'active',
     label: 'Status',
