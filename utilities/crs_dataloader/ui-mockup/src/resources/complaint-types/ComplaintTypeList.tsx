@@ -9,6 +9,7 @@ const columns: DigitColumn[] = [
   {
     source: 'department',
     label: 'Department',
+    editable: { type: 'reference', reference: 'departments', displayField: 'name' },
     render: (record) => {
       const dept = String(record.department ?? '');
       return dept ? <EntityLink resource="departments" id={dept} /> : <span className="text-muted-foreground">--</span>;

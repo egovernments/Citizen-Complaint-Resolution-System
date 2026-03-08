@@ -157,6 +157,39 @@ describe('generateColumns', () => {
     expect(rolecodeCol?.editable).toBeFalsy();
   });
 
+  it('sets editable with type reference for non-key ref fields', () => {
+    const schema: SchemaDefinition = {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        department: { type: 'string' },
+        name: { type: 'string' },
+      },
+      required: ['id', 'department', 'name'],
+      'x-unique': ['id'],
+      'x-ref-schema': [
+        { fieldPath: 'department', schemaCode: 'common-masters.Department' },
+      ],
+    };
+    const refMap = getRefMap(schema, (code) => {
+      if (code === 'common-masters.Department') return 'departments';
+      return undefined;
+    });
+    const cols = generateColumns(schema, refMap);
+    const deptCol = cols.find((c) => c.source === 'department');
+    expect(deptCol?.editable).toEqual({
+      type: 'reference',
+      reference: 'departments',
+      displayField: 'name',
+    });
+    // name is not a ref, should be plain editable
+    const nameCol = cols.find((c) => c.source === 'name');
+    expect(nameCol?.editable).toBe(true);
+    // id is x-unique, not editable
+    const idCol = cols.find((c) => c.source === 'id');
+    expect(idCol?.editable).toBeFalsy();
+  });
+
   it('sets editable with type number for number fields', () => {
     const schema: SchemaDefinition = {
       type: 'object',

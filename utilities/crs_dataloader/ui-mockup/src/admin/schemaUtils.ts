@@ -127,9 +127,12 @@ export function generateColumns(
       };
     }
 
-    // Auto-set editable for non-key, non-ref fields
-    if (!unique.has(fieldName) && !ref) {
-      if (prop.type === 'number' || prop.type === 'integer') {
+    // Auto-set editable for non-key fields
+    if (!unique.has(fieldName)) {
+      if (ref) {
+        // Reference fields: editable as dropdown
+        col.editable = { type: 'reference', reference: ref.resource, displayField: 'name' };
+      } else if (prop.type === 'number' || prop.type === 'integer') {
         col.editable = { type: 'number' };
       } else {
         col.editable = true;

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { EditableCell } from '@/components/ui/editable-cell';
 import type { ValidationRule } from '@/components/ui/editable-cell';
+import { ReferenceSelect } from '@/components/ui/ReferenceSelect';
 import {
   Table,
   TableHeader,
@@ -23,8 +24,12 @@ import { Button } from '@/components/ui/button';
 import type { RaRecord } from 'ra-core';
 
 export interface EditableColumnConfig {
-  type?: 'text' | 'number';
+  type?: 'text' | 'number' | 'reference';
   validation?: ValidationRule;
+  /** For type: 'reference' — the react-admin resource to fetch choices from */
+  reference?: string;
+  /** For type: 'reference' — which field on the referenced record to display. Default: 'name' */
+  displayField?: string;
 }
 
 export interface DigitColumn<RecordType extends RaRecord = RaRecord> {
@@ -222,23 +227,41 @@ export function DigitDatagrid<RecordType extends RaRecord = RaRecord>({
                     className={isEditable ? 'group/cell' : ''}
                   >
                     {isEditing ? (
-                      <EditableCell
-                        value={String(getNestedValue(record as Record<string, unknown>, col.source) ?? '')}
-                        onSave={async (val) => {
-                          const typedVal = getTypedValue(col, val);
-                          await update(resource!, {
-                            id: record.id,
-                            data: { ...record, [col.source]: typedVal },
-                            previousData: record,
-                          });
-                          setEditingCell(null);
-                        }}
-                        type={typeof col.editable === 'object' && col.editable.type === 'number' ? 'number' : 'text'}
-                        validation={typeof col.editable === 'object' ? col.editable.validation : undefined}
-                        initialEditing
-                      />
+                      typeof col.editable === 'object' && col.editable.type === 'reference' && col.editable.reference ? (
+                        <ReferenceSelect
+                          reference={col.editable.reference}
+                          value={String(getNestedValue(record as Record<string, unknown>, col.source) ?? '')}
+                          displayField={col.editable.displayField}
+                          initialOpen
+                          onSave={async (val) => {
+                            await update(resource!, {
+                              id: record.id,
+                              data: { ...record, [col.source]: val },
+                              previousData: record,
+                            });
+                            setEditingCell(null);
+                          }}
+                          onCancel={() => setEditingCell(null)}
+                        />
+                      ) : (
+                        <EditableCell
+                          value={String(getNestedValue(record as Record<string, unknown>, col.source) ?? '')}
+                          onSave={async (val) => {
+                            const typedVal = getTypedValue(col, val);
+                            await update(resource!, {
+                              id: record.id,
+                              data: { ...record, [col.source]: typedVal },
+                              previousData: record,
+                            });
+                            setEditingCell(null);
+                          }}
+                          type={typeof col.editable === 'object' && col.editable.type === 'number' ? 'number' : 'text'}
+                          validation={typeof col.editable === 'object' ? col.editable.validation : undefined}
+                          initialEditing
+                        />
+                      )
                     ) : col.render ? (
-                      <span className="flex items-center gap-1">
+                      <span className={`flex items-center gap-1${isEditable ? ' pointer-events-none' : ''}`}>
                         {col.render(record)}
                         {isEditable && (
                           <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover/cell:opacity-100 transition-opacity flex-shrink-0" />
