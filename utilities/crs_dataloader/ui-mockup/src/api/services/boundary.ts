@@ -117,14 +117,80 @@ export const boundaryService = {
     }
   },
 
-  // Create a single boundary
-  async createBoundary(boundary: Boundary): Promise<Boundary> {
-    const response = await apiClient.post(ENDPOINTS.BOUNDARY_CREATE, {
-      RequestInfo: apiClient.buildRequestInfo(),
-      Boundary: boundary,
-    });
+  // Create a boundary entity (just the entity, not the relationship)
+  async createBoundaryEntity(tenantId: string, code: string): Promise<boolean> {
+    try {
+      await apiClient.post(ENDPOINTS.BOUNDARY_CREATE, {
+        RequestInfo: apiClient.buildRequestInfo(),
+        Boundary: [{
+          tenantId,
+          code,
+          geometry: { type: 'Polygon', coordinates: [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]] },
+        }],
+      });
+      return true;
+    } catch (error) {
+      // Check if already exists (which is OK)
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      if (errorMsg.toLowerCase().includes('already exists') || errorMsg.includes('DUPLICATE')) {
+        return true;
+      }
+      throw error;
+    }
+  },
 
-    return response.Boundary as Boundary;
+  // Create a boundary relationship (parent-child link in hierarchy)
+  async createBoundaryRelationship(
+    tenantId: string,
+    hierarchyType: string,
+    code: string,
+    boundaryType: string,
+    parentCode?: string
+  ): Promise<boolean> {
+    try {
+      const payload: Record<string, unknown> = {
+        RequestInfo: apiClient.buildRequestInfo(),
+        BoundaryRelationship: {
+          tenantId,
+          hierarchyType,
+          code,
+          boundaryType,
+        },
+      };
+
+      if (parentCode) {
+        (payload.BoundaryRelationship as Record<string, unknown>).parent = parentCode;
+      }
+
+      await apiClient.post(ENDPOINTS.BOUNDARY_RELATIONSHIP_CREATE, payload);
+      return true;
+    } catch (error) {
+      // Check if already exists (which is OK)
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      if (errorMsg.toLowerCase().includes('already exists') || errorMsg.includes('DUPLICATE')) {
+        return true;
+      }
+      throw error;
+    }
+  },
+
+  // Create a single boundary (entity + relationship)
+  async createBoundary(boundary: Boundary): Promise<Boundary> {
+    // Step 1: Create the boundary entity
+    await this.createBoundaryEntity(boundary.tenantId, boundary.code);
+
+    // Step 2: Create the boundary relationship
+    if (boundary.hierarchyType && boundary.boundaryType) {
+      await this.createBoundaryRelationship(
+        boundary.tenantId,
+        boundary.hierarchyType,
+        boundary.code,
+        boundary.boundaryType,
+        boundary.parent
+      );
+    }
+
+    return boundary;
   },
 
   // Create multiple boundaries in order (respecting parent-child relationships)

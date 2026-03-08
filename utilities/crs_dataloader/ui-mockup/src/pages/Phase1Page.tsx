@@ -24,6 +24,7 @@ import { Header, SubHeader } from '@/components/digit/Header';
 import { SubmitBar } from '@/components/digit/SubmitBar';
 import { Banner } from '@/components/digit/Banner';
 import { parseExcelFile, parseTenantExcel } from '@/utils/excelParser';
+import * as XLSX from 'xlsx';
 import { mdmsService, localizationService, apiClient, ApiClientError } from '@/api';
 import type { TenantExcelRow, Tenant, ValidationResult } from '@/api/types';
 
@@ -94,12 +95,14 @@ export default function Phase1Page() {
         code: tenantData.tenantCode,
         name: tenantData.tenantName,
         description: tenantData.displayName,
+        logoId: tenantData.logoPath || brandingData.logoUrl,
         city: {
           name: tenantData.cityName || tenantData.tenantName,
           code: tenantData.tenantCode,
           districtName: tenantData.districtName,
           latitude: tenantData.latitude,
           longitude: tenantData.longitude,
+          ulbGrade: tenantData.tenantType || 'Municipal Corporation',
         },
       };
 
@@ -185,10 +188,55 @@ export default function Phase1Page() {
   };
 
   const handleDownloadTemplate = () => {
-    // Create a simple template
-    const templateUrl = '/templates/tenant-branding-template.xlsx';
-    // For now, just show an alert
-    alert('Template download would start here. Template path: ' + templateUrl);
+    // Create a workbook with template sheets
+    const wb = XLSX.utils.book_new();
+
+    // Tenant Info sheet
+    const tenantHeaders = [
+      'Tenant Display Name*',
+      'Tenant Code*',
+      'Tenant Type*',
+      'Logo File Path*',
+      'Latitude',
+      'Longitude',
+      'City Name',
+      'District Name',
+    ];
+    const tenantSample = [
+      'City A ULB',
+      'PG.CITYA',
+      'City',
+      'https://example.com/logo.png',
+      '28.6139',
+      '77.2090',
+      'City A',
+      'District A',
+    ];
+    const tenantData = [tenantHeaders, tenantSample];
+    const tenantSheet = XLSX.utils.aoa_to_sheet(tenantData);
+
+    // Set column widths
+    tenantSheet['!cols'] = [
+      { wch: 25 }, { wch: 20 }, { wch: 15 }, { wch: 35 },
+      { wch: 12 }, { wch: 12 }, { wch: 15 }, { wch: 15 },
+    ];
+    XLSX.utils.book_append_sheet(wb, tenantSheet, 'Tenant Info');
+
+    // Tenant Branding Details sheet
+    const brandingHeaders = ['Banner URL', 'Logo URL', 'Logo URL (White)', 'State Logo'];
+    const brandingSample = [
+      'https://example.com/banner.png',
+      'https://example.com/logo.png',
+      'https://example.com/logo-white.png',
+      'https://example.com/state-logo.png',
+    ];
+    const brandingData = [brandingHeaders, brandingSample];
+    const brandingSheet = XLSX.utils.aoa_to_sheet(brandingData);
+    brandingSheet['!cols'] = [{ wch: 35 }, { wch: 35 }, { wch: 35 }, { wch: 35 }];
+    XLSX.utils.book_append_sheet(wb, brandingSheet, 'Tenant Branding Details');
+
+    // Download the file
+    XLSX.writeFile(wb, 'Tenant And Branding Master.xlsx');
   };
 
   return (

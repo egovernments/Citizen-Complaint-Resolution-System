@@ -8,19 +8,9 @@ export interface Environment {
 
 export const ENVIRONMENTS: Environment[] = [
   {
-    name: 'Development',
-    url: 'https://unified-dev.digit.org',
-    description: 'Development environment',
-  },
-  {
-    name: 'Staging',
-    url: 'https://staging.digit.org',
-    description: 'Staging environment',
-  },
-  {
-    name: 'UAT',
-    url: 'https://uat.digit.org',
-    description: 'User Acceptance Testing',
+    name: 'Chakshu Dev',
+    url: 'https://api.egov.theflywheel.in',
+    description: 'Chakshu development environment',
   },
 ];
 
@@ -31,14 +21,15 @@ export const ENDPOINTS = {
   USER_SEARCH: '/user/_search',
 
   // MDMS
-  MDMS_SEARCH: '/egov-mdms-service/v2/_search',
-  MDMS_CREATE: '/egov-mdms-service/v2/_create',
+  MDMS_SEARCH: '/mdms-v2/v2/_search',
+  MDMS_CREATE: '/mdms-v2/v2/_create',
 
   // Boundary
   BOUNDARY_SEARCH: '/boundary-service/boundary/_search',
   BOUNDARY_HIERARCHY_SEARCH: '/boundary-service/boundary-hierarchy-definition/_search',
   BOUNDARY_HIERARCHY_CREATE: '/boundary-service/boundary-hierarchy-definition/_create',
   BOUNDARY_CREATE: '/boundary-service/boundary/_create',
+  BOUNDARY_RELATIONSHIP_CREATE: '/boundary-service/boundary-relationships/_create',
 
   // HRMS
   HRMS_EMPLOYEES_SEARCH: '/egov-hrms/employees/_search',

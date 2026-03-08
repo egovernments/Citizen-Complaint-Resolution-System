@@ -16,11 +16,18 @@ export const localizationService = {
     locale: string = 'en_IN',
     module?: string
   ): Promise<LocalizationMessage[]> {
-    const response = await apiClient.post(ENDPOINTS.LOCALIZATION_SEARCH, {
-      RequestInfo: apiClient.buildRequestInfo(),
-      tenantId,
+    // Build query params - locale and tenantId are required as query params
+    const params = new URLSearchParams({
       locale,
-      module,
+      tenantId,
+    });
+    if (module) {
+      params.append('module', module);
+    }
+
+    const url = `${ENDPOINTS.LOCALIZATION_SEARCH}?${params.toString()}`;
+    const response = await apiClient.post(url, {
+      RequestInfo: apiClient.buildRequestInfo(),
     });
 
     return (response.messages || []) as LocalizationMessage[];

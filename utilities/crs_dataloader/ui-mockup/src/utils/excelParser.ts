@@ -90,7 +90,7 @@ export function parseTenantExcel(workbook: XLSX.WorkBook): {
   const warnings: ValidationWarning[] = [];
 
   // Try to find the Tenant sheet
-  const tenantSheetNames = ['Tenant', 'TenantMaster', 'Tenant Master', 'tenants'];
+  const tenantSheetNames = ['Tenant Info', 'Tenant', 'TenantMaster', 'Tenant Master', 'tenants'];
   let tenantSheet: XLSX.WorkSheet | undefined;
   let tenantSheetName = '';
 
@@ -131,31 +131,59 @@ export function parseTenantExcel(workbook: XLSX.WorkBook): {
   // Parse first row as tenant data (expecting single tenant per file)
   const row = jsonData[0];
 
-  // Map column names (handle various naming conventions)
-  const tenantCode = String(
-    row['tenantCode'] || row['TenantCode'] || row['Tenant Code'] || row['tenant_code'] || ''
-  ).trim();
-  const tenantName = String(
-    row['tenantName'] || row['TenantName'] || row['Tenant Name'] || row['tenant_name'] ||
-    row['displayName'] || row['DisplayName'] || row['Display Name'] || ''
-  ).trim();
-  const displayName = String(
-    row['displayName'] || row['DisplayName'] || row['Display Name'] || tenantName || ''
-  ).trim();
-  const tenantType = String(
-    row['tenantType'] || row['TenantType'] || row['Tenant Type'] || row['type'] || 'ULB'
-  ).trim();
-  const cityName = String(
-    row['cityName'] || row['CityName'] || row['City Name'] || row['city'] || ''
-  ).trim();
-  const districtName = String(
-    row['districtName'] || row['DistrictName'] || row['District Name'] || row['district'] || ''
-  ).trim();
-  const logoPath = String(row['logoPath'] || row['LogoPath'] || row['Logo Path'] || '').trim();
+  // Helper function to find value by checking multiple possible column names
+  const getValue = (row: Record<string, unknown>, ...keys: string[]): string => {
+    for (const key of keys) {
+      // Check exact match first
+      if (row[key] !== undefined && row[key] !== null && row[key] !== '') {
+        return String(row[key]).trim();
+      }
+      // Check case-insensitive and partial matches
+      for (const [rowKey, value] of Object.entries(row)) {
+        const normalizedRowKey = rowKey.toLowerCase().replace(/[*\n\r]/g, '').replace(/\s+/g, ' ').trim();
+        const normalizedKey = key.toLowerCase().replace(/[*\n\r]/g, '').replace(/\s+/g, ' ').trim();
+        if (normalizedRowKey === normalizedKey || normalizedRowKey.includes(normalizedKey)) {
+          if (value !== undefined && value !== null && value !== '') {
+            return String(value).trim();
+          }
+        }
+      }
+    }
+    return '';
+  };
+
+  // Map column names (handle various naming conventions including template format)
+  const tenantCode = getValue(row,
+    'tenantCode', 'TenantCode', 'Tenant Code', 'tenant_code',
+    'Tenant Code*', 'tenant code (to be filled by admin)'
+  );
+  const tenantName = getValue(row,
+    'tenantName', 'TenantName', 'Tenant Name', 'tenant_name',
+    'displayName', 'DisplayName', 'Display Name',
+    'Tenant Display Name*', 'Tenant Display Name'
+  );
+  const displayName = getValue(row,
+    'displayName', 'DisplayName', 'Display Name',
+    'Tenant Display Name*', 'Tenant Display Name'
+  ) || tenantName;
+  const tenantType = getValue(row,
+    'tenantType', 'TenantType', 'Tenant Type', 'Tenant Type*', 'type'
+  ) || 'ULB';
+  const cityName = getValue(row,
+    'cityName', 'CityName', 'City Name', 'city'
+  );
+  const districtName = getValue(row,
+    'districtName', 'DistrictName', 'District Name', 'district'
+  );
+  const logoPath = getValue(row,
+    'logoPath', 'LogoPath', 'Logo Path', 'Logo File Path*', 'Logo File Path'
+  );
 
   // Parse coordinates
-  const latitude = parseFloat(String(row['latitude'] || row['Latitude'] || '0')) || undefined;
-  const longitude = parseFloat(String(row['longitude'] || row['Longitude'] || '0')) || undefined;
+  const latitudeStr = getValue(row, 'latitude', 'Latitude');
+  const longitudeStr = getValue(row, 'longitude', 'Longitude');
+  const latitude = latitudeStr ? parseFloat(latitudeStr) || undefined : undefined;
+  const longitude = longitudeStr ? parseFloat(longitudeStr) || undefined : undefined;
 
   // Validate required fields
   if (!tenantCode) {
@@ -202,7 +230,7 @@ export function parseTenantExcel(workbook: XLSX.WorkBook): {
   }
 
   // Try to parse branding from a separate sheet or same sheet
-  const brandingSheetNames = ['Branding', 'BrandingMaster', 'branding'];
+  const brandingSheetNames = ['Tenant Branding Details', 'Branding', 'BrandingMaster', 'branding'];
   let branding: TenantBrandingData['branding'] = {};
 
   for (const name of brandingSheetNames) {
@@ -210,11 +238,25 @@ export function parseTenantExcel(workbook: XLSX.WorkBook): {
       const brandingData = XLSX.utils.sheet_to_json<Record<string, string>>(workbook.Sheets[name]);
       if (brandingData.length > 0) {
         const bRow = brandingData[0];
+        // Helper for branding sheet (reuse same pattern)
+        const getBrandingValue = (...keys: string[]): string | undefined => {
+          for (const key of keys) {
+            if (bRow[key]) return String(bRow[key]).trim();
+            for (const [rowKey, value] of Object.entries(bRow)) {
+              const normalizedRowKey = rowKey.toLowerCase().replace(/[*\n\r]/g, '').replace(/\s+/g, ' ').trim();
+              const normalizedKey = key.toLowerCase().replace(/[*\n\r]/g, '').replace(/\s+/g, ' ').trim();
+              if (normalizedRowKey === normalizedKey || normalizedRowKey.includes(normalizedKey)) {
+                if (value) return String(value).trim();
+              }
+            }
+          }
+          return undefined;
+        };
         branding = {
-          bannerUrl: bRow['bannerUrl'] || bRow['BannerUrl'] || bRow['Banner URL'],
-          logoUrl: bRow['logoUrl'] || bRow['LogoUrl'] || bRow['Logo URL'],
-          logoUrlWhite: bRow['logoUrlWhite'] || bRow['LogoUrlWhite'] || bRow['Logo White'],
-          stateLogo: bRow['stateLogo'] || bRow['StateLogo'] || bRow['State Logo'],
+          bannerUrl: getBrandingValue('bannerUrl', 'BannerUrl', 'Banner URL'),
+          logoUrl: getBrandingValue('logoUrl', 'LogoUrl', 'Logo URL'),
+          logoUrlWhite: getBrandingValue('logoUrlWhite', 'LogoUrlWhite', 'Logo White', 'Logo URL (White)', 'Logo URL White'),
+          stateLogo: getBrandingValue('stateLogo', 'StateLogo', 'State Logo'),
         };
         break;
       }
@@ -224,10 +266,10 @@ export function parseTenantExcel(workbook: XLSX.WorkBook): {
   // If no branding sheet, check main tenant sheet for branding columns
   if (!branding.logoUrl) {
     branding = {
-      bannerUrl: String(row['bannerUrl'] || row['BannerUrl'] || '').trim() || undefined,
-      logoUrl: String(row['logoUrl'] || row['LogoUrl'] || logoPath || '').trim() || undefined,
-      logoUrlWhite: String(row['logoUrlWhite'] || row['LogoUrlWhite'] || '').trim() || undefined,
-      stateLogo: String(row['stateLogo'] || row['StateLogo'] || '').trim() || undefined,
+      bannerUrl: getValue(row, 'bannerUrl', 'BannerUrl', 'Banner URL') || undefined,
+      logoUrl: getValue(row, 'logoUrl', 'LogoUrl', 'Logo URL') || logoPath || undefined,
+      logoUrlWhite: getValue(row, 'logoUrlWhite', 'LogoUrlWhite', 'Logo URL (White)', 'Logo URL White') || undefined,
+      stateLogo: getValue(row, 'stateLogo', 'StateLogo', 'State Logo') || undefined,
     };
   }
 

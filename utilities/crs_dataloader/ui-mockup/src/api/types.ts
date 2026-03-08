@@ -169,6 +169,7 @@ export interface Tenant {
     districtName?: string;
     latitude?: number;
     longitude?: number;
+    ulbGrade?: string;
   };
 }
 

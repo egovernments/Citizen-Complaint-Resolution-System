@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../App';
-import { Eye, EyeOff, Loader2, Database, AlertCircle, HelpCircle } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Database, AlertCircle, HelpCircle, Rocket, Settings } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -10,16 +10,19 @@ import { LabelFieldPair, CardLabel, Field } from '@/components/digit/LabelFieldP
 import { SubmitBar } from '@/components/digit/SubmitBar';
 import { apiClient, ENVIRONMENTS, ApiClientError } from '@/api';
 
+type AppMode = 'onboarding' | 'management';
+
 export default function LoginPage() {
   const { login } = useApp();
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
     environment: ENVIRONMENTS[0].url,
-    username: '',
-    password: '',
-    tenantCode: 'pg',
+    username: 'ADMIN',
+    password: 'eGov@123',
+    tenantCode: 'statea',
   });
+  const [mode, setMode] = useState<AppMode>('onboarding');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,18 +58,23 @@ export default function LoginPage() {
         return;
       }
 
-      // Update app state
+      // Update app state — persist full user identity for session restore
       login(
         {
           name: response.UserRequest.name,
           email: response.UserRequest.emailId || `${response.UserRequest.userName}@digit.org`,
           roles: roles,
+          id: response.UserRequest.id,
+          uuid: response.UserRequest.uuid,
+          mobileNumber: response.UserRequest.mobileNumber,
         },
         formData.environment,
-        formData.tenantCode
+        formData.tenantCode,
+        mode
       );
 
-      navigate('/phase/1');
+      // Navigate based on mode
+      navigate(mode === 'onboarding' ? '/phase/1' : '/manage');
     } catch (err) {
       console.error('Login error:', err);
 
@@ -90,7 +98,7 @@ export default function LoginPage() {
             <div className="w-1 h-12 bg-primary mr-3" />
             <Database className="w-10 h-10 text-primary" />
           </div>
-          <h1 className="text-2xl font-condensed font-bold text-foreground">CRS Data Loader</h1>
+          <h1 className="text-2xl font-condensed font-bold text-foreground">CRS Configurator</h1>
           <p className="text-muted-foreground mt-1">Configure your DIGIT environment</p>
         </div>
 
@@ -100,6 +108,41 @@ export default function LoginPage() {
           <DigitCardSubHeader>Enter your credentials to continue</DigitCardSubHeader>
 
           <form onSubmit={handleSubmit} className="space-y-6 mt-6">
+            {/* Mode Toggle */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Mode</label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setMode('onboarding')}
+                  className={`
+                    flex items-center justify-center gap-2 p-4 rounded-lg border-2 transition-all
+                    ${mode === 'onboarding'
+                      ? 'border-primary bg-primary/5 text-primary'
+                      : 'border-border bg-card text-muted-foreground hover:border-primary/50'
+                    }
+                  `}
+                >
+                  <Rocket className="w-5 h-5" />
+                  <span className="font-medium text-sm">Onboarding</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode('management')}
+                  className={`
+                    flex items-center justify-center gap-2 p-4 rounded-lg border-2 transition-all
+                    ${mode === 'management'
+                      ? 'border-primary bg-primary/5 text-primary'
+                      : 'border-border bg-card text-muted-foreground hover:border-primary/50'
+                    }
+                  `}
+                >
+                  <Settings className="w-5 h-5" />
+                  <span className="font-medium text-sm">Management</span>
+                </button>
+              </div>
+            </div>
+
             {/* Error message */}
             {error && (
               <Alert variant="destructive">

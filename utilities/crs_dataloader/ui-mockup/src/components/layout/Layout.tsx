@@ -8,7 +8,8 @@ import {
   MapPin,
   FileSpreadsheet,
   Users,
-  Check
+  Check,
+  Settings,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,7 +22,7 @@ const phases = [
 ];
 
 export default function Layout() {
-  const { state, logout, goToPhase, toggleHelp } = useApp();
+  const { state, logout, goToPhase, setMode, toggleHelp } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -39,7 +40,13 @@ export default function Layout() {
     navigate('/login');
   };
 
-  const envName = state.environment.includes('unified-dev') ? 'unified-dev'
+  const handleSwitchToManagement = () => {
+    setMode('management');
+    navigate('/manage');
+  };
+
+  const envName = state.environment.includes('chakshu') ? 'chakshu-dev'
+    : state.environment.includes('unified-dev') ? 'unified-dev'
     : state.environment.includes('staging') ? 'staging'
     : state.environment.includes('uat') ? 'uat' : 'custom';
 
@@ -66,6 +73,17 @@ export default function Layout() {
             <div className="flex items-center gap-2 sm:gap-4">
               {/* Environment badge */}
               <Badge variant="secondary" className="hidden xs:inline-flex text-xs bg-primary/10 text-primary border-primary/20">{envName}</Badge>
+
+              {/* Switch to Management button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSwitchToManagement}
+                className="hidden sm:inline-flex text-xs gap-1.5"
+              >
+                <Settings className="w-3.5 h-3.5" />
+                Management
+              </Button>
 
               {/* Help button */}
               <Button
@@ -162,7 +180,7 @@ export default function Layout() {
       <footer className="bg-secondary text-white py-3 sm:py-4 mt-auto">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <p className="text-center text-xs sm:text-sm">
-            CRS Data Loader • <span className="hidden sm:inline">Press <kbd className="px-1.5 py-0.5 bg-white/20 rounded text-xs">Ctrl+/</kbd> for help</span>
+            CRS Configurator • <span className="hidden sm:inline">Press <kbd className="px-1.5 py-0.5 bg-white/20 rounded text-xs">Ctrl+/</kbd> for help</span>
           </p>
         </div>
       </footer>

@@ -215,16 +215,34 @@ export const mdmsService = {
   },
 
   async createTenant(stateTenantId: string, tenant: Tenant): Promise<MdmsRecord> {
-    return this.create(stateTenantId, MDMS_SCHEMAS.TENANT, tenant.code, {
+    // Build the full tenant data structure matching MDMS schema
+    const tenantData = {
       code: tenant.code,
       name: tenant.name,
-      description: tenant.description,
-      logoId: tenant.logoId,
-      emailId: tenant.emailId,
-      address: tenant.address,
-      contactNumber: tenant.contactNumber,
-      city: tenant.city,
-    });
+      type: tenant.city?.ulbGrade || 'CITY',
+      description: tenant.description || tenant.name,
+      logoId: tenant.logoId || null,
+      imageId: tenant.logoId || null,
+      emailId: tenant.emailId || `info@${tenant.code.toLowerCase().replace(/\./g, '-')}.gov.in`,
+      address: tenant.address || `${tenant.city?.name || tenant.name}, ${tenant.city?.districtName || 'District'}`,
+      domainUrl: `https://${tenant.code.toLowerCase().replace(/\./g, '-')}.digit.org`,
+      contactNumber: tenant.contactNumber || '1800-000-0000',
+      OfficeTimings: {
+        'Mon - Fri': '9:00 AM - 6:00 PM',
+      },
+      city: {
+        code: tenant.city?.code || tenant.code.toUpperCase().replace(/\./g, '_'),
+        name: tenant.city?.name || tenant.name,
+        latitude: tenant.city?.latitude || 0,
+        longitude: tenant.city?.longitude || 0,
+        ulbGrade: tenant.city?.ulbGrade || 'Municipal Corporation',
+        districtCode: tenant.city?.districtCode || tenant.code.split('.').pop()?.toUpperCase() || 'DISTRICT',
+        districtName: tenant.city?.districtName || 'District',
+        districtTenantCode: stateTenantId,
+      },
+    };
+
+    return this.create(stateTenantId, MDMS_SCHEMAS.TENANT, tenant.code, tenantData);
   },
 
   // ============================================
