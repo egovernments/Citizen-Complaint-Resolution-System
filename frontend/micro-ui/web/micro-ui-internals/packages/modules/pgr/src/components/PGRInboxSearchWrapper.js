@@ -38,15 +38,21 @@ const PGRInboxSearchWrapper = ({ configs }) => {
         button.className?.includes('secondary');
 
       if (isSecondaryButton) {
-        // Small delay to allow the form to clear first
+        // Small delay to allow the form to clear first, then click search twice
         setTimeout(() => {
-          // Find and click the primary search button
+          // Find the primary search button
           const searchButton = wrapperRef.current?.querySelector(
             'button[type="submit"]'
           );
 
           if (searchButton) {
+            // First click
             searchButton.click();
+
+            // Second click after a short delay
+            setTimeout(() => {
+              searchButton.click();
+            }, 150);
           }
         }, 100);
       }
