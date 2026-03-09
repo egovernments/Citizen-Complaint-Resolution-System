@@ -47,7 +47,7 @@ public class NovuClient {
 
             String apiKey = (novuApiKey != null && !novuApiKey.isBlank()) ? novuApiKey : config.getNovuApiKey();
             HttpHeaders headers = new HttpHeaders();
-            headers.set("Authorization", apiKey);
+            headers.set("Authorization", "ApiKey " + apiKey);
             headers.setContentType(MediaType.APPLICATION_JSON);
 
             String url = config.getNovuBaseUrl() + "/v1/events/trigger";
