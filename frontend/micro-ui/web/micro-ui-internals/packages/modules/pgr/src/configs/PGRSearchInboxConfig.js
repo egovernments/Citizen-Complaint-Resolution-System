@@ -48,7 +48,7 @@ const PGRSearchInboxConfig = () => {
                     headerStyle: null,
                     primaryLabel: 'ACTION_TEST_SEARCH',
                     secondaryLabel: 'CS_COMMON_CLEAR_SEARCH',
-                    minReqFields: 1,
+                    minReqFields: 0,
                     defaultValues: {
                         complaintNumber: "",
                         mobileNumber: "",

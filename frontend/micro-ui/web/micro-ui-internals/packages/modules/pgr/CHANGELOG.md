@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to this module will be documented in this file.
 
+### Version 1.0.4
+- **Fixed**: Clear search button in PGR inbox now clears both text fields and search results in a single click
+  - Updated `minReqFields` from 1 to 0 in PGRSearchInboxConfig.js to allow search with empty criteria
+  - Previously required two clicks: one to clear fields, another to refresh results
+  - Now automatically triggers search with cleared criteria on first click
+
 ## [1.0.3] - 2026-03-05
 ### Fixed
 - **PGR Inbox Search and Filter Issues**
