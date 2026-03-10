@@ -12,6 +12,18 @@ export {
   commonValidations,
 } from '@digit-ui/datagrid';
 
+// Filter components from @digit-ui/datagrid
+export {
+  SearchFilterInput,
+  TextFilterInput,
+  SelectFilterInput,
+  BooleanFilterInput,
+  DateFilterInput,
+  NullableBooleanFilterInput,
+  ReferenceFilterInput,
+  FilterBar,
+} from '@digit-ui/datagrid';
+
 export type {
   DigitDatagridProps,
   DigitColumn,

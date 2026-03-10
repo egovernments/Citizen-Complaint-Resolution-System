@@ -13,6 +13,7 @@ export {
   orderFields,
   groupShowFields,
   formatFieldLabel,
+  generateFilterElements,
 } from '@digit-ui/datagrid';
 
 export type {

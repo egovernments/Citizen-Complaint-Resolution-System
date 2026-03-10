@@ -4,27 +4,35 @@ import type { DigitColumn } from '@/admin';
 import { useListContext, useResourceContext } from 'ra-core';
 import { getResourceConfig, getResourceLabel, getResourceBySchema } from '@/providers/bridge';
 import { useSchemaDefinition } from '@/hooks/useSchemaDefinition';
-import { generateColumns, getRefMap } from './schemaUtils';
+import { generateColumns, getRefMap, generateFilterElements } from './schemaUtils';
 
 export function MdmsResourcePage() {
   const resource = useResourceContext() ?? '';
   const config = getResourceConfig(resource);
   const label = getResourceLabel(resource);
-
-  // Fetch schema definition for this resource
   const { definition } = useSchemaDefinition(config?.schema);
 
-  // Generate columns from schema (doesn't need data)
+  // Compute refMap once, reused by columns and filters
+  const refMap = useMemo(() => {
+    if (!definition) return {};
+    return getRefMap(definition, getResourceBySchema);
+  }, [definition]);
+
   const schemaColumns = useMemo(() => {
     if (!definition) return null;
-    const refMap = getRefMap(definition, getResourceBySchema);
     return generateColumns(definition, refMap);
-  }, [definition]);
+  }, [definition, refMap]);
+
+  // Auto-generate filter elements from schema
+  const filterElements = useMemo(() => {
+    if (!definition) return undefined;
+    return generateFilterElements(definition, refMap);
+  }, [definition, refMap]);
 
   const subtitle = config?.schema ? `Schema: ${config.schema}` : undefined;
 
   return (
-    <DigitList title={label} subtitle={subtitle}>
+    <DigitList title={label} subtitle={subtitle} filters={filterElements}>
       {schemaColumns ? (
         <DigitDatagrid columns={schemaColumns} rowClick="show" />
       ) : (

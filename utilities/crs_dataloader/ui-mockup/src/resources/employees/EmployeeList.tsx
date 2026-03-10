@@ -1,7 +1,22 @@
-import { DigitList, DigitDatagrid } from '@/admin';
+import { DigitList, DigitDatagrid, SearchFilterInput, SelectFilterInput, TextFilterInput } from '@/admin';
 import type { DigitColumn } from '@/admin';
 import { StatusChip } from '@/admin/fields';
 import { EntityLink } from '@/components/ui/EntityLink';
+
+const filters = [
+  <SearchFilterInput key="q" source="q" alwaysOn />,
+  <SelectFilterInput
+    key="employeeStatus"
+    source="employeeStatus"
+    label="Status"
+    choices={[
+      { id: 'EMPLOYED', name: 'Employed' },
+      { id: 'INACTIVE', name: 'Inactive' },
+    ]}
+    alwaysOn
+  />,
+  <TextFilterInput key="code" source="code" label="Code" />,
+];
 
 const columns: DigitColumn[] = [
   { source: 'code', label: 'Code' },
@@ -47,7 +62,7 @@ const columns: DigitColumn[] = [
 
 export function EmployeeList() {
   return (
-    <DigitList title="Employees" hasCreate sort={{ field: 'code', order: 'ASC' }}>
+    <DigitList title="Employees" hasCreate sort={{ field: 'code', order: 'ASC' }} filters={filters}>
       <DigitDatagrid columns={columns} rowClick="show" />
     </DigitList>
   );
