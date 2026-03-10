@@ -107,9 +107,9 @@ const componentsToRegister = {
   PGRSelectRating: SelectRating,
   PGRResponseCitzen: ResponseCitizen,
   GeoLocations,
-  SelectAddress,
-   CreatePGRFlow: CreatePGRFlow,
   SelectImages,
+  CreatePGRFlow: CreatePGRFlow,
+  SelectAddress,
  
 };
 
