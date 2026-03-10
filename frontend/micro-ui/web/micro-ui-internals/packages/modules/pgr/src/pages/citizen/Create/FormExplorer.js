@@ -37,7 +37,13 @@ const FormExplorer = () => {
   const client = useQueryClient();
   const match = useRouteMatch();
   const dispatch = useDispatch();
-  const tenantId = Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || Digit.ULBService.getCurrentTenantId()
+  const tenantId = 
+  
+  Digit.Utils.getMultiRootTenant()
+    ? Digit.ULBService.getCurrentTenantId()
+    : 
+    
+    Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || Digit.ULBService.getCurrentTenantId();
 
 
   // Use Custom MDMS hook for fetching Hierarchy Schema
@@ -230,7 +236,7 @@ const FormExplorer = () => {
           type: "CREATE_COMPLAINT",
           payload: { responseInfo: { status: "failed" } },
         });
-        history.push(`/digit-ui/citizen/pgr/response`);
+        history.push(`/${window.contextPath}/citizen/pgr/response`);
       },
       onSuccess: async (responseData) => {
         dispatch({
@@ -241,10 +247,10 @@ const FormExplorer = () => {
           const id = responseData.ServiceWrappers[0].service.serviceRequestId;
 
           await client.refetchQueries(["complaintsList"]);
-          history.push(`/digit-ui/citizen/pgr/response`);
+          history.push(`/${window.contextPath}/citizen/pgr/response`);
 
         } else {
-          history.push(`/digit-ui/citizen/pgr/response`);
+          history.push(`/${window.contextPath}/citizen/pgr/response`);
         }
       },
     });

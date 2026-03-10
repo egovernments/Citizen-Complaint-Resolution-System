@@ -1,11 +1,17 @@
 # Changelog
 All notable changes to this module will be documented in this file.
 
+## [1.0.9] - 2026-03-10
+- Multiroot tenant city id updated and logics added
+
+## [1.0.8] - 2026-03-10
+- CMS Create multiroot tenant city id updated
+
 ## [1.0.7] - 2026-03-10
-- CMS Create multiroot tenant city id Updaed
+- CMS Create multiroot tenant city id updated
 
 ## [1.0.6] - 2026-03-10
-- Digit-ui-libraries Updaed into 1.9.4
+- Digit-ui-libraries updated into 1.9.4
 
 ## [1.0.5] - 2026-03-10
 ### Updated
