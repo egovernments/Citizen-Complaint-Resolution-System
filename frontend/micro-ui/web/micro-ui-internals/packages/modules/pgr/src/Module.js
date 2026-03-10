@@ -26,9 +26,7 @@ import SelectAddress from "../../pgr/src/pages/citizen/Create/Steps/SelectAddres
 import SelectImages from "../../pgr/src/pages/citizen/Create/Steps/SelectImages";
 import CreatePGRFlow from "./pages/citizen/Create/FormExplorer";
 
-
 export const PGRReducers = getRootReducer;
-
 
 export const PGRModule = ({ stateCode, userType, tenants }) => {
   const { path, url } = useRouteMatch();
@@ -67,6 +65,8 @@ export const PGRModule = ({ stateCode, userType, tenants }) => {
     );
   }
 };
+
+// Added new component to render links on citizen home page for PGR module
 
 const PGRLinks = ({ matchPath }) => {
   const { t } = useTranslation();
@@ -108,8 +108,9 @@ const componentsToRegister = {
   PGRResponseCitzen: ResponseCitizen,
   GeoLocations,
   SelectAddress,
+   CreatePGRFlow: CreatePGRFlow,
   SelectImages,
-  CreatePGRFlow: CreatePGRFlow,
+ 
 };
 
 export const initPGRComponents = () => {
