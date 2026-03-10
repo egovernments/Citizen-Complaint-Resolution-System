@@ -16,3 +16,5 @@ export { FilterFormInput } from './FilterFormInput';
 export type { FilterFormInputProps } from './FilterFormInput';
 export { AddFilterButton } from './AddFilterButton';
 export type { AddFilterButtonProps } from './AddFilterButton';
+export { FilterBar } from './FilterBar';
+export type { FilterBarProps } from './FilterBar';

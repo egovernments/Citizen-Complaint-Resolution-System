@@ -13,6 +13,7 @@ import { Input } from './primitives/input';
 import { Popover, PopoverTrigger, PopoverContent } from './primitives/popover';
 import { useColumnConfig } from './editing/useColumnConfig';
 import type { DigitColumn } from './columns/types';
+import { FilterBar } from './filters/FilterBar';
 
 export interface DigitListProps {
   /** Page title displayed as h1 */
@@ -43,6 +44,8 @@ export interface DigitListProps {
   alwaysVisibleSources?: string[];
   /** Custom localStorage key for column preferences */
   preferenceKey?: string;
+  /** Filter input elements (react-admin style) */
+  filters?: React.ReactElement[];
 }
 
 export function DigitList({
@@ -60,6 +63,7 @@ export function DigitList({
   columns,
   alwaysVisibleSources,
   preferenceKey,
+  filters,
 }: DigitListProps) {
   const [searchValue, setSearchValue] = useState('');
 
@@ -183,18 +187,24 @@ export function DigitList({
 
         {/* Card with search and content */}
         <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6">
-          {/* Search input */}
-          <div className="mb-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search..."
-                value={searchValue}
-                onChange={handleSearchChange}
-                className="pl-9 max-w-sm"
-              />
+          {/* Filter bar OR built-in search */}
+          {filters ? (
+            <div className="mb-4">
+              <FilterBar filters={filters} />
             </div>
-          </div>
+          ) : (
+            <div className="mb-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search..."
+                  value={searchValue}
+                  onChange={handleSearchChange}
+                  className="pl-9 max-w-sm"
+                />
+              </div>
+            </div>
+          )}
 
           {/* Loading state */}
           {listContext.isPending && (
