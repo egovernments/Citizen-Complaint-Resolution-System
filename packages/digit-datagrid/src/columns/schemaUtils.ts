@@ -1,5 +1,13 @@
 import React from 'react';
 import type { DigitColumn } from './types';
+import {
+  SearchFilterInput,
+  TextFilterInput,
+  SelectFilterInput,
+  NullableBooleanFilterInput,
+  DateFilterInput,
+  ReferenceFilterInput,
+} from '../filters';
 
 // --- Types ---
 
@@ -212,4 +220,92 @@ export function formatFieldLabel(fieldName: string): string {
     .replace(/\s+/g, ' ')
     .trim()
     .replace(/\b\w/g, (s) => s.toUpperCase());
+}
+
+/**
+ * Auto-generate filter elements from a schema definition.
+ * Rules:
+ * - Always prepend SearchFilterInput source="q" alwaysOn
+ * - x-unique fields: skip
+ * - enum fields: SelectFilterInput (alwaysOn if required)
+ * - boolean fields: NullableBooleanFilterInput (alwaysOn if required)
+ * - x-ref-schema fields: ReferenceFilterInput (alwaysOn if required)
+ * - date/date-time: DateFilterInput
+ * - Required string fields: TextFilterInput (max 2)
+ */
+export function generateFilterElements(
+  schema: SchemaDefinition,
+  refMap: Record<string, RefMapEntry>
+): React.ReactElement[] {
+  const props = schema.properties ?? {};
+  const unique = new Set(schema['x-unique'] ?? []);
+  const required = new Set(schema.required ?? []);
+
+  const elements: React.ReactElement[] = [
+    React.createElement(SearchFilterInput, { key: 'q', source: 'q', alwaysOn: true }),
+  ];
+
+  let textCount = 0;
+
+  for (const [fieldName, prop] of Object.entries(props)) {
+    if (unique.has(fieldName)) continue;
+
+    const isRequired = required.has(fieldName);
+    const label = formatFieldLabel(fieldName);
+    const ref = refMap[fieldName];
+
+    if (prop.enum && Array.isArray(prop.enum)) {
+      const choices = prop.enum.map((v: unknown) => ({
+        id: String(v),
+        name: String(v),
+      }));
+      elements.push(
+        React.createElement(SelectFilterInput, {
+          key: fieldName,
+          source: fieldName,
+          label,
+          choices,
+          alwaysOn: isRequired,
+        })
+      );
+    } else if (prop.type === 'boolean') {
+      elements.push(
+        React.createElement(NullableBooleanFilterInput, {
+          key: fieldName,
+          source: fieldName,
+          label,
+          alwaysOn: isRequired,
+        })
+      );
+    } else if (ref) {
+      elements.push(
+        React.createElement(ReferenceFilterInput, {
+          key: fieldName,
+          source: fieldName,
+          label,
+          reference: ref.resource,
+          alwaysOn: isRequired,
+        })
+      );
+    } else if (prop.format === 'date' || prop.format === 'date-time') {
+      elements.push(
+        React.createElement(DateFilterInput, {
+          key: fieldName,
+          source: fieldName,
+          label,
+        })
+      );
+    } else if (isRequired && prop.type === 'string' && textCount < 2) {
+      textCount++;
+      elements.push(
+        React.createElement(TextFilterInput, {
+          key: fieldName,
+          source: fieldName,
+          label,
+        })
+      );
+    }
+  }
+
+  return elements;
 }
