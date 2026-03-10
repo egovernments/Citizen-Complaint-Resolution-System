@@ -1,0 +1,4 @@
+{
+  "private": true,
+  "workspaces": ["packages/*", "utilities/crs_dataloader/ui-mockup"]
+}
