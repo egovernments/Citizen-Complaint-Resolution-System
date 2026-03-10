@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to this module will be documented in this file.
 
+## [1.0.5] - 2026-03-10
+### Updated
+- **Libraries Package**: Updated digit-ui-libraries to version 1.9.4
+
 ### Version 1.0.4
 - **Fixed**: Clear search button in PGR inbox now clears both text fields and search results in a single click
   - Updated `minReqFields` from 1 to 0 in PGRSearchInboxConfig.js to allow search with empty criteria

@@ -1,8 +1,7 @@
 import React, { useMemo, useState, useEffect } from "react";
-import { HeaderComponent, Toast, Loader } from "@egovernments/digit-ui-components";
+import { InboxSearchComposer, HeaderComponent, Toast, Loader } from "@egovernments/digit-ui-components";
 import { useTranslation } from "react-i18next";
 import PGRSearchInboxConfig from "../../configs/PGRSearchInboxConfig";
-import PGRInboxSearchWrapper from "../../components/PGRInboxSearchWrapper";
 import { useLocation } from "react-router-dom";
 import _ from "lodash";
 
@@ -169,7 +168,7 @@ const PGRSearchInbox = () => {
 
       {/* Complaint search and filter interface */}
       <div className="digit-inbox-search-wrapper">
-        <PGRInboxSearchWrapper configs={updatedConfig} />
+        <InboxSearchComposer configs={updatedConfig} />
       </div>
     </div>
   );
