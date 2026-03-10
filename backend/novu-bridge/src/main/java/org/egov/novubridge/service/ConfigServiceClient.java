@@ -152,14 +152,14 @@ public class ConfigServiceClient {
      * Returns all active providers sorted by priority
      */
     public List<ResolvedProvider> resolveProvidersByChannel(String tenantId, String channel) {
-        Map<String, Object> resolveRequest = new HashMap<>();
-        resolveRequest.put("schemaCode", "ProviderDetail");
-        resolveRequest.put("tenantId", tenantId);
-        resolveRequest.put("criteria", Map.of("channel", channel));
+        Map<String, Object> searchCriteria = new HashMap<>();
+        searchCriteria.put("schemaCode", "ProviderDetail");
+        searchCriteria.put("tenantId", tenantId);
+        searchCriteria.put("criteria", Map.of("channel", channel));
 
         Map<String, Object> payload = new HashMap<>();
         payload.put("RequestInfo", new HashMap<>());
-        payload.put("resolveRequest", resolveRequest);
+        payload.put("criteria", searchCriteria);
 
         try {
             String url = config.getConfigHost() + config.getConfigResolvePath().replace("_resolve", "_search");
