@@ -1,3 +1,4 @@
+export type { FilterElementProps, FilterElement } from './types';
 export { SearchFilterInput } from './SearchFilterInput';
 export type { SearchFilterInputProps } from './SearchFilterInput';
 export { TextFilterInput } from './TextFilterInput';

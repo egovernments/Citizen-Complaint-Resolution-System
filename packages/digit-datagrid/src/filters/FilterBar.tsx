@@ -1,10 +1,11 @@
 import React from 'react';
 import { FilterLiveForm, useListContext } from 'ra-core';
+import type { FilterElement } from './types';
 import { FilterFormInput } from './FilterFormInput';
 import { AddFilterButton } from './AddFilterButton';
 
 export interface FilterBarProps {
-  filters: React.ReactElement[];
+  filters: FilterElement[];
 }
 
 export function FilterBar({ filters }: FilterBarProps) {

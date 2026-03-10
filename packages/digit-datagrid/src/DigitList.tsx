@@ -13,6 +13,7 @@ import { Input } from './primitives/input';
 import { Popover, PopoverTrigger, PopoverContent } from './primitives/popover';
 import { useColumnConfig } from './editing/useColumnConfig';
 import type { DigitColumn } from './columns/types';
+import type { FilterElement } from './filters/types';
 import { FilterBar } from './filters/FilterBar';
 
 export interface DigitListProps {
@@ -45,7 +46,7 @@ export interface DigitListProps {
   /** Custom localStorage key for column preferences */
   preferenceKey?: string;
   /** Filter input elements (react-admin style) */
-  filters?: React.ReactElement[];
+  filters?: FilterElement[];
 }
 
 export function DigitList({

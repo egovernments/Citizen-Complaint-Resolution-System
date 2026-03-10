@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ListFilter } from 'lucide-react';
+import type { FilterElement } from './types';
 import { Button } from '../primitives/button';
 import {
   Popover,
@@ -8,7 +9,7 @@ import {
 } from '../primitives/popover';
 
 export interface AddFilterButtonProps {
-  filters: React.ReactElement[];
+  filters: FilterElement[];
   displayedFilters: Record<string, boolean>;
   showFilter: (name: string, defaultValue?: unknown) => void;
 }
@@ -18,6 +19,8 @@ export function AddFilterButton({
   displayedFilters,
   showFilter,
 }: AddFilterButtonProps) {
+  const [open, setOpen] = useState(false);
+
   const hiddenFilters = filters.filter((f) => {
     const { source, alwaysOn } = f.props;
     return !alwaysOn && !displayedFilters[source];
@@ -26,7 +29,7 @@ export function AddFilterButton({
   if (hiddenFilters.length === 0) return null;
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="outline" size="sm" className="h-8 gap-1.5 text-sm">
           <ListFilter className="w-3.5 h-3.5" />
@@ -41,7 +44,10 @@ export function AddFilterButton({
               <button
                 key={source}
                 type="button"
-                onClick={() => showFilter(source, f.props.defaultValue)}
+                onClick={() => {
+                  showFilter(source, f.props.defaultValue);
+                  setOpen(false);
+                }}
                 className="w-full text-left px-2 py-1.5 text-sm rounded-sm hover:bg-accent hover:text-accent-foreground transition-colors"
               >
                 {label || source}

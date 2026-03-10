@@ -1,13 +1,14 @@
 import React from 'react';
 import { X } from 'lucide-react';
+import type { FilterElement } from './types';
 
 export interface FilterFormInputProps {
-  filterElement: React.ReactElement;
+  filterElement: FilterElement;
   hideFilter: (name: string) => void;
 }
 
 export function FilterFormInput({ filterElement, hideFilter }: FilterFormInputProps) {
-  const source = filterElement.props.source as string;
+  const source = filterElement.props.source;
 
   return (
     <div className="flex items-center gap-1">

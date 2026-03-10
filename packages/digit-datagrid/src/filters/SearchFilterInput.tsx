@@ -13,7 +13,7 @@ export function SearchFilterInput({ source = 'q', alwaysOn = true, ...rest }: Se
 
   const handleClear = useCallback(() => {
     field.onChange('');
-  }, [field]);
+  }, [field.onChange]);
 
   return (
     <div className="relative">

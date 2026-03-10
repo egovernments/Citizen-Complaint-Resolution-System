@@ -60,6 +60,8 @@ export {
   FilterBar,
 } from './filters';
 export type {
+  FilterElementProps,
+  FilterElement,
   SearchFilterInputProps,
   TextFilterInputProps,
   SelectFilterInputProps,

@@ -1,5 +1,6 @@
 import React from 'react';
 import type { DigitColumn } from './types';
+import type { FilterElement } from '../filters/types';
 import {
   SearchFilterInput,
   TextFilterInput,
@@ -236,10 +237,11 @@ export function formatFieldLabel(fieldName: string): string {
 export function generateFilterElements(
   schema: SchemaDefinition,
   refMap: Record<string, RefMapEntry>
-): React.ReactElement[] {
+): FilterElement[] {
   const props = schema.properties ?? {};
   const unique = new Set(schema['x-unique'] ?? []);
   const required = new Set(schema.required ?? []);
+  const ordered = orderFields(schema);
 
   const elements: React.ReactElement[] = [
     React.createElement(SearchFilterInput, { key: 'q', source: 'q', alwaysOn: true }),
@@ -247,8 +249,10 @@ export function generateFilterElements(
 
   let textCount = 0;
 
-  for (const [fieldName, prop] of Object.entries(props)) {
+  for (const fieldName of ordered) {
     if (unique.has(fieldName)) continue;
+    const prop = props[fieldName];
+    if (!prop) continue;
 
     const isRequired = required.has(fieldName);
     const label = formatFieldLabel(fieldName);
@@ -307,5 +311,6 @@ export function generateFilterElements(
     }
   }
 
-  return elements;
+  // Elements are typed as ReactElement[] internally but each has FilterElementProps
+  return elements as FilterElement[];
 }
