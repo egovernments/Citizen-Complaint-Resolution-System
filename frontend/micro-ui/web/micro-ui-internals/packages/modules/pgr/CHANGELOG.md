@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to this module will be documented in this file.
 
+## [1.0.7] - 2026-03-10
+- CMS Create multiroot tenant city id Updaed
+
+## [1.0.6] - 2026-03-10
+- Digit-ui-libraries Updaed into 1.9.4
+
 ## [1.0.5] - 2026-03-10
 ### Updated
 - **Libraries Package**: Updated digit-ui-libraries to version 1.9.4
