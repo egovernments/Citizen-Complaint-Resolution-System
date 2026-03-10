@@ -61,14 +61,14 @@ public class ConfigDataService {
 
         ConfigData result = repository.resolve(
                 params.getSchemaCode(),
-                params.getFilters(),
+                params.getCriteria(),
                 tenantChain);
 
         if (result == null) {
             throw new CustomException("CONFIG_NOT_RESOLVED",
                     "No config found for schemaCode=" + params.getSchemaCode()
                             + " tenantId=" + params.getTenantId()
-                            + " filters=" + params.getFilters());
+                            + " criteria=" + params.getCriteria());
         }
 
         // Decrypt sensitive fields before returning
