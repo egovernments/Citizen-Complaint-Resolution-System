@@ -12,3 +12,7 @@ export { NullableBooleanFilterInput } from './NullableBooleanFilterInput';
 export type { NullableBooleanFilterInputProps } from './NullableBooleanFilterInput';
 export { ReferenceFilterInput } from './ReferenceFilterInput';
 export type { ReferenceFilterInputProps } from './ReferenceFilterInput';
+export { FilterFormInput } from './FilterFormInput';
+export type { FilterFormInputProps } from './FilterFormInput';
+export { AddFilterButton } from './AddFilterButton';
+export type { AddFilterButtonProps } from './AddFilterButton';
