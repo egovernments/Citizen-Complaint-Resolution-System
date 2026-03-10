@@ -33,7 +33,7 @@ public class ConfigServiceClient {
         Map<String, Object> resolveRequest = new HashMap<>();
         resolveRequest.put("schemaCode", "TemplateBinding");
         resolveRequest.put("tenantId", tenantId);
-        resolveRequest.put("filters", Map.of(
+        resolveRequest.put("criteria", Map.of(
             "eventName", eventName,
             "channel", context.getChannel()  // Include channel in template resolution
         ));
@@ -90,7 +90,7 @@ public class ConfigServiceClient {
         Map<String, Object> resolveRequest = new HashMap<>();
         resolveRequest.put("schemaCode", "ProviderDetail");
         resolveRequest.put("tenantId", tenantId);
-        resolveRequest.put("filters", Map.of(
+        resolveRequest.put("criteria", Map.of(
             "providerName", providerName,
             "channel", channel
         ));
@@ -155,7 +155,7 @@ public class ConfigServiceClient {
         Map<String, Object> resolveRequest = new HashMap<>();
         resolveRequest.put("schemaCode", "ProviderDetail");
         resolveRequest.put("tenantId", tenantId);
-        resolveRequest.put("filters", Map.of("channel", channel));
+        resolveRequest.put("criteria", Map.of("channel", channel));
 
         Map<String, Object> payload = new HashMap<>();
         payload.put("RequestInfo", new HashMap<>());
