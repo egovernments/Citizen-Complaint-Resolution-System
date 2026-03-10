@@ -186,7 +186,7 @@ public class ConfigServiceClient {
                 Map<String, Object> credentials = (Map<String, Object>) data.get("credentials");
                 String novuApiKey = (String) data.get("novuApiKey");
                 Boolean isActive = (Boolean) configItem.get("isActive");
-                Integer priority = (Integer) configItem.get("priority");
+                Integer priority = (Integer) data.get("priority");
 
                 providers.add(ResolvedProvider.builder()
                         .providerName(resolvedProvider)
