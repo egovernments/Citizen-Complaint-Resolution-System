@@ -145,4 +145,67 @@ public class ConfigServiceClient {
             throw new CustomException("NB_PROVIDER_RESOLVE_FAILED", "Failed resolving provider config");
         }
     }
+
+    /**
+     * Resolve providers by tenant and channel only (no specific provider name)
+     * Returns all active providers sorted by priority
+     */
+    public List<ResolvedProvider> resolveProvidersByChannel(String tenantId, String channel) {
+        Map<String, Object> resolveRequest = new HashMap<>();
+        resolveRequest.put("schemaCode", "ProviderDetail");
+        resolveRequest.put("tenantId", tenantId);
+        resolveRequest.put("filters", Map.of("channel", channel));
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("RequestInfo", new HashMap<>());
+        payload.put("resolveRequest", resolveRequest);
+
+        try {
+            String url = config.getConfigHost() + config.getConfigResolvePath().replace("_resolve", "_search");
+            log.info("Provider search request: url={}, schemaCode=ProviderDetail, channel={}, tenantId={}",
+                    url, channel, tenantId);
+
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(payload), Map.class);
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                throw new CustomException("NB_PROVIDER_SEARCH_FAILED", "Provider search returned non-success response");
+            }
+
+            List<Map<String, Object>> configDataList = (List<Map<String, Object>>) response.getBody().get("configData");
+            if (configDataList == null || configDataList.isEmpty()) {
+                throw new CustomException("NB_PROVIDERS_NOT_FOUND", "No provider configs found for channel");
+            }
+
+            List<ResolvedProvider> providers = new ArrayList<>();
+            for (Map<String, Object> configItem : configDataList) {
+                Map<String, Object> data = (Map<String, Object>) configItem.get("data");
+                if (data == null) continue;
+
+                String resolvedProvider = (String) data.get("providerName");
+                String resolvedChannel = (String) data.get("channel");
+                Map<String, Object> credentials = (Map<String, Object>) data.get("credentials");
+                String novuApiKey = (String) data.get("novuApiKey");
+                Boolean isActive = (Boolean) configItem.get("isActive");
+                Integer priority = (Integer) configItem.get("priority");
+
+                providers.add(ResolvedProvider.builder()
+                        .providerName(resolvedProvider)
+                        .channel(resolvedChannel)
+                        .credentials(credentials)
+                        .novuApiKey(novuApiKey)
+                        .isActive(isActive != null ? isActive : true)
+                        .priority(priority != null ? priority : 999) // Default low priority
+                        .build());
+            }
+
+            log.info("Provider search result: found {} providers for channel={}, tenantId={}",
+                    providers.size(), channel, tenantId);
+
+            return providers;
+        } catch (CustomException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Provider search failed for channel={} tenantId={}", channel, tenantId, e);
+            throw new CustomException("NB_PROVIDER_SEARCH_FAILED", "Failed searching provider configs");
+        }
+    }
 }

@@ -77,25 +77,22 @@ public class DispatchPipelineService {
                 resolvedTemplate.getRequiredVars(), resolvedTemplate.getParamOrder());
         validateTemplateConfig(resolvedTemplate);
         
-        // Resolve provider configuration dynamically - use generic provider name, not hardcoded "twilio"
-        ResolvedProvider resolvedProvider = configServiceClient.resolveProvider(event.getTenantId(), "whatsapp-provider", context.getChannel());
-        log.info("Resolved provider: eventId={}, provider={}, channel={}, isActive={}, priority={}, credentialKeys={}",
+        // Resolve providers by channel only, then select by priority
+        List<ResolvedProvider> availableProviders = configServiceClient.resolveProvidersByChannel(event.getTenantId(), context.getChannel());
+        ResolvedProvider resolvedProvider = availableProviders.stream()
+                .filter(ResolvedProvider::getIsActive)
+                .sorted(Comparator.comparing(ResolvedProvider::getPriority))
+                .findFirst()
+                .orElseThrow(() -> new CustomException("NB_NO_ACTIVE_PROVIDER", 
+                        "No active provider found for tenant=" + event.getTenantId() + " channel=" + context.getChannel()));
+        
+        log.info("Resolved provider: eventId={}, provider={}, channel={}, isActive={}, priority={}, credentialKeys={}, availableCount={}",
                 event.getEventId(), resolvedProvider.getProviderName(), resolvedProvider.getChannel(),
                 resolvedProvider.getIsActive(), resolvedProvider.getPriority(), 
-                resolvedProvider.getCredentials() != null ? resolvedProvider.getCredentials().keySet() : "null");
+                resolvedProvider.getCredentials() != null ? resolvedProvider.getCredentials().keySet() : "null",
+                availableProviders.size());
         
-        if (!resolvedProvider.getIsActive()) {
-            persist(event, context, resolvedTemplate, "FAILED", "NB_PROVIDER_INACTIVE", "Provider is inactive", null, 1);
-            return DispatchResult.builder()
-                    .valid(false)
-                    .preferenceAllowed(true)
-                    .derivedContext(context)
-                    .resolvedTemplate(resolvedTemplate)
-                    .resolvedProvider(resolvedProvider)
-                    .novuTriggered(false)
-                    .diagnostics(Collections.singletonList("Provider inactive"))
-                    .build();
-        }
+        // Provider is already filtered for active status above, no need to check again
         
         List<String> missingVars = findMissingRequiredVars(resolvedTemplate, event.getData());
         if (!missingVars.isEmpty()) {
