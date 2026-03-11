@@ -140,7 +140,7 @@ public class DispatchPipelineService {
         String novuApiKey = resolvedProvider.getNovuApiKey() != null ? 
                 resolvedProvider.getNovuApiKey() : resolvedTemplate.getNovuApiKey();
 
-        // Use direct provider credential pass-through with sender number from config
+        // Use direct provider credential pass-through with sender number and contentSid from config
         NovuClient.NovuResponse novuResponse = novuClient.triggerWithProviderCredentials(
                 resolvedTemplate.getTemplateKey(),
                 subscriberId,
@@ -150,6 +150,7 @@ public class DispatchPipelineService {
                 resolvedProvider.getProviderName(),
                 resolvedProvider.getCredentials(),
                 resolvedProvider.getSenderNumber(),
+                resolvedTemplate.getTwilioContentSid(),
                 novuApiKey);
 
         log.info("Novu trigger response: eventId={}, statusCode={}, response={}",

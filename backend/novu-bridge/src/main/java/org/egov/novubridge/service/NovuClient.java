@@ -77,9 +77,9 @@ public class NovuClient {
     public NovuResponse triggerWithProviderCredentials(String templateKey, String subscriberId, String phone, 
                                                        Map<String, Object> payload, String transactionId,
                                                        String providerName, Map<String, Object> providerCredentials,
-                                                       String senderNumber, String novuApiKey) {
+                                                       String senderNumber, String contentSid, String novuApiKey) {
         
-        // Build provider overrides - pass credentials and sender number to Novu
+        // Build provider overrides - pass credentials, sender number, and contentSid to Novu
         Map<String, Object> providerOverrides = new HashMap<>();
         if (providerCredentials != null && !providerCredentials.isEmpty()) {
             Map<String, Object> providerConfig = new HashMap<>();
@@ -91,13 +91,23 @@ public class NovuClient {
                 log.info("Using senderNumber from config: {}", senderNumber);
             }
             
+            // Add contentSid for WhatsApp template messaging - use Twilio's _passthrough format
+            if (contentSid != null && !contentSid.isBlank()) {
+                Map<String, Object> passthrough = new HashMap<>();
+                Map<String, Object> body = new HashMap<>();
+                body.put("contentSid", contentSid);
+                passthrough.put("body", body);
+                providerConfig.put("_passthrough", passthrough);
+                log.info("Using contentSid from config: {}", contentSid);
+            }
+            
             providerOverrides.put(providerName, providerConfig);
         }
         
         Map<String, Object> overrides = Map.of("providers", providerOverrides);
         
-        log.info("Triggering Novu with provider credentials: templateKey={}, provider={}, credentialKeys={}, senderNumber={}", 
-                templateKey, providerName, providerCredentials != null ? providerCredentials.keySet() : "none", senderNumber);
+        log.info("Triggering Novu with provider credentials: templateKey={}, provider={}, credentialKeys={}, senderNumber={}, contentSid={}", 
+                templateKey, providerName, providerCredentials != null ? providerCredentials.keySet() : "none", senderNumber, contentSid);
         
         return trigger(templateKey, subscriberId, phone, payload, transactionId, overrides, novuApiKey);
     }
