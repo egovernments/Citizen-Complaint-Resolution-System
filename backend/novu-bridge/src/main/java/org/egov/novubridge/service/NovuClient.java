@@ -52,8 +52,11 @@ public class NovuClient {
 
             String url = config.getNovuBaseUrl() + "/v1/events/trigger";
             
-            log.debug("Novu trigger request: templateKey={}, subscriberId={}, overrides={}", 
-                    templateKey, subscriberId, overrides);
+            log.info("=== NOVU PAYLOAD ===");
+            log.info("URL: {}", url);
+            log.info("Headers: {}", headers);
+            log.info("Request Body: {}", request);
+            log.info("==================");
             
             ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(request, headers), Map.class);
             return NovuResponse.builder()
@@ -69,23 +72,32 @@ public class NovuClient {
     }
 
     /**
-     * Trigger with provider credentials passed directly in overrides
+     * Trigger with provider credentials and sender number
      */
     public NovuResponse triggerWithProviderCredentials(String templateKey, String subscriberId, String phone, 
                                                        Map<String, Object> payload, String transactionId,
                                                        String providerName, Map<String, Object> providerCredentials,
-                                                       String novuApiKey) {
+                                                       String senderNumber, String novuApiKey) {
         
-        // Build provider overrides - pass credentials directly to Novu
+        // Build provider overrides - pass credentials and sender number to Novu
         Map<String, Object> providerOverrides = new HashMap<>();
         if (providerCredentials != null && !providerCredentials.isEmpty()) {
-            providerOverrides.put(providerName, Map.of("credentials", providerCredentials));
+            Map<String, Object> providerConfig = new HashMap<>();
+            providerConfig.put("credentials", providerCredentials);
+            
+            // Add sender number - Novu will map this to provider-specific field (from/originator/etc)
+            if (senderNumber != null && !senderNumber.isBlank()) {
+                providerConfig.put("from", senderNumber);
+                log.info("Using senderNumber from config: {}", senderNumber);
+            }
+            
+            providerOverrides.put(providerName, providerConfig);
         }
         
         Map<String, Object> overrides = Map.of("providers", providerOverrides);
         
-        log.info("Triggering Novu with provider credentials: templateKey={}, provider={}, credentialKeys={}", 
-                templateKey, providerName, providerCredentials != null ? providerCredentials.keySet() : "none");
+        log.info("Triggering Novu with provider credentials: templateKey={}, provider={}, credentialKeys={}, senderNumber={}", 
+                templateKey, providerName, providerCredentials != null ? providerCredentials.keySet() : "none", senderNumber);
         
         return trigger(templateKey, subscriberId, phone, payload, transactionId, overrides, novuApiKey);
     }

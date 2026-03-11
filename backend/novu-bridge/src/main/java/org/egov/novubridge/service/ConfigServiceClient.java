@@ -125,11 +125,12 @@ public class ConfigServiceClient {
             String novuApiKey = (String) data.get("novuApiKey");
             Boolean isActive = (Boolean) data.get("isActive");
             Integer priority = (Integer) data.get("priority");
+            String senderNumber = (String) data.get("senderNumber");
 
-            log.info("Provider resolve result: provider={}, channel={}, credentialKeys={}, priority={}, isActive={}",
+            log.info("Provider resolve result: provider={}, channel={}, credentialKeys={}, priority={}, isActive={}, senderNumber={}",
                     resolvedProvider, resolvedChannel, 
                     credentials != null ? credentials.keySet() : "null",
-                    priority, isActive);
+                    priority, isActive, senderNumber);
 
             return ResolvedProvider.builder()
                     .providerName(resolvedProvider)
@@ -138,6 +139,7 @@ public class ConfigServiceClient {
                     .novuApiKey(novuApiKey)
                     .isActive(isActive != null ? isActive : true)
                     .priority(priority != null ? priority : 0)
+                    .senderNumber(senderNumber)
                     .build();
         } catch (CustomException e) {
             throw e;
@@ -187,6 +189,7 @@ public class ConfigServiceClient {
                 String novuApiKey = (String) data.get("novuApiKey");
                 Boolean isActive = (Boolean) configItem.get("isActive");
                 Integer priority = (Integer) data.get("priority");
+                String senderNumber = (String) data.get("senderNumber");
 
                 providers.add(ResolvedProvider.builder()
                         .providerName(resolvedProvider)
@@ -195,6 +198,7 @@ public class ConfigServiceClient {
                         .novuApiKey(novuApiKey)
                         .isActive(isActive != null ? isActive : true)
                         .priority(priority != null ? priority : 999) // Default low priority
+                        .senderNumber(senderNumber)
                         .build());
             }
 

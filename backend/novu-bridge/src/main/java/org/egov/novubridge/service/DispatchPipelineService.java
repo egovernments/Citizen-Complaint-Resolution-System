@@ -86,11 +86,11 @@ public class DispatchPipelineService {
                 .orElseThrow(() -> new CustomException("NB_NO_ACTIVE_PROVIDER", 
                         "No active provider found for tenant=" + event.getTenantId() + " channel=" + context.getChannel()));
         
-        log.info("Resolved provider: eventId={}, provider={}, channel={}, isActive={}, priority={}, credentialKeys={}, availableCount={}",
+        log.info("Resolved provider: eventId={}, provider={}, channel={}, isActive={}, priority={}, credentialKeys={}, senderNumber={}, availableCount={}",
                 event.getEventId(), resolvedProvider.getProviderName(), resolvedProvider.getChannel(),
                 resolvedProvider.getIsActive(), resolvedProvider.getPriority(), 
                 resolvedProvider.getCredentials() != null ? resolvedProvider.getCredentials().keySet() : "null",
-                availableProviders.size());
+                resolvedProvider.getSenderNumber(), availableProviders.size());
         
         // Provider is already filtered for active status above, no need to check again
         
@@ -126,11 +126,12 @@ public class DispatchPipelineService {
         String whatsappPhone = formatWhatsappPhone(context.getRecipientMobile());
 
         log.info("Dispatching notification: eventId={}, eventName={}, tenant={}, complaintNo={}, " +
-                 "templateKey={}, subscriberId={}, phone={}, recipientMobile={}, provider={}, channel={}",
+                 "templateKey={}, subscriberId={}, phone={}, recipientMobile={}, provider={}, channel={}, senderNumber={}",
                 event.getEventId(), event.getEventName(), event.getTenantId(),
                 event.getData() != null ? event.getData().get("complaintNo") : "N/A",
                 resolvedTemplate.getTemplateKey(), subscriberId, whatsappPhone,
-                context.getRecipientMobile(), resolvedProvider.getProviderName(), resolvedProvider.getChannel());
+                context.getRecipientMobile(), resolvedProvider.getProviderName(), resolvedProvider.getChannel(),
+                resolvedProvider.getSenderNumber());
         log.info("Novu trigger payload: data={}, paramOrder={}, novuBaseUrl={}, providerCredentials={}",
                 event.getData(), resolvedTemplate.getParamOrder(), config.getNovuBaseUrl(), 
                 resolvedProvider.getCredentials() != null ? "[REDACTED]" : "null");
@@ -139,7 +140,7 @@ public class DispatchPipelineService {
         String novuApiKey = resolvedProvider.getNovuApiKey() != null ? 
                 resolvedProvider.getNovuApiKey() : resolvedTemplate.getNovuApiKey();
 
-        // Use direct provider credential pass-through instead of hardcoded Twilio overrides
+        // Use direct provider credential pass-through with sender number from config
         NovuClient.NovuResponse novuResponse = novuClient.triggerWithProviderCredentials(
                 resolvedTemplate.getTemplateKey(),
                 subscriberId,
@@ -148,6 +149,7 @@ public class DispatchPipelineService {
                 event.getEventId(),
                 resolvedProvider.getProviderName(),
                 resolvedProvider.getCredentials(),
+                resolvedProvider.getSenderNumber(),
                 novuApiKey);
 
         log.info("Novu trigger response: eventId={}, statusCode={}, response={}",

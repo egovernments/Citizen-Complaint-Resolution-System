@@ -18,4 +18,5 @@ public class ResolvedProvider {
     private String novuApiKey;  // Optional provider-specific Novu API key
     private Boolean isActive;
     private Integer priority;
+    private String senderNumber;  // Provider-agnostic sender number (e.g., whatsapp:+14155550123)
 }
