@@ -372,15 +372,23 @@ const PGRDetails = () => {
     const matchingState = businessServiceResponse?.states?.find((state) => state.uuid === currentState?.uuid);
     if (!matchingState) return [];
     const userRoles = userInfo?.info?.roles?.map((role) => role.code) || [];
-    return matchingState.actions
-      ? matchingState.actions.filter((action) => action.roles.some((role) => userRoles.includes(role)))
-        .map((action) => ({
-          action: action.action,
-          roles: action.roles,
-          nextState: action.nextState,
-          uuid: action.uuid,
-        }))
-      : [];
+
+    // SUPERUSER gets all available actions without role filtering
+    const hasSuperUserRole = userRoles.includes("SUPERUSER");
+
+    if (!matchingState.actions) return [];
+
+    // Filter actions based on user roles, or return all if SUPERUSER
+    const filteredActions = hasSuperUserRole
+      ? matchingState.actions
+      : matchingState.actions.filter((action) => action.roles.some((role) => userRoles.includes(role)));
+
+    return filteredActions.map((action) => ({
+      action: action.action,
+      roles: action.roles,
+      nextState: action.nextState,
+      uuid: action.uuid,
+    }));
   };
 
   // Check if action button should be visible based on user roles
@@ -392,6 +400,14 @@ const PGRDetails = () => {
 
     if (!currentState?.actions) {
       return false;
+    }
+
+    // Check if user has SUPERUSER role - SUPERUSER bypasses ALL checks
+    const hasSuperUserRole = userRoles.includes("SUPERUSER");
+
+    // SUPERUSER always sees action buttons if any actions exist
+    if (hasSuperUserRole) {
+      return true;
     }
 
     // Get all roles from current state actions
@@ -413,8 +429,7 @@ const PGRDetails = () => {
       allActionRoles.includes(userRole)
     );
 
-
-    // Show button only if user has BOTH PGR_VIEWER AND other matching roles
+    // For other users: Show button only if user has BOTH PGR_VIEWER AND other matching roles
     return hasViewerRole && hasMatchingRole;
   };
 
