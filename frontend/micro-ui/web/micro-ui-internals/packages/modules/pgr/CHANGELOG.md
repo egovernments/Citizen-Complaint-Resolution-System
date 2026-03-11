@@ -1,6 +1,9 @@
 # Changelog
 All notable changes to this module will be documented in this file.
 
+## [1.0.10] - 2026-03-11
+- SUPERUSER Role added
+
 ## [1.0.9] - 2026-03-10
 - Multiroot tenant city id updated and logics added
 
