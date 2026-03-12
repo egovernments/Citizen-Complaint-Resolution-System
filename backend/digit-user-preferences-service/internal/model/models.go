@@ -126,13 +126,13 @@ type PreferenceCriteria struct {
 
 // PreferenceRequest is the request wrapper for upsert operations.
 type PreferenceRequest struct {
-	RequestInfo *digit.RequestInfo `json:"requestInfo"`
+	RequestInfo *digit.RequestInfo `json:"RequestInfo"` // Capital R to match DIGIT standard
 	Preference  *Preference        `json:"preference"`
 }
 
 // PreferenceSearchRequest is the request wrapper for search operations.
 type PreferenceSearchRequest struct {
-	RequestInfo *digit.RequestInfo  `json:"requestInfo"`
+	RequestInfo *digit.RequestInfo  `json:"RequestInfo"` // Capital R to match DIGIT standard
 	Criteria    *PreferenceCriteria `json:"criteria"`
 }
 

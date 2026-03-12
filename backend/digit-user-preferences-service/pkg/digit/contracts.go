@@ -1,7 +1,46 @@
 // Package digit provides common DIGIT platform contracts and types.
 package digit
 
-import "time"
+import (
+	"encoding/json"
+	"fmt"
+	"strconv"
+	"time"
+)
+
+// FlexibleString is a type that can unmarshal both string and number JSON values.
+type FlexibleString string
+
+// UnmarshalJSON implements json.Unmarshaler to handle both string and numeric values.
+func (fs *FlexibleString) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as string first
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		*fs = FlexibleString(str)
+		return nil
+	}
+
+	// If that fails, try as number
+	var num float64
+	if err := json.Unmarshal(data, &num); err == nil {
+		*fs = FlexibleString(fmt.Sprintf("%.0f", num))
+		return nil
+	}
+
+	// Try as integer
+	var intNum int64
+	if err := json.Unmarshal(data, &intNum); err == nil {
+		*fs = FlexibleString(strconv.FormatInt(intNum, 10))
+		return nil
+	}
+
+	return fmt.Errorf("cannot unmarshal %s into FlexibleString", data)
+}
+
+// String returns the string representation.
+func (fs FlexibleString) String() string {
+	return string(fs)
+}
 
 // RequestInfo contains metadata about the API request (DIGIT standard).
 type RequestInfo struct {
@@ -20,15 +59,15 @@ type RequestInfo struct {
 
 // UserInfo contains authenticated user details.
 type UserInfo struct {
-	TenantId    string   `json:"tenantId,omitempty"`
-	Id          string   `json:"id,omitempty"`
-	UserName    string   `json:"userName,omitempty"`
-	Name        string   `json:"name,omitempty"`
-	Type        string   `json:"type,omitempty"`
-	MobileNumber string  `json:"mobileNumber,omitempty"`
-	EmailId     string   `json:"emailId,omitempty"`
-	Roles       []Role   `json:"roles,omitempty"`
-	UUID        string   `json:"uuid,omitempty"`
+	TenantId     string         `json:"tenantId,omitempty"`
+	Id           FlexibleString `json:"id,omitempty"` // Can accept both string and number
+	UserName     string         `json:"userName,omitempty"`
+	Name         string         `json:"name,omitempty"`
+	Type         string         `json:"type,omitempty"`
+	MobileNumber string         `json:"mobileNumber,omitempty"`
+	EmailId      string         `json:"emailId,omitempty"`
+	Roles        []Role         `json:"roles,omitempty"`
+	UUID         string         `json:"uuid,omitempty"`
 }
 
 // Role represents a user role.
