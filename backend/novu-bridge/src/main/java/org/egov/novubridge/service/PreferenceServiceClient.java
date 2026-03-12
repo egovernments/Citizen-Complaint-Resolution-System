@@ -102,6 +102,67 @@ public class PreferenceServiceClient {
         }
     }
 
+    public String getUserPreferredLocale(String tenantId, String userId, String defaultLocale) {
+        log.info("Getting preferred locale: tenantId={}, userId={}, preferenceEnabled={}",
+                tenantId, userId, config.getPreferenceEnabled());
+
+        if (Boolean.FALSE.equals(config.getPreferenceEnabled())) {
+            log.info("Preference check disabled, using default locale: {}", defaultLocale);
+            return defaultLocale;
+        }
+        if (!StringUtils.hasText(userId)) {
+            log.warn("Cannot get locale: userId is blank. tenantId={}, using default: {}", tenantId, defaultLocale);
+            return defaultLocale;
+        }
+        try {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("requestInfo", new HashMap<>());
+            payload.put("criteria", Map.of(
+                    "userId", userId,
+                    "tenantId", tenantId,
+                    "preferenceCode", config.getPreferenceCode(),
+                    "limit", 1,
+                    "offset", 0
+            ));
+
+            String url = config.getPreferenceHost() + config.getPreferenceCheckPath();
+            log.info("Preference request for locale: url={}, preferenceCode={}, userId={}, tenantId={}",
+                    url, config.getPreferenceCode(), userId, tenantId);
+
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(payload), Map.class);
+            log.info("Preference response for locale: statusCode={}", response.getStatusCode());
+
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                log.warn("Cannot get locale: non-success response. statusCode={}, using default: {}", response.getStatusCode(), defaultLocale);
+                return defaultLocale;
+            }
+            List<Map<String, Object>> preferences = (List<Map<String, Object>>) response.getBody().get("preferences");
+            if (preferences == null || preferences.isEmpty()) {
+                log.warn("Cannot get locale: no preferences found for userId={}, tenantId={}, using default: {}", userId, tenantId, defaultLocale);
+                return defaultLocale;
+            }
+
+            Map<String, Object> pref = preferences.get(0);
+            Map<String, Object> prefPayload = (Map<String, Object>) pref.get("payload");
+            if (prefPayload == null) {
+                log.warn("Cannot get locale: preference payload is null. using default: {}", defaultLocale);
+                return defaultLocale;
+            }
+            
+            String preferredLanguage = value(prefPayload.get("preferredLanguage"));
+            if (!StringUtils.hasText(preferredLanguage)) {
+                log.warn("Cannot get locale: preferredLanguage is blank. using default: {}", defaultLocale);
+                return defaultLocale;
+            }
+
+            log.info("Found user preferred locale: {} for userId={}, tenantId={}", preferredLanguage, userId, tenantId);
+            return preferredLanguage;
+        } catch (Exception e) {
+            log.warn("Error getting preferred locale for tenantId={} userId={}, using default: {}", tenantId, userId, defaultLocale, e);
+            return defaultLocale;
+        }
+    }
+
     private String value(Object o) {
         return o == null ? null : String.valueOf(o);
     }

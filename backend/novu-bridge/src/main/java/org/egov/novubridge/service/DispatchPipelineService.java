@@ -59,6 +59,12 @@ public class DispatchPipelineService {
         context.setRecipientUserId(recipientUuid);
         String subscriberId = event.getTenantId() + ":" + recipientUuid;
 
+        // Get user's preferred locale from preferences and update context
+        String userPreferredLocale = preferenceServiceClient.getUserPreferredLocale(event.getTenantId(), recipientUuid, context.getLocale());
+        context.setLocale(userPreferredLocale);
+        log.info("Updated context locale from user preferences: eventId={}, userId={}, locale={}", 
+                event.getEventId(), recipientUuid, userPreferredLocale);
+
         boolean preferenceAllowed = preferenceServiceClient.isWhatsAppAllowed(event.getTenantId(), recipientUuid, context.getRecipientMobile());
         if (!preferenceAllowed) {
             persist(event, context, null, "SKIPPED", "NB_PREFERENCE_DENIED", "WhatsApp preference denied", null, 1);

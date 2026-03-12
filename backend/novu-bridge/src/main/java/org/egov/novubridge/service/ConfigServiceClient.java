@@ -35,7 +35,8 @@ public class ConfigServiceClient {
         resolveRequest.put("tenantId", tenantId);
         resolveRequest.put("criteria", Map.of(
             "eventName", eventName,
-            "channel", context.getChannel()  // Include channel in template resolution
+            "channel", context.getChannel(),  // Include channel in template resolution
+            "locale", context.getLocale()     // Include locale in template resolution
         ));
 
         Map<String, Object> payload = new HashMap<>();
@@ -44,8 +45,8 @@ public class ConfigServiceClient {
 
         try {
             String url = config.getConfigHost() + config.getConfigResolvePath();
-            log.info("Config resolve request: url={}, schemaCode=TemplateBinding, eventName={}, channel={}, tenantId={}",
-                    url, eventName, context.getChannel(), tenantId);
+            log.info("Config resolve request: url={}, schemaCode=TemplateBinding, eventName={}, channel={}, locale={}, tenantId={}",
+                    url, eventName, context.getChannel(), context.getLocale(), tenantId);
 
             ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(payload), Map.class);
             if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
@@ -54,7 +55,25 @@ public class ConfigServiceClient {
 
             Map<String, Object> configData = (Map<String, Object>) response.getBody().get("configData");
             if (configData == null) {
-                throw new CustomException("NB_CONFIG_NOT_FOUND", "No config data found for event");
+                // Try fallback to default locale if specific locale not found
+                log.warn("No config found for locale={}, attempting fallback to en_IN", context.getLocale());
+                
+                // Retry with default locale en_IN
+                resolveRequest.put("criteria", Map.of(
+                    "eventName", eventName,
+                    "channel", context.getChannel(),
+                    "locale", "en_IN"
+                ));
+                
+                response = restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(payload), Map.class);
+                if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                    throw new CustomException("NB_CONFIG_RESOLVE_FAILED", "Template resolve failed even with default locale");
+                }
+                
+                configData = (Map<String, Object>) response.getBody().get("configData");
+                if (configData == null) {
+                    throw new CustomException("NB_CONFIG_NOT_FOUND", "No config data found for event even with default locale");
+                }
             }
 
             Map<String, Object> data = (Map<String, Object>) configData.get("data");
