@@ -13,7 +13,7 @@ env:
   IMAGE_NAME: token-exchange-svc
   DOCKER_USERNAME: ${{ vars.DOCKER_USERNAME }}
   DOCKER_PASSWORD: ${{ secrets.DOCKER_ACCESS_TOKEN }}
-  OVERLAY_REPO: ChakshuGautam/DIGIT-keycloak-overlay
+  OVERLAY_REPO: egovernments/DIGIT-keycloak-overlay
 
 jobs:
   resolve-tag:
@@ -21,6 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
+      sha: ${{ steps.tag.outputs.sha }}
     steps:
       - name: Checkout overlay repo
         uses: actions/checkout@v4
@@ -31,10 +32,13 @@ jobs:
       - name: Generate tag
         id: tag
         run: |
-          BRANCH="${{ github.event.inputs.ref }}"
+          RAW_REF="${{ github.event.inputs.ref }}"
+          BRANCH=$(printf '%s' "$RAW_REF" | tr '/:@' '-' | sed 's/[^A-Za-z0-9_.-]/-/g')
+          COMMIT_SHA=$(git rev-parse HEAD)
           COMMIT_HASH=$(git rev-parse --short HEAD)
           TAG="${BRANCH}-${COMMIT_HASH}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
           echo "### Tag: \`$TAG\`" >> $GITHUB_STEP_SUMMARY
 
   build:
@@ -55,13 +59,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ env.OVERLAY_REPO }}
-          ref: ${{ github.event.inputs.ref }}
+          ref: ${{ needs.resolve-tag.outputs.sha }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Cache Docker layers
-        uses: actions/cache@v3
+        uses: actions/cache@v5
         with:
           path: /tmp/.buildx-cache
           key: ${{ runner.os }}-${{ matrix.arch }}-buildx-${{ env.IMAGE_NAME }}-${{ github.event.inputs.ref }}
@@ -69,7 +73,7 @@ jobs:
             ${{ runner.os }}-${{ matrix.arch }}-buildx-${{ env.IMAGE_NAME }}-
 
       - name: Docker Login
-        uses: docker/login-action@v2
+        uses: docker/login-action@v4
         with:
           username: ${{ env.DOCKER_USERNAME }}
           password: ${{ env.DOCKER_PASSWORD }}
@@ -91,7 +95,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Docker Login
-        uses: docker/login-action@v2
+        uses: docker/login-action@v4
         with:
           username: ${{ env.DOCKER_USERNAME }}
           password: ${{ env.DOCKER_PASSWORD }}
@@ -109,4 +113,4 @@ jobs:
           echo "### Docker Image Published" >> $GITHUB_STEP_SUMMARY
           echo "- **Image**: \`egovio/${{ env.IMAGE_NAME }}:${{ needs.resolve-tag.outputs.tag }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Platforms**: linux/amd64, linux/arm64" >> $GITHUB_STEP_SUMMARY
-          echo "- **Source**: ${{ env.OVERLAY_REPO }}@${{ github.event.inputs.ref }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Source**: ${{ env.OVERLAY_REPO }}@${{ needs.resolve-tag.outputs.sha }}" >> $GITHUB_STEP_SUMMARY
