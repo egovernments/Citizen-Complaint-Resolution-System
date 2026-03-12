@@ -1,5 +1,5 @@
 name: Build token-exchange-svc
-run-name: Build token-exchange-svc from DIGIT-keycloak-overlay
+run-name: Build token-exchange-svc (${{ inputs.ref }})
 
 on:
   workflow_dispatch:
@@ -8,12 +8,15 @@ on:
         description: "Branch or tag to build from DIGIT-keycloak-overlay"
         required: false
         default: "main"
+      repo:
+        description: "Source repository (owner/repo)"
+        required: false
+        default: "ChakshuGautam/DIGIT-keycloak-overlay"
 
 env:
   IMAGE_NAME: token-exchange-svc
   DOCKER_USERNAME: ${{ vars.DOCKER_USERNAME }}
   DOCKER_PASSWORD: ${{ secrets.DOCKER_ACCESS_TOKEN }}
-  OVERLAY_REPO: egovernments/DIGIT-keycloak-overlay
 
 jobs:
   resolve-tag:
@@ -26,13 +29,13 @@ jobs:
       - name: Checkout overlay repo
         uses: actions/checkout@v4
         with:
-          repository: ${{ env.OVERLAY_REPO }}
-          ref: ${{ github.event.inputs.ref }}
+          repository: ${{ inputs.repo }}
+          ref: ${{ inputs.ref }}
 
       - name: Generate tag
         id: tag
         run: |
-          RAW_REF="${{ github.event.inputs.ref }}"
+          RAW_REF="${{ inputs.ref }}"
           BRANCH=$(printf '%s' "$RAW_REF" | tr '/:@' '-' | sed 's/[^A-Za-z0-9_.-]/-/g')
           COMMIT_SHA=$(git rev-parse HEAD)
           COMMIT_HASH=$(git rev-parse --short HEAD)
@@ -58,7 +61,7 @@ jobs:
       - name: Checkout overlay repo
         uses: actions/checkout@v4
         with:
-          repository: ${{ env.OVERLAY_REPO }}
+          repository: ${{ inputs.repo }}
           ref: ${{ needs.resolve-tag.outputs.sha }}
 
       - name: Set up Docker Buildx
@@ -68,7 +71,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-${{ matrix.arch }}-buildx-${{ env.IMAGE_NAME }}-${{ github.event.inputs.ref }}
+          key: ${{ runner.os }}-${{ matrix.arch }}-buildx-${{ env.IMAGE_NAME }}-${{ inputs.ref }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.arch }}-buildx-${{ env.IMAGE_NAME }}-
 
@@ -113,4 +116,4 @@ jobs:
           echo "### Docker Image Published" >> $GITHUB_STEP_SUMMARY
           echo "- **Image**: \`egovio/${{ env.IMAGE_NAME }}:${{ needs.resolve-tag.outputs.tag }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Platforms**: linux/amd64, linux/arm64" >> $GITHUB_STEP_SUMMARY
-          echo "- **Source**: ${{ env.OVERLAY_REPO }}@${{ needs.resolve-tag.outputs.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Source**: ${{ inputs.repo }}@${{ needs.resolve-tag.outputs.sha }}" >> $GITHUB_STEP_SUMMARY
