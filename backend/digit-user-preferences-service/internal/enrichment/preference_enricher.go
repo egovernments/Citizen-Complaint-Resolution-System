@@ -80,7 +80,8 @@ func GetUserIDFromRequestInfo(reqInfo *digit.RequestInfo) string {
 		if reqInfo.UserInfo.UUID != "" {
 			return reqInfo.UserInfo.UUID
 		}
-		return reqInfo.UserInfo.Id
+
+		return reqInfo.UserInfo.Id.String()
 	}
 	return reqInfo.RequesterId
 }
