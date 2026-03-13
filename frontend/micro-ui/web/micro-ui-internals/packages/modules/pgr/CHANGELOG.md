@@ -1,6 +1,9 @@
 # Changelog
 All notable changes to this module will be documented in this file.
 
+## [1.0.12] - 2026-03-13
+- Fixed back button on complaint-success page to navigate to sandbox home with correct query params when in multi-root tenant mode
+
 ## [1.0.10] - 2026-03-11
 - SUPERUSER Role added
 
