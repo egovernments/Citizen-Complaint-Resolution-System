@@ -50,6 +50,9 @@ public class NovuBridgeConfiguration {
     @Value("${novu.bridge.config.resolve.path:/config-service/config/v1/_resolve}")
     private String configResolvePath;
 
+    @Value("${novu.bridge.config.search.path:/config-service/config/v1/_search}")
+    private String configSearchPath;
+
     @Value("${novu.bridge.preference.code:USER_NOTIFICATION_PREFERENCES}")
     private String preferenceCode;
 
