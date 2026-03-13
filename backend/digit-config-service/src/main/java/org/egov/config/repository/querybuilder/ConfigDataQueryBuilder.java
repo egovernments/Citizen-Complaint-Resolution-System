@@ -93,8 +93,8 @@ public class ConfigDataQueryBuilder {
             params.add(criteria.getSchemaCode());
         }
 
-        if (!CollectionUtils.isEmpty(criteria.getFilters())) {
-            appendJsonbFilter(criteria.getFilters(), sql, params);
+        if (!CollectionUtils.isEmpty(criteria.getCriteria())) {
+            appendJsonbFilter(criteria.getCriteria(), sql, params);
         }
 
         if (criteria.getIsActive() != null) {

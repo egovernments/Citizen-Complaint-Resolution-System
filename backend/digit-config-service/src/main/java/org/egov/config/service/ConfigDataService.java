@@ -22,6 +22,7 @@ public class ConfigDataService {
     private final ConfigDataValidator validator;
     private final ConfigDataEnricher enricher;
     private final ConfigDataRepository repository;
+    private final DecryptionService decryptionService;
 
     public ConfigData create(ConfigDataRequest request, String schemaCode) {
         request.getConfigData().setSchemaCode(schemaCode);
@@ -37,8 +38,8 @@ public class ConfigDataService {
     public ConfigData update(ConfigDataRequest request, String schemaCode) {
         request.getConfigData().setSchemaCode(schemaCode);
 
-        validator.validateUpdate(request);
-        enricher.enrichUpdate(request);
+        JSONObject schema = validator.validateUpdate(request);
+        enricher.enrichUpdate(request, schema);
 
         repository.update(request.getConfigData());
         return request.getConfigData();
@@ -46,7 +47,8 @@ public class ConfigDataService {
 
     public List<ConfigData> search(ConfigDataSearchRequest request) {
         enricher.enrichSearchDefaults(request.getCriteria());
-        return repository.search(request.getCriteria());
+        List<ConfigData> results = repository.search(request.getCriteria());
+        return decryptionService.decryptConfigDataList(results);
     }
 
     public long count(ConfigDataCriteria criteria) {
@@ -59,21 +61,24 @@ public class ConfigDataService {
 
         ConfigData result = repository.resolve(
                 params.getSchemaCode(),
-                params.getFilters(),
+                params.getCriteria(),
                 tenantChain);
 
         if (result == null) {
             throw new CustomException("CONFIG_NOT_RESOLVED",
                     "No config found for schemaCode=" + params.getSchemaCode()
                             + " tenantId=" + params.getTenantId()
-                            + " filters=" + params.getFilters());
+                            + " criteria=" + params.getCriteria());
         }
+
+        // Decrypt sensitive fields before returning
+        ConfigData decryptedResult = decryptionService.decryptConfigData(result);
 
         return ConfigDataResolveResponse.builder()
                 .responseInfo(ResponseUtil.createResponseInfo(request.getRequestInfo(), true))
-                .configData(result)
+                .configData(decryptedResult)
                 .resolutionMeta(ConfigDataResolveResponse.ResolutionMeta.builder()
-                        .matchedTenant(result.getTenantId())
+                        .matchedTenant(decryptedResult.getTenantId())
                         .build())
                 .build();
     }

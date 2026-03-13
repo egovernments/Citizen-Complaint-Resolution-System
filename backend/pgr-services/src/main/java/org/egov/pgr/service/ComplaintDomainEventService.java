@@ -141,6 +141,7 @@ public class ComplaintDomainEventService {
         data.put("submittedDate", getSubmittedDate(service));
         data.put("assigneeName", getAssigneeName(request));
         data.put("assigneeDesignation", getAssigneeDesignation(request));
+        data.put("comment", getWorkflowComment(request));
         return data;
     }
 
@@ -197,5 +198,12 @@ public class ComplaintDomainEventService {
         // Designation is not directly available on the workflow model
         // Can be enriched via HRMS lookup if needed
         return "Officer";
+    }
+
+    private String getWorkflowComment(ServiceRequest request) {
+        if (request.getWorkflow() != null && StringUtils.hasText(request.getWorkflow().getComments())) {
+            return request.getWorkflow().getComments();
+        }
+        return "No comments provided";
     }
 }
