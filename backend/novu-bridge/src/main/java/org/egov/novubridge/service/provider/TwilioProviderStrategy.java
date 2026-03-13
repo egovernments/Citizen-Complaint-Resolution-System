@@ -44,10 +44,18 @@ public class TwilioProviderStrategy implements NovuProviderStrategy {
             config.put("credentials", resolvedProvider.getCredentials());
         }
         
-        // Add sender number from resolved provider
+        // Add sender number from resolved provider with WhatsApp prefix for WhatsApp channel
         if (StringUtils.hasText(resolvedProvider.getSenderNumber())) {
-            config.put("from", resolvedProvider.getSenderNumber());
-            log.debug("Twilio: Using senderNumber from config: {}", resolvedProvider.getSenderNumber());
+            String senderNumber = resolvedProvider.getSenderNumber();
+            
+            // For WhatsApp channel, ensure whatsapp: prefix is present
+            if (!senderNumber.startsWith("whatsapp:")) {
+                senderNumber = "whatsapp:" + senderNumber;
+                log.debug("Twilio: Added whatsapp: prefix to sender number: {}", senderNumber);
+            }
+            
+            config.put("from", senderNumber);
+            log.debug("Twilio: Using formatted senderNumber: {}", senderNumber);
         }
         
         // Add Twilio-specific template configuration using _passthrough

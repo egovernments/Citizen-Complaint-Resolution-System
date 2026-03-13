@@ -3,29 +3,64 @@ package org.egov.novubridge.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
+import org.egov.novubridge.service.provider.NovuProviderStrategyFactory;
+import org.egov.novubridge.service.provider.TwilioProviderStrategy;
 import org.egov.novubridge.web.models.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.*;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.when;
 
 @Slf4j
 public class ProviderAgnosticTest {
 
     private NovuClient novuClient;
     private NovuBridgeConfiguration config;
+    
+    @Mock
+    private NovuProviderStrategyFactory providerStrategyFactory;
+    
+    @Mock
+    private TwilioProviderStrategy twilioStrategy;
+    
+    @Mock
+    private RestTemplate restTemplate;
 
     @BeforeEach
     void setUp() {
+        MockitoAnnotations.openMocks(this);
+        
         config = new NovuBridgeConfiguration();
         config.setNovuBaseUrl("https://api.novu.co");
-        config.setNovuApiKey("5b390045f466ce42f8589571536e1060");
+        config.setNovuApiKey("test_api_key_here");
         
-        // Use real RestTemplate for actual API calls
-        RestTemplate restTemplate = new RestTemplate();
-        // Pass null for providerStrategyFactory since we're testing the deprecated method
-        novuClient = new NovuClient(restTemplate, config, null);
+        // Mock the strategy factory to return Twilio strategy
+        when(providerStrategyFactory.getStrategy(any(ResolvedProvider.class))).thenReturn(twilioStrategy);
+        
+        // Mock Twilio strategy to return proper config
+        Map<String, Object> mockConfig = new HashMap<>();
+        mockConfig.put("credentials", Map.of("accountSid", "ACXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", "authToken", "test_token"));
+        mockConfig.put("from", "whatsapp:+1234567890");
+        when(twilioStrategy.buildProviderConfig(any(), any(), any())).thenReturn(mockConfig);
+        
+        // Mock RestTemplate to return successful response
+        Map<String, Object> mockResponse = Map.of("data", Map.of("transactionId", "mock-tx-id"));
+        ResponseEntity<Map> responseEntity = new ResponseEntity<>(mockResponse, HttpStatus.OK);
+        when(restTemplate.exchange(any(String.class), eq(HttpMethod.POST), any(HttpEntity.class), eq(Map.class)))
+            .thenReturn(responseEntity);
+        
+        novuClient = new NovuClient(restTemplate, config, providerStrategyFactory);
     }
 
     @Test
