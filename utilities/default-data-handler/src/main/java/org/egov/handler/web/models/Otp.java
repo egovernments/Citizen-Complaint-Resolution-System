@@ -17,6 +17,9 @@ public class Otp {
 	@JsonProperty("mobileNumber")
 	private String mobileNumber;
 
+	@JsonProperty("countryCode")
+	private String countryCode;
+
 	@JsonProperty("tenantId")
 	private String tenantId;
 

@@ -20,6 +20,7 @@ public class User {
     private String type;
     private String mobileNumber;
     private String emailId;
+    private String countryCode;
     private List<Role> roles;
     private String tenantId;
     private String uuid;

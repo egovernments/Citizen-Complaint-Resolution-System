@@ -118,6 +118,10 @@ public class UserUtils {
         userInfo.setUserName(mobileNumber);
         userInfo.setTenantId(getStateLevelTenant(tenantId));
         userInfo.setActive(true);
+        // Set default country code if not provided
+        if(userInfo.getCountryCode() == null || userInfo.getCountryCode().isEmpty()){
+            userInfo.setCountryCode("+91");
+        }
     }
 
     /**

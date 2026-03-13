@@ -43,6 +43,9 @@ public class User {
 	@JsonProperty("mobileNumber")
 	private String mobileNumber = null;
 
+	@JsonProperty("countryCode")
+	private String countryCode = null;
+
 	@JsonProperty("emailId")
 	private String emailId = null;
 
