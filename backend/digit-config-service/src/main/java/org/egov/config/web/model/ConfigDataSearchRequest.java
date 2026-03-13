@@ -24,3 +24,9 @@ public class ConfigDataSearchRequest {
     @Valid
     private ConfigDataCriteria criteria;
 }
+
+
+
+
+
+

@@ -14,7 +14,7 @@ import java.util.List;
 public class ResolvedTemplate {
     private String templateKey;
     private String templateVersion;
-    private String twilioContentSid;
+    private String contentSid;
     private List<String> requiredVars;
     private List<String> optionalVars;
     private List<String> paramOrder;

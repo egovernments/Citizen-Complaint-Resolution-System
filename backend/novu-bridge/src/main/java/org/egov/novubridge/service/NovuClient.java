@@ -6,6 +6,10 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
+import org.egov.novubridge.service.provider.NovuProviderStrategy;
+import org.egov.novubridge.service.provider.NovuProviderStrategyFactory;
+import org.egov.novubridge.web.models.ResolvedProvider;
+import org.egov.novubridge.web.models.ResolvedTemplate;
 import org.egov.tracer.model.CustomException;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -20,10 +24,13 @@ public class NovuClient {
 
     private final RestTemplate restTemplate;
     private final NovuBridgeConfiguration config;
+    private final NovuProviderStrategyFactory providerStrategyFactory;
 
-    public NovuClient(RestTemplate restTemplate, NovuBridgeConfiguration config) {
+    public NovuClient(RestTemplate restTemplate, NovuBridgeConfiguration config, 
+                     NovuProviderStrategyFactory providerStrategyFactory) {
         this.restTemplate = restTemplate;
         this.config = config;
+        this.providerStrategyFactory = providerStrategyFactory;
     }
 
     public NovuResponse trigger(String templateKey, String subscriberId, String phone, Map<String, Object> payload,
@@ -72,44 +79,59 @@ public class NovuClient {
     }
 
     /**
-     * Trigger with provider credentials and sender number
+     * Trigger notification with provider-agnostic configuration using strategy pattern
+     * Automatically selects the correct provider strategy based on resolved configuration
      */
-    public NovuResponse triggerWithProviderCredentials(String templateKey, String subscriberId, String phone, 
-                                                       Map<String, Object> payload, String transactionId,
-                                                       String providerName, Map<String, Object> providerCredentials,
-                                                       String senderNumber, String contentSid, String novuApiKey) {
+    public NovuResponse triggerWithProviderConfig(String templateKey, String subscriberId, String phone, 
+                                                  Map<String, Object> payload, String transactionId,
+                                                  ResolvedProvider resolvedProvider, ResolvedTemplate resolvedTemplate,
+                                                  Map<String, String> contentVariables, String novuApiKey) {
         
-        // Build provider overrides - pass credentials, sender number, and contentSid to Novu
+        // Get the appropriate strategy for this provider
+        NovuProviderStrategy strategy = providerStrategyFactory.getStrategy(resolvedProvider);
+        
+        // Build provider-specific configuration using the strategy
+        Map<String, Object> providerConfig = strategy.buildProviderConfig(
+            resolvedProvider, resolvedTemplate, contentVariables);
+        
+        // Create Novu overrides structure
         Map<String, Object> providerOverrides = new HashMap<>();
-        if (providerCredentials != null && !providerCredentials.isEmpty()) {
-            Map<String, Object> providerConfig = new HashMap<>();
-            providerConfig.put("credentials", providerCredentials);
-            
-            // Add sender number - Novu will map this to provider-specific field (from/originator/etc)
-            if (senderNumber != null && !senderNumber.isBlank()) {
-                providerConfig.put("from", senderNumber);
-                log.info("Using senderNumber from config: {}", senderNumber);
-            }
-            
-            // Add contentSid for WhatsApp template messaging - use Twilio's _passthrough format
-            if (contentSid != null && !contentSid.isBlank()) {
-                Map<String, Object> passthrough = new HashMap<>();
-                Map<String, Object> body = new HashMap<>();
-                body.put("contentSid", contentSid);
-                passthrough.put("body", body);
-                providerConfig.put("_passthrough", passthrough);
-                log.info("Using contentSid from config: {}", contentSid);
-            }
-            
-            providerOverrides.put(providerName, providerConfig);
+        if (providerConfig != null && !providerConfig.isEmpty()) {
+            providerOverrides.put(resolvedProvider.getProviderName().toLowerCase(), providerConfig);
         }
         
         Map<String, Object> overrides = Map.of("providers", providerOverrides);
         
-        log.info("Triggering Novu with provider credentials: templateKey={}, provider={}, credentialKeys={}, senderNumber={}, contentSid={}", 
-                templateKey, providerName, providerCredentials != null ? providerCredentials.keySet() : "none", senderNumber, contentSid);
+        log.info("Triggering Novu with provider config: templateKey={}, provider={}, strategy={}, credentialKeys={}, senderNumber={}, contentSid={}", 
+                templateKey, resolvedProvider.getProviderName(), strategy.getClass().getSimpleName(),
+                resolvedProvider.getCredentials() != null ? resolvedProvider.getCredentials().keySet() : "none", 
+                resolvedProvider.getSenderNumber(), resolvedTemplate.getContentSid());
         
         return trigger(templateKey, subscriberId, phone, payload, transactionId, overrides, novuApiKey);
+    }
+    
+    /**
+     * @deprecated Use triggerWithProviderConfig instead for provider-agnostic support
+     */
+    @Deprecated
+    public NovuResponse triggerWithProviderCredentials(String templateKey, String subscriberId, String phone, 
+                                                       Map<String, Object> payload, String transactionId,
+                                                       String providerName, Map<String, Object> providerCredentials,
+                                                       String senderNumber, String contentSid, 
+                                                       Map<String, String> contentVariables, String novuApiKey) {
+        // For backward compatibility, create ResolvedProvider and ResolvedTemplate
+        ResolvedProvider provider = ResolvedProvider.builder()
+                .providerName(providerName)
+                .credentials(providerCredentials)
+                .senderNumber(senderNumber)
+                .build();
+                
+        ResolvedTemplate template = ResolvedTemplate.builder()
+                .contentSid(contentSid)
+                .build();
+        
+        return triggerWithProviderConfig(templateKey, subscriberId, phone, payload, transactionId,
+                provider, template, contentVariables, novuApiKey);
     }
 
     public NovuResponse trigger(String templateKey, String subscriberId, String phone, Map<String, Object> payload,

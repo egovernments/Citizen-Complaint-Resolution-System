@@ -92,7 +92,7 @@ public class ConfigServiceClient {
 
             return ResolvedTemplate.builder()
                     .templateKey(templateId)
-                    .twilioContentSid(contentSid)
+                    .contentSid(contentSid)
                     .paramOrder(paramOrder)
                     .requiredVars(requiredVars)
                     .novuApiKey(novuApiKey)

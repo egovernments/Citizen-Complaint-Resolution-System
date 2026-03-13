@@ -1,0 +1,62 @@
+[
+  {
+    "schemaCode": "ProviderDetail",
+    "tenantId": "pb.amritsar",
+    "data": {
+      "tenantId": "pb.amritsar",
+      "providerName": "twilio",
+      "channel": "whatsapp",
+      "credentials": {
+        "accountSid": "ACXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+        "authToken": "your_auth_token_here"
+      },
+      "novuApiKey": "optional_novu_api_key_for_this_provider",
+      "isActive": true,
+      "priority": 1
+    }
+  },
+  {
+    "schemaCode": "ProviderDetail", 
+    "tenantId": "pb.ludhiana",
+    "data": {
+      "tenantId": "pb.ludhiana",
+      "providerName": "twilio",
+      "channel": "whatsapp",
+      "credentials": {
+        "accountSid": "ACXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+        "authToken": "different_auth_token_for_ludhiana"
+      },
+      "isActive": true,
+      "priority": 1
+    }
+  },
+  {
+    "schemaCode": "ProviderDetail",
+    "tenantId": "pb.amritsar", 
+    "data": {
+      "tenantId": "pb.amritsar",
+      "providerName": "sendgrid",
+      "channel": "email",
+      "credentials": {
+        "apiKey": "SG.your_sendgrid_api_key_here"
+      },
+      "isActive": true,
+      "priority": 2
+    }
+  },
+  {
+    "schemaCode": "ProviderDetail",
+    "tenantId": "pb.amritsar",
+    "data": {
+      "tenantId": "pb.amritsar", 
+      "providerName": "plivo",
+      "channel": "sms",
+      "credentials": {
+        "authId": "your_plivo_auth_id",
+        "authToken": "your_plivo_auth_token"
+      },
+      "isActive": false,
+      "priority": 3
+    }
+  }
+]
