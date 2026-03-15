@@ -185,12 +185,34 @@ public class ComplaintDomainEventService {
     }
 
     private String getAssigneeName(ServiceRequest request) {
-        if (request.getWorkflow() != null && !CollectionUtils.isEmpty(request.getWorkflow().getAssignes())) {
-            // Assignee name would need user-service lookup; for now pass the UUID
-            // The actual name resolution happens downstream or via enrichment
-            return request.getWorkflow().getAssignes().get(0);
+//        if (request.getWorkflow() != null && !CollectionUtils.isEmpty(request.getWorkflow().getAssignes())) {
+//            return request.getWorkflow().getAssignes().get(0);
+//        }
+        String role = getRoleFromProcessInstance(request);
+        if (role != null) {
+            return role;
         }
-        return "Unassigned";
+        return "NA";
+    }
+
+    private String getRoleFromProcessInstance(ServiceRequest request) {
+        if (request.getService() == null || request.getService().getProcessInstance() == null) {
+            return null;
+        }
+        var state = request.getService().getProcessInstance().getState();
+        if (state == null || CollectionUtils.isEmpty(state.getActions())) {
+            return null;
+        }
+        // Pick the first non-COMMENT action's primary role
+        for (var action : state.getActions()) {
+            if ("COMMENT".equalsIgnoreCase(action.getAction())) {
+                continue;
+            }
+            if (!CollectionUtils.isEmpty(action.getRoles())) {
+                return action.getRoles().get(0);
+            }
+        }
+        return null;
     }
 
     private String getAssigneeDesignation(ServiceRequest request) {

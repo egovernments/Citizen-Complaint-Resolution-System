@@ -230,13 +230,13 @@ public class PGRService {
 
             if (department == null || department.isEmpty()) {
                 log.warn("No department found in MDMS for service: {}. Defaulting to UNKNOWN.", serviceCode);
-                return "UNKNOWN";
+                return "NA";
             }
 
             return department.get(0);
         } catch (Exception e) {
             log.warn("Failed to parse MDMS response for department lookup, service: {}. Defaulting to UNKNOWN.", serviceCode, e);
-            return "UNKNOWN";
+            return "NA";
         }
     }
 
