@@ -1,0 +1,82 @@
+services:
+  temporal:
+    image: temporalio/auto-setup:1.24.2
+    environment:
+      DB: postgres12
+      DB_PORT: 15432
+      POSTGRES_USER: egov
+      POSTGRES_PWD: egov123
+      POSTGRES_SEEDS: host.docker.internal
+      DYNAMIC_CONFIG_FILE_PATH: /etc/temporal/dynamicconfig/development-sql.yaml
+    ports:
+      - "7233:7233"
+    volumes:
+      - ./dynamicconfig:/etc/temporal/dynamicconfig
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'HOST_IP=$$(hostname -i | awk \"{print \\$1}\"); exec 3<>/dev/tcp/$${HOST_IP}/7233'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  temporal-ui:
+    image: temporalio/ui:2.31.2
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:3000
+    depends_on:
+      temporal:
+        condition: service_healthy
+    ports:
+      - "8088:8080"
+
+  kafka:
+    image: redpandadata/redpanda:v24.1.2
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp
+      - "1"
+      - --memory
+      - 512M
+      - --reserve-memory
+      - 0M
+      - --node-id
+      - "0"
+      - --check=false
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:9092,OUTSIDE://0.0.0.0:19092
+      - --advertise-kafka-addr
+      - PLAINTEXT://kafka:9092,OUTSIDE://localhost:19092
+      - --pandaproxy-addr
+      - 0.0.0.0:8082
+      - --advertise-pandaproxy-addr
+      - localhost:8082
+    ports:
+      - "19092:19092"
+      - "8082:8082"
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+
+  temporal-pgr-adapter:
+    build: .
+    environment:
+      TEMPORAL_TARGET: temporal:7233
+      TEMPORAL_NAMESPACE: digit-pgr
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      DIGIT_PGR_BASE_URL: http://host.docker.internal:8280/pgr-services
+      DIGIT_WORKFLOW_BASE_URL: http://host.docker.internal:8282/egov-workflow-v2
+      DIGIT_MDMS_BASE_URL: http://host.docker.internal:8083/mdms-v2
+    depends_on:
+      temporal:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8096:8096"
