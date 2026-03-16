@@ -119,6 +119,7 @@ public class EncryptionDecryptionUtil {
             
             // For config service, use null RequestInfo as we don't need user-specific decryption logic
             // The schema-based security fields determine what needs to be decrypted
+            @SuppressWarnings("unchecked")
             P decryptedObject = (P) encryptionService.decryptJson(null, objectToDecrypt, key != null ? key : "Config", "ConfigDecryption", classType);
             if (decryptedObject == null) {
                 throw new CustomException("DECRYPTION_NULL_ERROR", "Null object found on performing decryption");
