@@ -72,8 +72,6 @@ public class NovuClient {
                     .build();
         } catch (Exception e) {
             log.error("Novu trigger failed for templateKey={} subscriberId={}", templateKey, subscriberId, e);
-            log.error("Request was: templateKey={}, subscriberId={}, phone={}, payload={}, transactionId={}, overrides={}", 
-                    templateKey, subscriberId, phone, payload, transactionId, overrides);
             throw new CustomException("NB_NOVU_TRIGGER_FAILED", "Failed triggering Novu event: " + e.getMessage());
         }
     }

@@ -22,7 +22,7 @@ public class SecurityFieldsUtil {
      * x-security works like x-unique - as an array at schema level listing field names
      */
     public Set<String> extractSecurityFields(JSONObject schema) {
-        Set<String> securityFields = new HashSet<>();
+        Set<String> securityFields = new LinkedHashSet<>(); // Preserve insertion order
         if (schema == null) {
             return securityFields;
         }
@@ -66,8 +66,9 @@ public class SecurityFieldsUtil {
 
     /**
      * Replaces security field values in data with encrypted values
+     * CRITICAL: Uses List to preserve field order for correct value mapping
      */
-    public JsonNode replaceWithEncryptedValues(JsonNode originalData, Set<String> securityFields, 
+    public JsonNode replaceWithEncryptedValues(JsonNode originalData, List<String> securityFields, 
                                                JsonNode encryptedValues) {
         if (encryptedValues == null || !encryptedValues.isArray()) {
             return originalData;
@@ -75,25 +76,29 @@ public class SecurityFieldsUtil {
 
         try {
             JsonNode dataCopy = originalData.deepCopy();
-            Iterator<String> fieldIterator = securityFields.iterator();
             
-            for (int i = 0; i < encryptedValues.size() && fieldIterator.hasNext(); i++) {
-                String fieldPath = fieldIterator.next();
+            // Use indexed iteration to maintain field order
+            for (int i = 0; i < Math.min(encryptedValues.size(), securityFields.size()); i++) {
+                String fieldPath = securityFields.get(i);
                 JsonNode encryptedValue = encryptedValues.get(i);
                 setValueAtPath(dataCopy, fieldPath, encryptedValue);
             }
             
             return dataCopy;
-        } catch (Exception e) {
-            log.error("Failed to replace encrypted values: {}", e.getMessage());
-            return originalData;
+        } catch (IllegalArgumentException e) {
+            log.error("Invalid argument while replacing encrypted values: {}", e.getMessage());
+            throw new CustomException("ENCRYPTION_REPLACE_ERROR", "Invalid argument during encrypted value replacement");
+        } catch (RuntimeException e) {
+            log.error("Runtime error while replacing encrypted values: {}", e.getMessage());
+            throw new CustomException("ENCRYPTION_REPLACE_ERROR", "Runtime error during encrypted value replacement");
         }
     }
 
     /**
      * Replaces encrypted field values in data with decrypted values
+     * CRITICAL: Uses List to preserve field order for correct value mapping
      */
-    public JsonNode replaceWithDecryptedValues(JsonNode encryptedData, Set<String> securityFields,
+    public JsonNode replaceWithDecryptedValues(JsonNode encryptedData, List<String> securityFields,
                                                JsonNode decryptedValues) {
         if (decryptedValues == null) {
             return encryptedData;
@@ -103,9 +108,9 @@ public class SecurityFieldsUtil {
             JsonNode dataCopy = encryptedData.deepCopy();
             
             if (decryptedValues.isArray()) {
-                Iterator<String> fieldIterator = securityFields.iterator();
-                for (int i = 0; i < decryptedValues.size() && fieldIterator.hasNext(); i++) {
-                    String fieldPath = fieldIterator.next();
+                // Use indexed iteration to maintain field order
+                for (int i = 0; i < Math.min(decryptedValues.size(), securityFields.size()); i++) {
+                    String fieldPath = securityFields.get(i);
                     JsonNode decryptedValue = decryptedValues.get(i);
                     setValueAtPath(dataCopy, fieldPath, decryptedValue);
                 }
@@ -115,8 +120,13 @@ public class SecurityFieldsUtil {
             }
             
             return dataCopy;
-        } catch (Exception e) {
-            log.error("Failed to replace decrypted values: {}", e.getMessage());
+        } catch (IllegalArgumentException e) {
+            log.error("Invalid argument while replacing decrypted values: {}", e.getMessage());
+            // For decryption, return original encrypted data on failure to maintain service availability
+            return encryptedData;
+        } catch (RuntimeException e) {
+            log.error("Runtime error while replacing decrypted values: {}", e.getMessage());
+            // For decryption, return original encrypted data on failure to maintain service availability
             return encryptedData;
         }
     }
@@ -155,6 +165,11 @@ public class SecurityFieldsUtil {
         return objectMapper.convertValue(current, Object.class);
     }
 
+    /**
+     * Sets a value at the specified path in JSON data
+     * SAFETY: Prevents ClassCastException by checking node types before casting
+     * LIMITATION: Cannot traverse through array nodes in the path
+     */
     public void setValueAtPath(JsonNode data, String path, JsonNode newValue) {
         if (data == null || path == null || path.isEmpty() || !data.isObject()) {
             return;
@@ -168,9 +183,17 @@ public class SecurityFieldsUtil {
             JsonNode next = current.get(part);
             
             if (next == null || !next.isObject()) {
+                // Check if existing node is an array - don't overwrite arrays destructively
+                if (next != null && next.isArray()) {
+                    log.warn("Cannot traverse through array node at path '{}'. Skipping setValueAtPath for: {}", part, path);
+                    return;
+                }
+                // Safe to create object node
                 current.set(part, objectMapper.createObjectNode());
                 next = current.get(part);
             }
+            
+            // Safe cast - we've ensured next is an ObjectNode
             current = (ObjectNode) next;
         }
 
