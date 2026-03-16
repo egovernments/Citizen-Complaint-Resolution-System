@@ -1,0 +1,73 @@
+{
+  "createComplaint": {
+    "RequestInfo": {
+      "apiId": "Rainmaker",
+      "ver": "1.0",
+      "ts": 1710076200000,
+      "action": "POST",
+      "did": "1",
+      "key": "",
+      "msgId": "20260310-001",
+      "authToken": "sample-token"
+    },
+    "service": {
+      "tenantId": "pb.amritsar",
+      "serviceCode": "PGR.WATER.LOGGING",
+      "description": "Water logging near market road",
+      "source": "web",
+      "accountId": "9876543210",
+      "address": {
+        "tenantId": "pb.amritsar",
+        "city": "Amritsar",
+        "locality": {
+          "code": "LOC-11"
+        }
+      },
+      "additionalDetail": {
+        "landmark": "Near bus stand",
+        "priority": "HIGH"
+      }
+    },
+    "workflow": {
+      "action": "CREATE",
+      "comments": "Citizen complaint submitted"
+    }
+  },
+  "updateComplaint": {
+    "workflowId": "pgr-complaint-pb-amritsar-pb-pgr-2026-03-10-000123",
+    "RequestInfo": {
+      "apiId": "Rainmaker",
+      "msgId": "20260310-002"
+    },
+    "service": {
+      "tenantId": "pb.amritsar",
+      "serviceRequestId": "PB-PGR-2026-03-10-000123",
+      "description": "Escalated due to repeated overflow",
+      "additionalDetail": {
+        "priority": "CRITICAL"
+      }
+    },
+    "workflow": {
+      "action": "ASSIGN",
+      "assignes": [
+        "c9dd71d6-7402-42a2-9d18-c9e3e7e8f100"
+      ],
+      "comments": "Assign field engineer"
+    }
+  },
+  "resolveComplaint": {
+    "workflowId": "pgr-complaint-pb-amritsar-pb-pgr-2026-03-10-000123",
+    "RequestInfo": {
+      "apiId": "Rainmaker",
+      "msgId": "20260310-003"
+    },
+    "service": {
+      "tenantId": "pb.amritsar",
+      "serviceRequestId": "PB-PGR-2026-03-10-000123"
+    },
+    "workflow": {
+      "action": "RESOLVE",
+      "comments": "Drainage cleared and site cleaned"
+    }
+  }
+}

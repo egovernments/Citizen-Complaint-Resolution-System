@@ -1,0 +1,69 @@
+spring:
+  application:
+    name: temporal-workflow-engine
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:19093}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    consumer:
+      group-id: ${KAFKA_GROUP_ID:temporal-workflow-engine}
+      auto-offset-reset: earliest
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+server:
+  port: ${SERVER_PORT:8096}
+  servlet:
+    context-path: /temporal-workflow-engine
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+  tracing:
+    sampling:
+      probability: 1.0
+
+logging:
+  pattern:
+    level: "%5p [${spring.application.name:},traceId=%X{traceId:-},spanId=%X{spanId:-}]"
+
+temporal:
+  namespace: ${TEMPORAL_NAMESPACE:default}
+  task-queue: ${TEMPORAL_TASK_QUEUE:workflow-engine-task-queue}
+  workflow-id-prefix: ${TEMPORAL_WORKFLOW_ID_PREFIX:wf-}
+  target: ${TEMPORAL_TARGET:localhost:7233}
+  workflows:
+    create:
+      execution-timeout: ${TEMPORAL_CREATE_EXECUTION_TIMEOUT:PT24H}
+      task-timeout: ${TEMPORAL_CREATE_TASK_TIMEOUT:PT30S}
+      auto-escalation-enabled: ${TEMPORAL_CREATE_AUTO_ESCALATION_ENABLED:false}
+      auto-escalation-timeout: ${TEMPORAL_CREATE_AUTO_ESCALATION_TIMEOUT:PT30M}
+    update:
+      execution-timeout: ${TEMPORAL_UPDATE_EXECUTION_TIMEOUT:PT1H}
+      task-timeout: ${TEMPORAL_UPDATE_TASK_TIMEOUT:PT30S}
+  activities:
+    start-to-close-timeout: ${TEMPORAL_ACTIVITY_TIMEOUT:PT30S}
+    heartbeat-timeout: ${TEMPORAL_ACTIVITY_HEARTBEAT_TIMEOUT:PT10S}
+    retry:
+      initial-interval: ${TEMPORAL_ACTIVITY_RETRY_INITIAL:PT2S}
+      backoff-coefficient: ${TEMPORAL_ACTIVITY_RETRY_BACKOFF:2.0}
+      maximum-attempts: ${TEMPORAL_ACTIVITY_RETRY_MAX_ATTEMPTS:5}
+
+otel:
+  exporter:
+    otlp:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}
+
+workflow:
+  engine:
+    definitions-location: ${WORKFLOW_ENGINE_DEFINITIONS_LOCATION:classpath:workflow-definitions.json}
+    kafka:
+      event-topic-pattern: ${WORKFLOW_ENGINE_EVENT_TOPIC_PATTERN:((^[a-zA-Z]+-)?save-pgr-request|(^[a-zA-Z]+-)?update-pgr-request)}
+      dead-letter-topic: ${WORKFLOW_ENGINE_DEAD_LETTER_TOPIC:workflow-engine-dlq}

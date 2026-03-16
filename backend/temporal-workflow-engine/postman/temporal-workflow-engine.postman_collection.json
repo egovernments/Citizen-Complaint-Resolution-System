@@ -1,0 +1,140 @@
+{
+  "info": {
+    "name": "Temporal Workflow Engine Local",
+    "_postman_id": "6376c4e9-d277-47af-a02a-3a223ce51ff6",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Start Process",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/temporal-workflow-engine/workflow-engine/v1/process/start",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "temporal-workflow-engine",
+            "workflow-engine",
+            "v1",
+            "process",
+            "start"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"tenantId\": \"{{tenantId}}\",\n  \"module\": \"{{module}}\",\n  \"workflow\": \"{{workflowName}}\",\n  \"businessId\": \"{{businessId}}\",\n  \"correlationId\": \"manual-start-{{$timestamp}}\",\n  \"action\": \"{{startAction}}\",\n  \"actor\": {\n    \"uuid\": \"{{actorUuid}}\",\n    \"roles\": [\"{{actorRole}}\"]\n  },\n  \"payload\": {\n    \"source\": \"postman\"\n  }\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set(\"workflowId\", body.workflowId);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Signal Process",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/temporal-workflow-engine/workflow-engine/v1/process/signal",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "temporal-workflow-engine",
+            "workflow-engine",
+            "v1",
+            "process",
+            "signal"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"workflowId\": \"{{workflowId}}\",\n  \"tenantId\": \"{{tenantId}}\",\n  \"module\": \"{{module}}\",\n  \"workflow\": \"{{workflowName}}\",\n  \"businessId\": \"{{businessId}}\",\n  \"correlationId\": \"manual-signal-{{$timestamp}}\",\n  \"action\": \"{{signalAction}}\",\n  \"actor\": {\n    \"uuid\": \"{{actorUuid}}\",\n    \"roles\": [\"{{actorRole}}\"]\n  },\n  \"payload\": {\n    \"source\": \"postman\"\n  }\n}"
+        }
+      }
+    },
+    {
+      "name": "Get Snapshot",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/temporal-workflow-engine/workflow-engine/v1/process/{{workflowId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "temporal-workflow-engine",
+            "workflow-engine",
+            "v1",
+            "process",
+            "{{workflowId}}"
+          ]
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8096"
+    },
+    {
+      "key": "tenantId",
+      "value": "statea"
+    },
+    {
+      "key": "module",
+      "value": "pgr"
+    },
+    {
+      "key": "workflowName",
+      "value": "complaint-lifecycle"
+    },
+    {
+      "key": "businessId",
+      "value": "PG-PGR-TEST-0001"
+    },
+    {
+      "key": "startAction",
+      "value": "CREATE"
+    },
+    {
+      "key": "signalAction",
+      "value": "ASSIGN"
+    },
+    {
+      "key": "actorUuid",
+      "value": "system"
+    },
+    {
+      "key": "actorRole",
+      "value": "SYSTEM"
+    },
+    {
+      "key": "workflowId",
+      "value": ""
+    }
+  ]
+}

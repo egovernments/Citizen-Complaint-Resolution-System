@@ -69,12 +69,20 @@ public class ServiceRequestValidator {
     public void validateUpdate(ServiceRequest request, Object mdmsData){
 
         String id = request.getService().getId();
+        String serviceRequestId = request.getService().getServiceRequestId();
         String tenantId = request.getService().getTenantId();
         validateSource(request.getService().getSource());
         validateMDMS(request, mdmsData);
-        validateDepartment(request, mdmsData);
+        if(config.getIsValidateDeptEnabled()) validateDepartment(request, mdmsData);
         validateReOpen(request);
-        RequestSearchCriteria criteria = RequestSearchCriteria.builder().ids(Collections.singleton(id)).tenantId(tenantId).build();
+        RequestSearchCriteria.RequestSearchCriteriaBuilder criteriaBuilder =
+                RequestSearchCriteria.builder().tenantId(tenantId);
+        if (id != null) {
+            criteriaBuilder.ids(Collections.singleton(id));
+        } else {
+            criteriaBuilder.serviceRequestId(serviceRequestId);
+        }
+        RequestSearchCriteria criteria = criteriaBuilder.build();
         criteria.setIsPlainSearch(false);
         List<ServiceWrapper> serviceWrappers = repository.getServiceWrappers(criteria);
 

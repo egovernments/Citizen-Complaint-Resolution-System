@@ -70,7 +70,7 @@ public class PGRService {
         Object mdmsData = mdmsUtils.mDMSCall(request);
         validator.validateCreate(request, mdmsData);
         enrichmentService.enrichCreateRequest(request);
-        workflowService.updateWorkflowStatus(request);
+        //workflowService.updateWorkflowStatus(request);
 
         Service service = request.getService();
         Map<String, Object> additionalDetailMap = new HashMap<>();
@@ -108,7 +108,10 @@ public class PGRService {
             return new ArrayList<>();;
 
         userService.enrichUsers(serviceWrappers);
-        List<ServiceWrapper> enrichedServiceWrappers = workflowService.enrichWorkflow(requestInfo,serviceWrappers);
+        List<ServiceWrapper> enrichedServiceWrappers = serviceWrappers;
+        if (Boolean.TRUE.equals(config.getIsWorkflowEnabled())) {
+            enrichedServiceWrappers = workflowService.enrichWorkflow(requestInfo, serviceWrappers);
+        }
         Map<Long, List<ServiceWrapper>> sortedWrappers = new TreeMap<>(Collections.reverseOrder());
         for(ServiceWrapper svc : enrichedServiceWrappers){
             if(sortedWrappers.containsKey(svc.getService().getAuditDetails().getCreatedTime())){
@@ -137,7 +140,7 @@ public class PGRService {
         Object mdmsData = mdmsUtils.mDMSCall(request);
         validator.validateUpdate(request, mdmsData);
         enrichmentService.enrichUpdateRequest(request);
-        workflowService.updateWorkflowStatus(request);
+        //workflowService.updateWorkflowStatus(request);
         producer.push(tenantId,config.getUpdateTopic(),request);
         producer.push(tenantId,config.getInboxUpdateTopic(),request);
         return request;
@@ -177,7 +180,10 @@ public class PGRService {
         }
 
         userService.enrichUsers(serviceWrappers);
-        List<ServiceWrapper> enrichedServiceWrappers = workflowService.enrichWorkflow(requestInfo, serviceWrappers);
+        List<ServiceWrapper> enrichedServiceWrappers = serviceWrappers;
+        if (Boolean.TRUE.equals(config.getIsWorkflowEnabled())) {
+            enrichedServiceWrappers = workflowService.enrichWorkflow(requestInfo, serviceWrappers);
+        }
 
         Map<Long, List<ServiceWrapper>> sortedWrappers = new TreeMap<>(Collections.reverseOrder());
         for(ServiceWrapper svc : enrichedServiceWrappers){

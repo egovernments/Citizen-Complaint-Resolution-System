@@ -1,0 +1,114 @@
+{
+  "definitions": [
+    {
+      "module": "pgr",
+      "workflow": "complaint-lifecycle",
+      "version": 1,
+      "startState": "__START__",
+      "eventTriggers": [
+        {
+          "topicPattern": "((^[a-zA-Z]+-)?save-pgr-request)",
+          "tenantIdPath": "service.tenantId",
+          "businessIdPath": "service.serviceRequestId",
+          "correlationIdPath": "RequestInfo.msgId",
+          "defaultAction": "CREATE"
+        },
+        {
+          "topicPattern": "((^[a-zA-Z]+-)?update-pgr-request)",
+          "tenantIdPath": "service.tenantId",
+          "businessIdPath": "service.serviceRequestId",
+          "correlationIdPath": "RequestInfo.msgId",
+          "actionPath": "workflow.action",
+          "defaultAction": "UPDATE"
+        }
+      ],
+      "states": {
+        "OPEN": {
+          "terminal": false,
+          "timer": {
+            "after": "PT30M",
+            "action": "AUTO_ESCALATE"
+          }
+        },
+        "ASSIGNED": {
+          "terminal": false,
+          "timer": {
+            "after": "PT30M",
+            "action": "AUTO_ESCALATE"
+          }
+        },
+        "ESCALATED": {
+          "terminal": false
+        },
+        "RESOLVED": {
+          "terminal": true
+        },
+        "REJECTED": {
+          "terminal": true
+        }
+      },
+      "transitions": [
+        {
+          "fromState": "__START__",
+          "action": "CREATE",
+          "toState": "OPEN",
+          "steps": []
+        },
+        {
+          "fromState": "OPEN",
+          "action": "ASSIGN",
+          "toState": "ASSIGNED",
+          "steps": []
+        },
+        {
+          "fromState": "OPEN",
+          "action": "RESOLVE",
+          "toState": "RESOLVED",
+          "steps": []
+        },
+        {
+          "fromState": "ASSIGNED",
+          "action": "RESOLVE",
+          "toState": "RESOLVED",
+          "steps": []
+        },
+        {
+          "fromState": "OPEN",
+          "action": "REJECT",
+          "toState": "REJECTED",
+          "steps": []
+        },
+        {
+          "fromState": "ASSIGNED",
+          "action": "REJECT",
+          "toState": "REJECTED",
+          "steps": []
+        },
+        {
+          "fromState": "OPEN",
+          "action": "AUTO_ESCALATE",
+          "toState": "ESCALATED",
+          "steps": []
+        },
+        {
+          "fromState": "ASSIGNED",
+          "action": "AUTO_ESCALATE",
+          "toState": "ESCALATED",
+          "steps": []
+        },
+        {
+          "fromState": "ESCALATED",
+          "action": "ASSIGN",
+          "toState": "ASSIGNED",
+          "steps": []
+        },
+        {
+          "fromState": "ESCALATED",
+          "action": "RESOLVE",
+          "toState": "RESOLVED",
+          "steps": []
+        }
+      ]
+    }
+  ]
+}

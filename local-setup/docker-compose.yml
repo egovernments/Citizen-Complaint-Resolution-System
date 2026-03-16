@@ -99,7 +99,7 @@ services:
       - --advertise-pandaproxy-addr
       - PLAINTEXT://redpanda:8082
     ports:
-      - 19092:9092
+      - 19093:9092
       - 18082:8082
     healthcheck:
       test: ["CMD", "rpk", "cluster", "health"]
@@ -748,7 +748,7 @@ services:
       - egov-network
 
   pgr-services:
-    image: egovio/pgr-services:multiarch-d448cb7
+    image: pgr-services-dev:latest
     container_name: pgr-services
     depends_on:
       pgbouncer:
