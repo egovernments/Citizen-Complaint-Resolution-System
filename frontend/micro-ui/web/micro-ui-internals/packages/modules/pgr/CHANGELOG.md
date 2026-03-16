@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to this module will be documented in this file.
 
+## [1.0.14] - 2026-03-16
+### Fixed
+ -var Digit = window.Digit || {}; removed
+
 ## [1.0.13] - 2026-03-16
 ### Fixed
 - Fixed complaint subtype localization keys showing raw keys instead of translated labels
