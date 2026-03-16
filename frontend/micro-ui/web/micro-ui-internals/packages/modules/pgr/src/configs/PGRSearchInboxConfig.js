@@ -69,14 +69,13 @@ const PGRSearchInboxConfig = () => {
                         },
                         {
                             label: "CS_COMMON_MOBILE_NO",
-                            type: "text",
+                            type: "mobileNumber",
                             isMandatory: false,
                             disable: false,
                             populators: {
-                                // prefix:"+922",
                                 name: "mobileNumber",
-                                // error: `PROJECT_PATTERN_ERR_MSG`,
-                                // validation: { pattern: "^\+?[1-9]\d{0,2}[-.\s]?\(?\d{1,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}$", minlength: 2 }
+                                showCountryCodeSelector: true,
+                                countryCode: "+91",
                             },
                         },
                         {
