@@ -1,8 +1,17 @@
 # Changelog
 All notable changes to this module will be documented in this file.
 
+## [1.0.13] - 2026-03-16
+### Fixed
+- Fixed complaint subtype localization keys showing raw keys instead of translated labels
+  - Changed `SERVICEDEFS.` (dot separator) to `SERVICEDEFS_` (underscore separator) to match localization entries
+  - Updated across useServiceDefs hook, UICustomizations, Complaint component, and SelectSubType step
+
 ## [1.0.12] - 2026-03-13
-- Fixed back button on complaint-success page to navigate to sandbox home with correct query params when in multi-root tenant mode
+- Fixed back button on complaint-success page to navigate to sandbox home with correct query params when in multi-.root tenant mode
+
+## [1.0.11] - 2026-03-11
+- multi-root tenant mode changes 
 
 ## [1.0.10] - 2026-03-11
 - SUPERUSER Role added
