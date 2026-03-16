@@ -8,7 +8,7 @@ import { Button as ButtonNew, Dropdown, Toast, Tag, Loader, FormComposerV2 } fro
 //create functions here based on module name set in mdms(eg->SearchProjectConfig)
 //how to call these -> Digit?.Customizations?.[masterName]?.[moduleName]
 // these functions will act as middlewares
-// var Digit = window.Digit || {};
+var Digit = window.Digit || {};
 
 
 const wrapTextStyle = {
