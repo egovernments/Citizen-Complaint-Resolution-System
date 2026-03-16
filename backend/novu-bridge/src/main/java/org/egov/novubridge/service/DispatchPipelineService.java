@@ -107,8 +107,8 @@ public class DispatchPipelineService {
                     .valid(false)
                     .preferenceAllowed(true)
                     .derivedContext(context)
-                    .resolvedTemplate(resolvedTemplate)
-                    .resolvedProvider(resolvedProvider)
+                    .resolvedTemplate(ResolvedTemplateResponse.fromInternal(resolvedTemplate))
+                    .resolvedProvider(ResolvedProviderResponse.fromInternal(resolvedProvider))
                     .missingRequiredVars(missingVars)
                     .novuTriggered(false)
                     .diagnostics(Collections.singletonList("Missing required vars"))
@@ -121,8 +121,8 @@ public class DispatchPipelineService {
                     .valid(true)
                     .preferenceAllowed(true)
                     .derivedContext(context)
-                    .resolvedTemplate(resolvedTemplate)
-                    .resolvedProvider(resolvedProvider)
+                    .resolvedTemplate(ResolvedTemplateResponse.fromInternal(resolvedTemplate))
+                    .resolvedProvider(ResolvedProviderResponse.fromInternal(resolvedProvider))
                     .missingRequiredVars(Collections.emptyList())
                     .novuTriggered(false)
                     .diagnostics(Collections.singletonList("Validation only mode"))
@@ -132,18 +132,18 @@ public class DispatchPipelineService {
         String whatsappPhone = formatWhatsappPhone(context.getRecipientMobile());
 
         log.info("Dispatching notification: eventId={}, eventName={}, tenant={}, complaintNo={}, " +
-                 "templateKey={}, subscriberId={}, phone={}, recipientMobile={}, provider={}, channel={}, senderNumber={}",
+                 "templateKey={}, subscriberId={}, provider={}, channel={}, senderNumber={}",
                 event.getEventId(), event.getEventName(), event.getTenantId(),
                 event.getData() != null ? event.getData().get("complaintNo") : "N/A",
-                resolvedTemplate.getTemplateKey(), subscriberId, whatsappPhone,
-                context.getRecipientMobile(), resolvedProvider.getProviderName(), resolvedProvider.getChannel(),
+                resolvedTemplate.getTemplateKey(), subscriberId, 
+                resolvedProvider.getProviderName(), resolvedProvider.getChannel(),
                 resolvedProvider.getSenderNumber());
-        log.info("Novu trigger payload: data={}, paramOrder={}, novuBaseUrl={}, providerCredentials={}",
-                event.getData(), resolvedTemplate.getParamOrder(), config.getNovuBaseUrl(), 
+        log.info("Novu trigger payload: paramOrder={}, novuBaseUrl={}, providerCredentials={}",
+                resolvedTemplate.getParamOrder(), config.getNovuBaseUrl(), 
                 resolvedProvider.getCredentials() != null ? "[REDACTED]" : "null");
 
-        // Use provider-specific Novu API key if available, otherwise use template-specific key
-        String novuApiKey = resolvedProvider.getNovuApiKey() != null ? 
+        // Use provider-specific Novu API key if available and not blank, otherwise use template-specific key
+        String novuApiKey = StringUtils.hasText(resolvedProvider.getNovuApiKey()) ? 
                 resolvedProvider.getNovuApiKey() : resolvedTemplate.getNovuApiKey();
 
         // Build ordered content variables for template if paramOrder is configured
@@ -174,8 +174,8 @@ public class DispatchPipelineService {
                 .valid(true)
                 .preferenceAllowed(true)
                 .derivedContext(context)
-                .resolvedTemplate(resolvedTemplate)
-                .resolvedProvider(resolvedProvider)
+                .resolvedTemplate(ResolvedTemplateResponse.fromInternal(resolvedTemplate))
+                .resolvedProvider(ResolvedProviderResponse.fromInternal(resolvedProvider))
                 .missingRequiredVars(Collections.emptyList())
                 .novuTriggered(true)
                 .novuStatusCode(novuResponse.getStatusCode())
