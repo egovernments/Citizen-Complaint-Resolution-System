@@ -106,10 +106,11 @@ const componentsToRegister = {
   PGRComplaintDetailsPage: ComplaintDetailsPage,
   PGRSelectRating: SelectRating,
   PGRResponseCitzen: ResponseCitizen,
-  GeoLocations,
-  SelectImages,
   CreatePGRFlow: CreatePGRFlow,
   SelectAddress,
+  GeoLocations,
+  SelectImages,
+
  
 };
 
