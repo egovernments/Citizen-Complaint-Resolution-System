@@ -40,7 +40,7 @@ public class ConfigDataResolveRequest {
         @NotNull
         private String tenantId;
 
-        @JsonProperty("filters")
-        private Map<String, String> filters;
+        @JsonProperty("criteria")
+        private Map<String, String> criteria;
     }
 }

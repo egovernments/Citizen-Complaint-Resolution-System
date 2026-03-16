@@ -1,0 +1,110 @@
+[
+  {
+    "schemaCode": "TemplateBinding",
+    "tenantId": "pb.amritsar",
+    "data": {
+      "tenantId": "pb.amritsar",
+      "eventName": "complaint-assigned",
+      "channel": "whatsapp",
+      "locale": "en_IN",
+      "templateId": "complaint-assigned-whatsapp-english",
+      "contentSid": "HX1234567890abcdef1234567890abcdef12",
+      "paramOrder": ["complaintNo", "assigneeName", "estimatedResolutionTime"],
+      "requiredVars": ["complaintNo", "assigneeName"],
+      "novuApiKey": "optional_template_specific_novu_key"
+    }
+  },
+  {
+    "schemaCode": "TemplateBinding",
+    "tenantId": "pb.amritsar",
+    "data": {
+      "tenantId": "pb.amritsar",
+      "eventName": "complaint-assigned",
+      "channel": "whatsapp",
+      "locale": "hi_IN",
+      "templateId": "complaint-assigned-whatsapp-hindi",
+      "contentSid": "HX2234567890abcdef1234567890abcdef23",
+      "paramOrder": ["complaintNo", "assigneeName", "estimatedResolutionTime"],
+      "requiredVars": ["complaintNo", "assigneeName"],
+      "novuApiKey": "optional_template_specific_novu_key"
+    }
+  },
+  {
+    "schemaCode": "TemplateBinding",
+    "tenantId": "pb.amritsar",
+    "data": {
+      "tenantId": "pb.amritsar",
+      "eventName": "complaint-resolved",
+      "channel": "whatsapp",
+      "locale": "en_IN",
+      "templateId": "complaint-resolved-whatsapp-english",
+      "contentSid": "HXfedcba0987654321fedcba0987654321fe",
+      "paramOrder": ["complaintNo", "resolutionDetails", "resolutionDate"],
+      "requiredVars": ["complaintNo", "resolutionDetails"]
+    }
+  },
+  {
+    "schemaCode": "TemplateBinding",
+    "tenantId": "pb.ludhiana",
+    "data": {
+      "tenantId": "pb.ludhiana",
+      "eventName": "complaint-assigned", 
+      "channel": "whatsapp",
+      "locale": "pa_IN",
+      "templateId": "complaint-assigned-punjabi",
+      "contentSid": "HXabcdef1234567890abcdef1234567890ab",
+      "paramOrder": ["complaintNo", "assigneeName"],
+      "requiredVars": ["complaintNo", "assigneeName"]
+    }
+  },
+  {
+    "schemaCode": "TemplateBinding",
+    "tenantId": "pb.amritsar",
+    "data": {
+      "tenantId": "pb.amritsar",
+      "eventName": "complaint-feedback-request",
+      "channel": "email",
+      "locale": "en_IN",
+      "templateId": "feedback-request-email-english",
+      "requiredVars": ["complaintNo", "citizenName", "feedbackLink"]
+    }
+  },
+  {
+    "schemaCode": "TemplateBinding",
+    "tenantId": "pb.amritsar",
+    "data": {
+      "tenantId": "pb.amritsar",
+      "eventName": "complaint-feedback-request",
+      "channel": "email",
+      "locale": "hi_IN",
+      "templateId": "feedback-request-email-hindi",
+      "requiredVars": ["complaintNo", "citizenName", "feedbackLink"]
+    }
+  },
+  {
+    "schemaCode": "TemplateBinding",
+    "tenantId": "pb.amritsar",
+    "data": {
+      "tenantId": "pb.amritsar",
+      "eventName": "complaint-urgent-escalation",
+      "channel": "sms",
+      "locale": "en_IN",
+      "templateId": "urgent-escalation-sms-english", 
+      "paramOrder": ["complaintNo", "urgencyLevel"],
+      "requiredVars": ["complaintNo", "urgencyLevel"]
+    }
+  },
+  {
+    "schemaCode": "TemplateBinding",
+    "tenantId": "pb.amritsar",
+    "data": {
+      "tenantId": "pb.amritsar",
+      "eventName": "complaint-urgent-escalation",
+      "channel": "sms",
+      "locale": "hi_IN",
+      "templateId": "urgent-escalation-sms-hindi", 
+      "paramOrder": ["complaintNo", "urgencyLevel"],
+      "requiredVars": ["complaintNo", "urgencyLevel"]
+    }
+  }
+]
