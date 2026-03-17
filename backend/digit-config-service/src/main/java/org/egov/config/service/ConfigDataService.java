@@ -15,6 +15,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import org.egov.config.web.model.*;
 import org.egov.config.web.model.RequestInfo;
 import org.json.JSONObject;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -32,6 +33,9 @@ public class ConfigDataService {
     private final EncryptionDecryptionUtil encryptionDecryptionUtil;
     private final SecurityFieldsUtil securityFieldsUtil;
     private final MdmsV2Client mdmsV2Client;
+
+    @Value("${mdms.v2.validation.enabled:true}")
+    private boolean schemaValidationEnabled;
 
 
     public ConfigData create(ConfigDataRequest request, String schemaCode) {
@@ -105,6 +109,7 @@ public class ConfigDataService {
         }
 
         try {
+            // Always fetch schema for encryption/decryption - this is independent of validation
             JSONObject schema = mdmsV2Client.fetchSchemaDefinition(
                     configData.getTenantId(), 
                     configData.getSchemaCode());
