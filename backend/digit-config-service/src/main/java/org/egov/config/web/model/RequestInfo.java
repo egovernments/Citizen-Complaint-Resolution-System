@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
@@ -39,6 +41,9 @@ public class RequestInfo {
     @JsonProperty("userInfo")
     private UserInfo userInfo;
 
+    @JsonProperty("plainAccessRequest")
+    private Object plainAccessRequest;
+
     @Data
     @AllArgsConstructor
     @NoArgsConstructor
@@ -53,6 +58,46 @@ public class RequestInfo {
 
         @JsonProperty("userName")
         private String userName;
+
+        @JsonProperty("name")
+        private String name;
+
+        @JsonProperty("mobileNumber")
+        private String mobileNumber;
+
+        @JsonProperty("emailId")
+        private String emailId;
+
+        @JsonProperty("locale")
+        private String locale;
+
+        @JsonProperty("type")
+        private String type;
+
+        @JsonProperty("roles")
+        private List<Role> roles;
+
+        @JsonProperty("active")
+        private Boolean active;
+
+        @JsonProperty("tenantId")
+        private String tenantId;
+
+        @JsonProperty("permanentCity")
+        private String permanentCity;
+    }
+
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
+    @Builder
+    public static class Role {
+
+        @JsonProperty("name")
+        private String name;
+
+        @JsonProperty("code")
+        private String code;
 
         @JsonProperty("tenantId")
         private String tenantId;
