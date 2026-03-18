@@ -14,11 +14,24 @@ Usage:
     loader.load_employees("Employee Master.xlsx")
 """
 
-from unified_loader import UnifiedExcelReader, APIUploader
+try:
+    from dataloader.dataloader.unified_loader import UnifiedExcelReader, APIUploader
+except ModuleNotFoundError as exc:
+    if exc.name not in {"dataloader.dataloader.unified_loader", "dataloader.unified_loader", "unified_loader"}:
+        raise
+    try:
+        from dataloader.unified_loader import UnifiedExcelReader, APIUploader
+    except ModuleNotFoundError as inner_exc:
+        if inner_exc.name not in {"dataloader.unified_loader", "unified_loader"}:
+            raise
+        from unified_loader import UnifiedExcelReader, APIUploader
 from typing import Optional, Dict
+from copy import deepcopy
 import os
 import json
 import requests
+
+REQUEST_TIMEOUT = 30  # seconds - prevent indefinite hangs on unresponsive services
 
 # kubectl API server URL (for environments without kubectl access)
 KUBECTL_API_URL = os.environ.get('KUBECTL_API_URL', 'http://localhost:8765')
@@ -104,7 +117,7 @@ class CRSLoader:
                    Default roles: ["EMPLOYEE"]. Type defaults to "EMPLOYEE".
 
         Returns:
-            bool: True if tenant exists or was created successfully
+            bool: True if tenant exists/was created and StateInfo is present
 
         Example:
             loader.login(username="ADMIN", password="eGov@123", tenant_id="pg")
@@ -128,7 +141,7 @@ class CRSLoader:
             "RequestInfo": {"apiId": "Rainmaker"}
         }
 
-        resp = requests.post(search_url, json=search_payload, headers={"Content-Type": "application/json"})
+        resp = requests.post(search_url, json=search_payload, headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
         existing_tenants = []
         if resp.ok:
             try:
@@ -139,7 +152,8 @@ class CRSLoader:
 
         if tenant_code.lower() in existing_tenants:
             print(f"✅ Tenant '{tenant_code}' already exists")
-            return True
+            # Ensure branding entry exists even for pre-existing tenants
+            return self._ensure_stateinfo_for_tenant(tenant_code, display_name)
 
         print(f"📝 Creating tenant '{tenant_code}'...")
 
@@ -175,10 +189,15 @@ class CRSLoader:
             }
         }
 
-        resp = requests.post(create_url, json=create_payload, headers={"Content-Type": "application/json"})
+        resp = requests.post(create_url, json=create_payload, headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
 
         if resp.ok:
             print(f"✅ Tenant '{tenant_code}' created successfully!")
+
+            # Ensure tenant has branding metadata used by UI localization bootstrap
+            if not self._ensure_stateinfo_for_tenant(tenant_code, display_name):
+                print(f"❌ Failed to ensure StateInfo for '{tenant_code}'")
+                return False
 
             # Enable modules for the tenant
             for module in enable_modules:
@@ -204,6 +223,68 @@ class CRSLoader:
                 print(f"   Response: {resp.text[:200]}")
             return False
 
+    def _ensure_stateinfo_for_tenant(self, tenant_code: str, display_name: str = None) -> bool:
+        """Ensure common-masters.StateInfo exists for tenant.
+
+        DIGIT UI depends on StateInfo (especially localizationModules/languages)
+        during login/bootstrap. Missing StateInfo can lead to raw i18n codes in UI.
+        """
+        # Already present for tenant -> nothing to do
+        existing_records = self.uploader.search_mdms_data(
+            schema_code='common-masters.StateInfo',
+            tenant=tenant_code,
+            limit=5
+        )
+        existing = any((r.get('code') or '').lower() == tenant_code.lower() for r in existing_records)
+        if existing:
+            print(f"   ✅ StateInfo already present for '{tenant_code}'")
+            return True
+
+        # Try to clone a baseline template from parent/root tenants
+        candidate_tenants = []
+        parent_tenant = tenant_code.split('.')[0] if '.' in tenant_code else tenant_code
+        for candidate in [parent_tenant, self.tenant_id, "pg"]:
+            if candidate and candidate not in candidate_tenants:
+                candidate_tenants.append(candidate)
+
+        template = None
+        for candidate in candidate_tenants:
+            records = self.uploader.search_mdms_data(
+                schema_code='common-masters.StateInfo',
+                tenant=candidate,
+                limit=5
+            )
+            if records:
+                matched = next((r for r in records if (r.get('code') or '').lower() == candidate.lower()), None)
+                template = matched or records[0]
+                break
+
+        if not template:
+            print(f"   ⚠️  Could not find a StateInfo template in tenants: {candidate_tenants}")
+            print("   ⚠️  Run load_tenant() with Tenant And Branding Master to create branding manually.")
+            return False
+
+        stateinfo = deepcopy(template)
+        stateinfo.pop('_isActive', None)
+        stateinfo.pop('_uniqueIdentifier', None)
+        stateinfo['code'] = tenant_code
+        if display_name:
+            stateinfo['name'] = display_name
+
+        result = self.uploader.create_mdms_data(
+            schema_code='common-masters.StateInfo',
+            data_list=[stateinfo],
+            tenant=tenant_code
+        )
+        created = result.get('created', 0)
+        exists = result.get('exists', 0)
+        if created > 0 or exists > 0:
+            print(f"   ✅ StateInfo ensured for '{tenant_code}'")
+            return True
+
+        print(f"   ❌ Failed to create StateInfo for '{tenant_code}'")
+        return False
+
     def _enable_module_for_tenant(self, tenant_code: str, module_code: str):
         """Add tenant to citymodule for a specific module (internal)
 
@@ -220,7 +301,7 @@ class CRSLoader:
             "RequestInfo": {"apiId": "Rainmaker"}
         }
 
-        resp = requests.post(search_url, json=search_payload, headers={"Content-Type": "application/json"})
+        resp = requests.post(search_url, json=search_payload, headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
         if not resp.ok:
             print(f"   ⚠️  Could not fetch citymodule config for {module_code}")
             return
@@ -267,18 +348,21 @@ class CRSLoader:
             import hashlib
             config_str = json_lib.dumps(new_config, sort_keys=True, separators=(',', ':'))
 
-            # Construct SQL update
-            sql = f"""
+            # Construct SQL update (parameterized to prevent SQL injection)
+            update_sql = """
             UPDATE eg_mdms_data
-            SET data = '{json_lib.dumps(new_config)}'::jsonb,
+            SET data = :'new_data'::jsonb,
                 lastmodifiedtime = EXTRACT(EPOCH FROM NOW())::bigint * 1000
             WHERE schemacode = 'tenant.citymodule'
               AND tenantid = 'pg'
-              AND data->>'code' = '{module_code}';
+              AND data->>'code' = :'mod_code';
             """
 
             result = subprocess.run(
-                ["docker", "exec", "docker-postgres", "psql", "-U", "egov", "-d", "egov", "-c", sql],
+                ["docker", "exec", "docker-postgres", "psql", "-U", "egov", "-d", "egov",
+                 "-v", f"new_data={json_lib.dumps(new_config)}",
+                 "-v", f"mod_code={module_code}",
+                 "-c", update_sql],
                 capture_output=True, text=True, timeout=10
             )
 
@@ -326,7 +410,7 @@ class CRSLoader:
 
         existing_roles = set()
         try:
-            resp = requests.post(search_url, json=search_payload, headers={"Content-Type": "application/json"})
+            resp = requests.post(search_url, json=search_payload, headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
             if resp.ok:
                 roles_data = resp.json().get("MdmsRes", {}).get("ACCESSCONTROL-ROLES", {}).get("roles", [])
                 existing_roles = {r.get("code") for r in roles_data}
@@ -365,7 +449,7 @@ class CRSLoader:
             }
 
             try:
-                resp = requests.post(create_url, json=create_payload, headers={"Content-Type": "application/json"})
+                resp = requests.post(create_url, json=create_payload, headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
                 if resp.ok:
                     print(f"   ✅ Created role '{role_code}' for tenant '{state_tenant}'")
                 elif "already exists" in resp.text.lower() or "duplicate" in resp.text.lower():
@@ -437,7 +521,7 @@ class CRSLoader:
         }
 
         try:
-            resp = requests.post(create_url, json=user_payload, headers={"Content-Type": "application/json"})
+            resp = requests.post(create_url, json=user_payload, headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
 
             if resp.ok:
                 result = resp.json()
@@ -1097,10 +1181,10 @@ class CRSLoader:
         """Delete boundaries using direct database access (requires kubectl)"""
         import subprocess
 
-        # Database connection details
-        db_host = "chakshu-pgr-db.czvokiourya9.ap-south-1.rds.amazonaws.com"
-        db_name = "chakshupgrdb"
-        db_user = "chakshupgr"
+        # Database connection details (from environment or defaults for local Docker)
+        db_host = os.environ.get("BOUNDARY_DB_HOST", "postgres")
+        db_name = os.environ.get("BOUNDARY_DB_NAME", "egov")
+        db_user = os.environ.get("BOUNDARY_DB_USER", "egov")
 
         # Get DB password from K8s secret
         pw_result = subprocess.run(
@@ -1127,12 +1211,13 @@ class CRSLoader:
 
         conn_str = f"postgresql://{db_user}:{db_pass}@{db_host}:5432/{db_name}"
 
-        # Delete relationships first, then boundaries
+        # Delete relationships first, then boundaries (parameterized to prevent SQL injection)
+        delete_sql = "DELETE FROM boundary_relationship WHERE tenantid = :'tenant_id'; DELETE FROM boundary WHERE tenantid = :'tenant_id';"
         result = subprocess.run(
             ["kubectl", "exec", "-n", "egov", "db-cleanup", "--",
-             "psql", conn_str, "-t", "-c",
-             f"DELETE FROM boundary_relationship WHERE tenantid='{tenant}'; "
-             f"DELETE FROM boundary WHERE tenantid='{tenant}';"],
+             "psql", conn_str, "-t",
+             "-v", f"tenant_id={tenant}",
+             "-c", delete_sql],
             capture_output=True, text=True
         )
 

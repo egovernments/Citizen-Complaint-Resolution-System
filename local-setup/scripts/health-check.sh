@@ -1,6 +1,9 @@
 #!/bin/bash
 # Quick health check for all DIGIT core services
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/telemetry.sh" 2>/dev/null || true
+
 BASE_URL="${1:-http://0.0.0.0}"
 
 echo "=== DIGIT Core Services Health Check ==="
@@ -12,7 +15,6 @@ services=(
   "Postgres:15432:SELECT 1"
   "Redis:16379:PING"
   "Redpanda:19092:broker"
-  "Elasticsearch:19200:/_cluster/health"
   "MDMS:18094:/mdms-v2/health"
   "ENC Service:11234:/egov-enc-service/actuator/health"
   "IDGEN:18088:/egov-idgen/health"
@@ -70,6 +72,7 @@ echo ""
 echo "=== Summary: $healthy/$total services healthy ==="
 
 if [[ $healthy -eq $total ]]; then
+  send_event setup healthy all-services
   exit 0
 else
   exit 1

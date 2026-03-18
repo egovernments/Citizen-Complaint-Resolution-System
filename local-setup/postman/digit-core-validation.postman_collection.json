@@ -64,14 +64,6 @@
           }
         },
         {
-          "name": "Location health",
-          "request": {
-            "method": "GET",
-            "url": "{{baseUrl}}:18084/egov-location/health",
-            "description": "Checks egov-location health endpoint."
-          }
-        },
-        {
           "name": "Boundary-service health",
           "request": {
             "method": "GET",
@@ -93,14 +85,6 @@
             "method": "GET",
             "url": "{{baseUrl}}:18091/common-persist/actuator/health",
             "description": "Checks egov-persister actuator health."
-          }
-        },
-        {
-          "name": "Elasticsearch cluster health",
-          "request": {
-            "method": "GET",
-            "url": "{{baseUrl}}:19200/_cluster/health",
-            "description": "Checks Elasticsearch cluster health."
           }
         }
       ]
@@ -151,24 +135,6 @@
             "method": "POST",
             "url": "{{baseUrl}}:18096/localization/messages/cache-bust",
             "description": "Clears Redis cache for localization messages."
-          }
-        },
-        {
-          "name": "Location boundary search",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"RequestInfo\": { \"apiId\": \"digit\", \"ver\": \"1.0\", \"ts\": 0 },\n  \"tenantId\": \"pg\"\n}"
-            },
-            "url": "{{baseUrl}}:18084/egov-location/location/v11/boundarys/_search",
-            "description": "Fetches location boundaries for tenant pg (requires seeded boundaries)."
           }
         },
         {

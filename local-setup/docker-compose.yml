@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       POSTGRES_DB: egov
     volumes:
-      - postgres_data:/var/lib/docker-postgresql/data
+      - postgres_data:/var/lib/postgresql/data
       - ./db/full-dump.sql:/docker-entrypoint-initdb.d/01-full-dump.sql:ro
     ports:
       - 15432:5432
@@ -232,14 +232,15 @@ services:
       SPRING_FLYWAY_ENABLED: 'false'
       SERVER_PORT: 1234
       OTEL_TRACES_EXPORTER: none
-      MASTER_PASSWORD: asd@#$@$!132123
-      MASTER_SALT: qweasdzx
-      MASTER_INITIALVECTOR: qweasdzxqwea
+      # DEV ONLY - override via .env or environment for non-local use
+      MASTER_PASSWORD: ${ENC_MASTER_PASSWORD:-asd@#$@$!132123}
+      MASTER_SALT: ${ENC_MASTER_SALT:-qweasdzx}
+      MASTER_INITIALVECTOR: ${ENC_MASTER_INITIALVECTOR:-qweasdzxqwea}
       MASTER_PASSWORD_PROVIDER: software
       EGOV_MDMS_HOST: http://egov-mdms-service:8094
       EGOV_MDMS_SEARCH_ENDPOINT: /mdms-v2/v1/_search
       EGOV_STATE_LEVEL_TENANT_ID: pg
-      STATE_LEVEL_TENANT_ID: pg.citya
+      STATE_LEVEL_TENANT_ID: pg
       JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
     ports:
       - 11234:1234
@@ -379,7 +380,7 @@ services:
       EGOV_MDMS_HOST: http://egov-mdms-service:8094/
       EGOV_MDMS_SEARCH_ENDPOINT: mdms-v2/v1/_search
       EGOV_USER_HOST: http://egov-user:8107/
-      STATE_LEVEL_TENANT_ID: pg.citya
+      STATE_LEVEL_TENANT_ID: pg
       EGOV_STATE_LEVEL_TENANT_ID: pg
       IS_ENVIRONMENT_CENTRAL_INSTANCE: 'false'
       OTEL_TRACES_EXPORTER: none
@@ -424,7 +425,7 @@ services:
       SPRING_REDIS_PORT: 6379
       SERVER_PORT: 8096
       OTEL_TRACES_EXPORTER: none
-      JAVA_TOOL_OPTIONS: -Xms64m -Xmx256m
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx512m
     ports:
       - 18096:8096
     healthcheck:
@@ -436,7 +437,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: 640M
           cpus: '1'
     networks:
       - egov-network
@@ -781,7 +782,7 @@ services:
       EGOV_LOCALIZATION_HOST: http://egov-localization:8096/
       EGOV_USER_HOST: http://egov-user:8107/
       EGOV_LOCATION_HOST: http://boundary-service:8081/
-      EGOV_HRMS_HOST: http://egov-user:8107/
+      EGOV_HRMS_HOST: http://egov-hrms:8092/
       EGOV_URL_SHORTNER_HOST: http://egov-url-shortening:8080/
       EGOV_UI_APP_HOST: http://localhost:18080
       NOTIFICATION_SMS_ENABLED: 'false'
@@ -878,6 +879,20 @@ services:
     networks:
       - egov-network
 
+  # Seed PGR workflow business service config (one-shot init container)
+  pgr-workflow-seed:
+    image: curlimages/curl:latest
+    container_name: pgr-workflow-seed
+    depends_on:
+      egov-workflow-v2:
+        condition: service_healthy
+    volumes:
+      - ./db/pgr-workflow-config.json:/pgr-workflow-config.json:ro
+    entrypoint: ["sh", "-c", "echo 'Seeding PGR workflow business service...' && HTTP_CODE=$(curl -sS -o /tmp/response.txt -w '%{http_code}' -X POST 'http://egov-workflow-v2:8109/egov-workflow-v2/egov-wf/businessservice/_create' -H 'Content-Type: application/json' -d @/pgr-workflow-config.json) && echo \"PGR workflow seed done (HTTP $HTTP_CODE)\" && cat /tmp/response.txt && echo || (echo 'PGR workflow seed FAILED' && cat /tmp/response.txt 2>/dev/null && exit 1)"]
+    networks:
+      - egov-network
+    restart: "no"
+
   gatus:
     image: twinproduction/gatus:latest
     container_name: digit-gatus
@@ -926,7 +941,7 @@ services:
       --port=8888
       --no-browser
       --allow-root
-      --ServerApp.token=''
+      --ServerApp.token=${JUPYTER_TOKEN:-digit-crs-local}
       --ServerApp.password=''
       --ServerApp.base_url=/jupyter
       --ServerApp.allow_origin='*'
@@ -943,6 +958,34 @@ services:
           cpus: '0.25'
     networks:
       - egov-network
+
+  # Telemetry sidecar — monitors Docker lifecycle via the socket and
+  # sends opt-in events (start/stop/health) to Matomo.
+  # Opt-out: TELEMETRY=false
+  telemetry:
+    image: alpine:3.20
+    container_name: digit-telemetry
+    entrypoint: ["sh", "/telemetry/sidecar.sh"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./telemetry:/telemetry:ro
+    environment:
+      TELEMETRY: "${TELEMETRY:-false}"
+      MATOMO_SITE_ID: "${MATOMO_SITE_ID:-5}"
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    stop_grace_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+          cpus: '0.05'
+    networks:
+      - egov-network
+    restart: unless-stopped
 
 networks:
   egov-network:

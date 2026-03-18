@@ -27,7 +27,7 @@ const Response = () => {
         footerChildren={[
           <Button label={t(`PGR_CREATE_ANOTHER_COMPLAIN`)} onClick={
             () => {
-              history.push(`/${window.contextPath}/employee/pgr/create-complaint`);
+              history.push(`/${window.contextPath}/employee/pgr/complaint/create`);
             }
           } variation="teritiary" icon="ArrowForward" isSuffix />
         ]}
