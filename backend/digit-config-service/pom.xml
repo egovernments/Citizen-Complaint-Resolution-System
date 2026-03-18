@@ -74,49 +74,9 @@
             <version>1.5.1</version>
         </dependency>
 
-        <!-- eGov Tracer -->
-        <dependency>
-            <groupId>org.egov.services</groupId>
-            <artifactId>tracer</artifactId>
-            <version>2.1.2-SNAPSHOT</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.springframework.kafka</groupId>
-                    <artifactId>spring-kafka</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.kafka</groupId>
-                    <artifactId>kafka-clients</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-
-        <!-- eGov Encryption Client -->
-        <dependency>
-            <groupId>org.egov</groupId>
-            <artifactId>enc-client</artifactId>
-            <version>2.0.1-SNAPSHOT</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.springframework.kafka</groupId>
-                    <artifactId>spring-kafka</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.kafka</groupId>
-                    <artifactId>kafka-clients</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-
-        <!-- Kafka (compatible versions for Spring Boot 3.x) -->
-        <dependency>
-            <groupId>org.springframework.kafka</groupId>
-            <artifactId>spring-kafka</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.kafka</groupId>
-            <artifactId>kafka-clients</artifactId>
-        </dependency>
+        <!-- eGov Tracer - REMOVED: Not needed without enc-client -->
+        <!-- eGov Encryption Client - REMOVED: Using direct REST calls instead -->
+        <!-- Kafka - REMOVED: Not needed without enc-client -->
 
         <!-- Lombok -->
         <dependency>
