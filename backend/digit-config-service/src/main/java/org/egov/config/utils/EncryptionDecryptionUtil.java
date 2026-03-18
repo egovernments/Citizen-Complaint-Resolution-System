@@ -25,9 +25,6 @@ public class EncryptionDecryptionUtil {
     @Autowired
     private ObjectMapper objectMapper;
     
-    @Value("${state.level.tenant.id}")
-    private String stateLevelTenantId;
-    
     @Value("${egov.enc.host}")
     private String encryptionServiceHost;
     
