@@ -12,6 +12,7 @@ import org.egov.config.utils.FallbackUtil;
 import org.egov.config.utils.ResponseUtil;
 import org.egov.config.utils.SecurityFieldsUtil;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.config.web.model.*;
 import org.egov.config.web.model.RequestInfo;
 import org.json.JSONObject;
@@ -19,7 +20,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -33,6 +36,7 @@ public class ConfigDataService {
     private final EncryptionDecryptionUtil encryptionDecryptionUtil;
     private final SecurityFieldsUtil securityFieldsUtil;
     private final MdmsV2Client mdmsV2Client;
+    private final ObjectMapper objectMapper;
 
     @Value("${mdms.v2.validation.enabled:true}")
     private boolean schemaValidationEnabled;
@@ -219,6 +223,7 @@ public class ConfigDataService {
 
     /**
      * Replaces encrypted values with decrypted values maintaining correct field order
+     * Parses JSON-like strings back to objects when appropriate
      */
     private JsonNode replaceWithDecryptedValuesInOrder(JsonNode data, List<String> fieldOrder, JsonNode decryptedValues) {
         if (decryptedValues == null || !decryptedValues.isArray()) {
@@ -232,7 +237,10 @@ public class ConfigDataService {
             for (int i = 0; i < decryptedValues.size() && i < fieldOrder.size(); i++) {
                 String fieldPath = fieldOrder.get(i);
                 JsonNode decryptedValue = decryptedValues.get(i);
-                securityFieldsUtil.setValueAtPath(dataCopy, fieldPath, decryptedValue);
+                
+                // Check if the decrypted value should be parsed as JSON object
+                JsonNode parsedValue = parseDecryptedValue(decryptedValue);
+                securityFieldsUtil.setValueAtPath(dataCopy, fieldPath, parsedValue);
             }
             
             return dataCopy;
@@ -242,6 +250,69 @@ public class ConfigDataService {
         } catch (RuntimeException e) {
             log.error("Runtime error while replacing decrypted values: {}", e.getMessage());
             return data;
+        }
+    }
+    
+    /**
+     * Parses decrypted values that should be JSON objects back from string format
+     * Handles patterns like: {key1=value1, key2=value2} -> {"key1":"value1","key2":"value2"}
+     */
+    private JsonNode parseDecryptedValue(JsonNode decryptedValue) {
+        if (decryptedValue == null || !decryptedValue.isTextual()) {
+            return decryptedValue;
+        }
+        
+        String textValue = decryptedValue.asText().trim();
+        
+        // Check if it looks like a serialized object: starts with { and ends with }
+        if (textValue.startsWith("{") && textValue.endsWith("}")) {
+            try {
+                // Try to parse as JSON first (proper JSON format)
+                return objectMapper.readTree(textValue);
+            } catch (Exception jsonException) {
+                // If JSON parsing fails, try to parse the Java toString() format
+                try {
+                    log.debug("Attempting to parse Java toString format: {}", textValue);
+                    return parseJavaToStringFormat(textValue);
+                } catch (Exception parseException) {
+                    log.warn("Could not parse object-like string '{}', returning as-is: {}", 
+                            textValue, parseException.getMessage());
+                    return decryptedValue;
+                }
+            }
+        }
+        
+        return decryptedValue;
+    }
+    
+    /**
+     * Parses Java toString() format like {key1=value1, key2=value2} into JSON object
+     */
+    private JsonNode parseJavaToStringFormat(String text) {
+        try {
+            // Remove outer braces
+            String content = text.substring(1, text.length() - 1).trim();
+            
+            Map<String, Object> result = new HashMap<>();
+            if (!content.isEmpty()) {
+                // Split by comma, but be careful about values that might contain commas
+                String[] pairs = content.split(",\\s*(?=[a-zA-Z_][a-zA-Z0-9_]*=)");
+                
+                for (String pair : pairs) {
+                    String[] keyValue = pair.split("=", 2);
+                    if (keyValue.length == 2) {
+                        String key = keyValue[0].trim();
+                        String value = keyValue[1].trim();
+                        result.put(key, value);
+                    }
+                }
+            }
+            
+            log.debug("Parsed Java toString format to object with {} keys", result.size());
+            return objectMapper.valueToTree(result);
+        } catch (Exception e) {
+            log.error("Error parsing Java toString format: {}", e.getMessage());
+            throw new RuntimeException("Failed to parse Java toString format", e);
         }
     }
 }
