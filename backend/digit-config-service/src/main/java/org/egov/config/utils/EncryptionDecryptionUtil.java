@@ -150,10 +150,14 @@ public class EncryptionDecryptionUtil {
                 return objectMapper.valueToTree(new ArrayList<>());
             }
             
-            log.debug("Calling decryption service at: {} for {} values", url, encryptedValues.size());
+            log.info("EncryptionDecryptionUtil.decryptValues: Calling decryption service at: {} for {} values", url, encryptedValues.size());
+            log.debug("EncryptionDecryptionUtil.decryptValues: Sending {} encrypted values for decryption", encryptedValues.size());
             
             // Make direct REST call to decryption service (expects raw array format)
             JsonNode response = restTemplate.postForObject(url, encryptedValues, JsonNode.class);
+            
+            log.debug("EncryptionDecryptionUtil.decryptValues: Received decryption response with {} values", 
+                    response != null && response.isArray() ? response.size() : "unknown");
             
             if (response == null) {
                 throw new CustomException("DECRYPTION_RESPONSE_NULL", "No decryption response from service");
@@ -178,7 +182,8 @@ public class EncryptionDecryptionUtil {
                 decryptedResults.add(response.asText());
             }
             
-            log.debug("Successfully decrypted {} values", decryptedResults.size());
+            log.info("EncryptionDecryptionUtil.decryptValues: Successfully decrypted {} values", decryptedResults.size());
+            log.debug("EncryptionDecryptionUtil.decryptValues: Decryption completed successfully");
             return objectMapper.valueToTree(decryptedResults);
             
         } catch (ResourceAccessException e) {

@@ -60,9 +60,19 @@ public class ConfigDataService {
     }
 
     public List<ConfigData> search(ConfigDataSearchRequest request) {
+        log.info("ConfigDataService.search: Starting search with tenantId={}, schemaCode={}, criteria={}", 
+                request.getCriteria().getTenantId(), request.getCriteria().getSchemaCode(), request.getCriteria());
+        
         enricher.enrichSearchDefaults(request.getCriteria());
+        log.debug("ConfigDataService.search: Search criteria enriched with defaults");
+        
         List<ConfigData> results = repository.search(request.getCriteria());
-        return decryptConfigDataList(results, request.getRequestInfo());
+        log.info("ConfigDataService.search: Repository returned {} raw results", results.size());
+        
+        List<ConfigData> decryptedResults = decryptConfigDataList(results, request.getRequestInfo());
+        log.info("ConfigDataService.search: Completed search, returning {} decrypted results", decryptedResults.size());
+        
+        return decryptedResults;
     }
 
     public long count(ConfigDataCriteria criteria) {
@@ -145,14 +155,20 @@ public class ConfigDataService {
      */
     private List<ConfigData> decryptConfigDataList(List<ConfigData> configDataList, RequestInfo requestInfo) {
         if (configDataList == null || configDataList.isEmpty()) {
+            log.debug("ConfigDataService.decryptConfigDataList: No config data to decrypt (null or empty)");
             return configDataList;
         }
 
+        log.info("ConfigDataService.decryptConfigDataList: Starting decryption for {} config data entries", configDataList.size());
         List<ConfigData> decryptedList = new ArrayList<>();
+        
         for (ConfigData configData : configDataList) {
+            log.debug("ConfigDataService.decryptConfigDataList: Decrypting config data id={}, schemaCode={}", 
+                    configData.getId(), configData.getSchemaCode());
             decryptedList.add(decryptConfigData(configData, requestInfo));
         }
         
+        log.info("ConfigDataService.decryptConfigDataList: Completed decryption for {} entries", decryptedList.size());
         return decryptedList;
     }
 

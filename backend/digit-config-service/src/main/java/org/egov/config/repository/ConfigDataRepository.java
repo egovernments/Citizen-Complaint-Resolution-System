@@ -2,6 +2,7 @@ package org.egov.config.repository;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.egov.config.repository.querybuilder.ConfigDataQueryBuilder;
 import org.egov.config.repository.rowmapper.ConfigDataRowMapper;
 import org.egov.config.web.model.ConfigData;
@@ -15,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 
 @Repository
+@Slf4j
 public class ConfigDataRepository {
 
     private final JdbcTemplate jdbcTemplate;
@@ -68,9 +70,17 @@ public class ConfigDataRepository {
     }
 
     public List<ConfigData> search(ConfigDataCriteria criteria) {
+        log.info("ConfigDataRepository.search: Building search query for tenantId={}, schemaCode={}", 
+                criteria.getTenantId(), criteria.getSchemaCode());
+        
         List<Object> params = new ArrayList<>();
         String sql = queryBuilder.buildSearchQuery(criteria, params);
-        return jdbcTemplate.query(sql, params.toArray(), rowMapper);
+        
+        log.debug("ConfigDataRepository.search: Executing SQL: {} with params: {}", sql, params);
+        List<ConfigData> results = jdbcTemplate.query(sql, params.toArray(), rowMapper);
+        
+        log.info("ConfigDataRepository.search: Query returned {} results", results.size());
+        return results;
     }
 
     public long count(ConfigDataCriteria criteria) {
