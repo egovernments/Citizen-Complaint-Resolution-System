@@ -129,7 +129,7 @@ public class EncryptionDecryptionUtil {
         try {
             String url = encryptionServiceHost + decryptEndpoint;
             
-            // Build decryption request payload (direct array format)
+            // Build decryption request payload with proper format for egov-enc-service
             List<Object> encryptedValues = new ArrayList<>();
             
             if (encryptedData instanceof List) {
@@ -152,21 +152,30 @@ public class EncryptionDecryptionUtil {
             
             log.debug("Calling decryption service at: {} for {} values", url, encryptedValues.size());
             
-            // Make direct REST call to decryption service (expects array format)
+            // Make direct REST call to decryption service (expects raw array format)
             JsonNode response = restTemplate.postForObject(url, encryptedValues, JsonNode.class);
             
             if (response == null) {
                 throw new CustomException("DECRYPTION_RESPONSE_NULL", "No decryption response from service");
             }
             
-            // Extract decrypted values from response (direct array format)
+            // Extract decrypted values from response 
             List<Object> decryptedResults = new ArrayList<>();
             
             if (response.isArray()) {
+                // Response is a direct array of decrypted strings
                 for (JsonNode item : response) {
-                    // Response is a direct array of decrypted strings
                     decryptedResults.add(item.asText());
                 }
+            } else if (response.has("plaintext") && response.get("plaintext").isArray()) {
+                // Response has plaintext field containing array
+                JsonNode plaintextArray = response.get("plaintext");
+                for (JsonNode item : plaintextArray) {
+                    decryptedResults.add(item.asText());
+                }
+            } else {
+                // Single value response
+                decryptedResults.add(response.asText());
             }
             
             log.debug("Successfully decrypted {} values", decryptedResults.size());
