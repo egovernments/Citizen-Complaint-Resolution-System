@@ -746,17 +746,40 @@ WHERE NOT EXISTS (
 );
 
 -- =============================================================================
--- Copy PGR and HRMS translations from statea to pg
+-- Manual inserts for keys that don't exist in statea en_IN data
+-- ACTIVE_EMPLOYEES only exists in Hindi; CONFIGURE_MASTER not in DB at all
+-- =============================================================================
+
+INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
+SELECT 'a0000001-0001-4000-8000-000000000020'::uuid, 'pg', 'en_IN', 'rainmaker-hr', 'ACTIVE_EMPLOYEES', 'Active Employees', 1, now(), 1, now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-hr' AND code = 'ACTIVE_EMPLOYEES'
+);
+
+INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
+SELECT 'a0000001-0001-4000-8000-000000000021'::uuid, 'pg', 'en_IN', 'rainmaker-workbench', 'CONFIGURE_MASTER', 'Configure Master', 1, now(), 1, now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-workbench' AND code = 'CONFIGURE_MASTER'
+);
+
+-- =============================================================================
+-- Bulk-copy translations from statea to pg
 -- The pg tenant only has rainmaker-common and rainmaker-workbench modules.
--- Internal pages (PGR inbox, complaints, HRMS) need translations that only
--- exist under the statea tenant. This bulk-copies them to pg so post-login
--- pages render translated labels instead of raw keys.
+-- Internal pages (PGR inbox, complaints, HRMS, workbench) need translations
+-- that only exist under the statea tenant. This bulk-copies them to pg so
+-- post-login pages render translated labels instead of raw keys.
 -- =============================================================================
 
 INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
 SELECT gen_random_uuid(), 'pg', locale, module, code, message, createdby, now(), lastmodifiedby, now()
 FROM message
-WHERE tenantid = 'statea' AND locale = 'en_IN' AND module IN ('rainmaker-pgr', 'egov-hrms')
+WHERE tenantid = 'statea' AND locale = 'en_IN' AND module IN (
+  'rainmaker-pgr',
+  'egov-hrms',
+  'rainmaker-common',
+  'rainmaker-hr',
+  'rainmaker-workbench'
+)
 AND NOT EXISTS (
   SELECT 1 FROM message m2
   WHERE m2.tenantid = 'pg' AND m2.locale = message.locale AND m2.module = message.module AND m2.code = message.code

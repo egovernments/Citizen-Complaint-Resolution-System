@@ -204,6 +204,16 @@ test.describe('Login page localization', () => {
       'ACTION_TEST_COMPLAINTS',
       'CS_HEADER_COMPLAINT',
       'CS_HOME_HEADER',
+      'ACTION_TEST_SEARCH_COMPLAINT',
+      'ACTION_TEST_HRMS',
+      'TOTAL_EMPLOYEES',
+      'ACTIVE_EMPLOYEES',
+      'HR_HOME_SEARCH_RESULTS_HEADING',
+      'HR_COMMON_CREATE_EMPLOYEE_HEADER',
+      'CONFIGURE_MASTER',
+      'ACTION_TEST_WORKBENCH',
+      'ACTION_TEST_MDMS',
+      'ACTION_TEST_LOCALISATION',
     ];
     for (const rawKey of criticalRawKeys) {
       expect.soft(
@@ -223,12 +233,12 @@ test.describe('Login page localization', () => {
       description: `Potential raw keys on post-login page: ${localizationKeyLike.length} (${localizationKeyLike.slice(0, 10).join(', ')}${localizationKeyLike.length > 10 ? '...' : ''})`,
     });
 
-    // Soft assertion: accept some raw keys since not all modules are seeded.
-    // The core PGR and login keys should be translated; HRMS/workbench/admin
-    // keys may remain raw in the CI seed. Threshold of 20 allows for this.
+    // Soft assertion: with all major modules seeded (rainmaker-common, pgr,
+    // hrms, hr, workbench), very few raw keys should remain. Threshold of 5
+    // catches regressions while allowing for edge cases.
     expect.soft(
       localizationKeyLike.length,
       `Found ${localizationKeyLike.length} potential raw localization keys on post-login page`,
-    ).toBeLessThan(20);
+    ).toBeLessThan(5);
   });
 });
