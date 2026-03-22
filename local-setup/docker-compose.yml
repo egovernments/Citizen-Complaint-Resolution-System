@@ -818,6 +818,7 @@ services:
   digit-ui:
     image: egovio/digit-ui:multiarch-d448cb7
     container_name: digit-ui
+    restart: on-failure
     ports:
       - "18080:80"
     volumes:
