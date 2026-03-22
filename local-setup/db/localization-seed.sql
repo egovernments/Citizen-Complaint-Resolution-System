@@ -746,20 +746,41 @@ WHERE NOT EXISTS (
 );
 
 -- =============================================================================
--- Manual inserts for keys that don't exist in statea en_IN data
--- ACTIVE_EMPLOYEES only exists in Hindi; CONFIGURE_MASTER not in DB at all
+-- Dashboard sidebar keys that live in rainmaker-hr / rainmaker-workbench in
+-- statea but the DIGIT UI only loads rainmaker-common on the dashboard page.
+-- We duplicate them into rainmaker-common for pg so they render on first load.
+-- ACTIVE_EMPLOYEES only exists in Hindi under statea; CONFIGURE_MASTER not in
+-- statea en_IN at all — both are manually created here.
 -- =============================================================================
 
 INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
-SELECT 'a0000001-0001-4000-8000-000000000020'::uuid, 'pg', 'en_IN', 'rainmaker-hr', 'ACTIVE_EMPLOYEES', 'Active Employees', 1, now(), 1, now()
+SELECT 'a0000001-0001-4000-8000-000000000020'::uuid, 'pg', 'en_IN', 'rainmaker-common', 'ACTIVE_EMPLOYEES', 'Active Employees', 1, now(), 1, now()
 WHERE NOT EXISTS (
-  SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-hr' AND code = 'ACTIVE_EMPLOYEES'
+  SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-common' AND code = 'ACTIVE_EMPLOYEES'
 );
 
 INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
-SELECT 'a0000001-0001-4000-8000-000000000021'::uuid, 'pg', 'en_IN', 'rainmaker-workbench', 'CONFIGURE_MASTER', 'Configure Master', 1, now(), 1, now()
+SELECT 'a0000001-0001-4000-8000-000000000021'::uuid, 'pg', 'en_IN', 'rainmaker-common', 'CONFIGURE_MASTER', 'Configure Master', 1, now(), 1, now()
 WHERE NOT EXISTS (
-  SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-workbench' AND code = 'CONFIGURE_MASTER'
+  SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-common' AND code = 'CONFIGURE_MASTER'
+);
+
+INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
+SELECT 'a0000001-0001-4000-8000-000000000022'::uuid, 'pg', 'en_IN', 'rainmaker-common', 'HR_HOME_SEARCH_RESULTS_HEADING', 'Search Employee', 1, now(), 1, now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-common' AND code = 'HR_HOME_SEARCH_RESULTS_HEADING'
+);
+
+INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
+SELECT 'a0000001-0001-4000-8000-000000000023'::uuid, 'pg', 'en_IN', 'rainmaker-common', 'HR_COMMON_CREATE_EMPLOYEE_HEADER', 'Create Employee', 1, now(), 1, now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-common' AND code = 'HR_COMMON_CREATE_EMPLOYEE_HEADER'
+);
+
+INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
+SELECT 'a0000001-0001-4000-8000-000000000024'::uuid, 'pg', 'en_IN', 'rainmaker-common', 'ACTION_TEST_WORKBENCH', 'Workbench', 1, now(), 1, now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-common' AND code = 'ACTION_TEST_WORKBENCH'
 );
 
 -- =============================================================================
