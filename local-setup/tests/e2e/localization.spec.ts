@@ -155,7 +155,9 @@ test.describe('Login page localization', () => {
     await page.waitForTimeout(2_000);
 
     // Step 1: Fill login credentials using role-based locators
-    await page.getByRole('textbox', { name: 'Mobile Number' }).fill('9999999999');
+    // The field is labeled "Mobile Number" but DIGIT login uses the username field.
+    // The ADMIN user has username "ADMIN" (not the mobile number).
+    await page.getByRole('textbox', { name: 'Mobile Number' }).fill('ADMIN');
     await page.getByRole('textbox', { name: 'Password' }).fill('eGov@123');
 
     // Step 2: Select city — DIGIT's React form may clear the city dropdown
