@@ -797,7 +797,7 @@ services:
       PGR_STATELEVEL_TENANTID: pg
       STATE_LEVEL_TENANT_ID: pg
       EGOV_STATE_LEVEL_TENANT_ID: pg
-      JAVA_OPTS: '-Xmx192m -Xms192m'
+      JAVA_OPTS: '-Xmx256m -Xms256m'
       OTEL_TRACES_EXPORTER: none
     ports:
       - "18083:8080"
@@ -810,7 +810,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 300M
+          memory: 384M
           cpus: '0.25'
     networks:
       - egov-network
