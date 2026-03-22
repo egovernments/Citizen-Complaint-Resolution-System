@@ -154,19 +154,27 @@ test.describe('Login page localization', () => {
     await expect(loginForm.first()).toBeVisible({ timeout: 60_000 });
     await page.waitForTimeout(2_000);
 
-    // Step 1: City "Demo" (tenant pg) is selected by default — the ADMIN user
-    // is seeded under tenant pg, so we leave the default city selection.
-
-    // Step 2: Fill login credentials using role-based locators
-    // (avoids accidentally targeting the city dropdown's search input)
+    // Step 1: Fill login credentials using role-based locators
     await page.getByRole('textbox', { name: 'Mobile Number' }).fill('9999999999');
     await page.getByRole('textbox', { name: 'Password' }).fill('eGov@123');
+
+    // Step 2: Select city — DIGIT's React form may clear the city dropdown
+    // during re-renders, so we explicitly select it after filling credentials.
+    // The ADMIN user is seeded under tenant pg (city "Demo").
+    const cityInput = page.getByRole('textbox', { name: 'City' });
+    await cityInput.click();
+    await page.waitForTimeout(500);
+    await page.locator('[class*="option"], [class*="Option"]')
+      .filter({ hasText: 'Demo' }).first().click({ timeout: 5_000 });
+    await page.waitForTimeout(500);
 
     // Step 3: Accept Privacy Policy checkbox (required before login)
     await page.getByRole('checkbox').first().check();
 
-    // Step 4: Click login
-    await page.getByRole('button', { name: 'Login' }).click();
+    // Step 4: Click login — verify the button is enabled first
+    const loginBtn = page.getByRole('button', { name: 'Login' });
+    await expect(loginBtn).toBeEnabled({ timeout: 5_000 });
+    await loginBtn.click();
 
     // Step 5: Wait for redirect away from login page
     // After successful login, the URL changes away from /user/login
