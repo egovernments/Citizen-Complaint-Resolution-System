@@ -253,7 +253,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 300M
+          memory: 384M
           cpus: '0.25'
     networks:
       - egov-network
@@ -298,7 +298,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 384M
           cpus: '0.25'
     networks:
       - egov-network
@@ -396,7 +396,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 320M
+          memory: 448M
           cpus: '0.25'
     networks:
       - egov-network
@@ -485,7 +485,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 384M
           cpus: '0.25'
     networks:
       - egov-network
@@ -523,7 +523,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 384M
           cpus: '0.25'
     networks:
       - egov-network
@@ -563,7 +563,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 384M
           cpus: '0.25'
     networks:
       - egov-network
@@ -659,7 +659,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 384M
           cpus: '0.25'
     networks:
       - egov-network
@@ -742,7 +742,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 192M
+          memory: 320M
           cpus: '0.25'
     networks:
       - egov-network
@@ -810,7 +810,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 384M
+          memory: 448M
           cpus: '0.25'
     networks:
       - egov-network
