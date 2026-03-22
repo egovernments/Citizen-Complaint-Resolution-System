@@ -893,6 +893,41 @@ services:
       - egov-network
     restart: "no"
 
+  # Seed localization data for pg tenant (one-shot init container)
+  # The full DB dump only has translations under 'statea' tenant.
+  # The UI fetches with tenantId=pg, so we need pg-specific records
+  # for login labels, tenant names, and PGR/HRMS translations.
+  localization-seed:
+    image: postgres:16
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+    volumes:
+      - ./db/localization-seed.sql:/localization-seed.sql:ro
+    entrypoint: >
+      bash -c "
+        echo 'Seeding localization data for pg tenant...';
+        psql postgresql://egov:${POSTGRES_PASSWORD:-egov123}@postgres:5432/egov -f /localization-seed.sql;
+        echo 'Localization seed complete'
+      "
+    networks:
+      - egov-network
+    restart: "no"
+
+  # Flush localization cache after seed so egov-localization picks up new data.
+  # Without this, cached empty results for pg tenant cause raw keys on login page.
+  localization-cache-bust:
+    image: redis:7.2.4
+    depends_on:
+      egov-localization:
+        condition: service_healthy
+      localization-seed:
+        condition: service_completed_successfully
+    entrypoint: ["redis-cli", "-h", "redis", "DEL", "messages", "computedMessages"]
+    networks:
+      - egov-network
+    restart: "no"
+
   gatus:
     image: twinproduction/gatus:latest
     container_name: digit-gatus
