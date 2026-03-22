@@ -154,19 +154,8 @@ test.describe('Login page localization', () => {
     await expect(loginForm.first()).toBeVisible({ timeout: 60_000 });
     await page.waitForTimeout(2_000);
 
-    // Step 1: Select city "City A" from dropdown
-    const dropdownTrigger = page.locator(
-      '[class*="dropdown"], [class*="Dropdown"]'
-    ).first();
-    await dropdownTrigger.click();
-    await page.waitForTimeout(500);
-
-    // Type to filter and select "City A"
-    // DIGIT dropdown may support type-ahead or we click the matching option
-    const cityOption = page.locator(
-      '[class*="option"], [class*="Option"], [class*="menu"] div'
-    ).filter({ hasText: 'City A' }).first();
-    await cityOption.click({ timeout: 5_000 });
+    // Step 1: City "Demo" (tenant pg) is selected by default — the ADMIN user
+    // is seeded under tenant pg, so we leave the default city selection.
 
     // Step 2: Fill login credentials
     // DIGIT login form uses mobile number as username
@@ -179,13 +168,17 @@ test.describe('Login page localization', () => {
     const passwordInput = page.locator('input[type="password"]').first();
     await passwordInput.fill('eGov@123');
 
-    // Step 3: Click login
+    // Step 3: Accept Privacy Policy checkbox (required before login)
+    const privacyCheckbox = page.locator('input[type="checkbox"]').first();
+    await privacyCheckbox.check();
+
+    // Step 4: Click login
     const loginButton = page.locator(
       'button[type="submit"], input[type="submit"]'
     ).first();
     await loginButton.click();
 
-    // Step 4: Wait for redirect away from login page
+    // Step 5: Wait for redirect away from login page
     // After successful login, the URL changes away from /user/login
     await page.waitForURL((url) => !url.pathname.includes('/user/login'), {
       timeout: 30_000,
