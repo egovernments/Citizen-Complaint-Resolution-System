@@ -157,26 +157,16 @@ test.describe('Login page localization', () => {
     // Step 1: City "Demo" (tenant pg) is selected by default — the ADMIN user
     // is seeded under tenant pg, so we leave the default city selection.
 
-    // Step 2: Fill login credentials
-    // DIGIT login form uses mobile number as username
-    const usernameInput = page.locator(
-      'input[type="text"][name*="username"], input[type="text"][name*="phone"], ' +
-      'input[type="tel"], input[class*="user"], input[type="text"]'
-    ).first();
-    await usernameInput.fill('9999999999');
-
-    const passwordInput = page.locator('input[type="password"]').first();
-    await passwordInput.fill('eGov@123');
+    // Step 2: Fill login credentials using role-based locators
+    // (avoids accidentally targeting the city dropdown's search input)
+    await page.getByRole('textbox', { name: 'Mobile Number' }).fill('9999999999');
+    await page.getByRole('textbox', { name: 'Password' }).fill('eGov@123');
 
     // Step 3: Accept Privacy Policy checkbox (required before login)
-    const privacyCheckbox = page.locator('input[type="checkbox"]').first();
-    await privacyCheckbox.check();
+    await page.getByRole('checkbox').first().check();
 
     // Step 4: Click login
-    const loginButton = page.locator(
-      'button[type="submit"], input[type="submit"]'
-    ).first();
-    await loginButton.click();
+    await page.getByRole('button', { name: 'Login' }).click();
 
     // Step 5: Wait for redirect away from login page
     // After successful login, the URL changes away from /user/login
