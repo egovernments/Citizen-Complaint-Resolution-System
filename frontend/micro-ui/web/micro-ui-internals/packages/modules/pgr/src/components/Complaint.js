@@ -59,7 +59,7 @@ const Complaint = ({ data, path }) => {
           <h2 style={{ fontSize: "20px", fontWeight: "600", color: "#0B0C0C", margin: 0 }}>
             {t(`SERVICEDEFS_${serviceCode.toUpperCase()}`)}
           </h2>
-          <div onClick={(e) => e.stopPropagation()}>
+          {/* <div onClick={(e) => e.stopPropagation()}>
             <button
               onClick={handleWhatsAppClick}
               style={{
@@ -79,7 +79,7 @@ const Complaint = ({ data, path }) => {
               <WhatsAppIcon />
               {t("CS_PGR_TRACK_ON_WHATSAPP")}
             </button>
-          </div>
+          </div> */}
         </div>
 
         {/* Date */}
