@@ -36,6 +36,9 @@ public class EncryptionDecryptionUtil {
     
     @Value("${encryption.service.enabled:true}")
     private boolean encryptionServiceEnabled;
+    
+    @Value("${state.level.tenantid:pg}")
+    private String stateLevelTenantId;
 
     /**
      * Encrypts an object using direct REST calls to encryption service
@@ -69,7 +72,7 @@ public class EncryptionDecryptionUtil {
             for (Object value : valuesToEncrypt) {
                 if (value != null && !value.toString().trim().isEmpty()) {
                     Map<String, Object> request = new HashMap<>();
-                    request.put("tenantId", tenantId);
+                    request.put("tenantId", stateLevelTenantId);
                     request.put("type", "Normal");
                     request.put("value", value.toString());
                     encryptionRequests.add(request);
