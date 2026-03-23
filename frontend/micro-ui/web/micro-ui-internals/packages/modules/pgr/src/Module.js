@@ -25,6 +25,8 @@ import GeoLocations from "./components/GeoLocations";
 import SelectAddress from "../../pgr/src/pages/citizen/Create/Steps/SelectAddress";
 import SelectImages from "../../pgr/src/pages/citizen/Create/Steps/SelectImages";
 import CreatePGRFlow from "./pages/citizen/Create/FormExplorer";
+import TrackOnWhatsApp from "./components/TrackOnWhatsApp";
+import Complaint from "./components/Complaint";
 
 export const PGRReducers = getRootReducer;
 
@@ -110,8 +112,8 @@ const componentsToRegister = {
   SelectAddress,
   GeoLocations,
   SelectImages,
-
- 
+  PGRTrackOnWhatsApp: TrackOnWhatsApp,
+  PGRComplaint: Complaint,
 };
 
 export const initPGRComponents = () => {
