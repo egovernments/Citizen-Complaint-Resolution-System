@@ -33,6 +33,9 @@ public class EncryptionDecryptionUtil {
     
     @Value("${egov.enc.decrypt.endpoint}")
     private String decryptEndpoint;
+    
+    @Value("${encryption.service.enabled:true}")
+    private boolean encryptionServiceEnabled;
 
     /**
      * Encrypts an object using direct REST calls to encryption service
@@ -50,6 +53,12 @@ public class EncryptionDecryptionUtil {
     public JsonNode encryptValues(String tenantId, List<Object> valuesToEncrypt) {
         if (valuesToEncrypt == null || valuesToEncrypt.isEmpty()) {
             return null;
+        }
+        
+        // If encryption is disabled, return values as-is without encryption
+        if (!encryptionServiceEnabled) {
+            log.debug("Encryption service disabled, returning {} values without encryption", valuesToEncrypt.size());
+            return objectMapper.valueToTree(valuesToEncrypt);
         }
 
         try {
@@ -124,6 +133,18 @@ public class EncryptionDecryptionUtil {
     public JsonNode decryptValues(Object encryptedData) {
         if (encryptedData == null) {
             return null;
+        }
+        
+        // If encryption is disabled, return data as-is without decryption
+        if (!encryptionServiceEnabled) {
+            log.debug("Encryption service disabled, returning data without decryption");
+            if (encryptedData instanceof List) {
+                return objectMapper.valueToTree(encryptedData);
+            } else {
+                List<Object> singleValueList = new ArrayList<>();
+                singleValueList.add(encryptedData);
+                return objectMapper.valueToTree(singleValueList);
+            }
         }
 
         try {
