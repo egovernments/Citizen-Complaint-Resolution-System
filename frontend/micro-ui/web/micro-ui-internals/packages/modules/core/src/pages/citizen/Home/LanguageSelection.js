@@ -30,7 +30,16 @@ const LanguageSelection = () => {
   );
 
   function onSubmit() {
-    history.push(`/${window?.contextPath}/citizen/login`);
+    const isKC = window?.globalConfigs?.getConfig("AUTH_PROVIDER") === "keycloak";
+    const user = Digit.UserService.getUser();
+    if (isKC && user?.access_token) {
+      // Already authenticated via Keycloak — skip login, go to location or home
+      history.push(`/${window?.contextPath}/citizen`);
+    } else if (isKC) {
+      history.push(`/${window?.globalPath || window?.contextPath}/user/login`);
+    } else {
+      history.push(`/${window?.contextPath}/citizen/login`);
+    }
   }
 
   return isLoading ? (

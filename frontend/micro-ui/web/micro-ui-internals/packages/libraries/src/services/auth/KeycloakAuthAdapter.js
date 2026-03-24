@@ -188,10 +188,17 @@ export class KeycloakAuthAdapter extends AuthAdapter {
 
     Digit.SessionStorage.set("User", sessionUser);
     Digit.SessionStorage.set("userType", "citizen");
+    Digit.SessionStorage.set("user_type", "citizen");
     Digit.SessionStorage.set("Citizen.tenantId", stateCode);
     window.localStorage.setItem("token", this._kc.token);
     window.localStorage.setItem("Citizen.token", this._kc.token);
     window.localStorage.setItem("Citizen.user-info", JSON.stringify(sessionUser.info));
     window.localStorage.setItem("Citizen.tenant-id", stateCode);
+
+    // Set default city so CitizenHome doesn't redirect to language selection
+    if (!Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")) {
+      const defaultCity = window?.globalConfigs?.getConfig("DEFAULT_CITIZEN_CITY") || `${stateCode}.citya`;
+      Digit.SessionStorage.set("CITIZEN.COMMON.HOME.CITY", { code: defaultCity });
+    }
   }
 }
