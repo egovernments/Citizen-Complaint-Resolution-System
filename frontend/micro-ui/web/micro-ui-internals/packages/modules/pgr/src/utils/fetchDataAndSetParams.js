@@ -158,9 +158,10 @@ export const formPayloadToCreateComplaint = (formData, tenantId, user) => {
     "name": formData?.ComplainantName?.trim()?.length > 0 ? formData?.ComplainantName?.trim() : null,
     "mobileNumber": formData?.ComplainantContactNumber?.trim()?.length > 0 ? formData?.ComplainantContactNumber?.trim() : null,
     "userName": formData?.ComplainantContactNumber?.trim()?.length > 0 ? formData?.ComplainantContactNumber?.trim() : null,
+    "countryCode": formData?.countryCode || "+91",
     "type": "EMPLOYEE",
     "tenantId": tenantId,
-  } : user;
+  } : { ...user, countryCode: formData?.countryCode || user?.countryCode || "+91" };
   const additionalDetail = { supervisorName : formData?.SupervisorName?.trim()?.length > 0 ? formData?.SupervisorName?.trim() : null, supervisorContactNumber : formData?.SupervisorContactNumber?.trim()?.length > 0 ? formData?.SupervisorContactNumber?.trim() : null };
   const timestamp = Date.now();
   let complaint = {

@@ -1,6 +1,15 @@
 # Changelog
 All notable changes to this module will be documented in this file.
 
+## [1.0.23] - 2026-04-08
+
+### Added / Fixed
+
+- **Dynamic Mobile Validation & Prefix Support**: 
+  - Integrated full MDMS-driven validation rules into the Employee PGR workflows natively using the new `useMobileValidation` hook.
+  - Implemented the custom `MobileNumberWithPrefix` component to enforce consistent, standard-compliant mobile input dropdowns.
+  - Added real-time automated mapping for mapping and extracting `"countryCode"` based on the globally loaded MDMS `"default": true` configurations directly into backend `citizen` request payloads for the `_create` APIs.
+
 ## [1.0.22] - 2026-04-06
 
 ### Fixed

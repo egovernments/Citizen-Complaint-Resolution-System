@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import PGRSearchInboxConfig from "../../configs/PGRSearchInboxConfig";
 import { useLocation } from "react-router-dom";
 import _ from "lodash";
+import MobileNumberWithPrefix from "../../components/MobileNumberWithPrefix";
 
 /**
  * PGRSearchInbox - Complaint Search Inbox Screen
@@ -27,6 +28,7 @@ import _ from "lodash";
  * - Service Definitions from PGR module
  */
 
+
 const PGRSearchInbox = () => {
   const { t } = useTranslation();
 
@@ -42,8 +44,8 @@ const PGRSearchInbox = () => {
   // Used to detect route/location changes to trigger config reset
   const location = useLocation();
 
-  // Fetch mobile validation config from MDMS
-  const { validationRules, isLoading: isValidationLoading, getMinMaxValues } = Digit.Hooks.pgr.useMobileValidation(tenantId);
+  // Mobile validation loading check
+  const { isLoading: isValidationLoading } = Digit.Hooks.pgr.useMobileValidation(tenantId);
 
   // Fetch MDMS config for inbox screen (RAINMAKER-PGR.SearchInboxConfig)
   const { data: mdmsData, isLoading } = Digit.Hooks.useCommonMDMS(
@@ -97,9 +99,8 @@ const PGRSearchInbox = () => {
       }
     );
 
-    // Step 2: Inject mobile validation rules into search section
-    if (processedConfig && validationRules && processedConfig.sections?.search?.uiConfig?.fields) {
-      const { min, max } = getMinMaxValues();
+    // Step 2: Replace mobile field with MobileNumberWithPrefix component
+    if (processedConfig && processedConfig.sections?.search?.uiConfig?.fields) {
       processedConfig = {
         ...processedConfig,
         sections: {
@@ -112,17 +113,12 @@ const PGRSearchInbox = () => {
                 if (field.label === "CS_COMMON_MOBILE_NO" && field.populators?.name === "mobileNumber") {
                   return {
                     ...field,
+                    type: "component",
+                    component: MobileNumberWithPrefix,
+                    key: "mobileNumber",
                     populators: {
                       ...field.populators,
-                      prefix: validationRules.prefix,
-                      validation: {
-                        minlength: validationRules.minLength,
-                        maxlength: validationRules.maxLength,
-                        min: min,
-                        max: max,
-                        pattern: validationRules.pattern,
-                      },
-                      error: validationRules.errorMessage || field.populators.error,
+                      validation: {},
                     },
                   };
                 }
@@ -135,7 +131,7 @@ const PGRSearchInbox = () => {
     }
 
     return processedConfig;
-  }, [pageConfig, serviceDefs, validationRules, t]);
+  }, [pageConfig, serviceDefs, t]);
 
   /**
    * Show loader until necessary data is available
