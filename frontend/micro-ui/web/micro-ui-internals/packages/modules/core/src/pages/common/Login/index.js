@@ -135,7 +135,7 @@ const UnifiedLogin = ({ stateCode }) => {
               <Button
                 key={provider}
                 label={t(`CORE_COMMON_SSO_${provider.toUpperCase()}`) || `Sign in with ${provider}`}
-                onButtonClick={() => handleSSO(provider)}
+                onClick={() => handleSSO(provider)}
                 variation="secondary"
                 style={{ width: "100%", marginBottom: "8px" }}
               />
