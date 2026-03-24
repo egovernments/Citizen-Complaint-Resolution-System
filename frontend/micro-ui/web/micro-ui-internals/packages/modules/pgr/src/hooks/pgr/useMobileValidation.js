@@ -14,7 +14,9 @@
  */
 const useMobileValidation = (tenantId, validationName = "defaultMobileValidation") => {
   // Fetch mobile validation config from MDMS
-  const stateId = window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID");
+  const stateId = Digit.Utils.getMultiRootTenant()
+    ? Digit.ULBService.getCurrentTenantId()
+    : window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID");
   const moduleName = Digit?.Utils?.getConfigModuleName?.() || "commonUiConfig";
   const { isLoading, data: mdmsData, error } = Digit.Hooks.useCustomMDMS(
     stateId,
