@@ -193,19 +193,16 @@ const StaticCitizenSideBar = ({ linkData, islinkDataLoading }) => {
           <React.Fragment>
             {t("CS_COMMON_HELPLINE")}
             <div className="telephone" style={{ marginTop: "-10%" }}>
-              {storeData?.tenants?.map((i) => {
-                i.code === tenantId ? (
-                  <div className="link">
-                    <a href={`tel:${storeData?.tenants?.[i].contactNumber}`}>{storeData?.tenants?.[i].contactNumber}</a>
+              {storeData?.tenants?.map((tenant, idx) => {
+                const phone = tenant?.code === tenantId ? tenant?.contactNumber : storeData?.tenants?.[0]?.contactNumber;
+                return phone ? (
+                  <div key={idx} className="link">
+                    <a href={`tel:${phone}`}>{phone}</a>
                   </div>
-                ) : (
-                  <div className="link">
-                    <a href={`tel:${storeData?.tenants?.[0].contactNumber}`}>{storeData?.tenants?.[0].contactNumber}</a>
-                  </div>
-                );
+                ) : null;
               })}
               <div className="link">
-                <a href={`tel:${storeData?.tenants?.[0].contactNumber}`}>{storeData?.tenants?.[0].contactNumber}</a>
+                <a href={`tel:${storeData?.tenants?.[0]?.contactNumber}`}>{storeData?.tenants?.[0]?.contactNumber}</a>
               </div>
             </div>
           </React.Fragment>
