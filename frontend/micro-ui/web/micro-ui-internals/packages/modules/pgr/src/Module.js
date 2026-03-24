@@ -110,8 +110,8 @@ const componentsToRegister = {
   PGRResponseCitzen: ResponseCitizen,
   CreatePGRFlow: CreatePGRFlow,
   SelectAddress,
-  GeoLocations,
   SelectImages,
+  GeoLocations,
   PGRTrackOnWhatsApp: TrackOnWhatsApp,
   PGRComplaint: Complaint,
 };
