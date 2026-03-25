@@ -358,6 +358,7 @@ public class DispatchPipelineService {
                          Map<String, Object> providerResponse, Integer attemptCount) {
         dispatchLogRepository.upsert(DispatchLogEntry.builder()
                 .eventId(event.getEventId())
+                .referenceNumber(event.getEntityId())
                 .module(event.getModule())
                 .eventName(event.getEventName())
                 .tenantId(event.getTenantId())
