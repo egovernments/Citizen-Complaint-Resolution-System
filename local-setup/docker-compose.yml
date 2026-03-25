@@ -907,8 +907,8 @@ services:
       - ./db/localization-seed.sql:/localization-seed.sql:ro
     entrypoint: >
       bash -c "
-        echo 'Seeding localization data for pg tenant...';
-        psql postgresql://egov:${POSTGRES_PASSWORD:-egov123}@postgres:5432/egov -f /localization-seed.sql;
+        echo 'Seeding localization data for pg tenant...' &&
+        psql postgresql://egov:${POSTGRES_PASSWORD:-egov123}@postgres:5432/egov -f /localization-seed.sql &&
         echo 'Localization seed complete'
       "
     networks:
