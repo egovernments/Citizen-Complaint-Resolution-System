@@ -29,9 +29,9 @@ public class DispatchLogRepository {
             return;
         }
 
-        String sql = "INSERT INTO nb_dispatch_log(id, event_id, module, event_name, tenant_id, channel, recipient_value, " +
+        String sql = "INSERT INTO nb_dispatch_log(id, event_id, reference_number, module, event_name, tenant_id, channel, recipient_value, " +
                 "template_key, template_version, status, attempt_count, last_error_code, last_error_message, provider_response_jsonb, " +
-                "created_time, last_modified_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSONB), ?, ?) " +
+                "created_time, last_modified_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSONB), ?, ?) " +
                 "ON CONFLICT (event_id, channel) DO UPDATE SET status=EXCLUDED.status, attempt_count=EXCLUDED.attempt_count, " +
                 "last_error_code=EXCLUDED.last_error_code, last_error_message=EXCLUDED.last_error_message, " +
                 "provider_response_jsonb=EXCLUDED.provider_response_jsonb, last_modified_time=EXCLUDED.last_modified_time";
@@ -40,6 +40,7 @@ public class DispatchLogRepository {
             jdbcTemplate.update(sql,
                     entry.getId() != null ? entry.getId() : UUID.randomUUID(),
                     entry.getEventId(),
+                    entry.getReferenceNumber(),
                     entry.getModule(),
                     entry.getEventName(),
                     entry.getTenantId(),
