@@ -546,7 +546,7 @@ class CRSLoader:
             print(f"   ⚠️  {module_code}: Add tenant manually to citymodule (MDMS v2 API limitation)")
 
     def _update_citymodule_db(self, module_code: str, tenant_code: str, current_config: dict):
-        """Update citymodule via database query through boundary-service workaround"""
+        """Update citymodule via direct Docker postgres psql"""
         import subprocess
         import json as json_lib
 
@@ -555,32 +555,25 @@ class CRSLoader:
         new_config = current_config.copy()
         new_config["tenants"] = new_tenants
 
-        # Try to use psql to update directly (if running locally with Docker)
         try:
-            # Get unique identifier hash
-            import hashlib
-            config_str = json_lib.dumps(new_config, sort_keys=True, separators=(',', ':'))
-
-            # Construct SQL update (parameterized to prevent SQL injection)
-            update_sql = """
-            UPDATE eg_mdms_data
-            SET data = :'new_data'::jsonb,
-                lastmodifiedtime = EXTRACT(EPOCH FROM NOW())::bigint * 1000
-            WHERE schemacode = 'tenant.citymodule'
-              AND tenantid = 'pg'
-              AND data->>'code' = :'mod_code';
-            """
+            # Escape single quotes for SQL string literal
+            new_data = json_lib.dumps(new_config).replace("'", "''")
+            sql = (
+                f"UPDATE eg_mdms_data "
+                f"SET data = '{new_data}'::jsonb, "
+                f"lastmodifiedtime = EXTRACT(EPOCH FROM NOW())::bigint * 1000 "
+                f"WHERE schemacode = 'tenant.citymodule' "
+                f"AND tenantid = 'pg' "
+                f"AND data->>'code' = '{module_code}';"
+            )
 
             result = subprocess.run(
-                ["docker", "exec", "docker-postgres", "psql", "-U", "egov", "-d", "egov",
-                 "-v", f"new_data={json_lib.dumps(new_config)}",
-                 "-v", f"mod_code={module_code}",
-                 "-c", update_sql],
+                ["docker", "exec", "docker-postgres", "psql", "-U", "egov", "-d", "egov", "-c", sql],
                 capture_output=True, text=True, timeout=10
             )
 
             if result.returncode == 0 and "UPDATE 1" in result.stdout:
-                print(f"   ✅ {module_code} enabled (via DB)")
+                print(f"   ✅ {module_code} enabled for '{tenant_code}' (via DB)")
             else:
                 raise Exception(f"SQL update failed: {result.stderr or result.stdout}")
 
@@ -1185,6 +1178,28 @@ class CRSLoader:
 
         print(f"   Found {len(employees)} employees")
 
+        # Fix 1: Restore original username from Excel (unified_loader strips underscores).
+        # Re-read the User Name* column and apply only uppercase + space→underscore,
+        # preserving underscores that unified_loader would have dropped.
+        try:
+            import pandas as pd
+            df = pd.read_excel(excel_path, sheet_name='Employee Master')
+            original_names = [
+                str(row).strip().upper().replace(' ', '_')
+                for row in df.get('User Name*', df.iloc[:, 0])
+                if pd.notna(row)
+            ]
+            for emp, original in zip(employees, original_names):
+                emp['code'] = original
+                emp.setdefault('user', {})['userName'] = original
+        except Exception as e:
+            print(f"   Warning: could not restore original usernames: {e}")
+
+        # Fix 2: Ensure every employee has a password; default to eGov@123 if missing
+        for emp in employees:
+            if not emp.get('user', {}).get('password'):
+                emp.setdefault('user', {})['password'] = 'eGov@123'
+
         # 2. Create employees via HRMS
         print(f"\n[2/2] Creating employees...")
         results = self.uploader.create_employees(
@@ -1193,6 +1208,33 @@ class CRSLoader:
             sheet_name='Employee Master',
             excel_file=excel_path
         )
+
+        # Fix 3: Force password update for ALL employees (created + exists) via HRMS _update.
+        # unified_loader skips password update for EXISTS case, so we handle it here.
+        hrms_svc = os.environ.get("HRMS_SERVICE", "/egov-hrms")
+        headers = {"Content-Type": "application/json"}
+        print(f"\n[2b/2] Setting passwords...")
+        for emp in employees:
+            username = emp.get('code')
+            password = emp.get('user', {}).get('password', 'eGov@123')
+            try:
+                sr = requests.post(
+                    f"{self.base_url}{hrms_svc}/employees/_search",
+                    json={"RequestInfo": {"apiId": "Rainmaker", "authToken": self.auth_token,
+                          "userInfo": self.user_info}, "codes": [username], "tenantId": tenant},
+                    headers=headers, params={"tenantId": tenant, "codes": username},
+                    timeout=REQUEST_TIMEOUT)
+                emp_data = sr.json().get("Employees", [{}])[0] if sr.ok else {}
+                if emp_data.get("id"):
+                    emp_data["user"]["password"] = password
+                    requests.post(
+                        f"{self.base_url}{hrms_svc}/employees/_update",
+                        json={"RequestInfo": {"apiId": "Rainmaker", "authToken": self.auth_token,
+                              "userInfo": self.user_info}, "Employees": [emp_data]},
+                        headers=headers, timeout=REQUEST_TIMEOUT)
+                    print(f"   Password set for '{username}'")
+            except Exception as e:
+                print(f"   Warning: password update failed for '{username}': {e}")
 
         self._print_summary("Employees", {'employees': results})
         return results

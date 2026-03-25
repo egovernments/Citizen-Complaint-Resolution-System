@@ -20,6 +20,8 @@ import os
 import json
 import requests
 
+REQUEST_TIMEOUT = 30  # seconds
+
 # kubectl API server URL (for environments without kubectl access)
 KUBECTL_API_URL = os.environ.get('KUBECTL_API_URL', 'http://localhost:8765')
 KUBECTL_API_KEY = os.environ.get('KUBECTL_API_KEY', 'dev-only-key')
@@ -142,8 +144,79 @@ class CRSLoader:
                 tenant=target_tenant
             )
 
+        # Enable PGR and HRMS citymodule for the new tenant
+        for t in tenants:
+            tc = t.get('code')
+            if tc:
+                for module in ['PGR', 'HRMS']:
+                    self._enable_module_for_tenant(tc, module)
+
         self._print_summary("Tenant & Branding", results)
         return results
+
+    def _enable_module_for_tenant(self, tenant_code: str, module_code: str):
+        """Add tenant to citymodule for a given module under the root tenant (pg)."""
+        import json as json_lib
+        search_url = f"{self.base_url}/mdms-v2/v1/_search"
+        resp = requests.post(
+            search_url,
+            json={
+                "MdmsCriteria": {
+                    "tenantId": "pg",
+                    "moduleDetails": [{"moduleName": "tenant", "masterDetails": [{"name": "citymodule"}]}]
+                },
+                "RequestInfo": {"apiId": "Rainmaker"}
+            },
+            headers={"Content-Type": "application/json"},
+            timeout=REQUEST_TIMEOUT
+        )
+        if not resp.ok:
+            print(f"   ⚠️  Could not fetch citymodule for {module_code}")
+            return
+
+        citymodules = resp.json().get("MdmsRes", {}).get("tenant", {}).get("citymodule", [])
+        module_config = next((cm for cm in citymodules if cm.get("code") == module_code), None)
+
+        if not module_config:
+            print(f"   ⚠️  Module '{module_code}' not found in citymodule")
+            return
+
+        existing = [t.get("code", "").lower() for t in module_config.get("tenants", [])]
+        if tenant_code.lower() in existing:
+            print(f"   ✅ {module_code} already enabled for '{tenant_code}'")
+            return
+
+        try:
+            self._update_citymodule_db(module_code, tenant_code, module_config)
+        except Exception as e:
+            print(f"   ⚠️  {module_code}: could not update citymodule: {e}")
+
+    def _update_citymodule_db(self, module_code: str, tenant_code: str, current_config: dict):
+        """Append tenant to citymodule via direct Docker postgres psql."""
+        import subprocess
+        import json as json_lib
+
+        new_config = current_config.copy()
+        new_config["tenants"] = current_config.get("tenants", []) + [{"code": tenant_code}]
+
+        new_data = json_lib.dumps(new_config).replace("'", "''")
+        sql = (
+            f"UPDATE eg_mdms_data "
+            f"SET data = '{new_data}'::jsonb, "
+            f"lastmodifiedtime = EXTRACT(EPOCH FROM NOW())::bigint * 1000 "
+            f"WHERE schemacode = 'tenant.citymodule' "
+            f"AND tenantid = 'pg' "
+            f"AND data->>'code' = '{module_code}';"
+        )
+
+        result = subprocess.run(
+            ["docker", "exec", "docker-postgres", "psql", "-U", "egov", "-d", "egov", "-c", sql],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0 and "UPDATE 1" in result.stdout:
+            print(f"   ✅ {module_code} enabled for '{tenant_code}' (via DB)")
+        else:
+            raise Exception(result.stderr or result.stdout)
 
     def load_hierarchy(self, name: str, levels: list, target_tenant: str = None,
                        output_dir: str = "upload") -> str:
@@ -419,6 +492,11 @@ class CRSLoader:
             return {'created': 0, 'exists': 0, 'failed': 0}
 
         print(f"   Found {len(employees)} employees")
+
+        # Ensure every employee has a password; default to eGov@123 if missing
+        for emp in employees:
+            if not emp.get('user', {}).get('password'):
+                emp.setdefault('user', {})['password'] = 'eGov@123'
 
         # 2. Create employees via HRMS
         print(f"\n[2/2] Creating employees...")
