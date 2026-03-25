@@ -13,7 +13,7 @@ export default async function globalSetup() {
   const baseURL = process.env.BASE_URL || 'http://localhost:18000';
   const tenantId = 'pg';
   const locale = 'en_IN';
-  const maxRetries = 30;
+  const maxRetries = 90;
   const retryDelay = 2000; // 2 seconds
 
   console.log('[Global Setup] Waiting for localization seed to complete...');
@@ -51,16 +51,31 @@ export default async function globalSetup() {
 
       if (response.ok()) {
         const body = await response.json();
-        const messageCount = body?.messages?.length ?? 0;
+        const messages = body?.messages ?? [];
+        const messageCount = messages.length;
 
-        if (messageCount > 0) {
+        // Check for specific seeded keys to ensure localization is fully ready
+        const requiredKeys = [
+          'CS_COMMON_INBOX',
+          'CS_COMMON_SEARCH',
+          'CS_COMMON_SUBMIT',
+        ];
+        const messageMap = new Map(
+          messages.map((msg: any) => [msg.code, msg.message])
+        );
+        const missingKeys = requiredKeys.filter(key => !messageMap.has(key));
+
+        if (messageCount > 0 && missingKeys.length === 0) {
           console.log(
-            `[Global Setup] ✓ Localization data available (${messageCount} messages for ${tenantId}/${locale})`
+            `[Global Setup] ✓ Localization data available (${messageCount} messages for ${tenantId}/${locale}, all required keys present)`
           );
           success = true;
           break;
-        } else {
+        } else if (messageCount === 0) {
           lastError = `Received empty messages array (attempt ${attempt}/${maxRetries})`;
+          console.log(`[Global Setup] ${lastError}`);
+        } else {
+          lastError = `Missing required keys: ${missingKeys.join(', ')} (attempt ${attempt}/${maxRetries})`;
           console.log(`[Global Setup] ${lastError}`);
         }
       } else {
