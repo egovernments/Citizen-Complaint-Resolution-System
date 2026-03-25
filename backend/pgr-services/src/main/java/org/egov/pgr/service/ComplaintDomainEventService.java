@@ -134,7 +134,7 @@ public class ComplaintDomainEventService {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("complaintNo", service.getServiceRequestId());
         data.put("status", service.getApplicationStatus());
-        data.put("serviceName", service.getServiceCode());
+        data.put("serviceName", getServiceName(service));
         data.put("citizenName", getCitizenName(request));
         data.put("departmentName", getDepartmentName(service));
         data.put("mobileNumber", getCitizenMobile(request));
@@ -154,6 +154,16 @@ public class ComplaintDomainEventService {
             return request.getRequestInfo().getUserInfo().getName();
         }
         return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private String getServiceName(org.egov.pgr.web.models.Service service) {
+        Object additionalDetail = service.getAdditionalDetail();
+        if (additionalDetail instanceof Map) {
+            Object name = ((Map<String, Object>) additionalDetail).get("serviceName");
+            if (name != null) return name.toString();
+        }
+        return service.getServiceCode();
     }
 
     @SuppressWarnings("unchecked")
