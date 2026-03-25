@@ -10,7 +10,10 @@ import {
 } from "@egovernments/digit-ui-components";
 import { getAuthAdapter } from "../../../../../../libraries/src/services/auth/index";
 
-const DEFAULT_REDIRECT = (contextPath) => `/${contextPath}/citizen`;
+const DEFAULT_REDIRECT = (contextPath, userType) => {
+  if (userType === "EMPLOYEE") return `/${contextPath}/employee`;
+  return `/${contextPath}/citizen`;
+};
 
 // Hardcode labels — this page renders before DIGIT's i18n loads
 const t = (key) =>
@@ -43,7 +46,7 @@ const UnifiedLogin = ({ stateCode }) => {
   const contextPath = window?.contextPath || "digit-ui";
   const adapter = getAuthAdapter();
   const providers = adapter.getSupportedProviders();
-  const from = location.state?.from || DEFAULT_REDIRECT(contextPath);
+  const from = location.state?.from;
 
   const checkEmail = useCallback(
     async (emailValue) => {
@@ -64,7 +67,8 @@ const UnifiedLogin = ({ stateCode }) => {
 
   useEffect(() => {
     if (adapter.isAuthenticated()) {
-      history.replace(from);
+      const user = adapter.getUser();
+      history.replace(from || DEFAULT_REDIRECT(contextPath, user?.type));
     }
   }, []);
 
@@ -87,7 +91,8 @@ const UnifiedLogin = ({ stateCode }) => {
       } else {
         await adapter.login({ email, password });
       }
-      history.replace(from);
+      const user = adapter.getUser();
+      history.replace(from || DEFAULT_REDIRECT(contextPath, user?.type));
     } catch (err) {
       setError(err.message || t("CORE_AUTH_FAILED"));
     } finally {

@@ -41,7 +41,8 @@ export class KeycloakAuthAdapter extends AuthAdapter {
     this._kc.onTokenExpired = () => {
       this._kc.updateToken(30).then(() => {
         window.localStorage.setItem("token", this._kc.token);
-        window.localStorage.setItem("Citizen.token", this._kc.token);
+        const prefix = this._user?.type === "EMPLOYEE" ? "Employee" : "Citizen";
+        window.localStorage.setItem(`${prefix}.token`, this._kc.token);
       }).catch(() => {
         this._user = null;
       });
@@ -158,18 +159,41 @@ export class KeycloakAuthAdapter extends AuthAdapter {
 
     const parsed = this._kc.tokenParsed;
     const stateCode = window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID") || "pg";
+    const defaultCity = window?.globalConfigs?.getConfig("DEFAULT_CITIZEN_CITY") || `${stateCode}.citya`;
+
+    // Call /userinfo to resolve the KC identity to a DIGIT user.
+    // This tells us the user's type (CITIZEN vs EMPLOYEE), roles, and tenantId.
+    let digitUser = null;
+    if (this._tokenExchangeUrl) {
+      try {
+        const resp = await fetch(`${this._tokenExchangeUrl}/userinfo?tenantId=${defaultCity}`, {
+          headers: { Authorization: `Bearer ${this._kc.token}` },
+        });
+        if (resp.ok) {
+          digitUser = await resp.json();
+        }
+      } catch (err) {
+        console.warn("[KeycloakAuthAdapter] /userinfo failed, using JWT claims:", err);
+      }
+    }
+
+    const isEmployee = digitUser?.type === "EMPLOYEE";
+    const userType = isEmployee ? "EMPLOYEE" : "CITIZEN";
+    const userTypeKey = isEmployee ? "employee" : "citizen";
 
     this._user = {
-      uuid: parsed.sub,
-      email: parsed.email,
-      name: parsed.name || parsed.preferred_username || parsed.email,
-      roles: (parsed.realm_access?.roles || []).map((code) => ({
+      uuid: digitUser?.uuid || parsed.sub,
+      email: digitUser?.emailId || parsed.email,
+      userName: digitUser?.userName || parsed.email,
+      name: digitUser?.name || parsed.name || parsed.preferred_username || parsed.email,
+      mobileNumber: digitUser?.mobileNumber || "",
+      roles: digitUser?.roles || (parsed.realm_access?.roles || []).map((code) => ({
         code,
         name: code,
         tenantId: stateCode,
       })),
-      tenantId: stateCode,
-      type: "CITIZEN",
+      tenantId: digitUser?.tenantId || stateCode,
+      type: userType,
     };
 
     const sessionUser = {
@@ -177,28 +201,41 @@ export class KeycloakAuthAdapter extends AuthAdapter {
       token: this._kc.token,
       info: {
         uuid: this._user.uuid,
-        userName: this._user.email,
+        userName: this._user.userName,
         name: this._user.name,
         emailId: this._user.email,
+        mobileNumber: this._user.mobileNumber,
         tenantId: this._user.tenantId,
         type: this._user.type,
         roles: this._user.roles,
       },
     };
 
+    // Common storage
     Digit.SessionStorage.set("User", sessionUser);
-    Digit.SessionStorage.set("userType", "citizen");
-    Digit.SessionStorage.set("user_type", "citizen");
-    Digit.SessionStorage.set("Citizen.tenantId", stateCode);
+    Digit.SessionStorage.set("userType", userTypeKey);
+    Digit.SessionStorage.set("user_type", userTypeKey);
     window.localStorage.setItem("token", this._kc.token);
-    window.localStorage.setItem("Citizen.token", this._kc.token);
-    window.localStorage.setItem("Citizen.user-info", JSON.stringify(sessionUser.info));
-    window.localStorage.setItem("Citizen.tenant-id", stateCode);
 
-    // Set default city so CitizenHome doesn't redirect to language selection
-    if (!Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")) {
-      const defaultCity = window?.globalConfigs?.getConfig("DEFAULT_CITIZEN_CITY") || `${stateCode}.citya`;
-      Digit.SessionStorage.set("CITIZEN.COMMON.HOME.CITY", { code: defaultCity });
+    if (isEmployee) {
+      // Employee storage pattern (matches existing DIGIT employee login)
+      Digit.SessionStorage.set("Employee.tenantId", this._user.tenantId);
+      window.localStorage.setItem("Employee.token", this._kc.token);
+      window.localStorage.setItem("Employee.user-info", JSON.stringify(sessionUser.info));
+      window.localStorage.setItem("Employee.tenant-id", this._user.tenantId);
+      window.localStorage.setItem("tenant-id", this._user.tenantId);
+      window.localStorage.setItem("user-info", JSON.stringify(sessionUser.info));
+    } else {
+      // Citizen storage pattern
+      Digit.SessionStorage.set("Citizen.tenantId", stateCode);
+      window.localStorage.setItem("Citizen.token", this._kc.token);
+      window.localStorage.setItem("Citizen.user-info", JSON.stringify(sessionUser.info));
+      window.localStorage.setItem("Citizen.tenant-id", stateCode);
+
+      // Set default city so CitizenHome doesn't redirect to language selection
+      if (!Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")) {
+        Digit.SessionStorage.set("CITIZEN.COMMON.HOME.CITY", { code: defaultCity });
+      }
     }
   }
 }
