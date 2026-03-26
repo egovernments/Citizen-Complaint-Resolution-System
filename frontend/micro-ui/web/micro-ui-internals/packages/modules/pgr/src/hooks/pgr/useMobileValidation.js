@@ -2,33 +2,55 @@
  * Custom hook to fetch mobile number validation configuration from MDMS
  * Priority:
  * 1. Global configs (window.globalConfigs?.getConfig("CORE_MOBILE_CONFIGS"))
- * 2. MDMS configs (UserValidation - fieldType: mobile)
+ * 2. MDMS configs (UserValidation - fieldType: mobile as default)
  * 3. Default fallback validation
+ *
+ * Returns all available country validation configs for dropdown support,
+ * plus the currently selected/default validation rules.
+ *
  * @param {string} tenantId - The tenant ID
  * @param {string} validationName - The validation name (default: "defaultMobileValidation")
- * @returns {object} - Returns validation rules and loading state
+ * @returns {object} - Returns validation rules, all configs, loading state, and helpers
  */
 const useMobileValidation = (tenantId, validationName = "defaultMobileValidation") => {
   // Fetch mobile validation config from MDMS
-  const stateId = window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID");
-  const moduleName = Digit?.Utils?.getConfigModuleName?.() || "commonUiConfig";
-  const { isLoading, data: mdmsConfig, error } = Digit.Hooks.useCustomMDMS(
+  const stateId = Digit.Utils.getMultiRootTenant()
+    ? Digit.ULBService.getCurrentTenantId()
+    : window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID");
+  const moduleName = Digit.Utils.getMultiRootTenant() ? "common-masters" : Digit?.Utils?.getConfigModuleName?.();
+  const { isLoading, data: mdmsData, error } = Digit.Hooks.useCustomMDMS(
     stateId,
     moduleName,
     [{ name: "UserValidation" }],
     {
       select: (data) => {
-        const validationData = data?.[moduleName]?.UserValidation?.find((x) => x.fieldType === "mobile");
-        const rules = validationData?.rules;
-        const attributes = validationData?.attributes;
+        const allValidations = data?.[moduleName]?.UserValidation || [];
+
+        // Build config for each entry
+        const allConfigs = allValidations.map((item) => ({
+          fieldType: item.fieldType,
+          prefix: item.attributes?.prefix || "+91",
+          pattern: item.rules?.pattern || "^[6-9][0-9]{9}$",
+          maxLength: item.rules?.maxLength || 10,
+          minLength: item.rules?.minLength || 10,
+          errorMessage: item.rules?.errorMessage || "ES_SEARCH_APPLICATION_MOBILE_INVALID",
+          allowedStartingCharacters: item.rules?.allowedStartingCharacters,
+          isActive: item.isActive,
+        }));
+
+        // Default config is the one with fieldType "mobile"
+        const defaultConfig = allConfigs.find((c) => c.fieldType === "mobile") || allConfigs[0] || {
+          prefix: "+91",
+          pattern: "^[6-9][0-9]{9}$",
+          maxLength: 10,
+          minLength: 10,
+          errorMessage: "ES_SEARCH_APPLICATION_MOBILE_INVALID",
+          allowedStartingCharacters: ["6", "7", "8", "9"],
+        };
+
         return {
-          prefix: attributes?.prefix || "+91",
-          pattern: rules?.pattern || "^[6-9][0-9]{9}$",
-          maxLength: rules?.maxLength || 10,
-          minLength: rules?.minLength || 10,
-          errorMessage: rules?.errorMessage || "ES_SEARCH_APPLICATION_MOBILE_INVALID",
-          allowedStartingCharacters: rules?.allowedStartingCharacters,
-          isActive: validationData?.isActive
+          defaultConfig,
+          allConfigs,
         };
       },
       staleTime: 300000,
@@ -45,33 +67,43 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
     isActive: true,
   };
 
+  const mdmsDefault = mdmsData?.defaultConfig || {};
+
   /** ---------- Combine configs with priority ---------- */
   const validationRules = {
     allowedStartingCharacters:
-      globalConfig?.mobileNumberAllowedStartingCharacters || mdmsConfig?.allowedStartingCharacters || defaultValidation?.allowedStartingCharacters,
+      globalConfig?.mobileNumberAllowedStartingCharacters || mdmsDefault?.allowedStartingCharacters || defaultValidation?.allowedStartingCharacters,
 
-    prefix: globalConfig?.mobilePrefix || mdmsConfig?.prefix,
+    prefix: globalConfig?.mobilePrefix || mdmsDefault?.prefix,
 
-    pattern: globalConfig?.mobileNumberPattern || mdmsConfig?.pattern,
+    pattern: globalConfig?.mobileNumberPattern || mdmsDefault?.pattern,
 
-    minLength: globalConfig?.mobileNumberLength || mdmsConfig?.minLength,
+    minLength: globalConfig?.mobileNumberLength || mdmsDefault?.minLength,
 
-    maxLength: globalConfig?.mobileNumberLength || mdmsConfig?.maxLength,
+    maxLength: globalConfig?.mobileNumberLength || mdmsDefault?.maxLength,
 
-    errorMessage: globalConfig?.mobileNumberErrorMessage || mdmsConfig?.errorMessage,
+    errorMessage: globalConfig?.mobileNumberErrorMessage || mdmsDefault?.errorMessage,
 
     isActive:
-      mdmsConfig?.isActive !== undefined
-        ? mdmsConfig.isActive
+      mdmsDefault?.isActive !== undefined
+        ? mdmsDefault.isActive
         : defaultValidation.isActive !== undefined
           ? defaultValidation.isActive
           : true,
   };
 
+  // All available country configs for dropdown
+  const allValidationConfigs = mdmsData?.allConfigs || [];
+
+  // Helper to get config by prefix value (e.g., "+91", "+251")
+  const getConfigByPrefix = (prefix) => {
+    return allValidationConfigs.find((c) => c.prefix === prefix) || validationRules;
+  };
 
   // Helper function to get min/max values for number validation
-  const getMinMaxValues = () => {
-    const { allowedStartingCharacters, minLength } = validationRules;
+  const getMinMaxValues = (config) => {
+    const rules = config || validationRules;
+    const { allowedStartingCharacters, minLength } = rules;
     if (!allowedStartingCharacters || allowedStartingCharacters.length === 0) {
       return { min: 0, max: 9999999999 };
     }
@@ -87,6 +119,8 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
 
   return {
     validationRules,
+    allValidationConfigs,
+    getConfigByPrefix,
     isLoading,
     error,
     getMinMaxValues,
