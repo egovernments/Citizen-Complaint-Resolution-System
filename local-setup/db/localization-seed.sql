@@ -1,5 +1,134 @@
 BEGIN;
 
+-- =============================================================================
+-- Login page translations (rainmaker-common module)
+-- These are required for the DIGIT UI login page to display translated labels
+-- instead of raw keys like CORE_COMMON_LOGIN, CORE_COMMON_CITY, etc.
+-- =============================================================================
+
+-- Login button
+INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
+SELECT 'a0000001-0001-4000-8000-000000000001'::uuid, 'pg', 'en_IN', 'rainmaker-common', 'CORE_COMMON_LOGIN', 'Login', 1, now(), 1, now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-common' AND code = 'CORE_COMMON_LOGIN'
+);
+
+-- City dropdown label
+INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
+SELECT 'a0000001-0001-4000-8000-000000000002'::uuid, 'pg', 'en_IN', 'rainmaker-common', 'CORE_COMMON_CITY', 'City', 1, now(), 1, now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-common' AND code = 'CORE_COMMON_CITY'
+);
+
+-- Username field label
+INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
+SELECT 'a0000001-0001-4000-8000-000000000003'::uuid, 'pg', 'en_IN', 'rainmaker-common', 'CORE_LOGIN_USERNAME', 'Mobile Number', 1, now(), 1, now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-common' AND code = 'CORE_LOGIN_USERNAME'
+);
+
+-- Password field label
+INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
+SELECT 'a0000001-0001-4000-8000-000000000004'::uuid, 'pg', 'en_IN', 'rainmaker-common', 'CORE_LOGIN_PASSWORD', 'Password', 1, now(), 1, now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-common' AND code = 'CORE_LOGIN_PASSWORD'
+);
+
+-- Forgot password link
+INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
+SELECT 'a0000001-0001-4000-8000-000000000005'::uuid, 'pg', 'en_IN', 'rainmaker-common', 'CORE_COMMON_FORGOT_PASSWORD', 'Forgot Password?', 1, now(), 1, now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-common' AND code = 'CORE_COMMON_FORGOT_PASSWORD'
+);
+
+-- Tenant name for pg
+INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
+SELECT 'a0000001-0001-4000-8000-000000000006'::uuid, 'pg', 'en_IN', 'rainmaker-common', 'TENANT_TENANTS_PG', 'Demo', 1, now(), 1, now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-common' AND code = 'TENANT_TENANTS_PG'
+);
+
+-- Tenant name for pg.citya
+INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
+SELECT 'a0000001-0001-4000-8000-000000000011'::uuid, 'pg', 'en_IN', 'rainmaker-common', 'TENANT_TENANTS_PG_CITYA', 'City A', 1, now(), 1, now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-common' AND code = 'TENANT_TENANTS_PG_CITYA'
+);
+
+-- Tenant name for pg.cityb
+INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
+SELECT 'a0000001-0001-4000-8000-000000000012'::uuid, 'pg', 'en_IN', 'rainmaker-common', 'TENANT_TENANTS_PG_CITYB', 'City B', 1, now(), 1, now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-common' AND code = 'TENANT_TENANTS_PG_CITYB'
+);
+
+-- Tenant name for pg.loadtest
+INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
+SELECT 'a0000001-0001-4000-8000-000000000013'::uuid, 'pg', 'en_IN', 'rainmaker-common', 'TENANT_TENANTS_PG_LOADTEST', 'CI Test', 1, now(), 1, now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-common' AND code = 'TENANT_TENANTS_PG_LOADTEST'
+);
+
+-- Tenant name for statea
+INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
+SELECT 'a0000001-0001-4000-8000-000000000014'::uuid, 'pg', 'en_IN', 'rainmaker-common', 'TENANT_TENANTS_STATEA', 'State A', 1, now(), 1, now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-common' AND code = 'TENANT_TENANTS_STATEA'
+);
+
+-- Tenant name for statea.citya
+INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
+SELECT 'a0000001-0001-4000-8000-000000000015'::uuid, 'pg', 'en_IN', 'rainmaker-common', 'TENANT_TENANTS_STATEA_CITYA', 'City A', 1, now(), 1, now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-common' AND code = 'TENANT_TENANTS_STATEA_CITYA'
+);
+
+-- Tenant name for statea.cityb
+INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
+SELECT 'a0000001-0001-4000-8000-000000000016'::uuid, 'pg', 'en_IN', 'rainmaker-common', 'TENANT_TENANTS_STATEA_CITYB', 'City B', 1, now(), 1, now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-common' AND code = 'TENANT_TENANTS_STATEA_CITYB'
+);
+
+-- Tenant name for statea.g
+INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
+SELECT 'a0000001-0001-4000-8000-000000000017'::uuid, 'pg', 'en_IN', 'rainmaker-common', 'TENANT_TENANTS_STATEA_G', 'My Tenant', 1, now(), 1, now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-common' AND code = 'TENANT_TENANTS_STATEA_G'
+);
+
+-- Privacy policy agreement text
+INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
+SELECT 'a0000001-0001-4000-8000-000000000007'::uuid, 'pg', 'en_IN', 'rainmaker-common', 'ES_BY_CLICKING', 'I agree to the', 1, now(), 1, now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-common' AND code = 'ES_BY_CLICKING'
+);
+
+-- Privacy policy link text
+INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
+SELECT 'a0000001-0001-4000-8000-000000000008'::uuid, 'pg', 'en_IN', 'rainmaker-common', 'ES_PRIVACY_POLICY', 'Privacy Policy', 1, now(), 1, now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-common' AND code = 'ES_PRIVACY_POLICY'
+);
+
+-- Back button
+INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
+SELECT 'a0000001-0001-4000-8000-000000000009'::uuid, 'pg', 'en_IN', 'rainmaker-common', 'CS_COMMON_BACK', 'Back', 1, now(), 1, now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-common' AND code = 'CS_COMMON_BACK'
+);
+
+-- City placeholder
+INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
+SELECT 'a0000001-0001-4000-8000-000000000010'::uuid, 'pg', 'en_IN', 'rainmaker-common', 'CORE_COMMON_CITY_PLACEHOLDER', 'Select your city', 1, now(), 1, now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-common' AND code = 'CORE_COMMON_CITY_PLACEHOLDER'
+);
+
+-- =============================================================================
+-- Workbench translations (rainmaker-workbench module)
+-- =============================================================================
+
 -- Localisation :: rainmaker-workbench.WBH_MDMS_MASTER_TRADELICENSE.en_IN
 INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
 SELECT '1cb9d62c-2800-4674-8d50-d2c5d85db269'::uuid, 'pg', 'en_IN', 'rainmaker-workbench', 'WBH_MDMS_MASTER_TRADELICENSE', 'TradeLicense', 1, now(), 1, now()
@@ -614,6 +743,67 @@ INSERT INTO message (id, tenantid, locale, module, code, message, createdby, cre
 SELECT 'b6a96571-24a3-4f8d-af77-0de1a0e140f5'::uuid, 'pg', 'en_IN', 'rainmaker-workbench', 'TRADELICENSE_TRADELICENSE_APPLICATIONDOCUMENT', 'applicationDocument', 1, now(), 1, now()
 WHERE NOT EXISTS (
   SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-workbench' AND code = 'TRADELICENSE_TRADELICENSE_APPLICATIONDOCUMENT'
+);
+
+-- =============================================================================
+-- Dashboard sidebar keys that live in rainmaker-hr / rainmaker-workbench in
+-- statea but the DIGIT UI only loads rainmaker-common on the dashboard page.
+-- We duplicate them into rainmaker-common for pg so they render on first load.
+-- ACTIVE_EMPLOYEES only exists in Hindi under statea; CONFIGURE_MASTER not in
+-- statea en_IN at all — both are manually created here.
+-- =============================================================================
+
+INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
+SELECT 'a0000001-0001-4000-8000-000000000020'::uuid, 'pg', 'en_IN', 'rainmaker-common', 'ACTIVE_EMPLOYEES', 'Active Employees', 1, now(), 1, now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-common' AND code = 'ACTIVE_EMPLOYEES'
+);
+
+INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
+SELECT 'a0000001-0001-4000-8000-000000000021'::uuid, 'pg', 'en_IN', 'rainmaker-common', 'CONFIGURE_MASTER', 'Configure Master', 1, now(), 1, now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-common' AND code = 'CONFIGURE_MASTER'
+);
+
+INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
+SELECT 'a0000001-0001-4000-8000-000000000022'::uuid, 'pg', 'en_IN', 'rainmaker-common', 'HR_HOME_SEARCH_RESULTS_HEADING', 'Search Employee', 1, now(), 1, now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-common' AND code = 'HR_HOME_SEARCH_RESULTS_HEADING'
+);
+
+INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
+SELECT 'a0000001-0001-4000-8000-000000000023'::uuid, 'pg', 'en_IN', 'rainmaker-common', 'HR_COMMON_CREATE_EMPLOYEE_HEADER', 'Create Employee', 1, now(), 1, now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-common' AND code = 'HR_COMMON_CREATE_EMPLOYEE_HEADER'
+);
+
+INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
+SELECT 'a0000001-0001-4000-8000-000000000024'::uuid, 'pg', 'en_IN', 'rainmaker-common', 'ACTION_TEST_WORKBENCH', 'Workbench', 1, now(), 1, now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM message WHERE tenantid = 'pg' AND locale = 'en_IN' AND module = 'rainmaker-common' AND code = 'ACTION_TEST_WORKBENCH'
+);
+
+-- =============================================================================
+-- Bulk-copy translations from statea to pg
+-- The pg tenant only has rainmaker-common and rainmaker-workbench modules.
+-- Internal pages (PGR inbox, complaints, HRMS, workbench) need translations
+-- that only exist under the statea tenant. This bulk-copies them to pg so
+-- post-login pages render translated labels instead of raw keys.
+-- =============================================================================
+
+INSERT INTO message (id, tenantid, locale, module, code, message, createdby, createddate, lastmodifiedby, lastmodifieddate)
+SELECT gen_random_uuid(), 'pg', locale, module, code, message, createdby, now(), lastmodifiedby, now()
+FROM message
+WHERE tenantid = 'statea' AND locale = 'en_IN' AND module IN (
+  'rainmaker-pgr',
+  'egov-hrms',
+  'rainmaker-common',
+  'rainmaker-hr',
+  'rainmaker-workbench'
+)
+AND NOT EXISTS (
+  SELECT 1 FROM message m2
+  WHERE m2.tenantid = 'pg' AND m2.locale = message.locale AND m2.module = message.module AND m2.code = message.code
 );
 
 COMMIT;
