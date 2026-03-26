@@ -175,7 +175,7 @@ const FormExplorer = () => {
     return {
       service: {
         active: true,
-        tenantId: formData?.SelectAddress?.city?.code || tenantId,
+        tenantId: Digit.Utils.getMultiRootTenant() ? Digit.ULBService.getCurrentTenantId() : formData?.SelectAddress?.city?.code || tenantId,
         serviceCode: getEffectiveServiceCode(formData?.SelectComplaintType, formData?.SelectSubComplaintType),
         description: formData?.description || "",
         applicationStatus: "CREATED",
