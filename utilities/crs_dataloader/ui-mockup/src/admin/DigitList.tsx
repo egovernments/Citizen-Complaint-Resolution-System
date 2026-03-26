@@ -6,6 +6,7 @@ import {
   type SortPayload,
   type FilterPayload,
 } from 'ra-core';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { RefreshCw, Plus, Search } from 'lucide-react';
 import { DigitCard } from '@/components/digit/DigitCard';
 import { Badge } from '@/components/ui/badge';
@@ -48,6 +49,8 @@ export function DigitList({
   filter,
 }: DigitListProps) {
   const [searchValue, setSearchValue] = useState('');
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const controllerProps: ListControllerProps = {
     resource,
@@ -109,7 +112,7 @@ export function DigitList({
               Refresh
             </Button>
             {hasCreate && (
-              <Button size="sm" onClick={onCreate} className="gap-1.5">
+              <Button size="sm" onClick={onCreate ?? (() => navigate(`${location.pathname}/create`))} className="gap-1.5">
                 <Plus className="w-4 h-4" />
                 Create
               </Button>

@@ -32,7 +32,7 @@ export function MdmsResourcePage() {
   const subtitle = config?.schema ? `Schema: ${config.schema}` : undefined;
 
   return (
-    <DigitList title={label} subtitle={subtitle} filters={filterElements}>
+    <DigitList title={label} subtitle={subtitle} filters={filterElements} hasCreate>
       {schemaColumns ? (
         <DigitDatagrid columns={schemaColumns} rowClick="show" />
       ) : (

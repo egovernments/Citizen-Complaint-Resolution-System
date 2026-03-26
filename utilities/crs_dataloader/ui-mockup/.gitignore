@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# E2E test artifacts
+e2e/screenshots/
+e2e-onboarding/results/
+e2e-onboarding/report/
+e2e-onboarding/screenshots/

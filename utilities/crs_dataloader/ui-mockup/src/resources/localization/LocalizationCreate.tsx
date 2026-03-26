@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { DigitEdit, DigitFormInput, DigitFormSelect, v } from '@/admin';
+import { DigitCreate, DigitFormCodeInput, DigitFormInput, DigitFormSelect, v } from '@/admin';
 import { useGetList } from 'ra-core';
 
 const LOCALE_CHOICES = [
@@ -10,7 +10,14 @@ const LOCALE_CHOICES = [
   { value: 'ta_IN', label: 'Tamil (ta_IN)' },
 ];
 
-export function LocalizationEdit() {
+const DEFAULT_MODULE = 'rainmaker-common';
+
+const defaultRecord = {
+  locale: 'en_IN',
+  module: DEFAULT_MODULE,
+};
+
+export function LocalizationCreate() {
   const { data } = useGetList('localization', {
     pagination: { page: 1, perPage: 1000 },
     sort: { field: 'module', order: 'ASC' },
@@ -18,15 +25,15 @@ export function LocalizationEdit() {
 
   const moduleChoices = useMemo(() => {
     if (!data || data.length === 0) {
-      return [{ value: 'rainmaker-common', label: 'rainmaker-common' }];
+      return [{ value: DEFAULT_MODULE, label: DEFAULT_MODULE }];
     }
     const unique = [...new Set(data.map((r) => r.module))].filter(Boolean).sort();
     return unique.map((m) => ({ value: m, label: m }));
   }, [data]);
 
   return (
-    <DigitEdit title="Edit Localization Message">
-      <DigitFormInput source="code" label="Code" disabled />
+    <DigitCreate title="Create Localization Message" record={defaultRecord}>
+      <DigitFormCodeInput source="code" label="Code" validate={v.codeRequired} />
       <DigitFormInput source="message" label="Message" validate={v.required} />
       <DigitFormSelect
         source="module"
@@ -41,6 +48,6 @@ export function LocalizationEdit() {
         choices={LOCALE_CHOICES}
         placeholder="Select locale..."
       />
-    </DigitEdit>
+    </DigitCreate>
   );
 }

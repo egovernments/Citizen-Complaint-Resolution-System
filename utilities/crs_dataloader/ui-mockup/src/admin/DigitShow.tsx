@@ -1,5 +1,5 @@
 import React from 'react';
-import { useShowController, type ShowControllerProps } from 'ra-core';
+import { useShowController, RecordContextProvider, type ShowControllerProps } from 'ra-core';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Pencil, RefreshCw } from 'lucide-react';
 import { DigitCard } from '@/components/digit/DigitCard';
@@ -112,9 +112,11 @@ export function DigitShow({
 
       {/* Content card */}
       <DigitCard className="max-w-none">
-        {typeof children === 'function' && record
-          ? (children as (record: Record<string, unknown>) => React.ReactNode)(record as Record<string, unknown>)
-          : (children as React.ReactNode)}
+        <RecordContextProvider value={record}>
+          {typeof children === 'function' && record
+            ? (children as (record: Record<string, unknown>) => React.ReactNode)(record as Record<string, unknown>)
+            : (children as React.ReactNode)}
+        </RecordContextProvider>
       </DigitCard>
     </div>
   );

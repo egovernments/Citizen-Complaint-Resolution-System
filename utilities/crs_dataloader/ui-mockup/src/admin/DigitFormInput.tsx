@@ -24,12 +24,17 @@ export function DigitFormInput({
   className,
   ...inputProps
 }: DigitFormInputProps) {
+  // Auto-coerce number inputs so the form value is a number, not a string
+  const parseProps = type === 'number' && !inputProps.parse
+    ? { ...inputProps, parse: (v: string) => (v === '' ? null : Number(v)) }
+    : inputProps;
+
   const {
     id,
     field,
     fieldState,
     isRequired,
-  } = useInput(inputProps);
+  } = useInput(parseProps);
 
   const hasError = fieldState.invalid && fieldState.isTouched;
   const errorMessage = fieldState.error?.message;

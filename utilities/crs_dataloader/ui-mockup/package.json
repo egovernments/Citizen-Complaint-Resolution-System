@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:e2e": "node e2e/run-all.mjs"
   },
   "dependencies": {
     "@digit-mcp/data-provider": "file:../../../../../DIGIT-MCP/packages/data-provider",
@@ -43,6 +44,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@playwright/test": "^1.58.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^24.10.1",
@@ -56,6 +58,7 @@
     "globals": "^16.5.0",
     "jsdom": "^27.4.0",
     "postcss": "^8.5.6",
+    "puppeteer": "^24.40.0",
     "tailwindcss": "^3.4.19",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",

@@ -13,6 +13,10 @@ export interface DigitCreateProps {
   children: React.ReactNode;
   /** Resource name (optional, from ResourceContext by default) */
   resource?: string;
+  /** Default values for the new record */
+  record?: Record<string, unknown>;
+  /** Where to redirect after successful creation (default: "list") */
+  redirect?: 'list' | 'edit' | 'show' | false;
 }
 
 function DigitCreateContent({
@@ -82,9 +86,9 @@ function DigitCreateContent({
   );
 }
 
-export function DigitCreate({ title, children, resource }: DigitCreateProps) {
+export function DigitCreate({ title, children, resource, record, redirect = 'list' }: DigitCreateProps) {
   return (
-    <CreateBase resource={resource}>
+    <CreateBase resource={resource} record={record} redirect={redirect}>
       <DigitCreateContent title={title}>{children}</DigitCreateContent>
     </CreateBase>
   );

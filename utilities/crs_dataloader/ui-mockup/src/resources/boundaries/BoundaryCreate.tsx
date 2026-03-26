@@ -1,4 +1,4 @@
-import { DigitEdit, DigitFormInput, DigitFormSelect } from '@/admin';
+import { DigitCreate, DigitFormCodeInput, DigitFormSelect, v } from '@/admin';
 
 const BOUNDARY_TYPE_CHOICES = [
   { value: 'City', label: 'City' },
@@ -9,17 +9,16 @@ const BOUNDARY_TYPE_CHOICES = [
   { value: 'State', label: 'State' },
 ];
 
-export function BoundaryEdit() {
+export function BoundaryCreate() {
   return (
-    <DigitEdit title="Edit Boundary">
-      <DigitFormInput source="code" label="Code" disabled />
+    <DigitCreate title="Create Boundary">
+      <DigitFormCodeInput source="code" label="Code" validate={v.codeRequired} />
       <DigitFormSelect
         source="boundaryType"
         label="Boundary Type"
         choices={BOUNDARY_TYPE_CHOICES}
         placeholder="Select type..."
-        disabled
       />
-    </DigitEdit>
+    </DigitCreate>
   );
 }

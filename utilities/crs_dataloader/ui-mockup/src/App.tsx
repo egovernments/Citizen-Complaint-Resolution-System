@@ -9,17 +9,17 @@ import Phase4Page from './pages/Phase4Page';
 import CompletePage from './pages/CompletePage';
 import { CoreAdminContext, CoreAdminUI, Resource, CustomRoutes } from 'ra-core';
 import { QueryClient } from '@tanstack/react-query';
-import { DigitLayout, DigitDashboard, MdmsResourcePage, MdmsResourceShow, MdmsResourceEdit } from '@/admin';
+import { DigitLayout, DigitDashboard, MdmsResourcePage, MdmsResourceShow, MdmsResourceEdit, MdmsResourceCreate } from '@/admin';
 import {
-  DepartmentList, DepartmentShow, DepartmentEdit,
-  DesignationList, DesignationShow, DesignationEdit,
-  ComplaintTypeList, ComplaintTypeShow, ComplaintTypeEdit,
+  DepartmentList, DepartmentShow, DepartmentEdit, DepartmentCreate,
+  DesignationList, DesignationShow, DesignationEdit, DesignationCreate,
+  ComplaintTypeList, ComplaintTypeShow, ComplaintTypeEdit, ComplaintTypeCreate,
   TenantList, TenantShow,
-  EmployeeList, EmployeeShow, EmployeeEdit,
-  ComplaintList, ComplaintShow, ComplaintEdit,
-  BoundaryList, BoundaryShow, BoundaryEdit,
-  LocalizationList, LocalizationShow, LocalizationEdit,
-  UserList, UserShow, UserEdit,
+  EmployeeList, EmployeeShow, EmployeeEdit, EmployeeCreate,
+  ComplaintList, ComplaintShow, ComplaintEdit, ComplaintCreate,
+  BoundaryList, BoundaryShow, BoundaryEdit, BoundaryCreate,
+  LocalizationList, LocalizationShow, LocalizationEdit, LocalizationCreate,
+  UserList, UserShow, UserEdit, UserCreate,
   AccessRoleList, AccessRoleShow,
   WorkflowServiceList, WorkflowServiceShow,
   WorkflowProcessList, WorkflowProcessShow,
@@ -87,16 +87,16 @@ function ManagementAdmin() {
       basename="/manage"
     >
       <CoreAdminUI layout={DigitLayout} dashboard={DigitDashboard}>
-        {/* Core entities with List/Show/Edit */}
+        {/* Core entities with List/Show/Edit/Create */}
         <Resource name="tenants" list={TenantList} show={TenantShow} />
-        <Resource name="departments" list={DepartmentList} show={DepartmentShow} edit={DepartmentEdit} />
-        <Resource name="designations" list={DesignationList} show={DesignationShow} edit={DesignationEdit} />
-        <Resource name="complaint-types" list={ComplaintTypeList} show={ComplaintTypeShow} edit={ComplaintTypeEdit} />
-        <Resource name="employees" list={EmployeeList} show={EmployeeShow} edit={EmployeeEdit} />
-        <Resource name="complaints" list={ComplaintList} show={ComplaintShow} edit={ComplaintEdit} />
-        <Resource name="boundaries" list={BoundaryList} show={BoundaryShow} edit={BoundaryEdit} />
-        <Resource name="localization" list={LocalizationList} show={LocalizationShow} edit={LocalizationEdit} />
-        <Resource name="users" list={UserList} show={UserShow} edit={UserEdit} />
+        <Resource name="departments" list={DepartmentList} show={DepartmentShow} edit={DepartmentEdit} create={DepartmentCreate} />
+        <Resource name="designations" list={DesignationList} show={DesignationShow} edit={DesignationEdit} create={DesignationCreate} />
+        <Resource name="complaint-types" list={ComplaintTypeList} show={ComplaintTypeShow} edit={ComplaintTypeEdit} create={ComplaintTypeCreate} />
+        <Resource name="employees" list={EmployeeList} show={EmployeeShow} edit={EmployeeEdit} create={EmployeeCreate} />
+        <Resource name="complaints" list={ComplaintList} show={ComplaintShow} edit={ComplaintEdit} create={ComplaintCreate} />
+        <Resource name="boundaries" list={BoundaryList} show={BoundaryShow} edit={BoundaryEdit} create={BoundaryCreate} />
+        <Resource name="localization" list={LocalizationList} show={LocalizationShow} edit={LocalizationEdit} create={LocalizationCreate} />
+        <Resource name="users" list={UserList} show={UserShow} edit={UserEdit} create={UserCreate} />
 
         {/* Read-only entities with List/Show */}
         <Resource name="access-roles" list={AccessRoleList} show={AccessRoleShow} />
@@ -105,9 +105,9 @@ function ManagementAdmin() {
         <Resource name="mdms-schemas" list={MdmsSchemaList} show={MdmsSchemaShow} />
         <Resource name="boundary-hierarchies" list={BoundaryHierarchyList} show={BoundaryHierarchyShow} />
 
-        {/* Generic MDMS with Show/Edit */}
+        {/* Generic MDMS with Show/Edit/Create */}
         {Object.keys(getGenericMdmsResources()).map((name) => (
-          <Resource key={name} name={name} list={MdmsResourcePage} show={MdmsResourceShow} edit={MdmsResourceEdit} />
+          <Resource key={name} name={name} list={MdmsResourcePage} show={MdmsResourceShow} edit={MdmsResourceEdit} create={MdmsResourceCreate} />
         ))}
 
         {/* Custom routes */}
