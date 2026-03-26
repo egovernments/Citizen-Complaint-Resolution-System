@@ -102,7 +102,8 @@ export const mdmsService = {
     return this.create(tenantId, MDMS_SCHEMAS.DESIGNATION, designation.code, {
       code: designation.code,
       name: designation.name,
-      department: designation.department,
+      description: designation.name,
+      department: designation.department ? [designation.department] : [],
       active: designation.active,
     });
   },
@@ -141,7 +142,7 @@ export const mdmsService = {
 
     return results.map((r) => ({
       serviceCode: r.serviceCode as string,
-      serviceName: r.serviceName as string,
+      serviceName: (r.serviceName || r.name) as string,
       department: r.department as string,
       slaHours: r.slaHours as number,
       menuPath: r.menuPath as string | undefined,
@@ -160,7 +161,8 @@ export const mdmsService = {
       complaintType.serviceCode,
       {
         serviceCode: complaintType.serviceCode,
-        serviceName: complaintType.serviceName,
+        name: complaintType.serviceName,
+        keywords: complaintType.serviceName.toLowerCase(),
         department: complaintType.department,
         slaHours: complaintType.slaHours,
         menuPath: complaintType.menuPath || 'Complaint',
@@ -219,6 +221,7 @@ export const mdmsService = {
     const tenantData = {
       code: tenant.code,
       name: tenant.name,
+      tenantId: tenant.code,
       type: tenant.city?.ulbGrade || 'CITY',
       description: tenant.description || tenant.name,
       logoId: tenant.logoId || null,

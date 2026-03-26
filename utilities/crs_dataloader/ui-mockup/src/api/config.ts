@@ -53,7 +53,7 @@ export const MDMS_SCHEMAS = {
   EMPLOYEE_STATUS: 'egov-hrms.EmployeeStatus',
   EMPLOYEE_TYPE: 'egov-hrms.EmployeeType',
   ROLES: 'ACCESSCONTROL-ROLES.roles',
-  PGR_SERVICE_DEFS: 'RAINMAKER_PGR.ServiceDefs',
+  PGR_SERVICE_DEFS: 'RAINMAKER-PGR.ServiceDefs',
   TENANT: 'tenant.tenants',
 };
 

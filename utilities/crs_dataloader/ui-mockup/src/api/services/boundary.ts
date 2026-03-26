@@ -83,13 +83,34 @@ export const boundaryService = {
       },
     });
 
-    // Flatten the nested boundary structure
+    // Handle both response formats:
+    // - Old format: TenantBoundary[] with nested hierarchy
+    // - New format: Boundary[] flat array
     const tenantBoundaries = response.TenantBoundary || [];
+    const flatBoundaries = response.Boundary || [];
     const boundaries: Boundary[] = [];
 
+    // Old format: flatten nested hierarchy
     for (const tb of tenantBoundaries as { boundary: Boundary }[]) {
       if (tb.boundary) {
         this.flattenBoundaries(tb.boundary, boundaries);
+      }
+    }
+
+    // New format: flat boundary array
+    for (const b of flatBoundaries as Boundary[]) {
+      if (b.code) {
+        boundaries.push({
+          id: b.id,
+          tenantId: b.tenantId,
+          code: b.code,
+          name: b.name,
+          boundaryType: b.boundaryType,
+          parent: b.parent,
+          hierarchyType: b.hierarchyType,
+          latitude: b.latitude,
+          longitude: b.longitude,
+        });
       }
     }
 
