@@ -7,6 +7,16 @@ module.exports = {
   // mode: 'development',
   entry: "./src/index.js",
   devtool: "none",
+  resolve: {
+    alias: {
+      // Build core module from local source instead of npm package to pick up
+      // UnifiedLogin, routing fixes, and auth adapter integration
+      "@egovernments/digit-ui-module-core": path.resolve(__dirname, "micro-ui-internals/packages/modules/core/src/Module.js"),
+      // Ensure single React instance across all packages (prevents React #321)
+      "react": path.resolve(__dirname, "node_modules/react"),
+      "react-dom": path.resolve(__dirname, "node_modules/react-dom"),
+    },
+  },
   module: {
     rules: [
       {
@@ -25,7 +35,7 @@ module.exports = {
         use: ["style-loader", "css-loader"],
       },
       {
-        test: /\.(png|jpe?g|gif)$/i,
+        test: /\.(png|jpe?g|gif|svg)$/i,
         use: [
           {
             loader: 'file-loader',

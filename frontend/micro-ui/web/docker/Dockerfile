@@ -30,14 +30,19 @@ RUN chmod +x ./install-deps.sh
 RUN ./install-deps.sh
 RUN yarn config set network-timeout 600000
 
-# Allow lockfile updates for new dependencies (keycloak-js)
-RUN yarn install
-# Rebuild node-sass native binary (fails to download prebuild on some archs)
-RUN cd micro-ui-internals && npx node-sass --version || npm rebuild node-sass --force
+# Install dependencies
+RUN yarn install --frozen-lockfile
+
+# Install core module's extra peer deps (needed because webpack now compiles
+# core from source via resolve.alias instead of using the npm package)
+RUN yarn add react-responsive react-tooltip --no-lockfile -W
+
 RUN yarn build:webpack
 
 FROM nginx:mainline-alpine
 ENV WORK_DIR=/var/web/digit-ui
 RUN mkdir -p ${WORK_DIR}
 COPY --from=build /app/web/build ${WORK_DIR}/
+COPY --from=build /app/web/public/globalConfigs.js ${WORK_DIR}/globalConfigs.js
+COPY --from=build /app/web/public/silent-check-sso.html ${WORK_DIR}/silent-check-sso.html
 COPY --from=build /app/web/docker/nginx.conf /etc/nginx/conf.d/default.conf

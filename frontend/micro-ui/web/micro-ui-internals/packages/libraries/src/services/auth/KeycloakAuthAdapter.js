@@ -7,12 +7,22 @@ function getKeycloakConstructor() {
   throw new Error("keycloak-js not loaded. Ensure the CDN script is in index.html.");
 }
 
+// Decode JWT payload without keycloak-js re-init
+function b64decode(str) {
+  let b = str.replace(/-/g, "+").replace(/_/g, "/");
+  while (b.length % 4) b += "=";
+  return JSON.parse(atob(b));
+}
+
 export class KeycloakAuthAdapter extends AuthAdapter {
   constructor() {
     super();
     this._kc = null;
     this._user = null;
     this._tokenExchangeUrl = null;
+    this._tenantId = null;
+    this._digitUserType = null;
+    this._digitRoles = null;
   }
 
   async init() {
@@ -25,14 +35,26 @@ export class KeycloakAuthAdapter extends AuthAdapter {
     this._kc = new Keycloak({ url: kcUrl, realm, clientId });
 
     try {
+      const contextPath = window?.contextPath || "digit-ui";
       const authenticated = await this._kc.init({
         onLoad: "check-sso",
         pkceMethod: "S256",
-        silentCheckSsoRedirectUri: window.location.origin + "/digit-ui/silent-check-sso.html",
+        silentCheckSsoRedirectUri: window.location.origin + "/" + contextPath + "/silent-check-sso.html",
       });
 
       if (authenticated) {
         await this._loadUserFromToken();
+        // If we just completed an SSO callback (auth code in URL) and are still
+        // on the login page, redirect the user. This handles the timing issue
+        // where React renders before init() completes.
+        if (window.location.pathname.includes("/user/login")) {
+          const user = this._user;
+          if (user && user.type === "EMPLOYEE") {
+            window.location.replace(window.location.origin + "/" + contextPath + "/employee");
+          } else {
+            window.location.replace(window.location.origin + "/" + contextPath + "/citizen");
+          }
+        }
       }
     } catch (err) {
       console.warn("[KeycloakAuthAdapter] SSO check failed, continuing without SSO:", err);
@@ -41,8 +63,8 @@ export class KeycloakAuthAdapter extends AuthAdapter {
     this._kc.onTokenExpired = () => {
       this._kc.updateToken(30).then(() => {
         window.localStorage.setItem("token", this._kc.token);
-        const prefix = this._user?.type === "EMPLOYEE" ? "Employee" : "Citizen";
-        window.localStorage.setItem(`${prefix}.token`, this._kc.token);
+        const sessionType = this._digitUserType === "EMPLOYEE" ? "Employee" : "Citizen";
+        window.localStorage.setItem(sessionType + ".token", this._kc.token);
       }).catch(() => {
         this._user = null;
       });
@@ -61,10 +83,48 @@ export class KeycloakAuthAdapter extends AuthAdapter {
     return this._user;
   }
 
-  async login({ email, password }) {
+  // Manually set tokens on the keycloak instance by decoding JWTs directly.
+  // Required because kc.init() with raw tokens from a password grant triggers
+  // a full OIDC flow or fails silently in some keycloak-js versions.
+  _setTokens(access, refresh, id) {
+    this._kc.token = access;
+    this._kc.refreshToken = refresh || null;
+    this._kc.idToken = id || null;
+    this._kc.authenticated = true;
+
+    try {
+      this._kc.tokenParsed = b64decode(access.split(".")[1]);
+      this._kc.subject = this._kc.tokenParsed.sub;
+      this._kc.realmAccess = this._kc.tokenParsed.realm_access;
+      this._kc.resourceAccess = this._kc.tokenParsed.resource_access;
+    } catch (e) {
+      console.warn("[KeycloakAuthAdapter] Failed to decode access token:", e);
+    }
+
+    if (refresh) {
+      try {
+        this._kc.refreshTokenParsed = b64decode(refresh.split(".")[1]);
+      } catch (e) { /* refresh token may not be a JWT */ }
+    }
+
+    if (id) {
+      try {
+        this._kc.idTokenParsed = b64decode(id.split(".")[1]);
+      } catch (e) { /* id token decode failure is non-fatal */ }
+    }
+  }
+
+  async login({ email, password, tenantId }) {
     const kcUrl = window?.globalConfigs?.getConfig("KEYCLOAK_URL");
     const realm = window?.globalConfigs?.getConfig("KEYCLOAK_REALM");
     const clientId = window?.globalConfigs?.getConfig("KEYCLOAK_CLIENT_ID");
+
+    // If no tenantId passed by caller, read from KC tenant dropdown
+    if (!tenantId) {
+      const kcSel = document.getElementById("kc-tenant-select");
+      if (kcSel && kcSel.value) tenantId = kcSel.value;
+    }
+    this._tenantId = tenantId || null;
 
     const tokenUrl = `${kcUrl}/realms/${realm}/protocol/openid-connect/token`;
     const body = new URLSearchParams({
@@ -74,6 +134,7 @@ export class KeycloakAuthAdapter extends AuthAdapter {
       password: password,
       scope: "openid",
     });
+    if (tenantId) body.set("tenantId", tenantId);
 
     const resp = await fetch(tokenUrl, {
       method: "POST",
@@ -88,23 +149,25 @@ export class KeycloakAuthAdapter extends AuthAdapter {
 
     const tokens = await resp.json();
 
-    await this._kc.init({
-      token: tokens.access_token,
-      refreshToken: tokens.refresh_token,
-      idToken: tokens.id_token,
-      pkceMethod: "S256",
-    });
+    // Extract DIGIT-specific fields from token response
+    this._digitUserType = tokens.digit_user_type || null;
+    this._digitRoles = tokens.digit_roles || null;
 
+    // Use _setTokens instead of kc.init() to avoid OIDC redirect issues
+    this._setTokens(tokens.access_token, tokens.refresh_token, tokens.id_token);
     await this._loadUserFromToken();
 
+    // Return user and token — the login page handles redirect and session storage
     return { success: true, user: this._user, token: tokens.access_token };
   }
 
-  async signup({ email, password, name }) {
+  async signup({ email, password, name, tenantId }) {
+    this._tenantId = tenantId || null;
+
     const resp = await fetch(`${this._tokenExchangeUrl}/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, name }),
+      body: JSON.stringify({ email, password, name, tenantId }),
     });
 
     if (!resp.ok) {
@@ -112,11 +175,14 @@ export class KeycloakAuthAdapter extends AuthAdapter {
       throw new Error(err.message || err.error || "Registration failed");
     }
 
-    return this.login({ email, password });
+    return this.login({ email, password, tenantId });
   }
 
   async logout() {
     this._user = null;
+    this._tenantId = null;
+    this._digitUserType = null;
+    this._digitRoles = null;
     window.localStorage.clear();
     window.sessionStorage.clear();
 
@@ -158,41 +224,31 @@ export class KeycloakAuthAdapter extends AuthAdapter {
     if (!this._kc?.tokenParsed) return;
 
     const parsed = this._kc.tokenParsed;
-    const stateCode = window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID") || "pg";
-    const defaultCity = window?.globalConfigs?.getConfig("DEFAULT_CITIZEN_CITY") || `${stateCode}.citya`;
+    const tenantId = this._tenantId
+      || window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID")
+      || "pg";
 
-    // Call /userinfo to resolve the KC identity to a DIGIT user.
-    // This tells us the user's type (CITIZEN vs EMPLOYEE), roles, and tenantId.
-    let digitUser = null;
-    if (this._tokenExchangeUrl) {
-      try {
-        const resp = await fetch(`${this._tokenExchangeUrl}/userinfo?tenantId=${defaultCity}`, {
-          headers: { Authorization: `Bearer ${this._kc.token}` },
-        });
-        if (resp.ok) {
-          digitUser = await resp.json();
-        }
-      } catch (err) {
-        console.warn("[KeycloakAuthAdapter] /userinfo failed, using JWT claims:", err);
-      }
-    }
-
-    const isEmployee = digitUser?.type === "EMPLOYEE";
+    const isEmployee = this._digitUserType === "EMPLOYEE";
     const userType = isEmployee ? "EMPLOYEE" : "CITIZEN";
-    const userTypeKey = isEmployee ? "employee" : "citizen";
+    const sessionType = isEmployee ? "employee" : "citizen";
+
+    // Use digit_roles from token response if available, else fall back to KC realm roles
+    const roles = (this._digitRoles && this._digitRoles.length > 0)
+      ? this._digitRoles.map(r => ({
+          code: r.code,
+          name: r.name || r.code,
+          tenantId: isEmployee ? tenantId : (r.tenantId || tenantId),
+        }))
+      : (parsed.realm_access?.roles || []).map(code => ({
+          code, name: code, tenantId,
+        }));
 
     this._user = {
-      uuid: digitUser?.uuid || parsed.sub,
-      email: digitUser?.emailId || parsed.email,
-      userName: digitUser?.userName || parsed.email,
-      name: digitUser?.name || parsed.name || parsed.preferred_username || parsed.email,
-      mobileNumber: digitUser?.mobileNumber || "",
-      roles: digitUser?.roles || (parsed.realm_access?.roles || []).map((code) => ({
-        code,
-        name: code,
-        tenantId: stateCode,
-      })),
-      tenantId: digitUser?.tenantId || stateCode,
+      uuid: parsed.sub,
+      email: parsed.email,
+      name: parsed.name || parsed.preferred_username || parsed.email,
+      roles,
+      tenantId,
       type: userType,
     };
 
@@ -204,37 +260,30 @@ export class KeycloakAuthAdapter extends AuthAdapter {
         userName: this._user.userName,
         name: this._user.name,
         emailId: this._user.email,
-        mobileNumber: this._user.mobileNumber,
-        tenantId: this._user.tenantId,
-        type: this._user.type,
-        roles: this._user.roles,
+        tenantId,
+        type: userType,
+        roles,
       },
     };
 
     // Common storage
     Digit.SessionStorage.set("User", sessionUser);
-    Digit.SessionStorage.set("userType", userTypeKey);
-    Digit.SessionStorage.set("user_type", userTypeKey);
+    Digit.SessionStorage.set("userType", sessionType);
+    Digit.SessionStorage.set("user_type", sessionType);
     window.localStorage.setItem("token", this._kc.token);
 
     if (isEmployee) {
-      // Employee storage pattern (matches existing DIGIT employee login)
-      Digit.SessionStorage.set("Employee.tenantId", this._user.tenantId);
+      Digit.SessionStorage.set("Employee.tenantId", tenantId);
       window.localStorage.setItem("Employee.token", this._kc.token);
       window.localStorage.setItem("Employee.user-info", JSON.stringify(sessionUser.info));
-      window.localStorage.setItem("Employee.tenant-id", this._user.tenantId);
-      window.localStorage.setItem("tenant-id", this._user.tenantId);
-      window.localStorage.setItem("user-info", JSON.stringify(sessionUser.info));
+      window.localStorage.setItem("Employee.tenant-id", tenantId);
     } else {
-      // Citizen storage pattern
-      Digit.SessionStorage.set("Citizen.tenantId", stateCode);
+      Digit.SessionStorage.set("Citizen.tenantId", tenantId);
       window.localStorage.setItem("Citizen.token", this._kc.token);
       window.localStorage.setItem("Citizen.user-info", JSON.stringify(sessionUser.info));
-      window.localStorage.setItem("Citizen.tenant-id", stateCode);
-
-      // Set default city so CitizenHome doesn't redirect to language selection
+      window.localStorage.setItem("Citizen.tenant-id", tenantId);
       if (!Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")) {
-        Digit.SessionStorage.set("CITIZEN.COMMON.HOME.CITY", { code: defaultCity });
+        Digit.SessionStorage.set("CITIZEN.COMMON.HOME.CITY", { code: tenantId });
       }
     }
   }

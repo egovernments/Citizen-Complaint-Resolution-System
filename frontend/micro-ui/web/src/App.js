@@ -12,7 +12,7 @@ import { UICustomizations } from "./Customisations/UICustomizations";
 import { Loader } from "@egovernments/digit-ui-components";
 
 window.contextPath = window?.globalConfigs?.getConfig("CONTEXT_PATH");
-window.globalPath = window?.globalConfigs?.getConfig("CONTEXT_PATH") || "digit-ui";
+window.globalPath = window.contextPath;
 
 // Lazy load DigitUI
 const DigitUI = React.lazy(() =>

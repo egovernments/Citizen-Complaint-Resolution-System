@@ -113,32 +113,16 @@ export const DigitAppWrapper = ({ stateCode, modules, appTenants, logoUrl, logoU
         <Route exact path={`/${window?.globalPath}/user/invalid-url`}>
           <CustomErrorComponent />
         </Route>
-        {window?.globalConfigs?.getConfig("AUTH_PROVIDER") === "keycloak" && (
-          <Route exact path={`/${window?.globalPath}/user/login`}>
-            <UnifiedLogin stateCode={stateCode} />
-          </Route>
-        )}
-        {window?.globalConfigs?.getConfig("AUTH_PROVIDER") === "keycloak" && (
-          <Route exact path={`/${window?.globalPath}/user/sign-up`}>
-            <UnifiedLogin stateCode={stateCode} />
-          </Route>
-        )}
-        {/* Intercept employee/citizen login paths and redirect to unified keycloak login */}
-        {window?.globalConfigs?.getConfig("AUTH_PROVIDER") === "keycloak" && (
-          <Route path={`/${window?.contextPath}/:type/user/login`}>
-            <Redirect to={`/${window?.globalPath}/user/login`} />
-          </Route>
-        )}
-        {window?.globalConfigs?.getConfig("AUTH_PROVIDER") !== "keycloak" && (
-          <Route exact path={`/${window?.globalPath}/user/sign-up`}>
-            <SignUpV2 stateCode={stateCode} />
-          </Route>
-        )}
-        {window?.globalConfigs?.getConfig("AUTH_PROVIDER") !== "keycloak" && (
-          <Route exact path={`/${window?.globalPath}/user/login`}>
-            <LoginV2 stateCode={stateCode} />
-          </Route>
-        )}
+        <Route exact path={`/${window?.globalPath}/user/login`}>
+          {window?.globalConfigs?.getConfig("AUTH_PROVIDER") === "keycloak"
+            ? <UnifiedLogin stateCode={stateCode} />
+            : <LoginV2 stateCode={stateCode} />}
+        </Route>
+        <Route exact path={`/${window?.globalPath}/user/sign-up`}>
+          {window?.globalConfigs?.getConfig("AUTH_PROVIDER") === "keycloak"
+            ? <UnifiedLogin stateCode={stateCode} />
+            : <SignUpV2 stateCode={stateCode} />}
+        </Route>
         <Route exact path={`/${window?.globalPath}/user/otp`}>
           <Otp />
         </Route>
@@ -148,21 +132,18 @@ export const DigitAppWrapper = ({ stateCode, modules, appTenants, logoUrl, logoU
         <Route exact path={`/${window?.globalPath}/user/url`}>
           <ViewUrl />
         </Route>
-        {(window?.globalPath !== window?.contextPath ||
-          window?.globalConfigs?.getConfig("AUTH_PROVIDER") === "keycloak") && (
-          <Route path={`/${window?.contextPath}`}>
-            <DigitApp
-              stateCode={stateCode}
-              modules={modules}
-              appTenants={appTenants}
-              logoUrl={logoUrl}
-              logoUrlWhite={logoUrlWhite}
-              initData={initData}
-              defaultLanding={defaultLanding}
-              allowedUserTypes={allowedUserTypes}
-            />
-          </Route>
-        )}
+        <Route path={`/${window?.contextPath}`}>
+          <DigitApp
+            stateCode={stateCode}
+            modules={modules}
+            appTenants={appTenants}
+            logoUrl={logoUrl}
+            logoUrlWhite={logoUrlWhite}
+            initData={initData}
+            defaultLanding={defaultLanding}
+            allowedUserTypes={allowedUserTypes}
+          />
+        </Route>
         <Route>
           <Redirect to={
             window?.globalConfigs?.getConfig("AUTH_PROVIDER") === "keycloak"

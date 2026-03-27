@@ -1,36 +1,18 @@
-import React, { useState, useCallback, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { useHistory, useLocation } from "react-router-dom";
-import {
-  Button,
-  CardText,
-  FieldV1,
-  InputCard,
-  LinkLabel,
-  Toast,
-} from "@egovernments/digit-ui-components";
-import { getAuthAdapter } from "../../../../../../libraries/src/services/auth/index";
+import { Toast } from "@egovernments/digit-ui-components";
+import { getAuthAdapter } from "@egovernments/digit-ui-libraries";
+import SandBoxHeader from "../../../components/SandBoxHeader";
+import ImageComponent from "../../../components/ImageComponent";
 
-const DEFAULT_REDIRECT = (contextPath, userType) => {
-  if (userType === "EMPLOYEE") return `/${contextPath}/employee`;
-  return `/${contextPath}/citizen`;
-};
-
-// Hardcode labels — this page renders before DIGIT's i18n loads
-const t = (key) =>
-  ({
-    CORE_COMMON_LOGIN: "Login",
-    CORE_COMMON_SIGNUP: "Sign Up",
-    CORE_COMMON_EMAIL: "Email",
-    CORE_COMMON_PASSWORD: "Password",
-    CORE_COMMON_NAME: "Full Name",
-    CORE_COMMON_FORGOT_PASSWORD: "Forgot password?",
-    CORE_COMMON_SSO_GOOGLE: "Sign in with Google",
-    CORE_COMMON_SSO_GITHUB: "Sign in with GitHub",
-    CORE_SSO_DIVIDER: "or",
-    CORE_CHECKING_EMAIL: "Checking...",
-    CORE_AUTH_FAILED: "Authentication failed",
-    CORE_NAME_REQUIRED: "Please enter your name",
-  })[key] || key;
+const GoogleIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 48 48">
+    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+  </svg>
+);
 
 const UnifiedLogin = ({ stateCode }) => {
   const history = useHistory();
@@ -38,182 +20,266 @@ const UnifiedLogin = ({ stateCode }) => {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
-  const [emailStatus, setEmailStatus] = useState("idle");
+  const [tenantId, setTenantId] = useState("");
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const contextPath = window?.contextPath || "digit-ui";
   const adapter = getAuthAdapter();
-  const providers = adapter.getSupportedProviders();
-  const from = location.state?.from;
+  const providers = adapter ? adapter.getSupportedProviders() : [];
 
-  const checkEmail = useCallback(
-    async (emailValue) => {
-      if (!emailValue || !emailValue.includes("@")) {
-        setEmailStatus("idle");
-        return;
-      }
-      setEmailStatus("checking");
-      try {
-        const exists = await adapter.checkEmailExists(emailValue);
-        setEmailStatus(exists ? "exists" : "new");
-      } catch {
-        setEmailStatus("idle");
-      }
-    },
-    [adapter]
-  );
+  const tenants =
+    Digit.SessionStorage.get("initData")?.tenants ||
+    window?.globalConfigs?.getConfig("TENANTS") ||
+    [];
 
   useEffect(() => {
-    if (adapter.isAuthenticated()) {
+    if (adapter && adapter.isAuthenticated()) {
       const user = adapter.getUser();
-      history.replace(from || DEFAULT_REDIRECT(contextPath, user?.type));
+      if (user && user.type === "EMPLOYEE") {
+        history.replace(`/${contextPath}/employee`);
+      } else {
+        history.replace(location.state?.from || `/${contextPath}/citizen`);
+      }
     }
   }, []);
 
-  const handleEmailBlur = () => {
-    checkEmail(email);
-  };
-
-  const handleSubmit = async () => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setError(null);
     setLoading(true);
 
     try {
-      if (emailStatus === "new") {
-        if (!name.trim()) {
-          setError(t("CORE_NAME_REQUIRED"));
-          setLoading(false);
-          return;
-        }
-        await adapter.signup({ email, password, name: name.trim() });
+      const loginTenant = tenantId || stateCode;
+      const result = await adapter.login({
+        email,
+        password,
+        tenantId: loginTenant,
+      });
+
+      const user = result?.user || (adapter && adapter.getUser());
+      if (user && user.type === "EMPLOYEE") {
+        window.location.replace(
+          window.location.origin + "/" + contextPath + "/employee"
+        );
       } else {
-        await adapter.login({ email, password });
+        history.replace(location.state?.from || `/${contextPath}/citizen`);
       }
-      const user = adapter.getUser();
-      history.replace(from || DEFAULT_REDIRECT(contextPath, user?.type));
     } catch (err) {
-      setError(err.message || t("CORE_AUTH_FAILED"));
+      setError(err.message || "Authentication failed");
     } finally {
       setLoading(false);
     }
   };
 
   const handleSSO = (provider) => {
-    adapter.loginWithProvider(provider);
+    if (adapter) adapter.loginWithProvider(provider);
   };
 
-  const isSignup = emailStatus === "new";
+  const isSubmitDisabled = !email || !password || loading;
 
-  const isSubmitDisabled = useMemo(
-    () => !email || !password || emailStatus === "checking" || loading,
-    [email, password, emailStatus, loading]
-  );
+  const fieldStyle = {
+    width: "100%",
+    padding: "0.625rem 0.75rem",
+    border: "1px solid #B1B4B6",
+    borderRadius: "4px",
+    fontSize: "0.9375rem",
+    fontFamily: "Roboto, sans-serif",
+    backgroundColor: "#fff",
+    height: "42px",
+    boxSizing: "border-box",
+    outline: "none",
+  };
 
-  const inputCardTexts = useMemo(
-    () => ({
-      header: isSignup ? t("CORE_COMMON_SIGNUP") : t("CORE_COMMON_LOGIN"),
-      submitBarLabel: loading
-        ? "..."
-        : isSignup
-        ? t("CORE_COMMON_SIGNUP")
-        : t("CORE_COMMON_LOGIN"),
-    }),
-    [isSignup, loading]
-  );
+  const labelStyle = {
+    display: "block",
+    marginBottom: "0.375rem",
+    fontSize: "0.875rem",
+    fontWeight: 600,
+    color: "#0B0C0C",
+  };
 
   return (
-    <div className="banner banner-container">
-      <div style={{ width: "100%", maxWidth: "480px" }}>
-      <InputCard
-        t={t}
-        texts={inputCardTexts}
-        submit
-        onNext={handleSubmit}
-        isDisable={isSubmitDisabled}
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: "100vh",
+        backgroundColor: "#F0F0F0",
+        padding: "1rem",
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "420px",
+          backgroundColor: "#fff",
+          borderRadius: "8px",
+          boxShadow: "0 1px 4px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.06)",
+          padding: "2rem 2rem 1.5rem",
+        }}
       >
-        {/* SSO providers */}
-        {providers.length > 0 && (
-          <div style={{ marginBottom: "16px" }}>
-            {providers.map((provider) => (
-              <Button
-                key={provider}
-                label={t(`CORE_COMMON_SSO_${provider.toUpperCase()}`) || `Sign in with ${provider}`}
-                onClick={() => handleSSO(provider)}
-                variation="secondary"
-                style={{ width: "100%", marginBottom: "8px" }}
-              />
-            ))}
-            <CardText style={{ textAlign: "center" }}>
-              &mdash; {t("CORE_SSO_DIVIDER")} &mdash;
-            </CardText>
-          </div>
-        )}
-
-        {/* Email field */}
-        <div>
-          <FieldV1
-            withoutLabel
-            error={emailStatus === "checking" ? t("CORE_CHECKING_EMAIL") : ""}
-            onChange={(e) => setEmail(e.target.value)}
-            onBlur={handleEmailBlur}
-            placeholder="you@example.com"
-            populators={{
-              name: "email",
-              validation: { maxlength: 256 },
-            }}
-            props={{ fieldStyle: { width: "100%" } }}
-            type="text"
-            value={email}
-          />
+        <div style={{ marginBottom: "1.5rem" }}>
+          <SandBoxHeader showTenant={false} />
         </div>
 
-        {/* Password field */}
-        <div>
-          <FieldV1
-            withoutLabel
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="********"
-            populators={{
-              name: "password",
-              validation: { minlength: 8 },
-            }}
-            props={{ fieldStyle: { width: "100%" } }}
-            type="password"
-            value={password}
-          />
-        </div>
+        <h2
+          style={{
+            fontSize: "1.375rem",
+            fontWeight: 700,
+            color: "#0B0C0C",
+            margin: "0 0 0.25rem",
+          }}
+        >
+          Login
+        </h2>
+        <p
+          style={{
+            fontSize: "0.8125rem",
+            color: "#505A5F",
+            margin: "0 0 1.5rem",
+          }}
+        >
+          Sign in to access employee services
+        </p>
 
-        {/* Name field (signup only) */}
-        {isSignup && (
-          <div>
-            <FieldV1
-              withoutLabel
-              onChange={(e) => setName(e.target.value)}
-              placeholder={t("CORE_COMMON_NAME")}
-              populators={{
-                name: "name",
-              }}
-              props={{ fieldStyle: { width: "100%" } }}
+        <form onSubmit={handleSubmit}>
+          {tenants.length > 1 && (
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={labelStyle}>
+                City <span style={{ color: "#D4351C" }}>*</span>
+              </label>
+              <select
+                id="kc-tenant-select"
+                value={tenantId}
+                onChange={(e) => setTenantId(e.target.value)}
+                style={{ ...fieldStyle, cursor: "pointer" }}
+              >
+                <option value="">Select city</option>
+                {tenants
+                  .filter((t) => t.code !== stateCode)
+                  .map((t) => (
+                    <option key={t.code} value={t.code}>
+                      {t.name || t.code}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          )}
+
+          <div style={{ marginBottom: "1rem" }}>
+            <label style={labelStyle}>
+              Username / Email <span style={{ color: "#D4351C" }}>*</span>
+            </label>
+            <input
               type="text"
-              value={name}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Enter username or email"
+              required
+              style={fieldStyle}
             />
           </div>
-        )}
 
-        {/* Forgot password link */}
-        {emailStatus === "exists" && (
-          <div style={{ textAlign: "center", marginTop: "8px" }}>
-            <LinkLabel onClick={() => {}}>
-              {t("CORE_COMMON_FORGOT_PASSWORD")}
-            </LinkLabel>
+          <div style={{ marginBottom: "1.5rem" }}>
+            <label style={labelStyle}>
+              Password <span style={{ color: "#D4351C" }}>*</span>
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter password"
+              required
+              style={fieldStyle}
+            />
           </div>
+
+          <button
+            type="submit"
+            disabled={isSubmitDisabled}
+            style={{
+              width: "100%",
+              padding: "0.625rem 1rem",
+              backgroundColor: isSubmitDisabled ? "#B1B4B6" : "#F47738",
+              color: "#fff",
+              border: "none",
+              borderRadius: "4px",
+              fontSize: "1rem",
+              fontWeight: 700,
+              fontFamily: "Roboto, sans-serif",
+              cursor: isSubmitDisabled ? "not-allowed" : "pointer",
+              height: "42px",
+            }}
+          >
+            {loading ? "Signing in..." : "Login"}
+          </button>
+
+          {providers.length > 0 && (
+            <React.Fragment>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  margin: "1.25rem 0",
+                  gap: "0.75rem",
+                }}
+              >
+                <div style={{ flex: 1, height: "1px", backgroundColor: "#D6D6D6" }} />
+                <span style={{ fontSize: "0.8125rem", color: "#505A5F" }}>or</span>
+                <div style={{ flex: 1, height: "1px", backgroundColor: "#D6D6D6" }} />
+              </div>
+
+              {providers.map((provider) => (
+                <button
+                  key={provider}
+                  type="button"
+                  onClick={() => handleSSO(provider)}
+                  style={{
+                    width: "100%",
+                    padding: "0.5rem 1rem",
+                    border: "1px solid #B1B4B6",
+                    borderRadius: "4px",
+                    backgroundColor: "#fff",
+                    cursor: "pointer",
+                    fontSize: "0.9375rem",
+                    fontWeight: 500,
+                    fontFamily: "Roboto, sans-serif",
+                    height: "42px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "0.625rem",
+                    marginBottom: "0.5rem",
+                  }}
+                >
+                  {provider.toLowerCase() === "google" && <GoogleIcon />}
+                  <span>Sign in with {provider.charAt(0).toUpperCase() + provider.slice(1)}</span>
+                </button>
+              ))}
+            </React.Fragment>
+          )}
+        </form>
+
+        {error && (
+          <Toast type="error" label={error} onClose={() => setError(null)} />
         )}
-      </InputCard>
       </div>
 
-      {error && <Toast type="error" label={error} onClose={() => setError(null)} />}
+      <div style={{ marginTop: "1.5rem" }}>
+        <ImageComponent
+          alt="Powered by DIGIT"
+          src={window?.globalConfigs?.getConfig?.("DIGIT_FOOTER_BW")}
+          style={{ cursor: "pointer", height: "1.25em" }}
+          onClick={() => {
+            window
+              .open(window?.globalConfigs?.getConfig?.("DIGIT_HOME_URL"), "_blank")
+              .focus();
+          }}
+        />
+      </div>
     </div>
   );
 };

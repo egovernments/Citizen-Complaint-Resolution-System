@@ -1,10 +1,22 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
-import { initLibraries } from "@egovernments/digit-ui-libraries";
+import { initLibraries, initAuthAdapter } from "@egovernments/digit-ui-libraries";
 import "./index.css";
 import App from './App';
 
 initLibraries();
+
+// Initialize Keycloak auth adapter if configured (SSO check).
+// Login interception is handled inside UserService.authenticate (libraries package).
+const authProvider = window.globalConfigs && window.globalConfigs.getConfig("AUTH_PROVIDER");
+if (authProvider === "keycloak") {
+  const adapter = initAuthAdapter();
+  if (adapter) {
+    adapter.init().catch(function(err) {
+      console.warn("[KC] Auth adapter init failed:", err);
+    });
+  }
+}
 
 window.Digit.Customizations = { PGR: {}};
 
