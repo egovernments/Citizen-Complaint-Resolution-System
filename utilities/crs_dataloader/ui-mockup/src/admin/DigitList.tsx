@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import {
   useListController,
   ListContextProvider,
+  useTranslate,
   type ListControllerProps,
   type SortPayload,
   type FilterPayload,
@@ -51,6 +52,7 @@ export function DigitList({
   const [searchValue, setSearchValue] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
+  const translate = useTranslate();
 
   const controllerProps: ListControllerProps = {
     resource,
@@ -86,7 +88,7 @@ export function DigitList({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl sm:text-3xl font-bold font-condensed text-foreground">
-              {title}
+              {translate(title, { _: title })}
             </h1>
             {subtitle && (
               <span className="text-xs text-muted-foreground font-mono">{subtitle}</span>
@@ -109,12 +111,12 @@ export function DigitList({
               <RefreshCw
                 className={`w-4 h-4 ${listContext.isFetching ? 'animate-spin' : ''}`}
               />
-              Refresh
+              {translate('app.list.refresh')}
             </Button>
             {hasCreate && (
               <Button size="sm" onClick={onCreate ?? (() => navigate(`${location.pathname}/create`))} className="gap-1.5">
                 <Plus className="w-4 h-4" />
-                Create
+                {translate('app.list.create')}
               </Button>
             )}
           </div>
@@ -127,7 +129,7 @@ export function DigitList({
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Search..."
+                placeholder={translate('app.list.search')}
                 value={searchValue}
                 onChange={handleSearchChange}
                 className="pl-9 max-w-sm"
@@ -139,7 +141,7 @@ export function DigitList({
           {listContext.isPending && (
             <div className="flex items-center justify-center py-12 text-muted-foreground">
               <RefreshCw className="w-5 h-5 animate-spin mr-2" />
-              Loading...
+              {translate('app.list.loading')}
             </div>
           )}
 
@@ -147,12 +149,12 @@ export function DigitList({
           {listContext.error && !listContext.isPending && (
             <div className="text-center py-12">
               <p className="text-destructive font-medium">
-                Error loading data
+                {translate('app.list.error_loading')}
               </p>
               <p className="text-sm text-muted-foreground mt-1">
                 {listContext.error instanceof Error
                   ? listContext.error.message
-                  : 'An unexpected error occurred'}
+                  : translate('app.list.error_unexpected')}
               </p>
               <Button
                 variant="outline"
@@ -160,7 +162,7 @@ export function DigitList({
                 onClick={handleRefresh}
                 className="mt-3"
               >
-                Try again
+                {translate('app.list.try_again')}
               </Button>
             </div>
           )}
@@ -174,10 +176,10 @@ export function DigitList({
             listContext.data &&
             listContext.data.length === 0 && (
               <div className="text-center py-12 text-muted-foreground">
-                <p className="font-medium">No records found</p>
+                <p className="font-medium">{translate('app.list.no_records')}</p>
                 {searchValue && (
                   <p className="text-sm mt-1">
-                    Try adjusting your search query
+                    {translate('app.list.adjust_search')}
                   </p>
                 )}
               </div>

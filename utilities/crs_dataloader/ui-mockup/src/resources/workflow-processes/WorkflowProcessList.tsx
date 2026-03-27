@@ -6,16 +6,16 @@ import { EntityLink } from '@/components/ui/EntityLink';
 const columns: DigitColumn[] = [
   {
     source: 'businessId',
-    label: 'Business ID',
+    label: 'app.fields.business_id',
     render: (record) => {
       const id = String(record.businessId ?? '');
       return id ? <EntityLink resource="complaints" id={id} label={id} /> : <span className="text-muted-foreground">--</span>;
     },
   },
-  { source: 'action', label: 'Action' },
+  { source: 'action', label: 'app.fields.action' },
   {
     source: 'state',
-    label: 'State',
+    label: 'app.fields.state',
     sortable: false,
     render: (record) => {
       const state = record.state as Record<string, unknown> | undefined;
@@ -24,7 +24,7 @@ const columns: DigitColumn[] = [
   },
   {
     source: 'auditDetails.createdTime',
-    label: 'Created',
+    label: 'app.fields.created',
     render: (record) => {
       const audit = record.auditDetails as Record<string, unknown> | undefined;
       return <DateField value={audit?.createdTime} />;
@@ -34,7 +34,7 @@ const columns: DigitColumn[] = [
 
 export function WorkflowProcessList() {
   return (
-    <DigitList title="Workflow Processes" sort={{ field: 'auditDetails.createdTime', order: 'DESC' }}>
+    <DigitList title="app.resources.workflow_processes" sort={{ field: 'auditDetails.createdTime', order: 'DESC' }}>
       <DigitDatagrid columns={columns} rowClick="show" />
     </DigitList>
   );

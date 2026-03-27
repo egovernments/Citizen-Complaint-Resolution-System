@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { useListContext, useResourceContext, useUpdate } from 'ra-core';
+import { useListContext, useResourceContext, useUpdate, useTranslate } from 'ra-core';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowUp,
@@ -93,6 +93,7 @@ export function DigitDatagrid<RecordType extends RaRecord = RaRecord>({
   } = useListContext<RecordType>();
   const resource = useResourceContext();
   const navigate = useNavigate();
+  const translate = useTranslate();
   const [editingCell, setEditingCell] = useState<{ recordId: string | number; source: string } | null>(null);
   const [update] = useUpdate();
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -174,7 +175,7 @@ export function DigitDatagrid<RecordType extends RaRecord = RaRecord>({
                     onClick={() => handleSort(col.source)}
                     className="flex items-center gap-1 font-medium text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    {col.label}
+                    {translate(col.label, { _: col.label })}
                     {sort.field === col.source ? (
                       sort.order === 'ASC' ? (
                         <ArrowUp className="w-3.5 h-3.5" />
@@ -187,7 +188,7 @@ export function DigitDatagrid<RecordType extends RaRecord = RaRecord>({
                   </button>
                 ) : (
                   <span className="font-medium text-muted-foreground">
-                    {col.label}
+                    {translate(col.label, { _: col.label })}
                   </span>
                 )}
               </TableHead>
@@ -195,7 +196,7 @@ export function DigitDatagrid<RecordType extends RaRecord = RaRecord>({
             {actions && (
               <TableHead className="text-right">
                 <span className="font-medium text-muted-foreground">
-                  Actions
+                  {translate('app.list.actions')}
                 </span>
               </TableHead>
             )}
@@ -292,7 +293,7 @@ export function DigitDatagrid<RecordType extends RaRecord = RaRecord>({
       {total != null && total > 0 && (
         <div className="flex items-center justify-between pt-4 border-t border-border mt-2">
           <p className="text-sm text-muted-foreground">
-            Showing {startRecord}-{endRecord} of {total}
+            {translate('app.list.showing', { start: startRecord, end: endRecord, total })}
           </p>
           <div className="flex items-center gap-2">
             <Button
@@ -303,10 +304,10 @@ export function DigitDatagrid<RecordType extends RaRecord = RaRecord>({
               className="gap-1"
             >
               <ChevronLeft className="w-4 h-4" />
-              Previous
+              {translate('app.list.previous')}
             </Button>
             <span className="text-sm text-muted-foreground px-2">
-              Page {page} of {totalPages}
+              {translate('app.list.page_info', { page, totalPages })}
             </span>
             <Button
               variant="outline"
@@ -315,7 +316,7 @@ export function DigitDatagrid<RecordType extends RaRecord = RaRecord>({
               disabled={page >= totalPages}
               className="gap-1"
             >
-              Next
+              {translate('app.list.next')}
               <ChevronRight className="w-4 h-4" />
             </Button>
           </div>

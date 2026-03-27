@@ -2,23 +2,23 @@ import { DigitList, DigitDatagrid } from '@/admin';
 import type { DigitColumn } from '@/admin';
 
 const columns: DigitColumn[] = [
-  { source: 'code', label: 'Code' },
+  { source: 'code', label: 'app.fields.code' },
   {
     source: 'message',
-    label: 'Message',
+    label: 'app.fields.message',
     editable: true,
     render: (record) => {
       const msg = String(record.message ?? '');
       return <span className="truncate max-w-[300px] block">{msg.length > 80 ? msg.slice(0, 80) + '...' : msg}</span>;
     },
   },
-  { source: 'module', label: 'Module' },
-  { source: 'locale', label: 'Locale' },
+  { source: 'module', label: 'app.fields.module' },
+  { source: 'locale', label: 'app.fields.locale' },
 ];
 
 export function LocalizationList() {
   return (
-    <DigitList title="Localization Messages" hasCreate sort={{ field: 'code', order: 'ASC' }}>
+    <DigitList title="app.resources.localization" hasCreate sort={{ field: 'code', order: 'ASC' }}>
       <DigitDatagrid columns={columns} rowClick="show" />
     </DigitList>
   );

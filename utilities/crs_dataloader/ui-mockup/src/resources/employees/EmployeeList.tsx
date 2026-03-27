@@ -19,17 +19,17 @@ const filters = [
 ];
 
 const columns: DigitColumn[] = [
-  { source: 'code', label: 'Code' },
-  { source: 'user.name', label: 'Name' },
-  { source: 'user.mobileNumber', label: 'Mobile' },
+  { source: 'code', label: 'app.fields.code' },
+  { source: 'user.name', label: 'app.fields.name' },
+  { source: 'user.mobileNumber', label: 'app.fields.mobile' },
   {
     source: 'employeeStatus',
-    label: 'Status',
+    label: 'app.fields.status',
     render: (record) => <StatusChip value={record.employeeStatus} />,
   },
   {
     source: 'assignments',
-    label: 'Department',
+    label: 'app.fields.department',
     sortable: false,
     render: (record) => {
       const assignments = record.assignments as Array<Record<string, unknown>> | undefined;
@@ -41,7 +41,7 @@ const columns: DigitColumn[] = [
   },
   {
     source: 'assignments',
-    label: 'Designation',
+    label: 'app.fields.designation',
     sortable: false,
     render: (record) => {
       const assignments = record.assignments as Array<Record<string, unknown>> | undefined;
@@ -53,7 +53,7 @@ const columns: DigitColumn[] = [
   },
   {
     source: 'isActive',
-    label: 'Active',
+    label: 'app.fields.active',
     render: (record) => (
       <StatusChip value={record.isActive} labels={{ true: 'Active', false: 'Inactive' }} />
     ),
@@ -62,7 +62,7 @@ const columns: DigitColumn[] = [
 
 export function EmployeeList() {
   return (
-    <DigitList title="Employees" hasCreate sort={{ field: 'code', order: 'ASC' }} filters={filters}>
+    <DigitList title="app.resources.employees" hasCreate sort={{ field: 'code', order: 'ASC' }} filters={filters}>
       <DigitDatagrid columns={columns} rowClick="show" />
     </DigitList>
   );

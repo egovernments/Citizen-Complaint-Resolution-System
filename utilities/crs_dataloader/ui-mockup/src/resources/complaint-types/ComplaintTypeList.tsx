@@ -4,21 +4,21 @@ import { StatusChip } from '@/admin/fields';
 import { EntityLink } from '@/components/ui/EntityLink';
 
 const columns: DigitColumn[] = [
-  { source: 'serviceCode', label: 'Service Code' },
-  { source: 'name', label: 'Name', editable: true },
+  { source: 'serviceCode', label: 'app.fields.service_code' },
+  { source: 'name', label: 'app.fields.name', editable: true },
   {
     source: 'department',
-    label: 'Department',
+    label: 'app.fields.department',
     editable: { type: 'reference', reference: 'departments', displayField: 'name' },
     render: (record) => {
       const dept = String(record.department ?? '');
       return dept ? <EntityLink resource="departments" id={dept} /> : <span className="text-muted-foreground">--</span>;
     },
   },
-  { source: 'slaHours', label: 'SLA (hrs)', editable: { type: 'number' } },
+  { source: 'slaHours', label: 'app.fields.sla_hours', editable: { type: 'number' } },
   {
     source: 'active',
-    label: 'Status',
+    label: 'app.fields.status',
     render: (record) => (
       <StatusChip value={record.active} labels={{ true: 'Active', false: 'Inactive' }} />
     ),
@@ -27,7 +27,7 @@ const columns: DigitColumn[] = [
 
 export function ComplaintTypeList() {
   return (
-    <DigitList title="Complaint Types" hasCreate sort={{ field: 'serviceCode', order: 'ASC' }}>
+    <DigitList title="app.resources.complaint_types" hasCreate sort={{ field: 'serviceCode', order: 'ASC' }}>
       <DigitDatagrid columns={columns} rowClick="show" />
     </DigitList>
   );

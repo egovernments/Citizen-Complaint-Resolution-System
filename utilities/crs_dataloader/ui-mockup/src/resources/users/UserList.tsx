@@ -4,24 +4,24 @@ import { StatusChip } from '@/admin/fields';
 import { Badge } from '@/components/ui/badge';
 
 const columns: DigitColumn[] = [
-  { source: 'userName', label: 'Username' },
-  { source: 'name', label: 'Name' },
-  { source: 'mobileNumber', label: 'Mobile' },
+  { source: 'userName', label: 'app.fields.username' },
+  { source: 'name', label: 'app.fields.name' },
+  { source: 'mobileNumber', label: 'app.fields.mobile' },
   {
     source: 'type',
-    label: 'Type',
+    label: 'app.fields.type',
     render: (record) => <StatusChip value={record.type} />,
   },
   {
     source: 'active',
-    label: 'Active',
+    label: 'app.fields.active',
     render: (record) => (
       <StatusChip value={record.active} labels={{ true: 'Active', false: 'Inactive' }} />
     ),
   },
   {
     source: 'roles',
-    label: 'Roles',
+    label: 'app.fields.roles',
     sortable: false,
     render: (record) => {
       const roles = record.roles as Array<Record<string, unknown>> | undefined;
@@ -37,7 +37,7 @@ const columns: DigitColumn[] = [
 
 export function UserList() {
   return (
-    <DigitList title="Users" hasCreate sort={{ field: 'userName', order: 'ASC' }}>
+    <DigitList title="app.resources.users" hasCreate sort={{ field: 'userName', order: 'ASC' }}>
       <DigitDatagrid columns={columns} rowClick="show" />
     </DigitList>
   );
