@@ -8,6 +8,7 @@
 import { DigitApiClient, createDigitDataProvider, createDigitAuthProvider } from '@digit-mcp/data-provider';
 import type { DataProvider, AuthProvider } from 'ra-core';
 import type { UserInfo } from '@digit-mcp/data-provider';
+import { clearTranslationCache } from './i18nProvider';
 
 // Re-export registry functions so the rest of the app imports from one place
 export {
@@ -47,10 +48,14 @@ export function getAuthProvider(): AuthProvider {
   return _authProvider;
 }
 
+// Re-export i18n provider
+export { i18nProvider, clearTranslationCache } from './i18nProvider';
+
 export function resetProviders(): void {
   _dataProvider = null;
   _dataProviderTenant = '';
   _authProvider = null;
+  clearTranslationCache();
 }
 
 /**

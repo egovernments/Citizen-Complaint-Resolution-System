@@ -34,6 +34,8 @@
     "lucide-react": "^0.562.0",
     "posthog-js": "^1.336.1",
     "ra-core": "^5.14.3",
+    "ra-i18n-polyglot": "^5.14.4",
+    "ra-language-english": "^5.14.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-hook-form": "^7.71.2",

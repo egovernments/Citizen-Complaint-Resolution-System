@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useLocaleState, useLocales, useTranslate } from 'ra-core';
 import { useApp } from '../App';
 import {
   HelpCircle,
@@ -24,46 +25,50 @@ import {
   History,
   FileCode,
   Workflow,
+  Palette,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import DocsPane from '@/components/layout/DocsPane';
 import { getGenericMdmsResources, getResourceLabel } from '@/providers/bridge';
+import { useTheme } from '@/providers/ThemeProvider';
+import { THEMES } from '@/themes';
 
-/** Sidebar navigation groups */
+/** Sidebar navigation groups — names are i18n keys resolved at render time */
 const navGroups = [
   {
-    label: 'Tenant Management',
+    labelKey: 'app.nav.tenant_management',
     items: [
-      { id: 'tenants', name: 'Tenants', path: '/manage/tenants', icon: Building2 },
-      { id: 'departments', name: 'Departments', path: '/manage/departments', icon: Briefcase },
-      { id: 'designations', name: 'Designations', path: '/manage/designations', icon: Award },
-      { id: 'boundary-hierarchies', name: 'Hierarchies', path: '/manage/boundary-hierarchies', icon: GitBranch },
+      { id: 'tenants', nameKey: 'app.nav.tenants', path: '/manage/tenants', icon: Building2 },
+      { id: 'departments', nameKey: 'app.nav.departments', path: '/manage/departments', icon: Briefcase },
+      { id: 'designations', nameKey: 'app.nav.designations', path: '/manage/designations', icon: Award },
+      { id: 'boundary-hierarchies', nameKey: 'app.nav.hierarchies', path: '/manage/boundary-hierarchies', icon: GitBranch },
     ],
   },
   {
-    label: 'Complaint Management',
+    labelKey: 'app.nav.complaint_management',
     items: [
-      { id: 'complaint-types', name: 'Complaint Types', path: '/manage/complaint-types', icon: AlertTriangle },
-      { id: 'complaints', name: 'Complaints', path: '/manage/complaints', icon: MessageSquare },
-      { id: 'localization', name: 'Localization', path: '/manage/localization', icon: Globe },
+      { id: 'complaint-types', nameKey: 'app.nav.complaint_types', path: '/manage/complaint-types', icon: AlertTriangle },
+      { id: 'complaints', nameKey: 'app.nav.complaints', path: '/manage/complaints', icon: MessageSquare },
+      { id: 'localization', nameKey: 'app.nav.localization', path: '/manage/localization', icon: Globe },
     ],
   },
   {
-    label: 'People',
+    labelKey: 'app.nav.people',
     items: [
-      { id: 'employees', name: 'Employees', path: '/manage/employees', icon: Users },
-      { id: 'users', name: 'Users', path: '/manage/users', icon: User },
+      { id: 'employees', nameKey: 'app.nav.employees', path: '/manage/employees', icon: Users },
+      { id: 'users', nameKey: 'app.nav.users', path: '/manage/users', icon: User },
     ],
   },
   {
-    label: 'System',
+    labelKey: 'app.nav.system',
     items: [
-      { id: 'access-roles', name: 'Access Roles', path: '/manage/access-roles', icon: Shield },
-      { id: 'workflow-business-services', name: 'Workflows', path: '/manage/workflow-business-services', icon: Workflow },
-      { id: 'workflow-processes', name: 'Processes', path: '/manage/workflow-processes', icon: History },
-      { id: 'mdms-schemas', name: 'MDMS Schemas', path: '/manage/mdms-schemas', icon: FileCode },
-      { id: 'boundaries', name: 'Boundaries', path: '/manage/boundaries', icon: MapPin },
+      { id: 'access-roles', nameKey: 'app.nav.access_roles', path: '/manage/access-roles', icon: Shield },
+      { id: 'workflow-business-services', nameKey: 'app.nav.workflows', path: '/manage/workflow-business-services', icon: Workflow },
+      { id: 'workflow-processes', nameKey: 'app.nav.processes', path: '/manage/workflow-processes', icon: History },
+      { id: 'mdms-schemas', nameKey: 'app.nav.mdms_schemas', path: '/manage/mdms-schemas', icon: FileCode },
+      { id: 'boundaries', nameKey: 'app.nav.boundaries', path: '/manage/boundaries', icon: MapPin },
     ],
   },
 ];
@@ -79,6 +84,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
   const { state, logout, setMode, toggleHelp } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
+  const translate = useTranslate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() => {
     // Auto-expand groups that contain the active route, collapse others
@@ -87,7 +93,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
       const hasActive = group.items.some(
         (item) => location.pathname === item.path || location.pathname.startsWith(item.path + '/')
       );
-      initial[group.label] = !hasActive; // collapsed = true means hidden
+      initial[group.labelKey] = !hasActive; // collapsed = true means hidden
     }
     return initial;
   });
@@ -95,8 +101,8 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
     advancedResources.some((r) => location.pathname.startsWith(r.path))
   );
 
-  const toggleGroup = (label: string) => {
-    setCollapsedGroups((prev) => ({ ...prev, [label]: !prev[label] }));
+  const toggleGroup = (labelKey: string) => {
+    setCollapsedGroups((prev) => ({ ...prev, [labelKey]: !prev[labelKey] }));
   };
 
   const handleLogout = () => {
@@ -164,25 +170,25 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                   ? 'bg-primary/10 text-primary border-l-2 border-primary'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'}
               `}
-              title={sidebarCollapsed ? 'Dashboard' : undefined}
+              title={sidebarCollapsed ? translate('app.nav.dashboard') : undefined}
             >
               <LayoutDashboard className="w-5 h-5 flex-shrink-0" />
-              {!sidebarCollapsed && <span className="text-sm font-medium">Dashboard</span>}
+              {!sidebarCollapsed && <span className="text-sm font-medium">{translate('app.nav.dashboard')}</span>}
             </button>
           </div>
 
           {/* Grouped navigation */}
           {navGroups.map((group) => {
-            const isCollapsed = collapsedGroups[group.label];
+            const isCollapsed = collapsedGroups[group.labelKey];
             return (
-              <div key={group.label} className="mt-3">
+              <div key={group.labelKey} className="mt-3">
                 {!sidebarCollapsed && (
                   <button
-                    onClick={() => toggleGroup(group.label)}
+                    onClick={() => toggleGroup(group.labelKey)}
                     className="w-full flex items-center px-3 mb-1 group cursor-pointer"
                   >
                     <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 group-hover:text-muted-foreground flex-1 text-left">
-                      {group.label}
+                      {translate(group.labelKey)}
                     </span>
                     <ChevronDown
                       className={`w-3 h-3 text-muted-foreground/40 group-hover:text-muted-foreground transition-transform ${isCollapsed ? '-rotate-90' : ''}`}
@@ -206,11 +212,11 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                               ? 'bg-primary/10 text-primary border-l-2 border-primary'
                               : 'text-muted-foreground hover:bg-muted hover:text-foreground'}
                           `}
-                          title={sidebarCollapsed ? item.name : undefined}
+                          title={sidebarCollapsed ? translate(item.nameKey) : undefined}
                         >
                           <Icon className="w-4.5 h-4.5 flex-shrink-0" />
                           {!sidebarCollapsed && (
-                            <span className="text-sm font-medium">{item.name}</span>
+                            <span className="text-sm font-medium">{translate(item.nameKey)}</span>
                           )}
                         </button>
                       );
@@ -239,12 +245,12 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                     : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                 }
               `}
-              title={sidebarCollapsed ? 'Advanced' : undefined}
+              title={sidebarCollapsed ? translate('app.nav.advanced') : undefined}
             >
               <Database className="w-5 h-5 flex-shrink-0" />
               {!sidebarCollapsed && (
                 <>
-                  <span className="text-sm font-medium flex-1 text-left">Advanced</span>
+                  <span className="text-sm font-medium flex-1 text-left">{translate('app.nav.advanced')}</span>
                   <ChevronDown
                     className={`w-4 h-4 transition-transform ${advancedExpanded ? '' : '-rotate-90'}`}
                   />
@@ -284,13 +290,38 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
           <button
             onClick={handleSwitchToOnboarding}
             className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-            title={sidebarCollapsed ? 'Switch to Onboarding' : undefined}
+            title={sidebarCollapsed ? translate('app.nav.switch_to_onboarding') : undefined}
           >
             <Settings className="w-5 h-5 flex-shrink-0" />
             {!sidebarCollapsed && (
-              <span className="text-sm">Switch to Onboarding</span>
+              <span className="text-sm">{translate('app.nav.switch_to_onboarding')}</span>
             )}
           </button>
+
+          {/* User info */}
+          <div className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-2 px-3'} py-2`}>
+            <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
+              <User className="w-4 h-4 text-primary" />
+            </div>
+            {!sidebarCollapsed && (
+              <>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">
+                    {state.user?.name}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">{state.tenant}</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleLogout}
+                  className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 h-8 w-8 flex-shrink-0"
+                >
+                  <LogOut className="w-4 h-4" />
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       </aside>
 
@@ -300,24 +331,29 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
         <header className="bg-card sticky top-0 z-40 shadow-card border-b border-border">
           <div className="h-1 bg-primary" />
           <div className="px-6 h-14 flex items-center justify-between">
-            {/* Left: Management Mode badge */}
+            {/* Left: Management Mode + env badges */}
             <div className="flex items-center gap-2">
               <Badge
                 variant="outline"
                 className="text-xs bg-blue-50 text-blue-700 border-blue-200"
               >
-                Management Mode
+                {translate('app.header.management_mode')}
               </Badge>
-            </div>
-
-            {/* Right: env, help, user */}
-            <div className="flex items-center gap-4">
               <Badge
                 variant="secondary"
                 className="text-xs bg-primary/10 text-primary border-primary/20"
               >
                 {envName}
               </Badge>
+            </div>
+
+            {/* Right: locale, theme, help */}
+            <div className="flex items-center gap-3">
+              {/* Locale switcher */}
+              <LocaleSwitcher />
+
+              {/* Theme switcher */}
+              <ThemeSwitcher />
 
               <Button
                 variant="ghost"
@@ -327,26 +363,6 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
               >
                 <HelpCircle className="w-5 h-5" />
               </Button>
-
-              <div className="flex items-center gap-2 pl-4 border-l border-border">
-                <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                  <User className="w-4 h-4 text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-foreground">
-                    {state.user?.name}
-                  </p>
-                  <p className="text-xs text-muted-foreground">{state.tenant}</p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleLogout}
-                  className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 h-9 w-9"
-                >
-                  <LogOut className="w-4 h-4" />
-                </Button>
-              </div>
             </div>
           </div>
         </header>
@@ -360,5 +376,64 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
       {/* Documentation Pane */}
       <DocsPane />
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// LocaleSwitcher — compact dropdown using ra-core hooks
+// ---------------------------------------------------------------------------
+function LocaleSwitcher() {
+  const [locale, setLocale] = useLocaleState();
+  const locales = useLocales();
+
+  if (!locales || locales.length <= 1) return null;
+
+  return (
+    <Select value={locale} onValueChange={setLocale}>
+      <SelectTrigger className="h-8 w-[80px] text-xs border-border bg-transparent">
+        <Globe className="w-3.5 h-3.5 mr-1 flex-shrink-0" />
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {locales.map((l) => (
+          <SelectItem key={l.locale} value={l.locale} className="text-xs">
+            {l.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ThemeSwitcher — compact dropdown with color swatch previews
+// ---------------------------------------------------------------------------
+function ThemeSwitcher() {
+  const { theme, setTheme } = useTheme();
+  const currentTheme = THEMES.find((t) => t.name === theme);
+
+  return (
+    <Select value={theme} onValueChange={setTheme}>
+      <SelectTrigger className="h-8 w-[90px] text-xs border-border bg-transparent">
+        <span
+          className="inline-block w-3 h-3 rounded-full border border-border flex-shrink-0 mr-1"
+          style={{ backgroundColor: currentTheme?.primaryHex }}
+        />
+        Theme
+      </SelectTrigger>
+      <SelectContent>
+        {THEMES.map((t) => (
+          <SelectItem key={t.name} value={t.name} className="text-xs">
+            <span className="flex items-center gap-2">
+              <span
+                className="inline-block w-3 h-3 rounded-full border border-border flex-shrink-0"
+                style={{ backgroundColor: t.primaryHex }}
+              />
+              {t.label}
+            </span>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

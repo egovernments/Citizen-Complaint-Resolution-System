@@ -21,13 +21,16 @@ import {
   LocalizationList, LocalizationShow, LocalizationEdit, LocalizationCreate,
   UserList, UserShow, UserEdit, UserCreate,
   AccessRoleList, AccessRoleShow,
+  AccessActionList, AccessActionShow,
+  RoleActionList, RoleActionShow,
   WorkflowServiceList, WorkflowServiceShow,
   WorkflowProcessList, WorkflowProcessShow,
   MdmsSchemaList, MdmsSchemaShow,
   BoundaryHierarchyList, BoundaryHierarchyShow,
   AdvancedPage,
 } from '@/resources';
-import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, digitClient, resetProviders } from '@/providers/bridge';
+import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, digitClient, resetProviders, i18nProvider } from '@/providers/bridge';
+import { ThemeProvider } from '@/providers/ThemeProvider';
 import HelpModal from './components/ui/HelpModal';
 import UndoToast from './components/ui/UndoToast';
 import { Toaster } from './components/ui/toaster';
@@ -83,6 +86,7 @@ function ManagementAdmin() {
     <CoreAdminContext
       dataProvider={getDataProvider(state.tenant)}
       authProvider={getAuthProvider()}
+      i18nProvider={i18nProvider}
       queryClient={queryClient}
       basename="/manage"
     >
@@ -100,13 +104,15 @@ function ManagementAdmin() {
 
         {/* Read-only entities with List/Show */}
         <Resource name="access-roles" list={AccessRoleList} show={AccessRoleShow} />
+        <Resource name="access-actions" list={AccessActionList} show={AccessActionShow} />
+        <Resource name="role-actions" list={RoleActionList} show={RoleActionShow} />
         <Resource name="workflow-business-services" list={WorkflowServiceList} show={WorkflowServiceShow} />
         <Resource name="workflow-processes" list={WorkflowProcessList} show={WorkflowProcessShow} />
         <Resource name="mdms-schemas" list={MdmsSchemaList} show={MdmsSchemaShow} />
         <Resource name="boundary-hierarchies" list={BoundaryHierarchyList} show={BoundaryHierarchyShow} />
 
-        {/* Generic MDMS with Show/Edit/Create */}
-        {Object.keys(getGenericMdmsResources()).map((name) => (
+        {/* Generic MDMS with Show/Edit/Create (exclude resources with dedicated UI above) */}
+        {Object.keys(getGenericMdmsResources()).filter((name) => name !== 'role-actions').map((name) => (
           <Resource key={name} name={name} list={MdmsResourcePage} show={MdmsResourceShow} edit={MdmsResourceEdit} create={MdmsResourceCreate} />
         ))}
 
@@ -378,6 +384,7 @@ function App() {
 
   return (
     <AppContext.Provider value={contextValue}>
+      <ThemeProvider>
       <BrowserRouter>
         <PageViewTracker />
         <a href="#main-content" className="skip-link">Skip to main content</a>
@@ -411,6 +418,7 @@ function App() {
         <UndoToast items={state.undoStack} onUndo={undo} onDismiss={dismissUndo} />
         <Toaster />
       </BrowserRouter>
+      </ThemeProvider>
     </AppContext.Provider>
   );
 }
