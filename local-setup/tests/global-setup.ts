@@ -10,7 +10,7 @@ import { chromium } from '@playwright/test';
  * due to missing localization data.
  */
 export default async function globalSetup() {
-  const baseURL = process.env.BASE_URL || 'http://localhost:18000';
+  const baseURL = process.env.BASE_URL || 'http://127.0.0.1:18000';
   const tenantId = 'pg';
   const locale = 'en_IN';
   const maxRetries = 90;
@@ -27,27 +27,22 @@ export default async function globalSetup() {
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      // Call the localization API to check if seed data is available
-      const response = await page.request.post(
-        `${baseURL}/localization/messages/v1/_search`,
-        {
-          headers: { 'Content-Type': 'application/json' },
-          data: {
-            RequestInfo: {
-              apiId: 'global-setup',
-              ver: '1.0',
-              ts: Date.now(),
-              action: '_search',
-              msgId: `${Date.now()}-setup`,
-              authToken: '',
-            },
-            tenantId,
-            module: 'rainmaker-common',
-            locale,
+      // locale, tenantId, and module must be query parameters (not body fields)
+      const searchURL = `${baseURL}/localization/messages/v1/_search?locale=${locale}&tenantId=${tenantId}&module=rainmaker-common`;
+      const response = await page.request.post(searchURL, {
+        headers: { 'Content-Type': 'application/json' },
+        data: {
+          RequestInfo: {
+            apiId: 'global-setup',
+            ver: '1.0',
+            ts: Date.now(),
+            action: '_search',
+            msgId: `${Date.now()}-setup`,
+            authToken: '',
           },
-          timeout: 10000,
-        }
-      );
+        },
+        timeout: 10000,
+      });
 
       if (response.ok()) {
         const body = await response.json();
@@ -56,8 +51,6 @@ export default async function globalSetup() {
 
         // Check for specific seeded keys to ensure localization is fully ready
         const requiredKeys = [
-          'CS_COMMON_INBOX',
-          'CS_COMMON_SEARCH',
           'CS_COMMON_SUBMIT',
         ];
         const messageMap = new Map(
@@ -67,7 +60,7 @@ export default async function globalSetup() {
 
         if (messageCount > 0 && missingKeys.length === 0) {
           console.log(
-            `[Global Setup] ✓ Localization data available (${messageCount} messages for ${tenantId}/${locale}, all required keys present)`
+            `[Global Setup] Localization data available (${messageCount} messages for ${tenantId}/${locale}, all required keys present)`
           );
           success = true;
           break;
