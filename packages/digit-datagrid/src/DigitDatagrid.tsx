@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState, useMemo } from 'react';
-import { useListContext, useResourceContext } from 'ra-core';
+import { useListContext, useResourceContext, useTranslate } from 'ra-core';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowUp,
@@ -104,12 +104,14 @@ export function DigitDatagrid<RecordType extends RaRecord = RaRecord>({
     page,
     perPage,
     setPage,
+    setPerPage,
     sort,
     setSort,
     isPending,
   } = useListContext<RecordType>();
   const resource = useResourceContext();
   const navigate = useNavigate();
+  const translate = useTranslate();
   const [editingCell, setEditingCell] = useState<{
     recordId: string | number;
     source: string;
@@ -249,7 +251,7 @@ export function DigitDatagrid<RecordType extends RaRecord = RaRecord>({
                     onClick={() => handleSort(col.source)}
                     className="flex items-center gap-1 font-medium text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    {col.label}
+                    {translate(col.label, { _: col.label })}
                     {sort.field === col.source ? (
                       sort.order === 'ASC' ? (
                         <ArrowUp className="w-3.5 h-3.5" />
@@ -262,7 +264,7 @@ export function DigitDatagrid<RecordType extends RaRecord = RaRecord>({
                   </button>
                 ) : (
                   <span className="font-medium text-muted-foreground">
-                    {col.label}
+                    {translate(col.label, { _: col.label })}
                   </span>
                 )}
               </TableHead>
@@ -271,7 +273,7 @@ export function DigitDatagrid<RecordType extends RaRecord = RaRecord>({
             {(actions || showAutoRowActions || showCustomRowActions) && (
               <TableHead className="text-right">
                 <span className="font-medium text-muted-foreground">
-                  Actions
+                  {translate('app.list.actions', { _: 'Actions' })}
                 </span>
               </TableHead>
             )}
@@ -394,9 +396,29 @@ export function DigitDatagrid<RecordType extends RaRecord = RaRecord>({
       {/* Pagination footer */}
       {total != null && total > 0 && (
         <div className="flex items-center justify-between pt-4 border-t border-border mt-2">
-          <p className="text-sm text-muted-foreground">
-            Showing {startRecord}-{endRecord} of {total}
-          </p>
+          <div className="flex items-center gap-4">
+            <p className="text-sm text-muted-foreground">
+              {translate('app.list.showing', { _: `Showing ${startRecord}-${endRecord} of ${total}`, start: startRecord, end: endRecord, total })}
+            </p>
+            <div className="flex items-center gap-1.5">
+              <label htmlFor="rows-per-page" className="text-sm text-muted-foreground">
+                {translate('app.list.rows_per_page', { _: 'Rows per page:' })}
+              </label>
+              <select
+                id="rows-per-page"
+                value={perPage}
+                onChange={(e) => {
+                  setPerPage(Number(e.target.value));
+                  setPage(1);
+                }}
+                className="h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                {[10, 25, 50, 100].map((n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+            </div>
+          </div>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
@@ -406,10 +428,10 @@ export function DigitDatagrid<RecordType extends RaRecord = RaRecord>({
               className="gap-1"
             >
               <ChevronLeft className="w-4 h-4" />
-              Previous
+              {translate('app.list.previous', { _: 'Previous' })}
             </Button>
             <span className="text-sm text-muted-foreground px-2">
-              Page {page} of {totalPages}
+              {translate('app.list.page_info', { _: `Page ${page} of ${totalPages}`, page, totalPages })}
             </span>
             <Button
               variant="outline"
@@ -418,7 +440,7 @@ export function DigitDatagrid<RecordType extends RaRecord = RaRecord>({
               disabled={page >= totalPages}
               className="gap-1"
             >
-              Next
+              {translate('app.list.next', { _: 'Next' })}
               <ChevronRight className="w-4 h-4" />
             </Button>
           </div>

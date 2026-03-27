@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import {
   useListController,
   ListContextProvider,
+  useTranslate,
   type ListControllerProps,
   type SortPayload,
   type FilterPayload,
@@ -59,7 +60,7 @@ export function DigitList({
   onCreate,
   actions,
   sort,
-  perPage = 25,
+  perPage = 10,
   filter,
   configurable = false,
   columns,
@@ -70,6 +71,7 @@ export function DigitList({
   const [searchValue, setSearchValue] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
+  const translate = useTranslate();
 
   const controllerProps: ListControllerProps = {
     resource,
@@ -115,7 +117,7 @@ export function DigitList({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl sm:text-3xl font-bold font-condensed text-foreground">
-              {title}
+              {translate(title, { _: title })}
             </h1>
             {subtitle && (
               <span className="text-xs text-muted-foreground font-mono">
@@ -135,12 +137,12 @@ export function DigitList({
                 <PopoverTrigger asChild>
                   <Button variant="outline" size="sm" className="gap-1.5">
                     <Settings2 className="w-4 h-4" />
-                    Columns
+                    {translate('app.list.columns', { _: 'Columns' })}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-56">
                   <div className="space-y-1">
-                    <p className="text-sm font-medium mb-2">Show columns</p>
+                    <p className="text-sm font-medium mb-2">{translate('app.list.show_columns', { _: 'Show columns' })}</p>
                     {columns!.map((col) => (
                       <label
                         key={col.source}
@@ -153,7 +155,7 @@ export function DigitList({
                           disabled={alwaysVisibleSources?.includes(col.source)}
                           className="rounded"
                         />
-                        {col.label}
+                        {translate(col.label, { _: col.label })}
                       </label>
                     ))}
                     <Button
@@ -162,7 +164,7 @@ export function DigitList({
                       onClick={columnConfig.resetColumns}
                       className="w-full mt-2"
                     >
-                      Reset
+                      {translate('app.list.reset', { _: 'Reset' })}
                     </Button>
                   </div>
                 </PopoverContent>
@@ -178,12 +180,12 @@ export function DigitList({
               <RefreshCw
                 className={`w-4 h-4 ${listContext.isFetching ? 'animate-spin' : ''}`}
               />
-              Refresh
+              {translate('app.list.refresh', { _: 'Refresh' })}
             </Button>
             {hasCreate && (
               <Button size="sm" onClick={onCreate ?? (() => navigate(`${location.pathname}/create`))} className="gap-1.5">
                 <Plus className="w-4 h-4" />
-                Create
+                {translate('app.list.create', { _: 'Create' })}
               </Button>
             )}
           </div>
@@ -201,7 +203,7 @@ export function DigitList({
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search..."
+                  placeholder={translate('app.list.search', { _: 'Search...' })}
                   value={searchValue}
                   onChange={handleSearchChange}
                   className="pl-9 max-w-sm"
@@ -214,7 +216,7 @@ export function DigitList({
           {listContext.isPending && (
             <div className="flex items-center justify-center py-12 text-muted-foreground">
               <RefreshCw className="w-5 h-5 animate-spin mr-2" />
-              Loading...
+              {translate('app.list.loading', { _: 'Loading...' })}
             </div>
           )}
 
@@ -222,12 +224,12 @@ export function DigitList({
           {listContext.error && !listContext.isPending && (
             <div className="text-center py-12">
               <p className="text-destructive font-medium">
-                Error loading data
+                {translate('app.list.error_loading', { _: 'Error loading data' })}
               </p>
               <p className="text-sm text-muted-foreground mt-1">
                 {listContext.error instanceof Error
                   ? listContext.error.message
-                  : 'An unexpected error occurred'}
+                  : translate('app.list.error_unexpected', { _: 'An unexpected error occurred' })}
               </p>
               <Button
                 variant="outline"
@@ -235,7 +237,7 @@ export function DigitList({
                 onClick={handleRefresh}
                 className="mt-3"
               >
-                Try again
+                {translate('app.list.try_again', { _: 'Try again' })}
               </Button>
             </div>
           )}
@@ -249,10 +251,10 @@ export function DigitList({
             listContext.data &&
             listContext.data.length === 0 && (
               <div className="text-center py-12 text-muted-foreground">
-                <p className="font-medium">No records found</p>
+                <p className="font-medium">{translate('app.list.no_records', { _: 'No records found' })}</p>
                 {searchValue && (
                   <p className="text-sm mt-1">
-                    Try adjusting your search query
+                    {translate('app.list.adjust_search', { _: 'Try adjusting your search query' })}
                   </p>
                 )}
               </div>
