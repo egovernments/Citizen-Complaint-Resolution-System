@@ -234,9 +234,6 @@ class CRSLoader:
             for module in enable_modules:
                 self._enable_module_for_tenant(tenant_code, module)
 
-            # Copy workflow business services to child tenant (PGR needs this)
-            self._copy_workflow_services_to_child_tenant(tenant_code, root_tenant)
-
             # Create users for the tenant
             if users:
                 print(f"\n👥 Creating {len(users)} user(s) for tenant '{tenant_code}'...")
@@ -1174,104 +1171,6 @@ class CRSLoader:
 
         self._print_summary("Tenant & Branding", results)
         return results
-
-    def bootstrap_new_root_tenant(self, root_tenant: str, display_name: str = None) -> bool:
-        """Complete bootstrap of a new root tenant with all essential data
-        
-        This is a convenience method that:
-        1. Bootstraps the new root tenant with all startup seed data
-        2. Updates UI config to use new root as default
-        3. Creates essential admin user
-        4. Validates the setup
-        
-        Args:
-            root_tenant: New root tenant code (e.g., "ethiopia", "statea")
-            display_name: Display name for the root (e.g., "Ethiopia State")
-            
-        Returns:
-            bool: True if bootstrap completed successfully
-            
-        Example:
-            loader.login("ADMIN", "eGov@123", tenant_id="pg")
-            success = loader.bootstrap_new_root_tenant("ethiopia", "Ethiopia State")
-        """
-        self._check_auth()
-        
-        print(f"\n{'='*70}")
-        print(f"🚀 BOOTSTRAPPING NEW ROOT TENANT: {root_tenant}")
-        print(f"{'='*70}")
-        
-        if not display_name:
-            display_name = root_tenant.title() + " State"
-            
-        # Step 1: Bootstrap the root tenant
-        print(f"[1/4] Bootstrapping root tenant data...")
-        success = self._bootstrap_tenant_root(root_tenant, source_tenant=self.tenant_id)
-        
-        if not success:
-            print(f"❌ Bootstrap failed for '{root_tenant}'")
-            return False
-            
-        # Step 2: Create root self-record and StateInfo
-        print(f"[2/4] Creating root tenant record...")
-        root_data = {
-            "code": root_tenant,
-            "name": display_name,
-            "tenantId": root_tenant,
-            "type": "STATE",
-            "city": {
-                "code": root_tenant.upper(),
-                "name": display_name,
-                "districtName": display_name
-            }
-        }
-        
-        result = self.uploader.create_mdms_data(
-            schema_code='tenant.tenants',
-            data_list=[root_data], 
-            tenant=root_tenant
-        )
-        
-        if result.get('created', 0) > 0 or result.get('exists', 0) > 0:
-            print(f"   ✅ Root tenant record created")
-        else:
-            print(f"   ❌ Failed to create root tenant record")
-            
-        # Step 3: Create StateInfo for UI branding
-        print(f"[3/4] Creating StateInfo for UI...")
-        self._ensure_stateinfo_for_tenant(root_tenant, display_name)
-        
-        # Step 4: Test basic functionality
-        print(f"[4/4] Validating setup...")
-        try:
-            # Test MDMS data access
-            test_schemas = ['ACCESSCONTROL-ROLES.roles', 'common-masters.IdFormat', 'tenant.citymodule']
-            validation_passed = True
-            
-            for schema in test_schemas:
-                records = self.uploader.search_mdms_data(
-                    schema_code=schema, tenant=root_tenant, limit=1
-                )
-                if not records:
-                    print(f"   ❌ Validation failed: No {schema} data in {root_tenant}")
-                    validation_passed = False
-                else:
-                    print(f"   ✅ {schema}: OK")
-                    
-            if validation_passed:
-                print(f"\n🎉 SUCCESS: Root tenant '{root_tenant}' is ready!")
-                print(f"📍 Next steps:")
-                print(f"   1. Create sub-tenants: loader.create_tenant('{root_tenant}.city1')")
-                print(f"   2. Access UI at: http://localhost:18000/digit-ui/{root_tenant}/")
-                print(f"   3. Login with: ADMIN / eGov@123")
-                return True
-            else:
-                print(f"❌ Validation failed - some components missing")
-                return False
-                
-        except Exception as e:
-            print(f"❌ Validation error: {str(e)}")
-            return False
 
     def load_hierarchy(self, name: str, levels: list, target_tenant: str = None,
                        output_dir: str = "upload") -> str:
