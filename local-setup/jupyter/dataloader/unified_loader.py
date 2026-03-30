@@ -1019,9 +1019,11 @@ class APIUploader:
             data_list = []
             for record in mdms_records:
                 record_data = record.get('data', {}).copy()
-                # Add wrapper's isActive status to data object
+                # Add wrapper metadata to data object (prefixed with _)
                 record_data['_isActive'] = record.get('isActive', True)
                 record_data['_uniqueIdentifier'] = record.get('uniqueIdentifier')
+                record_data['_id'] = record.get('id')
+                record_data['_auditDetails'] = record.get('auditDetails')
                 data_list.append(record_data)
 
             return data_list
@@ -1347,9 +1349,17 @@ class APIUploader:
         return results
 
     def _reactivate_mdms_record(self, record: Dict, schema_code: str, tenant: str):
-        """Reactivate a soft-deleted MDMS record by setting isActive=True."""
+        """Reactivate a soft-deleted MDMS record by setting isActive=True.
+
+        Args:
+            record: Data dict from search_mdms_data (has _id, _uniqueIdentifier, _auditDetails)
+            schema_code: MDMS schema code
+            tenant: Tenant ID
+        """
         update_url = f"{self.mdms_url}/v2/_update/{schema_code}"
-        unique_id = record.get('uniqueIdentifier', record.get('id', '?'))
+        unique_id = record.get('_uniqueIdentifier', record.get('code', '?'))
+        # Build clean data dict without internal _ fields
+        clean_data = {k: v for k, v in record.items() if not k.startswith('_')}
         payload = {
             "RequestInfo": {
                 "apiId": "Rainmaker",
@@ -1361,9 +1371,9 @@ class APIUploader:
                 "tenantId": tenant,
                 "schemaCode": schema_code,
                 "uniqueIdentifier": unique_id,
-                "id": record.get('id'),
-                "data": record.get('data', {}),
-                "auditDetails": record.get('auditDetails'),
+                "id": record.get('_id'),
+                "data": clean_data,
+                "auditDetails": record.get('_auditDetails'),
                 "isActive": True
             }
         }

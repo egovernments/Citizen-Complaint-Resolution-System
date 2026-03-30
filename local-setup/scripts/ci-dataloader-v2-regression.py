@@ -385,10 +385,12 @@ def test_mdms_inactive_reactivation():
     )
     assert len(records) > 0, f"Record {dept_code} not found after create"
     record = records[0]
-    print(f"   Found record: id={record.get('id')}, isActive={record.get('_isActive')}")
+    print(f"   Found record: id={record.get('_id')}, isActive={record.get('_isActive')}")
 
     # Soft-delete by calling _update with isActive=False
-    update_url = f"{loader.uploader.mdms_url}/v2/_update/{schema_code}"
+    update_url = f"{loader.uploader.mdms_url}/v2/_update/{schema}"
+    # Build clean data (strip _ prefixed internal fields)
+    clean_data = {k: v for k, v in record.items() if not k.startswith('_')}
     deactivate_payload = {
         "RequestInfo": {
             "apiId": "Rainmaker",
@@ -398,10 +400,11 @@ def test_mdms_inactive_reactivation():
         },
         "Mdms": {
             "tenantId": test_tenant,
-            "schemaCode": schema_code,
+            "schemaCode": schema,
             "uniqueIdentifier": dept_code,
-            "id": record.get('id'),
-            "data": record.get('data', record),
+            "id": record.get('_id'),
+            "data": clean_data,
+            "auditDetails": record.get('_auditDetails'),
             "isActive": False
         }
     }

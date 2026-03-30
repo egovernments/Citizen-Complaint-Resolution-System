@@ -433,10 +433,12 @@ class CRSLoader:
             }
         }
 
+        # Workflow search requires businessServices parameter — search for known PGR services
+        known_wf_services = ["PGR"]
         try:
             wf_resp = requests.post(
                 wf_search_url, json=wf_request_info,
-                params={"tenantId": source_tenant},
+                params={"tenantId": source_tenant, "businessServices": ",".join(known_wf_services)},
                 headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
             if wf_resp.ok:
                 business_services = wf_resp.json().get("BusinessServices", [])
