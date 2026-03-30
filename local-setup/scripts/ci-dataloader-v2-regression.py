@@ -275,12 +275,14 @@ def test_workflow_nextstate_resolution():
     """Workflow copy should resolve nextState UUIDs to state names."""
     import requests
     import time
+    import re
 
-    # Create a fresh root tenant and bootstrap it
-    test_root = "ciwftest"
+    # Use a unique root name to avoid stale data from previous runs
+    ts = int(time.time()) % 100000
+    test_root = f"ciwf{ts}"
     result = loader.create_root_tenant(test_root)
-    assert result, "create_root_tenant returned False"
-    time.sleep(2)
+    assert result, f"create_root_tenant('{test_root}') returned False"
+    time.sleep(3)
 
     # Search for PGR workflow on the new root
     wf_search_url = f"{BASE_URL}/egov-workflow-v2/egov-wf/businessservice/_search"
@@ -302,7 +304,6 @@ def test_workflow_nextstate_resolution():
 
     pgr_wf = bss[0]
     # Check that at least one action has a nextState that is NOT a UUID
-    import re
     uuid_pattern = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.I)
     actions_with_next = []
     for state in pgr_wf.get("states", []):
@@ -322,12 +323,14 @@ def test_workflow_nextstate_resolution():
 
 def test_bootstrap_datasecurity_schemas():
     """Bootstrapped root should have DataSecurity schemas."""
-    # Use the root created in test 6 (ciwftest) or create fresh
-    test_root = "cidstest"
-    result = loader.create_root_tenant(test_root)
-    # May already exist from test 6, that's fine
     import time
-    time.sleep(2)
+
+    # Use a unique root name to avoid stale data
+    ts = int(time.time()) % 100000
+    test_root = f"cids{ts}"
+    result = loader.create_root_tenant(test_root)
+    assert result, f"create_root_tenant('{test_root}') returned False"
+    time.sleep(3)
 
     expected_schemas = [
         'DataSecurity.DecryptionABAC',
@@ -356,42 +359,83 @@ def test_bootstrap_datasecurity_schemas():
 def test_mdms_inactive_reactivation():
     """Soft-deleted record should be reactivated on re-create."""
     import time
-    test_tenant = f"{ROOT_TENANT}.cireact"
+
+    # Use unique tenant/code to avoid stale data
+    ts = int(time.time()) % 100000
+    test_tenant = f"{ROOT_TENANT}.circt{ts}"
     loader.create_tenant(test_tenant, "CI Reactivation Test")
-    time.sleep(1)
+    time.sleep(2)
 
     schema = "common-masters.Department"
-    test_dept = {"code": "CI_REACT_DEPT", "name": "CI Reactivation Test Dept", "active": True}
+    dept_code = f"CI_RCT_{ts}"
+    test_dept = {"code": dept_code, "name": "CI Reactivation Test Dept", "active": True}
 
     # Step 1: Create the record
     result1 = loader.uploader.create_mdms_data(
         schema_code=schema, data_list=[test_dept], tenant=test_tenant
     )
     assert result1['created'] + result1['exists'] > 0, "Initial create failed"
-    time.sleep(1)
+    time.sleep(2)  # Wait for Kafka persistence
 
-    # Step 2: Soft-delete it
-    del_result = loader.uploader.delete_mdms_data(
-        schema_code=schema, tenant=test_tenant, unique_ids=["CI_REACT_DEPT"]
+    # Step 2: Soft-delete via direct search + _reactivate pattern (inverse)
+    # Use search_mdms_data with unique_identifiers to find the exact record
+    records = loader.uploader.search_mdms_data(
+        schema_code=schema, tenant=test_tenant,
+        unique_identifiers=[dept_code], limit=1
     )
-    print(f"   Delete result: {del_result}")
-    time.sleep(1)
+    assert len(records) > 0, f"Record {dept_code} not found after create"
+    record = records[0]
+    print(f"   Found record: id={record.get('id')}, isActive={record.get('_isActive')}")
 
-    # Step 3: Re-create — should reactivate, not fail
+    # Soft-delete by calling _update with isActive=False
+    update_url = f"{loader.uploader.mdms_url}/v2/_update/{schema_code}"
+    deactivate_payload = {
+        "RequestInfo": {
+            "apiId": "Rainmaker",
+            "authToken": loader.auth_token,
+            "userInfo": loader.user_info,
+            "msgId": f"test-delete-{int(time.time()*1000)}|en_IN"
+        },
+        "Mdms": {
+            "tenantId": test_tenant,
+            "schemaCode": schema_code,
+            "uniqueIdentifier": dept_code,
+            "id": record.get('id'),
+            "data": record.get('data', record),
+            "isActive": False
+        }
+    }
+    import requests as req
+    del_resp = req.post(update_url, json=deactivate_payload,
+                        headers={"Content-Type": "application/json"}, timeout=30)
+    assert del_resp.ok, f"Soft-delete failed: {del_resp.status_code} {del_resp.text[:200]}"
+    print(f"   Soft-deleted {dept_code}")
+    time.sleep(2)
+
+    # Verify it's inactive
+    inactive_check = loader.uploader.search_mdms_data(
+        schema_code=schema, tenant=test_tenant,
+        unique_identifiers=[dept_code], limit=1, include_inactive=False
+    )
+    assert len(inactive_check) == 0, f"Record should be inactive but found: {inactive_check}"
+    print(f"   Confirmed record is inactive")
+
+    # Step 3: Re-create — should reactivate via pre-check
     result2 = loader.uploader.create_mdms_data(
         schema_code=schema, data_list=[test_dept], tenant=test_tenant
     )
-    assert result2['created'] > 0 or result2['exists'] > 0, (
-        f"Re-create after soft-delete failed: {result2}"
-    )
     print(f"   Re-create result: created={result2['created']}, exists={result2['exists']}")
-
-    # Verify the record is active
-    records = loader.uploader.search_mdms_data(
-        schema_code=schema, tenant=test_tenant,
-        unique_identifiers=["CI_REACT_DEPT"], limit=1, include_inactive=False
+    assert result2['created'] > 0, (
+        f"Expected reactivation (created>0), got: {result2}"
     )
-    assert len(records) > 0, "Record not found as active after reactivation"
+    time.sleep(2)
+
+    # Verify the record is active again
+    active_check = loader.uploader.search_mdms_data(
+        schema_code=schema, tenant=test_tenant,
+        unique_identifiers=[dept_code], limit=1, include_inactive=False
+    )
+    assert len(active_check) > 0, "Record not found as active after reactivation"
     print(f"   Record is active after reactivation")
 
 
