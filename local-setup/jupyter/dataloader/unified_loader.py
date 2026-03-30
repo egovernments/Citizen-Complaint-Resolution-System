@@ -403,7 +403,6 @@ class UnifiedExcelReader:
                     'serviceCode': service_code,
                     'name': sub_type_name,
                     'menuPath': menu_path_value,
-                    'menuPathName': menu_path_value,
                     'active': True
                 }
 
@@ -3550,7 +3549,7 @@ class APIUploader:
 
             # Extract custom password before creation (if provided)
             custom_password = employee.get('user', {}).get('password')
-            needs_password_update = custom_password and custom_password not in ['eGov@123', None, '']
+            needs_password_update = custom_password and custom_password not in [None, '']
 
             # Override userInfo tenantId to match the request tenant
             user_info_copy = self.user_info.copy()
@@ -3667,6 +3666,60 @@ class APIUploader:
                     print(f"   [EXISTS] [{i}/{len(employee_list)}] {emp_code} (HTTP {status_code})")
                     results['exists'] += 1
                     status = "EXISTS"
+                    
+                    # STEP 2C: Update password for existing employee if needed
+                    if needs_password_update:
+                        try:
+                            # Search for the existing employee to get full details
+                            search_payload = {
+                                "RequestInfo": {
+                                    "apiId": "Rainmaker",
+                                    "authToken": self.auth_token,
+                                    "userInfo": user_info_copy,
+                                    "msgId": f"{int(time.time() * 1000)}|en_IN"
+                                },
+                                "codes": [emp_code],
+                                "tenantId": tenant
+                            }
+
+                            # Add query parameters for search
+                            search_params = {
+                                "tenantId": tenant,
+                                "codes": emp_code
+                            }
+
+                            search_response = requests.post(search_url, json=search_payload, headers=headers, params=search_params)
+                            search_response.raise_for_status()
+                            search_data = search_response.json()
+
+                            existing_employee = search_data.get('Employees', [{}])[0]
+
+                            if existing_employee and existing_employee.get('id'):
+                                # Update the password in the user object
+                                existing_employee['user']['password'] = custom_password
+
+                                # Prepare update payload
+                                update_payload = {
+                                    "RequestInfo": {
+                                        "apiId": "Rainmaker",
+                                        "authToken": self.auth_token,
+                                        "userInfo": user_info_copy,
+                                        "msgId": f"{int(time.time() * 1000)}|en_IN"
+                                    },
+                                    "Employees": [existing_employee]
+                                }
+
+                                update_response = requests.post(update_url, json=update_payload, headers=headers)
+                                update_response.raise_for_status()
+
+                                results['password_updated'] += 1
+                                print(f"   [✓] [{i}/{len(employee_list)}] {emp_code} - Password updated for existing employee")
+                            else:
+                                print(f"   [⚠] [{i}/{len(employee_list)}] {emp_code} - Could not fetch existing employee for password update")
+
+                        except Exception as pwd_error:
+                            print(f"   [⚠] [{i}/{len(employee_list)}] {emp_code} - Password update failed: {str(pwd_error)[:100]}")
+                            # Status remains EXISTS since employee exists
                 else:
                     print(f"   [FAILED] [{i}/{len(employee_list)}] {emp_code} (HTTP {status_code})")
                     print(f"   ERROR: {error_message}")
