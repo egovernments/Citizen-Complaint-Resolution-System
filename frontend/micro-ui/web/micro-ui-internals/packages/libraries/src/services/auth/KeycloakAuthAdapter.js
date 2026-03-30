@@ -179,21 +179,46 @@ export class KeycloakAuthAdapter extends AuthAdapter {
   }
 
   async logout() {
+    // Build the redirect URL before clearing anything
+    const contextPath = window?.contextPath || "digit-ui";
+    const redirectUri = `${window.location.origin}/${contextPath}/user/login`;
+
+    // Build the KC logout URL directly from config.
+    // We can't rely on this._kc.authenticated because password-grant logins
+    // use _setTokens() on a previous page's adapter instance — after navigation,
+    // the new adapter's init(check-sso) sees no KC session cookie, so
+    // _kc.authenticated is false even though the user is logged in.
+    const kcUrl = window?.globalConfigs?.getConfig("KEYCLOAK_URL");
+    const realm = window?.globalConfigs?.getConfig("KEYCLOAK_REALM");
+    const clientId = window?.globalConfigs?.getConfig("KEYCLOAK_CLIENT_ID");
+
+    // Clear in-memory state
     this._user = null;
     this._tenantId = null;
     this._digitUserType = null;
     this._digitRoles = null;
+
+    // Grab id_token_hint before clearing storage (needed for KC logout)
+    const idTokenHint = this._kc?.idToken || null;
+
+    // Clear all browser storage
     window.localStorage.clear();
     window.sessionStorage.clear();
 
-    if (this._kc?.authenticated) {
-      const contextPath = window?.contextPath || "digit-ui";
-      this._kc.logout({
-        redirectUri: `${window.location.origin}/${contextPath}/user/login`,
-      });
+    // Always redirect through KC's logout endpoint to clear any session cookies
+    // (from SSO/Google login or future flows that create KC sessions).
+    // For password-grant-only sessions there's no cookie, but the redirect is
+    // harmless and ensures consistent behavior.
+    if (kcUrl && realm) {
+      const logoutUrl = new URL(`${kcUrl}/realms/${realm}/protocol/openid-connect/logout`);
+      logoutUrl.searchParams.set("client_id", clientId);
+      logoutUrl.searchParams.set("post_logout_redirect_uri", redirectUri);
+      if (idTokenHint) {
+        logoutUrl.searchParams.set("id_token_hint", idTokenHint);
+      }
+      window.location.replace(logoutUrl.toString());
     } else {
-      const contextPath = window?.contextPath || "digit-ui";
-      window.location.replace(`${window.location.origin}/${contextPath}/user/login`);
+      window.location.replace(redirectUri);
     }
   }
 
