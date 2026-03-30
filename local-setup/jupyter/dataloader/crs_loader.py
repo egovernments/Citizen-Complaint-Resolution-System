@@ -481,8 +481,13 @@ class CRSLoader:
                             action.pop("currentState", None)
                             # Resolve nextState UUID to state name
                             next_state_uuid = action.pop("nextState", None)
-                            if next_state_uuid and next_state_uuid in state_map:
-                                action["nextState"] = state_map[next_state_uuid]
+                            if next_state_uuid:
+                                if next_state_uuid in state_map:
+                                    action["nextState"] = state_map[next_state_uuid]
+                                else:
+                                    # Can't resolve (e.g., start state has state=null)
+                                    # Keep original value — API accepts names or UUIDs
+                                    action["nextState"] = next_state_uuid
 
                     create_wf = {
                         "RequestInfo": {
