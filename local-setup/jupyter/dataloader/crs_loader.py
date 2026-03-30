@@ -475,7 +475,7 @@ class CRSLoader:
                         state.pop("uuid", None)
                         state.pop("auditDetails", None)
                         state["tenantId"] = target_root
-                        for action in state.get("actions", []):
+                        for action in (state.get("actions") or []):
                             action.pop("uuid", None)
                             action.pop("auditDetails", None)
                             action.pop("currentState", None)
@@ -558,8 +558,10 @@ class CRSLoader:
             return False
 
         stateinfo = deepcopy(template)
-        stateinfo.pop('_isActive', None)
-        stateinfo.pop('_uniqueIdentifier', None)
+        # Strip internal metadata fields from search_mdms_data
+        for key in list(stateinfo.keys()):
+            if key.startswith('_'):
+                stateinfo.pop(key)
         stateinfo['code'] = tenant_code
         if display_name:
             stateinfo['name'] = display_name
