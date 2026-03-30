@@ -500,27 +500,8 @@ class CRSLoader:
             except Exception as e:
                 print(f"   ⚠️  Error creating {boundary_item['schema_code']} data: {e}")
 
-        # Step 2: Create root self-record (required by idgen for city code resolution)
-        root_data = {
-            "code": target_root,
-            "name": target_root.title(),
-            "description": f"State tenant root: {target_root}",
-            "city": {
-                "code": target_root.upper(),
-                "name": target_root.title(),
-                "districtCode": target_root.upper(),
-                "districtName": target_root.title()
-            }
-        }
-        result = self.uploader.create_mdms_data(
-            schema_code='tenant.tenants', data_list=[root_data], tenant=target_root
-        )
-        root_created = result.get('created', 0) + result.get('exists', 0)
-        if root_created > 0:
-            print(f"   ✅ Root tenant record created for '{target_root}'")
-        else:
-            print(f"   ❌ Could not create root tenant record (required for ID generation)")
-            return False
+        # Skip creating tenant.tenants in bootstrap - main create_tenant flow will create the city
+        print(f"   ✅ Skipping tenant.tenants creation (city will be created by main flow)")
 
         # Step 3: Copy essential MDMS data records from source
         essential_schemas = [
@@ -528,14 +509,14 @@ class CRSLoader:
             'common-masters.Department',        # Department hierarchy
             'common-masters.Designation',       # Employee designations  
             'common-masters.GenderType',        # Gender types
-            'common-masters.StateInfo',         # UI branding and localization
+            # StateInfo handled separately via direct DB copy in _copy_stateinfo_direct
             'egov-hrms.EmployeeStatus',        # HR configurations
             'egov-hrms.EmployeeType',
             'egov-hrms.DeactivationReason',
             'ACCESSCONTROL-ROLES.roles',       # User roles and permissions
             'RAINMAKER-PGR.ServiceDefs',       # Complaint type definitions
             'tenant.citymodule',               # CRITICAL: Copy citymodule configs for all modules
-            'tenant.tenants',                  # Tenant registry
+            'tenant.tenants',                  # Tenant registry - schema needed for city creation
             'DataSecurity.EncryptionPolicy',   # Data security configurations
             'DataSecurity.DecryptionABAC',
             'DataSecurity.MaskingPatterns',
@@ -559,6 +540,12 @@ class CRSLoader:
                 if schema_code == 'tenant.citymodule':
                     rec['tenants'] = []  # Start with empty tenant list for new root
                     print(f"   🔄 Initializing empty citymodule '{rec.get('code', 'unknown')}' for root '{target_root}'")
+                
+                # Special handling for StateInfo: update code to match new root tenant
+                elif schema_code == 'common-masters.StateInfo':
+                    rec['code'] = target_root
+                    rec['name'] = target_root.title()
+                    print(f"   🔄 Updating StateInfo code to '{target_root}' (keeps localizationModules for UI)")
                 
                 clean_records.append(rec)
 
@@ -601,7 +588,11 @@ class CRSLoader:
         # Root tenants don't need workflow business services - only child tenants do
         print(f"   ℹ️  Skipping workflow services for root tenant '{target_root}' (child tenants will get them)")
 
-        # Step 5: Copy localization messages
+        # Step 5: Copy and fix StateInfo directly via DB
+        print(f"   🔧 Copying and fixing StateInfo for new root...")
+        self._copy_stateinfo_direct(source_tenant, target_root)
+        
+        # Step 6: Copy localization messages
         print(f"   🔧 Copying localization messages...")
         self._copy_localization_messages(source_tenant, target_root)
 
@@ -612,6 +603,69 @@ class CRSLoader:
         print(f"   ✅ Bootstrap complete for '{target_root}'\n")
         print(f"   💡 To use the new tenant in UI, restart: tilt up")
         return True
+
+    def _copy_stateinfo_direct(self, source_tenant: str, target_root: str):
+        """Copy StateInfo from source tenant to target root via direct DB operations"""
+        try:
+            import psycopg2
+            
+            # Database connection
+            conn = psycopg2.connect(
+                host="postgres-db",
+                port="5432", 
+                database="egov",
+                user="egov",
+                password="egov123"
+            )
+            
+            with conn:
+                with conn.cursor() as cur:
+                    # First, delete existing StateInfo for target root (if any)
+                    cur.execute("""
+                        DELETE FROM eg_mdms_data 
+                        WHERE schemacode = 'common-masters.StateInfo' 
+                        AND tenantid = %s
+                    """, (target_root,))
+                    
+                    deleted_count = cur.rowcount
+                    print(f"   🗑️  Deleted {deleted_count} existing StateInfo records for '{target_root}'")
+                    
+                    # Copy StateInfo from source, updating code and name for new root
+                    cur.execute("""
+                        INSERT INTO eg_mdms_data (
+                            id, tenantid, schemahash, schemacode, data, 
+                            isactive, createdby, lastmodifiedby, 
+                            createdtime, lastmodifiedtime
+                        )
+                        SELECT 
+                            gen_random_uuid(),
+                            %s as tenantid,
+                            schemahash,
+                            schemacode,
+                            jsonb_set(
+                                jsonb_set(data, '{code}', to_jsonb(%s::text)),
+                                '{name}', to_jsonb(initcap(%s::text))
+                            ) as data,
+                            isactive,
+                            'bootstrap-stateinfo' as createdby,
+                            'bootstrap-stateinfo' as lastmodifiedby,
+                            extract(epoch from now()) * 1000,
+                            extract(epoch from now()) * 1000
+                        FROM eg_mdms_data
+                        WHERE schemacode = 'common-masters.StateInfo' 
+                        AND tenantid = %s
+                        LIMIT 1
+                    """, (target_root, target_root, target_root, source_tenant))
+                    
+                    created_count = cur.rowcount
+                    print(f"   ✅ Created {created_count} StateInfo record for '{target_root}' with correct code")
+                    
+            conn.close()
+            return True
+            
+        except Exception as e:
+            print(f"   ⚠️  Failed to copy StateInfo directly: {e}")
+            return False
 
     def _copy_idgen_formats(self, source_tenant: str, target_root: str) -> Dict:
         """Copy ID generation formats from pg to new root tenant using direct DB connection"""
@@ -750,37 +804,38 @@ class CRSLoader:
             return False
 
     def _update_global_config_tenant(self, target_root: str):
-        """Store the new root tenant in a config file that globalConfigs.js can read
-        
-        Creates/updates nginx/current-tenant.json with the active root tenant
-        """
+        """Update the stateTenantId in globalConfigs.js to match the target root tenant"""
         try:
             import os
-            import json
+            import re
             
-            # Create a simple config file to store current tenant
-            config_dir = os.path.join(os.path.dirname(__file__), '../../nginx')
-            tenant_config_path = os.path.join(config_dir, 'current-tenant.json')
+            # Path to globalConfigs.js
+            global_config_path = os.path.join(os.path.dirname(__file__), '../../nginx/globalConfigs.js')
             
-            # Ensure directory exists
-            os.makedirs(config_dir, exist_ok=True)
+            if not os.path.exists(global_config_path):
+                print(f"   ⚠️ GlobalConfigs.js not found at {global_config_path}")
+                return
             
-            # Store current tenant info
-            tenant_config = {
-                "currentRootTenant": target_root,
-                "updatedAt": int(time.time() * 1000),
-                "updatedBy": "crs_loader"
-            }
+            # Read current content
+            with open(global_config_path, 'r') as f:
+                content = f.read()
             
-            with open(tenant_config_path, 'w') as f:
-                json.dump(tenant_config, f, indent=2)
-                
-            print(f"   ✅ Stored current root tenant '{target_root}' in nginx/current-tenant.json")
-            print(f"   💡 GlobalConfigs.js can now read this file to get the active tenant")
+            # Update stateTenantId using regex
+            pattern = r'var\s+stateTenantId\s*=\s*["\'][^"\']*["\'];'
+            replacement = f'var stateTenantId = "{target_root}";'
+            
+            updated_content = re.sub(pattern, replacement, content)
+            
+            if updated_content != content:
+                with open(global_config_path, 'w') as f:
+                    f.write(updated_content)
+                print(f"   ✅ Updated stateTenantId to '{target_root}' in globalConfigs.js")
+            else:
+                print(f"   ⚠️ No stateTenantId variable found to update in globalConfigs.js")
             return True
             
         except Exception as e:
-            print(f"   ⚠️  Could not store tenant config: {str(e)}")
+            print(f"   ⚠️  Could not update globalConfigs.js: {str(e)}")
             return False
 
     def _ensure_stateinfo_for_tenant(self, tenant_code: str, display_name: str = None) -> bool:
