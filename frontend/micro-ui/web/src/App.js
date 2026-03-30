@@ -47,19 +47,28 @@ const initDigitUI = async () => {
     commonUiConfig: UICustomizations,
   };
 
-  // Dynamic imports — each module gets its own chunk, loaded in parallel
-  const [pgr, utilities, workbench, hrms] = await Promise.all([
-    import(/* webpackChunkName: "pgr" */ "@egovernments/digit-ui-module-cms"),
-    import(/* webpackChunkName: "utilities" */ "@egovernments/digit-ui-module-utilities"),
-    import(/* webpackChunkName: "workbench" */ "@egovernments/digit-ui-module-workbench"),
-    import(/* webpackChunkName: "hrms" */ "@egovernments/digit-ui-module-hrms"),
-  ]);
+  // Dynamic imports — each module gets its own chunk
+  // Use individual try/catch so missing optional modules don't block startup
+  try {
+    const pgr = await import(/* webpackChunkName: "pgr" */ "@egovernments/digit-ui-module-pgr");
+    _PGRReducers = pgr.PGRReducers;
+    pgr.initPGRComponents();
+  } catch (e) { console.warn("[App] PGR module not available:", e.message); }
 
-  _PGRReducers = pgr.PGRReducers;
-  pgr.initPGRComponents();
-  utilities.initUtilitiesComponents();
-  workbench.initWorkbenchComponents();
-  hrms.initHRMSComponents();
+  try {
+    const utilities = await import(/* webpackChunkName: "utilities" */ "@egovernments/digit-ui-module-utilities");
+    utilities.initUtilitiesComponents();
+  } catch (e) { /* optional */ }
+
+  try {
+    const workbench = await import(/* webpackChunkName: "workbench" */ "@egovernments/digit-ui-module-workbench");
+    workbench.initWorkbenchComponents();
+  } catch (e) { /* optional */ }
+
+  try {
+    const hrms = await import(/* webpackChunkName: "hrms" */ "@egovernments/digit-ui-module-hrms");
+    hrms.initHRMSComponents();
+  } catch (e) { /* optional */ }
 };
 
 function App() {

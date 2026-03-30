@@ -26,7 +26,7 @@ module.exports = {
           loader: "babel-loader",
           options: {
             presets: ["@babel/preset-env", "@babel/preset-react"],
-            plugins: ["@babel/plugin-proposal-optional-chaining"]
+            plugins: ["@babel/plugin-proposal-optional-chaining", "@babel/plugin-proposal-class-properties"]
           }
         }
       },
@@ -50,11 +50,18 @@ module.exports = {
       path.resolve(__dirname, "micro-ui-internals/node_modules"),
     ],
     alias: {
-      // Use local source instead of npm-published package so our
-      // Module.js / App.js changes are included in the build
+      // Resolve workspace packages from local source (skip build:libraries)
+      "@egovernments/digit-ui-libraries": path.resolve(
+        __dirname,
+        "micro-ui-internals/packages/libraries/src/index.js"
+      ),
       "@egovernments/digit-ui-module-core": path.resolve(
         __dirname,
-        "micro-ui-internals/packages/modules/core"
+        "micro-ui-internals/packages/modules/core/src/Module.js"
+      ),
+      "@egovernments/digit-ui-module-pgr": path.resolve(
+        __dirname,
+        "micro-ui-internals/packages/modules/pgr/src/Module.js"
       ),
       // Force single React instance to prevent "Invalid hook call" errors
       // when the core module alias resolves from a different path

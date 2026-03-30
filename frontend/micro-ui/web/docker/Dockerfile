@@ -19,7 +19,7 @@ RUN npm config set python /usr/bin/python
 
 ARG WORK_DIR
 WORKDIR /app
-ENV NODE_OPTIONS="--max-old-space-size=8168"
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 
 COPY ${WORK_DIR} .
 RUN ls -lah
@@ -37,7 +37,7 @@ RUN yarn install --frozen-lockfile
 # core from source via resolve.alias instead of using the npm package)
 RUN yarn add react-responsive react-tooltip --no-lockfile -W
 
-RUN yarn build:webpack
+RUN yarn build:prod
 
 FROM nginx:mainline-alpine
 ENV WORK_DIR=/var/web/digit-ui
