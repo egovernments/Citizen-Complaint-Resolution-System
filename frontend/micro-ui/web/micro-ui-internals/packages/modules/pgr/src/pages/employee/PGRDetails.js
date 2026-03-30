@@ -226,7 +226,8 @@ const PGRDetails = () => {
   function getServiceCategoryByCode(serviceCode, services) {
     if (!serviceCode || !Array.isArray(services)) return null;
     const match = services.find(item => item.serviceCode === serviceCode);
-    return match?.menuPath || null;
+    // Return category if available, fallback to menuPath for backward compatibility
+    return match?.category || match?.menuPath || null;
   }
 
   function getServiceNameByCode(serviceCode, services) {
@@ -566,7 +567,7 @@ const PGRDetails = () => {
                 ],
                 header: t("CS_COMPLAINT_DETAILS_COMPLAINT_TIMELINE"),
               },
-            ]}
+            ].filter(Boolean)}
             type="primary"
           />
         ) : (

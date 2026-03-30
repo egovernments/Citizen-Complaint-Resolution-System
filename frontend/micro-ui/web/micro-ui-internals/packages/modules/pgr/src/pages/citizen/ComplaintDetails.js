@@ -113,7 +113,7 @@ const ComplaintDetailsPage = (props) => {
                   />
                 ))}
               </StatusTable>
-              {complaintDetails?.workflow?.verificationDocuments?.length > 0 && (
+              {!!(complaintDetails?.workflow?.verificationDocuments?.length) && (
                 <React.Fragment>
                   <CardSubHeader>{t("CS_COMMON_ATTACHMENTS")}</CardSubHeader>
                   <ComplaintPhotos serviceWrapper={complaintDetails} />
@@ -121,7 +121,7 @@ const ComplaintDetailsPage = (props) => {
               )}
             </Card>
 
-            {geoLocation?.latitude && geoLocation?.longitude && (
+            {!!(geoLocation?.latitude && geoLocation?.longitude) && (
               <Card>
                 <CardSubHeader style={{ marginBottom: "16px" }}>{t("CS_COMPLAINT_LOCATION")}</CardSubHeader>
                 <ComplaintLocationMap
