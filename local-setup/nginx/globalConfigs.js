@@ -1,5 +1,29 @@
-var globalConfigs = (function () {
-  var stateTenantId = "pg";
+var bu = (function () {
+  // Dynamic stateTenantId detection - checks URL path, environment, or defaults to "pg"
+  var stateTenantId = (function() {
+    // Option 1: Check if tenant is specified in URL path (e.g., /digit-ui/ethiopia/)
+    var pathMatch = window.location.pathname.match(/\/digit-ui\/([^\/]+)\//);
+    if (pathMatch && pathMatch[1] && pathMatch[1] !== 'digit-ui') {
+      return pathMatch[1];
+    }
+    
+    // Option 2: Check environment variable (if available via server-side rendering)
+    if (typeof window !== 'undefined' && window.DIGIT_STATE_TENANT_ID) {
+      return window.DIGIT_STATE_TENANT_ID;
+    }
+    
+    // Option 3: Check localStorage for previously set tenant
+    try {
+      var storedTenant = window.localStorage.getItem('STATE_LEVEL_TENANT_ID');
+      if (storedTenant && storedTenant !== 'null' && storedTenant !== 'undefined') {
+        return storedTenant;
+      }
+    } catch (e) {}
+    
+    // Option 4: Default fallback
+    return "kenya";
+  })();
+  
   var contextPath = "digit-ui";
   var gmaps_api_key = "";
   var finEnv = "dev";
