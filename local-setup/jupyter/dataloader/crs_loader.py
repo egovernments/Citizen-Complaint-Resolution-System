@@ -350,6 +350,11 @@ class CRSLoader:
         if failed > 0:
             print(f"   ⚠️  Some schemas failed but continuing — non-critical schemas may be optional")
 
+        # Wait for Kafka-based schema persistence before creating data.
+        # Without this, create_mdms_data fails with "Schema definition not found".
+        import time as _time
+        _time.sleep(3)
+
         # Step 2: Create root self-record (required by idgen for city code resolution)
         root_data = {
             "code": target_root,

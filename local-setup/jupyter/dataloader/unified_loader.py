@@ -1040,8 +1040,19 @@ class APIUploader:
                     response = requests.post(url, json=payload, headers=headers)
                     status_code = response.status_code
                     response.raise_for_status()
-                    print(f"   [OK] [{i}/{len(data_list)}] {unique_id}")
-                    results['created'] += 1
+                    # Detect "phantom 200": MDMS v2 returns HTTP 200 with empty
+                    # body when a record with the same uniqueIdentifier already
+                    # exists. The record isn't duplicated but the API doesn't
+                    # report it as an error either.
+                    resp_data = response.json() if response.text.strip() else {}
+                    mdms_arr = resp_data.get('mdms', [])
+                    if not mdms_arr and response.text.strip():
+                        print(f"   [EXISTS] [{i}/{len(data_list)}] {unique_id} (phantom 200)")
+                        results['exists'] += 1
+                        status = "EXISTS"
+                    else:
+                        print(f"   [OK] [{i}/{len(data_list)}] {unique_id}")
+                        results['created'] += 1
 
                 except requests.exceptions.HTTPError as e:
                     # Get status code - response.status_code is the correct attribute
