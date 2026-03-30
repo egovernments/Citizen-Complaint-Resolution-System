@@ -231,16 +231,31 @@ class UnifiedExcelReader:
         dept_counter = {}
         dept_name_to_code = {}  # Mapping for complaint types
         desig_counter = 1
+        existing_dept_count = 0
+        existing_desig_count = 0
 
         # Fetch existing departments and designations from MDMS to continue numbering
         if uploader:
             try:
+                # Search both root AND city tenant to find true max codes.
+                # MDMS v2 returns inherited root data if city has no overrides,
+                # but only city-specific data once overrides exist. Searching both
+                # ensures we never generate colliding codes.
+                root_tenant = tenant_id.split(".")[0] if "." in tenant_id else tenant_id
                 existing_depts = uploader.fetch_departments(tenant_id)
                 existing_desigs = uploader.fetch_designations(tenant_id)
 
-                # Find max department counter
+                # If city tenant, also fetch root tenant data for numbering
+                if root_tenant != tenant_id:
+                    root_depts = uploader.fetch_departments(root_tenant)
+                    root_desigs = uploader.fetch_designations(root_tenant)
+                else:
+                    root_depts = []
+                    root_desigs = []
+
+                # Find max department counter across both tenants
                 max_dept_num = 0
-                for dept in existing_depts:
+                for dept in existing_depts + root_depts:
                     code = dept.get('code', '')
                     if code.startswith('DEPT_'):
                         try:
@@ -248,12 +263,14 @@ class UnifiedExcelReader:
                             max_dept_num = max(max_dept_num, num)
                         except (ValueError, IndexError):
                             pass
-                    # Map existing dept names to codes
+                    # Map existing dept names to codes (city overrides root)
                     dept_name_to_code[dept.get('name', '')] = code
 
-                # Find max designation counter
+                # Find max designation counter across both tenants and build name lookup
                 max_desig_num = 0
-                for desig in existing_desigs:
+                desig_name_to_code = {}
+                # Process root first, then city (city names override root)
+                for desig in root_desigs + existing_desigs:
                     code = desig.get('code', '')
                     if code.startswith('DESIG_'):
                         try:
@@ -261,6 +278,12 @@ class UnifiedExcelReader:
                             max_desig_num = max(max_desig_num, num)
                         except (ValueError, IndexError):
                             pass
+                    # Map existing designation names to codes
+                    desig_name_to_code[desig.get('name', '')] = code
+
+                print(f"   Existing data on {tenant_id}: {len(existing_depts)} dept(s), {len(existing_desigs)} desig(s)")
+                if root_tenant != tenant_id:
+                    print(f"   Existing data on {root_tenant}: {len(root_depts)} dept(s), {len(root_desigs)} desig(s)")
 
                 # Start counters from next available number
                 dept_start_counter = max_dept_num + 1
@@ -270,8 +293,10 @@ class UnifiedExcelReader:
                 # If fetch fails, start from 1
                 dept_start_counter = 1
                 desig_counter = 1
+                desig_name_to_code = {}
         else:
             dept_start_counter = 1
+            desig_name_to_code = {}
 
         for _, row in df.iterrows():
             dept_name = row.get('Department Name*')
@@ -286,6 +311,7 @@ class UnifiedExcelReader:
             # Check if department already exists in MDMS
             if dept_name in dept_name_to_code:
                 dept_code = dept_name_to_code[dept_name]
+                existing_dept_count += 1
             else:
                 # Auto-generate department code with next available number
                 if dept_name not in dept_counter:
@@ -317,25 +343,35 @@ class UnifiedExcelReader:
             # Add designation if present
             if pd.notna(desig_name) and str(desig_name).strip() != '':
                 desig_name = str(desig_name).strip()
-                desig_code = f"DESIG_{desig_counter:02d}"
-                desig_counter += 1
 
-                designations.append({
-                    'code': desig_code,
-                    'name': desig_name,
-                    'department': [dept_code],
-                    'active': True,
-                    'description': f'{desig_name} - {dept_name}'
-                })
+                # Check if designation with same name already exists (dedup)
+                if desig_name in desig_name_to_code:
+                    desig_code = desig_name_to_code[desig_name]
+                    existing_desig_count += 1
+                else:
+                    desig_code = f"DESIG_{desig_counter:02d}"
+                    desig_counter += 1
+                    desig_name_to_code[desig_name] = desig_code
 
-                # Auto-generate designation localization
-                loc_code = f"COMMON_MASTERS_{desig_code}"
-                desig_localizations.append({
-                    'code': loc_code,
-                    'message': desig_name,
-                    'module': 'rainmaker-common',
-                    'locale': 'en_IN'
-                })
+                    designations.append({
+                        'code': desig_code,
+                        'name': desig_name,
+                        'department': [dept_code],
+                        'active': True,
+                        'description': f'{desig_name} - {dept_name}'
+                    })
+
+                    # Auto-generate designation localization
+                    loc_code = f"COMMON_MASTERS_{desig_code}"
+                    desig_localizations.append({
+                        'code': loc_code,
+                        'message': desig_name,
+                        'module': 'rainmaker-common',
+                        'locale': 'en_IN'
+                    })
+
+        print(f"   Departments: {existing_dept_count} existing (reused), {len(departments)} new (to create)")
+        print(f"   Designations: {existing_desig_count} existing (reused), {len(designations)} new (to create)")
 
         return departments, designations, dept_localizations, desig_localizations, dept_name_to_code
 
@@ -2542,6 +2578,12 @@ class APIUploader:
             if response.status_code in [200, 201, 202]:
                 print(f"   ✅ Created boundary: {code}")
                 return True
+            elif response.status_code == 403:
+                raise PermissionError(
+                    f"Boundary operation failed (403 Forbidden): user lacks required roles. "
+                    f"Ensure the user has BOUNDARY_ADMIN role and that role-action mappings "
+                    f"exist for boundary endpoints."
+                )
             else:
                 data = response.json()
                 error_code = data.get('Errors', [{}])[0].get('code', '')
@@ -2552,6 +2594,8 @@ class APIUploader:
                 else:
                     print(f"   ❌ Failed to create boundary {code}: {error_code or error_msg or response.status_code}")
                     return False
+        except PermissionError:
+            raise  # Re-raise 403 errors — don't swallow them
         except Exception as e:
             print(f"   ❌ Error creating boundary {code}: {str(e)[:100]}")
             return False
@@ -2588,6 +2632,12 @@ class APIUploader:
                 parent_info = f" (parent: {parent_code})" if parent_code else " (root)"
                 print(f"   ✅ Created relationship: {code} [{boundary_type}]{parent_info}")
                 return True
+            elif response.status_code == 403:
+                raise PermissionError(
+                    f"Boundary operation failed (403 Forbidden): user lacks required roles. "
+                    f"Ensure the user has BOUNDARY_ADMIN role and that role-action mappings "
+                    f"exist for boundary endpoints."
+                )
             else:
                 data = response.json()
                 error_code = data.get('Errors', [{}])[0].get('code', '')
@@ -2598,6 +2648,8 @@ class APIUploader:
                 else:
                     print(f"   ❌ Failed relationship {code}: {error_msg[:80] if error_msg else error_code or response.status_code}")
                     return False
+        except PermissionError:
+            raise  # Re-raise 403 errors — don't swallow them
         except Exception as e:
             print(f"   ❌ Error creating relationship {code}: {str(e)[:100]}")
             return False

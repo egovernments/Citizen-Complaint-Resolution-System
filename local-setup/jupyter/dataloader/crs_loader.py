@@ -104,6 +104,47 @@ class CRSLoader:
         """Get current user info"""
         return self.uploader.user_info if self.uploader else None
 
+    def create_root_tenant(self, root_code: str, source_root: str = None) -> bool:
+        """Create a standalone root-level tenant.
+
+        Creates the root tenant record in tenant.tenants MDMS and bootstraps
+        all schemas and essential data from a source root. This enables creating
+        tenants like 'ethiopia' or 'mombasa' without having to go through
+        create_tenant('ethiopia.somecity') first.
+
+        Args:
+            root_code: Root tenant code (e.g., "ethiopia", "mombasa")
+                       Must not contain dots.
+            source_root: Root to copy schemas/data from (default: login tenant root)
+
+        Returns:
+            bool: True if root tenant was created or already exists
+        """
+        self._check_auth()
+
+        if "." in root_code:
+            print(f"❌ Root tenant code must not contain dots: '{root_code}'")
+            print(f"   Use create_tenant() for city tenants like '{root_code}'")
+            return False
+
+        # Determine source root
+        if source_root is None:
+            source_root = self.tenant_id.split(".")[0] if "." in self.tenant_id else self.tenant_id
+
+        # Check if root already exists
+        existing = self.uploader.search_mdms_data(
+            schema_code='tenant.tenants', tenant=root_code, limit=10
+        )
+        root_exists = any(
+            r.get('code', '').lower() == root_code.lower() for r in existing
+        )
+        if root_exists:
+            print(f"✅ Root tenant '{root_code}' already exists")
+            return True
+
+        print(f"📝 Creating root tenant '{root_code}' (source: {source_root})...")
+        return self._bootstrap_tenant_root(root_code, source_tenant=source_root)
+
     def create_tenant(self, tenant_code: str, display_name: str = None,
                       enable_modules: list = None, users: list = None) -> bool:
         """Create a tenant if it doesn't exist
@@ -1019,7 +1060,7 @@ class CRSLoader:
 
         # Upload departments
         if dept_data:
-            print(f"   Creating {len(dept_data)} departments...")
+            print(f"   Creating {len(dept_data)} new departments...")
             results['departments'] = self.uploader.create_mdms_data(
                 schema_code='common-masters.Department',
                 data_list=dept_data,
@@ -1034,7 +1075,7 @@ class CRSLoader:
 
         # Upload designations
         if desig_data:
-            print(f"   Creating {len(desig_data)} designations...")
+            print(f"   Creating {len(desig_data)} new designations...")
             results['designations'] = self.uploader.create_mdms_data(
                 schema_code='common-masters.Designation',
                 data_list=desig_data,
@@ -1046,6 +1087,11 @@ class CRSLoader:
             # Designation localizations
             if desig_loc:
                 self.uploader.create_localization_messages(desig_loc, tenant)
+
+        # Re-fetch to show accurate after-counts
+        after_desigs = self.uploader.fetch_designations(tenant)
+        after_depts = self.uploader.fetch_departments(tenant)
+        print(f"   After load: {len(after_depts)} dept(s), {len(after_desigs)} desig(s) on {tenant}")
 
         # 2. Load complaint types
         print(f"\n[2/2] Loading complaint types...")
