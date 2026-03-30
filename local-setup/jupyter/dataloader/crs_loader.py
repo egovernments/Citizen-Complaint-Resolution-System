@@ -379,22 +379,29 @@ class CRSLoader:
 
         # Step 3: Copy essential MDMS data records from source
         essential_schemas = [
+            'DataSecurity.DecryptionABAC',
+            'DataSecurity.EncryptionPolicy',
+            'DataSecurity.SecurityPolicy',
+            'DataSecurity.MaskingPatterns',
             'common-masters.IdFormat',
             'common-masters.Department',
             'common-masters.Designation',
             'common-masters.GenderType',
+            'common-masters.StateInfo',
             'egov-hrms.EmployeeStatus',
             'egov-hrms.EmployeeType',
             'egov-hrms.DeactivationReason',
             'ACCESSCONTROL-ROLES.roles',
             'RAINMAKER-PGR.ServiceDefs',
+            'Workflow.BusinessService',
+            'INBOX.InboxQueryConfiguration',
         ]
 
         data_copied = 0
         data_skipped = 0
         for schema_code in essential_schemas:
-            records = self.uploader.search_mdms_data(
-                schema_code=schema_code, tenant=source_tenant, limit=500
+            records = self.uploader.search_mdms_data_all(
+                schema_code=schema_code, tenant=source_tenant
             )
             if not records:
                 continue
@@ -435,7 +442,29 @@ class CRSLoader:
                 business_services = wf_resp.json().get("BusinessServices", [])
                 wf_copied = 0
                 for bs in business_services:
-                    # Clone for target root: strip IDs, update tenant
+                    bs_name = bs.get('businessService', '?')
+
+                    # Check if workflow already exists on target
+                    try:
+                        existing_wf = requests.post(
+                            wf_search_url, json=wf_request_info,
+                            params={"tenantId": target_root, "businessServices": bs_name},
+                            headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
+                        if existing_wf.ok and existing_wf.json().get("BusinessServices", []):
+                            print(f"   ⚠️  Workflow '{bs_name}' already exists on target — skipping")
+                            wf_copied += 1  # Count as success
+                            continue
+                    except Exception:
+                        pass  # If check fails, proceed with create attempt
+
+                    # Build UUID→state name map for resolving nextState references
+                    state_map = {
+                        s['uuid']: s['state']
+                        for s in bs.get('states', [])
+                        if s.get('uuid') and s.get('state')
+                    }
+
+                    # Clone for target root: strip IDs, update tenant, resolve nextState
                     bs_copy = deepcopy(bs)
                     bs_copy.pop("uuid", None)
                     bs_copy.pop("auditDetails", None)
@@ -448,7 +477,10 @@ class CRSLoader:
                             action.pop("uuid", None)
                             action.pop("auditDetails", None)
                             action.pop("currentState", None)
-                            action.pop("nextState", None)
+                            # Resolve nextState UUID to state name
+                            next_state_uuid = action.pop("nextState", None)
+                            if next_state_uuid and next_state_uuid in state_map:
+                                action["nextState"] = state_map[next_state_uuid]
 
                     create_wf = {
                         "RequestInfo": {
@@ -464,7 +496,7 @@ class CRSLoader:
                         if r.ok:
                             wf_copied += 1
                         else:
-                            print(f"   ⚠️  Workflow create for '{bs.get('businessService', '?')}': {r.text[:150]}")
+                            print(f"   ⚠️  Workflow create for '{bs_name}': {r.text[:150]}")
                     except Exception as e:
                         print(f"   ⚠️  Workflow create error: {e}")
 
@@ -744,6 +776,11 @@ class CRSLoader:
         mobile = user_def.get("mobile", "9999999999")
         email = user_def.get("email", f"{username.lower()}@digit.org")
         user_type = user_def.get("type", "EMPLOYEE")
+
+        # Add INTERNAL_MICROSERVICE_ROLE for admin/superuser accounts
+        admin_roles = {"SUPERUSER", "CITIZEN_ADMIN", "EMPLOYEE_ADMIN", "SYSTEM_ADMIN"}
+        if admin_roles & set(roles) and "INTERNAL_MICROSERVICE_ROLE" not in roles:
+            roles = list(roles) + ["INTERNAL_MICROSERVICE_ROLE"]
 
         # Build roles array with state-level tenant ID (roles are defined at state level)
         # Extract state tenant: "statea.c" -> "statea", "pg.citya" -> "pg"

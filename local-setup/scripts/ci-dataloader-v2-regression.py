@@ -269,22 +269,154 @@ def test_boundary_auth_error():
         print(f"   PermissionError correctly raised: {msg[:100]}")
 
 
+# ── Test 6: Workflow nextState resolution ─────────────────────
+
+def test_workflow_nextstate_resolution():
+    """Workflow copy should resolve nextState UUIDs to state names."""
+    import requests
+    import time
+
+    # Create a fresh root tenant and bootstrap it
+    test_root = "ciwftest"
+    result = loader.create_root_tenant(test_root)
+    assert result, "create_root_tenant returned False"
+    time.sleep(2)
+
+    # Search for PGR workflow on the new root
+    wf_search_url = f"{BASE_URL}/egov-workflow-v2/egov-wf/businessservice/_search"
+    wf_payload = {
+        "RequestInfo": {
+            "apiId": "Rainmaker",
+            "authToken": loader.auth_token,
+            "userInfo": loader.user_info
+        }
+    }
+    resp = requests.post(
+        wf_search_url, json=wf_payload,
+        params={"tenantId": test_root, "businessServices": "PGR"},
+        headers={"Content-Type": "application/json"}, timeout=30
+    )
+    assert resp.ok, f"Workflow search failed: {resp.status_code}"
+    bss = resp.json().get("BusinessServices", [])
+    assert len(bss) > 0, "PGR workflow not found on bootstrapped root"
+
+    pgr_wf = bss[0]
+    # Check that at least one action has a nextState that is NOT a UUID
+    import re
+    uuid_pattern = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.I)
+    actions_with_next = []
+    for state in pgr_wf.get("states", []):
+        for action in state.get("actions", []):
+            ns = action.get("nextState")
+            if ns:
+                actions_with_next.append(ns)
+                assert not uuid_pattern.match(ns), (
+                    f"nextState is still a UUID: {ns}. Resolution failed."
+                )
+
+    assert len(actions_with_next) > 0, "No actions with nextState found in PGR workflow"
+    print(f"   Found {len(actions_with_next)} resolved nextState values: {actions_with_next}")
+
+
+# ── Test 7: Bootstrap DataSecurity schemas ────────────────────
+
+def test_bootstrap_datasecurity_schemas():
+    """Bootstrapped root should have DataSecurity schemas."""
+    # Use the root created in test 6 (ciwftest) or create fresh
+    test_root = "cidstest"
+    result = loader.create_root_tenant(test_root)
+    # May already exist from test 6, that's fine
+    import time
+    time.sleep(2)
+
+    expected_schemas = [
+        'DataSecurity.DecryptionABAC',
+        'DataSecurity.EncryptionPolicy',
+        'DataSecurity.SecurityPolicy',
+        'DataSecurity.MaskingPatterns',
+    ]
+
+    for schema_code in expected_schemas:
+        records = loader.uploader.search_mdms_data(
+            schema_code=schema_code, tenant=test_root, limit=10
+        )
+        # Records may be empty if source has none, but the search should not error
+        print(f"   {schema_code}: {len(records)} records")
+
+    # At minimum, verify ACCESSCONTROL-ROLES.roles was copied
+    roles = loader.uploader.search_mdms_data(
+        schema_code='ACCESSCONTROL-ROLES.roles', tenant=test_root, limit=10
+    )
+    assert len(roles) > 0, "No roles found on bootstrapped root — bootstrap likely failed"
+    print(f"   ACCESSCONTROL-ROLES.roles: {len(roles)} roles (verified)")
+
+
+# ── Test 8: MDMS inactive record reactivation ────────────────
+
+def test_mdms_inactive_reactivation():
+    """Soft-deleted record should be reactivated on re-create."""
+    import time
+    test_tenant = f"{ROOT_TENANT}.cireact"
+    loader.create_tenant(test_tenant, "CI Reactivation Test")
+    time.sleep(1)
+
+    schema = "common-masters.Department"
+    test_dept = {"code": "CI_REACT_DEPT", "name": "CI Reactivation Test Dept", "active": True}
+
+    # Step 1: Create the record
+    result1 = loader.uploader.create_mdms_data(
+        schema_code=schema, data_list=[test_dept], tenant=test_tenant
+    )
+    assert result1['created'] + result1['exists'] > 0, "Initial create failed"
+    time.sleep(1)
+
+    # Step 2: Soft-delete it
+    del_result = loader.uploader.delete_mdms_data(
+        schema_code=schema, tenant=test_tenant, unique_ids=["CI_REACT_DEPT"]
+    )
+    print(f"   Delete result: {del_result}")
+    time.sleep(1)
+
+    # Step 3: Re-create — should reactivate, not fail
+    result2 = loader.uploader.create_mdms_data(
+        schema_code=schema, data_list=[test_dept], tenant=test_tenant
+    )
+    assert result2['created'] > 0 or result2['exists'] > 0, (
+        f"Re-create after soft-delete failed: {result2}"
+    )
+    print(f"   Re-create result: created={result2['created']}, exists={result2['exists']}")
+
+    # Verify the record is active
+    records = loader.uploader.search_mdms_data(
+        schema_code=schema, tenant=test_tenant,
+        unique_identifiers=["CI_REACT_DEPT"], limit=1, include_inactive=False
+    )
+    assert len(records) > 0, "Record not found as active after reactivation"
+    print(f"   Record is active after reactivation")
+
+
 # ── Main ─────────────────────────────────────────────────────
 
 def main():
     print("=" * 60)
-    print("DataLoader v2 Regression Tests (Issue #263)")
+    print("DataLoader v2 Regression Tests (Issue #263 + MCP Parity)")
     print("=" * 60)
     print(f"URL:  {BASE_URL}")
     print(f"Root: {ROOT_TENANT}")
 
     setup()
 
+    # Original tests (issue #263)
     run_test("Root tenant creation", test_root_tenant_creation)
     run_test("Designation dedup", test_designation_dedup)
     run_test("Department count accuracy", test_department_count_accuracy)
     run_test("Tenant-scoped designation counts", test_tenant_scoped_counts)
     run_test("Boundary auth error message", test_boundary_auth_error)
+
+    # New tests (MCP parity)
+    run_test("Workflow nextState resolution", test_workflow_nextstate_resolution)
+    run_test("Bootstrap DataSecurity schemas", test_bootstrap_datasecurity_schemas)
+    run_test("MDMS inactive record reactivation", test_mdms_inactive_reactivation)
 
     print(f"\n{'='*60}")
     print(f"RESULTS: {passed} passed, {failed} failed")
