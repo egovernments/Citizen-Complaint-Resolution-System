@@ -352,8 +352,9 @@ class CRSLoader:
 
         # Wait for Kafka-based schema persistence before creating data.
         # Without this, create_mdms_data fails with "Schema definition not found".
+        # 5 seconds needed — 3 is sometimes not enough under load.
         import time as _time
-        _time.sleep(3)
+        _time.sleep(5)
 
         # Step 2: Create root self-record (required by idgen for city code resolution)
         root_data = {
