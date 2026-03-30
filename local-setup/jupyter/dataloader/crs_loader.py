@@ -43,19 +43,16 @@ KUBECTL_API_KEY = os.environ.get('KUBECTL_API_KEY', 'dev-only-key')
 class CRSLoader:
     """Simple wrapper for CRS Data Loading operations"""
 
-    def __init__(self, base_url: str, auto_detect_root: bool = True):
+    def __init__(self, base_url: str):
         """Initialize CRS Loader with DIGIT environment URL
 
         Args:
             base_url: DIGIT gateway URL (e.g., "https://unified-dev.digit.org")
-            auto_detect_root: If True, automatically detects and uses the correct root tenant
         """
         self.base_url = base_url.rstrip('/')
         self.uploader: Optional[APIUploader] = None
         self.tenant_id: Optional[str] = None
         self._authenticated = False
-        self.auto_detect_root = auto_detect_root
-        self._root_tenant_cache = {}  # Cache for root tenant detection
 
     def login(self, username: str = None, password: str = None,
               tenant_id: str = "pg", user_type: str = "EMPLOYEE") -> bool:
@@ -683,6 +680,10 @@ class CRSLoader:
             
             with conn:
                 with conn.cursor() as cur:
+                    # Get source prefix dynamically instead of hardcoding 'PB-'
+                    source_prefix = source_tenant.upper() + '-'
+                    target_prefix = target_root.upper() + '-'
+                    
                     # Copy ID formats with proper tenant substitution
                     copy_sql = """
                     INSERT INTO id_generator (idname, tenantid, format, sequencenumber)
@@ -690,7 +691,7 @@ class CRSLoader:
                         idname, 
                         %s as tenantid,
                         CASE 
-                            WHEN format LIKE '%%PB-%%' THEN REPLACE(format, 'PB-', %s || '-')
+                            WHEN format LIKE (%s || '%%') THEN REPLACE(format, %s, %s)
                             ELSE format 
                         END as format,
                         1 as sequencenumber
@@ -699,7 +700,7 @@ class CRSLoader:
                     ON CONFLICT (idname, tenantid) DO NOTHING;
                     """
                     
-                    cur.execute(copy_sql, (target_root, target_root.upper(), source_tenant))
+                    cur.execute(copy_sql, (target_root, source_prefix, source_prefix, target_prefix, source_tenant))
                     
                     # Get count of copied formats
                     cur.execute("SELECT COUNT(*) FROM id_generator WHERE tenantid = %s", (target_root,))
@@ -767,9 +768,23 @@ class CRSLoader:
                     print(f"   ✅ Localization: {copied_count} new messages copied to '{target_root}'")
                     print(f"   📊 Total messages: {after_count} across {len(modules)} modules")
                     print(f"   📦 Modules: {', '.join(modules)}")
+                    
+                    return {
+                        'status': 'completed',
+                        'copied_count': copied_count,
+                        'total_count': after_count,
+                        'modules': modules
+                    }
 
         except Exception as e:
-            print(f"   ⚠️  Localization copy failed: {str(e)[:100]}")
+            error_msg = str(e)[:100]
+            print(f"   ⚠️  Localization copy failed: {error_msg}")
+            return {
+                'status': 'failed',
+                'error': error_msg,
+                'copied_count': 0,
+                'modules': []
+            }
 
     def _create_core_admin_user(self, target_root: str) -> bool:
         """Create core admin user for new root tenant
@@ -1743,10 +1758,24 @@ class CRSLoader:
         print(f"Source tenant: {source_tenant}")
         print(f"Target tenant: {target_tenant}")
         
-        # Use the existing private method
-        self._copy_localization_messages(source_tenant, target_tenant)
+        # Use the existing private method and check result
+        result = self._copy_localization_messages(source_tenant, target_tenant)
         
-        return {"status": "completed", "source": source_tenant, "target": target_tenant}
+        if result and result.get('status') == 'completed':
+            return {
+                "status": "completed", 
+                "source": source_tenant, 
+                "target": target_tenant,
+                "copied": result.get('copied_count', 0),
+                "modules": result.get('modules', [])
+            }
+        else:
+            return {
+                "status": "failed",
+                "source": source_tenant,
+                "target": target_tenant, 
+                "error": result.get('error', 'Unknown error') if result else 'No result returned'
+            }
 
     def load_workflow(self, json_path: str, target_tenant: str = None,
                       business_service: str = "PGR") -> Dict:
