@@ -349,6 +349,12 @@ class CRSLoader:
             import time
             time.sleep(10)
 
+        # Wait for Kafka-based schema persistence before creating data.
+        # Without this, create_mdms_data fails with "Schema definition not found".
+        # 5 seconds needed — 3 is sometimes not enough under load.
+        import time as _time
+        _time.sleep(5)
+
         # Step 1.5: Create essential schemas that might be missing
         essential_schemas_to_create = {
             "common-masters.StateInfo": {
@@ -424,6 +430,19 @@ class CRSLoader:
                     "active": {"type": "boolean"},
                     "description": {"type": ["string", "null"]}
                 }
+            }
+        }
+
+        # Step 2: Create root self-record (required by idgen for city code resolution)
+        root_data = {
+            "code": target_root,
+            "name": target_root.title(),
+            "description": f"State tenant root: {target_root}",
+            "city": {
+                "code": target_root.upper(),
+                "name": target_root.title(),
+                "districtCode": target_root.upper(),
+                "districtName": target_root.title()
             }
         }
         
