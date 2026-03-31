@@ -362,6 +362,17 @@ def test_bootstrap_datasecurity_schemas():
         # Records may be empty if source has none, but the search should not error
         print(f"   {schema_code}: {len(records)} records")
 
+    # Verify additional schemas were bootstrapped
+    extra_schemas = [
+        'Workflow.BusinessService',
+        'INBOX.InboxQueryConfiguration',
+    ]
+    for schema_code in extra_schemas:
+        records = loader.uploader.search_mdms_data(
+            schema_code=schema_code, tenant=test_root, limit=10
+        )
+        print(f"   {schema_code}: {len(records)} records")
+
     # At minimum, verify ACCESSCONTROL-ROLES.roles was copied
     roles = loader.uploader.search_mdms_data(
         schema_code='ACCESSCONTROL-ROLES.roles', tenant=test_root, limit=10
@@ -458,6 +469,190 @@ def test_mdms_inactive_reactivation():
     print(f"   Record is active after reactivation")
 
 
+# ── Test 9: Employee password reset via user service ─────────
+
+def test_employee_password_via_user_service():
+    """Employee created via HRMS should have password set via user service."""
+    import time
+    import requests as req
+
+    ts = int(time.time()) % 100000
+    test_tenant = f"{ROOT_TENANT}.ciemp{ts}"
+    loader.create_tenant(test_tenant, f"CI Emp Test {ts}")
+    time.sleep(2)
+
+    # Create a user via _create_user_for_tenant (which uses egov-user directly)
+    test_username = f"CI_EMP_{ts}"
+    test_password = "eGov@123"
+    loader._create_user_for_tenant(test_tenant, {
+        "username": test_username,
+        "password": test_password,
+        "name": "CI Employee Test",
+        "roles": ["EMPLOYEE"],
+        "mobile": f"99{ts:08d}"[:10]
+    })
+    time.sleep(1)
+
+    # Verify: login as the new user with the expected password
+    test_loader = CRSLoader(BASE_URL)
+    logged_in = test_loader.login(
+        username=test_username, password=test_password, tenant_id=test_tenant
+    )
+    assert logged_in, (
+        f"Login failed for '{test_username}' with expected password — "
+        f"password was not set correctly"
+    )
+    print(f"   ✅ User '{test_username}' can login with expected password")
+
+    # Also verify user exists via user service search
+    user_search_url = f"{BASE_URL}/user/_search"
+    search_resp = req.post(user_search_url, json={
+        "RequestInfo": {
+            "apiId": "Rainmaker",
+            "authToken": loader.auth_token,
+            "userInfo": loader.user_info
+        },
+        "userName": test_username,
+        "tenantId": test_tenant
+    }, headers={"Content-Type": "application/json"}, timeout=30)
+    assert search_resp.ok, f"User search failed: {search_resp.status_code}"
+    users = search_resp.json().get("user", [])
+    assert len(users) > 0, f"User '{test_username}' not found via user service search"
+    print(f"   ✅ User '{test_username}' found via user service search")
+
+
+# ── Test 10: INTERNAL_MICROSERVICE_ROLE for admin users ──────
+
+def test_internal_microservice_role():
+    """Admin users should automatically get INTERNAL_MICROSERVICE_ROLE."""
+    import time
+    import requests as req
+
+    ts = int(time.time()) % 100000
+    test_tenant = f"{ROOT_TENANT}.ciadm{ts}"
+    loader.create_tenant(test_tenant, f"CI Admin Test {ts}")
+    time.sleep(2)
+
+    # Create an admin user with SUPERUSER role
+    admin_username = f"CI_ADMIN_{ts}"
+    loader._create_user_for_tenant(test_tenant, {
+        "username": admin_username,
+        "password": "eGov@123",
+        "name": "CI Admin Test",
+        "roles": ["EMPLOYEE", "SUPERUSER"],
+        "mobile": f"98{ts:08d}"[:10]
+    })
+    time.sleep(1)
+
+    # Search for the user and verify roles
+    user_search_url = f"{BASE_URL}/user/_search"
+    search_resp = req.post(user_search_url, json={
+        "RequestInfo": {
+            "apiId": "Rainmaker",
+            "authToken": loader.auth_token,
+            "userInfo": loader.user_info
+        },
+        "userName": admin_username,
+        "tenantId": test_tenant
+    }, headers={"Content-Type": "application/json"}, timeout=30)
+    assert search_resp.ok, f"User search failed: {search_resp.status_code}"
+    users = search_resp.json().get("user", [])
+    assert len(users) > 0, f"Admin user '{admin_username}' not found"
+
+    user_roles = [r.get("code") for r in users[0].get("roles", [])]
+    print(f"   User roles: {user_roles}")
+    assert "INTERNAL_MICROSERVICE_ROLE" in user_roles, (
+        f"INTERNAL_MICROSERVICE_ROLE not found in admin user roles. Got: {user_roles}"
+    )
+    assert "SUPERUSER" in user_roles, f"SUPERUSER role missing. Got: {user_roles}"
+    print(f"   ✅ Admin user has INTERNAL_MICROSERVICE_ROLE")
+
+    # Also verify a non-admin user does NOT get INTERNAL_MICROSERVICE_ROLE
+    regular_username = f"CI_REG_{ts}"
+    loader._create_user_for_tenant(test_tenant, {
+        "username": regular_username,
+        "password": "eGov@123",
+        "name": "CI Regular User",
+        "roles": ["EMPLOYEE"],
+        "mobile": f"97{ts:08d}"[:10]
+    })
+    time.sleep(1)
+
+    search_resp2 = req.post(user_search_url, json={
+        "RequestInfo": {
+            "apiId": "Rainmaker",
+            "authToken": loader.auth_token,
+            "userInfo": loader.user_info
+        },
+        "userName": regular_username,
+        "tenantId": test_tenant
+    }, headers={"Content-Type": "application/json"}, timeout=30)
+    assert search_resp2.ok, f"User search failed: {search_resp2.status_code}"
+    users2 = search_resp2.json().get("user", [])
+    assert len(users2) > 0, f"Regular user '{regular_username}' not found"
+
+    regular_roles = [r.get("code") for r in users2[0].get("roles", [])]
+    print(f"   Regular user roles: {regular_roles}")
+    assert "INTERNAL_MICROSERVICE_ROLE" not in regular_roles, (
+        f"Regular user should NOT have INTERNAL_MICROSERVICE_ROLE. Got: {regular_roles}"
+    )
+    print(f"   ✅ Regular user does NOT have INTERNAL_MICROSERVICE_ROLE")
+
+
+# ── Test 11: Workflow copy idempotency ───────────────────────
+
+def test_workflow_copy_idempotency():
+    """Bootstrapping a root twice should not duplicate PGR workflow."""
+    import time
+    import requests as req
+
+    ts = int(time.time()) % 100000
+    test_root = f"ciwfi{ts}"
+
+    # Bootstrap root first time
+    result1 = loader.create_root_tenant(test_root)
+    assert result1, f"First create_root_tenant('{test_root}') returned False"
+    time.sleep(3)
+
+    # Count workflows after first bootstrap
+    wf_search_url = f"{BASE_URL}/egov-workflow-v2/egov-wf/businessservice/_search"
+    wf_payload = {
+        "RequestInfo": {
+            "apiId": "Rainmaker",
+            "authToken": loader.auth_token,
+            "userInfo": loader.user_info
+        }
+    }
+    resp1 = req.post(
+        wf_search_url, json=wf_payload,
+        params={"tenantId": test_root, "businessServices": "PGR"},
+        headers={"Content-Type": "application/json"}, timeout=30
+    )
+    assert resp1.ok, f"Workflow search failed: {resp1.status_code}"
+    wf_count_1 = len(resp1.json().get("BusinessServices", []))
+    print(f"   After first bootstrap: {wf_count_1} PGR workflow(s)")
+    assert wf_count_1 == 1, f"Expected 1 PGR workflow, got {wf_count_1}"
+
+    # Bootstrap root second time (should be idempotent)
+    result2 = loader.create_root_tenant(test_root)
+    # Should succeed (idempotent) or skip
+    time.sleep(3)
+
+    # Count workflows after second bootstrap
+    resp2 = req.post(
+        wf_search_url, json=wf_payload,
+        params={"tenantId": test_root, "businessServices": "PGR"},
+        headers={"Content-Type": "application/json"}, timeout=30
+    )
+    assert resp2.ok, f"Workflow search failed: {resp2.status_code}"
+    wf_count_2 = len(resp2.json().get("BusinessServices", []))
+    print(f"   After second bootstrap: {wf_count_2} PGR workflow(s)")
+    assert wf_count_2 == 1, (
+        f"Workflow duplicated! Expected 1 PGR workflow after second bootstrap, got {wf_count_2}"
+    )
+    print(f"   ✅ Workflow copy is idempotent — no duplicates")
+
+
 # ── Main ─────────────────────────────────────────────────────
 
 def main():
@@ -480,6 +675,11 @@ def main():
     run_test("Workflow nextState resolution", test_workflow_nextstate_resolution)
     run_test("Bootstrap DataSecurity schemas", test_bootstrap_datasecurity_schemas)
     run_test("MDMS inactive record reactivation", test_mdms_inactive_reactivation)
+
+    # Coverage tests (additional)
+    run_test("Employee password via user service", test_employee_password_via_user_service)
+    run_test("INTERNAL_MICROSERVICE_ROLE for admin users", test_internal_microservice_role)
+    run_test("Workflow copy idempotency", test_workflow_copy_idempotency)
 
     print(f"\n{'='*60}")
     print(f"RESULTS: {passed} passed, {failed} failed")
