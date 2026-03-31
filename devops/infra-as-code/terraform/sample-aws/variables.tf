@@ -91,23 +91,9 @@ variable "db_username" {
   default = <db_username> #REPLACE
 }
 
-variable "ami_id" {
-  description = "Provide the AMI ID that supports your eks version for karpenter"
-  default = {
-    id   = "ami-0b4109ea30612adf2" #Replace if needed
-    name = "amazon-eks-node-al2023-x86_64-standard-1.33-v20260224" #Replace if needed
-  }
-}
-
 variable "filestore_namespace" {
   description = "Provide the namespace to create filestore secret"
-  default = "egov" #REPLACE  
-}
-
-variable "enable_karpenter" {
-  description = "Enable the karpenter."
-  type        = bool
-  default     = false
+  default = "egov" #REPLACE
 }
 
 #DO NOT fill in here. This will be asked at runtime
