@@ -64,12 +64,12 @@ var globalConfigs = (function () {
       history.pushState = function() {
         origPushState.apply(this, arguments);
         var path = arguments[2];
-        if (path && (path.includes('/citizen/login') || path.includes('/employee/login'))) {
+        if (path && (path.includes('/citizen/login') || path.includes('/employee/login') || path.includes('/employee/user/login'))) {
           window.location.replace(window.location.origin + '/digit-ui/user/login');
         }
       };
       // Also check on initial page load
-      if (window.location.pathname.includes('/citizen/login') || window.location.pathname.includes('/employee/login')) {
+      if (window.location.pathname.includes('/citizen/login') || window.location.pathname.includes('/employee/login') || window.location.pathname.includes('/employee/user/login')) {
         window.location.replace(window.location.origin + '/digit-ui/user/login');
       }
     }
