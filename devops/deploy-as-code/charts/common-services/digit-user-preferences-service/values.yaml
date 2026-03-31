@@ -1,0 +1,77 @@
+# Common Labels
+labels:
+  app: "digit-user-preferences-service"
+  group: "egov"
+
+# Ingress Configs
+ingress:
+  namespace: "egov"
+  enabled: true
+  zuul: true
+  context: "user-preference"
+
+# Init Containers - DB Migration
+# Disabled: Uses GORM AutoMigrate instead
+initContainers:
+  dbMigration:
+    enabled: false
+
+# Container Configs
+image:
+  repository: "digit-user-preferences-service"
+  tag: "master-2242e47"
+replicas: "1"
+httpPort: 8080
+
+# Health Checks
+healthChecks:
+  enabled: true
+  livenessProbePath: "/health"
+  readinessProbePath: "/health"
+
+# Resources
+memory_limits: "256Mi"
+resources: |
+  requests:
+    memory: "64Mi"
+    cpu: "50m"
+  limits:
+    memory: {{ .Values.memory_limits | quote }}
+    cpu: "200m"
+
+# Tracing disabled for Go service
+tracing-enabled: false
+
+# Environment variables
+env: |
+  - name: SERVER_PORT
+    value: "8080"
+  - name: SERVER_CONTEXT_PATH
+    value: "/user-preference"
+  - name: DB_HOST
+    valueFrom:
+      configMapKeyRef:
+        name: egov-config
+        key: db-host
+  - name: DB_PORT
+    value: "5432"
+  - name: DB_NAME
+    valueFrom:
+      configMapKeyRef:
+        name: egov-config
+        key: db-name
+  - name: DB_USER
+    valueFrom:
+      secretKeyRef:
+        name: db
+        key: username
+  - name: DB_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: db
+        key: password
+  - name: DB_SSL_MODE
+    value: {{ index .Values "db-ssl-mode" | quote }}
+
+# Default values
+db-ssl-mode: "require"
