@@ -7,16 +7,6 @@ module.exports = {
   // mode: 'development',
   entry: "./src/index.js",
   devtool: "none",
-  resolve: {
-    alias: {
-      // Build core module from local source instead of npm package to pick up
-      // UnifiedLogin, routing fixes, and auth adapter integration
-      "@egovernments/digit-ui-module-core": path.resolve(__dirname, "micro-ui-internals/packages/modules/core/src/Module.js"),
-      // Ensure single React instance across all packages (prevents React #321)
-      "react": path.resolve(__dirname, "node_modules/react"),
-      "react-dom": path.resolve(__dirname, "node_modules/react-dom"),
-    },
-  },
   module: {
     rules: [
       {
@@ -63,6 +53,10 @@ module.exports = {
         __dirname,
         "micro-ui-internals/packages/modules/pgr/src/Module.js"
       ),
+      "@egovernments/digit-ui-react-components": path.resolve(
+        __dirname,
+        "micro-ui-internals/packages/react-components/src/index.js"
+      ),
       // Force single React instance to prevent "Invalid hook call" errors
       // when the core module alias resolves from a different path
       "react": path.resolve(__dirname, "node_modules/react"),
@@ -80,12 +74,12 @@ module.exports = {
   optimization: {
     splitChunks: {
       chunks: 'all',
-      minSize:20000,
-      maxSize:50000,
-      enforceSizeThreshold:50000,
-      minChunks:1,
-      maxAsyncRequests:30,
-      maxInitialRequests:30
+      minSize: 30000,
+      maxSize: 500000,
+      enforceSizeThreshold: 500000,
+      minChunks: 1,
+      maxAsyncRequests: 15,
+      maxInitialRequests: 15
     },
   },
   plugins: [
