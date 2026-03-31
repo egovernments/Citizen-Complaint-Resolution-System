@@ -67,19 +67,28 @@ env: |
   - name: NOVU_BRIDGE_PREFERENCE_ENABLED
     value: "true"
   - name: NOVU_BRIDGE_PREFERENCE_HOST
-    value: {{ index .Values "preference-host" | quote }}
+    valueFrom:
+      configMapKeyRef:
+        name: egov-service-host
+        key: digit-user-preferences-service
   - name: NOVU_BRIDGE_PREFERENCE_CHECK_PATH
-    value: "/v1/_search"
+    value: {{ index .Values "preference-check-path" | quote }}
   - name: NOVU_BRIDGE_PREFERENCE_CODE
     value: "USER_NOTIFICATION_PREFERENCES"
   - name: NOVU_BRIDGE_CONFIG_HOST
-    value: {{ index .Values "config-host" | quote }}
+    valueFrom:
+      configMapKeyRef:
+        name: egov-service-host
+        key: digit-config-service
   - name: NOVU_BRIDGE_CONFIG_RESOLVE_PATH
-    value: "/config-service/config/v1/_resolve"
+    value: {{ index .Values "config-resolve-path" | quote }}
   - name: NOVU_BRIDGE_CONFIG_SEARCH_PATH
-    value: "/config-service/config/v1/_search"
+    value: {{ index .Values "config-search-path" | quote }}
   - name: NOVU_BRIDGE_USER_HOST
-    value: {{ index .Values "user-host" | quote }}
+    valueFrom:
+      configMapKeyRef:
+        name: egov-service-host
+        key: egov-user
   - name: NOVU_BRIDGE_USER_SEARCH_PATH
     value: "/user/_search"
   - name: NOVU_BASE_URL
@@ -105,10 +114,3 @@ env: |
     value: "false"
   - name: TRACER_ERRORS_SEND_TO_KAFKA
     value: "false"
-
-# Default values (overridden per environment)
-preference-host: "http://digit-user-preferences-service.egov:8080/user-preference"
-config-host: "http://digit-config-service.egov:8080"
-user-host: "http://egov-user.egov:8080"
-novu-base-url: "http://novu-api.novu:3000"
-novu-api-key: ""
