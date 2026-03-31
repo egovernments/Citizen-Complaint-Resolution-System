@@ -141,7 +141,7 @@ docker-compose up -d
 
 ### Helm Chart
 
-Location: `deploy-as-code/helm/charts/common-services/digit-user-preferences-service`
+Location: [`deploy-as-code/helm/charts/common-services/digit-user-preferences-service`](https://github.com/egovernments/DIGIT-DevOps/tree/sandbox-demo/deploy-as-code/helm/charts/common-services/digit-user-preferences-service)
 
 ## Resources
 
