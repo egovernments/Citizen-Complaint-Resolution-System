@@ -25,7 +25,9 @@ import ComplaintPhotos from "../../components/ComplaintPhotos";
 import ComplaintLocationMap from "../../components/ComplaintLocationMap";
 
 const WorkflowComponent = ({ complaintDetails, id }) => {
-  const tenantId = Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || complaintDetails.service.tenantId;
+  const tenantId = Digit.Utils.getMultiRootTenant()
+    ? Digit.ULBService.getCurrentTenantId()
+    : Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || Digit.ULBService.getCurrentTenantId();
   let workFlowDetails = Digit.Hooks.useWorkflowDetails({ tenantId: tenantId, id, moduleCode: "PGR" });
 
   const { isLoading: isMDMSLoading, data: cct } = Digit.Hooks.useCustomMDMS(
@@ -63,7 +65,9 @@ const ComplaintDetailsPage = (props) => {
   let { t } = useTranslation();
   let { id } = useParams();
 
-  let tenantId = Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || Digit.ULBService.getCurrentTenantId(); // ToDo: fetch from state
+  let tenantId = Digit.Utils.getMultiRootTenant()
+    ? Digit.ULBService.getCurrentTenantId()
+    : Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || Digit.ULBService.getCurrentTenantId();
   const { isLoading, error, isError, complaintDetails, revalidate } = Digit.Hooks.pgr.useComplaintDetails({ tenantId, id });
 
   if (isLoading) {
@@ -109,7 +113,7 @@ const ComplaintDetailsPage = (props) => {
                   />
                 ))}
               </StatusTable>
-              {complaintDetails?.workflow?.verificationDocuments?.length > 0 && (
+              {!!(complaintDetails?.workflow?.verificationDocuments?.length) && (
                 <React.Fragment>
                   <CardSubHeader>{t("CS_COMMON_ATTACHMENTS")}</CardSubHeader>
                   <ComplaintPhotos serviceWrapper={complaintDetails} />
@@ -117,7 +121,7 @@ const ComplaintDetailsPage = (props) => {
               )}
             </Card>
 
-            {geoLocation?.latitude && geoLocation?.longitude && (
+            {!!(geoLocation?.latitude && geoLocation?.longitude) && (
               <Card>
                 <CardSubHeader style={{ marginBottom: "16px" }}>{t("CS_COMPLAINT_LOCATION")}</CardSubHeader>
                 <ComplaintLocationMap

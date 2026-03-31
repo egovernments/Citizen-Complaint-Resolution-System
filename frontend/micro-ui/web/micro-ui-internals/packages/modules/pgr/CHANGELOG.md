@@ -1,11 +1,36 @@
 # Changelog
 All notable changes to this module will be documented in this file.
 
+## [1.0.14] - 2026-03-16
+### Fixed
+ -var Digit = window.Digit || {}; removed
+
+## [1.0.13] - 2026-03-16
+### Fixed
+- Fixed complaint subtype localization keys showing raw keys instead of translated labels
+  - Changed `SERVICEDEFS.` (dot separator) to `SERVICEDEFS_` (underscore separator) to match localization entries
+  - Updated across useServiceDefs hook, UICustomizations, Complaint component, and SelectSubType step
+
+## [1.0.12] - 2026-03-13
+- Fixed back button on complaint-success page to navigate to sandbox home with correct query params when in multi-.root tenant mode
+
+## [1.0.11] - 2026-03-11
+- multi-root tenant mode changes 
+
+## [1.0.10] - 2026-03-11
+- SUPERUSER Role added
+
+## [1.0.9] - 2026-03-10
+- Multiroot tenant city id updated and logics added
+
+## [1.0.8] - 2026-03-10
+- CMS Create multiroot tenant city id updated
+
 ## [1.0.7] - 2026-03-10
-- CMS Create multiroot tenant city id Updaed
+- CMS Create multiroot tenant city id updated
 
 ## [1.0.6] - 2026-03-10
-- Digit-ui-libraries Updaed into 1.9.4
+- Digit-ui-libraries updated into 1.9.4
 
 ## [1.0.5] - 2026-03-10
 ### Updated

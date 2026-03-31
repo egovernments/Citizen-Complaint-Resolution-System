@@ -110,7 +110,9 @@ export const WorkflowService = {
                   lastModifiedEpoch: instance.auditDetails.lastModifiedTime,
                 },
                 timeLineActions: instance.nextActions
-                  ? instance.nextActions.filter((action) => action.roles.includes(role)).map((action) => action?.action)
+                  ? (role === "SUPERUSER"
+                    ? instance.nextActions.map((action) => action?.action)
+                    : instance.nextActions.filter((action) => action.roles.includes(role)).map((action) => action?.action))
                   : null,
               };
               return checkPoint;

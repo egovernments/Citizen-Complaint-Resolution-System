@@ -1,0 +1,17 @@
+@startuml
+title User Preferences Service ERD
+
+entity "user_preference" as user_preference {
+  *id : uuid
+  --
+  user_id : string
+  tenant_id : string
+  preference_code : string
+  payload : jsonb
+  created_by : string
+  created_time : long
+  last_modified_by : string
+  last_modified_time : long
+}
+
+@enduml

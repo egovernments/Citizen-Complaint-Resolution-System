@@ -11,7 +11,10 @@ on:
         options:
           - pgr-services
           - default-data-handler
-          - digit-ui
+          - digit-user-preferences-service
+          - digit-config-service
+          - novu-bridge
+
 
 env:
   DOCKER_USERNAME: ${{ vars.DOCKER_USERNAME }}
