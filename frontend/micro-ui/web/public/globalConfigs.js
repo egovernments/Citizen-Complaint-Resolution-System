@@ -60,16 +60,26 @@ var globalConfigs = (function () {
   // Keycloak mode: intercept SPA navigation to citizen/employee login
   try {
     if (authProvider === 'keycloak') {
+      var loginPaths = ['/citizen/login', '/employee/login', '/employee/user/login'];
+      var isLoginPath = function(p) {
+        return p && loginPaths.some(function(lp) { return p.includes(lp); });
+      };
       var origPushState = history.pushState;
       history.pushState = function() {
         origPushState.apply(this, arguments);
-        var path = arguments[2];
-        if (path && (path.includes('/citizen/login') || path.includes('/employee/login') || path.includes('/employee/user/login'))) {
+        if (isLoginPath(arguments[2])) {
+          window.location.replace(window.location.origin + '/digit-ui/user/login');
+        }
+      };
+      var origReplaceState = history.replaceState;
+      history.replaceState = function() {
+        origReplaceState.apply(this, arguments);
+        if (isLoginPath(arguments[2])) {
           window.location.replace(window.location.origin + '/digit-ui/user/login');
         }
       };
       // Also check on initial page load
-      if (window.location.pathname.includes('/citizen/login') || window.location.pathname.includes('/employee/login') || window.location.pathname.includes('/employee/user/login')) {
+      if (isLoginPath(window.location.pathname)) {
         window.location.replace(window.location.origin + '/digit-ui/user/login');
       }
     }
