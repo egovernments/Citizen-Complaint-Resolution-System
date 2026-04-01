@@ -4,6 +4,18 @@ import { PopUp, Timeline, TimelineMolecule, Loader, DisplayPhotos } from '@egove
 import { useMyContext } from "../utils/context";
 import { convertEpochFormateToDate } from '../utils';
 
+// Helper function to mask employee names (show first 2 chars only)
+const maskName = (name) => {
+  if (!name || name.length < 2) return name;
+  return name.substring(0, 2) + 'X'.repeat(Math.max(0, name.length - 2));
+};
+
+// Helper function to mask phone numbers (show last 4 digits only)
+const maskPhoneNumber = (phone) => {
+  if (!phone || phone.length < 4) return phone;
+  return 'XXXXXX' + phone.slice(-4);
+};
+
 const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPrefix = "" }) => {
     const { state } = useMyContext();
     const { t } = useTranslation();
@@ -17,18 +29,23 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
         if (workflowData && workflowData.ProcessInstances) {
             // Map API response to timeline steps
             const steps = workflowData.ProcessInstances.map((instance, index) => {
+                // Determine whether to show assignee or assigner details
+                const isAssignAction = instance?.action === "ASSIGN" || instance?.action === "REASSIGN";
+                const employee = isAssignAction ? instance?.assignes?.[0] : instance?.assigner;
+
+                // Mask employee name and mobile number
+                const maskedName = employee?.name ? maskName(employee.name) : null;
+                const maskedMobile = employee?.mobileNumber ? maskPhoneNumber(employee.mobileNumber) : null;
+
                 const subElements = [
                     convertEpochFormateToDate(instance?.auditDetails?.lastModifiedTime),
-                    // For ASSIGN or REASSIGN actions, show assignee details; otherwise show assigner details
-                    (instance?.action == "ASSIGN" || instance?.action == "REASSIGN" ? instance?.assignes && `${instance.assignes?.[0]?.name} - ${instance?.assignes?.[0]?.roles
+                    // Display masked employee name with roles
+                    employee && maskedName && `${maskedName} - ${employee?.roles
                         ?.map(role => t(Digit.Utils.locale.getTransformedLocale(`ACCESSCONTROL_ROLES_ROLES_${role.code}`)))
                         .join(", ") || t('NA')
-                        }` : instance?.assigner &&
-                    `${instance.assigner?.name} - ${instance.assigner?.roles
-                        ?.map(role => t(Digit.Utils.locale.getTransformedLocale(`ACCESSCONTROL_ROLES_ROLES_${role.code}`)))
-                        .join(", ") || t('NA')
-                    }`),
-                    (instance?.action === "ASSIGN" || instance?.action === "REASSIGN" ? `${t("ES_COMMON_CONTACT_DETAILS")}: ${instance?.assignes?.[0]?.mobileNumber}` : `${t("ES_COMMON_CONTACT_DETAILS")}: ${instance?.assigner?.mobileNumber}`),
+                    }`,
+                    // Display masked mobile number
+                    maskedMobile && `${t("ES_COMMON_CONTACT_DETAILS")}: ${maskedMobile}`,
                     instance?.comment && `${t('CS_COMMON_EMPLOYEE_COMMENTS')} : "${instance.comment}"`
                 ];
 

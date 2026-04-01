@@ -12,20 +12,27 @@ const AssigneeComponent = ({ config, onSelect, formState, defaultValues }) => {
   // Get roles from config populators
   const { roles = [], department } = config?.populators || {};
 
+  // Filter out PGR_VIEWER role
+  const filteredRoles = roles.filter(role => role !== "PGR_VIEWER");
+
+  // Create a unique query identifier based on roles to trigger refetch when roles change
+  const rolesKey = filteredRoles.sort().join(",");
+
   // Fetch employee data based on roles
-  const { 
-    isLoading: isEmployeeDataLoading, 
-    data: employeeData, 
-    error 
+  const {
+    isLoading: isEmployeeDataLoading,
+    data: employeeData,
+    error
   } = Digit.Hooks.useCustomAPIHook({
     url: `/${hrmsContext}/employees/_search`,
     params: {
       tenantId: tenantId,
-      roles: roles.join(","),
+      roles: rolesKey,
     },
     config: {
-      enabled: roles.length > 0,
+      enabled: filteredRoles.length > 0,
     },
+    changeQueryName: rolesKey, // This forces refetch when roles change
   });
 
   // Transform employee data for dropdown
@@ -61,6 +68,12 @@ const AssigneeComponent = ({ config, onSelect, formState, defaultValues }) => {
   
   
 
+  // Reset assignees and selected employee when roles change
+  useEffect(() => {
+    setAssignees([]);
+    setSelectedEmployee(null);
+  }, [rolesKey]);
+
   // Update assignees when employee data changes
   useEffect(() => {
     if (employeeData?.Employees?.length > 0) {
@@ -68,8 +81,10 @@ const AssigneeComponent = ({ config, onSelect, formState, defaultValues }) => {
         e => e?.assignments?.[0]?.department === department && e?.user?.uuid
       );
       setAssignees(transformData(filtered));
+    } else {
+      setAssignees([]);
     }
-  }, [employeeData]);
+  }, [employeeData, department]);
 
   // Handle employee selection
   const handleEmployeeSelect = (employee) => {
