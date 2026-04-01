@@ -48,9 +48,9 @@ env: |
     valueFrom:
       configMapKeyRef:
         name: egov-service-host
-        key: {{ index .Values.mdmsLegacyHost | default "egov-mdms-service" }} 
+        key: egov-mdms-service
   - name: EGOV_MDMSLEGACY_SEARCH_ENDPOINT
-    value: {{ index .Values.mdmsLegacySearchPath | default "mdms-v2/v1/_search" }}
+    value: {{ index .Values mdmsLegacySearchPath | default "mdms-v2/v1/_search" }}
   - name: EGOV_FILESTORE_HOST
     valueFrom:
       configMapKeyRef:
