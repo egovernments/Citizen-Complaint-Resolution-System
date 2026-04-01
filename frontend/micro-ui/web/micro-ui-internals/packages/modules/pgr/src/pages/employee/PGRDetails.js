@@ -53,7 +53,7 @@ const ACTION_CONFIGS = [
     actionType: "REOPEN",
     formConfig: {
       label: {
-        heading: "CS_ACTION_ASSIGN",
+        heading: "CS_ACTION_REOPEN",
         cancel: "CS_COMMON_CANCEL",
         submit: "CS_COMMON_SUBMIT",
       },
@@ -327,11 +327,42 @@ const PGRDetails = () => {
   };
 
   // Enhance config with roles and department dynamically
-  const getUpdatedConfig = (selectedAction, workflowData, configs, serviceDefs, complaintData) => {
+  const getUpdatedConfig = (selectedAction, workflowData, configs, serviceDefs, complaintData, businessServiceResponse) => {
     const actionConfig = configs.find((config) => config.actionType === selectedAction.action);
     const department = serviceDefs?.find((def) => def.serviceCode === complaintData?.ServiceWrappers[0]?.service?.serviceCode)?.department;
     if (!actionConfig) return null;
-    const roles = selectedAction?.roles || [];
+
+    // Get the next state UUID from the selected action
+    const nextStateUuid = selectedAction?.nextState;
+
+    // Find all roles from the next state's actions by searching in BusinessService states
+    let nextStateRoles = [];
+    if (nextStateUuid && businessServiceResponse?.states) {
+      // Search through business service states to find the state with matching UUID
+      const nextState = businessServiceResponse.states.find(
+        (state) => state?.uuid === nextStateUuid
+      );
+
+      if (nextState?.actions) {
+        // Filter actions that contain PGR_VIEWER role
+        const actionsWithPgrViewer = nextState.actions.filter((action) =>
+          action.roles && Array.isArray(action.roles) && action.roles.includes("PGR_VIEWER")
+        );
+
+        // Collect all unique roles from filtered actions
+        const allRoles = new Set();
+        actionsWithPgrViewer.forEach((action) => {
+          action.roles.forEach((role) => allRoles.add(role));
+        });
+        nextStateRoles = Array.from(allRoles);
+      }
+    }
+
+    // Use next state roles if found, otherwise fall back to current action roles
+    // Filter out PGR_VIEWER role from the final list
+    const roles = (nextStateRoles.length > 0 ? nextStateRoles : (selectedAction?.roles || [])).filter(
+      (role) => role !== "PGR_VIEWER"
+    );
 
     return {
       ...actionConfig.formConfig,
@@ -600,7 +631,7 @@ const PGRDetails = () => {
           sessionFormData={sessionFormData}
           setSessionFormData={setSessionFormData}
           clearSessionFormData={clearSessionFormData}
-          config={getUpdatedConfig(selectedAction, workflowData, ACTION_CONFIGS, serviceDefs, pgrData)}
+          config={getUpdatedConfig(selectedAction, workflowData, ACTION_CONFIGS, serviceDefs, pgrData, businessServiceData?.BusinessServices?.[0])}
           closeModal={() => setOpenModal(false)}
           onSubmit={handleActionSubmit}
         />
