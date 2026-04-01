@@ -3,7 +3,7 @@ labels:
   app: "egov-bndry-mgmnt"
   group: "rainmaker"
 
-namespace: urban
+namespace: egov
 
 # Ingress Configs
 ingress:
@@ -21,10 +21,12 @@ initContainers:
     schemaTable: "egov-bndry-mgmnt_schema"
     image:
       repository: "egov-bndry-mgmnt-db"
+      tag: "bndry-mgmnt-8b5fc86"
 
 # Container Configs
 image:
   repository: "egov-bndry-mgmnt"
+  tag: "bndry-mgmnt-8b5fc86"
 replicas: "1"
 appType: "java-spring"
 tracing-enabled: true
