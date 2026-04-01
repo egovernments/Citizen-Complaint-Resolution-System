@@ -97,23 +97,6 @@ const ACTION_CONFIGS = [
         {
           body: [
             {
-              isMandatory: false,
-              key: "SelectedReason",
-              type: "dropdown",
-              label: "CS_REJECT_COMPLAINT",
-              disable: false,
-              populators: {
-                name: "SelectedReason",
-                optionsKey: "name",
-                error: "Required",
-                mdmsConfig: {
-                  masterName: "RejectionReasons",
-                  moduleName: "RAINMAKER-PGR",
-                  localePrefix: "CS_REJECTION_",
-                },
-              },
-            },
-            {
               type: "textarea",
               isMandatory: true,
               key: "SelectedComments",
