@@ -48,9 +48,9 @@ env: |
     valueFrom:
       configMapKeyRef:
         name: egov-service-host
-        key: egov-mdms-service
+        key: {{ .Values.mdmsLegacyHost | default "egov-mdms-service" }} 
   - name: EGOV_MDMSLEGACY_SEARCH_ENDPOINT
-    value: {{ index .Values mdmsLegacySearchPath | default "mdms-v2/v1/_search" }}
+    value: {{ .Values.mdmsLegacySearchPath | default "mdms-v2/v1/_search" }}
   - name: EGOV_FILESTORE_HOST
     valueFrom:
       configMapKeyRef:
@@ -148,7 +148,7 @@ env: |
     value: "true"
   {{- end }}
   - name: EGOV_HRMS_DEV_MODE
-    value: {{ index .Values "hrms-dev-mode" | default "false" }} 
+    value: "true"
   - name: EGOV_HRMS_EMPLOYEE_DEFAULT_PASSWORD
     valueFrom:
       secretKeyRef:
