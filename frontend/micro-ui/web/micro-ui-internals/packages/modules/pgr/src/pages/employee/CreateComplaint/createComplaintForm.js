@@ -302,9 +302,16 @@ const CreateComplaintForm = ({
     const prevCodes = prevSubTypeRef.current.map(s => s.code).sort().join(",");
     const newCodes = newSubTypes.map(s => s.code).sort().join(",");
 
+    let needsSessionUpdate = false;
+    let updatedData = { ...formData };
+
     if (prevCodes !== newCodes) {
       prevSubTypeRef.current = newSubTypes;
       setSubType(newSubTypes);
+
+      setValue("SelectSubComplaintType", null);
+      updatedData.SelectSubComplaintType = null;
+      needsSessionUpdate = true;
     }
 
 
@@ -326,7 +333,7 @@ const CreateComplaintForm = ({
 
     // Only update if complaint user selection has changed
     if (selectedUser !== prevSelectedUser) {
-      const updatedData = { ...formData };
+      needsSessionUpdate = true;
 
       if (selectedUser === "MYSELF") {
         updatedData.ComplainantName = user?.info?.name || "";
@@ -338,6 +345,9 @@ const CreateComplaintForm = ({
 
       setValue("ComplainantName", updatedData.ComplainantName);
       setValue("ComplainantContactNumber", updatedData.ComplainantContactNumber);
+    }
+
+    if (needsSessionUpdate) {
       setSessionFormData(updatedData);
     }
   };
