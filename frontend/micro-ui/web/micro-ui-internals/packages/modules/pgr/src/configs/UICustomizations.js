@@ -407,3 +407,10 @@ export const UICustomizations = {
     },
   }
 };
+
+// CRITICAL FIX: The MDMS Database in Production identifies this module as "SearchInboxConfig",
+// whereas the local PGRSearchInboxConfig.js defines it as "PGRInboxConfig". 
+// Because this alias was missing, the Production server was completely ignoring the Search Clearing logic!
+// This explicitly forces Prod to execute the same fixes you authored for Local.
+UICustomizations.SearchInboxConfig = UICustomizations.PGRInboxConfig;
+UICustomizations.PGRSearchInboxConfig = UICustomizations.PGRInboxConfig;
