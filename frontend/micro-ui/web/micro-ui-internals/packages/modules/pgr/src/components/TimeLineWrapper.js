@@ -4,10 +4,10 @@ import { PopUp, Timeline, TimelineMolecule, Loader, DisplayPhotos } from '@egove
 import { useMyContext } from "../utils/context";
 import { convertEpochFormateToDate } from '../utils';
 
-// Helper function to mask employee names (show first 2 chars only)
+// Helper function to mask employee names (show first 1 char + * + X's)
 const maskName = (name) => {
   if (!name || name.length < 2) return name;
-  return name.substring(0, 2) + 'X'.repeat(Math.max(0, name.length - 2));
+  return name.charAt(0) + '*' + 'X'.repeat(Math.max(0, name.length - 2));
 };
 
 // Helper function to mask phone numbers (show last 4 digits only)
