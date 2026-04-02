@@ -35,6 +35,12 @@ const AssigneeComponent = ({ config, onSelect, formState, defaultValues }) => {
     changeQueryName: rolesKey, // This forces refetch when roles change
   });
 
+  // Helper function to securely mask employee names (e.g. "J*XXX")
+  const maskName = (name) => {
+    if (!name || name.length < 2) return name;
+    return name.charAt(0) + '*' + 'X'.repeat(Math.max(0, name.length - 2));
+  };
+
   // Transform employee data for dropdown
   function transformData(data) {
     return Object.values(
@@ -52,9 +58,11 @@ const AssigneeComponent = ({ config, onSelect, formState, defaultValues }) => {
           };
         }
   
+        const maskedEmployeeName = maskName(employee.user?.name);
+
         acc[department].options.push({
-          code: `${employee.user?.name} (${department})`,
-          name: `${employee.user?.name} (${department})`,
+          code: `${maskedEmployeeName} (${department})`,
+          name: `${maskedEmployeeName} (${department})`,
           uuid: uuid,
           userServiceUUID: userServiceUUID,
           mobileNumber: employee.user?.mobileNumber,
