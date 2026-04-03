@@ -1,0 +1,111 @@
+# Supplementary compose for ES + indexer + inbox
+# Run with: docker compose -p local-setup -f docker-compose.inbox.yml up -d
+
+networks:
+  local-setup_egov-network:
+    external: true
+
+volumes:
+  es_data:
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.10.3
+    container_name: digit-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms256m -Xmx384m
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - local-setup_egov-network
+
+  egov-indexer:
+    image: egovio/egov-indexer:v2.9.2-4a60f20
+    container_name: egov-indexer
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    volumes:
+      - ./configs/indexer:/indexer-config:ro
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://docker-postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: egov123
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
+      SPRING_FLYWAY_URL: jdbc:postgresql://docker-postgres:5432/egov
+      SPRING_FLYWAY_USER: egov
+      SPRING_FLYWAY_PASSWORD: egov123
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
+      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
+      SPRING_FLYWAY_ENABLED: 'true'
+      SPRING_FLYWAY_TABLE: egov_indexer_schema
+      KAFKA_BOOTSTRAP_SERVERS: digit-redpanda:9092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: digit-redpanda:9092
+      SERVER_PORT: 8080
+      EGOV_INFRA_INDEXER_HOST: http://elasticsearch:9200/
+      EGOV_INDEXER_YML_REPO_PATH: "file:///indexer-config/pgr-services.yml,file:///indexer-config/pgr-inbox-indexer.yml"
+      EGOV_MDMS_SEARCH_ENDPOINT: mdms-v2/v1/_search
+      EGOV_STATELEVEL_TENANTID: pg
+      EGOV_INDEXER_ES_USERNAME: ""
+      EGOV_INDEXER_ES_PASSWORD: ""
+      SECURITY_BASIC_ENABLED: 'false'
+      MANAGEMENT_SECURITY_ENABLED: 'false'
+      MANAGEMENT_HEALTH_DB_ENABLED: 'false'
+      JAVA_OPTS: -Xms256m -Xmx256m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/egov-indexer/actuator/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    networks:
+      - local-setup_egov-network
+
+  inbox:
+    image: egovio/inbox:state-tenant-fix
+    container_name: digit-inbox
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://docker-postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: egov123
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
+      KAFKA_BOOTSTRAP_SERVERS: digit-redpanda:9092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: digit-redpanda:9092
+      SERVER_PORT: 8080
+      SERVICES_ESINDEXER_HOST: http://elasticsearch:9200/
+      SERVICES_ESINDEXER_USERNAME: ""
+      SERVICES_ESINDEXER_PASSWORD: ""
+      WORKFLOW_HOST: http://egov-workflow-v2:8109/
+      EGOV_MDMS_HOST: http://egov-mdms-service:8094/
+      EGOV_USER_HOST: http://egov-user:8107/
+      STATE_LEVEL_TENANT_ID: pg
+      PARENT_LEVEL_TENANT_ID: pg
+      WORKFLOW_PROCESS_SEARCH_PATH: egov-workflow-v2/egov-wf/process/_search
+      WORKFLOW_BUSINESSSERVICE_SEARCH_PATH: egov-workflow-v2/egov-wf/businessservice/_search
+      WORKFLOW_PROCESS_COUNT_PATH: egov-workflow-v2/egov-wf/process/_count
+      WORKFLOW_PROCESS_STATUSCOUNT_PATH: egov-workflow-v2/egov-wf/process/_statuscount
+      EGOV_MDMS_SEARCH_ENDPOINT: mdms-v2/v1/_search
+      SECURITY_BASIC_ENABLED: 'false'
+      MANAGEMENT_SECURITY_ENABLED: 'false'
+      SPRING_JACKSON_DESERIALIZATION_FAIL_ON_UNKNOWN_PROPERTIES: 'false'
+      JAVA_OPTS: -Xms256m -Xmx256m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/inbox/actuator/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    networks:
+      - local-setup_egov-network

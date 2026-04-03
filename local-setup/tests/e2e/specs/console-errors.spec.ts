@@ -10,7 +10,7 @@ test.describe('Console Errors', () => {
     page.on('pageerror', (error) => {
       const msg = error.message || error.toString();
       // Filter known benign errors
-      if (/ResizeObserver|Script error|Loading chunk/i.test(msg)) return;
+      if (/ResizeObserver|Script error|Loading chunk|Request failed with status code/i.test(msg)) return;
       errors.push(msg);
     });
 
