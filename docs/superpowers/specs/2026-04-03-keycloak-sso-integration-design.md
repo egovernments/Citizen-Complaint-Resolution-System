@@ -492,15 +492,249 @@ The `/register` endpoint exists but there's no UI flow for self-registration in 
 | **Medium** | 9 | S5 (query param token), S6 (hardcoded creds), SC3 (system token), SC4 (rate limiting), R4 (OTEL missing), R5 (structured logging), O2 (readiness probe), O3 (debug endpoints), O4 (silent failures), C2 (mobile collision), C3 (type mismatch) |
 | **Low** | 1 | C4 (no signup UI) |
 
-### Recommended Fix Order
+### Resolution Strategy: NestJS + Fastify + Bun Rewrite
 
-1. **R1** (KC admin token) — Quick fix, unblocks role sync
-2. **S2** (deterministic passwords) — Replace with random-per-user or service-account approach
-3. **S1** (ROPC) — Migrate to Authorization Code + PKCE with KC login theme
-4. **S4** (audience validation) — One-line fix in jwt.ts
-5. **S3** (CORS) — Config change in server.ts
-6. **O1** (metrics) — Add prom-client, essential for production monitoring
-7. **SC1 + SC2** (HA) — Multi-replica deployment + Redis Sentinel
-8. **R2 + R3** (circuit breaker + cache invalidation) — Reliability hardening
-9. **C1** (userName collision) — Required before multi-state deployment
-10. Remaining medium/low gaps as capacity allows
+Rather than patching individual gaps in the existing Express codebase, all 20 gaps are resolved via a clean rewrite of token-exchange-svc using a production-grade framework stack:
+
+- **NestJS** — dependency injection, modular architecture, guards/interceptors/filters, built-in health checks, config validation, throttling
+- **Fastify** — 2-3x throughput over Express, schema validation, better hooks model
+- **Bun** — native TypeScript execution (no build step), faster startup (~50ms), faster crypto + fetch
+- **Dragonfly** — drop-in Redis replacement, multi-threaded, better memory efficiency
+
+This is a drop-in replacement with the same API contract — nginx routing, frontend adapter, and DIGIT backends are unaffected.
+
+---
+
+# Part 3: Remediation Design — token-exchange-svc v2
+
+## Architecture
+
+```
+src/
+  app.module.ts                — Root module
+  main.ts                      — Bun + Fastify bootstrap
+
+  auth/
+    auth.module.ts             — JWT validation, JWKS management
+    jwt.service.ts             — Validates KC JWTs (injectable, JWKS-cached)
+    jwt.guard.ts               — Per-request guard: extract + validate JWT
+
+  user/
+    user.module.ts             — User resolution, provisioning
+    user-resolver.service.ts   — Cache lookup, search/create, role sync
+    digit-client.service.ts    — egov-user API (search, create, update, token)
+
+  proxy/
+    proxy.module.ts            — Request rewriting + forwarding
+    proxy.service.ts           — Content-type aware proxying to Kong
+    proxy.controller.ts        — Wildcard catch-all route
+
+  cache/
+    cache.module.ts            — Dragonfly connection + in-memory LRU fallback
+    cache.service.ts           — get/set/delete with automatic fallback
+
+  keycloak/
+    keycloak.module.ts         — KC admin API, realm sync
+    kc-admin.service.ts        — Admin token with retry-backoff, realm CRUD
+    kc-sync.service.ts         — DIGIT→KC role sync (fire-and-forget)
+
+  circuit-breaker/
+    circuit-breaker.service.ts — Generic circuit breaker (injectable)
+
+  health/
+    health.module.ts           — @nestjs/terminus
+    health.controller.ts       — /healthz (liveness) + /readyz (readiness)
+
+  metrics/
+    metrics.module.ts          — prom-client integration
+    metrics.controller.ts      — /metrics endpoint
+    metrics.interceptor.ts     — Auto-instrument all requests
+
+  config/
+    config.module.ts           — @nestjs/config with Zod validation
+    config.schema.ts           — Typed schema for all env vars
+
+  login/
+    login.module.ts            — BFF login endpoint
+    login.controller.ts        — POST /auth/login (replaces browser ROPC)
+```
+
+## Gap-to-Module Mapping
+
+| Gap | Resolution | Module |
+|-----|-----------|--------|
+| **R1** KC admin token race | `kc-admin.service.ts` — retry with exponential backoff on init, separate from refresh interval | `keycloak/` |
+| **S2** Deterministic passwords | `digit-client.service.ts` — random password per user, stored in Dragonfly. On cache miss: generate new, update via `_updatenovalidate`, re-auth | `user/` |
+| **S1** ROPC in browser | `login.controller.ts` — BFF `/auth/login` endpoint. Browser sends credentials to own backend, not KC directly. KC refresh token stays server-side | `login/` |
+| **S4** No audience validation | `jwt.service.ts` — `audience` param in `jwtVerify()` + KC audience mapper in realm config | `auth/` |
+| **S3** Wide-open CORS | `main.ts` — Fastify CORS plugin with configurable `CORS_ALLOWED_ORIGINS`. Empty = permissive (dev), non-empty = strict | `main.ts` |
+| **SC1** Single instance | Stateless design with DI — no module-scope singletons. Graceful shutdown via `app.enableShutdownHooks()` | Architecture |
+| **SC2** Redis SPOF | `cache.service.ts` — Dragonfly primary, in-memory LRU fallback with health-check recovery loop | `cache/` |
+| **SC3** System token | `digit-client.service.ts` — injectable `TokenManager` with retry, jitter, lifecycle-managed refresh | `user/` |
+| **SC4** No rate limiting | `@nestjs/throttler` — `@Throttle()` decorator on `/auth/login` and wildcard proxy | `login/`, `proxy/` |
+| **R2** No circuit breaker | `circuit-breaker.service.ts` — injectable, wraps egov-user calls. 5 failures → open for 30s | `circuit-breaker/` |
+| **R3** Cache invalidation | `cache.service.ts` — `DELETE /cache/user/:sub` endpoint + 1-hour TTL with lazy re-validation + auto-clear on invalid JWT | `cache/` |
+| **R4** OTEL not reaching Tempo | `nestjs-otel` module — proper lifecycle, auto-instruments HTTP + Dragonfly + fetch | `app.module.ts` |
+| **R5** No structured logging | `nestjs-pino` — JSON output, request-scoped context (traceId, sub, tenant, latency) | `app.module.ts` |
+| **O1** No metrics | `metrics.module.ts` — prom-client counters/histograms for requests, cache, JWT, provisioning, circuit state, token refresh, role sync | `metrics/` |
+| **O2** No readiness probe | `health.controller.ts` — `/healthz` (process alive) + `/readyz` (Dragonfly + system token + KC admin token) | `health/` |
+| **O3** No debug endpoints | `health.controller.ts` — `/debug/status` behind `@UseGuards(AdminGuard)` reporting cache size, token status, JWKS state, circuit states | `health/` |
+| **O4** Silent failures | NestJS exception filters + interceptors — centralized error handling, metrics emitted on every catch. No silent swallowing | Architecture |
+| **S5** Query param token | Fastify `onSend` hook strips `auth-token` from logged URLs. Prefer `Authorization` header for multipart where possible | `proxy/` |
+| **S6** Hardcoded creds | `config.schema.ts` — Zod-validated env vars. Startup fails if required secrets missing in production mode | `config/` |
+| **C1** userName collision | `user-resolver.service.ts` — namespace userName as `{realm}:{email}`. No migration (new installation) | `user/` |
+| **C2** Mobile collision | `digit-client.service.ts` — retry with different seed on 409 from egov-user | `user/` |
+| **C3** Type mismatch | `user-resolver.service.ts` — respect `digit_user_type` from JWT when creating user and acquiring token | `user/` |
+| **C4** No signup UI | `login.controller.ts` — `POST /auth/register` delegates to KC user creation | `login/` |
+
+## Bootstrap
+
+```typescript
+// main.ts
+import { NestFactory } from "@nestjs/core";
+import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
+import { AppModule } from "./app.module";
+
+async function bootstrap() {
+  const app = await NestFactory.create<NestFastifyApplication>(
+    AppModule,
+    new FastifyAdapter(),
+  );
+
+  app.enableShutdownHooks();
+
+  const config = app.get(ConfigService);
+  const origins = config.get("CORS_ALLOWED_ORIGINS");
+  if (origins) {
+    app.enableCors({ origin: origins.split(","), credentials: true });
+  } else {
+    app.enableCors(); // Permissive dev mode
+  }
+
+  await app.listen(config.get("PORT") || 3000, "0.0.0.0");
+}
+
+bootstrap();
+// Run: bun run src/main.ts
+```
+
+## Test Strategy
+
+Each module has co-located unit tests using NestJS `Test.createTestingModule()` with mocked dependencies:
+
+```
+src/
+  auth/
+    jwt.service.spec.ts        — 5 tests (valid, expired, wrong aud, missing, malformed)
+  user/
+    user-resolver.service.spec.ts — 9 tests (cache hit, miss, provision, collision, roles, type)
+    digit-client.service.spec.ts  — 6 tests (search, create, update, token, password, mobile)
+  cache/
+    cache.service.spec.ts      — 8 tests (hit, miss, fallback, recovery, invalidation, TTL, staleness)
+  circuit-breaker/
+    circuit-breaker.service.spec.ts — 5 tests (closed, open, half-open, reset, threshold)
+  login/
+    login.controller.spec.ts   — 6 tests (success, bad creds, missing fields, rate limit, no refresh in response)
+  proxy/
+    proxy.service.spec.ts      — 4 tests (JSON rewrite, multipart, no-jwt forward, upstream error)
+  keycloak/
+    kc-admin.service.spec.ts   — 4 tests (init retry, backoff, refresh, realm sync)
+  health/
+    health.controller.spec.ts  — 4 tests (liveness, readiness-ok, readiness-degraded, debug-status)
+  metrics/
+    metrics.interceptor.spec.ts — 3 tests (counter inc, histogram observe, labels)
+```
+
+**Total: ~54 unit tests** covering all 20 gaps.
+
+**E2E tests** (extend existing Playwright suite in `/opt/digit-ccrs/local-setup/tests/`):
+
+| Test | Validates |
+|------|-----------|
+| BFF login returns tokens without refresh_token | S1 |
+| Old deterministic password rejected | S2 |
+| CORS blocked from disallowed origin | S3 |
+| Wrong-audience JWT rejected | S4 |
+| Metrics endpoint returns Prometheus format | O1 |
+| /readyz reports Dragonfly + token status | O2 |
+| Service survives Dragonfly restart | SC2 |
+| Service survives egov-user downtime (cached users work) | R2 |
+| Cache invalidation endpoint clears user session | R3 |
+| Rate limiting on /auth/login | SC4 |
+| Multi-realm same-email creates separate users | C1 |
+
+## Docker Compose Changes
+
+```yaml
+# docker-compose.prod.yml — v2
+digit-dragonfly:
+  image: docker.dragonflydb.io/dragonflydb/dragonfly:latest
+  command: --maxmemory 512mb --proactor_threads 4
+  ports:
+    - "16379:6379"
+  healthcheck:
+    test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+    interval: 10s
+    retries: 5
+  networks:
+    - local-setup_egov-network
+
+token-exchange-svc:
+  build: .
+  command: bun run src/main.ts
+  deploy:
+    replicas: 2
+  environment:
+    PORT: "3000"
+    DIGIT_USER_HOST: http://egov-user:8107
+    DIGIT_GATEWAY_HOST: http://kong-gateway:8000
+    KEYCLOAK_INTERNAL_URL: http://keycloak:8080
+    KEYCLOAK_AUDIENCE: digit-sandbox-ui
+    KEYCLOAK_ADMIN_URL: http://keycloak:8080
+    KEYCLOAK_ADMIN_USERNAME: admin
+    KEYCLOAK_ADMIN_PASSWORD: admin     # Use secrets in production
+    REDIS_HOST: digit-dragonfly
+    REDIS_PORT: "6379"
+    CACHE_TTL_SECONDS: "3600"          # 1 hour (down from 7 days)
+    CORS_ALLOWED_ORIGINS: "https://keycloak-sandbox.live.digit.org"
+    PASSWORD_HMAC_SECRET: ""           # Not needed — random passwords
+    TENANT_SYNC_ENABLED: "true"
+    DIGIT_TENANTS: "pg:pg.citya,pg.cityb"
+    OTEL_EXPORTER_OTLP_ENDPOINT: http://digit-telemetry:4317
+    OTEL_SERVICE_NAME: token-exchange-svc
+  depends_on:
+    keycloak:
+      condition: service_healthy
+    digit-dragonfly:
+      condition: service_healthy
+  healthcheck:
+    test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/readyz || exit 1"]
+    interval: 10s
+    retries: 5
+  networks:
+    - local-setup_egov-network
+```
+
+## KC Realm Config Changes
+
+1. **Audience mapper** on `digit-sandbox-ui` client — includes client ID in JWT `aud` claim
+2. **Disable direct access grants** — ROPC blocked at KC level (browser can't bypass BFF)
+
+```json
+{
+  "clientId": "digit-sandbox-ui",
+  "directAccessGrantsEnabled": false,
+  "protocolMappers": [{
+    "name": "digit-ui-audience",
+    "protocol": "openid-connect",
+    "protocolMapper": "oidc-audience-mapper",
+    "config": {
+      "included.client.audience": "digit-sandbox-ui",
+      "id.token.claim": "true",
+      "access.token.claim": "true"
+    }
+  }]
+}
+```
+
+Note: ROPC is re-enabled only for `token-exchange-svc`'s server-side use via a **separate confidential client** (`digit-svc`) that only the BFF knows the secret for.
