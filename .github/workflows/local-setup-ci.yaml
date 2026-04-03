@@ -2,7 +2,7 @@ name: Local Setup CI
 
 on:
   push:
-    branches: [main, master, feature/*]
+    branches: [main, master, feature/*, feat/*]
     paths:
       - 'local-setup/**'
   pull_request:
@@ -362,6 +362,38 @@ jobs:
             echo "FATAL: boundary end-to-end test failed (exit code $BND_RC)"
             exit 1
           fi
+
+      - name: Wait for Keycloak and UI
+        run: |
+          echo "Waiting for Keycloak..."
+          timeout 180 bash -c 'until curl -sf http://localhost:18180/health/ready; do sleep 5; done'
+          echo "Waiting for digit-ui..."
+          timeout 60 bash -c 'until curl -sf http://localhost:18080/digit-ui/; do sleep 5; done'
+          echo "Waiting for token-exchange-svc..."
+          timeout 60 bash -c 'until curl -sf http://localhost:18200/health; do sleep 5; done'
+
+      - name: Install Playwright
+        run: |
+          cd tests
+          npx playwright install --with-deps chromium
+
+      - name: Run Playwright E2E tests
+        env:
+          BASE_URL: http://localhost:18080
+          CI: true
+        run: |
+          cd tests
+          npx playwright test --config=e2e/playwright.config.ts
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            local-setup/tests/e2e/test-results/
+            local-setup/tests/e2e/playwright-report/
+          retention-days: 7
 
       - name: Show telemetry events
         if: always()

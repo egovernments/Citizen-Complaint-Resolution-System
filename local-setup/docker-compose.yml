@@ -1016,7 +1016,7 @@ services:
       - egov-network
 
   digit-ui:
-    image: egovio/digit-ui:multiarch-d448cb7
+    image: egovio/digit-ui:kc-sso-f71b3a27
     container_name: digit-ui
     ports:
       - "18080:80"
