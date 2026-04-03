@@ -115,10 +115,6 @@ export class KeycloakAuthAdapter extends AuthAdapter {
   }
 
   async login({ email, password, tenantId }) {
-    const kcUrl = window?.globalConfigs?.getConfig("KEYCLOAK_URL");
-    const realm = window?.globalConfigs?.getConfig("KEYCLOAK_REALM");
-    const clientId = window?.globalConfigs?.getConfig("KEYCLOAK_CLIENT_ID");
-
     // If no tenantId passed by caller, read from KC tenant dropdown
     if (!tenantId) {
       const kcSel = document.getElementById("kc-tenant-select");
@@ -126,39 +122,27 @@ export class KeycloakAuthAdapter extends AuthAdapter {
     }
     this._tenantId = tenantId || null;
 
-    const tokenUrl = `${kcUrl}/realms/${realm}/protocol/openid-connect/token`;
-    const body = new URLSearchParams({
-      grant_type: "password",
-      client_id: clientId,
-      username: email,
-      password: password,
-      scope: "openid",
-    });
-    if (tenantId) body.set("tenantId", tenantId);
-
-    const resp = await fetch(tokenUrl, {
+    const tokenExchangeUrl = this._tokenExchangeUrl || window.location.origin;
+    const resp = await fetch(`${tokenExchangeUrl}/auth/login`, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: body.toString(),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, tenantId }),
     });
 
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({}));
-      throw new Error(err.error_description || "Login failed");
+      throw new Error(err.error || err.message || "Login failed");
     }
 
     const tokens = await resp.json();
 
-    // Extract DIGIT-specific fields from token response
+    // BFF does not return refresh_token — pass null
+    this._setTokens(tokens.access_token, null, tokens.id_token);
     this._digitUserType = tokens.digit_user_type || null;
     this._digitRoles = tokens.digit_roles || null;
 
-    // Use _setTokens instead of kc.init() to avoid OIDC redirect issues
-    this._setTokens(tokens.access_token, tokens.refresh_token, tokens.id_token);
     await this._loadUserFromToken();
-
-    // Return user and token — the login page handles redirect and session storage
-    return { success: true, user: this._user, token: tokens.access_token };
+    return { token: tokens.access_token, user: this._user };
   }
 
   async signup({ email, password, name, tenantId }) {
