@@ -57,8 +57,8 @@ async function build() {
     bundle: true,
     outdir: OUTDIR,
     publicPath: PUBLIC_PATH,
-    splitting: true,
-    format: "esm",
+    splitting: false,
+    format: "iife",
     target: ["es2018"],
     minify: true,
     metafile: true,
@@ -76,34 +76,38 @@ async function build() {
       ".svg": "file",
     },
     alias: {
-      // Resolve core module from local source (with keycloak customizations)
+      // Resolve all @egovernments packages from LOCAL SOURCE for live editing
       "@egovernments/digit-ui-module-core": path.resolve(
         __dirname,
         "micro-ui-internals/packages/modules/core/src/Module.js"
       ),
+      "@egovernments/digit-ui-module-pgr": path.resolve(
+        __dirname,
+        "micro-ui-internals/packages/modules/pgr/src/Module.js"
+      ),
+      "@egovernments/digit-ui-libraries": path.resolve(
+        __dirname,
+        "micro-ui-internals/packages/libraries/src/index.js"
+      ),
+      "@egovernments/digit-ui-react-components": path.resolve(
+        __dirname,
+        "micro-ui-internals/packages/react-components/src/index.js"
+      ),
+      // These don't have local source — resolve from node_modules
+      "@egovernments/digit-ui-components": path.resolve(
+        __dirname,
+        "node_modules/@egovernments/digit-ui-components"
+      ),
+      "@egovernments/digit-ui-svg-components": path.resolve(
+        __dirname,
+        "node_modules/@egovernments/digit-ui-svg-components"
+      ),
       // Force single instance of shared packages to prevent duplication
-      // (each @egovernments module bundles its own copy otherwise)
       react: path.resolve(__dirname, "node_modules/react"),
       "react-dom": path.resolve(__dirname, "node_modules/react-dom"),
       "react-router-dom": path.resolve(__dirname, "node_modules/react-router-dom"),
       "react-redux": path.resolve(__dirname, "node_modules/react-redux"),
       "react-query": path.resolve(__dirname, "node_modules/react-query"),
-      "@egovernments/digit-ui-components": path.resolve(
-        __dirname,
-        "micro-ui-internals/node_modules/@egovernments/digit-ui-components"
-      ),
-      "@egovernments/digit-ui-react-components": path.resolve(
-        __dirname,
-        "micro-ui-internals/node_modules/@egovernments/digit-ui-react-components"
-      ),
-      "@egovernments/digit-ui-svg-components": path.resolve(
-        __dirname,
-        "micro-ui-internals/node_modules/@egovernments/digit-ui-svg-components"
-      ),
-      "@egovernments/digit-ui-libraries": path.resolve(
-        __dirname,
-        "micro-ui-internals/node_modules/@egovernments/digit-ui-libraries"
-      ),
     },
     nodePaths: [
       path.resolve(__dirname, "node_modules"),
@@ -134,7 +138,7 @@ async function build() {
     .map((f) => path.basename(f));
 
   const scriptTags = entryJS
-    .map((f) => `  <script type="module" src="${PUBLIC_PATH}${f}"></script>`)
+    .map((f) => `  <script src="${PUBLIC_PATH}${f}"></script>`)
     .join("\n");
   const linkTags = cssFiles
     .map((f) => `  <link rel="stylesheet" href="${PUBLIC_PATH}${f}">`)

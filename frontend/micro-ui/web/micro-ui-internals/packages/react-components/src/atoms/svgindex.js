@@ -427,6 +427,13 @@ const SortUp = (style) => (
   </svg>
 );
 
+const ArrowRight = ({ style }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" style={style}>
+    <path d="M0 0h24v24H0z" fill="none" />
+    <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" fill={style && style.fill ? style.fill : COLOR_FILL} />
+  </svg>
+);
+
 const ArrowRightInbox = ({ style }) => (
   <svg width="20" height="14" viewBox="0 0 20 14" fill="none" xmlns="http://www.w3.org/2000/svg" style={style}>
     <path d="M13 0L11.59 1.41L16.17 6H0V8H16.17L11.58 12.59L13 14L20 7L13 0Z" fill={COLOR_FILL} />
@@ -1912,6 +1919,7 @@ export {
   HamburgerIcon,
   ArrowBack,
   ArrowForward,
+  ArrowRight,
   ArrowRightInbox,
   SortDown,
   SortUp,

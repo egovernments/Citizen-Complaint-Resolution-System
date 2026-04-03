@@ -89,4 +89,5 @@ const initLibraries = () => {
 };
 
 export { initAuthAdapter, getAuthAdapter } from "./services/auth/index";
+export { MdmsService } from "./services/elements/MDMS";
 export { initLibraries, Enums, Hooks, subFormRegistry ,Request};
