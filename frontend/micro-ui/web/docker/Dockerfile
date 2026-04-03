@@ -19,7 +19,7 @@ RUN npm config set python /usr/bin/python
 
 ARG WORK_DIR
 WORKDIR /app
-ENV NODE_OPTIONS="--max-old-space-size=8168"
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 
 COPY ${WORK_DIR} .
 RUN ls -lah
@@ -30,12 +30,19 @@ RUN chmod +x ./install-deps.sh
 RUN ./install-deps.sh
 RUN yarn config set network-timeout 600000
 
-# Use frozen-lockfile for deterministic installs in CI
+# Install dependencies
 RUN yarn install --frozen-lockfile
-RUN yarn build:webpack
+
+# Install core module's extra peer deps (needed because webpack now compiles
+# core from source via resolve.alias instead of using the npm package)
+RUN yarn add react-responsive react-tooltip --no-lockfile -W
+
+RUN yarn build:prod
 
 FROM nginx:mainline-alpine
 ENV WORK_DIR=/var/web/digit-ui
 RUN mkdir -p ${WORK_DIR}
 COPY --from=build /app/web/build ${WORK_DIR}/
+COPY --from=build /app/web/public/globalConfigs.js ${WORK_DIR}/globalConfigs.js
+COPY --from=build /app/web/public/silent-check-sso.html ${WORK_DIR}/silent-check-sso.html
 COPY --from=build /app/web/docker/nginx.conf /etc/nginx/conf.d/default.conf

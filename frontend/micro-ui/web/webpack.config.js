@@ -16,7 +16,7 @@ module.exports = {
           loader: "babel-loader",
           options: {
             presets: ["@babel/preset-env", "@babel/preset-react"],
-            plugins: ["@babel/plugin-proposal-optional-chaining"]
+            plugins: ["@babel/plugin-proposal-optional-chaining", "@babel/plugin-proposal-class-properties"]
           }
         }
       },
@@ -25,7 +25,7 @@ module.exports = {
         use: ["style-loader", "css-loader"],
       },
       {
-        test: /\.(png|jpe?g|gif)$/i,
+        test: /\.(png|jpe?g|gif|svg)$/i,
         use: [
           {
             loader: 'file-loader',
@@ -33,6 +33,38 @@ module.exports = {
         ],
       },
     ],
+  },
+  resolve: {
+    modules: [
+      "node_modules",
+      path.resolve(__dirname, "micro-ui-internals/node_modules"),
+    ],
+    alias: {
+      // Resolve workspace packages from local source (skip build:libraries)
+      "@egovernments/digit-ui-libraries": path.resolve(
+        __dirname,
+        "micro-ui-internals/packages/libraries/src/index.js"
+      ),
+      "@egovernments/digit-ui-module-core": path.resolve(
+        __dirname,
+        "micro-ui-internals/packages/modules/core/src/Module.js"
+      ),
+      "@egovernments/digit-ui-module-pgr": path.resolve(
+        __dirname,
+        "micro-ui-internals/packages/modules/pgr/src/Module.js"
+      ),
+      "@egovernments/digit-ui-react-components": path.resolve(
+        __dirname,
+        "micro-ui-internals/packages/react-components/src/index.js"
+      ),
+      // Force single React instance to prevent "Invalid hook call" errors
+      // when the core module alias resolves from a different path
+      "react": path.resolve(__dirname, "node_modules/react"),
+      "react-dom": path.resolve(__dirname, "node_modules/react-dom"),
+      "react-router-dom": path.resolve(__dirname, "node_modules/react-router-dom"),
+      "react-redux": path.resolve(__dirname, "node_modules/react-redux"),
+      "react-query": path.resolve(__dirname, "node_modules/react-query"),
+    },
   },
   output: {
     filename: "[name].bundle.js",
@@ -42,12 +74,12 @@ module.exports = {
   optimization: {
     splitChunks: {
       chunks: 'all',
-      minSize:20000,
-      maxSize:50000,
-      enforceSizeThreshold:50000,
-      minChunks:1,
-      maxAsyncRequests:30,
-      maxInitialRequests:30
+      minSize: 30000,
+      maxSize: 500000,
+      enforceSizeThreshold: 500000,
+      minChunks: 1,
+      maxAsyncRequests: 15,
+      maxInitialRequests: 15
     },
   },
   plugins: [

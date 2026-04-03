@@ -245,6 +245,15 @@ services:
     paths:
     - /egov-bndry-mgmnt
     strip_path: true
+- name: inbox-service
+  host: digit-inbox
+  port: 8080
+  protocol: http
+  tags: [core]
+  routes:
+    - name: inbox-route
+      paths: ["/inbox"]
+      strip_path: false
 - name: digit-ui
   url: http://digit-ui:80
   tags:

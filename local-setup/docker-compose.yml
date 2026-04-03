@@ -815,6 +815,206 @@ services:
     networks:
       - egov-network
 
+  # ===========================================================================
+  # Keycloak SSO - Identity provider for unified login
+  # ===========================================================================
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    container_name: keycloak
+    command: start-dev --import-realm
+    environment:
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_HTTP_PORT: 8080
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+    volumes:
+      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+    ports:
+      - "18180:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '200 OK'"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+          cpus: '0.5'
+    networks:
+      - egov-network
+
+  # ===========================================================================
+  # Token Exchange Service - Wraps Keycloak token endpoint with DIGIT user enrichment
+  # Source: https://github.com/ChakshuGautam/DIGIT-keycloak-overlay
+  # ===========================================================================
+  token-exchange-svc:
+    image: chakshu/digit-keycloak-overlay:latest
+    container_name: token-exchange-svc
+    environment:
+      DIGIT_USER_HOST: http://egov-user:8107
+      DIGIT_SYSTEM_USERNAME: INTERNAL_MICROSERVICE_ROLE
+      DIGIT_SYSTEM_PASSWORD: ${DIGIT_SYSTEM_PASSWORD:-eGov@123}
+      DIGIT_SYSTEM_TENANT: pg
+      DIGIT_DEFAULT_TENANT: pg.citya
+      KEYCLOAK_ISSUER: http://keycloak:8080/realms/digit-sandbox
+      KEYCLOAK_JWKS_URI: http://keycloak:8080/realms/digit-sandbox/protocol/openid-connect/certs
+      KEYCLOAK_ADMIN_URL: http://keycloak:8080
+      KEYCLOAK_ADMIN_USERNAME: admin
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      TENANT_SYNC_ENABLED: "true"
+      DIGIT_MDMS_HOST: ""
+      DIGIT_TENANTS: "pg:pg.citya,pg.cityb"
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    ports:
+      - "18200:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      egov-user:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+    networks:
+      - egov-network
+
+  # ===========================================================================
+  # Elasticsearch - Search engine for inbox queries
+  # ===========================================================================
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.10.3
+    container_name: digit-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms256m -Xmx384m
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    ports:
+      - "19200:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+    networks:
+      - egov-network
+
+  # ===========================================================================
+  # Elasticsearch Indexer - Reads Kafka topics, indexes into Elasticsearch
+  # ===========================================================================
+  egov-indexer:
+    image: egovio/egov-indexer:v2.9.2-4a60f20
+    container_name: egov-indexer
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      egov-mdms-service:
+        condition: service_healthy
+    volumes:
+      - ./configs/indexer:/indexer-config:ro
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
+      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_FLYWAY_USER: egov
+      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
+      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
+      SPRING_FLYWAY_ENABLED: 'true'
+      SPRING_FLYWAY_TABLE: egov_indexer_schema
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SERVER_PORT: 8080
+      EGOV_INFRA_INDEXER_HOST: http://elasticsearch:9200/
+      EGOV_INDEXER_YML_REPO_PATH: "file:///indexer-config/pgr-services.yml,file:///indexer-config/pgr-inbox-indexer.yml"
+      EGOV_MDMS_SEARCH_ENDPOINT: mdms-v2/v1/_search
+      EGOV_STATELEVEL_TENANTID: pg
+      OTEL_TRACES_EXPORTER: none
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+          cpus: '0.25'
+    networks:
+      - egov-network
+
+  # ===========================================================================
+  # Inbox v2 - Queries Elasticsearch for inbox/search views
+  # ===========================================================================
+  inbox:
+    image: egovio/inbox:state-tenant-fix
+    container_name: digit-inbox
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      egov-mdms-service:
+        condition: service_healthy
+      egov-workflow-v2:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SERVER_PORT: 8080
+      SERVICES_ESINDEXER_HOST: http://elasticsearch:9200/
+      SERVICES_ESINDEXER_USERNAME: ""
+      SERVICES_ESINDEXER_PASSWORD: ""
+      WORKFLOW_HOST: http://egov-workflow-v2:8109/
+      EGOV_MDMS_HOST: http://egov-mdms-service:8094/
+      EGOV_USER_HOST: http://egov-user:8107/
+      STATE_LEVEL_TENANT_ID: pg
+      OTEL_TRACES_EXPORTER: none
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
+    ports:
+      - "18280:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/inbox/actuator/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+          cpus: '0.25'
+    networks:
+      - egov-network
+
   digit-ui:
     image: egovio/digit-ui:multiarch-d448cb7
     container_name: digit-ui
@@ -1030,3 +1230,4 @@ networks:
 volumes:
   postgres_data: null
   minio_data: null
+  es_data: null
