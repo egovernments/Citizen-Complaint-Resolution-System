@@ -167,7 +167,7 @@ java -jar target/digit-config-service-*.jar \
 
 ### Helm Chart
 
-Location: `deploy-as-code/helm/charts/common-services/digit-config-service`
+Location: [`deploy-as-code/helm/charts/common-services/digit-config-service`](https://github.com/egovernments/DIGIT-DevOps/tree/sandbox-demo/deploy-as-code/helm/charts/common-services/digit-config-service)
 
 ## Resources
 

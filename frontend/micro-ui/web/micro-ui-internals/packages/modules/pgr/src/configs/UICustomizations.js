@@ -285,8 +285,23 @@ export const UICustomizations = {
       var _bodyOffset = clonedData.body.inbox.offset;
       clonedData.body.inbox.offset = _tableOffset != null ? _tableOffset : (_bodyOffset != null ? _bodyOffset : 0);
 
-      // Handle date range from search form
-      const requestDate = clonedData?.body?.inbox?.moduleSearchCriteria?.range?.requestDate;
+      // Extract search fields from state rather than body to avoid stale data during 'Clear Search'
+      const searchForm = clonedData?.state?.searchForm || {};
+
+      if (searchForm.complaintNumber) {
+        clonedData.body.inbox.moduleSearchCriteria.complaintNumber = searchForm.complaintNumber;
+      } else {
+        delete clonedData.body.inbox.moduleSearchCriteria.complaintNumber;
+      }
+
+      if (searchForm.mobileNumber) {
+        clonedData.body.inbox.moduleSearchCriteria.mobileNumber = searchForm.mobileNumber;
+      } else {
+        delete clonedData.body.inbox.moduleSearchCriteria.mobileNumber;
+      }
+
+      // Handle date range from search form directly
+      const requestDate = searchForm?.range?.requestDate;
 
       if (requestDate?.startDate && requestDate?.endDate) {
         const fromDate = new Date(requestDate.startDate).getTime();

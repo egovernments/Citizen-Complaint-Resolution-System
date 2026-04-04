@@ -5,8 +5,7 @@ import { useSelector } from "react-redux";
 import { PgrRoutes, getRoute } from "../../constants/Routes";
 import { useTranslation } from "react-i18next";
 
-const GetActionMessage = ({ action }) => {
-  const { t } = useTranslation();
+const getActionMessage = (t, { action }) => {
   switch (action) {
     case "REOPEN":
       return t(`CS_COMMON_COMPLAINT_REOPENED`);
@@ -20,10 +19,16 @@ const GetActionMessage = ({ action }) => {
 const BannerPicker = ({ response }) => {
   const { complaints } = response;
   const { t } = useTranslation();
-  if (complaints && complaints.response && complaints.response.responseInfo && complaints.response.ServiceWrappers && complaints.response.ServiceWrappers.length > 0) {
+
+  // Return null while loading to prevent showing "Failed" banner prematurely
+  if (!complaints || !complaints.response) {
+    return null;
+  }
+
+  if (complaints.response.responseInfo && complaints.response.ServiceWrappers && complaints.response.ServiceWrappers.length > 0) {
     return (
       <Banner
-        message={GetActionMessage(complaints.response.ServiceWrappers[0].workflow)}
+        message={getActionMessage(t, complaints.response.ServiceWrappers[0].workflow)}
         complaintNumber={complaints.response.ServiceWrappers[0].service.serviceRequestId}
         successful={true}
       />
@@ -36,7 +41,13 @@ const BannerPicker = ({ response }) => {
 const TextPicker = ({ response }) => {
   const { complaints } = response;
   const { t } = useTranslation();
-  if (complaints && complaints.response && complaints.response.responseInfo && complaints.response.ServiceWrappers && complaints.response.ServiceWrappers.length > 0) {
+
+  // Return null while loading
+  if (!complaints || !complaints.response) {
+    return null;
+  }
+
+  if (complaints.response.responseInfo && complaints.response.ServiceWrappers && complaints.response.ServiceWrappers.length > 0) {
     const { action } = complaints.response.ServiceWrappers[0].workflow;
     return action === "RATE" ? <CardText>{t("CS_COMMON_RATING_SUBMIT_TEXT")}</CardText> : <CardText>{t("CS_COMMON_TRACK_COMPLAINT_TEXT")}</CardText>;
   }
@@ -56,7 +67,7 @@ const Response = (props) => {
   return (
     <Card>
       <BannerPicker response={appState} />
-      {appState.complaints.response && <TextPicker response={appState} />}
+      {appState.complaints?.response && <TextPicker response={appState} />}
       <Link to={`/${window?.contextPath}/citizen/all-services`}>
         <SubmitBar label={t("CORE_COMMON_GO_TO_HOME")} />
       </Link>

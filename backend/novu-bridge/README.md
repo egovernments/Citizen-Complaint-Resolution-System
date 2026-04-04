@@ -271,7 +271,7 @@ NOVU_API_KEY=<your-key> java -jar target/novu-bridge-*.jar
 
 ### Helm Chart
 
-Location: `deploy-as-code/helm/charts/common-services/novu-bridge`
+Location: [`deploy-as-code/helm/charts/common-services/novu-bridge`](https://github.com/egovernments/DIGIT-DevOps/tree/sandbox-demo/deploy-as-code/helm/charts/common-services/novu-bridge)
 
 ## System Flow
 
