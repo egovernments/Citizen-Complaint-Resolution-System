@@ -148,7 +148,7 @@ env: |
     value: "true"
   {{- end }}
   - name: EGOV_HRMS_DEV_MODE
-    value: "true"
+    value: {{ index .Values "hrms-dev-mode" | "false" }}
   - name: EGOV_HRMS_EMPLOYEE_DEFAULT_PASSWORD
     valueFrom:
       secretKeyRef:
