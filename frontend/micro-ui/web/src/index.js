@@ -51,6 +51,34 @@ async function bootstrap() {
       console.error("[bootstrap] initAuthAdapter failed:", err.message);
     });
     console.log("[bootstrap] initAuthAdapter done");
+    // If KC adapter didn't authenticate (SSO check failed/timed out),
+    // fall back to localStorage tokens (same as non-KC path)
+    const user = window.Digit.SessionStorage.get("User");
+    if (!user || !user.access_token) {
+      console.log("[bootstrap] KC adapter not authenticated, recovering from localStorage");
+      const token = getFromStorage("token");
+      const citizenToken = getFromStorage("Citizen.token");
+      const citizenInfo = getFromStorage("Citizen.user-info");
+      const stateCode = window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID");
+      const citizenTenantId = getFromStorage("Citizen.tenant-id") || getFromInfo(citizenInfo) || stateCode;
+      const employeeToken = getFromStorage("Employee.token");
+      const employeeInfo = getFromStorage("Employee.user-info");
+      const employeeTenantId = getFromStorage("Employee.tenant-id") || getFromInfo(employeeInfo) || stateCode;
+      const userType = token === citizenToken ? "citizen" : (employeeToken ? "employee" : "citizen");
+
+      if (token) {
+        window.Digit.SessionStorage.set("user_type", userType);
+        window.Digit.SessionStorage.set("userType", userType);
+        const getUserDetails = (access_token, info) => ({ token: access_token, access_token, info });
+        const userDetails = userType === "citizen"
+          ? getUserDetails(citizenToken, citizenInfo)
+          : getUserDetails(employeeToken, employeeInfo);
+        window.Digit.SessionStorage.set("User", userDetails);
+        window.Digit.SessionStorage.set("Citizen.tenantId", citizenTenantId);
+        window.Digit.SessionStorage.set("Employee.tenantId", employeeTenantId);
+        console.log("[bootstrap] Recovered session from localStorage as " + userType);
+      }
+    }
   } else {
     const user = window.Digit.SessionStorage.get("User");
     if (!user || !user.access_token || !user.info) {

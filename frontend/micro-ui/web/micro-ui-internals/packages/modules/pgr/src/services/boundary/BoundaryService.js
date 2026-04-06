@@ -24,18 +24,23 @@ const fetchBoundaries = async ({ tenantId }) => {
   const boundaryType = window?.globalConfigs?.getConfig("BOUNDARY_TYPE") || "Locality";
 
 
-    // Get user info from localStorage
-  const citizenInfo = window.localStorage.getItem("user-info");
+    // Get user info from localStorage (KC adapter stores as "Citizen.user-info")
+  const citizenInfo = window.localStorage.getItem("Citizen.user-info") || window.localStorage.getItem("user-info");
 
   if (citizenInfo) {
-    const user = JSON.parse(citizenInfo);
-    const userType = user.type;
+    try {
+      const user = JSON.parse(citizenInfo);
+      if (user.type === "CITIZEN") {
+        tenantId = Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code
+          || window.localStorage.getItem("Citizen.tenant-id")
+          || tenantId;
+      }
+    } catch (e) {}
+  }
 
-    if (userType === "CITIZEN") {
-      tenantId = Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || tenantId;
-    }
-  } else {
-    console.log("No CITIZEN user info found in localStorage.");
+  // Ensure city-level tenant (boundaries are seeded at city level)
+  if (tenantId && !tenantId.includes(".")) {
+    tenantId = tenantId + ".citya";
   }
 
 
