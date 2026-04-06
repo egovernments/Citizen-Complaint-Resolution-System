@@ -109,9 +109,9 @@ const componentsToRegister = {
   PGRSelectRating: SelectRating,
   PGRResponseCitzen: ResponseCitizen,
   CreatePGRFlow: CreatePGRFlow,
-  SelectAddress,
   SelectImages,
   GeoLocations,
+  SelectAddress,
   PGRTrackOnWhatsApp: TrackOnWhatsApp,
   PGRComplaint: Complaint,
 };
