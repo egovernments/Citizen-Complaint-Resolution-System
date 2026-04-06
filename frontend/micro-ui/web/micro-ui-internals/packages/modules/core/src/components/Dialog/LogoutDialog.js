@@ -6,7 +6,7 @@ const LogoutDialog = ({ onSelect, onCancel, onDismiss, PopupStyles, isDisabled, 
   const { t } = useTranslation();
 
   const children = [
-    <div>
+    <div key="logout-message">
       <CardText>
         {t("CORE_LOGOUT_WEB_CONFIRMATION_MESSAGE") + " "}
         <strong>{t("CORE_LOGOUT_MESSAGE")}</strong>
@@ -16,6 +16,7 @@ const LogoutDialog = ({ onSelect, onCancel, onDismiss, PopupStyles, isDisabled, 
 
   const footer = [
     <Button
+      key="cancel"
       type={"button"}
       size={"large"}
       variation={"secondary"}
@@ -24,6 +25,7 @@ const LogoutDialog = ({ onSelect, onCancel, onDismiss, PopupStyles, isDisabled, 
       onClick={onCancel}
     />,
     <Button
+      key="confirm"
       type={"button"}
       size={"large"}
       variation={"primary"}
@@ -36,6 +38,7 @@ const LogoutDialog = ({ onSelect, onCancel, onDismiss, PopupStyles, isDisabled, 
 
   const footerWithoutSubmit = [
     <Button
+      key="cancel"
       type={"button"}
       size={"large"}
       variation={"digit-action-cancel"}

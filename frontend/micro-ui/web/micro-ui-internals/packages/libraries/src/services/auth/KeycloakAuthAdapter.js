@@ -241,9 +241,9 @@ export class KeycloakAuthAdapter extends AuthAdapter {
     console.log("[KC-AUTH] _loadUserFromToken: sub=" + parsed.sub + " email=" + parsed.email);
     console.log("[KC-AUTH] _digitUserType=" + this._digitUserType + " _digitRoles=" + JSON.stringify(this._digitRoles));
     console.log("[KC-AUTH] realm_access.roles=" + JSON.stringify(parsed.realm_access?.roles));
-    const tenantId = this._tenantId
-      || window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID")
-      || "pg";
+    const stateTenant = window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID") || "pg";
+    const defaultCityTenant = stateTenant + ".citya"; // TODO: make configurable
+    const tenantId = this._tenantId || defaultCityTenant;
 
     const isEmployee = this._digitUserType === "EMPLOYEE";
     const userType = isEmployee ? "EMPLOYEE" : "CITIZEN";

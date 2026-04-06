@@ -21,7 +21,7 @@ import Download from "./services/atoms/Download";
 import { WorkflowService } from "./services/elements/WorkFlow";
 import { MdmsService } from "./services/elements/MDMS";
 import { Complaint } from "./services/elements/Complaint";
-import { UserService } from "./services/elements/User";
+import { UserService } from "./services/elements/User/index";
 import HrmsService from "./services/elements/HRMS";
 import { InboxGeneral } from "./services/elements/InboxService";
 import EventsServices from "./services/elements/Events";
