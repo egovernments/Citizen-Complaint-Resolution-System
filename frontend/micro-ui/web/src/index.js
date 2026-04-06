@@ -43,7 +43,14 @@ async function bootstrap() {
       /* webpackChunkName: "keycloak-auth" */
       "../micro-ui-internals/packages/libraries/src/services/auth/index"
     );
-    await initAuthAdapter();
+    console.log("[bootstrap] Starting initAuthAdapter...");
+    await Promise.race([
+      initAuthAdapter(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("initAuthAdapter timeout after 15s")), 15000))
+    ]).catch(err => {
+      console.error("[bootstrap] initAuthAdapter failed:", err.message);
+    });
+    console.log("[bootstrap] initAuthAdapter done");
   } else {
     const user = window.Digit.SessionStorage.get("User");
     if (!user || !user.access_token || !user.info) {
@@ -90,6 +97,7 @@ async function bootstrap() {
     }
   }
 
+  console.log("[bootstrap] About to call ReactDOM.render()");
   ReactDOM.render(
     <React.StrictMode>
       <App />

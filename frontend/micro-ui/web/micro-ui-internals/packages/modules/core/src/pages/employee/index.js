@@ -42,7 +42,15 @@ const EmployeeApp = ({
   const showLanguageChange = location?.pathname?.includes("language-selection");
   const isUserProfile = userScreensExempted.some((url) => location?.pathname?.includes(url));
   useEffect(() => {
-    Digit.UserService.setType("employee");
+    const userInfo = Digit.SessionStorage.get("User")?.info;
+    const currentType = Digit.UserService.getType();
+    console.log("[EmployeeApp] useEffect: userInfo.type=" + userInfo?.type + " currentType=" + currentType + " pathname=" + window.location.pathname);
+    if (!userInfo || userInfo.type !== "CITIZEN") {
+      console.log("[EmployeeApp] Setting userType to employee");
+      Digit.UserService.setType("employee");
+    } else {
+      console.log("[EmployeeApp] SKIPPING setType — user is CITIZEN");
+    }
   }, []);
 
   const additionalComponent = initData?.modules?.filter((i) => i?.additionalComponent)?.map((i) => i?.additionalComponent);

@@ -42,18 +42,19 @@ export class KeycloakAuthAdapter extends AuthAdapter {
         silentCheckSsoRedirectUri: window.location.origin + "/" + contextPath + "/silent-check-sso.html",
       });
 
+      console.log("[KC-AUTH] init: authenticated=" + authenticated + " pathname=" + window.location.pathname);
       if (authenticated) {
         await this._loadUserFromToken();
-        // If we just completed an SSO callback (auth code in URL) and are still
-        // on the login page, redirect the user. This handles the timing issue
-        // where React renders before init() completes.
+        console.log("[KC-AUTH] init: user=" + JSON.stringify(this._user?.type) + " roles=" + JSON.stringify(this._user?.roles?.map(r=>r.code)));
         if (window.location.pathname.includes("/user/login")) {
           const user = this._user;
-          if (user && user.type === "EMPLOYEE") {
-            window.location.replace(window.location.origin + "/" + contextPath + "/employee");
-          } else {
-            window.location.replace(window.location.origin + "/" + contextPath + "/citizen");
-          }
+          const targetType = (user && user.type === "EMPLOYEE") ? "employee" : "citizen";
+          console.log("[KC-AUTH] init: redirecting to /" + targetType + " (user.type=" + user?.type + ")");
+          Digit.SessionStorage.set("userType", targetType);
+          Digit.SessionStorage.set("user_type", targetType);
+          window.location.replace(window.location.origin + "/" + contextPath + "/" + targetType);
+        } else {
+          console.log("[KC-AUTH] init: NOT on login page, no redirect. pathname=" + window.location.pathname);
         }
       }
     } catch (err) {
@@ -222,6 +223,7 @@ export class KeycloakAuthAdapter extends AuthAdapter {
   }
 
   async loginWithProvider(provider) {
+    console.log("[KC-AUTH] loginWithProvider: " + provider + " redirectUri=" + window.location.href);
     this._kc.login({ idpHint: provider });
   }
 
@@ -230,9 +232,15 @@ export class KeycloakAuthAdapter extends AuthAdapter {
   }
 
   async _loadUserFromToken() {
-    if (!this._kc?.tokenParsed) return;
+    if (!this._kc?.tokenParsed) {
+      console.log("[KC-AUTH] _loadUserFromToken: no tokenParsed, skipping");
+      return;
+    }
 
     const parsed = this._kc.tokenParsed;
+    console.log("[KC-AUTH] _loadUserFromToken: sub=" + parsed.sub + " email=" + parsed.email);
+    console.log("[KC-AUTH] _digitUserType=" + this._digitUserType + " _digitRoles=" + JSON.stringify(this._digitRoles));
+    console.log("[KC-AUTH] realm_access.roles=" + JSON.stringify(parsed.realm_access?.roles));
     const tenantId = this._tenantId
       || window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID")
       || "pg";
@@ -240,6 +248,7 @@ export class KeycloakAuthAdapter extends AuthAdapter {
     const isEmployee = this._digitUserType === "EMPLOYEE";
     const userType = isEmployee ? "EMPLOYEE" : "CITIZEN";
     const sessionType = isEmployee ? "employee" : "citizen";
+    console.log("[KC-AUTH] isEmployee=" + isEmployee + " userType=" + userType + " sessionType=" + sessionType);
 
     // Use digit_roles from token response if available, else fall back to KC realm roles
     const roles = (this._digitRoles && this._digitRoles.length > 0)

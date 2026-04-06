@@ -46,6 +46,7 @@ const Home = ({
   pathname,
   initData,
 }) => {
+  console.log("[CitizenApp] Rendering. pathname=" + window.location.pathname);
   const { isLoading: islinkDataLoading, data: linkData, isFetched: isLinkDataFetched } = Digit.Hooks.useCustomMDMS(
     Digit.ULBService.getStateId(),
     "ACCESSCONTROL-ACTIONS-TEST",

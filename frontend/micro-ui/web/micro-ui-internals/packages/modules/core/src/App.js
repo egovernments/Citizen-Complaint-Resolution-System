@@ -73,19 +73,27 @@ export const DigitApp = ({ stateCode, modules, appTenants, logoUrl, logoUrlWhite
     pathname,
     initData,
   };
+  console.log("[DigitApp] Rendering Switch. pathname=" + window.location.pathname + " contextPath=" + window?.contextPath);
   return (
     <Switch>
      {allowedUserTypes?.some(userType=>userType=="employee")&& <Route path={`/${window?.contextPath}/employee`}>
+        {(() => { console.log("[DigitApp] Route matched: /employee"); return null; })()}
         <EmployeeApp {...commonProps} />
       </Route>}
       {allowedUserTypes?.some(userType=>userType=="citizen")&& <Route path={`/${window?.contextPath}/citizen`}>
+        {(() => { console.log("[DigitApp] Route matched: /citizen → CitizenApp"); return null; })()}
         <CitizenApp {...commonProps} />
       </Route>}
       {allowedUserTypes?.some(userType=>userType=="employee")&& <Route path={`/${window?.contextPath}/no-top-bar/employee`}>
         <EmployeeApp  {...commonProps} noTopBar={true} />
       </Route>}
       <Route>
-        <Redirect to={`/${window?.contextPath}/${defaultLanding}`} />
+        {(() => {
+          const currentType = Digit.UserService.getType();
+          const target = currentType === "citizen" ? "citizen" : defaultLanding;
+          console.log("[DigitApp] Default redirect: userType=" + currentType + " defaultLanding=" + defaultLanding + " → redirecting to /" + target + " (current pathname=" + window.location.pathname + ")");
+          return <Redirect to={`/${window?.contextPath}/${target}`} />;
+        })()}
       </Route>
     </Switch>
   );
@@ -102,11 +110,12 @@ export const DigitAppWrapper = ({ stateCode, modules, appTenants, logoUrl, logoU
   const innerWidth = window.innerWidth;
   const mobileView = innerWidth <= 640;
 
+  console.log("[DigitAppWrapper] Rendering. pathname=" + window.location.pathname + " CITIZEN=" + CITIZEN + " userType=" + userDetails?.info?.type);
   return (
     <div
-      className={isUserProfile ? "grounded-container" : "loginContainer"}
+      className={isUserProfile || (CITIZEN && userDetails) ? "grounded-container" : "loginContainer"}
       style={
-        isUserProfile ? { padding: 0, paddingTop: CITIZEN ? "0" : mobileView && !CITIZEN ? "3rem" : "80px", marginLeft: CITIZEN || mobileView ? "0" : "40px" } : { "--banner-url": `url(${stateInfo?.bannerUrl})`, padding: "0px" }
+        (isUserProfile || (CITIZEN && userDetails)) ? { padding: 0, paddingTop: CITIZEN ? "0" : mobileView && !CITIZEN ? "3rem" : "80px", marginLeft: CITIZEN || mobileView ? "0" : "40px" } : { "--banner-url": `url(${stateInfo?.bannerUrl})`, padding: "0px" }
       }
     >
       <Switch>
