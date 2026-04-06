@@ -126,7 +126,7 @@ const PGRSearchInbox = () => {
    * Reset or refresh config when the route changes
    */
   useEffect(() => {
-    setPageConfig(_.cloneDeep(configs));
+    setPageConfig(structuredClone(configs));
   }, [location]);
 
   /**

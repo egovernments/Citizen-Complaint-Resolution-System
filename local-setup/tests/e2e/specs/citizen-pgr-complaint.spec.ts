@@ -153,16 +153,17 @@ test.describe('Citizen PGR complaint wizard', () => {
     await page.locator('text=Parks').first().click();
     await page.waitForTimeout(2000);
 
-    // Select complaint subtype
+    // Select complaint subtype (appears after type is selected)
+    await page.waitForTimeout(500);
     const subtypeInput = page.locator('.digit-dropdown-employee-select-wrap--elipses').last();
     await subtypeInput.click();
     await page.waitForTimeout(500);
     await page.locator('text=Park requires maintenance').click();
     await page.waitForTimeout(1000);
 
-    // Verify selections
-    const bodyText = await page.locator('body').innerText();
-    expect(bodyText).toContain('Parks');
+    // Verify type was selected (value appears in the dropdown input)
+    const typeValue = await page.locator('.digit-dropdown-employee-select-wrap--elipses').first().inputValue();
+    expect(typeValue).toBeTruthy();
 
     // Step 1 -> Step 2 (Pin Location)
     await page.click('button:has-text("NEXT")');
@@ -205,5 +206,22 @@ test.describe('Citizen PGR complaint wizard', () => {
       expect(relationshipCall.status).toBe(200);
       expect(relationshipCall.hasData).toBe(true);
     }
+
+    // Verify City dropdown has selectable options (not "No Results Found")
+    const cityInput = page.locator('.digit-dropdown-employee-select-wrap--elipses').first();
+    await cityInput.click();
+    await page.waitForTimeout(1000);
+    await page.screenshot({ path: '/tmp/e2e-city-dropdown.png' });
+
+    const dropdownHtml = await page.locator('.digit-dropdown-options-card').first().innerHTML().catch(() => '');
+    const hasNoResults = dropdownHtml.includes('No Results Found');
+    const hasOptions = await page.locator('.digit-dropdown-options-card .digit-dropdown-item:not(.unsuccessfulresults)').count();
+
+    console.log(`City dropdown: hasNoResults=${hasNoResults}, optionCount=${hasOptions}`);
+    console.log(`Dropdown HTML: ${dropdownHtml.substring(0, 300)}`);
+
+    // City dropdown should have selectable options
+    expect(hasNoResults).toBe(false);
+    expect(hasOptions).toBeGreaterThan(0);
   });
 });

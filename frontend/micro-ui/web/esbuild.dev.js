@@ -110,10 +110,10 @@ async function start() {
         __dirname,
         "micro-ui-internals/packages/react-components/src/index.js"
       ),
-      // These don't have local source — resolve from node_modules
+      // Local source (v0.2.3) for HMR — fix: BoundaryFilter root dropdown variant
       "@egovernments/digit-ui-components": path.resolve(
         __dirname,
-        "node_modules/@egovernments/digit-ui-components"
+        "micro-ui-internals/packages/digit-ui-components/src/index.js"
       ),
       "@egovernments/digit-ui-svg-components": path.resolve(
         __dirname,

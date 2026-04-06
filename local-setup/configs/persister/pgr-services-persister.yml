@@ -72,8 +72,10 @@ serviceMaps:
       - jsonPath: $.service.address.country
 
       - jsonPath: $.service.address.geoLocation.latitude
+        defaultValue: ~
 
       - jsonPath: $.service.address.geoLocation.longitude
+        defaultValue: ~
 
       - jsonPath: $.service.address.additionDetails
         type: JSON
@@ -150,8 +152,10 @@ serviceMaps:
       - jsonPath: $.service.address.country
 
       - jsonPath: $.service.address.geoLocation.latitude
+        defaultValue: ~
 
       - jsonPath: $.service.address.geoLocation.longitude
+        defaultValue: ~
 
       - jsonPath: $.service.address.additionDetails
         type: JSON

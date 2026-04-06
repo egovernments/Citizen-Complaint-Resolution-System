@@ -13,9 +13,9 @@ export const complaintsLocation = {
         "fieldPairClassName": "boundary-filter-label-left-align",
         "name": "boundaryComponent",
         "levelConfig": {
-          "lowestLevel": "zone",
-          "highestLevel": "region",
-          isSingleSelect: ["zone", "region"]
+          "lowestLevel": "Locality",
+          "highestLevel": "City",
+          isSingleSelect: ["Locality", "City"]
         },
         "layoutConfig": {
           "isDropdownLayoutHorizontal": true,
