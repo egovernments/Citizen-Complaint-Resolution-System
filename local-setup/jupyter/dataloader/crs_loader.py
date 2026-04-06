@@ -349,7 +349,10 @@ class CRSLoader:
             import time
             time.sleep(10)
 
-        # Step 1.5: Create essential schemas that might be missing
+
+
+
+      # Step 1.5: Create essential schemas that might be missing
         essential_schemas_to_create = {
             "common-masters.StateInfo": {
                 "type": "object",
@@ -426,6 +429,7 @@ class CRSLoader:
                 }
             }
         }
+
         
         for schema_code, definition in essential_schemas_to_create.items():
             create_payload = {
@@ -517,6 +521,7 @@ class CRSLoader:
             'DataSecurity.EncryptionPolicy',   # Data security configurations
             'DataSecurity.DecryptionABAC',
             'DataSecurity.MaskingPatterns',
+            'CRS-ADMIN-CONSOLE.adminSchema',   # CRS Admin Console schema for boundary management
         ]
 
         data_copied = 0
