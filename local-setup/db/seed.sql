@@ -7493,3 +7493,6 @@ CREATE TABLE IF NOT EXISTS public.eg_bm_processed_template (
 
 CREATE INDEX IF NOT EXISTS idx_bm_gen_template_tenant_hierarchy ON eg_bm_generated_template(tenantid, hierarchytype);
 CREATE INDEX IF NOT EXISTS idx_bm_proc_template_tenant_hierarchy ON eg_bm_processed_template(tenantid, hierarchytype);
+
+-- Load boundary management MDMS schemas
+\i mdms-bndry-mgmnt-seed.sql

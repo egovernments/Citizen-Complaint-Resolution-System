@@ -11,7 +11,7 @@ import warnings
 import requests
 import time
 import os
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Font
@@ -47,6 +47,56 @@ def clean_nans(obj):
         return None  # Handle any other pandas NA types
     else:
         return obj  # Keep None as None (will be null in JSON)
+
+
+def normalize_lookup_key(value: Any) -> str:
+    """Normalize text keys for case-insensitive and spacing-tolerant lookups."""
+    if value is None or pd.isna(value):
+        return ""
+    return " ".join(str(value).strip().lower().split())
+
+
+def build_name_to_code_map(records: List[Dict[str, Any]]) -> Dict[str, str]:
+    """Build a normalized name -> code mapping from MDMS-style records."""
+    mapping = {}
+    for record in records:
+        name_key = normalize_lookup_key(record.get('name'))
+        code = record.get('code')
+        if name_key and code:
+            mapping[name_key] = code
+    return mapping
+
+
+def build_designation_lookup_maps(records: List[Dict[str, Any]]) -> Tuple[Dict[Tuple[str, Optional[str]], str], Dict[str, str]]:
+    """Build designation lookup maps keyed by name+department and by unique name."""
+    by_department = {}
+    name_to_codes = {}
+
+    for record in records:
+        name_key = normalize_lookup_key(record.get('name'))
+        code = record.get('code')
+        if not name_key or not code:
+            continue
+
+        departments = record.get('department') or []
+        if not isinstance(departments, list):
+            departments = [departments]
+
+        if departments:
+            for department_code in departments:
+                if department_code:
+                    by_department[(name_key, department_code)] = code
+        else:
+            by_department[(name_key, None)] = code
+
+        name_to_codes.setdefault(name_key, set()).add(code)
+
+    unique_by_name = {
+        name_key: next(iter(codes))
+        for name_key, codes in name_to_codes.items()
+        if len(codes) == 1
+    }
+    return by_department, unique_by_name
 
 
 # ============================================================================
@@ -230,6 +280,7 @@ class UnifiedExcelReader:
 
         dept_counter = {}
         dept_name_to_code = {}  # Mapping for complaint types
+        desig_key_to_code = {}  # Mapping keyed by designation name + department
         desig_counter = 1
 
         # Fetch existing departments and designations from MDMS to continue numbering
@@ -248,10 +299,11 @@ class UnifiedExcelReader:
                             max_dept_num = max(max_dept_num, num)
                         except (ValueError, IndexError):
                             pass
-                    # Map existing dept names to codes
-                    dept_name_to_code[dept.get('name', '')] = code
+                    dept_name_key = normalize_lookup_key(dept.get('name'))
+                    if dept_name_key:
+                        dept_name_to_code[dept_name_key] = code
 
-                # Find max designation counter
+                # Find max designation counter and map existing designations
                 max_desig_num = 0
                 for desig in existing_desigs:
                     code = desig.get('code', '')
@@ -261,6 +313,8 @@ class UnifiedExcelReader:
                             max_desig_num = max(max_desig_num, num)
                         except (ValueError, IndexError):
                             pass
+                existing_desig_map, _ = build_designation_lookup_maps(existing_desigs)
+                desig_key_to_code.update(existing_desig_map)
 
                 # Start counters from next available number
                 dept_start_counter = max_dept_num + 1
@@ -282,10 +336,11 @@ class UnifiedExcelReader:
                 continue
 
             dept_name = str(dept_name).strip()
+            dept_name_key = normalize_lookup_key(dept_name)
 
             # Check if department already exists in MDMS
-            if dept_name in dept_name_to_code:
-                dept_code = dept_name_to_code[dept_name]
+            if dept_name_key in dept_name_to_code:
+                dept_code = dept_name_to_code[dept_name_key]
             else:
                 # Auto-generate department code with next available number
                 if dept_name not in dept_counter:
@@ -293,8 +348,7 @@ class UnifiedExcelReader:
                     dept_start_counter += 1
                     dept_code = f"DEPT_{dept_counter[dept_name]}"
 
-                    # Store mapping from name to code
-                    dept_name_to_code[dept_name] = dept_code
+                    dept_name_to_code[dept_name_key] = dept_code
 
                     # Add department
                     departments.append({
@@ -317,25 +371,32 @@ class UnifiedExcelReader:
             # Add designation if present
             if pd.notna(desig_name) and str(desig_name).strip() != '':
                 desig_name = str(desig_name).strip()
-                desig_code = f"DESIG_{desig_counter:02d}"
-                desig_counter += 1
+                desig_key = (normalize_lookup_key(desig_name), dept_code)
 
-                designations.append({
-                    'code': desig_code,
-                    'name': desig_name,
-                    'department': [dept_code],
-                    'active': True,
-                    'description': f'{desig_name} - {dept_name}'
-                })
+                if desig_key in desig_key_to_code:
+                    continue
+                else:
+                    desig_code = f"DESIG_{desig_counter:02d}"
+                    desig_counter += 1
 
-                # Auto-generate designation localization
-                loc_code = f"COMMON_MASTERS_{desig_code}"
-                desig_localizations.append({
-                    'code': loc_code,
-                    'message': desig_name,
-                    'module': 'rainmaker-common',
-                    'locale': 'en_IN'
-                })
+                    desig_key_to_code[desig_key] = desig_code
+
+                    designations.append({
+                        'code': desig_code,
+                        'name': desig_name,
+                        'department': [dept_code],
+                        'active': True,
+                        'description': f'{desig_name} - {dept_name}'
+                    })
+
+                    # Auto-generate designation localization
+                    loc_code = f"COMMON_MASTERS_{desig_code}"
+                    desig_localizations.append({
+                        'code': loc_code,
+                        'message': desig_name,
+                        'module': 'rainmaker-common',
+                        'locale': 'en_IN'
+                    })
 
         return departments, designations, dept_localizations, desig_localizations, dept_name_to_code
 
@@ -368,7 +429,8 @@ class UnifiedExcelReader:
 
                 # Get department name and convert to code
                 dept_name = str(row['Department Name*']).strip() if pd.notna(row.get('Department Name*')) else None
-                dept_code = dept_name_to_code.get(dept_name, dept_name) if dept_name else None
+                dept_key = normalize_lookup_key(dept_name) if dept_name else None
+                dept_code = dept_name_to_code.get(dept_key, dept_name) if dept_name else None
 
                 current_parent = {
                     'type': parent_type,
@@ -451,17 +513,41 @@ class UnifiedExcelReader:
 
         df = pd.read_excel(self.excel_file, sheet_name='Employee Master')
 
-        # Fetch departments and create name->code mapping
+        # Fetch departments and create normalized name->code mapping
         departments = uploader.fetch_departments(tenant_id)
-        dept_name_to_code = {d.get('name'): d.get('code') for d in departments}
+        dept_name_to_code = build_name_to_code_map(departments)
 
-        # Fetch designations and create name->code mapping
+        # Fetch designations and create department-aware lookup mappings
         designations = uploader.fetch_designations(tenant_id)
-        desig_name_to_code = {d.get('name'): d.get('code') for d in designations}
+        desig_key_to_code, desig_name_to_code = build_designation_lookup_maps(designations)
 
-        # Fetch roles and create name->code mapping
+        # Fetch roles and create normalized name->code mapping
         roles_list = uploader.fetch_roles(tenant_id)
-        role_name_to_code = {r.get('name'): r.get('code') for r in roles_list}
+        role_name_to_code = build_name_to_code_map(roles_list)
+        role_codes_set = {r.get('code') for r in roles_list if r.get('code')}
+
+        common_role_mappings = {
+            'super user': 'SUPERUSER',
+            'superuser': 'SUPERUSER', 
+            'admin': 'SUPERUSER',
+            'system administrator': 'SYSTEM_ADMINISTRATOR',
+            'tenant admin': 'TENANT_ADMIN',
+            'boundary admin': 'BOUNDARY_ADMIN',
+            'boundary administrator': 'BOUNDARY_ADMIN',
+            'gro': 'GRO',
+            'dgro': 'DGRO',
+            'employee': 'EMPLOYEE',
+            'citizen': 'CITIZEN',
+            'hrms admin': 'HRMS_ADMIN',
+            'mdms admin': 'MDMS_ADMIN',
+            'workflow admin': 'WORKFLOW_ADMIN',
+            'complaint resolver': 'PGR_LME',
+            'grievance routing officer': 'GRO',
+            'department gro': 'DGRO',
+            'complainant': 'CSR'
+        }
+        
+        common_role_mappings.update(role_name_to_code)
 
         employees = []
         for idx, row in df.iterrows():
@@ -518,16 +604,34 @@ class UnifiedExcelReader:
 
             # Convert department NAME to CODE
             dept_name = str(row.get('Department Name*', '')).strip()
-            department = dept_name_to_code.get(dept_name, dept_name)  # Fallback to name if not found
+            dept_key = normalize_lookup_key(dept_name)
+            department = dept_name_to_code.get(dept_key, dept_name)
 
-            # Convert designation NAME to CODE
+            # Convert designation NAME to CODE using department-aware mapping first
             desig_name = str(row.get('Designation Name*', '')).strip()
-            designation = desig_name_to_code.get(desig_name, desig_name)  # Fallback to name if not found
+            desig_key = (normalize_lookup_key(desig_name), department if department != dept_name else None)
+            designation = desig_key_to_code.get(desig_key)
+            if not designation:
+                designation = desig_name_to_code.get(normalize_lookup_key(desig_name), desig_name)
 
-            # Parse role NAMES and convert to CODES
+            # Parse role NAMES and convert to CODES with enhanced mapping
             role_names_str = str(row.get('Role Names (comma separated)*', '')).strip()
             role_names = [r.strip() for r in role_names_str.split(',') if r.strip()]
-            role_codes = [role_name_to_code.get(name, name) for name in role_names]  # Convert names to codes
+            
+            # Convert role names to codes using enhanced mapping
+            role_codes = []
+            for name in role_names:
+                # Try exact match first
+                normalized_role_name = normalize_lookup_key(name)
+                if normalized_role_name in common_role_mappings:
+                    role_codes.append(common_role_mappings[normalized_role_name])
+                # Check if it's already a valid role code
+                elif name.upper() in role_codes_set:
+                    role_codes.append(name.upper())
+                else:
+                    # Still not found - warn but include it (will fail during validation)
+                    print(f"   ⚠️  Role name '{name}' not found in mappings. Using as-is (may cause validation error)")
+                    role_codes.append(name)
 
             # Build roles list for both user and jurisdiction
             roles = []
@@ -568,6 +672,7 @@ class UnifiedExcelReader:
                 }],
                 'user': {
                     'name': user_name,
+                    'userName': user_name,
                     'mobileNumber': mobile,
                     'active': True,
                     'type': 'EMPLOYEE',
@@ -863,6 +968,36 @@ class APIUploader:
             # If JSON parsing fails, return truncated original text
             return error_text[:200]
 
+    def _request_with_retry(self, url, *, json=None, data=None, headers=None,
+                            timeout=120, max_retries=3, retry_delay=2, **kwargs):
+        """POST with a small retry loop for transient failures."""
+        last_error = None
+
+        for attempt in range(max_retries):
+            try:
+                response = requests.post(
+                    url,
+                    json=json,
+                    data=data,
+                    headers=headers,
+                    timeout=timeout,
+                    **kwargs
+                )
+
+                if response.status_code < 500:
+                    return response
+
+                last_error = requests.exceptions.HTTPError(
+                    f"Server error {response.status_code}: {response.text[:200]}"
+                )
+            except requests.exceptions.RequestException as exc:
+                last_error = exc
+
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay)
+
+        raise last_error
+
     def search_mdms_data(self, schema_code: str, tenant: str, unique_identifiers: List[str] = None,
                          limit: int = 100, offset: int = 0, include_inactive: bool = True) -> List[Dict]:
         """Generic function to search MDMS v2 data
@@ -938,6 +1073,30 @@ class APIUploader:
         except Exception as e:
             print(f"Error during MDMS search for {schema_code}: {str(e)}")
             return []
+
+    def search_mdms_data_all(self, schema_code: str, tenant: str, page_size: int = 100, **kwargs) -> List[Dict]:
+        """Fetch ALL records by auto-paginating through results.
+
+        Args:
+            schema_code: MDMS schema code
+            tenant: Tenant ID
+            page_size: Records per page (default: 100)
+            **kwargs: Extra args forwarded to search_mdms_data()
+
+        Returns:
+            list: All matching data objects across all pages
+        """
+        all_records = []
+        offset = 0
+        while True:
+            page = self.search_mdms_data(
+                schema_code, tenant, limit=page_size, offset=offset, **kwargs
+            )
+            all_records.extend(page)
+            if len(page) < page_size:
+                break
+            offset += page_size
+        return all_records
 
     def create_mdms_data(self, schema_code: str, data_list: List[Dict], tenant: str, 
                         sheet_name: str = None, excel_file: str = None):
@@ -2376,6 +2535,54 @@ class APIUploader:
             print(f"   Found {len(df)} boundary records")
             print(f"   Columns: {list(df.columns)}")
 
+            def _normalize_column_name(value) -> str:
+                return ''.join(ch.lower() for ch in str(value).strip() if ch.isalnum())
+
+            def _find_best_column_match(target: str, available_columns: list) -> str:
+                """Resolve a logical field/level name to an Excel column header.
+
+                Matching priority:
+                1. Exact match
+                2. Case-insensitive exact match
+                3. Normalized exact match (ignores spaces/_/- and case)
+                4. Normalized suffix match for generated headers like ADMIN_STATE
+                """
+                if target in available_columns:
+                    return target
+
+                target_str = str(target).strip()
+                target_lower = target_str.lower()
+                target_norm = _normalize_column_name(target_str)
+
+                for column in available_columns:
+                    if str(column).strip().lower() == target_lower:
+                        return column
+
+                for column in available_columns:
+                    if _normalize_column_name(column) == target_norm:
+                        return column
+
+                suffix_matches = []
+                for column in available_columns:
+                    col_norm = _normalize_column_name(column)
+                    if col_norm.endswith(target_norm):
+                        suffix_matches.append(column)
+
+                if len(suffix_matches) == 1:
+                    return suffix_matches[0]
+
+                target_token = target_lower.replace(' ', '').replace('-', '').replace('_', '')
+                contains_matches = []
+                for column in available_columns:
+                    col_norm = _normalize_column_name(column)
+                    if target_token and target_token in col_norm:
+                        contains_matches.append(column)
+
+                if len(contains_matches) == 1:
+                    return contains_matches[0]
+
+                return None
+
             # Get hierarchy definition to understand boundary types
             hierarchy = self._get_boundary_hierarchy(tenant_id, hierarchy_type)
             if hierarchy:
@@ -2385,9 +2592,15 @@ class APIUploader:
                 print("   ⚠️ Could not fetch hierarchy, will use boundaryType from Excel")
                 boundary_types = df['boundaryType'].unique().tolist() if 'boundaryType' in df.columns else []
 
+            standard_column_map = {
+                logical_name: _find_best_column_match(logical_name, list(df.columns))
+                for logical_name in ['code', 'name', 'boundaryType', 'parentCode']
+            }
+
             # Check if Excel has the standard format (code, name, boundaryType, parentCode)
-            if 'code' in df.columns and 'boundaryType' in df.columns:
+            if standard_column_map['code'] and standard_column_map['boundaryType']:
                 print("   Using standard format (code, boundaryType, parentCode)")
+                print(f"   Standard column mapping: {standard_column_map}")
 
                 # Map Excel boundary types to hierarchy types if they don't match
                 # Common mappings for Punjab-style templates
@@ -2400,7 +2613,8 @@ class APIUploader:
                 }
 
                 # Check if we need mapping (Excel types vs hierarchy types)
-                excel_types = set(df['boundaryType'].unique())
+                boundary_type_col = standard_column_map['boundaryType']
+                excel_types = set(df[boundary_type_col].dropna().astype(str).str.strip().unique())
                 hierarchy_set = set(boundary_types) if boundary_types else set()
 
                 # If Excel types match hierarchy, no mapping needed
@@ -2416,9 +2630,16 @@ class APIUploader:
 
                 # Process each row
                 for idx, row in df.iterrows():
-                    code = str(row.get('code', '')).strip()
-                    boundary_type = str(row.get('boundaryType', '')).strip()
-                    parent_code = str(row.get('parentCode', '')).strip() if pd.notna(row.get('parentCode')) else None
+                    code_col = standard_column_map['code']
+                    parent_code_col = standard_column_map['parentCode']
+
+                    code = str(row.get(code_col, '')).strip() if code_col else ''
+                    boundary_type = str(row.get(boundary_type_col, '')).strip() if boundary_type_col else ''
+                    parent_code = (
+                        str(row.get(parent_code_col, '')).strip()
+                        if parent_code_col and pd.notna(row.get(parent_code_col))
+                        else None
+                    )
 
                     if not code or not boundary_type:
                         continue
@@ -2445,11 +2666,20 @@ class APIUploader:
             else:
                 # Handle column-per-level format
                 print("   Using column-per-level format")
+                level_column_map = {}
                 for boundary_type in boundary_types:
-                    if boundary_type not in df.columns:
+                    matched_col = _find_best_column_match(boundary_type, list(df.columns))
+                    if matched_col:
+                        level_column_map[boundary_type] = matched_col
+
+                print(f"   Hierarchy column mapping: {level_column_map}")
+
+                for boundary_type in boundary_types:
+                    level_col = level_column_map.get(boundary_type)
+                    if not level_col:
                         continue
 
-                    boundaries_at_level = df[boundary_type].dropna().unique()
+                    boundaries_at_level = df[level_col].dropna().unique()
 
                     for boundary_code in boundaries_at_level:
                         if pd.isna(boundary_code) or str(boundary_code).strip() == '':
@@ -2464,9 +2694,11 @@ class APIUploader:
                         parent_code = None
                         if parent_type_idx >= 0:
                             parent_type = boundary_types[parent_type_idx]
-                            row = df[df[boundary_type] == boundary_code].iloc[0] if len(df[df[boundary_type] == boundary_code]) > 0 else None
-                            if row is not None and parent_type in df.columns:
-                                parent_code = str(row[parent_type]).strip() if pd.notna(row[parent_type]) else None
+                            parent_col = level_column_map.get(parent_type)
+                            matching_rows = df[df[level_col] == boundary_code]
+                            row = matching_rows.iloc[0] if len(matching_rows) > 0 else None
+                            if row is not None and parent_col:
+                                parent_code = str(row[parent_col]).strip() if pd.notna(row[parent_col]) else None
 
                         rel_success = self._create_boundary_relationship(
                             tenant_id, hierarchy_type, boundary_code, boundary_type, parent_code
@@ -2537,10 +2769,16 @@ class APIUploader:
         }
 
         try:
-            response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'})
+            response = self._request_with_retry(url, json=payload, headers={'Content-Type': 'application/json'})
             if response.status_code in [200, 201, 202]:
                 print(f"   ✅ Created boundary: {code}")
                 return True
+            elif response.status_code == 403:
+                raise PermissionError(
+                    f"Boundary operation failed (403 Forbidden): user lacks required roles. "
+                    f"Ensure the user has BOUNDARY_ADMIN role and that role-action mappings "
+                    f"exist for boundary endpoints."
+                )
             else:
                 data = response.json()
                 error_code = data.get('Errors', [{}])[0].get('code', '')
@@ -2551,6 +2789,8 @@ class APIUploader:
                 else:
                     print(f"   ❌ Failed to create boundary {code}: {error_code or error_msg or response.status_code}")
                     return False
+        except PermissionError:
+            raise  # Re-raise 403 errors — don't swallow them
         except Exception as e:
             print(f"   ❌ Error creating boundary {code}: {str(e)[:100]}")
             return False
@@ -2582,11 +2822,17 @@ class APIUploader:
             payload["BoundaryRelationship"]["parent"] = parent_code
 
         try:
-            response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'})
+            response = self._request_with_retry(url, json=payload, headers={'Content-Type': 'application/json'})
             if response.status_code in [200, 201, 202]:
                 parent_info = f" (parent: {parent_code})" if parent_code else " (root)"
                 print(f"   ✅ Created relationship: {code} [{boundary_type}]{parent_info}")
                 return True
+            elif response.status_code == 403:
+                raise PermissionError(
+                    f"Boundary operation failed (403 Forbidden): user lacks required roles. "
+                    f"Ensure the user has BOUNDARY_ADMIN role and that role-action mappings "
+                    f"exist for boundary endpoints."
+                )
             else:
                 data = response.json()
                 error_code = data.get('Errors', [{}])[0].get('code', '')
@@ -2597,6 +2843,8 @@ class APIUploader:
                 else:
                     print(f"   ❌ Failed relationship {code}: {error_msg[:80] if error_msg else error_code or response.status_code}")
                     return False
+        except PermissionError:
+            raise  # Re-raise 403 errors — don't swallow them
         except Exception as e:
             print(f"   ❌ Error creating relationship {code}: {str(e)[:100]}")
             return False
@@ -2739,7 +2987,7 @@ class APIUploader:
             List of department objects with code and name
         """
         print(f"📥 Fetching departments from MDMS for tenant: {tenant}")
-        departments = self.search_mdms_data(schema_code='common-masters.Department', tenant=tenant)
+        departments = self.search_mdms_data_all(schema_code='common-masters.Department', tenant=tenant)
         print(f"   ✅ Found {len(departments)} department(s)")
         return departments
 
@@ -2753,7 +3001,7 @@ class APIUploader:
             List of designation objects with code and name
         """
         print(f"📥 Fetching designations from MDMS for tenant: {tenant}")
-        designations = self.search_mdms_data(schema_code='common-masters.Designation', tenant=tenant)
+        designations = self.search_mdms_data_all(schema_code='common-masters.Designation', tenant=tenant)
         print(f"   ✅ Found {len(designations)} designation(s)")
         return designations
 
@@ -2770,10 +3018,9 @@ class APIUploader:
             print(f"📥 Fetching roles from MDMS for tenant: {tenant}")
 
             # Try to fetch from MDMS roles schema
-            roles = self.search_mdms_data(
+            roles = self.search_mdms_data_all(
                 schema_code='ACCESSCONTROL-ROLES.roles',
-                tenant=tenant,
-                limit=200
+                tenant=tenant
             )
 
             if roles and len(roles) > 0:
@@ -2801,7 +3048,8 @@ class APIUploader:
 
             # PGR Roles (from default-data-handler ACCESSCONTROL-ROLES.roles.json)
             {"code": "PGR_LME", "name": "Complaint Resolver", "description": "One who will resolve complaints"},
-            {"code": "GRO", "name": "Complaint Assessor", "description": "One who will assess & assign complaints"},
+            {"code": "GRO", "name": "Grievance Routing Officer", "description": "One who will assess & assign complaints"},
+            {"code": "DGRO", "name": "Department GRO", "description": "Department Grievance Routing Officer"},
             {"code": "CSR", "name": "Complainant", "description": "One who will create complaints"},
             {"code": "PGR_VIEWER", "name": "PGR Viewer role", "description": " "},
 
@@ -2810,7 +3058,10 @@ class APIUploader:
             {"code": "MDMS_ADMIN", "name": "MDMS ADMIN", "description": "MDMS User that can create and search schema"},
             {"code": "HRMS_ADMIN", "name": "HRMS Admin", "description": "HRMS Admin"},
             {"code": "WORKFLOW_ADMIN", "name": "WORKFLOW ADMIN", "description": "WORKFLOW User that can create and search Workflow"},
+            {"code": "BOUNDARY_ADMIN", "name": "Boundary Admin", "description": "Administrative access for boundary management operations"},
             {"code": "SUPERUSER", "name": "Super User", "description": "System Administrator. Can change all master data and has access to all the system screens."},
+            {"code": "SYSTEM_ADMINISTRATOR", "name": "System Administrator", "description": "Full system access for configuration and maintenance"},
+            {"code": "TENANT_ADMIN", "name": "Tenant Administrator", "description": "Administrative access within a tenant scope"},
 
             # Common Roles
             {"code": "EMPLOYEE", "name": "Employee", "description": "Default role for all employees"},
@@ -2829,11 +3080,14 @@ class APIUploader:
             {"code": "AUTO_ESCALATE", "name": "Auto Escalation Employee", "description": "Auto Escalation Employee"}
         ]
 
-    def ensure_roles_in_mdms(self, tenant: str, auto_create: bool = True) -> bool:
+    def ensure_roles_in_mdms(self, tenant: str, required_role_codes: List[str] = None,
+                             auto_create: bool = True) -> bool:
         """Ensure all required roles exist in MDMS, optionally creating them if missing
 
         Args:
             tenant: Tenant ID
+            required_role_codes: Specific role codes required for current operation.
+                                If omitted, validates all default roles.
             auto_create: If True, automatically create missing roles in MDMS
 
         Returns:
@@ -2843,10 +3097,9 @@ class APIUploader:
 
         # Fetch existing roles from MDMS
         try:
-            existing_roles = self.search_mdms_data(
+            existing_roles = self.search_mdms_data_all(
                 schema_code='ACCESSCONTROL-ROLES.roles',
-                tenant=tenant,
-                limit=200
+                tenant=tenant
             )
             existing_codes = {role.get('code') for role in existing_roles if role.get('code')}
             print(f"   ✅ Found {len(existing_codes)} existing roles in MDMS")
@@ -2856,7 +3109,10 @@ class APIUploader:
 
         # Get default roles that should exist
         default_roles = self._get_default_roles()
-        required_codes = {role.get('code') for role in default_roles if role.get('code')}
+        default_roles_by_code = {
+            role.get('code'): role for role in default_roles if role.get('code')
+        }
+        required_codes = set(required_role_codes or default_roles_by_code.keys())
 
         # Find missing roles
         missing_codes = required_codes - existing_codes
@@ -2876,10 +3132,12 @@ class APIUploader:
         created_count = 0
         failed_roles = []
 
-        for role in default_roles:
-            role_code = role.get('code')
-            if role_code not in missing_codes:
-                continue
+        for role_code in sorted(missing_codes):
+            role = default_roles_by_code.get(role_code, {
+                'code': role_code,
+                'name': role_code.replace('_', ' ').title(),
+                'description': role_code
+            })
 
             try:
                 # Prepare MDMS data structure
@@ -2890,14 +3148,22 @@ class APIUploader:
                 }
 
                 # Create in MDMS
-                self.create_mdms_data(
+                create_result = self.create_mdms_data(
                     schema_code='ACCESSCONTROL-ROLES.roles',
-                    data=mdms_data,
-                    tenant=tenant,
-                    unique_identifier=role_code
+                    data_list=[mdms_data],
+                    tenant=tenant
                 )
-                created_count += 1
-                print(f"   ✅ Created role: {role_code} ({role.get('name')})")
+
+                if create_result.get('failed', 0) > 0:
+                    errors = create_result.get('errors', [])
+                    error_msg = errors[0].get('error') if errors and isinstance(errors[0], dict) else str(errors[:1])
+                    raise RuntimeError(error_msg or f"Failed to create role {role_code}")
+
+                if create_result.get('created', 0) > 0 or create_result.get('exists', 0) > 0:
+                    created_count += 1
+                    print(f"   ✅ Ensured role: {role_code} ({role.get('name')})")
+                else:
+                    raise RuntimeError(f"No create/exist acknowledgement for role {role_code}")
 
             except Exception as e:
                 error_msg = str(e)
@@ -3503,23 +3769,32 @@ class APIUploader:
         Returns:
             Dict with creation results
         """
-        # STEP 1: Ensure all required roles exist in MDMS before creating employees
+        # STEP 1: Check only the roles referenced in the Excel payload.
+        # Missing roles are logged, but we do not auto-create or block the upload.
         print(f"\n{'='*60}")
         print(f"🔐 PRE-CHECK: Validating Roles in MDMS")
         print(f"{'='*60}")
 
-        roles_ok = self.ensure_roles_in_mdms(tenant=tenant, auto_create=True)
+        required_role_codes = set()
+        for employee in employee_list:
+            for role in employee.get('user', {}).get('roles', []):
+                role_code = role.get('code')
+                if role_code:
+                    required_role_codes.add(role_code)
+            for jurisdiction in employee.get('jurisdictions', []):
+                for role in jurisdiction.get('roles', []):
+                    role_code = role.get('code')
+                    if role_code:
+                        required_role_codes.add(role_code)
+
+        roles_ok = self.ensure_roles_in_mdms(
+            tenant=tenant,
+            required_role_codes=sorted(required_role_codes),
+            auto_create=False
+        )
 
         if not roles_ok:
-            error_msg = "⚠️  Cannot proceed: Some required roles are missing from MDMS and could not be created."
-            print(f"\n{error_msg}")
-            print(f"   Please ensure roles are created in MDMS before creating employees.")
-            return {
-                'created': 0,
-                'exists': 0,
-                'failed': len(employee_list),
-                'errors': [error_msg]
-            }
+            print(f"\n   ℹ️  Proceeding with Excel role codes as-is. Missing roles were not auto-created in MDMS.")
 
         # STEP 2: Proceed with employee creation
         create_url = f"{self.hrms_url}/employees/_create"
