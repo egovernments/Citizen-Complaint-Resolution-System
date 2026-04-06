@@ -231,16 +231,31 @@ class UnifiedExcelReader:
         dept_counter = {}
         dept_name_to_code = {}  # Mapping for complaint types
         desig_counter = 1
+        existing_dept_count = 0
+        existing_desig_count = 0
 
         # Fetch existing departments and designations from MDMS to continue numbering
         if uploader:
             try:
+                # Search both root AND city tenant to find true max codes.
+                # MDMS v2 returns inherited root data if city has no overrides,
+                # but only city-specific data once overrides exist. Searching both
+                # ensures we never generate colliding codes.
+                root_tenant = tenant_id.split(".")[0] if "." in tenant_id else tenant_id
                 existing_depts = uploader.fetch_departments(tenant_id)
                 existing_desigs = uploader.fetch_designations(tenant_id)
 
-                # Find max department counter
+                # If city tenant, also fetch root tenant data for numbering
+                if root_tenant != tenant_id:
+                    root_depts = uploader.fetch_departments(root_tenant)
+                    root_desigs = uploader.fetch_designations(root_tenant)
+                else:
+                    root_depts = []
+                    root_desigs = []
+
+                # Find max department counter across both tenants
                 max_dept_num = 0
-                for dept in existing_depts:
+                for dept in existing_depts + root_depts:
                     code = dept.get('code', '')
                     if code.startswith('DEPT_'):
                         try:
@@ -248,12 +263,14 @@ class UnifiedExcelReader:
                             max_dept_num = max(max_dept_num, num)
                         except (ValueError, IndexError):
                             pass
-                    # Map existing dept names to codes
+                    # Map existing dept names to codes (city overrides root)
                     dept_name_to_code[dept.get('name', '')] = code
 
-                # Find max designation counter
+                # Find max designation counter across both tenants and build name lookup
                 max_desig_num = 0
-                for desig in existing_desigs:
+                desig_name_to_code = {}
+                # Process root first, then city (city names override root)
+                for desig in root_desigs + existing_desigs:
                     code = desig.get('code', '')
                     if code.startswith('DESIG_'):
                         try:
@@ -261,6 +278,12 @@ class UnifiedExcelReader:
                             max_desig_num = max(max_desig_num, num)
                         except (ValueError, IndexError):
                             pass
+                    # Map existing designation names to codes
+                    desig_name_to_code[desig.get('name', '')] = code
+
+                print(f"   Existing data on {tenant_id}: {len(existing_depts)} dept(s), {len(existing_desigs)} desig(s)")
+                if root_tenant != tenant_id:
+                    print(f"   Existing data on {root_tenant}: {len(root_depts)} dept(s), {len(root_desigs)} desig(s)")
 
                 # Start counters from next available number
                 dept_start_counter = max_dept_num + 1
@@ -270,8 +293,10 @@ class UnifiedExcelReader:
                 # If fetch fails, start from 1
                 dept_start_counter = 1
                 desig_counter = 1
+                desig_name_to_code = {}
         else:
             dept_start_counter = 1
+            desig_name_to_code = {}
 
         for _, row in df.iterrows():
             dept_name = row.get('Department Name*')
@@ -286,6 +311,7 @@ class UnifiedExcelReader:
             # Check if department already exists in MDMS
             if dept_name in dept_name_to_code:
                 dept_code = dept_name_to_code[dept_name]
+                existing_dept_count += 1
             else:
                 # Auto-generate department code with next available number
                 if dept_name not in dept_counter:
@@ -317,25 +343,35 @@ class UnifiedExcelReader:
             # Add designation if present
             if pd.notna(desig_name) and str(desig_name).strip() != '':
                 desig_name = str(desig_name).strip()
-                desig_code = f"DESIG_{desig_counter:02d}"
-                desig_counter += 1
 
-                designations.append({
-                    'code': desig_code,
-                    'name': desig_name,
-                    'department': [dept_code],
-                    'active': True,
-                    'description': f'{desig_name} - {dept_name}'
-                })
+                # Check if designation with same name already exists (dedup)
+                if desig_name in desig_name_to_code:
+                    desig_code = desig_name_to_code[desig_name]
+                    existing_desig_count += 1
+                else:
+                    desig_code = f"DESIG_{desig_counter:02d}"
+                    desig_counter += 1
+                    desig_name_to_code[desig_name] = desig_code
 
-                # Auto-generate designation localization
-                loc_code = f"COMMON_MASTERS_{desig_code}"
-                desig_localizations.append({
-                    'code': loc_code,
-                    'message': desig_name,
-                    'module': 'rainmaker-common',
-                    'locale': 'en_IN'
-                })
+                    designations.append({
+                        'code': desig_code,
+                        'name': desig_name,
+                        'department': [dept_code],
+                        'active': True,
+                        'description': f'{desig_name} - {dept_name}'
+                    })
+
+                    # Auto-generate designation localization
+                    loc_code = f"COMMON_MASTERS_{desig_code}"
+                    desig_localizations.append({
+                        'code': loc_code,
+                        'message': desig_name,
+                        'module': 'rainmaker-common',
+                        'locale': 'en_IN'
+                    })
+
+        print(f"   Departments: {existing_dept_count} existing (reused), {len(departments)} new (to create)")
+        print(f"   Designations: {existing_desig_count} existing (reused), {len(designations)} new (to create)")
 
         return departments, designations, dept_localizations, desig_localizations, dept_name_to_code
 
@@ -789,7 +825,7 @@ class APIUploader:
                 'grant_type': 'password'
             }
 
-            response = requests.post(token_url, headers=headers, data=data, timeout=30)
+            response = self._request_with_retry(token_url, headers=headers, data=data, timeout=30)
 
             if response.status_code == 200:
                 token_data = response.json()
@@ -820,6 +856,63 @@ class APIUploader:
         except Exception as e:
             print(f"❌ Authentication error: {str(e)}")
             return False
+
+    # Default timeout for API requests (seconds)
+    REQUEST_TIMEOUT = 30
+
+    def _request_with_retry(self, url, *, json=None, data=None, headers=None,
+                            params=None, timeout=None, max_retries=3, **kwargs):
+        """POST request with timeout and retry on 429/503.
+
+        Args:
+            url: Request URL
+            json: JSON payload
+            data: Form data payload
+            headers: Request headers
+            params: Query parameters
+            timeout: Request timeout in seconds (default: REQUEST_TIMEOUT)
+            max_retries: Maximum retry attempts (default: 3)
+            **kwargs: Extra args forwarded to requests.post()
+
+        Returns:
+            requests.Response object
+        """
+        if timeout is None:
+            timeout = self.REQUEST_TIMEOUT
+
+        last_exc = None
+        for attempt in range(max_retries):
+            try:
+                resp = requests.post(
+                    url, json=json, data=data, headers=headers,
+                    params=params, timeout=timeout, **kwargs
+                )
+                if resp.status_code in (429, 503) and attempt < max_retries - 1:
+                    retry_after = resp.headers.get("Retry-After")
+                    wait = float(retry_after) if retry_after else (2 ** attempt)
+                    print(f"   ⏳ {resp.status_code} on {url.split('/')[-1]} — retrying in {wait:.0f}s (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(wait)
+                    continue
+                return resp
+            except requests.exceptions.Timeout as e:
+                last_exc = e
+                if attempt < max_retries - 1:
+                    wait = 2 ** attempt
+                    print(f"   ⏳ Timeout on {url.split('/')[-1]} — retrying in {wait}s (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(wait)
+                    continue
+                raise
+            except requests.exceptions.ConnectionError as e:
+                last_exc = e
+                if attempt < max_retries - 1:
+                    wait = 2 ** attempt
+                    print(f"   ⏳ Connection error on {url.split('/')[-1]} — retrying in {wait}s (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(wait)
+                    continue
+                raise
+        # Should not reach here, but just in case
+        if last_exc:
+            raise last_exc
 
     def _extract_error_message(self, error_text: str) -> str:
         """Extract clean error message from API error response
@@ -914,7 +1007,7 @@ class APIUploader:
         headers = {'Content-Type': 'application/json'}
 
         try:
-            response = requests.post(url, json=payload, headers=headers)
+            response = self._request_with_retry(url, json=payload, headers=headers)
             response.raise_for_status()
             data = response.json()
 
@@ -926,9 +1019,11 @@ class APIUploader:
             data_list = []
             for record in mdms_records:
                 record_data = record.get('data', {}).copy()
-                # Add wrapper's isActive status to data object
+                # Add wrapper metadata to data object (prefixed with _)
                 record_data['_isActive'] = record.get('isActive', True)
                 record_data['_uniqueIdentifier'] = record.get('uniqueIdentifier')
+                record_data['_id'] = record.get('id')
+                record_data['_auditDetails'] = record.get('auditDetails')
                 data_list.append(record_data)
 
             return data_list
@@ -940,7 +1035,31 @@ class APIUploader:
             print(f"Error during MDMS search for {schema_code}: {str(e)}")
             return []
 
-    def create_mdms_data(self, schema_code: str, data_list: List[Dict], tenant: str, 
+    def search_mdms_data_all(self, schema_code: str, tenant: str, page_size: int = 100, **kwargs) -> List[Dict]:
+        """Fetch ALL records by auto-paginating through results.
+
+        Args:
+            schema_code: MDMS schema code
+            tenant: Tenant ID
+            page_size: Records per page (default: 100)
+            **kwargs: Extra args forwarded to search_mdms_data()
+
+        Returns:
+            list: All matching data objects across all pages
+        """
+        all_records = []
+        offset = 0
+        while True:
+            page = self.search_mdms_data(
+                schema_code, tenant, limit=page_size, offset=offset, **kwargs
+            )
+            all_records.extend(page)
+            if len(page) < page_size:
+                break
+            offset += page_size
+        return all_records
+
+    def create_mdms_data(self, schema_code: str, data_list: List[Dict], tenant: str,
                         sheet_name: str = None, excel_file: str = None):
             """
             Upload MDMS data and write status directly into the uploaded Excel file
@@ -978,6 +1097,33 @@ class APIUploader:
                     str(i)
                 )
 
+                # Pre-check: if record exists (active or inactive), skip or reactivate
+                try:
+                    existing = self.search_mdms_data(
+                        schema_code, tenant, unique_identifiers=[unique_id], limit=1
+                    )
+                    if existing:
+                        if existing[0].get('_isActive', True):
+                            print(f"   [EXISTS] [{i}/{len(data_list)}] {unique_id} (pre-check)")
+                            results['exists'] += 1
+                            row_statuses.append({
+                                'row_index': i, 'status': 'EXISTS',
+                                'status_code': 200, 'error_message': ''
+                            })
+                            continue
+                        else:
+                            # Inactive record — reactivate via _update
+                            self._reactivate_mdms_record(existing[0], schema_code, tenant)
+                            print(f"   [REACTIVATED] [{i}/{len(data_list)}] {unique_id}")
+                            results['created'] += 1
+                            row_statuses.append({
+                                'row_index': i, 'status': 'SUCCESS',
+                                'status_code': 200, 'error_message': ''
+                            })
+                            continue
+                except Exception:
+                    pass  # Pre-check failed, fall through to normal create
+
                 payload = {
                     "RequestInfo": {
                         "apiId": "Rainmaker",
@@ -1001,11 +1147,22 @@ class APIUploader:
                 error_message = ""
 
                 try:
-                    response = requests.post(url, json=payload, headers=headers)
+                    response = self._request_with_retry(url, json=payload, headers=headers)
                     status_code = response.status_code
                     response.raise_for_status()
-                    print(f"   [OK] [{i}/{len(data_list)}] {unique_id}")
-                    results['created'] += 1
+                    # Detect "phantom 200": MDMS v2 returns HTTP 200 with empty
+                    # body when a record with the same uniqueIdentifier already
+                    # exists. The record isn't duplicated but the API doesn't
+                    # report it as an error either.
+                    resp_data = response.json() if response.text.strip() else {}
+                    mdms_arr = resp_data.get('mdms', [])
+                    if not mdms_arr and response.text.strip():
+                        print(f"   [EXISTS] [{i}/{len(data_list)}] {unique_id} (phantom 200)")
+                        results['exists'] += 1
+                        status = "EXISTS"
+                    else:
+                        print(f"   [OK] [{i}/{len(data_list)}] {unique_id}")
+                        results['created'] += 1
 
                 except requests.exceptions.HTTPError as e:
                     # Get status code - response.status_code is the correct attribute
@@ -1107,7 +1264,7 @@ class APIUploader:
         }
 
         try:
-            response = requests.post(search_url, json=search_payload, headers={'Content-Type': 'application/json'})
+            response = self._request_with_retry(search_url, json=search_payload, headers={'Content-Type': 'application/json'})
             if response.status_code != 200:
                 print(f"   ❌ Failed to search MDMS data: {response.status_code}")
                 return results
@@ -1156,7 +1313,7 @@ class APIUploader:
                 }
 
                 try:
-                    upd_response = requests.post(update_url, json=update_payload, headers={'Content-Type': 'application/json'})
+                    upd_response = self._request_with_retry(update_url, json=update_payload, headers={'Content-Type': 'application/json'})
                     if upd_response.status_code == 200:
                         print(f"   ✅ Deleted: {unique_id}")
                         results['deleted'] += 1
@@ -1190,6 +1347,38 @@ class APIUploader:
 
         print(f"\n   Summary: Deleted {results['deleted']}, Failed {results['failed']}, Skipped {results['skipped']}")
         return results
+
+    def _reactivate_mdms_record(self, record: Dict, schema_code: str, tenant: str):
+        """Reactivate a soft-deleted MDMS record by setting isActive=True.
+
+        Args:
+            record: Data dict from search_mdms_data (has _id, _uniqueIdentifier, _auditDetails)
+            schema_code: MDMS schema code
+            tenant: Tenant ID
+        """
+        update_url = f"{self.mdms_url}/v2/_update/{schema_code}"
+        unique_id = record.get('_uniqueIdentifier', record.get('code', '?'))
+        # Build clean data dict without internal _ fields
+        clean_data = {k: v for k, v in record.items() if not k.startswith('_')}
+        payload = {
+            "RequestInfo": {
+                "apiId": "Rainmaker",
+                "authToken": self.auth_token,
+                "userInfo": self.user_info,
+                "msgId": f"reactivate-{int(time.time()*1000)}|en_IN"
+            },
+            "Mdms": {
+                "tenantId": tenant,
+                "schemaCode": schema_code,
+                "uniqueIdentifier": unique_id,
+                "id": record.get('_id'),
+                "data": clean_data,
+                "auditDetails": record.get('_auditDetails'),
+                "isActive": True
+            }
+        }
+        resp = self._request_with_retry(update_url, json=payload, headers={'Content-Type': 'application/json'})
+        resp.raise_for_status()
 
     def rollback_mdms_by_schema(self, schema_codes: List[str], tenant: str) -> Dict:
         """Rollback (delete) all MDMS data for multiple schema codes
@@ -1631,7 +1820,7 @@ class APIUploader:
                 status_code = None
 
                 try:
-                    response = requests.post(url, json=payload, headers=headers, timeout=120)
+                    response = self._request_with_retry(url, json=payload, headers=headers, timeout=120)
                     status_code = response.status_code
                     response.raise_for_status()
                     print(f"      ✅ Batch {batch_num}/{total_batches}: {len(batch)} messages uploaded")
@@ -1751,8 +1940,8 @@ class APIUploader:
         headers = {'Content-Type': 'application/json'}
 
         try:
-            response = requests.post(url, json=payload, headers=headers)
-          
+            response = self._request_with_retry(url, json=payload, headers=headers)
+
             response.raise_for_status()
             print(f"\n✅ [SUCCESS] Boundary hierarchy created")
             print(f"   Tenant: {hierarchy_data.get('tenantId')}")
@@ -1821,7 +2010,7 @@ class APIUploader:
             }
 
             headers = {'Content-Type': 'application/json'}
-            search_response = requests.post(search_url, json=search_payload, headers=headers)
+            search_response = self._request_with_retry(search_url, json=search_payload, headers=headers)
             search_response.raise_for_status()
             search_data = search_response.json()
 
@@ -1894,7 +2083,7 @@ class APIUploader:
                 }
             }
 
-            update_response = requests.post(update_url, json=update_payload, headers=headers)
+            update_response = self._request_with_retry(update_url, json=update_payload, headers=headers)
             update_response.raise_for_status()
 
             print(f"   [OK] StateInfo updated successfully with new language")
@@ -1943,7 +2132,7 @@ class APIUploader:
         try:
             # Tenant creation can take 5-10 minutes, use long timeout
             print(f"   ⏳ This may take 5-10 minutes, please wait...")
-            response = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=1200)
+            response = self._request_with_retry(url, json=payload, headers={"Content-Type": "application/json"}, timeout=1200)
             response.raise_for_status()
 
             result = response.json()
@@ -2005,11 +2194,11 @@ class APIUploader:
         headers = {'Content-Type': 'application/json'}
 
         try:
-            response = requests.post(url, json=payload, headers=headers)
+            response = self._request_with_retry(url, json=payload, headers=headers)
             response.raise_for_status()
             data = response.json()
 
-        
+
 
             hierarchies = data.get('BoundaryHierarchy', [])
 
@@ -2071,7 +2260,7 @@ class APIUploader:
         headers = {'Content-Type': 'application/json'}
 
         try:
-            response = requests.post(url, json=payload, headers=headers, params=params)
+            response = self._request_with_retry(url, json=payload, headers=headers, params=params)
             response.raise_for_status()
             data = response.json()
 
@@ -2130,8 +2319,8 @@ class APIUploader:
 
         for attempt in range(1, max_attempts + 1):
             try:
-                response = requests.post(url, json=payload, headers=headers, params=params)
-               
+                response = self._request_with_retry(url, json=payload, headers=headers, params=params)
+
                 response.raise_for_status()
                 data = response.json()
 
@@ -2310,7 +2499,7 @@ class APIUploader:
                 }
 
                 print(f"\n📤 Uploading file: {os.path.basename(file_path)}")
-                response = requests.post(url, files=files, data=data)
+                response = self._request_with_retry(url, files=files, data=data)
                 response.raise_for_status()
 
                 result = response.json()
@@ -2507,7 +2696,7 @@ class APIUploader:
         }
 
         try:
-            response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'})
+            response = self._request_with_retry(url, json=payload, headers={'Content-Type': 'application/json'})
             response.raise_for_status()
             data = response.json()
             hierarchies = data.get('BoundaryHierarchy', [])
@@ -2533,15 +2722,21 @@ class APIUploader:
             "Boundary": [{
                 "tenantId": tenant_id,
                 "code": code,
-                "geometry": {"type": "Polygon", "coordinates": [[[0,0],[0,1],[1,1],[1,0],[0,0]]]}
+                "geometry": {"type": "Point", "coordinates": [0, 0]}
             }]
         }
 
         try:
-            response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'})
+            response = self._request_with_retry(url, json=payload, headers={'Content-Type': 'application/json'})
             if response.status_code in [200, 201, 202]:
                 print(f"   ✅ Created boundary: {code}")
                 return True
+            elif response.status_code == 403:
+                raise PermissionError(
+                    f"Boundary operation failed (403 Forbidden): user lacks required roles. "
+                    f"Ensure the user has BOUNDARY_ADMIN role and that role-action mappings "
+                    f"exist for boundary endpoints."
+                )
             else:
                 data = response.json()
                 error_code = data.get('Errors', [{}])[0].get('code', '')
@@ -2552,6 +2747,8 @@ class APIUploader:
                 else:
                     print(f"   ❌ Failed to create boundary {code}: {error_code or error_msg or response.status_code}")
                     return False
+        except PermissionError:
+            raise  # Re-raise 403 errors — don't swallow them
         except Exception as e:
             print(f"   ❌ Error creating boundary {code}: {str(e)[:100]}")
             return False
@@ -2583,11 +2780,17 @@ class APIUploader:
             payload["BoundaryRelationship"]["parent"] = parent_code
 
         try:
-            response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'})
+            response = self._request_with_retry(url, json=payload, headers={'Content-Type': 'application/json'})
             if response.status_code in [200, 201, 202]:
                 parent_info = f" (parent: {parent_code})" if parent_code else " (root)"
                 print(f"   ✅ Created relationship: {code} [{boundary_type}]{parent_info}")
                 return True
+            elif response.status_code == 403:
+                raise PermissionError(
+                    f"Boundary operation failed (403 Forbidden): user lacks required roles. "
+                    f"Ensure the user has BOUNDARY_ADMIN role and that role-action mappings "
+                    f"exist for boundary endpoints."
+                )
             else:
                 data = response.json()
                 error_code = data.get('Errors', [{}])[0].get('code', '')
@@ -2598,6 +2801,8 @@ class APIUploader:
                 else:
                     print(f"   ❌ Failed relationship {code}: {error_msg[:80] if error_msg else error_code or response.status_code}")
                     return False
+        except PermissionError:
+            raise  # Re-raise 403 errors — don't swallow them
         except Exception as e:
             print(f"   ❌ Error creating relationship {code}: {str(e)[:100]}")
             return False
@@ -2632,7 +2837,7 @@ class APIUploader:
         }
 
         try:
-            response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'})
+            response = self._request_with_retry(url, json=payload, headers={'Content-Type': 'application/json'})
             if response.status_code != 200:
                 print(f"   ❌ Failed to search boundaries: {response.status_code}")
                 return results
@@ -2663,7 +2868,7 @@ class APIUploader:
                 }
 
                 try:
-                    del_response = requests.post(
+                    del_response = self._request_with_retry(
                         f"{delete_url}?tenantId={tenant_id}&code={code}",
                         json=delete_payload,
                         headers={'Content-Type': 'application/json'}
@@ -2714,7 +2919,7 @@ class APIUploader:
         }
 
         try:
-            response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'})
+            response = self._request_with_retry(url, json=payload, headers={'Content-Type': 'application/json'})
             if response.status_code == 200:
                 print(f"   ✅ Deleted hierarchy: {hierarchy_type}")
                 return {'status': 'success', 'message': f'Deleted {hierarchy_type}'}
@@ -2770,11 +2975,10 @@ class APIUploader:
         try:
             print(f"📥 Fetching roles from MDMS for tenant: {tenant}")
 
-            # Try to fetch from MDMS roles schema
-            roles = self.search_mdms_data(
+            # Try to fetch all roles from MDMS (auto-paginate)
+            roles = self.search_mdms_data_all(
                 schema_code='ACCESSCONTROL-ROLES.roles',
-                tenant=tenant,
-                limit=200
+                tenant=tenant
             )
 
             if roles and len(roles) > 0:
@@ -2844,10 +3048,9 @@ class APIUploader:
 
         # Fetch existing roles from MDMS
         try:
-            existing_roles = self.search_mdms_data(
+            existing_roles = self.search_mdms_data_all(
                 schema_code='ACCESSCONTROL-ROLES.roles',
-                tenant=tenant,
-                limit=200
+                tenant=tenant
             )
             existing_codes = {role.get('code') for role in existing_roles if role.get('code')}
             print(f"   ✅ Found {len(existing_codes)} existing roles in MDMS")
@@ -2952,7 +3155,7 @@ class APIUploader:
 
         try:
             print(f"📥 Fetching boundaries from boundary service for tenant: {tenant}")
-            response = requests.post(url, json=payload, headers=headers)
+            response = self._request_with_retry(url, json=payload, headers=headers)
             response.raise_for_status()
             data = response.json()
 
@@ -3089,8 +3292,8 @@ class APIUploader:
 
 
             headers = {'Content-Type': 'application/json'}
-            response = requests.post(url, json=payload, headers=headers, timeout=30)
-           
+            response = self._request_with_retry(url, json=payload, headers=headers, timeout=30)
+
             response.raise_for_status()
             data = response.json()
 
@@ -3524,8 +3727,6 @@ class APIUploader:
 
         # STEP 2: Proceed with employee creation
         create_url = f"{self.hrms_url}/employees/_create"
-        update_url = f"{self.hrms_url}/employees/_update"
-        search_url = f"{self.hrms_url}/employees/_search"
 
         results = {
             'created': 0,
@@ -3549,8 +3750,9 @@ class APIUploader:
             emp_code = employee.get('code', str(i))
 
             # Extract custom password before creation (if provided)
-            custom_password = employee.get('user', {}).get('password')
-            needs_password_update = custom_password and custom_password not in ['eGov@123', None, '']
+            # HRMS _create generates a random password and ignores the passed value,
+            # so we always need to reset it via the user service afterwards.
+            custom_password = employee.get('user', {}).get('password') or 'eGov@123'
 
             # Override userInfo tenantId to match the request tenant
             user_info_copy = self.user_info.copy()
@@ -3575,7 +3777,7 @@ class APIUploader:
 
             try:
                 # STEP 2A: Create employee (system generates random password)
-                response = requests.post(create_url, json=payload, headers=headers)
+                response = self._request_with_retry(create_url, json=payload, headers=headers)
                 status_code = response.status_code
                 response.raise_for_status()
 
@@ -3585,58 +3787,60 @@ class APIUploader:
                 print(f"   [OK] [{i}/{len(employee_list)}] {emp_code} - Created")
                 results['created'] += 1
 
-                # STEP 2B: Update password if custom password was provided
-                if needs_password_update and created_employee:
+                # STEP 2B: Reset password via user service
+                # HRMS _create generates a random password, so we always
+                # search for the user by UUID and update via user service.
+                if created_employee:
                     try:
-                        # Search for the created employee to get full details
-                        search_payload = {
-                            "RequestInfo": {
-                                "apiId": "Rainmaker",
-                                "authToken": self.auth_token,
-                                "userInfo": user_info_copy,
-                                "msgId": f"{int(time.time() * 1000)}|en_IN"
-                            },
-                            "codes": [emp_code],
-                            "tenantId": tenant
-                        }
+                        user_uuid = created_employee.get('user', {}).get('uuid')
+                        if not user_uuid:
+                            user_uuid = created_employee.get('uuid')
 
-                        # Add query parameters for search
-                        search_params = {
-                            "tenantId": tenant,
-                            "codes": emp_code
-                        }
-
-                        search_response = requests.post(search_url, json=search_payload, headers=headers, params=search_params)
-                        search_response.raise_for_status()
-                        search_data = search_response.json()
-
-                        full_employee = search_data.get('Employees', [{}])[0]
-
-                        if full_employee and full_employee.get('id'):
-                            # Update the password in the user object
-                            full_employee['user']['password'] = custom_password
-
-                            # Prepare update payload
-                            update_payload = {
+                        if user_uuid:
+                            # Search user via user service by UUID
+                            user_search_url = f"{self.auth_url}/_search"
+                            user_search_payload = {
                                 "RequestInfo": {
                                     "apiId": "Rainmaker",
-                                    "ver": "1.0",
-                                    "action": "_update",
-                                    "msgId": f"{int(time.time() * 1000)}",
                                     "authToken": self.auth_token,
-                                    "userInfo": user_info_copy
+                                    "userInfo": user_info_copy,
+                                    "msgId": f"{int(time.time() * 1000)}|en_IN"
                                 },
-                                "Employees": [full_employee]
+                                "uuid": [user_uuid],
+                                "tenantId": tenant
                             }
 
-                            # Update employee with custom password
-                            update_response = requests.post(update_url, json=update_payload, headers=headers)
-                            update_response.raise_for_status()
+                            user_search_resp = self._request_with_retry(
+                                user_search_url, json=user_search_payload, headers=headers)
+                            user_search_resp.raise_for_status()
+                            user_data = user_search_resp.json()
+                            users = user_data.get('user', [])
 
-                            print(f"   [✓] [{i}/{len(employee_list)}] {emp_code} - Password updated")
-                            results['password_updated'] += 1
+                            if users:
+                                # Update password via user service _updatenovalidate
+                                user_obj = users[0]
+                                user_obj['password'] = custom_password
+                                user_update_url = f"{self.auth_url}/users/_updatenovalidate"
+                                user_update_payload = {
+                                    "RequestInfo": {
+                                        "apiId": "Rainmaker",
+                                        "authToken": self.auth_token,
+                                        "userInfo": user_info_copy,
+                                        "msgId": f"{int(time.time() * 1000)}|en_IN"
+                                    },
+                                    "User": user_obj
+                                }
+
+                                user_update_resp = self._request_with_retry(
+                                    user_update_url, json=user_update_payload, headers=headers)
+                                user_update_resp.raise_for_status()
+
+                                print(f"   [✓] [{i}/{len(employee_list)}] {emp_code} - Password set via user service")
+                                results['password_updated'] += 1
+                            else:
+                                print(f"   [⚠] [{i}/{len(employee_list)}] {emp_code} - User not found by UUID for password update")
                         else:
-                            print(f"   [⚠] [{i}/{len(employee_list)}] {emp_code} - Could not fetch employee for password update")
+                            print(f"   [⚠] [{i}/{len(employee_list)}] {emp_code} - No user UUID in HRMS response for password update")
 
                     except Exception as pwd_error:
                         # Don't fail the entire creation if password update fails
@@ -3743,7 +3947,7 @@ class APIUploader:
         headers = {"Content-Type": "application/json"}
 
         try:
-            response = requests.post(url, json=payload, headers=headers, params=params)
+            response = self._request_with_retry(url, json=payload, headers=headers, params=params)
             response.raise_for_status()
 
             data = response.json()
@@ -3794,7 +3998,7 @@ class APIUploader:
         headers = {"Content-Type": "application/json"}
 
         try:
-            response = requests.post(url, json=payload, headers=headers)
+            response = self._request_with_retry(url, json=payload, headers=headers)
             response.raise_for_status()
 
             data = response.json()
@@ -3852,7 +4056,7 @@ class APIUploader:
         headers = {"Content-Type": "application/json"}
 
         try:
-            response = requests.post(url, json=payload, headers=headers)
+            response = self._request_with_retry(url, json=payload, headers=headers)
             response.raise_for_status()
 
             data = response.json()

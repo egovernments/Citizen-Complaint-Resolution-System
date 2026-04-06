@@ -104,6 +104,47 @@ class CRSLoader:
         """Get current user info"""
         return self.uploader.user_info if self.uploader else None
 
+    def create_root_tenant(self, root_code: str, source_root: str = None) -> bool:
+        """Create a standalone root-level tenant.
+
+        Creates the root tenant record in tenant.tenants MDMS and bootstraps
+        all schemas and essential data from a source root. This enables creating
+        tenants like 'ethiopia' or 'mombasa' without having to go through
+        create_tenant('ethiopia.somecity') first.
+
+        Args:
+            root_code: Root tenant code (e.g., "ethiopia", "mombasa")
+                       Must not contain dots.
+            source_root: Root to copy schemas/data from (default: login tenant root)
+
+        Returns:
+            bool: True if root tenant was created or already exists
+        """
+        self._check_auth()
+
+        if "." in root_code:
+            print(f"❌ Root tenant code must not contain dots: '{root_code}'")
+            print(f"   Use create_tenant() for city tenants like '{root_code}'")
+            return False
+
+        # Determine source root
+        if source_root is None:
+            source_root = self.tenant_id.split(".")[0] if "." in self.tenant_id else self.tenant_id
+
+        # Check if root already exists
+        existing = self.uploader.search_mdms_data(
+            schema_code='tenant.tenants', tenant=root_code, limit=10
+        )
+        root_exists = any(
+            r.get('code', '').lower() == root_code.lower() for r in existing
+        )
+        if root_exists:
+            print(f"✅ Root tenant '{root_code}' already exists")
+            return True
+
+        print(f"📝 Creating root tenant '{root_code}' (source: {source_root})...")
+        return self._bootstrap_tenant_root(root_code, source_tenant=source_root)
+
     def create_tenant(self, tenant_code: str, display_name: str = None,
                       enable_modules: list = None, users: list = None) -> bool:
         """Create a tenant if it doesn't exist
@@ -309,6 +350,12 @@ class CRSLoader:
         if failed > 0:
             print(f"   ⚠️  Some schemas failed but continuing — non-critical schemas may be optional")
 
+        # Wait for Kafka-based schema persistence before creating data.
+        # Without this, create_mdms_data fails with "Schema definition not found".
+        # 5 seconds needed — 3 is sometimes not enough under load.
+        import time as _time
+        _time.sleep(5)
+
         # Step 2: Create root self-record (required by idgen for city code resolution)
         root_data = {
             "code": target_root,
@@ -333,22 +380,29 @@ class CRSLoader:
 
         # Step 3: Copy essential MDMS data records from source
         essential_schemas = [
+            'DataSecurity.DecryptionABAC',
+            'DataSecurity.EncryptionPolicy',
+            'DataSecurity.SecurityPolicy',
+            'DataSecurity.MaskingPatterns',
             'common-masters.IdFormat',
             'common-masters.Department',
             'common-masters.Designation',
             'common-masters.GenderType',
+            'common-masters.StateInfo',
             'egov-hrms.EmployeeStatus',
             'egov-hrms.EmployeeType',
             'egov-hrms.DeactivationReason',
             'ACCESSCONTROL-ROLES.roles',
             'RAINMAKER-PGR.ServiceDefs',
+            'Workflow.BusinessService',
+            'INBOX.InboxQueryConfiguration',
         ]
 
         data_copied = 0
         data_skipped = 0
         for schema_code in essential_schemas:
-            records = self.uploader.search_mdms_data(
-                schema_code=schema_code, tenant=source_tenant, limit=500
+            records = self.uploader.search_mdms_data_all(
+                schema_code=schema_code, tenant=source_tenant
             )
             if not records:
                 continue
@@ -380,16 +434,40 @@ class CRSLoader:
             }
         }
 
+        # Workflow search requires businessServices parameter — search for known PGR services
+        known_wf_services = ["PGR"]
         try:
             wf_resp = requests.post(
                 wf_search_url, json=wf_request_info,
-                params={"tenantId": source_tenant},
+                params={"tenantId": source_tenant, "businessServices": ",".join(known_wf_services)},
                 headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
             if wf_resp.ok:
                 business_services = wf_resp.json().get("BusinessServices", [])
                 wf_copied = 0
                 for bs in business_services:
-                    # Clone for target root: strip IDs, update tenant
+                    bs_name = bs.get('businessService', '?')
+
+                    # Check if workflow already exists on target
+                    try:
+                        existing_wf = requests.post(
+                            wf_search_url, json=wf_request_info,
+                            params={"tenantId": target_root, "businessServices": bs_name},
+                            headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
+                        if existing_wf.ok and existing_wf.json().get("BusinessServices", []):
+                            print(f"   ⚠️  Workflow '{bs_name}' already exists on target — skipping")
+                            wf_copied += 1  # Count as success
+                            continue
+                    except Exception:
+                        pass  # If check fails, proceed with create attempt
+
+                    # Build UUID→state name map for resolving nextState references
+                    state_map = {
+                        s['uuid']: s['state']
+                        for s in bs.get('states', [])
+                        if s.get('uuid') and s.get('state')
+                    }
+
+                    # Clone for target root: strip IDs, update tenant, resolve nextState
                     bs_copy = deepcopy(bs)
                     bs_copy.pop("uuid", None)
                     bs_copy.pop("auditDetails", None)
@@ -398,11 +476,19 @@ class CRSLoader:
                         state.pop("uuid", None)
                         state.pop("auditDetails", None)
                         state["tenantId"] = target_root
-                        for action in state.get("actions", []):
+                        for action in (state.get("actions") or []):
                             action.pop("uuid", None)
                             action.pop("auditDetails", None)
                             action.pop("currentState", None)
-                            action.pop("nextState", None)
+                            # Resolve nextState UUID to state name
+                            next_state_uuid = action.pop("nextState", None)
+                            if next_state_uuid:
+                                if next_state_uuid in state_map:
+                                    action["nextState"] = state_map[next_state_uuid]
+                                else:
+                                    # Can't resolve (e.g., start state has state=null)
+                                    # Keep original value — API accepts names or UUIDs
+                                    action["nextState"] = next_state_uuid
 
                     create_wf = {
                         "RequestInfo": {
@@ -418,7 +504,7 @@ class CRSLoader:
                         if r.ok:
                             wf_copied += 1
                         else:
-                            print(f"   ⚠️  Workflow create for '{bs.get('businessService', '?')}': {r.text[:150]}")
+                            print(f"   ⚠️  Workflow create for '{bs_name}': {r.text[:150]}")
                     except Exception as e:
                         print(f"   ⚠️  Workflow create error: {e}")
 
@@ -478,8 +564,10 @@ class CRSLoader:
             return False
 
         stateinfo = deepcopy(template)
-        stateinfo.pop('_isActive', None)
-        stateinfo.pop('_uniqueIdentifier', None)
+        # Strip internal metadata fields from search_mdms_data
+        for key in list(stateinfo.keys()):
+            if key.startswith('_'):
+                stateinfo.pop(key)
         stateinfo['code'] = tenant_code
         if display_name:
             stateinfo['name'] = display_name
@@ -698,6 +786,11 @@ class CRSLoader:
         mobile = user_def.get("mobile", "9999999999")
         email = user_def.get("email", f"{username.lower()}@digit.org")
         user_type = user_def.get("type", "EMPLOYEE")
+
+        # Add INTERNAL_MICROSERVICE_ROLE for admin/superuser accounts
+        admin_roles = {"SUPERUSER", "CITIZEN_ADMIN", "EMPLOYEE_ADMIN", "SYSTEM_ADMIN"}
+        if admin_roles & set(roles) and "INTERNAL_MICROSERVICE_ROLE" not in roles:
+            roles = list(roles) + ["INTERNAL_MICROSERVICE_ROLE"]
 
         # Build roles array with state-level tenant ID (roles are defined at state level)
         # Extract state tenant: "statea.c" -> "statea", "pg.citya" -> "pg"
@@ -1019,7 +1112,7 @@ class CRSLoader:
 
         # Upload departments
         if dept_data:
-            print(f"   Creating {len(dept_data)} departments...")
+            print(f"   Creating {len(dept_data)} new departments...")
             results['departments'] = self.uploader.create_mdms_data(
                 schema_code='common-masters.Department',
                 data_list=dept_data,
@@ -1034,7 +1127,7 @@ class CRSLoader:
 
         # Upload designations
         if desig_data:
-            print(f"   Creating {len(desig_data)} designations...")
+            print(f"   Creating {len(desig_data)} new designations...")
             results['designations'] = self.uploader.create_mdms_data(
                 schema_code='common-masters.Designation',
                 data_list=desig_data,
@@ -1046,6 +1139,11 @@ class CRSLoader:
             # Designation localizations
             if desig_loc:
                 self.uploader.create_localization_messages(desig_loc, tenant)
+
+        # Re-fetch to show accurate after-counts
+        after_desigs = self.uploader.fetch_designations(tenant)
+        after_depts = self.uploader.fetch_departments(tenant)
+        print(f"   After load: {len(after_depts)} dept(s), {len(after_desigs)} desig(s) on {tenant}")
 
         # 2. Load complaint types
         print(f"\n[2/2] Loading complaint types...")
