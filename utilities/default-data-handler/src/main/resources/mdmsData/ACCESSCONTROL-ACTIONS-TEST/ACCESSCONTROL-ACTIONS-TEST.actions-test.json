@@ -1,5 +1,41 @@
 [
   {
+    "id": 2634,
+    "url": "/config-service/config/v1/_search",
+    "code": "null",
+    "name": "configSearch",
+    "path": "",
+    "enabled": true,
+    "displayName": "config Search",
+    "orderNumber": 1,
+    "serviceCode": "config url",
+    "parentModule": ""
+  },
+  {
+    "id": 2633,
+    "url": "/config-service/config/v1/_update",
+    "code": "null",
+    "name": "configUpdate",
+    "path": "",
+    "enabled": true,
+    "displayName": "config update",
+    "orderNumber": 1,
+    "serviceCode": "config url",
+    "parentModule": ""
+  },
+  {
+    "id": 2632,
+    "url": "/config-service/config/v1/_create",
+    "code": "null",
+    "name": "configCreate",
+    "path": "",
+    "enabled": true,
+    "displayName": "config create",
+    "orderNumber": 1,
+    "serviceCode": "config url",
+    "parentModule": ""
+  },
+  {
     "id": 2631,
     "name": "MDMS",
     "url": "/mdms-v2/v2/_update/ACCESSCONTROL-ACTIONS-TEST.actions-test",
