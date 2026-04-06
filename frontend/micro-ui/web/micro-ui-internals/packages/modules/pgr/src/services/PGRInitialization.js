@@ -34,6 +34,14 @@ const initializePGRModule = async ({ tenantId }) => {
     }
   }
 
+  // Ensure we use a city-level tenant (boundaries are seeded at city level, not state level)
+  // If tenantId is state-level (no dot), append the default city
+  if (tenantId && !tenantId.includes(".")) {
+    const defaultCity = tenantId + ".citya"; // TODO: make configurable or discover from MDMS
+    console.log("[PGRInit] State-level tenant " + tenantId + " → using city " + defaultCity);
+    tenantId = defaultCity;
+  }
+
 
   try {
     // Call boundary-service to get hierarchical boundary data with children included
