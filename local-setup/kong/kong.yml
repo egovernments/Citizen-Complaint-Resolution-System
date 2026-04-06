@@ -254,6 +254,15 @@ services:
     - name: inbox-route
       paths: ["/inbox"]
       strip_path: false
+- name: user-event-service
+  url: http://egov-user-event:8080
+  tags:
+  - core
+  routes:
+  - name: user-event-route
+    paths:
+    - /egov-user-event
+    strip_path: false
 - name: digit-ui
   url: http://digit-ui:80
   tags:
