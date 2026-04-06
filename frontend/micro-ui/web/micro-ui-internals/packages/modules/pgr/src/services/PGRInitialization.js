@@ -16,18 +16,22 @@ const initializePGRModule = async ({ tenantId }) => {
   const hierarchyType = window?.globalConfigs?.getConfig("HIERARCHY_TYPE") || "ADMIN";
   const boundaryType =  window?.globalConfigs?.getConfig("BOUNDARY_TYPE") || "Locality";
 
-    // Get user info from localStorage
-  const citizenInfo = window.localStorage.getItem("user-info");
+    // Get user info from localStorage (KC adapter stores as "Citizen.user-info", native as "user-info")
+  const citizenInfo = window.localStorage.getItem("Citizen.user-info") || window.localStorage.getItem("user-info");
 
   if (citizenInfo) {
-    const user = JSON.parse(citizenInfo);
-    const userType = user.type;
+    try {
+      const user = JSON.parse(citizenInfo);
+      const userType = user.type;
 
-    if (userType === "CITIZEN") {
-      tenantId = Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || tenantId;
+      if (userType === "CITIZEN") {
+        tenantId = Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code
+          || window.localStorage.getItem("Citizen.tenant-id")
+          || tenantId;
+      }
+    } catch (e) {
+      console.warn("Failed to parse citizen info:", e);
     }
-  } else {
-    console.log("No CITIZEN user info found in localStorage.");
   }
 
 
