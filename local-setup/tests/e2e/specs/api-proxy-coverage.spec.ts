@@ -315,3 +315,66 @@ test.describe('API Proxy Coverage', () => {
     expect(mdmsResult.status).toBeLessThan(500);
   });
 });
+
+test.describe('Domain Configuration', () => {
+  test('KC client has deployment domain in redirect URIs', async ({ page }) => {
+    const deploymentDomain = new URL(BASE_URL).origin;
+
+    // Check OIDC discovery to get the client registration info
+    const discovery = await page.evaluate(async (baseUrl) => {
+      const resp = await fetch(
+        `${baseUrl}/realms/digit-sandbox/.well-known/openid-configuration`,
+      );
+      return resp.json();
+    }, BASE_URL);
+
+    expect(discovery.issuer).toBeTruthy();
+    expect(discovery.authorization_endpoint).toBeTruthy();
+
+    // Verify the authorization endpoint is accessible and accepts our redirect_uri
+    const authUrl = new URL(discovery.authorization_endpoint);
+    authUrl.searchParams.set('client_id', 'digit-sandbox-ui');
+    authUrl.searchParams.set('redirect_uri', `${deploymentDomain}/digit-ui/user/login`);
+    authUrl.searchParams.set('response_type', 'code');
+    authUrl.searchParams.set('scope', 'openid');
+
+    const authResp = await page.evaluate(async (url) => {
+      const resp = await fetch(url, { redirect: 'manual' });
+      return { status: resp.status, location: resp.headers.get('location') };
+    }, authUrl.toString());
+
+    // Should redirect to login page (302) or return the login page (200)
+    // NOT return an error about invalid redirect_uri
+    expect(
+      authResp.status,
+      `KC should accept redirect_uri for ${deploymentDomain}. Got ${authResp.status}. ` +
+        `If this fails, add '${deploymentDomain}/*' to the KC client's redirectUris.`,
+    ).not.toBe(400);
+  });
+
+  test('KC CORS allows deployment domain', async ({ page }) => {
+    await page.goto(`${BASE_URL}/digit-ui/citizen`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 15_000,
+    });
+
+    // Test that KC OIDC endpoint allows CORS from our domain
+    const corsResult = await page.evaluate(async (baseUrl) => {
+      try {
+        const resp = await fetch(
+          `${baseUrl}/realms/digit-sandbox/.well-known/openid-configuration`,
+          { mode: 'cors' },
+        );
+        return { ok: resp.ok, status: resp.status, corsBlocked: false };
+      } catch {
+        return { ok: false, status: 0, corsBlocked: true };
+      }
+    }, BASE_URL);
+
+    expect(
+      corsResult.corsBlocked,
+      `KC CORS blocks ${BASE_URL}. Add the domain to webOrigins in KC client config.`,
+    ).toBe(false);
+    expect(corsResult.ok).toBe(true);
+  });
+});

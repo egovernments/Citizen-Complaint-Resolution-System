@@ -295,6 +295,7 @@ services:
       EGOV_MDMS_V2_HOST: http://egov-mdms-service:8094
       MDMS_SEARCH_ENDPOINT: /mdms-v2/v1/_search
       EGOV_OTP_HOST: http://egov-user:8107
+      CITIZEN_LOGIN_PASSWORD_OTP_ENABLED: "false"
       EGOV_ENC_HOST: http://egov-enc-service:1234
       EGOV_IDGEN_HOST: http://egov-idgen:8088
       EGOV_ACCESSCONTROL_HOST: http://egov-accesscontrol:8090
