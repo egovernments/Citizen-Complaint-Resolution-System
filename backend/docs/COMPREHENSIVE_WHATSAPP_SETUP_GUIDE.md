@@ -2,6 +2,8 @@
 
 This guide provides step-by-step instructions for setting up the end-to-end WhatsApp notification ecosystem, including the Novu infrastructure and the DIGIT platform services.
 
+For detailed information on Role-Based Access Control (RBAC) and cluster-level deployment, see [WhatsApp Notification Setup Guide](WHATSAPP_NOTIFICATION_SETUP.md).
+
 ---
 
 ## 1. System Architecture
@@ -29,7 +31,18 @@ The WhatsApp notification flow follows this path:
 
 ---
 
-## 3. Step-by-Step Setup
+## 3. Role and Access Control
+
+To ensure secure access to notification APIs, a new role `CONFIG_ADMIN` is required.
+
+- **Role**: `CONFIG_ADMIN`
+- **Responsibilities**: Manage template bindings, provider credentials, and user preferences.
+- **Assignment**: This role should be mapped to the `SUPERADMIN` user by default.
+- **Detailed API Mappings**: Refer to the [Setup Guide](WHATSAPP_NOTIFICATION_SETUP.md#1-role-and-access-control).
+
+---
+
+## 4. Step-by-Step Setup
 
 ### Phase 1: Novu Infrastructure Verification
 Ensure all Novu components are running in your cluster.
@@ -43,7 +56,7 @@ This step configures the Novu environment, creates the Twilio integration, and s
 
 1. **Locate Configuration**: Navigate to `novu-bridge/config`.
 2. **Edit Environment**: Copy `.env.novu` to `.env.novu.local` and fill in:
-   - `NOVU_BASE_URL`: Usually `http://novu-api.novu:3000` or local forward.
+   - `NOVU_BASE_URL`: Usually `http://novu-api.novu:3000` (internal) or `https://<domain>/novu-api` (external).
    - `NOVU_API_KEY`: Obtain from Novu Dashboard (Settings -> API Keys).
    - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM`.
 3. **Run Bootstrap**:
@@ -52,13 +65,18 @@ This step configures the Novu environment, creates the Twilio integration, and s
    ```
 
 ### Phase 3: Config Service Setup
-Config Service acts as the registry for notification metadata.
+Config Service acts as the registry for notification metadata. Use your platform's domain URL and provide a valid `authToken`.
 
-1. **Register Schemas**: Register `TemplateBinding` and `ProviderDetail` schemas via MDMS v2 (see `docs/WHATSAPP_NOTIFICATION_SETUP.md` Step 3 for details).
+1. **Register Schemas**: Register `TemplateBinding` and `ProviderDetail` schemas via MDMS v2 (see [Setup Guide](WHATSAPP_NOTIFICATION_SETUP.md#3-data-loading-via-domain-url) for details).
 2. **Seed Template Bindings**: Map your Kafka events to Novu workflows.
    ```bash
-   curl -X POST "http://config-service/config/v1/_create/TemplateBinding" -d '{
+   curl -X POST "https://<your-domain>/config-service/config/v1/_create/TemplateBinding" \
+   -H "Content-Type: application/json" \
+   -d '{
+     "requestInfo": { "authToken": "<your-auth-token>" },
      "configData": {
+       "tenantId": "pb",
+       "uniqueIdentifier": "COMPLAINTS.WORKFLOW.APPLY",
        "data": {
          "eventName": "COMPLAINTS.WORKFLOW.APPLY",
          "templateId": "complaints-whatsapp-v1",
@@ -70,8 +88,13 @@ Config Service acts as the registry for notification metadata.
    ```
 3. **Seed Provider Credentials**: Store Twilio credentials securely.
    ```bash
-   curl -X POST "http://config-service/config/v1/_create/ProviderDetail" -d '{
+   curl -X POST "https://<your-domain>/config-service/config/v1/_create/ProviderDetail" \
+   -H "Content-Type: application/json" \
+   -d '{
+     "requestInfo": { "authToken": "<your-auth-token>" },
      "configData": {
+       "tenantId": "pb",
+       "uniqueIdentifier": "twilio-whatsapp",
        "data": {
          "providerName": "twilio",
          "channel": "whatsapp",
@@ -84,50 +107,57 @@ Config Service acts as the registry for notification metadata.
 ### Phase 4: User Preference Service Setup
 Novu Bridge will skip notifications if consent is not granted.
 
-1. **Enable WhatsApp Channel**: Create a preference for the user.
+1. **Enable WhatsApp Channel**: Create a preference for the user using the `_upsert` endpoint.
    ```bash
-   curl -X POST "http://user-preference/v1/_create" -d '{
+   curl -X POST "https://<your-domain>/user-preference/v1/_upsert" \
+   -H "Content-Type: application/json" \
+   -d '{
+     "requestInfo": { "authToken": "<your-auth-token>" },
      "preference": {
        "userId": "<user-uuid>",
-       "channels": { "WHATSAPP": { "consent": "GRANTED" } }
+       "tenantId": "pb",
+       "preferenceCode": "USER_NOTIFICATION_PREFERENCES",
+       "payload": {
+         "preferredLanguage": "en_IN",
+         "consent": { "WHATSAPP": { "status": "GRANTED", "scope": "GLOBAL" } }
+       }
      }
    }'
    ```
-   *Note: Set `novu.bridge.preference.enabled=false` in Novu Bridge to bypass this check during dev.*
 
 ### Phase 5: Novu Bridge Deployment
-Configure Novu Bridge to connect all pieces.
+Configure Novu Bridge to connect all pieces. In a cluster environment, use internal DNS names for service discovery.
 
 1. **Key Properties**:
    - `spring.kafka.bootstrap-servers`: Kafka broker address.
    - `novu.bridge.kafka.input.topic`: Topic where domain events are published.
-   - `novu.bridge.config.host`: URL of Config Service.
-   - `novu.bridge.preference.host`: URL of User Preference Service.
-   - `novu.base.url`: URL of Novu API.
+   - `novu.bridge.config.host`: `http://digit-config-service.digit:8080`
+   - `novu.bridge.preference.host`: `http://digit-user-preferences-service.digit:8080/user-preference`
+   - `novu.base.url`: `http://novu-api.novu:3000`
    - `novu.api.key`: Novu API Key.
-
-2. **Run Service**:
-   ```bash
-   java -jar novu-bridge.jar --novu.api.key=${NOVU_API_KEY}
-   ```
 
 ---
 
-## 4. Verification
+## 5. Verification
 
 ### Dry Run Validation
 Test the entire pipeline (config resolution + consent check) without sending a real message:
 ```bash
-curl -X POST "http://novu-bridge/novu-adapter/v1/dispatch/_validate" \
+curl -X POST "https://<your-domain>/novu-bridge/novu-adapter/v1/dispatch/_validate" \
   -H "Content-Type: application/json" \
-  -d @domain-event.json
+  -d '{
+    "requestInfo": { "authToken": "<your-auth-token>" },
+    "event": { ...domain event... }
+  }'
 ```
 
 ### Direct Trigger
 Test Novu + Twilio integration directly:
 ```bash
-curl -X POST "http://novu-bridge/novu-adapter/v1/dispatch/_test-trigger" \
+curl -X POST "https://<your-domain>/novu-bridge/novu-adapter/v1/dispatch/_test-trigger" \
+  -H "Content-Type: application/json" \
   -d '{
+    "requestInfo": { "authToken": "<your-auth-token>" },
     "templateKey": "complaints-whatsapp-v1",
     "phone": "whatsapp:+91...",
     "contentSid": "HX...",
@@ -137,10 +167,10 @@ curl -X POST "http://novu-bridge/novu-adapter/v1/dispatch/_test-trigger" \
 
 ---
 
-## 5. Troubleshooting
+## 6. Troubleshooting
 
-- **Check Logs**: 
-  - Novu Bridge: `kubectl logs -l app=novu-bridge`
-  - Novu Worker: `kubectl logs -n novu -l app=novu-worker`
+- **Check Logs**:
+   - Novu Bridge: `kubectl logs -l app=novu-bridge`
+   - Novu Worker: `kubectl logs -n novu -l app=novu-worker`
 - **Audit Table**: Query `nb_dispatch_log` in the `egov` database to see the status of every event processed by the bridge.
 - **Novu Dashboard**: Check the "Activity Feed" in the Novu UI to see if triggers reached the API.

@@ -1,5 +1,61 @@
 [
   {
+    "rolecode": "EMPLOYEE",
+    "actionid": 2634,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1135
+  },
+  {
+    "rolecode": "CITIZEN",
+    "actionid": 2634,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1135
+  },
+  {
+    "rolecode": "SUPERUSER",
+    "actionid": 2634,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1135
+  },
+  {
+    "rolecode": "SUPERUSER",
+    "actionid": 2633,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1135
+  },
+  {
+    "rolecode": "SUPERUSER",
+    "actionid": 2632,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1135
+  },
+  {
+    "rolecode": "CONFIG_ADMIN",
+    "actionid": 2634,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1135
+  },
+  {
+    "rolecode": "CONFIG_ADMIN",
+    "actionid": 2633,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1135
+  },
+  {
+    "rolecode": "CONFIG_ADMIN",
+    "actionid": 2632,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1135
+  },
+  {
     "rolecode": "MDMS_ADMIN",
     "actionid": 2631,
     "actioncode": "",

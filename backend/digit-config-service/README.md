@@ -10,6 +10,181 @@ A schema-validated, tenant-scoped configuration store for the DIGIT platform. It
 - **Unique constraint enforcement** via `x-unique` schema fields
 - **Flyway-managed** database migrations
 
+## Schema Setup
+
+Before creating any configuration data (`configdata`), the following schemas must be registered in the MDMS v2 service. The `digit-config-service` uses these schemas to validate incoming data, enforce unique constraints, and apply field-level encryption.
+
+### 1. NotificationChannel Schema
+
+```json
+{
+  "type": "object",
+  "title": "NotificationChannel",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "required": [
+    "code",
+    "name",
+    "enabled"
+  ],
+  "x-unique": [
+    "code"
+  ],
+  "properties": {
+    "code": {
+      "type": "string",
+      "enum": [
+        "WHATSAPP",
+        "SMS",
+        "EMAIL"
+      ],
+      "description": "Channel identifier"
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-readable channel name"
+    },
+    "enabled": {
+      "type": "boolean",
+      "description": "Whether this channel is active for the tenant"
+    },
+    "providerName": {
+      "type": "string",
+      "description": "Provider handling this channel (links to ProviderDetail)"
+    },
+    "priority": {
+      "type": "integer",
+      "description": "Dispatch priority (lower = higher priority)"
+    }
+  },
+  "additionalProperties": true
+}
+```
+
+### 2. ProviderDetail Schema
+
+```json
+{
+  "type": "object",
+  "title": "ProviderDetail",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "required": [
+    "providerName",
+    "channel",
+    "priority"
+  ],
+  "x-unique": [
+    "providerName",
+    "channel",
+    "priority"
+  ],
+  "properties": {
+    "channel": {
+      "type": "string",
+      "description": "Communication channel (whatsapp, sms, email)"
+    },
+    "isActive": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether this provider is active"
+    },
+    "priority": {
+      "type": "integer",
+      "default": 0,
+      "description": "Provider priority (lower = higher priority)"
+    },
+    "novuApiKey": {
+      "type": "string",
+      "description": "Optional provider-specific Novu API key"
+    },
+    "credentials": {
+      "type": "object",
+      "description": "Provider-specific credentials in Novu-compatible format"
+    },
+    "providerName": {
+      "type": "string",
+      "description": "Provider name (e.g., twilio, sendgrid, etc.)"
+    }
+  },
+  "x-security": [
+    "credentials",
+    "novuApiKey"
+  ],
+  "description": "Schema for provider configurations per tenant and channel"
+}
+```
+
+### 3. TemplateBinding Schema
+
+```json
+{
+  "type": "object",
+  "title": "TemplateBinding",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "required": [
+    "eventName",
+    "channel",
+    "templateId",
+    "locale"
+  ],
+  "x-unique": [
+    "eventName",
+    "channel",
+    "locale"
+  ],
+  "properties": {
+    "locale": {
+      "type": "string",
+      "default": "en_IN",
+      "pattern": "^[a-z]{2}_[A-Z]{2}$",
+      "description": "Locale code for provider (e.g., en_IN, hi_IN, en_US)"
+    },
+    "channel": {
+      "type": "string",
+      "description": "Communication channel (whatsapp, sms, email)"
+    },
+    "isActive": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether this template binding is active"
+    },
+    "eventName": {
+      "type": "string",
+      "description": "Event name (e.g., COMPLAINTS.WORKFLOW.REJECT)"
+    },
+    "contentSid": {
+      "type": "string",
+      "description": "Provider-specific content SID (for Twilio)"
+    },
+    "novuApiKey": {
+      "type": "string",
+      "description": "Optional template-specific Novu API key"
+    },
+    "paramOrder": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Order of parameters for template"
+    },
+    "templateId": {
+      "type": "string",
+      "description": "Template identifier in Novu"
+    },
+    "requiredVars": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Required variables for template"
+    }
+  },
+  "x-security": [
+    "novuApiKey"
+  ],
+  "description": "Schema for template bindings per event and channel"
+}
+```
+
 ## Data Model
 
 **Table:** `eg_config_data`
