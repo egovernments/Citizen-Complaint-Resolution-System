@@ -11,8 +11,8 @@ const CitizenHomeCard = ({ header, links = [], state, Icon, Info, isInfo = false
 
       <div className="links">
         {links.map((e, i) => (
-          <div className="linksWrapper">
-            <Link key={i} to={{ pathname: e.link, state: e.state }}>
+          <div key={i} className="linksWrapper">
+            <Link to={{ pathname: e.link, state: e.state }}>
               {e.i18nKey}
             </Link>
           </div>

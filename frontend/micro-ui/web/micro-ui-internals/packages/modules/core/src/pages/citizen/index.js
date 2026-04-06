@@ -96,8 +96,8 @@ const Home = ({
       });
     }
     return (
-      <React.Fragment>
-        <Route key={index} path={`${path}/${code.toLowerCase()}-home`}>
+      <React.Fragment key={index}>
+        <Route path={`${path}/${code.toLowerCase()}-home`}>
           <div className="moduleLinkHomePage">
             <ImageComponent src={bannerImage || stateInfo?.bannerUrl} alt="noimagefound" />
 
