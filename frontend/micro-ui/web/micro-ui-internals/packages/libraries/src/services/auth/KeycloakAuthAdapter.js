@@ -183,8 +183,10 @@ export class KeycloakAuthAdapter extends AuthAdapter {
     this._digitUserType = null;
     this._digitRoles = null;
 
-    // Grab id_token_hint before clearing storage (needed for KC logout)
-    const idTokenHint = this._kc?.idToken || null;
+    // Grab id_token_hint before clearing storage (needed for KC to skip confirmation page)
+    const idTokenHint = this._kc?.idToken
+      || window.localStorage.getItem("kc_id_token")
+      || null;
 
     // Clear all browser storage
     window.localStorage.clear();
@@ -289,6 +291,10 @@ export class KeycloakAuthAdapter extends AuthAdapter {
     Digit.SessionStorage.set("userType", sessionType);
     Digit.SessionStorage.set("user_type", sessionType);
     window.localStorage.setItem("token", this._kc.token);
+    // Store id_token for logout (KC needs it to skip confirmation page)
+    if (this._kc.idToken) {
+      window.localStorage.setItem("kc_id_token", this._kc.idToken);
+    }
 
     if (isEmployee) {
       Digit.SessionStorage.set("Employee.tenantId", tenantId);
