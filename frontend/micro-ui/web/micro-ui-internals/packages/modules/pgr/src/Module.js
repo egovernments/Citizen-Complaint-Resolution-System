@@ -46,10 +46,9 @@ export const PGRModule = ({ stateCode, userType, tenants }) => {
   });
   let user = Digit?.SessionStorage.get("User");
 
-  // Only initialize boundary hierarchy for employee users (not needed for citizens)
-  const { isLoading: isPGRInitializing } = userType === "employee"
-    ? Digit.Hooks.pgr.usePGRInitialization({ tenantId: tenantId })
-    : { isLoading: false };
+  // Initialize boundary hierarchy for both employee and citizen users
+  // Citizens need it for the complaint location dropdown
+  const { isLoading: isPGRInitializing } = Digit.Hooks.pgr.usePGRInitialization({ tenantId: tenantId });
 
   Digit.SessionStorage.set("PGR_TENANTS", tenants);
 
