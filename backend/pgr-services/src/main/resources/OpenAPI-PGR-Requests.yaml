@@ -1,0 +1,264 @@
+openapi: 3.0.1
+info:
+  title: PGR Service Requests API
+  description: API for managing Public Grievance Redressal (PGR) service requests.
+  version: 1.0.0
+  contact:
+    name: DIGIT Team
+    email: digit@egovernments.org
+
+servers:
+  - url: /pgr-services/v2
+
+tags:
+  - name: ServiceRequest
+    description: Operations related to citizen service requests
+
+paths:
+  /request/_create:
+    post:
+      tags:
+        - ServiceRequest
+      summary: Create a new service request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceRequest'
+      responses:
+        '200':
+          description: Service request created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRes'
+
+  /request/_search:
+    post:
+      tags:
+        - ServiceRequest
+      summary: Search for service requests
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestInfoWrapper'
+      parameters:
+        - in: query
+          name: tenantId
+          schema:
+            type: string
+          required: true
+          description: Tenant ID for which requests are to be searched
+        # Add other search criteria as needed
+      responses:
+        '200':
+          description: List of service requests matching criteria
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRes'
+
+  /request/_plainsearch:
+    post:
+      tags:
+        - ServiceRequest
+      summary: Plain search for service requests
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestInfoWrapper'
+      parameters:
+        - in: query
+          name: tenantId
+          schema:
+            type: string
+          required: true
+          description: Tenant ID for which requests are to be searched
+        # Add other search criteria as needed
+      responses:
+        '200':
+          description: List of service requests matching criteria
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRes'
+
+  /request/_update:
+    post:
+      tags:
+        - ServiceRequest
+      summary: Update an existing service request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceRequest'
+      responses:
+        '200':
+          description: Service request updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRes'
+
+  /request/_count:
+    post:
+      tags:
+        - ServiceRequest
+      summary: Get count of service requests matching criteria
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestInfoWrapper'
+      parameters:
+        - in: query
+          name: tenantId
+          schema:
+            type: string
+          required: true
+          description: Tenant ID for which requests are to be counted
+        # Add other search criteria as needed
+      responses:
+        '200':
+          description: Count of service requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CountResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRes'
+
+components:
+  schemas:
+    RequestInfo:
+      $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/egov-common-contract/src/main/resources/egov-common-contract.yaml#/components/schemas/RequestInfo"
+    ResponseInfo:
+      $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/egov-common-contract/src/main/resources/egov-common-contract.yaml#/components/schemas/ResponseInfo"
+    ErrorRes:
+      $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/egov-common-contract/src/main/resources/egov-common-contract.yaml#/components/schemas/ErrorRes"
+    User:
+      $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/egov-common-contract/src/main/resources/egov-common-contract.yaml#/components/schemas/User"
+    Address:
+      $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/egov-common-contract/src/main/resources/egov-common-contract.yaml#/components/schemas/Address"
+    AuditDetails:
+      $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/egov-common-contract/src/main/resources/egov-common-contract.yaml#/components/schemas/AuditDetails"
+    ProcessInstance:
+      $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/egov-common-contract/src/main/resources/egov-common-contract.yaml#/components/schemas/ProcessInstance"
+    # Local wrappers and models
+    RequestInfoWrapper:
+      type: object
+      properties:
+        RequestInfo:
+          $ref: '#/components/schemas/RequestInfo'
+    ServiceRequest:
+      type: object
+      properties:
+        requestInfo:
+          $ref: '#/components/schemas/RequestInfo'
+        service:
+          $ref: '#/components/schemas/Service'
+        workflow:
+          $ref: '#/components/schemas/Workflow'
+    ServiceResponse:
+      type: object
+      properties:
+        responseInfo:
+          $ref: '#/components/schemas/ResponseInfo'
+        serviceWrappers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceWrapper'
+        complaintsResolved:
+          type: integer
+        averageResolutionTime:
+          type: integer
+        complaintTypes:
+          type: integer
+    CountResponse:
+      type: object
+      properties:
+        responseInfo:
+          $ref: '#/components/schemas/ResponseInfo'
+        count:
+          type: integer
+    ServiceWrapper:
+      type: object
+      properties:
+        service:
+          $ref: '#/components/schemas/Service'
+        workflow:
+          $ref: '#/components/schemas/Workflow'
+    Service:
+      type: object
+      description: Instance of Service request raised for a particular service.
+      properties:
+        active:
+          type: boolean
+          default: true
+        citizen:
+          $ref: '#/components/schemas/User'
+        id:
+          type: string
+        tenantId:
+          type: string
+        serviceCode:
+          type: string
+        serviceRequestId:
+          type: string
+        description:
+          type: string
+        accountId:
+          type: string
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        additionalDetail:
+          type: object
+          description: Arbitrary additional details, up to 600 characters.
+        applicationStatus:
+          type: string
+        source:
+          type: string
+        address:
+          $ref: '#/components/schemas/Address'
+        auditDetails:
+          $ref: '#/components/schemas/AuditDetails'
+        processInstance:
+          $ref: '#/components/schemas/ProcessInstance'

@@ -10,13 +10,25 @@ import Resolved from "./timelineInstances/resolved";
 import Rejected from "./timelineInstances/rejected";
 import StarRated from "./timelineInstances/StarRated";
 
+// Helper function to mask employee names (show first 1 char + * + X's)
+const maskName = (name) => {
+  if (!name || name.length < 2) return name;
+  return name.charAt(0) + '*' + 'X'.repeat(Math.max(0, name.length - 2));
+};
+
+// Helper function to mask phone numbers for citizen view (show last 4 digits only)
+const maskPhoneNumber = (phone) => {
+  if (!phone || phone.length < 4) return phone;
+  return 'XXXXXX' + phone.slice(-4);
+};
+
 const TLCaption = ({ data, comments }) => {
   const { t } = useTranslation()
   return (
     <div>
       {data?.date && <p>{data?.date}</p>}
-      <p>{data?.name}</p>
-      <p>{data?.mobileNumber}</p>
+      {data?.name && <p>{maskName(data?.name)}</p>}
+      {data?.mobileNumber && <p>{t("ES_COMMON_CONTACT_DETAILS")}: {maskPhoneNumber(data?.mobileNumber)}</p>}
       {data?.source && <p>{t("ES_COMMON_FILED_VIA_" + data?.source.toUpperCase())}</p>}
     </div>
   );
@@ -90,7 +102,8 @@ const TimeLine = ({ isLoading, data, serviceRequestId, complaintWorkflow, rating
       case "PENDINGATLME":
         let { name, mobileNumber } = caption && caption.length > 0 ? caption[0] : { name: "", mobileNumber: "" };
         const assignedTo = `${t(`CS_COMMON_${status}`)}`;
-        return <PendingAtLME isCompleted={isCurrent} key={index} name={name} mobile={mobileNumber} text={assignedTo} customChild={getCommentsInCustomChildComponent({ comment, thumbnailsToShow, auditDetails, assigner })} />;
+        // Show assignee info only in TLCaption (via customChild) to avoid duplicate display
+        return <PendingAtLME isCompleted={isCurrent} key={index} name={null} mobile={null} text={assignedTo} customChild={getCommentsInCustomChildComponent({ comment, thumbnailsToShow, auditDetails, assigner })} />;
 
       case "RESOLVED":
         return (

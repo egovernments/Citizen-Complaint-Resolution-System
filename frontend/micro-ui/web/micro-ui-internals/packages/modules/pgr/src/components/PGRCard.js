@@ -3,7 +3,7 @@ import React, { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
 const ROLES = {
-  PGR: ["GRO", "PGR_LME", "CSR"],
+  PGR: ["GRO", "PGR_LME", "CSR","SUPERUSER"],
 };
 
 const PGRCard = () => {
@@ -34,7 +34,7 @@ const PGRCard = () => {
   }
 
   let links = [
-    generateLink("ACTION_TEST_CREATE_COMPLAINT", "complaint/create", ["CSR"]),
+    generateLink("ACTION_TEST_CREATE_COMPLAINT", "complaint/create", ["CSR", "SUPERUSER"]),
     generateLink("ACTION_TEST_SEARCH_COMPLAINT", "inbox"),
   ];
   const hasRequiredRoles = (link) => {
