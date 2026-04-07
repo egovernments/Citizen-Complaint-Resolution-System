@@ -541,10 +541,15 @@ class UnifiedExcelReader:
             'hrms admin': 'HRMS_ADMIN',
             'mdms admin': 'MDMS_ADMIN',
             'workflow admin': 'WORKFLOW_ADMIN',
+            'pgr viewer': 'PGR_VIEWER',
+            'pgr last mile employee': 'PGR_LME',
+            'pgr complaint resolver': 'PGR_LME',
             'complaint resolver': 'PGR_LME',
             'grievance routing officer': 'GRO',
             'department gro': 'DGRO',
-            'complainant': 'CSR'
+            'complainant': 'CSR',
+            'localisation admin': 'LOCALISATION_ADMIN',
+            'localization admin': 'LOCALISATION_ADMIN'
         }
         
         common_role_mappings.update(role_name_to_code)
@@ -567,8 +572,10 @@ class UnifiedExcelReader:
 
             mobile = str(row['Mobile Number*']).strip()
 
-            # Get password (optional, defaults to eGov@123)
-            password = str(row.get('Password', 'eGov@123')).strip() if pd.notna(row.get('Password')) else 'eGov@123'
+            # Track whether the workbook explicitly supplied a password.
+            raw_password = row.get('Password')
+            password_supplied = pd.notna(raw_password) and str(raw_password).strip() != ''
+            password = str(raw_password).strip() if password_supplied else 'eGov@123'
 
             # Convert Excel dates to timestamps (milliseconds)
             def excel_date_to_timestamp(excel_date):
@@ -672,7 +679,7 @@ class UnifiedExcelReader:
                 }],
                 'user': {
                     'name': user_name,
-                    'userName': user_name,
+                    'userName': emp_code,
                     'mobileNumber': mobile,
                     'active': True,
                     'type': 'EMPLOYEE',
@@ -681,6 +688,7 @@ class UnifiedExcelReader:
                     'password': password,  # Use password from Excel or default
                     'otpReference': '12345'
                 },
+                'password_supplied': password_supplied,
                 'serviceHistory': [],
                 'education': [],
                 'tests': []
@@ -999,7 +1007,7 @@ class APIUploader:
         raise last_error
 
     def search_mdms_data(self, schema_code: str, tenant: str, unique_identifiers: List[str] = None,
-                         limit: int = 100, offset: int = 0, include_inactive: bool = True) -> List[Dict]:
+                         limit: int = 100, offset: int = 0, include_inactive: bool = True) -> Optional[List[Dict]]:
         """Generic function to search MDMS v2 data
 
         Args:
@@ -1011,7 +1019,8 @@ class APIUploader:
             include_inactive: If False, filter out soft-deleted records (default: True)
 
         Returns:
-            list: List of data objects retrieved (with 'isActive' field added from wrapper)
+            list | None: List of data objects retrieved (with 'isActive' field added
+            from wrapper), or None when the MDMS API call failed
         """
         url = f"{self.mdms_url}/v2/_search"
 
@@ -1069,10 +1078,10 @@ class APIUploader:
 
         except requests.exceptions.HTTPError as e:
             print(f"HTTP Error during MDMS search for {schema_code}: {str(e)}")
-            return []
+            return None
         except Exception as e:
             print(f"Error during MDMS search for {schema_code}: {str(e)}")
-            return []
+            return None
 
     def search_mdms_data_all(self, schema_code: str, tenant: str, page_size: int = 100, **kwargs) -> List[Dict]:
         """Fetch ALL records by auto-paginating through results.
@@ -3112,7 +3121,10 @@ class APIUploader:
         default_roles_by_code = {
             role.get('code'): role for role in default_roles if role.get('code')
         }
-        required_codes = set(required_role_codes or default_roles_by_code.keys())
+        if required_role_codes is None:
+            required_codes = set(default_roles_by_code.keys())
+        else:
+            required_codes = set(required_role_codes)
 
         # Find missing roles
         missing_codes = required_codes - existing_codes
@@ -3824,7 +3836,8 @@ class APIUploader:
 
             # Extract custom password before creation (if provided)
             custom_password = employee.get('user', {}).get('password')
-            needs_password_update = custom_password and custom_password not in [None, '']
+            password_supplied = bool(employee.get('password_supplied'))
+            needs_password_update = password_supplied and custom_password not in [None, '']
 
             # Override userInfo tenantId to match the request tenant
             user_info_copy = self.user_info.copy()
@@ -3880,7 +3893,13 @@ class APIUploader:
                             "codes": emp_code
                         }
 
-                        search_response = requests.post(search_url, json=search_payload, headers=headers, params=search_params)
+                        search_response = requests.post(
+                            search_url,
+                            json=search_payload,
+                            headers=headers,
+                            params=search_params,
+                            timeout=30
+                        )
                         search_response.raise_for_status()
                         search_data = search_response.json()
 
@@ -3904,7 +3923,12 @@ class APIUploader:
                             }
 
                             # Update employee with custom password
-                            update_response = requests.post(update_url, json=update_payload, headers=headers)
+                            update_response = requests.post(
+                                update_url,
+                                json=update_payload,
+                                headers=headers,
+                                timeout=30
+                            )
                             update_response.raise_for_status()
 
                             print(f"   [✓] [{i}/{len(employee_list)}] {emp_code} - Password updated")
@@ -3913,9 +3937,9 @@ class APIUploader:
                             print(f"   [⚠] [{i}/{len(employee_list)}] {emp_code} - Could not fetch employee for password update")
 
                     except Exception as pwd_error:
-                        # Don't fail the entire creation if password update fails
-                        print(f"   [⚠] [{i}/{len(employee_list)}] {emp_code} - Password update failed: {str(pwd_error)[:100]}")
-                        # Status remains SUCCESS since employee was created
+                        error_message = str(pwd_error)[:100]
+                        status = "FAILED"
+                        print(f"   [⚠] [{i}/{len(employee_list)}] {emp_code} - Password update failed: {error_message}")
 
             except requests.exceptions.HTTPError as e:
                 status_code = e.response.status_code if hasattr(e, 'response') and e.response is not None else 500
@@ -3963,7 +3987,13 @@ class APIUploader:
                                 "codes": emp_code
                             }
 
-                            search_response = requests.post(search_url, json=search_payload, headers=headers, params=search_params)
+                            search_response = requests.post(
+                                search_url,
+                                json=search_payload,
+                                headers=headers,
+                                params=search_params,
+                                timeout=30
+                            )
                             search_response.raise_for_status()
                             search_data = search_response.json()
 
@@ -3984,7 +4014,12 @@ class APIUploader:
                                     "Employees": [existing_employee]
                                 }
 
-                                update_response = requests.post(update_url, json=update_payload, headers=headers)
+                                update_response = requests.post(
+                                    update_url,
+                                    json=update_payload,
+                                    headers=headers,
+                                    timeout=30
+                                )
                                 update_response.raise_for_status()
 
                                 results['password_updated'] += 1
@@ -3993,8 +4028,9 @@ class APIUploader:
                                 print(f"   [⚠] [{i}/{len(employee_list)}] {emp_code} - Could not fetch existing employee for password update")
 
                         except Exception as pwd_error:
-                            print(f"   [⚠] [{i}/{len(employee_list)}] {emp_code} - Password update failed: {str(pwd_error)[:100]}")
-                            # Status remains EXISTS since employee exists
+                            error_message = str(pwd_error)[:100]
+                            status = "FAILED"
+                            print(f"   [⚠] [{i}/{len(employee_list)}] {emp_code} - Password update failed: {error_message}")
                 else:
                     print(f"   [FAILED] [{i}/{len(employee_list)}] {emp_code} (HTTP {status_code})")
                     print(f"   ERROR: {error_message}")

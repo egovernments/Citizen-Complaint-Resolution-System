@@ -74,30 +74,31 @@ def setup():
     print(f"Logged in as {USERNAME} on {ROOT_TENANT}")
 
 
+def bootstrap_root_via_city(root_tenant: str, city_suffix: str = "citya") -> str:
+    """Trigger root bootstrap through the public create_tenant flow."""
+    child_tenant = f"{root_tenant}.{city_suffix}"
+    result = loader.create_tenant(child_tenant, f"{root_tenant.title()} {city_suffix.title()}")
+    assert result, f"create_tenant('{child_tenant}') returned False"
+    return child_tenant
+
+
 # ── Test 1: Root tenant creation ─────────────────────────────
 
 def test_root_tenant_creation():
-    """create_root_tenant() should create a standalone root."""
-    result = loader.create_root_tenant("ciregtest")
-    assert result, "create_root_tenant returned False"
-
-    # Verify root exists in MDMS
-    records = loader.uploader.search_mdms_data(
-        schema_code='tenant.tenants', tenant='ciregtest', limit=10
-    )
-    codes = [r.get('code', '').lower() for r in records]
-    assert 'ciregtest' in codes, f"Root not found in tenant.tenants. Got: {codes}"
-
-    # Create a city tenant under the new root
-    result2 = loader.create_tenant("ciregtest.citya", "CI Reg City A")
-    assert result2, "create_tenant under new root returned False"
+    """create_tenant() should bootstrap a new root when creating its first city."""
+    child_tenant = bootstrap_root_via_city("ciregtest", "citya")
 
     # Verify city exists
     records2 = loader.uploader.search_mdms_data(
         schema_code='tenant.tenants', tenant='ciregtest', limit=50
     )
     codes2 = [r.get('code', '').lower() for r in records2]
-    assert 'ciregtest.citya' in codes2, f"City not found. Got: {codes2}"
+    assert child_tenant in codes2, f"City not found after root bootstrap. Got: {codes2}"
+
+    root_stateinfo = loader.uploader.search_mdms_data(
+        schema_code='common-masters.StateInfo', tenant='ciregtest', limit=5
+    )
+    assert len(root_stateinfo) > 0, "Root bootstrap did not create StateInfo on new root"
 
 
 # ── Test 2: Designation dedup ────────────────────────────────
@@ -188,27 +189,70 @@ def test_department_count_accuracy():
 
 def test_tenant_scoped_counts():
     """City tenant designation count should differ from root count."""
+    import glob
+    import tempfile
+    import openpyxl
+
+    import time
+
+    ts = int(time.time()) % 100000
     test_tenant = f"{ROOT_TENANT}.cicounts"
     loader.create_tenant(test_tenant, "CI Counts Test")
 
-    common_file = os.path.join(TEMPLATES_DIR, "Common and Complaint Master.xlsx")
-    loader.load_common_masters(common_file, target_tenant=test_tenant)
+    template_candidates = sorted(
+        glob.glob(os.path.join(TEMPLATES_DIR, "Common and Complaint Master*.xlsx"))
+    )
+    assert template_candidates, f"No Common Master template found in {TEMPLATES_DIR}"
+
+    common_file = template_candidates[0]
+    unique_department = f"CI_SCOPE_DEPT_{ts}"
+    unique_designation = f"CI_SCOPE_DESIG_{ts}"
+
+    with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
+        scoped_common_file = tmp.name
+
+    wb = openpyxl.load_workbook(common_file)
+    ws = wb["Department And Desgination Mast"]
+    ws.append([unique_department, unique_designation])
+    wb.save(scoped_common_file)
+    wb.close()
+
+    loader.load_common_masters(scoped_common_file, target_tenant=test_tenant)
 
     # Fetch from city
     city_desigs = loader.uploader.fetch_designations(test_tenant)
-    city_count = len(city_desigs)
+    city_set = {
+        (str(d.get("code", "")).strip(), str(d.get("name", "")).strip().lower())
+        for d in city_desigs
+    }
+    city_names = {name for _, name in city_set if name}
 
     # Fetch from root
     root_desigs = loader.uploader.fetch_designations(ROOT_TENANT)
-    root_count = len(root_desigs)
+    root_set = {
+        (str(d.get("code", "")).strip(), str(d.get("name", "")).strip().lower())
+        for d in root_desigs
+    }
+    root_names = {name for _, name in root_set if name}
 
-    print(f"   City ({test_tenant}): {city_count} designations")
-    print(f"   Root ({ROOT_TENANT}): {root_count} designations")
+    print(f"   City ({test_tenant}): {len(city_set)} designations")
+    print(f"   Root ({ROOT_TENANT}): {len(root_set)} designations")
 
-    # After creating city-level overrides, counts should be reported accurately.
-    # The city should have the designations we just loaded (not root's full set).
-    assert city_count > 0, "No designations found on city tenant"
-    assert root_count > 0, "No designations found on root tenant"
+    expected_name = unique_designation.lower()
+    assert city_set, "No designations found on city tenant"
+    assert root_set, "No designations found on root tenant"
+    assert expected_name in city_names, (
+        f"Expected tenant-scoped designation '{unique_designation}' not found on "
+        f"city tenant '{test_tenant}'"
+    )
+    assert expected_name not in root_names, (
+        f"Tenant-scoped designation '{unique_designation}' leaked into root tenant "
+        f"'{ROOT_TENANT}'"
+    )
+    assert city_set != root_set, (
+        f"City and root designation sets should differ after tenant-scoped load. "
+        f"Both sets matched with {len(city_set)} entries"
+    )
 
 
 # ── Test 5: Boundary auth error message ──────────────────────
@@ -243,8 +287,10 @@ def test_boundary_auth_error():
         uploader._user_info = {"id": 1, "tenantId": test_tenant}
         try:
             uploader._create_boundary_entity(test_tenant, "TEST_BND")
-            # If it returns without error (e.g., service returns different error),
-            # check that it at least didn't silently succeed
+            raise AssertionError(
+                "Expected PermissionError for boundary creation with invalid auth, "
+                "but _create_boundary_entity succeeded"
+            )
         except PermissionError as e:
             msg = str(e)
             assert "role" in msg.lower() or "permission" in msg.lower(), (
@@ -253,20 +299,29 @@ def test_boundary_auth_error():
             print(f"   PermissionError correctly raised: {msg[:100]}")
             return
         except Exception as e:
-            # Any non-403 error is acceptable (service might be down, etc.)
-            print(f"   Got {type(e).__name__} instead of PermissionError (acceptable)")
-            return
+            raise AssertionError(
+                f"Expected PermissionError for boundary creation with invalid auth, "
+                f"got {type(e).__name__}: {e}"
+            ) from e
 
     # If login succeeded, try boundary operation — should get 403
     try:
         test_loader.uploader._create_boundary_entity(test_tenant, "TEST_BND_AUTH")
-        print("   ⚠️ Boundary create didn't fail (user may have inherited roles)")
+        raise AssertionError(
+            "Expected PermissionError for boundary creation without boundary roles, "
+            "but _create_boundary_entity succeeded"
+        )
     except PermissionError as e:
         msg = str(e)
         assert "role" in msg.lower() or "permission" in msg.lower(), (
             f"PermissionError message should mention roles. Got: {msg}"
         )
         print(f"   PermissionError correctly raised: {msg[:100]}")
+    except Exception as e:
+        raise AssertionError(
+            f"Expected PermissionError for boundary creation without boundary roles, "
+            f"got {type(e).__name__}: {e}"
+        ) from e
 
 
 # ── Test 6: Workflow nextState resolution ─────────────────────
@@ -279,8 +334,7 @@ def test_workflow_nextstate_resolution():
     # Use a unique root name to avoid stale data from previous runs
     ts = int(time.time()) % 100000
     test_root = f"ciwf{ts}"
-    result = loader.create_root_tenant(test_root)
-    assert result, f"create_root_tenant('{test_root}') returned False"
+    bootstrap_root_via_city(test_root, "workflow")
     time.sleep(3)
 
     # Search for PGR workflow on the new root
@@ -344,8 +398,7 @@ def test_bootstrap_datasecurity_schemas():
     # Use a unique root name to avoid stale data
     ts = int(time.time()) % 100000
     test_root = f"cids{ts}"
-    result = loader.create_root_tenant(test_root)
-    assert result, f"create_root_tenant('{test_root}') returned False"
+    bootstrap_root_via_city(test_root, "security")
     time.sleep(3)
 
     expected_schemas = [
@@ -359,7 +412,10 @@ def test_bootstrap_datasecurity_schemas():
         records = loader.uploader.search_mdms_data(
             schema_code=schema_code, tenant=test_root, limit=10
         )
-        # Records may be empty if source has none, but the search should not error
+        assert len(records) > 0, (
+            f"Expected bootstrapped schema '{schema_code}' to have records on "
+            f"tenant '{test_root}', but found none"
+        )
         print(f"   {schema_code}: {len(records)} records")
 
     # Verify additional schemas were bootstrapped
@@ -370,6 +426,10 @@ def test_bootstrap_datasecurity_schemas():
     for schema_code in extra_schemas:
         records = loader.uploader.search_mdms_data(
             schema_code=schema_code, tenant=test_root, limit=10
+        )
+        assert len(records) > 0, (
+            f"Expected bootstrapped schema '{schema_code}' to have records on "
+            f"tenant '{test_root}', but found none"
         )
         print(f"   {schema_code}: {len(records)} records")
 
@@ -481,23 +541,36 @@ def test_employee_password_via_user_service():
     loader.create_tenant(test_tenant, f"CI Emp Test {ts}")
     time.sleep(2)
 
-    # Create a user via _create_user_for_tenant (which uses egov-user directly)
+    common_file = os.path.join(TEMPLATES_DIR, "Common and Complaint Master.xlsx")
+    assert os.path.exists(common_file), f"Template not found: {common_file}"
+    loader.load_common_masters(common_file, target_tenant=test_tenant)
+    time.sleep(2)
+
+    # Create an employee via the HRMS flow so the password update path is exercised.
     test_username = f"CI_EMP_{ts}"
     test_password = "eGov@123"
-    loader._create_user_for_tenant(test_tenant, {
-        "username": test_username,
-        "password": test_password,
-        "name": "CI Employee Test",
-        "roles": ["EMPLOYEE"],
-        "mobile": f"99{ts:08d}"[:10]
-    })
-    time.sleep(1)
-
-    # Verify: login as the new user with the expected password
-    test_loader = CRSLoader(BASE_URL)
-    logged_in = test_loader.login(
-        username=test_username, password=test_password, tenant_id=test_tenant
+    created = loader.create_employee(
+        tenant=test_tenant,
+        username=test_username,
+        password=test_password,
+        name="CI Employee Test",
+        roles=["EMPLOYEE"],
+        mobile=f"99{ts:08d}"[:10],
     )
+    assert created, f"HRMS employee creation failed for '{test_username}'"
+
+    # Verify: login as the new user with the expected password.
+    # HRMS/user writes can be slightly asynchronous, so retry briefly.
+    logged_in = False
+    for _ in range(6):
+        test_loader = CRSLoader(BASE_URL)
+        logged_in = test_loader.login(
+            username=test_username, password=test_password, tenant_id=test_tenant
+        )
+        if logged_in:
+            break
+        time.sleep(2)
+
     assert logged_in, (
         f"Login failed for '{test_username}' with expected password — "
         f"password was not set correctly"
@@ -610,8 +683,7 @@ def test_workflow_copy_idempotency():
     test_root = f"ciwfi{ts}"
 
     # Bootstrap root first time
-    result1 = loader.create_root_tenant(test_root)
-    assert result1, f"First create_root_tenant('{test_root}') returned False"
+    bootstrap_root_via_city(test_root, "citya")
     time.sleep(3)
 
     # Count workflows after first bootstrap
@@ -633,9 +705,8 @@ def test_workflow_copy_idempotency():
     print(f"   After first bootstrap: {wf_count_1} PGR workflow(s)")
     assert wf_count_1 == 1, f"Expected 1 PGR workflow, got {wf_count_1}"
 
-    # Bootstrap root second time (should be idempotent)
-    result2 = loader.create_root_tenant(test_root)
-    # Should succeed (idempotent) or skip
+    # Create another city under the same root; this should not duplicate root workflow bootstrap.
+    bootstrap_root_via_city(test_root, "cityb")
     time.sleep(3)
 
     # Count workflows after second bootstrap

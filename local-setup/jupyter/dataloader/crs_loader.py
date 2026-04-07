@@ -168,24 +168,20 @@ class CRSLoader:
         if root_tenant != session_root:
             print(f"🔧 New root tenant detected: '{root_tenant}' (different from session root '{session_root}')")
             # Check if root tenant schemas exist by trying to search for tenant.tenants
-            try:
-                root_check = self.uploader.search_mdms_data(
-                    schema_code='tenant.tenants', tenant=root_tenant, limit=1
-                )
-                if not root_check:  # No data means schemas don't exist, need bootstrap
-                    print(f"🚀 Bootstrapping new root tenant '{root_tenant}'...")
-                    if not self._bootstrap_tenant_root(root_tenant, source_tenant=session_root):
-                        print(f"❌ Failed to bootstrap root tenant '{root_tenant}'")
-                        return False
-                    print(f"✅ Root tenant '{root_tenant}' bootstrapped successfully")
-                else:
-                    print(f"✅ Root tenant '{root_tenant}' already bootstrapped")
-            except Exception as e:
-                print(f"🚀 Root tenant '{root_tenant}' needs bootstrapping (search failed: {str(e)[:50]})")
+            root_check = self.uploader.search_mdms_data(
+                schema_code='tenant.tenants', tenant=root_tenant, limit=1
+            )
+            if root_check == []:
+                print(f"🚀 Bootstrapping new root tenant '{root_tenant}'...")
                 if not self._bootstrap_tenant_root(root_tenant, source_tenant=session_root):
                     print(f"❌ Failed to bootstrap root tenant '{root_tenant}'")
                     return False
                 print(f"✅ Root tenant '{root_tenant}' bootstrapped successfully")
+            elif root_check is None:
+                print(f"❌ Failed to check whether root tenant '{root_tenant}' is bootstrapped")
+                return False
+            else:
+                print(f"✅ Root tenant '{root_tenant}' already bootstrapped")
         else:
             print(f"✅ Using existing root tenant: '{session_root}'")
 
@@ -592,7 +588,9 @@ class CRSLoader:
 
         # Step 5: Copy and fix StateInfo directly via DB
         print(f"   🔧 Copying and fixing StateInfo for new root...")
-        self._copy_stateinfo_direct(source_tenant, target_root)
+        if not self._copy_stateinfo_direct(source_tenant, target_root):
+            print(f"   ❌ Failed to copy StateInfo for root '{target_root}'")
+            return False
         
         # Step 6: Copy localization messages
         print(f"   🔧 Copying localization messages...")
@@ -606,7 +604,7 @@ class CRSLoader:
         print(f"   💡 To use the new tenant in UI, restart: tilt up")
         return True
 
-    def _copy_stateinfo_direct(self, source_tenant: str, target_root: str):
+    def _copy_stateinfo_direct(self, source_tenant: str, target_root: str) -> bool:
         """Copy StateInfo from source tenant to target root via direct DB operations"""
         try:
             import psycopg2
@@ -635,14 +633,14 @@ class CRSLoader:
                     # Copy StateInfo from source, updating code and name for new root
                     cur.execute("""
                         INSERT INTO eg_mdms_data (
-                            id, tenantid, schemahash, schemacode, data, 
+                            id, tenantid, uniqueidentifier, schemacode, data, 
                             isactive, createdby, lastmodifiedby, 
                             createdtime, lastmodifiedtime
                         )
                         SELECT 
                             gen_random_uuid(),
                             %s as tenantid,
-                            schemahash,
+                            %s as uniqueidentifier,
                             schemacode,
                             jsonb_set(
                                 jsonb_set(data, '{code}', to_jsonb(%s::text)),
@@ -657,9 +655,12 @@ class CRSLoader:
                         WHERE schemacode = 'common-masters.StateInfo' 
                         AND tenantid = %s
                         LIMIT 1
-                    """, (target_root, target_root, target_root, source_tenant))
+                    """, (target_root, target_root, target_root, target_root, source_tenant))
                     
                     created_count = cur.rowcount
+                    if created_count <= 0:
+                        print(f"   ⚠️  No StateInfo template found for source tenant '{source_tenant}'")
+                        return False
                     print(f"   ✅ Created {created_count} StateInfo record for '{target_root}' with correct code")
                     
             conn.close()
@@ -1368,11 +1369,15 @@ class CRSLoader:
         print(f"\n[4/4] Waiting for template...")
         poll_result = self.uploader.poll_boundary_template_status(tenant, name)
 
-        if not poll_result or poll_result.get('status') == 'failed':
+        poll_status = poll_result.get('status') if poll_result else None
+        error_details = {}
+        if poll_result:
+            error_details = poll_result.get('additionalDetails', {}).get('error', {})
+
+        if not poll_result or poll_status == 'failed':
             print(f"   ❌ Template generation failed")
-            error = poll_result.get('additionalDetails', {}).get('error', {})
-            if error:
-                print(f"   🔍 Error details: {error}")
+            if error_details:
+                print(f"   🔍 Error details: {error_details}")
             print(f"   💡 SOLUTION: Create Excel manually with these columns:")
             print(f"      Code | Name | Type | Parent")
             print(f"   📝 Save as boundaries.xlsx and proceed to Phase 2b")
