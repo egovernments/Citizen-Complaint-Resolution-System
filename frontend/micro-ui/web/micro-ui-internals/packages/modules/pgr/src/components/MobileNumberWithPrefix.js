@@ -11,7 +11,7 @@ import { CardLabelError } from "@egovernments/digit-ui-components";
  * - Handles all validation internally
  * - Shows inline errors via CardLabelError
  */
-var MobileNumberWithPrefix = function(componentProps) {
+var MobileNumberWithPrefix = function (componentProps) {
   var t = componentProps.t;
   var config = componentProps.config || {};
   var onSelect = componentProps.onSelect;
@@ -32,9 +32,9 @@ var MobileNumberWithPrefix = function(componentProps) {
   var getConfigByPrefix = hookResult.getConfigByPrefix;
 
   // All available country prefixes for dropdown
-  var allPrefixes = useMemo(function() {
+  var allPrefixes = useMemo(function () {
     if (allValidationConfigs && allValidationConfigs.length > 0) {
-      return allValidationConfigs.map(function(c) { return c.prefix; });
+      return allValidationConfigs.map(function (c) { return c.prefix; });
     }
     return [validationRules.prefix || "+91"];
   }, [allValidationConfigs, validationRules]);
@@ -53,9 +53,9 @@ var MobileNumberWithPrefix = function(componentProps) {
   var setLocalError = _error[1];
 
   // Active config based on selected prefix
-  var activeConfig = useMemo(function() {
+  var activeConfig = useMemo(function () {
     if (getConfigByPrefix) return getConfigByPrefix(selectedPrefix);
-    var found = allValidationConfigs.find(function(c) { return c.prefix === selectedPrefix; });
+    var found = allValidationConfigs.find(function (c) { return c.prefix === selectedPrefix; });
     return found || validationRules;
   }, [selectedPrefix, allValidationConfigs, validationRules, getConfigByPrefix]);
 
@@ -66,7 +66,7 @@ var MobileNumberWithPrefix = function(componentProps) {
   var activeErrorMsg = (activeConfig && activeConfig.errorMessage) || errorMsgKey;
 
   // Validate mobile number against active config
-  var validate = function(val) {
+  var validate = function (val) {
     if (!val || val.length === 0) return false;
     if (val.length < minLength || val.length > maxLength) return false;
     if (allowedStartingChars && allowedStartingChars.length > 0) {
@@ -80,29 +80,43 @@ var MobileNumberWithPrefix = function(componentProps) {
   };
 
   // Sync prefix when MDMS data loads
-  useEffect(function() {
+  useEffect(function () {
     if (validationRules && validationRules.prefix) {
       setSelectedPrefix(validationRules.prefix);
+      if (setValue) setValue("countryCode", validationRules.prefix);
+      if (onSelect) onSelect("countryCode", validationRules.prefix);
     }
   }, [validationRules.prefix]);
 
   // Sync local value when formData changes externally (e.g. MYSELF auto-fill)
-  useEffect(function() {
+  useEffect(function () {
     var externalVal = formData[fieldKey];
     if (externalVal !== undefined && externalVal !== null && externalVal !== localValue) {
       setLocalValue(externalVal);
     }
-  }, [formData[fieldKey]]);
+    var externalCode = formData.countryCode;
+    if (externalCode && externalCode !== selectedPrefix) {
+      setSelectedPrefix(externalCode);
+    }
+  }, [formData[fieldKey], formData.countryCode]);
 
   // Push value to form via all available channels
-  var pushToForm = function(val) {
-    if (onSelect) onSelect(fieldKey, val);
-    if (setValue && fieldKey) setValue(fieldKey, val);
+  var pushToForm = function (val, prefixOverride) {
+    var prefixToUse = prefixOverride !== undefined ? prefixOverride : selectedPrefix;
+    if (onSelect) {
+      onSelect(fieldKey, val);
+      onSelect("countryCode", prefixToUse);
+    }
+    if (setValue) {
+      if (fieldKey) setValue(fieldKey, val);
+      setValue("countryCode", prefixToUse);
+    }
     if (controllerProps && controllerProps.onChange) controllerProps.onChange(val);
   };
 
+
   // Re-validate and push when prefix changes
-  useEffect(function() {
+  useEffect(function () {
     if (localValue && localValue.length > 0) {
       if (validate(localValue)) {
         setLocalError("");
@@ -114,14 +128,14 @@ var MobileNumberWithPrefix = function(componentProps) {
     }
   }, [selectedPrefix]);
 
-  var handlePrefixChange = function(e) {
+  var handlePrefixChange = function (e) {
     setSelectedPrefix(e.target.value);
     setLocalValue("");
     setLocalError("");
-    pushToForm("");
+    pushToForm("", e.target.value);
   };
 
-  var handleMobileChange = function(e) {
+  var handleMobileChange = function (e) {
     var raw = e.target.value.replace(/\D/g, "");
     if (raw.length > maxLength) return;
 
@@ -176,7 +190,7 @@ var MobileNumberWithPrefix = function(componentProps) {
             appearance: "auto",
           }}
         >
-          {allPrefixes.map(function(p) {
+          {allPrefixes.map(function (p) {
             return <option key={p} value={p}>{p}</option>;
           })}
         </select>

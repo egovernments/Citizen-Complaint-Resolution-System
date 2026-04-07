@@ -42,8 +42,23 @@ const WorkflowComponent = ({ complaintDetails, id }) => {
 
   console.log(`*** LOG ***`, cct);
 
+  // CCSD-1766 Fix: Force revalidation on mount to ensure fresh data after rating submission.
+  // If a rating was just submitted for this complaint, use a longer delay (3 s) so the
+  // backend has time to commit the RATE transaction before the workflow/timeline API refetches.
   useEffect(() => {
+    const ratingSession = Digit.SessionStorage.get("PGR_LAST_RATING");
+    const SESSION_TTL_MS = 2 * 60 * 1000;
+    const isJustRated =
+      ratingSession &&
+      ratingSession.id === id &&
+      Date.now() - ratingSession.timestamp < SESSION_TTL_MS;
+
     workFlowDetails.revalidate();
+    const delay = isJustRated ? 3000 : 1500;
+    const timer = setTimeout(() => {
+      workFlowDetails.revalidate();
+    }, delay);
+    return () => clearTimeout(timer);
   }, []);
 
   return (
@@ -69,6 +84,24 @@ const ComplaintDetailsPage = (props) => {
     ? Digit.ULBService.getCurrentTenantId()
     : Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || Digit.ULBService.getCurrentTenantId();
   const { isLoading, error, isError, complaintDetails, revalidate } = Digit.Hooks.pgr.useComplaintDetails({ tenantId, id });
+
+  // CCSD-1766 Fix: Force fresh fetch of complaint data on mount so rating is not stale after submission.
+  // Use a longer delay when navigating back from a fresh rating submission.
+  useEffect(() => {
+    const ratingSession = Digit.SessionStorage.get("PGR_LAST_RATING");
+    const SESSION_TTL_MS = 2 * 60 * 1000;
+    const isJustRated =
+      ratingSession &&
+      ratingSession.id === id &&
+      Date.now() - ratingSession.timestamp < SESSION_TTL_MS;
+
+    revalidate();
+    const delay = isJustRated ? 3000 : 1500;
+    const timer = setTimeout(() => {
+      revalidate();
+    }, delay);
+    return () => clearTimeout(timer);
+  }, []);
 
   if (isLoading) {
     return <Loader />;
@@ -113,7 +146,7 @@ const ComplaintDetailsPage = (props) => {
                   />
                 ))}
               </StatusTable>
-              {complaintDetails?.workflow?.verificationDocuments?.length > 0 && (
+              {!!(complaintDetails?.workflow?.verificationDocuments?.length) && (
                 <React.Fragment>
                   <CardSubHeader>{t("CS_COMMON_ATTACHMENTS")}</CardSubHeader>
                   <ComplaintPhotos serviceWrapper={complaintDetails} />
@@ -121,7 +154,7 @@ const ComplaintDetailsPage = (props) => {
               )}
             </Card>
 
-            {geoLocation?.latitude && geoLocation?.longitude && (
+            {!!(geoLocation?.latitude && geoLocation?.longitude) && (
               <Card>
                 <CardSubHeader style={{ marginBottom: "16px" }}>{t("CS_COMPLAINT_LOCATION")}</CardSubHeader>
                 <ComplaintLocationMap

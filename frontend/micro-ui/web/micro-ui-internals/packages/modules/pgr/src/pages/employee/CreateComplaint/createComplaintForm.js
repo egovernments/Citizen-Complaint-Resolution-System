@@ -302,9 +302,16 @@ const CreateComplaintForm = ({
     const prevCodes = prevSubTypeRef.current.map(s => s.code).sort().join(",");
     const newCodes = newSubTypes.map(s => s.code).sort().join(",");
 
+    let needsSessionUpdate = false;
+    let updatedData = { ...formData };
+
     if (prevCodes !== newCodes) {
       prevSubTypeRef.current = newSubTypes;
       setSubType(newSubTypes);
+
+      setValue("SelectSubComplaintType", null);
+      updatedData.SelectSubComplaintType = null;
+      needsSessionUpdate = true;
     }
 
 
@@ -326,18 +333,24 @@ const CreateComplaintForm = ({
 
     // Only update if complaint user selection has changed
     if (selectedUser !== prevSelectedUser) {
-      const updatedData = { ...formData };
+      needsSessionUpdate = true;
 
       if (selectedUser === "MYSELF") {
         updatedData.ComplainantName = user?.info?.name || "";
         updatedData.ComplainantContactNumber = user?.info?.mobileNumber || "";
+        updatedData.countryCode = user?.info?.countryCode || "+91";
       } else if (selectedUser === "ANOTHER_USER") {
         updatedData.ComplainantName = "";
         updatedData.ComplainantContactNumber = "";
+        updatedData.countryCode = window?.Digit?.Hooks?.pgr?.useMobileValidation?.().validationRules?.prefix || "+91";
       }
 
       setValue("ComplainantName", updatedData.ComplainantName);
       setValue("ComplainantContactNumber", updatedData.ComplainantContactNumber);
+      setValue("countryCode", updatedData.countryCode);
+    }
+
+    if (needsSessionUpdate) {
       setSessionFormData(updatedData);
     }
   };
@@ -355,6 +368,21 @@ const CreateComplaintForm = ({
 
 
   const onFormSubmit = (_data) => {
+    // Validate boundary selection — ensure all boundary levels are filled
+    const boundaryData = _data?.boundaryComponent;
+    const lowestLevel = hierarchyData?.lowestHierarchy;
+    const highestLevel = hierarchyData?.highestHierarchy;
+    // Count expected levels: at least 1 if any level is configured
+    const levels = [highestLevel, lowestLevel].filter(Boolean);
+    const expectedLevels = new Set(levels).size;
+
+    if (expectedLevels > 0) {
+      if (!boundaryData || !Array.isArray(boundaryData) || boundaryData.length < expectedLevels) {
+        setToast({ show: true, label: t("ES_COMMON_PLEASE_SELECT_ALL_BOUNDARY_LEVELS"), type: "error" });
+        return;
+      }
+    }
+
     const payload = formPayloadToCreateComplaint(_data, tenantId, user?.info);
     handleResponseForCreateComplaint(payload);
   };

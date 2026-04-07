@@ -5,8 +5,7 @@ import { useSelector } from "react-redux";
 import { PgrRoutes, getRoute } from "../../../constants/Routes";
 import { useTranslation } from "react-i18next";
 
-const GetActionMessage = ({ action }) => {
-  const { t } = useTranslation();
+const getActionMessage = (t, { action }) => {
   switch (action) {
     case "REOPEN":
       return t(`CS_COMMON_COMPLAINT_REOPENED`);
@@ -19,11 +18,12 @@ const GetActionMessage = ({ action }) => {
 
 const BannerPicker = ({ response }) => {
   const { complaints } = response;
+  const { t } = useTranslation();
 
   if (complaints && complaints.response && complaints.response.responseInfo) {
     return (
       <Banner
-        message={GetActionMessage(complaints.response.ServiceWrappers[0].workflow)}
+        message={getActionMessage(t, complaints.response.ServiceWrappers[0].workflow)}
         complaintNumber={complaints.response.ServiceWrappers[0].service.serviceRequestId}
         successful={true}
       />

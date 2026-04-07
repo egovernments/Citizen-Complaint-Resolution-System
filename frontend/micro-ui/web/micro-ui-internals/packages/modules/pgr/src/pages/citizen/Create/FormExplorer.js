@@ -37,13 +37,13 @@ const FormExplorer = () => {
   const client = useQueryClient();
   const match = useRouteMatch();
   const dispatch = useDispatch();
-  const tenantId = 
-  
-  Digit.Utils.getMultiRootTenant()
-    ? Digit.ULBService.getCurrentTenantId()
-    : 
-    
-    Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || Digit.ULBService.getCurrentTenantId();
+  const tenantId =
+
+    Digit.Utils.getMultiRootTenant()
+      ? Digit.ULBService.getCurrentTenantId()
+      :
+
+      Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || Digit.ULBService.getCurrentTenantId();
 
 
   // Use Custom MDMS hook for fetching Hierarchy Schema
@@ -277,9 +277,20 @@ const FormExplorer = () => {
     switch (fieldKey) {
       case "ComplaintImagesPoint":
         return Array.isArray(data?.ComplaintImagesPoint) && data.ComplaintImagesPoint.length > 0;
-      case "SelectAddress":
+      case "SelectAddress": {
+        // Check if all boundary levels are selected
+        const boundaryData = data?.boundaryComponent;
+        const lowestLevel = hierarchyData?.lowestHierarchy;
+        const highestLevel = hierarchyData?.highestHierarchy;
+        const levels = [highestLevel, lowestLevel].filter(Boolean);
+        const expectedLevels = new Set(levels).size;
+
+        if (expectedLevels > 0) {
+          return Array.isArray(boundaryData) && boundaryData.length >= expectedLevels;
+        }
         return (data?.SelectAddress && Object.keys(data.SelectAddress).length > 0) ||
-          (Array.isArray(data?.boundaryComponent) && data.boundaryComponent.length > 0);
+          (Array.isArray(boundaryData) && boundaryData.length > 0);
+      }
       case "description":
         return typeof data?.description === "string" && data.description.trim().length > 0;
       case "SelectComplaintType":

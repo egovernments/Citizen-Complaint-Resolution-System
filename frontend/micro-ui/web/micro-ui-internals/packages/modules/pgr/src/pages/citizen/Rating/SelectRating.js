@@ -14,12 +14,12 @@ const SelectRating = ({ parentRoute }) => {
   let tenantId = Digit.Utils.getMultiRootTenant()
     ? Digit.ULBService.getCurrentTenantId()
     : Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || Digit.ULBService.getCurrentTenantId();
-  const complaintDetails = Digit.Hooks.pgr.useComplaintDetails({ tenantId: tenantId, id: id }).complaintDetails;
+  const { complaintDetails, revalidate: revalidateComplaint } = Digit.Hooks.pgr.useComplaintDetails({ tenantId: tenantId, id: id });
   const updateComplaint = useCallback((complaintDetails) => dispatch(updateComplaints(complaintDetails)), [dispatch]);
-  const [submitError, setError] = useState(false)
-  
-  function log(data) {
-    if (complaintDetails && data.rating > 0 ) {
+  const [submitError, setError] = useState(false);
+
+  async function log(data) {
+    if (complaintDetails && data.rating > 0) {
       complaintDetails.service.rating = data.rating;
       complaintDetails.service.additionalDetail = data.CS_FEEDBACK_WHAT_WAS_GOOD.join(",");
       complaintDetails.workflow = {
@@ -27,11 +27,24 @@ const SelectRating = ({ parentRoute }) => {
         comments: data.comments,
         verificationDocuments: [],
       };
-      updateComplaint({ service: complaintDetails.service, workflow: complaintDetails.workflow });
+      await updateComplaint({ service: complaintDetails.service, workflow: complaintDetails.workflow });
+
+      // Immediately trigger the complaint-details API to invalidate SWR cache.
+      // This ensures ComplaintDetails & timeline show updated rating without manual refresh.
+      revalidateComplaint();
+
+      // Store rating result in session storage as a reliable fallback for the Response page.
+      // This prevents a blank banner if the Redux state hasn't fully settled on navigation.
+      Digit.SessionStorage.set("PGR_LAST_RATING", {
+        id,
+        action: "RATE",
+        serviceRequestId: complaintDetails.service.serviceRequestId,
+        timestamp: Date.now(),
+      });
+
       history.push(`${parentRoute}/response`);
-    }
-    else{
-      setError(true)
+    } else {
+      setError(true);
     }
   }
 
