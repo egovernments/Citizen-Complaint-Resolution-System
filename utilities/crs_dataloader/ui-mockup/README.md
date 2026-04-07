@@ -1,73 +1,94 @@
-# React + TypeScript + Vite
+# DIGIT Studio Configurator
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Web UI for configuring and managing DIGIT platform tenants — onboard cities, set up departments, designations, complaint types, employees, and boundaries through a guided wizard or a full CRUD management interface.
 
-Currently, two official plugins are available:
+## Prerequisites
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Node.js 20+ and npm
+- [DIGIT-MCP](https://github.com/ChakshuGautam/DIGIT-MCP) repo cloned as a sibling to this repository's root (provides `@digit-mcp/data-provider`)
 
-## React Compiler
+Expected directory layout:
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+parent/
+├── Citizen-Complaint-Resolution-System/   # this repo
+└── DIGIT-MCP/                             # data-provider dependency
+    └── packages/data-provider/
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Quick Start (Dev Mode)
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+```bash
+# 1. Build the data-provider dependency
+cd ../../../../../DIGIT-MCP/packages/data-provider
+npm install && npm run build
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# 2. Install dependencies from repo root (npm workspaces)
+cd /path/to/Citizen-Complaint-Resolution-System
+npm install
+
+# 3. Start dev server
+cd utilities/crs_dataloader/ui-mockup
+npm run dev
 ```
+
+The app will be available at `http://localhost:5173`.
+
+## Production Build & Deploy
+
+Use the setup script from the repo root:
+
+```bash
+# Build only
+./scripts/setup-configurator.sh
+
+# Build and deploy to /var/www/configurator
+./scripts/setup-configurator.sh --deploy
+
+# Build and deploy to custom path
+./scripts/setup-configurator.sh --deploy --web-root /var/www/my-configurator
+```
+
+The script handles cloning DIGIT-MCP (if missing), building the data-provider, installing workspace dependencies, building the UI, and optionally copying the output to a web root. It also prints an nginx config snippet for serving the SPA.
+
+## How the DIGIT API URL Works
+
+The app does **not** use a backend server — it's a pure SPA that calls DIGIT APIs directly from the browser.
+
+The environment list is defined in `src/api/config.ts`:
+
+```ts
+export const ENVIRONMENTS: Environment[] = [
+  {
+    name: 'Chakshu Dev',
+    url: 'https://api.egov.theflywheel.in',
+    description: 'Chakshu development environment',
+  },
+];
+```
+
+To add a new environment, add an entry to this array. The user selects an environment at login, and all API calls go to that URL for the session.
+
+## Project Structure
+
+```
+src/
+├── api/            # API client, types, config, domain services
+├── components/     # Shared UI components (Radix-based)
+├── pages/          # Route pages (Login, Phase 1–4, Complete)
+├── providers/      # react-admin data/auth provider bridge
+├── resources/      # CRUD pages for each DIGIT entity type
+├── lib/            # Utilities
+└── App.tsx         # Root component, routes, state management
+```
+
+## Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start Vite dev server |
+| `npm run build` | TypeScript check + Vite production build |
+| `npm run preview` | Preview production build locally |
+| `npm run test` | Run unit tests (vitest) |
+| `npm run test:e2e` | Run end-to-end tests (Playwright) |
+| `npm run lint` | Run ESLint |
