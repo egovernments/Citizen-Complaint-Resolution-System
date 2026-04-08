@@ -52,7 +52,7 @@ public class ServiceRequestValidator {
     public void validateCreate(ServiceRequest request, Object mdmsData){
         Map<String,String> errorMap = new HashMap<>();
         validateUserData(request,errorMap);
-        validateSource(request.getService().getSource());
+        validateSource(request, mdmsData, errorMap);
 //        validateBoundary(request);
 //        validateMDMS(request, mdmsData);
         if(config.getIsValidateDeptEnabled()) validateDepartment(request, mdmsData);
@@ -70,7 +70,8 @@ public class ServiceRequestValidator {
 
         String id = request.getService().getId();
         String tenantId = request.getService().getTenantId();
-        validateSource(request.getService().getSource());
+        Map<String, String> errorMap = new HashMap<>();
+        validateSource(request, mdmsData, errorMap);
         validateMDMS(request, mdmsData);
         validateDepartment(request, mdmsData);
         validateReOpen(request);
@@ -80,6 +81,9 @@ public class ServiceRequestValidator {
 
         if(CollectionUtils.isEmpty(serviceWrappers))
             throw new CustomException("INVALID_UPDATE","The record that you are trying to update does not exists");
+
+        if (!errorMap.isEmpty())
+            throw new CustomException(errorMap);
 
         // TO DO
 
@@ -273,18 +277,58 @@ public class ServiceRequestValidator {
     }
 
     /**
-     * Validates if the source is in the given list configures in application properties
-     * @param source
+     * Validates if the source is valid against MDMS ComplaintSources or the
+     * allowed.source property.
+     * If the source is empty, sets it to the default source defined in MDMS.
+     *
+     * @param request  The service request
+     * @param mdmsData The MDMS data containing ComplaintSources
+     * @param errorMap Map to collect validation errors
      */
-    private void validateSource(String source){
+    private void validateSource(ServiceRequest request, Object mdmsData, Map<String, String> errorMap) {
+        Service service = request.getService();
+        String source = service.getSource();
 
-        List<String> allowedSourceStr = Arrays.asList(config.getAllowedSource().split(","));
+        if (source == null || source.isEmpty()) {
+            // Find default source from MDMS
+            String defaultSourceJsonPath = "$.MdmsRes.RAINMAKER-PGR.ComplaintSources[?(@.default==true)].code";
+            try {
+                List<String> defaultSources = JsonPath.read(mdmsData, defaultSourceJsonPath);
+                if (!CollectionUtils.isEmpty(defaultSources)) {
+                    service.setSource(defaultSources.get(0));
+                    source = service.getSource();
+                } else {
+                    errorMap.put("INVALID_SOURCE", "The source field is mandatory and no default source found in MDMS");
+                    return;
+                }
+            } catch (Exception e) {
+                errorMap.put("JSONPATH_ERROR", "Failed to parse mdms response for default complaint source");
+                return;
+            }
+        }
 
-        if(!allowedSourceStr.contains(source))
-            throw new CustomException("INVALID_SOURCE","The source: "+source+" is not valid");
+        if (source != null && !source.isEmpty()) {
+            String jsonPath = MDMS_COMPLAINT_SOURCE_CODE_SEARCH.replace("{SOURCECODE}", source);
 
+            List<Object> res = null;
+
+            try {
+                res = JsonPath.read(mdmsData, jsonPath);
+            } catch (Exception e) {
+                errorMap.put("JSONPATH_ERROR", "Failed to parse mdms response for complaint sources");
+                return;
+            }
+
+            if (CollectionUtils.isEmpty(res)) {
+                // Fallback: check if the source is in the allowed string config (for backwards
+                // compatibility if MDMS doesn't match)
+                List<String> allowedSourceStr = Arrays.asList(config.getAllowedSource().split(","));
+                if (!allowedSourceStr.contains(source)) {
+                    errorMap.put("INVALID_SOURCE", "The source: " + source + " is not valid");
+                }
+            }
+        }
     }
-
 
     public void validatePlainSearch(RequestSearchCriteria criteria) {
         if(CollectionUtils.isEmpty(criteria.getTenantIds())){

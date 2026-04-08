@@ -16,6 +16,7 @@ import java.util.*;
 
 import static org.egov.pgr.util.PGRConstants.MDMS_MODULE_NAME;
 import static org.egov.pgr.util.PGRConstants.MDMS_SERVICEDEF;
+import static org.egov.pgr.util.PGRConstants.MDMS_COMPLAINT_SOURCES;
 
 @Component
 public class MDMSUtils {
@@ -83,6 +84,7 @@ public class MDMSUtils {
         final String filterCode = "$.[?(@.active==true)]";
 
         pgrMasterDetails.add(MasterDetail.builder().name(MDMS_SERVICEDEF).filter(filterCode).build());
+        pgrMasterDetails.add(MasterDetail.builder().name(MDMS_COMPLAINT_SOURCES).filter(filterCode).build());
 
         ModuleDetail pgrModuleDtls = ModuleDetail.builder().masterDetails(pgrMasterDetails)
                 .moduleName(MDMS_MODULE_NAME).build();
