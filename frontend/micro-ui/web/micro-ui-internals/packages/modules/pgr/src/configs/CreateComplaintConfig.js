@@ -187,6 +187,20 @@ export const CreateComplaintConfig = {
           head: "CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS",
           body: [
             {
+              isMandatory: true,
+              key: "complaintSource",
+              type: "dropdown",
+              label: "COMPLAINTS_COMPLAINT_SOURCE",
+              preProcess: {
+                updateDependent: ["populators.options"]
+              },
+              populators: {
+                name: "complaintSource",
+                optionsKey: "i18nKey",
+                error: "CORE_COMMON_REQUIRED_ERRMSG",
+              },
+            },
+            {
               label: "CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS_DESCRIPTION",
               isMandatory: true,
               type: "textarea",
