@@ -24,7 +24,8 @@ const CreateComplaintForm = ({
   setSessionFormData,         // Setter for session form data
   clearSessionFormData,       // Clears form session data
   tenantId,                   // Current tenant ID
-  preProcessData              // Any preprocessing logic for form config or data
+  preProcessData,             // Any preprocessing logic for form config or data
+  complaintSourcesData        // Complaint sources data passed from parent
 }) => {
   const { t } = useTranslation();
   const history = useHistory();
@@ -165,6 +166,27 @@ const CreateComplaintForm = ({
     }
   );
 
+  const complaintSourceData = useMemo(() => {
+    return Array.isArray(complaintSourcesData) ? complaintSourcesData.map((item) => ({
+      ...item,
+      i18nKey: `${item.code.toUpperCase()}`,
+    })) : [];
+  }, [complaintSourcesData]);
+
+  useEffect(() => {
+    // If no complaint source is currently selected and we have data from MDMS
+    if (complaintSourceData?.length > 0 && !sessionFormData?.complaintSource) {
+      // Find the source that has 'default: true'
+      const defaultSource = complaintSourceData.find(source => source.default === true);
+      if (defaultSource) {
+        setSessionFormData((prev) => ({
+          ...prev,
+          complaintSource: defaultSource
+        }));
+      }
+    }
+  }, [complaintSourceData, sessionFormData?.complaintSource, setSessionFormData]);
+
   useEffect(() => {
 
     if (hierarchyData) {
@@ -238,6 +260,10 @@ const CreateComplaintForm = ({
             key: "ComplaintDate",
             value: [new Date().toISOString().split("T")[0]],
           },
+          {
+            key: "complaintSource",
+            value: [complaintSourceData ? complaintSourceData : []],
+          },
         ],
       }
     );
@@ -279,7 +305,7 @@ const CreateComplaintForm = ({
     });
 
     return { ...baseConfig, form: updatedForm };
-  }, [createComplaintConfig, serviceDefs, t, disabledFields, subType, selectedCity, localitiesOptions, hierarchyData]);
+  }, [createComplaintConfig, serviceDefs, t, disabledFields, subType, selectedCity, localitiesOptions, hierarchyData, complaintSourceData]);
 
 
 
