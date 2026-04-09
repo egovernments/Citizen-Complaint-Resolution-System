@@ -3,6 +3,7 @@
 frontend/micro-ui/web/micro-ui-internals/packages/digit-ui-components/
 frontend/micro-ui/web/micro-ui-internals/packages/react-components/
 frontend/micro-ui/web/micro-ui-internals/packages/libraries/
+frontend/micro-ui/web/micro-ui-internals/packages/modules/core/
 
 # Node
 node_modules/
