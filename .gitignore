@@ -1,0 +1,8 @@
+# NPM package sources — these are from upstream DIGIT-UI repos
+# and should be contributed back via separate PRs
+frontend/micro-ui/web/micro-ui-internals/packages/digit-ui-components/
+frontend/micro-ui/web/micro-ui-internals/packages/react-components/
+frontend/micro-ui/web/micro-ui-internals/packages/libraries/
+
+# Node
+node_modules/
