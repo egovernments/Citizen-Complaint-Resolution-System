@@ -92,7 +92,123 @@ Pre-login flow:
 
 ---
 
-# Part B: Boundary Auto-Generation & Localization Pipeline
+# Part B: V1 Inbox Replacement (Remove Inbox Service Dependency)
+
+## Problem Statement
+
+The CRS PGR employee inbox used `InboxSearchComposer` (V2) which calls `/inbox/v2/_search` — a separate Elasticsearch-backed Inbox service **not deployed locally**. The inbox page was completely broken.
+
+## Solution: Port V1 Inbox from DIGIT-Frontend
+
+The DIGIT-Frontend repo has a V1 inbox that calls PGR's direct search API (`/pgr-services/v2/request/_search` → PostgreSQL) and merges workflow data client-side. No Inbox service or Elasticsearch needed.
+
+**Data flow after change:**
+```
+PGRInbox → useInboxData(searchParams)
+  → Digit.PGRService.search() → /pgr-services/v2/request/_search → PostgreSQL
+  → Digit.WorkflowService.getByBusinessId() → /egov-workflow-v2/egov-wf/process/_search → PostgreSQL
+  → combineResponses() → merged data with SLA
+→ DesktopInbox/MobileInbox renders table/cards with filters
+```
+
+### Files Created (ported from DIGIT-Frontend)
+
+All under `frontend/.../packages/modules/pgr/src/`:
+
+| File | Purpose |
+|------|---------|
+| `components/DesktopInbox.js` | Desktop layout with table, filter, search panels |
+| `components/MobileInbox.js` | Mobile-responsive card layout |
+| `components/inbox/ComplaintTable.js` | Table wrapper for complaints |
+| `components/inbox/ComplaintCard.js` | Mobile card view per complaint |
+| `components/inbox/ComplaintLinks.js` | Quick action links (file complaint, etc.) |
+| `components/inbox/Filter.js` | Filter panel: status, complaint type, locality, assignee |
+| `components/inbox/search.js` | Search by complaint number / phone |
+| `components/inbox/Status.js` | Status checkboxes with counts |
+| `hooks/pgr/useInboxData.js` | Core hook: PGRService.search + WorkflowService merge |
+| `hooks/pgr/useComplaintStatus.js` | Fetches workflow states for PGR |
+| `hooks/pgr/useComplaintStatusCount.js` | Status counts for filter badges |
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `pages/employee/PGRInbox.js` | Replaced V2 `InboxSearchComposer` with V1 `DesktopInbox`/`MobileInbox` |
+| `hooks/index.js` | Registered `useInboxData`, `useComplaintStatus`, `useComplaintStatusCount` |
+| `services/pgr/PGRService.js` | Added `count` method |
+| `utils/urls.js` | Added workflow search URL |
+
+### Key Design Decisions
+
+- Kept same export name and file path for `PGRInbox.js` — `Module.js` imports default export and registers as `PGRSearchInbox`, so no routing changes needed
+- `Digit.PGRService` from `@egovernments/digit-ui-libraries` already has `search`/`count` — reused rather than reimplementing
+- `Digit.Hooks.useBoundaryLocalities` used for Filter locality dropdown — graceful degradation if unavailable (dropdown empty, inbox still works)
+- V1 components use `@egovernments/digit-ui-react-components` imports (available in CRS)
+
+---
+
+# Part C: Flat Tenant Support & Multi-Root Tenant Mode
+
+## Problem Statement
+
+The DataLoader only supported hierarchical tenant IDs like `pg.citya` (root.city). Users wanted flat tenants like `bomet` or `ke` that serve as both root and city.
+
+## Analysis: Why Flat Tenants Work
+
+DIGIT's backend uses `tenantId.split(".")[0]` extensively. For flat `"bomet"`:
+- `"bomet".split(".")[0]` → `"bomet"` (returns itself — doesn't break)
+- `isTenantIdStateLevel("bomet")` → `true` (no dot = state-level)
+- PGR LIKE query: `tenantid LIKE 'bomet%'` matches `"bomet"` itself
+- `MultiStateInstanceUtil`, User service, MDMS-v2 all handle dotless IDs correctly
+- **No changes needed to DIGIT-Core or DIGIT-Frontend core packages**
+
+## Changes Made
+
+**`crs_loader.py` — `create_tenant()`:**
+- Flat tenants (no dot) set `parent: null` in the tenant record
+- Bootstraps schemas from session root (e.g. `pg`) to new root correctly
+- Single tenant record serves as both root and city
+
+**`nginx/globalConfigs.js` — `MULTI_ROOT_TENANT = true`:**
+- Added config flag so UI city dropdown shows tenants from multiple roots
+- Read by frontend via `window.globalConfigs.getConfig("MULTI_ROOT_TENANT")` → `Digit.Utils.getMultiRootTenant()`
+
+**Tenant Localization Fix:**
+- `_copy_localization_messages` was only called during root bootstrapping, not for city tenants
+- Fixed: `create_tenant()` now copies English localization for **every** new tenant regardless of hierarchy level
+
+---
+
+# Part D: PGR Smoke/E2E Test Suite
+
+## Tests Created
+
+### `tests/smoke/pgr-workflow.test.ts` — PGR E2E Workflow
+Full complaint lifecycle:
+1. Create test employee (GRO/DGRO roles) → login → get auth token
+2. MDMS search → verify service definitions
+3. PGR Create → file complaint, verify in DB
+4. PGR Update (Assign) → assign to employee
+5. PGR Search → verify by serviceRequestId and by tenant
+
+### `tests/smoke/pgr-tenant.test.ts` — Parameterized Tenant Test (24 tests)
+Tenant-agnostic, accepts `TENANT` env var:
+```bash
+TENANT=pg.kericho npx jest smoke/pgr-tenant.test.ts --verbose
+```
+Full lifecycle: login, MDMS fetch, HRMS employee create with department, complaint create, search, assign (GRO), reassign (LME), resolve, verify RESOLVED state in API + DB, workflow history check, table integrity.
+
+**All 24 tests passed** on `pg.kericho`.
+
+### Key Testing Insights
+- PGR creates via Kafka → persister writes to DB asynchronously — tests need retry/delay for DB verification
+- ASSIGN workflow requires HRMS department association — fails with `DEPARTMENT_NOT_FOUND` if user created via `_createnovalidate` without HRMS
+- Search API requires `userInfo` with proper roles in `RequestInfo` for tenant-scoped queries
+- Test creates HRMS employee with random department from existing master data to avoid ASSIGN failures
+
+---
+
+# Part E: Boundary Auto-Generation & Localization Pipeline
 
 ## Background
 
@@ -265,6 +381,18 @@ Currently boundary localizations are created only for `en_IN`. Deployments needi
 
 `dataloader/templates/Kenya_Boundary_Master.xlsx` uses the old standard format with `State`/`District` as `boundaryType` values. Needs update to column-per-level format with correct boundary types (`Country`, `County`, `SubCounty`, `Ward`).
 
+## TODO: Boundary-Based Access Control Gap
+
+PGR's `EnrichmentService.enrichSearchRequest()` sets `accountId` but does NOT auto-filter by the employee's assigned boundary. Currently employees see ALL complaints in their tenant, not scoped to their HRMS jurisdictions. Enhancement needed: call HRMS, get employee's jurisdictions, add locality codes to PGR search criteria. Backend change in `pgr-services`.
+
+## TODO: V1 Inbox Browser Verification
+
+The V1 inbox code was ported and backend API tests pass (24/24), but it has not been visually verified in a browser. The `PGRService.count` endpoint (`/pgr-services/v2/request/_count`) may not exist in the backend — if so, status count badges in the inbox filter will show nothing (graceful degradation, inbox still works).
+
+## TODO: Playwright E2E Tests
+
+Chromium was not installed during initial attempts (`npx playwright install` needed). Playwright tests for UI login → create complaint → inbox → assign → resolve flow are planned but not yet created.
+
 ## TODO: Boundary Test Coverage
 
 - Unit tests (44 tests, all passing) cover code generation and auto-gen
@@ -287,7 +415,37 @@ Currently boundary localizations are created only for `en_IN`. Deployments needi
 | Kong routes / nginx proxy | TODO | Need route for `/tenant-management` (mock or stub) |
 | MDMS backfill | TODO | Register existing cross-root tenants under `pg` |
 
-## Part B — Boundary Pipeline
+## Part B — V1 Inbox
+
+| File | Status | Change |
+|------|--------|--------|
+| `pgr/src/components/DesktopInbox.js` | Created | Desktop inbox layout |
+| `pgr/src/components/MobileInbox.js` | Created | Mobile inbox layout |
+| `pgr/src/components/inbox/` (6 files) | Created | ComplaintTable, ComplaintCard, ComplaintLinks, Filter, search, Status |
+| `pgr/src/hooks/pgr/useInboxData.js` | Created | Core hook: PGR search + workflow merge |
+| `pgr/src/hooks/pgr/useComplaintStatus.js` | Created | Workflow states |
+| `pgr/src/hooks/pgr/useComplaintStatusCount.js` | Created | Status counts |
+| `pgr/src/pages/employee/PGRInbox.js` | Rewritten | V2 → V1 inbox |
+| `pgr/src/hooks/index.js` | Modified | Registered 3 new hooks |
+| `pgr/src/services/pgr/PGRService.js` | Modified | Added `count` method |
+| `pgr/src/utils/urls.js` | Modified | Added workflow URL |
+
+## Part C — Flat Tenants
+
+| File | Status | Change |
+|------|--------|--------|
+| `local-setup/nginx/globalConfigs.js` | Modified | `MULTI_ROOT_TENANT = true` |
+| `local-setup/jupyter/dataloader/crs_loader.py` | Modified | Flat tenant `parent: null`, localization for all tenants |
+
+## Part D — Test Suite
+
+| File | Status | Change |
+|------|--------|--------|
+| `tests/smoke/pgr-workflow.test.ts` | Created | PGR E2E lifecycle test |
+| `tests/smoke/pgr-tenant.test.ts` | Created | Parameterized 24-step tenant test |
+| `tests/utils/config.ts` | Modified | Added tenant config |
+
+## Part E — Boundary Pipeline
 
 | File | Role |
 |------|------|
@@ -303,12 +461,17 @@ Currently boundary localizations are created only for `en_IN`. Deployments needi
 
 - [x] Smoke tests pass (17/17 — user creation, login, PGR, MDMS, localization all green)
 - [x] Boundary unit tests pass (44/44)
+- [x] PGR tenant test passes (24/24 on `pg.kericho`)
+- [x] PGR e2e workflow test passes (`cd tests && npx jest smoke/pgr-workflow.test.ts --verbose`)
+- [x] V1 inbox backend API tests pass
+- [ ] V1 inbox visually verified in browser
 - [ ] Language-selection page shows translated labels (blocked by tenant-management 404)
 - [ ] City dropdown shows ALL tenants on login page (needs MDMS backfill)
 - [ ] Login works for any selected tenant
 - [ ] New tenant created via `crs_loader` appears in login dropdown
-- [ ] PGR e2e workflow test passes (`cd tests && npx jest smoke/pgr-workflow.test.ts --verbose`)
+- [ ] Playwright E2E tests (UI login → complaint → inbox → resolve)
 - [ ] Full boundary pipeline tested end-to-end with column-per-level format
+- [ ] Boundary-based access control scoping in PGR backend
 
 # Environment
 
