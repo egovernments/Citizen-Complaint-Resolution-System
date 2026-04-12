@@ -18,12 +18,16 @@ try:
     from .unified_loader import UnifiedExcelReader, APIUploader
 except (ImportError, ModuleNotFoundError):
     from unified_loader import UnifiedExcelReader, APIUploader
-from typing import Optional, Dict
+from typing import Optional, Dict, List, Set
 from copy import deepcopy
 import os
 import json
 import requests
 import time
+import unicodedata
+import re
+import difflib
+import tempfile
 
 REQUEST_TIMEOUT = 30  # seconds - prevent indefinite hangs on unresponsive services
 
@@ -38,6 +42,166 @@ except Exception:
 # kubectl API server URL (for environments without kubectl access)
 KUBECTL_API_URL = os.environ.get('KUBECTL_API_URL', 'http://localhost:8765')
 KUBECTL_API_KEY = os.environ.get('KUBECTL_API_KEY', 'dev-only-key')
+
+# Common boundary-name suffixes to strip during fuzzy matching
+_BOUNDARY_SUFFIXES = re.compile(
+    r'\b(county|district|sub\s*county|subcounty|ward|division|location|'
+    r'sub\s*location|province|region|constituency|municipality|city|town|'
+    r'village|state)\b',
+    re.IGNORECASE,
+)
+
+
+def _sanitize_name(name: str) -> str:
+    """Normalize unicode → ASCII, strip non-alphanumeric chars, uppercase.
+
+    Returns a string with NO spaces (suitable for embedding in a code).
+    """
+    nfkd = unicodedata.normalize('NFKD', str(name))
+    ascii_only = ''.join(ch for ch in nfkd if not unicodedata.combining(ch) and ch.isascii())
+    cleaned = re.sub(r'[^A-Za-z0-9]+', '', ascii_only).strip()
+    if not cleaned:
+        return 'X'
+    return cleaned.upper()
+
+
+def _split_words(name: str) -> List[str]:
+    """Split a name into words for abbreviation (preserves spaces temporarily)."""
+    nfkd = unicodedata.normalize('NFKD', str(name))
+    ascii_only = ''.join(ch for ch in nfkd if not unicodedata.combining(ch) and ch.isascii())
+    cleaned = re.sub(r'[^A-Za-z0-9 ]+', '', ascii_only).strip()
+    return cleaned.upper().split()
+
+
+def _abbreviate(name: str, max_chars: int = 10) -> str:
+    """Abbreviate a boundary name for use in a code segment.
+
+    Multi-word names: first letter of each word (e.g. "Nairobi County" → "NC").
+    Single-word names: first ``max_chars`` characters.
+    """
+    words = _split_words(name)
+    if len(words) > 1:
+        return ''.join(w[0] for w in words if w)
+    sanitized = _sanitize_name(name)
+    return sanitized[:max_chars]
+
+
+def _normalize_for_matching(name: str) -> str:
+    """Strip common suffixes, collapse whitespace, lowercase — for fuzzy dedup."""
+    s = _BOUNDARY_SUFFIXES.sub('', str(name))
+    return re.sub(r'\s+', '', s).strip().lower()
+
+
+def _generate_boundary_code(
+    tenant: str,
+    hierarchy_path: List[str],
+    seen_codes: Set[str],
+) -> str:
+    """Build a deterministic, human-readable boundary code from a hierarchy path.
+
+    Args:
+        tenant: Tenant id (e.g. "ke" or "pg.citya").
+        hierarchy_path: List of boundary names from root to leaf,
+            e.g. ["Kenya", "Nairobi County", "Westlands"].
+        seen_codes: Mutable set of already-assigned codes (updated in-place).
+
+    Returns:
+        A unique code ≤ 64 characters, e.g. "KE_KENYA_NC_WESTLANDS".
+    """
+    # Root prefix from tenant leaf segment
+    root = tenant.split('.')[-1].upper()
+
+    parts: List[str] = [root]
+    for name in hierarchy_path:
+        # Multi-word → initials (e.g. "Nairobi County" → "NC")
+        # Single-word → up to 10 chars (e.g. "Westlands" → "WESTLANDS")
+        parts.append(_abbreviate(name, max_chars=10))
+
+    candidate = '_'.join(parts)[:64]
+
+    # Deterministic collision resolution
+    if candidate not in seen_codes:
+        seen_codes.add(candidate)
+        return candidate
+
+    suffix = 2
+    while True:
+        suffixed = f"{candidate[:64 - len(str(suffix)) - 1]}_{suffix}"
+        if suffixed not in seen_codes:
+            seen_codes.add(suffixed)
+            return suffixed
+        suffix += 1
+
+
+def _fetch_existing_boundary_codes(uploader, tenant: str, hierarchy_type: str) -> Dict[str, str]:
+    """Fetch existing boundary codes from boundary-service for fuzzy dedup.
+
+    Returns:
+        Dict mapping normalized_code → original_code.
+    """
+    try:
+        url = f"{uploader.boundary_url}/boundary/_search"
+        user_info_copy = uploader.user_info.copy()
+        user_info_copy['tenantId'] = tenant
+
+        payload = {
+            "RequestInfo": {
+                "apiId": "Rainmaker",
+                "authToken": uploader.auth_token,
+                "userInfo": user_info_copy,
+                "msgId": f"{int(time.time() * 1000)}|en_IN"
+            },
+            "BoundaryCriteria": {
+                "tenantId": tenant,
+                "limit": 500,
+                "offset": 0
+            }
+        }
+
+        response = requests.post(
+            url, json=payload,
+            headers={'Content-Type': 'application/json'},
+            timeout=REQUEST_TIMEOUT,
+        )
+        if response.status_code != 200:
+            return {}
+
+        data = response.json()
+        boundaries = data.get('Boundary', [])
+
+        result = {}
+        for b in boundaries:
+            code = b.get('code', '')
+            if code:
+                result[_normalize_for_matching(code)] = code
+        return result
+
+    except Exception:
+        return {}
+
+
+def _fuzzy_match_existing(
+    candidate_code: str,
+    existing_normalized: Dict[str, str],
+    threshold: float = 0.85,
+) -> Optional[str]:
+    """Check if candidate_code fuzzy-matches an existing boundary code.
+
+    Returns the original existing code if matched, else None.
+    """
+    norm = _normalize_for_matching(candidate_code)
+
+    # Exact normalized match
+    if norm in existing_normalized:
+        return existing_normalized[norm]
+
+    # Similarity check
+    for existing_norm, original in existing_normalized.items():
+        ratio = difflib.SequenceMatcher(None, norm, existing_norm).ratio()
+        if ratio > threshold:
+            return original
+
+    return None
 
 
 class CRSLoader:
@@ -114,8 +278,11 @@ class CRSLoader:
         copies all required schema definitions and essential MDMS data from "pg"
         before creating the tenant.
 
+        Supports flat tenant IDs (e.g. "bomet") — the tenant serves as both
+        root and city. No dot-separated hierarchy required.
+
         Args:
-            tenant_code: Tenant code (e.g., "pg.citya", "ethiopia.kenya")
+            tenant_code: Tenant code (e.g., "pg.citya", "bomet", "ethiopia.kenya")
             display_name: Display name (derived from code if not provided)
             enable_modules: List of modules to enable (default: ["PGR", "HRMS"])
             users: List of users to create for this tenant. Each user is a dict:
@@ -128,6 +295,11 @@ class CRSLoader:
 
         Example:
             loader.login(username="ADMIN", password="eGov@123", tenant_id="pg")
+
+            # Flat tenant (no dot — serves as both root and city):
+            loader.create_tenant("bomet", "Bomet County", users=[...])
+
+            # Hierarchical tenant:
             loader.create_tenant("statea.chakshu", "Chakshu State", users=[
                 {"username": "ADMIN", "password": "eGov@123", "name": "Admin", "roles": ["SUPERUSER", "EMPLOYEE", "GRO", "DGRO"]},
                 {"username": "GRO", "password": "eGov@123", "name": "GRO User", "roles": ["EMPLOYEE", "GRO", "DGRO"]}
@@ -155,6 +327,10 @@ class CRSLoader:
 
         if tenant_code.lower() in existing_tenants:
             print(f"✅ Tenant '{tenant_code}' already exists")
+            # Ensure localization even for existing tenants (idempotent)
+            source = root_tenant if root_tenant != tenant_code else "pg"
+            print(f"   🔧 Ensuring localization messages for '{tenant_code}'...")
+            self._copy_localization_messages(source, tenant_code)
             return self._ensure_stateinfo_for_tenant(tenant_code, display_name)
 
         print(f"📝 Creating tenant '{tenant_code}'...")
@@ -186,6 +362,7 @@ class CRSLoader:
             print(f"✅ Using existing root tenant: '{session_root}'")
 
         # Create tenant record under its own root
+        is_flat_tenant = "." not in tenant_code
         create_url = f"{self.base_url}/mdms-v2/v2/_create/tenant.tenants"
         tenant_data = {
             "code": tenant_code,
@@ -198,6 +375,8 @@ class CRSLoader:
                 "districtName": display_name
             }
         }
+        if is_flat_tenant:
+            tenant_data["parent"] = None
 
         create_payload = {
             "RequestInfo": {
@@ -218,6 +397,33 @@ class CRSLoader:
         if resp.ok:
             print(f"✅ Tenant '{tenant_code}' created successfully!")
 
+            # Dual-register under bootstrap root 'pg' so the login page shows all tenants
+            if root_tenant != "pg":
+                pg_payload = {
+                    "RequestInfo": {
+                        "apiId": "Rainmaker",
+                        "authToken": self.auth_token,
+                        "userInfo": self.user_info
+                    },
+                    "Mdms": {
+                        "tenantId": "pg",
+                        "schemaCode": "tenant.tenants",
+                        "data": tenant_data,
+                        "isActive": True
+                    }
+                }
+                try:
+                    pg_resp = requests.post(create_url, json=pg_payload,
+                                            headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
+                    if pg_resp.ok:
+                        print(f"   ✅ Also registered '{tenant_code}' under bootstrap root 'pg'")
+                    elif "already exists" in pg_resp.text.lower() or "duplicate" in pg_resp.text.lower():
+                        pass  # Already there, fine
+                    else:
+                        print(f"   ⚠️  Could not register under 'pg': {pg_resp.status_code}")
+                except Exception as e:
+                    print(f"   ⚠️  Could not dual-register under 'pg': {e}")
+
             # Ensure tenant has branding metadata used by UI localization bootstrap
             if not self._ensure_stateinfo_for_tenant(tenant_code, display_name):
                 print(f"❌ Failed to ensure StateInfo for '{tenant_code}'")
@@ -226,6 +432,11 @@ class CRSLoader:
             # Enable modules for the tenant
             for module in enable_modules:
                 self._enable_module_for_tenant(tenant_code, module)
+
+            # Copy localization messages from source tenant
+            source = root_tenant if root_tenant != tenant_code else "pg"
+            print(f"   🔧 Copying localization messages to '{tenant_code}'...")
+            self._copy_localization_messages(source, tenant_code)
 
             # Create users for the tenant
             if users:
@@ -511,6 +722,9 @@ class CRSLoader:
             'egov-hrms.EmployeeType',
             'egov-hrms.DeactivationReason',
             'ACCESSCONTROL-ROLES.roles',       # User roles and permissions
+            'ACCESSCONTROL-ACTIONS-TEST.actions-test',  # CRITICAL: Action catalog used by accesscontrol
+            'ACCESSCONTROL-ROLEACTIONS.roleactions',    # CRITICAL: Role->action mapping (drives UI tile visibility)
+            'common-masters.uiHomePage',       # CRITICAL: Employee landing page module tiles
             'RAINMAKER-PGR.ServiceDefs',       # Complaint type definitions
             'tenant.citymodule',               # CRITICAL: Copy citymodule configs for all modules
             'tenant.tenants',                  # Tenant registry - schema needed for city creation
@@ -610,13 +824,7 @@ class CRSLoader:
             import psycopg2
             
             # Database connection
-            conn = psycopg2.connect(
-                host="postgres-db",
-                port="5432", 
-                database="egov",
-                user="egov",
-                password="egov123"
-            )
+            conn = self._get_db_connection()
             
             with conn:
                 with conn.cursor() as cur:
@@ -676,13 +884,7 @@ class CRSLoader:
             import psycopg2
             
             # Database connection using Docker service name
-            conn = psycopg2.connect(
-                host="postgres-db",
-                port="5432", 
-                database="egov",
-                user="egov",
-                password="egov123"
-            )
+            conn = self._get_db_connection()
             
             with conn:
                 with conn.cursor() as cur:
@@ -722,32 +924,48 @@ class CRSLoader:
             print(f"   ⚠️  ID format copy failed: {str(e)[:100]}")
             return {'created': 0, 'error': f'ID format copy failed: {str(e)}'}
 
-    def _copy_localization_messages(self, source_tenant: str, target_root: str):
-        """Copy localization messages from source tenant to target root tenant"""
+    def _get_db_connection(self):
+        """Get a PostgreSQL connection, trying docker-internal then localhost."""
+        import psycopg2
+        db_hosts = [
+            ("postgres-db", "5432"),   # docker-internal
+            ("localhost", "15432"),     # host-mapped port
+            ("localhost", "5432"),      # default postgres
+        ]
+        last_err = None
+        for host, port in db_hosts:
+            try:
+                return psycopg2.connect(
+                    host=host, port=port,
+                    database="egov", user="egov", password="egov123",
+                    connect_timeout=5,
+                )
+            except Exception as e:
+                last_err = e
+        raise last_err
+
+    def _copy_localization_messages(self, source_tenant: str, target_tenant: str):
+        """Copy localization messages from source tenant to target tenant.
+
+        Works for both root and city tenants — any tenant that needs
+        English localization data gets a copy from the source.
+        """
         try:
-            import psycopg2
-            
-            conn = psycopg2.connect(
-                host="postgres-db",
-                port="5432", 
-                database="egov",
-                user="egov",
-                password="egov123"
-            )
-            
+            conn = self._get_db_connection()
+
             with conn:
                 with conn.cursor() as cur:
                     # Get count before copy for reference
-                    cur.execute("SELECT COUNT(*) FROM message WHERE tenantid = %s", (target_root,))
+                    cur.execute("SELECT COUNT(*) FROM message WHERE tenantid = %s", (target_tenant,))
                     before_count = cur.fetchone()[0]
-                    
-                    # Copy all localization messages with correct column names
+
+                    # Copy all localization messages
                     copy_sql = """
                     INSERT INTO message (id, locale, code, message, tenantid, module, createdby, createddate, lastmodifiedby, lastmodifieddate)
-                    SELECT 
+                    SELECT
                         gen_random_uuid() as id,
                         locale,
-                        code, 
+                        code,
                         message,
                         %s as tenantid,
                         module,
@@ -755,26 +973,26 @@ class CRSLoader:
                         now() as createddate,
                         lastmodifiedby,
                         now() as lastmodifieddate
-                    FROM message 
+                    FROM message
                     WHERE tenantid = %s
                     ON CONFLICT (tenantid, locale, module, code) DO NOTHING;
                     """
-                    
-                    cur.execute(copy_sql, (target_root, source_tenant))
+
+                    cur.execute(copy_sql, (target_tenant, source_tenant))
                     copied_count = cur.rowcount
-                    
+
                     # Get final count
-                    cur.execute("SELECT COUNT(*) FROM message WHERE tenantid = %s", (target_root,))
+                    cur.execute("SELECT COUNT(*) FROM message WHERE tenantid = %s", (target_tenant,))
                     after_count = cur.fetchone()[0]
-                    
+
                     # Show modules copied
-                    cur.execute("SELECT DISTINCT module FROM message WHERE tenantid = %s ORDER BY module", (target_root,))
+                    cur.execute("SELECT DISTINCT module FROM message WHERE tenantid = %s ORDER BY module", (target_tenant,))
                     modules = [row[0] for row in cur.fetchall()]
-                    
-                    print(f"   ✅ Localization: {copied_count} new messages copied to '{target_root}'")
+
+                    print(f"   ✅ Localization: {copied_count} new messages copied to '{target_tenant}'")
                     print(f"   📊 Total messages: {after_count} across {len(modules)} modules")
                     print(f"   📦 Modules: {', '.join(modules)}")
-                    
+
                     return {
                         'status': 'completed',
                         'copied_count': copied_count,
@@ -937,13 +1155,7 @@ class CRSLoader:
         try:
             import psycopg2
             
-            conn = psycopg2.connect(
-                host="postgres-db",
-                port="5432", 
-                database="egov",
-                user="egov",
-                password="egov123"
-            )
+            conn = self._get_db_connection()
             
             with conn:
                 with conn.cursor() as cur:
@@ -1320,12 +1532,140 @@ class CRSLoader:
             print(f"   ERROR: Failed to create hierarchy: {e}")
             return None
 
+        # Step 2.5: Ensure boundary-v2 MDMS schemas and data records exist.
+        # The template generator (egov-bndry-mgmnt BFF) reads BoundaryType MDMS to
+        # build Excel column headers.  Without them it fails with FETCHING_COLUMN_ERROR.
+        # The schema definitions may be missing on the original root tenant (e.g. "pg")
+        # because they are only auto-created during _bootstrap_tenant_root for NEW roots.
+        root_tenant = tenant.split('.')[0]
+
+        # First ensure the schema definitions exist for the root tenant
+        schema_create_url = f"{self.base_url}/mdms-v2/schema/v1/_create"
+        for schema_code, definition in {
+            "boundary-v2.BoundaryType": {
+                "type": "object", "$schema": "http://json-schema.org/draft-07/schema#",
+                "required": ["code", "name", "hierarchyType"], "x-unique": ["code"],
+                "properties": {
+                    "code": {"type": "string"}, "name": {"type": "string"},
+                    "hierarchyType": {"type": "string"},
+                    "parent": {"type": ["string", "null"]}, "active": {"type": "boolean"}
+                }
+            },
+            "boundary-v2.HierarchyType": {
+                "type": "object", "$schema": "http://json-schema.org/draft-07/schema#",
+                "required": ["code", "name"], "x-unique": ["code"],
+                "properties": {
+                    "code": {"type": "string"}, "name": {"type": "string"},
+                    "active": {"type": "boolean"}
+                }
+            },
+            "project-factory.CampaignType": {
+                "type": "object", "$schema": "http://json-schema.org/draft-07/schema#",
+                "required": ["code", "name"], "x-unique": ["code"],
+                "properties": {
+                    "code": {"type": "string"}, "name": {"type": "string"},
+                    "active": {"type": "boolean"},
+                    "description": {"type": ["string", "null"]}
+                }
+            },
+            "CRS-ADMIN-CONSOLE.adminSchema": {
+                "type": "object", "$schema": "http://json-schema.org/draft-07/schema#",
+                "required": ["title", "campaignType"], "x-unique": ["title"],
+                "properties": {
+                    "title": {"type": "string", "maxLength": 200, "minLength": 1},
+                    "properties": {"type": "object", "properties": {
+                        "numberProperties": {"type": "array"},
+                        "stringProperties": {"type": "array"}
+                    }, "additionalProperties": False},
+                    "campaignType": {"type": "string", "maxLength": 100, "minLength": 1}
+                },
+                "x-ref-schema": [], "additionalProperties": False
+            }
+        }.items():
+            try:
+                r = requests.post(schema_create_url, json={
+                    "RequestInfo": {"apiId": "Rainmaker", "authToken": self.auth_token, "userInfo": self.user_info},
+                    "SchemaDefinition": {"tenantId": root_tenant, "code": schema_code,
+                                         "description": schema_code, "definition": definition}
+                }, headers={"Content-Type": "application/json"}, timeout=30)
+                if r.ok:
+                    print(f"   ✅ Created schema: {schema_code}")
+                elif any(kw in r.text.lower() for kw in ["duplicate", "already exists", "unique"]):
+                    pass  # Already exists, fine
+                else:
+                    print(f"   ⚠️  Schema {schema_code}: {r.text[:120]}")
+            except Exception as e:
+                print(f"   ⚠️  Schema {schema_code}: {e}")
+
+        # Brief pause for schema propagation
+        import time
+        time.sleep(3)
+
+        print(f"   Ensuring BoundaryType MDMS records for hierarchy '{name}'...")
+        boundary_type_records = []
+        for i, level in enumerate(levels):
+            boundary_type_records.append({
+                "code": level,
+                "name": level,
+                "hierarchyType": name,
+                "parent": levels[i - 1] if i > 0 else None,
+                "active": True
+            })
+        try:
+            bt_result = self.uploader.create_mdms_data(
+                schema_code="boundary-v2.BoundaryType",
+                data_list=boundary_type_records,
+                tenant=root_tenant
+            )
+            created = bt_result.get('created', 0)
+            exists = bt_result.get('exists', 0)
+            print(f"   ✅ BoundaryType: {created} created, {exists} already existed")
+        except Exception as e:
+            print(f"   ⚠️  BoundaryType creation failed: {e}")
+
+        # Also ensure HierarchyType MDMS record exists
+        try:
+            ht_result = self.uploader.create_mdms_data(
+                schema_code="boundary-v2.HierarchyType",
+                data_list=[{"code": name, "name": name, "active": True}],
+                tenant=root_tenant
+            )
+            ht_created = ht_result.get('created', 0)
+            if ht_created:
+                print(f"   ✅ HierarchyType '{name}' created")
+        except Exception as e:
+            print(f"   ⚠️  HierarchyType creation failed: {e}")
+
+        # Ensure CRS_BOUNDARY_DATA admin schema record exists (required by egov-bndry-mgmnt BFF)
+        try:
+            crs_data = {
+                "title": "CRS_BOUNDARY_DATA",
+                "properties": {
+                    "numberProperties": [
+                        {"name": "CRS_LAT", "type": "number", "isRequired": True, "description": "Latitude", "orderNumber": 2},
+                        {"name": "CRS_LONG", "type": "number", "isRequired": True, "description": "Longitude", "orderNumber": 3}
+                    ],
+                    "stringProperties": [
+                        {"name": "CRS_BOUNDARY_CODE", "type": "string", "isRequired": False, "description": "Boundary Code (auto-generated if empty)", "orderNumber": 1, "freezeColumn": True}
+                    ]
+                },
+                "campaignType": "all"
+            }
+            crs_result = self.uploader.create_mdms_data(
+                schema_code="CRS-ADMIN-CONSOLE.adminSchema",
+                data_list=[crs_data],
+                tenant=root_tenant
+            )
+            if crs_result.get('created', 0):
+                print(f"   ✅ CRS_BOUNDARY_DATA admin schema record created")
+        except Exception as e:
+            print(f"   ⚠️  CRS admin schema creation: {e}")
+
         # Step 3: Generate template (with fallback)
         print(f"\n[3/4] Generating template...")
-        
+
         # First ensure we have the boundary schemas needed
-        root_tenant = tenant.split('.')[0]
-        
+
         # Check if boundary schemas exist, if not create them
         try:
             # Create boundary campaign type if missing
@@ -1335,14 +1675,14 @@ class CRSLoader:
                 "active": True,
                 "description": "Campaign for boundary template generation"
             }]
-            
+
             self.uploader.create_mdms_data(
                 schema_code="project-factory.CampaignType",
                 data_list=campaign_data,
                 tenant=root_tenant
             )
             print(f"   ✅ Ensured campaign type schema exists")
-            
+
         except Exception as e:
             print(f"   ⚠️  Could not create campaign schema: {e}")
         
@@ -1410,6 +1750,331 @@ class CRSLoader:
             print(f"   ERROR: Failed to download template")
             return None
 
+    def _autogenerate_boundary_codes(self, excel_path: str, tenant: str,
+                                     hierarchy_type: str) -> str:
+        """Pre-process boundary Excel to auto-generate missing codes.
+
+        Supports two formats:
+        - **Standard**: columns ``code``, ``name``, ``boundaryType``, ``parentCode``
+        - **Column-per-level**: columns like ``ADMIN_Country``, ``ADMIN_County``, …
+          plus ``CRS_BOUNDARY_CODE``
+
+        If all codes are already filled in, the original path is returned unchanged.
+
+        Returns:
+            Path to the (possibly modified) Excel file to use for upload.
+        """
+        import pandas as pd
+
+        # Initialize localization list (may be populated by format-specific methods)
+        self._boundary_localizations: list = []
+
+        try:
+            try:
+                df = pd.read_excel(excel_path, sheet_name='Boundary')
+            except Exception:
+                try:
+                    df = pd.read_excel(excel_path, sheet_name='Boundary Data')
+                except Exception:
+                    df = pd.read_excel(excel_path, sheet_name=0)
+        except Exception as e:
+            print(f"   ⚠️  Could not read Excel for code generation: {e}")
+            return excel_path
+
+        cols_lower = {str(c).lower().strip(): c for c in df.columns}
+
+        # --- Detect format ---
+        # Standard format: has 'code' and 'boundaryType' columns
+        code_col = cols_lower.get('code')
+        name_col = cols_lower.get('name')
+        btype_col = cols_lower.get('boundarytype')
+        pcode_col = cols_lower.get('parentcode')
+
+        # Column-per-level format: columns matching ADMIN_<Level> or <HierarchyType>_<Level>
+        level_cols = [c for c in df.columns
+                      if re.match(rf'^{re.escape(hierarchy_type)}_', str(c), re.IGNORECASE)]
+        crs_code_col = cols_lower.get('crs_boundary_code')
+
+        is_standard = bool(code_col and btype_col)
+        is_level_format = bool(level_cols)
+
+        if not is_standard and not is_level_format:
+            # Unknown format — let downstream handle it
+            return excel_path
+
+        # Fetch existing boundaries for fuzzy dedup
+        existing_normalized = _fetch_existing_boundary_codes(
+            self.uploader, tenant, hierarchy_type
+        )
+        if existing_normalized:
+            print(f"   📋 Found {len(existing_normalized)} existing boundaries for dedup")
+
+        # Seed seen_codes from pre-filled values
+        seen_codes: Set[str] = set()
+        modified = False
+
+        if is_standard:
+            modified = self._autogen_standard_format(
+                df, code_col, name_col, btype_col, pcode_col,
+                tenant, seen_codes, existing_normalized,
+            )
+        elif is_level_format:
+            modified = self._autogen_level_format(
+                df, level_cols, crs_code_col, hierarchy_type,
+                tenant, seen_codes, existing_normalized,
+            )
+
+        if not modified:
+            return excel_path
+
+        # Save modified Excel to a temp file
+        suffix = os.path.splitext(excel_path)[1] or '.xlsx'
+        fd, tmp_path = tempfile.mkstemp(suffix=f'_with_codes{suffix}')
+        os.close(fd)
+        try:
+            df.to_excel(tmp_path, index=False, engine='openpyxl')
+        except Exception as e:
+            print(f"   ⚠️  Could not write modified Excel: {e}")
+            return excel_path
+
+        print(f"   💾 Saved codes to: {os.path.basename(tmp_path)}")
+        return tmp_path
+
+    def _autogen_standard_format(
+        self, df, code_col, name_col, btype_col, pcode_col,
+        tenant, seen_codes, existing_normalized,
+    ) -> bool:
+        """Auto-generate codes in standard (code/name/boundaryType/parentCode) format.
+
+        Returns True if any cells were modified.
+        """
+        import pandas as pd
+
+        if not name_col:
+            return False
+
+        # Seed seen_codes from pre-filled codes
+        for val in df[code_col].dropna():
+            v = str(val).strip()
+            if v:
+                seen_codes.add(v)
+
+        # Build parent→children mapping for hierarchy path reconstruction
+        # Each row has: code, name, boundaryType, parentCode
+        # We need to reconstruct the hierarchy path for each row to generate codes
+
+        # First pass: index existing rows by code for parent lookups
+        code_to_name = {}
+        code_to_parent = {}
+        for _, row in df.iterrows():
+            c = str(row.get(code_col, '')).strip() if pd.notna(row.get(code_col)) else ''
+            n = str(row.get(name_col, '')).strip() if name_col and pd.notna(row.get(name_col)) else ''
+            p = str(row.get(pcode_col, '')).strip() if pcode_col and pd.notna(row.get(pcode_col)) else ''
+            if c:
+                code_to_name[c] = n
+                code_to_parent[c] = p
+
+        # For rows missing a code, we generate one from the name + parent chain
+        modified = False
+        generated_count = 0
+        for idx in df.index:
+            existing_code = df.at[idx, code_col]
+            if pd.notna(existing_code) and str(existing_code).strip():
+                continue  # already has a code
+
+            name = str(df.at[idx, name_col]).strip() if name_col and pd.notna(df.at[idx, name_col]) else ''
+            parent_code = (
+                str(df.at[idx, pcode_col]).strip()
+                if pcode_col and pd.notna(df.at[idx, pcode_col])
+                else ''
+            )
+
+            if not name:
+                continue
+
+            # Build hierarchy path by walking parent chain
+            path = [name]
+            pc = parent_code
+            visited = set()
+            while pc and pc in code_to_name and pc not in visited:
+                visited.add(pc)
+                path.insert(0, code_to_name[pc])
+                pc = code_to_parent.get(pc, '')
+
+            code = _generate_boundary_code(tenant, path, seen_codes)
+
+            # Fuzzy match against existing boundaries
+            match = _fuzzy_match_existing(code, existing_normalized)
+            if match:
+                norm_new = _normalize_for_matching(code)
+                norm_existing = _normalize_for_matching(match)
+                if norm_new == norm_existing:
+                    print(f"   ⚠️  Reusing existing boundary '{match}' for '{name}'")
+                else:
+                    ratio = difflib.SequenceMatcher(
+                        None, norm_new, norm_existing
+                    ).ratio()
+                    print(
+                        f"   ⚠️  Possible duplicate: '{name}' is "
+                        f"{ratio:.0%} similar to existing '{match}' — reusing"
+                    )
+                code = match
+                seen_codes.add(code)
+
+            df.at[idx, code_col] = code
+            # Update lookup maps so children can find this parent
+            code_to_name[code] = name
+            code_to_parent[code] = parent_code
+            modified = True
+            generated_count += 1
+            print(f"   🏷️  {name} → {code}")
+
+        # Build localization entries from all code→name mappings
+        # (includes both pre-existing and newly generated codes)
+        boundary_localizations = []
+        seen_loc_codes: Set[str] = set()
+        for code, name in code_to_name.items():
+            if code in seen_loc_codes or not name:
+                continue
+            seen_loc_codes.add(code)
+            boundary_localizations.append({
+                'code': code,
+                'message': name,
+                'module': 'rainmaker-boundary',
+                'locale': 'en_IN'
+            })
+        self._boundary_localizations = boundary_localizations
+
+        if modified:
+            print(f"   ✅ Auto-generated {generated_count} boundary code(s) (standard format)")
+            print(f"   📝 Prepared {len(boundary_localizations)} localization entries")
+
+        return modified
+
+    def _autogen_level_format(
+        self, df, level_cols, crs_code_col, hierarchy_type,
+        tenant, seen_codes, existing_normalized,
+    ) -> bool:
+        """Auto-generate codes in column-per-level format.
+
+        Columns like ``ADMIN_Country``, ``ADMIN_County``, ``ADMIN_Ward``
+        plus an optional ``CRS_BOUNDARY_CODE`` column.
+
+        After processing, level column values are replaced with generated
+        codes so that ``process_boundary_data`` can consume them directly.
+        The original name-to-code mappings are stored in
+        ``self._boundary_localizations`` for later upload.
+
+        Returns True if any cells were modified.
+        """
+        import pandas as pd
+
+        # If there's no CRS_BOUNDARY_CODE column, create one
+        if not crs_code_col:
+            crs_code_col = 'CRS_BOUNDARY_CODE'
+            df[crs_code_col] = pd.NA
+
+        # Seed from pre-filled codes
+        for val in df[crs_code_col].dropna():
+            v = str(val).strip()
+            if v:
+                seen_codes.add(v)
+
+        # Sort level columns by their position in the hierarchy (left to right in Excel)
+        # They're typically ordered already, but let's sort by column index
+        level_cols_sorted = sorted(level_cols, key=lambda c: list(df.columns).index(c))
+
+        # Cache: (col_index, tuple_of_ancestor_names) -> generated code
+        # Ensures the same boundary name at the same position always gets the
+        # same code across rows.
+        path_tuple_to_code: Dict[tuple, str] = {}
+
+        modified = False
+        generated_count = 0
+
+        for idx in df.index:
+            existing_code = df.at[idx, crs_code_col]
+            if pd.notna(existing_code) and str(existing_code).strip():
+                continue  # already has a code
+
+            # Build hierarchy path from level columns
+            path = []
+            for col in level_cols_sorted:
+                val = df.at[idx, col]
+                if pd.notna(val) and str(val).strip():
+                    path.append(str(val).strip())
+
+            if not path:
+                continue
+
+            # Generate codes for EVERY level in the path so we can replace
+            # level column values with codes (needed by process_boundary_data)
+            for i in range(len(path)):
+                sub_path = tuple(path[:i + 1])
+                if sub_path in path_tuple_to_code:
+                    continue  # already generated
+
+                code = _generate_boundary_code(tenant, list(sub_path), seen_codes)
+
+                # Fuzzy match against existing boundaries
+                match = _fuzzy_match_existing(code, existing_normalized)
+                if match:
+                    norm_new = _normalize_for_matching(code)
+                    norm_existing = _normalize_for_matching(match)
+                    if norm_new == norm_existing:
+                        print(f"   ⚠️  Reusing existing boundary '{match}' for '{' → '.join(sub_path)}'")
+                    else:
+                        ratio = difflib.SequenceMatcher(
+                            None, norm_new, norm_existing
+                        ).ratio()
+                        print(
+                            f"   ⚠️  Possible duplicate: '{' → '.join(sub_path)}' is "
+                            f"{ratio:.0%} similar to existing '{match}' — reusing"
+                        )
+                    code = match
+                    seen_codes.add(code)
+
+                path_tuple_to_code[sub_path] = code
+
+            # The deepest level code goes into CRS_BOUNDARY_CODE
+            deepest_code = path_tuple_to_code[tuple(path)]
+            df.at[idx, crs_code_col] = deepest_code
+
+            # Replace each level column value with its generated code
+            for i, col in enumerate(level_cols_sorted):
+                if i < len(path):
+                    sub_path = tuple(path[:i + 1])
+                    df.at[idx, col] = path_tuple_to_code[sub_path]
+
+            modified = True
+            generated_count += 1
+            print(f"   🏷️  {' → '.join(path)} → {deepest_code}")
+
+        # Build localization entries: map each generated code back to the
+        # human-readable boundary name so the UI can display names.
+        boundary_localizations = []
+        seen_loc_codes: Set[str] = set()
+        for path_tuple, code in path_tuple_to_code.items():
+            if code in seen_loc_codes:
+                continue
+            seen_loc_codes.add(code)
+            name = path_tuple[-1]  # The leaf name in this sub-path
+            boundary_localizations.append({
+                'code': code,
+                'message': name,
+                'module': 'rainmaker-boundary',
+                'locale': 'en_IN'
+            })
+
+        # Store for later upload by load_boundaries()
+        self._boundary_localizations = boundary_localizations
+
+        if modified:
+            print(f"   ✅ Auto-generated {generated_count} boundary code(s) (column-per-level format)")
+            print(f"   📝 Prepared {len(boundary_localizations)} localization entries")
+
+        return modified
+
     def load_boundaries(self, excel_path: str, target_tenant: str = None,
                        hierarchy_type: str = "ADMIN") -> Dict:
         """Phase 2: Load boundary hierarchy from Excel
@@ -1432,10 +2097,16 @@ class CRSLoader:
 
         tenant = target_tenant or self.tenant_id
 
-        # 1. Upload Excel to FileStore
-        print(f"\n[1/2] Uploading boundary file...")
+        # Pre-process: auto-generate missing boundary codes
+        print(f"\n[1/4] Checking boundary codes...")
+        upload_path = self._autogenerate_boundary_codes(excel_path, tenant, hierarchy_type)
+        if upload_path != excel_path:
+            print(f"   📝 Using modified file with auto-generated codes")
+
+        # 2. Upload Excel to FileStore
+        print(f"\n[2/4] Uploading boundary file...")
         filestore_id = self.uploader.upload_file_to_filestore(
-            file_path=excel_path,
+            file_path=upload_path,
             tenant_id=tenant,
             module="HCM-ADMIN-CONSOLE"
         )
@@ -1446,15 +2117,29 @@ class CRSLoader:
 
         print(f"   FileStore ID: {filestore_id}")
 
-        # 2. Process boundaries
-        print(f"\n[2/2] Processing boundary data...")
+        # 3. Process boundaries
+        print(f"\n[3/4] Processing boundary data...")
         result = self.uploader.process_boundary_data(
             tenant_id=tenant,
             filestore_id=filestore_id,
             hierarchy_type=hierarchy_type,
             action="create",
-            excel_file=excel_path
+            excel_file=upload_path
         )
+
+        # Clean up temp file if we created one
+        if upload_path != excel_path:
+            try:
+                os.unlink(upload_path)
+            except OSError:
+                pass
+
+        # Upload boundary name localizations (code → human-readable name)
+        boundary_locs = getattr(self, '_boundary_localizations', [])
+        if boundary_locs:
+            print(f"\n[4/4] Uploading boundary localizations ({len(boundary_locs)} entries)...")
+            self.uploader.create_localization_messages(boundary_locs, tenant)
+            result['localizations_created'] = len(boundary_locs)
 
         status = result.get('status', 'unknown')
         print(f"\n   Status: {status}")

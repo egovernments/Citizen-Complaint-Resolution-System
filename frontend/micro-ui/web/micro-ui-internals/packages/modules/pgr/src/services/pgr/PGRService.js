@@ -11,6 +11,15 @@ const PGRService = {
       userService: true,
       params: { tenantId, ...filters, ...searchParams },
     }),
+  count: (tenantId, filters) =>
+    Request({
+      url: Urls.pgr.count,
+      useCache: false,
+      method: "POST",
+      auth: true,
+      userService: true,
+      params: { tenantId, ...filters },
+    }),
   create: (data, tenantId) =>
     Request({
       data: data,

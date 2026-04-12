@@ -7,6 +7,9 @@ import usePGRSearch from "./pgr/usePGRSearch";
 import usePGRUpdate from "./pgr/usePGRUpdate";
 import useServiceDefs from "./pgr/useServiceDefs";
 import useMobileValidation from "./pgr/useMobileValidation";
+import useInboxData from "./pgr/useInboxData";
+import useComplaintStatus from "./pgr/useComplaintStatus";
+import useComplaintStatusCount from "./pgr/useComplaintStatusCount";
 
 const pgr = {
   useProjectSearch,
@@ -17,10 +20,10 @@ const pgr = {
   usePGRUpdate,
   useServiceDefs,
   useMobileValidation,
+  useInboxData,
+  useComplaintStatus,
+  useComplaintStatusCount,
 };
-
-
-
 
 const Hooks = {
   pgr,
@@ -39,4 +42,3 @@ export const CustomisedHooks = {
   Hooks,
   Utils,
 };
-

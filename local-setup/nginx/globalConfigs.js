@@ -1,5 +1,6 @@
 var globalConfigs = (function () {
-  var stateTenantId = "pg";
+  var bootstrapTenantId = "pg";   // System seed tenant — used for pre-login bootstrap
+  var stateTenantId = "pg";       // Must match bootstrap for login to work
   var contextPath = "digit-ui";
   var gmaps_api_key = "";
   var finEnv = "dev";
@@ -14,6 +15,7 @@ var globalConfigs = (function () {
   var mdmsContext = "mdms-v2";
   var hrmsContext = "egov-hrms";
   var invalidEmployeeRoles = ["SYSTEM"];
+  var multiRootTenant = true;
 
   // Runtime locale fallback for local setup: force default language unless user explicitly changes it.
   try {
@@ -82,6 +84,10 @@ var globalConfigs = (function () {
       return hrmsContext;
     } else if (key === "INVALIDROLES") {
       return invalidEmployeeRoles;
+    } else if (key === "MULTI_ROOT_TENANT") {
+      return multiRootTenant;
+    } else if (key === "BOOTSTRAP_TENANT_ID") {
+      return bootstrapTenantId;
     }
   };
 

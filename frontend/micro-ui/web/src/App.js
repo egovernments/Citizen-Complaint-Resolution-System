@@ -56,8 +56,10 @@ const initDigitUI = () => {
 function App() {
   window.contextPath = window?.globalConfigs?.getConfig("CONTEXT_PATH");
   const stateCode =
+    window.globalConfigs?.getConfig("BOOTSTRAP_TENANT_ID") ||
     window.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID") ||
-    process.env.REACT_APP_STATE_LEVEL_TENANT_ID;
+    process.env.REACT_APP_STATE_LEVEL_TENANT_ID ||
+    "pg";
   if (!stateCode) {
     return <h1>stateCode is not defined</h1>;
   }

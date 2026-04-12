@@ -53,7 +53,8 @@ if (!user || !user.access_token || !user.info) {
 
   const citizenToken = getFromStorage("Citizen.token")
   const citizenInfo = getFromStorage("Citizen.user-info")
-  const stateCode = window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID");
+  const stateCode = window?.globalConfigs?.getConfig("BOOTSTRAP_TENANT_ID")
+    || window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID");
   const citizenTenantId = getFromStorage("Citizen.tenant-id") || getFromInfo(citizenInfo) || stateCode;
 
   const employeeToken = getFromStorage("Employee.token")
@@ -79,7 +80,8 @@ if (!user || !user.access_token || !user.info) {
 
 // Always normalize locale and tenant fallback, even when User exists in SessionStorage.
 normalizeLocale();
-const stateCode = window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID");
+const stateCode = window?.globalConfigs?.getConfig("BOOTSTRAP_TENANT_ID")
+  || window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID");
 const sessionEmployeeTenant = window.Digit.SessionStorage.get("Employee.tenantId");
 const sessionCitizenTenant = window.Digit.SessionStorage.get("Citizen.tenantId");
 if (!sessionEmployeeTenant) {

@@ -195,7 +195,9 @@ export const formPayloadToCreateComplaint = (formData, tenantId, user) => {
         "street": formData?.AddressTwo,
         "pincode": formData?.postalCode,
         "locality": {
-          "code": formData?.SelectLocality?.code || (Array.isArray(formData?.boundaryComponent) ? formData?.boundaryComponent[formData?.boundaryComponent.length - 1] : null),
+          "code": formData?.SelectLocality?.code
+            || formData?.boundaryComponent?.code
+            || (Array.isArray(formData?.boundaryComponent) ? formData?.boundaryComponent[formData?.boundaryComponent.length - 1] : null),
         },
         "geoLocation": {}
       },

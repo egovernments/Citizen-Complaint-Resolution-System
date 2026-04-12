@@ -14,6 +14,7 @@ export const config = {
     encryption: 11234,
     location: 18084,
     boundary: 18081,
+    hrms: 18092,
     kong: 18000,
   },
 
