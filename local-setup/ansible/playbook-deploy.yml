@@ -1,0 +1,381 @@
+---
+- name: Deploy DIGIT stack from public registry
+  hosts: targets
+  become: true
+  vars:
+    digit_dir: /opt/digit
+
+  tasks:
+    # ==================== Docker Installation ====================
+    - name: Install Docker prerequisites
+      apt:
+        name: [ca-certificates, curl, gnupg]
+        state: present
+        update_cache: yes
+
+    - name: Add Docker GPG key
+      shell: |
+        install -m 0755 -d /etc/apt/keyrings
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+        chmod a+r /etc/apt/keyrings/docker.asc
+      args:
+        creates: /etc/apt/keyrings/docker.asc
+
+    - name: Add Docker repository
+      shell: |
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
+      args:
+        creates: /etc/apt/sources.list.d/docker.list
+
+    - name: Install Docker Engine
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+        update_cache: yes
+
+    # ==================== Docker Configuration ====================
+    - name: Verify Docker Compose version >= 2.20
+      shell: docker compose version --short
+      register: compose_version
+      changed_when: false
+
+    - name: Fail if Docker Compose too old
+      fail:
+        msg: "Docker Compose {{ compose_version.stdout }} is too old. Need >= 2.20"
+      when: compose_version.stdout is version('2.20', '<')
+
+    # ==================== Deploy Directory ====================
+    - name: Create DIGIT directory
+      file:
+        path: "{{ digit_dir }}"
+        state: directory
+
+    # ==================== Compose File ====================
+    - name: Copy registry-prefixed Docker Compose file
+      copy:
+        src: ../docker-compose.registry.yml
+        dest: "{{ digit_dir }}/docker-compose.registry.yml"
+
+    # ==================== Config Directories ====================
+    - name: Synchronize config directories
+      synchronize:
+        src: "../{{ item }}/"
+        dest: "{{ digit_dir }}/{{ item }}/"
+      loop:
+        - kong
+        - otel
+        - keycloak
+        - configs
+        - nginx
+        - db
+        - seeds
+        - gatus
+        - jupyter
+
+    # docker/ contains build contexts (db-migrations, pgr-services)
+    # Even though we use pre-built images, compose may validate volume mount paths
+    - name: Synchronize docker build context dirs
+      synchronize:
+        src: "../docker/"
+        dest: "{{ digit_dir }}/docker/"
+
+    # ==================== Download OTEL Agent ====================
+    - name: Download OpenTelemetry Java Agent on target
+      shell: bash {{ digit_dir }}/otel/download-agent.sh
+      args:
+        creates: "{{ digit_dir }}/otel/opentelemetry-javaagent.jar"
+
+    # ==================== Configure digit-ui for native auth ====================
+    - name: Switch digit-ui authProvider from keycloak to digit
+      replace:
+        path: "{{ digit_dir }}/nginx/globalConfigs.js"
+        regexp: 'var authProvider = "keycloak"'
+        replace: 'var authProvider = "digit"'
+
+    - name: Add API proxy to digit-ui nginx config
+      copy:
+        content: |
+          resolver 127.0.0.11 valid=10s;
+
+          server
+          {
+            listen 80;
+            underscores_in_headers on;
+
+            sub_filter_once on;
+            sub_filter_types text/html;
+
+            location /digit-ui
+            {
+              root /var/web;
+              index index.html index.htm;
+              try_files $uri $uri/ /digit-ui/index.html;
+
+              sub_filter '</head>' '<script src="/digit-ui/globalConfigs.js"></script></head>';
+            }
+
+            location = /digit-ui/globalConfigs.js {
+              alias /var/web/digit-ui/globalConfigs.js;
+              default_type application/javascript;
+            }
+
+            location = /digit-ui/silent-check-sso.html {
+              alias /var/web/digit-ui/silent-check-sso.html;
+              default_type text/html;
+            }
+
+            # Proxy API calls to Kong gateway
+            location / {
+              set $kong http://kong-gateway:8000;
+              proxy_pass $kong;
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $scheme;
+              proxy_read_timeout 120s;
+              proxy_buffering off;
+            }
+          }
+        dest: "{{ digit_dir }}/nginx/digit-ui.conf"
+
+    # ==================== Pull & Start ====================
+    - name: Pull all images from public registry
+      shell: docker compose -f docker-compose.registry.yml pull --ignore-pull-failures
+      args:
+        chdir: "{{ digit_dir }}"
+
+    - name: Start DIGIT stack
+      shell: docker compose -f docker-compose.registry.yml up -d
+      args:
+        chdir: "{{ digit_dir }}"
+
+    # ==================== Health Check ====================
+    - name: Wait for Kong health (up to 10 min)
+      uri:
+        url: "http://127.0.0.1:18000/user/health"
+        status_code: 200
+      register: health
+      retries: 60
+      delay: 10
+      until: health.status == 200
+
+    # ==================== Wait for Persister (Kafka consumer) ====================
+    - name: Wait for egov-persister to be healthy
+      shell: docker inspect --format '{{ "{{" }}.State.Health.Status{{ "}}" }}' egov-persister
+      register: persister_health
+      retries: 30
+      delay: 10
+      until: persister_health.stdout == 'healthy'
+      changed_when: false
+
+    - name: Wait for egov-hrms to be healthy (JVM startup ~3 min)
+      shell: docker inspect --format '{{ "{{" }}.State.Health.Status{{ "}}" }}' egov-hrms
+      register: hrms_health
+      retries: 30
+      delay: 10
+      until: hrms_health.stdout == 'healthy'
+      changed_when: false
+
+    - name: Verify digit-ui container is running
+      shell: curl -sf http://127.0.0.1:18080/digit-ui/ -o /dev/null
+      register: ui_early_check
+      retries: 30
+      delay: 10
+      until: ui_early_check.rc == 0
+      changed_when: false
+      ignore_errors: yes
+
+    # ==================================================================
+    # CI TESTS — Stage A: XLSX-Driven DataLoader E2E
+    # ==================================================================
+    - name: Install Python3 and pip
+      apt:
+        name: [python3, python3-pip]
+        state: present
+
+    - name: Install Python dependencies for DataLoader
+      pip:
+        name: [requests, openpyxl, pandas, python-dotenv]
+        extra_args: --break-system-packages
+
+    - name: Create CI tests directory structure
+      file:
+        path: "{{ digit_dir }}/ci-tests/{{ item }}"
+        state: directory
+      loop:
+        - scripts
+        - jupyter/dataloader/templates/localisations
+        - data
+
+    - name: Copy XLSX-driven CI DataLoader script
+      copy:
+        src: ../scripts/ci-dataloader-xlsx.py
+        dest: "{{ digit_dir }}/ci-tests/scripts/ci-dataloader-xlsx.py"
+        mode: "0755"
+
+    - name: Copy crossroot bootstrap script (fallback)
+      copy:
+        src: ../scripts/ci-dataloader-crossroot.py
+        dest: "{{ digit_dir }}/ci-tests/scripts/ci-dataloader-crossroot.py"
+        mode: "0755"
+
+    - name: Copy DataLoader regression test script
+      copy:
+        src: ../scripts/ci-dataloader-v2-regression.py
+        dest: "{{ digit_dir }}/ci-tests/scripts/ci-dataloader-v2-regression.py"
+        mode: "0755"
+
+    - name: Synchronize DataLoader library
+      synchronize:
+        src: "../jupyter/dataloader/"
+        dest: "{{ digit_dir }}/ci-tests/jupyter/dataloader/"
+
+    - name: Copy county input XLSX (Bomet)
+      copy:
+        src: "{{ county_xlsx | default('../data/Bomet county health common complains items - R.xlsx') }}"
+        dest: "{{ digit_dir }}/ci-tests/data/county-data.xlsx"
+
+    # CI TESTS — Stage A1: XLSX-driven Bomet County E2E
+    - name: Run XLSX-driven DataLoader (Bomet County E2E)
+      shell: |
+        cd {{ digit_dir }}/ci-tests/scripts
+        DIGIT_URL=http://127.0.0.1:18000 \
+        DIGIT_USERNAME=ADMIN \
+        DIGIT_PASSWORD=eGov@123 \
+        ROOT_TENANT=pg \
+        BOOT_TENANT={{ boot_tenant | default('ke.bomet') }} \
+        INPUT_XLSX={{ digit_dir }}/ci-tests/data/county-data.xlsx \
+        python3 ci-dataloader-xlsx.py
+      register: xlsx_dataloader_result
+      timeout: 600
+      ignore_errors: yes
+
+    - name: Show XLSX DataLoader results
+      debug:
+        var: xlsx_dataloader_result.stdout_lines | default(['(no output)'])
+
+    # CI TESTS — Stage A2: DataLoader v2 regression tests (pg tenant)
+    - name: Run DataLoader v2 regression tests
+      shell: |
+        cd {{ digit_dir }}/ci-tests/scripts
+        DIGIT_URL=http://127.0.0.1:18000 \
+        DIGIT_USERNAME=ADMIN \
+        DIGIT_PASSWORD=eGov@123 \
+        ROOT_TENANT=pg \
+        python3 ci-dataloader-v2-regression.py
+      args:
+        chdir: "{{ digit_dir }}/ci-tests/scripts"
+      register: dataloader_result
+      timeout: 900
+      ignore_errors: yes
+
+    - name: Show DataLoader regression test results
+      debug:
+        var: dataloader_result.stdout_lines | default(['(no output - possibly timed out)'])
+
+    # ==================================================================
+    # CI TESTS — Stage B: Playwright E2E Tests
+    # ==================================================================
+    - name: Install Node.js 20 LTS
+      shell: |
+        if ! node --version 2>/dev/null | grep -qE "^v2[02]"; then
+          curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+          apt-get install -y nodejs
+        fi
+      register: nodejs_install
+      changed_when: "'nodejs is already' not in nodejs_install.stdout"
+
+    - name: Create E2E tests directory
+      file:
+        path: "{{ digit_dir }}/e2e-tests"
+        state: directory
+
+    - name: Copy Playwright package.json
+      copy:
+        src: ../tests/package.json
+        dest: "{{ digit_dir }}/e2e-tests/package.json"
+
+    - name: Synchronize E2E test suite
+      synchronize:
+        src: "../tests/e2e/"
+        dest: "{{ digit_dir }}/e2e-tests/e2e/"
+
+    - name: Copy tsconfig.json for tests
+      copy:
+        src: ../tests/tsconfig.json
+        dest: "{{ digit_dir }}/e2e-tests/tsconfig.json"
+
+    - name: Install npm dependencies
+      shell: npm install
+      args:
+        chdir: "{{ digit_dir }}/e2e-tests"
+
+    - name: Install Playwright Chromium with system dependencies
+      shell: npx playwright install --with-deps chromium
+      args:
+        chdir: "{{ digit_dir }}/e2e-tests"
+      timeout: 300
+
+    - name: Wait for DIGIT UI to serve pages (up to 10 min)
+      shell: curl -sf http://127.0.0.1:18080/digit-ui/ -o /dev/null
+      register: ui_health
+      retries: 60
+      delay: 10
+      until: ui_health.rc == 0
+      changed_when: false
+
+    - name: Run Playwright E2E tests (Bomet tenant)
+      shell: |
+        cd {{ digit_dir }}/e2e-tests
+        BASE_URL=http://127.0.0.1:18080 \
+        DIGIT_TENANT={{ boot_tenant | default('ke.bomet') }} \
+        DIGIT_USERNAME=BOMET_ADMIN \
+        DIGIT_PASSWORD=eGov@123 \
+        DIGIT_EMPLOYEE_USER=BOMET_ADMIN \
+        DIGIT_EMPLOYEE_PASSWORD=eGov@123 \
+        CI=1 \
+        npx playwright test --config=e2e/playwright.config.ts \
+          --timeout=60000 \
+          employee-login \
+          employee-logout \
+          console-errors \
+          pgr-flow \
+          citizen-pgr-complaint-api
+      args:
+        chdir: "{{ digit_dir }}/e2e-tests"
+      register: playwright_result
+      timeout: 900
+      ignore_errors: yes
+
+    - name: Show Playwright test results
+      debug:
+        var: playwright_result.stdout_lines | default(['(no output - possibly timed out)'])
+
+    # ==================================================================
+    # CI Results Summary
+    # ==================================================================
+    - name: CI test results summary
+      vars:
+        xlsx_rc: "{{ xlsx_dataloader_result.rc | default(-1) }}"
+        dl_rc: "{{ dataloader_result.rc | default(-1) }}"
+        pw_rc: "{{ playwright_result.rc | default(-1) }}"
+      debug:
+        msg:
+          - "===== CI TEST RESULTS ====="
+          - "XLSX DataLoader (Bomet): {{ 'PASS' if xlsx_rc|int == 0 else 'FAIL (exit ' + xlsx_rc|string + ')' }}"
+          - "DataLoader regression:   {{ 'PASS' if dl_rc|int == 0 else 'FAIL (exit ' + dl_rc|string + ')' }}"
+          - "Playwright E2E:          {{ 'PASS' if pw_rc|int == 0 else 'FAIL (exit ' + pw_rc|string + ')' }}"
+          - "==========================="
+
+    - name: Fail if critical CI tests failed
+      vars:
+        xlsx_rc: "{{ xlsx_dataloader_result.rc | default(-1) }}"
+        pw_rc: "{{ playwright_result.rc | default(-1) }}"
+      fail:
+        msg: "CI tests failed. XLSX DataLoader={{ xlsx_rc }}, Playwright={{ pw_rc }}"
+      when: xlsx_rc|int != 0 or pw_rc|int != 0
