@@ -439,7 +439,6 @@ class UnifiedExcelReader:
                     'serviceCode': service_code,
                     'name': sub_type_name,
                     'menuPath': menu_path_value,
-                    'menuPathName': menu_path_value,
                     'active': True
                 }
 
@@ -2604,6 +2603,27 @@ class APIUploader:
                     print(f"      Hierarchy types: {hierarchy_set}")
                     print(f"      Will attempt to map types")
 
+                # Pre-check: fetch existing boundary codes so we skip duplicates
+                existing_codes = set()
+                try:
+                    search_resp = self._request_with_retry(
+                        f"{self.boundary_url}/boundary-relationships/_search",
+                        json={"RequestInfo": {"apiId": "Rainmaker", "authToken": self.auth_token, "userInfo": self.user_info}},
+                        params={"tenantId": tenant_id, "hierarchyType": hierarchy_type, "includeChildren": "true"},
+                        headers={"Content-Type": "application/json"}
+                    )
+                    if search_resp.status_code in [200, 201]:
+                        def _collect_codes(nodes):
+                            for n in nodes:
+                                existing_codes.add(n.get("code", ""))
+                                _collect_codes(n.get("children", []))
+                        for tb in search_resp.json().get("TenantBoundary", []):
+                            _collect_codes(tb.get("boundary", []))
+                except Exception:
+                    pass  # If search fails, proceed without dedup — create API will catch duplicates
+                if existing_codes:
+                    print(f"   Found {len(existing_codes)} existing boundary codes — will skip duplicates")
+
                 # Process each row
                 for idx, row in df.iterrows():
                     code = str(row.get('code', '')).strip()
@@ -2611,6 +2631,10 @@ class APIUploader:
                     parent_code = str(row.get('parentCode', '')).strip() if pd.notna(row.get('parentCode')) else None
 
                     if not code or not boundary_type:
+                        continue
+
+                    if code in existing_codes:
+                        print(f"   ⏭️  Skipping {code} [{boundary_type}] — already exists")
                         continue
 
                     # Apply type mapping if needed
@@ -2646,6 +2670,10 @@ class APIUploader:
                             continue
 
                         boundary_code = str(boundary_code).strip()
+                        if boundary_code in existing_codes:
+                            print(f"   ⏭️  Skipping {boundary_code} [{boundary_type}] — already exists")
+                            continue
+
                         success = self._create_boundary_entity(tenant_id, boundary_code)
                         if success:
                             results['boundaries_created'] += 1
