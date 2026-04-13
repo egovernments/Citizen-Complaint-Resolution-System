@@ -69,7 +69,6 @@
       loop:
         - kong
         - otel
-        - keycloak
         - configs
         - nginx
         - db
@@ -90,13 +89,7 @@
       args:
         creates: "{{ digit_dir }}/otel/opentelemetry-javaagent.jar"
 
-    # ==================== Configure digit-ui for native auth ====================
-    - name: Switch digit-ui authProvider from keycloak to digit
-      replace:
-        path: "{{ digit_dir }}/nginx/globalConfigs.js"
-        regexp: 'var authProvider = "keycloak"'
-        replace: 'var authProvider = "digit"'
-
+    # ==================== Configure digit-ui nginx ====================
     - name: Add API proxy to digit-ui nginx config
       copy:
         content: |
@@ -122,11 +115,6 @@
             location = /digit-ui/globalConfigs.js {
               alias /var/web/digit-ui/globalConfigs.js;
               default_type application/javascript;
-            }
-
-            location = /digit-ui/silent-check-sso.html {
-              alias /var/web/digit-ui/silent-check-sso.html;
-              default_type text/html;
             }
 
             # Proxy API calls to Kong gateway

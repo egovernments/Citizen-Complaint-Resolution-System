@@ -441,25 +441,3 @@ services:
     paths:
     - /tempo
     strip_path: true
-# Keycloak identity provider (login, registration, admin console)
-- name: keycloak-service
-  url: http://keycloak:8180
-  tags:
-  - identity
-  - keycloak
-  routes:
-  - name: keycloak-route
-    paths:
-    - /auth
-    strip_path: false
-# Token exchange — Keycloak JWT-protected DIGIT API access
-- name: token-exchange-service
-  url: http://token-exchange-svc:3000
-  tags:
-  - identity
-  - keycloak
-  routes:
-  - name: keycloak-api-route
-    paths:
-    - /kc
-    strip_path: true

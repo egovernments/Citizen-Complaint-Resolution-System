@@ -305,14 +305,11 @@ local-setup/
 │   ├── mdms-proxy.conf             # MDMS backward-compat proxy
 │   ├── user-proxy.conf             # User service load balancer
 │   ├── workflow-proxy.conf         # Workflow service load balancer
-│   └── silent-check-sso.html       # Keycloak SSO check page
 ├── otel/
 │   ├── download-agent.sh           # Downloads OTEL Java Agent (~21MB)
 │   ├── otel-collector-config.yaml  # Collector → Tempo pipeline
 │   ├── tempo-config.yaml           # Trace storage config
 │   └── grafana/provisioning/       # Grafana datasource for Tempo
-├── keycloak/
-│   └── realm-export.json           # SSO realm configuration
 ├── seeds/
 │   └── user-seed.sh                # Creates ADMIN + GRO users via API
 ├── data/
@@ -659,15 +656,12 @@ local-setup/
 │   ├── globalConfigs.js            # Runtime UI config (auth provider, API endpoints)
 │   ├── mdms-proxy.conf             # MDMS v1→v2 backward-compat proxy
 │   ├── user-proxy.conf             # User service load balancer (scaled instances)
-│   ├── workflow-proxy.conf         # Workflow service load balancer
-│   └── silent-check-sso.html       # Keycloak silent SSO check page
+│   └── workflow-proxy.conf         # Workflow service load balancer
 ├── otel/
 │   ├── download-agent.sh           # Downloads OpenTelemetry Java Agent (~21MB)
 │   ├── otel-collector-config.yaml  # OTLP receiver → Tempo exporter pipeline
 │   ├── tempo-config.yaml           # Trace storage (local backend, 24h retention)
 │   └── grafana/provisioning/       # Grafana Tempo datasource auto-provisioning
-├── keycloak/
-│   └── realm-export.json           # Keycloak realm (digit-sandbox, PKCE client)
 ├── seeds/
 │   └── user-seed.sh                # Creates ADMIN, GRO, INTERNAL_USER via API
 ├── data/
