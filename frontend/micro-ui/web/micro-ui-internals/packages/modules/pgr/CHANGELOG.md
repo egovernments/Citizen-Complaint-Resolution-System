@@ -1,6 +1,14 @@
 # Changelog
 All notable changes to this module will be documented in this file.
 
+## [1.0.24] - 2026-04-13
+
+### Updated
+
+- **Core Package Version**:
+  - Updated core package alignment to `@egovernments/digit-ui-module-core@1.9.21-cms`.
+  - Includes the citizen login preferred-language update where local language changes are persisted only when the user explicitly changes locale.
+
 ## [1.0.23] - 2026-04-08
 
 ### Added / Fixed
