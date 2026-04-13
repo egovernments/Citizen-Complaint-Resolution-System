@@ -140,7 +140,7 @@ const Filter = (props) => {
 
   function clearAll() {
     let pgrReset = { serviceCode: [], locality: [], applicationStatus: [] };
-    let wfRest = { assigned: [{ code: [] }] };
+    let wfRest = { assignee: [] };
     setPgrFilters(pgrReset);
     setWfFilters(wfRest);
     pgrQuery = {};

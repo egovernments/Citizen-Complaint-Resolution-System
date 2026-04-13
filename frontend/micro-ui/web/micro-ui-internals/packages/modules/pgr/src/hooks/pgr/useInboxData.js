@@ -11,7 +11,6 @@ const useInboxData = (searchParams) => {
     let appFilters = { ...commonFilters, ...searchParams.filters.pgrQuery, ...searchParams.search, limit, offset };
     let wfFilters = { ...commonFilters, ...searchParams.filters.wfQuery };
     let complaintDetailsResponse = null;
-    let combinedRes = [];
     complaintDetailsResponse = await Digit.PGRService.search(tenantId, appFilters);
     complaintDetailsResponse.ServiceWrappers.forEach((service) => serviceIds.push(service.service.serviceRequestId));
 
@@ -20,13 +19,35 @@ const useInboxData = (searchParams) => {
     }
 
     const serviceIdParams = serviceIds.join();
-    const workflowInstances = await Digit.WorkflowService.getByBusinessId(tenantId, serviceIdParams, wfFilters, false);
-    if (workflowInstances?.ProcessInstances?.length) {
-      combinedRes = combineResponses(complaintDetailsResponse, workflowInstances).map((data) => ({
-        ...data,
-        sla: Math.round(data.sla / (24 * 60 * 60 * 1000)),
-      }));
+
+    // Workflow enrichment is best-effort — render rows even if workflow is unavailable
+    let workflowInstances = { ProcessInstances: [] };
+    try {
+      workflowInstances = await Digit.WorkflowService.getByBusinessId(tenantId, serviceIdParams, wfFilters, false) || { ProcessInstances: [] };
+    } catch (e) {
+      console.warn("Workflow service unavailable, showing complaints without workflow data:", e);
     }
+
+    let combinedRes = combineResponses(complaintDetailsResponse, workflowInstances).map((data) => ({
+      ...data,
+      sla: data.sla != null ? Math.round(data.sla / (24 * 60 * 60 * 1000)) : null,
+    }));
+
+    // BUG-3 fix: Client-side assignee filtering.
+    // The workflow API doesn't support assignee filtering as a query param.
+    // Filter results here based on the wfFilters.assignee value.
+    const assigneeFilter = searchParams?.filters?.wfFilters?.assignee;
+    const processInstances = workflowInstances?.ProcessInstances || [];
+    if (assigneeFilter?.length && assigneeFilter[0]?.code && processInstances.length) {
+      const assigneeUuid = assigneeFilter[0].code;
+      combinedRes = combinedRes.filter((item) => {
+        const wf = processInstances.find(
+          (pi) => pi.businessId === item.serviceRequestId
+        );
+        return wf?.assignes?.some((a) => a.uuid === assigneeUuid);
+      });
+    }
+
     return combinedRes;
   };
 
@@ -49,17 +70,13 @@ const mapWfBybusinessId = (wfs) => {
 };
 
 const combineResponses = (complaintDetailsResponse, workflowInstances) => {
-  let wfMap = mapWfBybusinessId(workflowInstances.ProcessInstances);
+  let wfMap = mapWfBybusinessId(workflowInstances?.ProcessInstances || []);
   const wrappers = complaintDetailsResponse?.ServiceWrappers || [];
-  const filtered = wrappers.filter(
-    (complaint) => complaint?.service?.serviceRequestId && wfMap?.[complaint.service.serviceRequestId]
-  );
-  const complaints = filtered.length ? filtered : wrappers;
 
-  return complaints.map((complaint) => ({
+  return wrappers.map((complaint) => ({
     serviceRequestId: complaint.service.serviceRequestId,
     complaintSubType: complaint.service.serviceCode,
-    locality: complaint.service.address.locality.code,
+    locality: complaint.service.address?.locality?.code || "",
     status: complaint.service.applicationStatus,
     taskOwner: wfMap[complaint.service.serviceRequestId]?.assignes?.[0]?.name || "-",
     sla: wfMap[complaint.service.serviceRequestId]?.businesssServiceSla,

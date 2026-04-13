@@ -14,23 +14,6 @@ const PGRSearchInbox = () => {
   const [totalRecords, setTotalRecords] = useState(0);
   const [searchParams, setSearchParams] = useState({ filters: { wfFilters: { assignee: [{ code: uuid }] } }, search: "", sort: {} });
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const applicationStatus = searchParams?.filters?.pgrfilters?.applicationStatus?.map(e => e.code).join(",");
-        const countFn = Digit.PGRService?.count;
-        if (countFn) {
-          let response = await countFn(tenantId, applicationStatus?.length > 0 ? { applicationStatus } : {});
-          if (response?.count) {
-            setTotalRecords(response.count);
-          }
-        }
-      } catch (e) {
-        console.warn("PGR count API not available", e);
-      }
-    })();
-  }, [searchParams]);
-
   const fetchNextPage = () => {
     setPageOffset((prevState) => prevState + pageSize);
   };
@@ -53,36 +36,45 @@ const PGRSearchInbox = () => {
 
   let { data: complaints, isLoading } = Digit.Hooks.pgr.useInboxData({ ...searchParams, offset: pageOffset, limit: pageSize });
 
+  // BUG-4 fix: /pgr-services/v2/request/_count does not exist.
+  // Compute total records from the search results instead.
+  // Must be declared AFTER the useInboxData hook (complaints is a let binding).
+  useEffect(() => {
+    if (complaints?.length !== undefined) {
+      setTotalRecords(complaints.length);
+    }
+  }, [complaints]);
+
   let isMobile = Digit.Utils.browser.isMobile();
 
-  if (complaints?.length !== null) {
-    if (isMobile) {
-      return (
-        <MobileInbox data={complaints} isLoading={isLoading} onFilterChange={handleFilterChange} onSearch={onSearch} searchParams={searchParams} />
-      );
-    } else {
-      return (
-        <div>
-          <Header>{t("ES_COMMON_INBOX")}</Header>
-          <DesktopInbox
-            data={complaints}
-            isLoading={isLoading}
-            onFilterChange={handleFilterChange}
-            onSearch={onSearch}
-            searchParams={searchParams}
-            onNextPage={fetchNextPage}
-            onPrevPage={fetchPrevPage}
-            onPageSizeChange={handlePageSizeChange}
-            currentPage={Math.floor(pageOffset / pageSize)}
-            totalRecords={totalRecords}
-            pageSizeLimit={pageSize}
-          />
-        </div>
-      );
-    }
-  } else {
+  if (isLoading || complaints === undefined) {
     return <Loader />;
   }
+
+  if (isMobile) {
+    return (
+      <MobileInbox data={complaints} isLoading={isLoading} onFilterChange={handleFilterChange} onSearch={onSearch} searchParams={searchParams} />
+    );
+  }
+
+  return (
+    <div>
+      <Header>{t("ES_COMMON_INBOX")}</Header>
+      <DesktopInbox
+        data={complaints}
+        isLoading={isLoading}
+        onFilterChange={handleFilterChange}
+        onSearch={onSearch}
+        searchParams={searchParams}
+        onNextPage={fetchNextPage}
+        onPrevPage={fetchPrevPage}
+        onPageSizeChange={handlePageSizeChange}
+        currentPage={Math.floor(pageOffset / pageSize)}
+        totalRecords={totalRecords}
+        pageSizeLimit={pageSize}
+      />
+    </div>
+  );
 };
 
 export default PGRSearchInbox;
