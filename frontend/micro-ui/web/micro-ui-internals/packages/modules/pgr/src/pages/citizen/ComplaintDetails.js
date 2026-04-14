@@ -40,8 +40,6 @@ const WorkflowComponent = ({ complaintDetails, id }) => {
     }
   );
 
-  console.log(`*** LOG ***`, cct);
-
   // CCSD-1766 Fix: Force revalidation on mount to ensure fresh data after rating submission.
   // If a rating was just submitted for this complaint, use a longer delay (3 s) so the
   // backend has time to commit the RATE transaction before the workflow/timeline API refetches.
@@ -61,18 +59,17 @@ const WorkflowComponent = ({ complaintDetails, id }) => {
     return () => clearTimeout(timer);
   }, []);
 
+  if (workFlowDetails.isLoading) return <Loader />;
+  if (workFlowDetails.isError || !workFlowDetails.data) return null;
+
   return (
-    !workFlowDetails.isLoading && (
-      <TimeLine
-        // isLoading={workFlowDetails.isLoading}
-        data={workFlowDetails.data}
-        serviceRequestId={id}
-        complaintWorkflow={complaintDetails.workflow}
-        rating={complaintDetails.audit.rating}
-        complaintDetails={complaintDetails}
-      // ComplainMaxIdleTime={ComplainMaxIdleTime}
-      />
-    )
+    <TimeLine
+      data={workFlowDetails.data}
+      serviceRequestId={id}
+      complaintWorkflow={complaintDetails.workflow}
+      rating={complaintDetails.audit.rating}
+      complaintDetails={complaintDetails}
+    />
   );
 };
 

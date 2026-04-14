@@ -365,19 +365,17 @@ const CreateComplaintForm = ({
 
 
   const onFormSubmit = (_data) => {
-    // Validate boundary selection — ensure all boundary levels are filled
+    // Validate boundary selection — at least one boundary level must be selected.
+    // Users can stop at any level (e.g. County without selecting Ward).
     const boundaryData = _data?.boundaryComponent;
-    const lowestLevel = hierarchyData?.lowestHierarchy;
-    const highestLevel = hierarchyData?.highestHierarchy;
-    // Count expected levels: at least 1 if any level is configured
-    const levels = [highestLevel, lowestLevel].filter(Boolean);
-    const expectedLevels = new Set(levels).size;
+    const hasBoundary = boundaryData && (
+      (typeof boundaryData === 'object' && boundaryData.code) ||
+      (Array.isArray(boundaryData) && boundaryData.length > 0)
+    );
 
-    if (expectedLevels > 0) {
-      if (!boundaryData || !Array.isArray(boundaryData) || boundaryData.length < expectedLevels) {
-        setToast({ show: true, label: t("ES_COMMON_PLEASE_SELECT_ALL_BOUNDARY_LEVELS"), type: "error" });
-        return;
-      }
+    if (!hasBoundary) {
+      setToast({ show: true, label: t("ES_COMMON_PLEASE_SELECT_ALL_BOUNDARY_LEVELS"), type: "error" });
+      return;
     }
 
     const payload = formPayloadToCreateComplaint(_data, tenantId, user?.info);

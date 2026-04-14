@@ -28,3 +28,6 @@ tmp/
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
+
+# OTEL Java Agent (21MB binary - use otel/download-agent.sh instead)
+otel/opentelemetry-javaagent.jar

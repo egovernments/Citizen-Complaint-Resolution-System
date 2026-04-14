@@ -13,9 +13,13 @@ export const complaintsLocation = {
         "fieldPairClassName": "boundary-filter-label-left-align",
         "name": "boundaryComponent",
         "levelConfig": {
-          "lowestLevel": "zone",
-          "highestLevel": "region",
-          isSingleSelect: ["zone", "region"]
+          "lowestLevel": window?.globalConfigs?.getConfig("PGR_BOUNDARY_LOWEST_LEVEL") || "Locality",
+          "highestLevel": window?.globalConfigs?.getConfig("PGR_BOUNDARY_HIGHEST_LEVEL") || "City",
+          isSingleSelect: [
+            window?.globalConfigs?.getConfig("PGR_BOUNDARY_LOWEST_LEVEL") || "Locality",
+            window?.globalConfigs?.getConfig("PGR_BOUNDARY_HIGHEST_LEVEL") || "City",
+            "Ward",
+          ]
         },
         "layoutConfig": {
           "isDropdownLayoutHorizontal": true,

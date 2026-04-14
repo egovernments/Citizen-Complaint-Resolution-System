@@ -42,7 +42,7 @@ const TimeLine = ({ isLoading, data, serviceRequestId, complaintWorkflow, rating
     zoomImage((newIndex > -1 && thumbnailsToShow?.fullImage?.[newIndex]) || imageSource);
   }
 
-  let { timeline } = data;
+  let { timeline } = data || {};
   const totalTimelineLength = useMemo(() => timeline?.length, [timeline])
 
   useEffect(() => {
