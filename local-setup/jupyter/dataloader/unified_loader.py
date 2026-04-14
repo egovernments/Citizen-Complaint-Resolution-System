@@ -439,6 +439,7 @@ class UnifiedExcelReader:
                     'serviceCode': service_code,
                     'name': sub_type_name,
                     'menuPath': menu_path_value,
+                    'menuPathName': menu_path_value,
                     'active': True
                 }
 
@@ -1088,6 +1089,13 @@ class APIUploader:
             # Track row-by-row status for Excel update
             row_statuses = []
 
+            # MDMS evaluates access using both the auth token and the tenant
+            # embedded in RequestInfo.userInfo. For cross-root bootstrap flows,
+            # keep userInfo aligned with the tenant being mutated.
+            user_info_copy = self.user_info.copy() if self.user_info else {}
+            if user_info_copy:
+                user_info_copy['tenantId'] = tenant
+
             for i, data_obj in enumerate(data_list, 1):
                 unique_id = (
                     data_obj.get('code') or
@@ -1127,7 +1135,7 @@ class APIUploader:
                     "RequestInfo": {
                         "apiId": "Rainmaker",
                         "authToken": self.auth_token,
-                        "userInfo": self.user_info,
+                        "userInfo": user_info_copy,
                         "msgId": "1695889012604|en_IN",
                         "plainAccessRequest": {}
                     },

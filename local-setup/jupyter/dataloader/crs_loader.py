@@ -22,6 +22,7 @@ from typing import Optional, Dict
 from copy import deepcopy
 import os
 import json
+import time
 import requests
 
 REQUEST_TIMEOUT = 30  # seconds - prevent indefinite hangs on unresponsive services
@@ -140,6 +141,7 @@ class CRSLoader:
 
         # Determine root tenant: "ethiopia.kenya" -> "ethiopia", "pg.citya" -> "pg"
         root_tenant = tenant_code.split(".")[0] if "." in tenant_code else tenant_code
+        session_root = self.tenant_id.split(".")[0] if "." in self.tenant_id else self.tenant_id
 
         # Check if tenant exists (search under both pg and the target root)
         existing_tenants = set()
@@ -154,16 +156,35 @@ class CRSLoader:
 
         if tenant_code.lower() in existing_tenants:
             print(f"✅ Tenant '{tenant_code}' already exists")
-            return self._ensure_stateinfo_for_tenant(tenant_code, display_name)
+            # Existing tenant records may still be incomplete when the root was
+            # created earlier without full bootstrap. Ensure root schemas/data
+            # exist before trying tenant-scoped branding or user creation.
+            if root_tenant != session_root:
+                if not self._bootstrap_tenant_root(root_tenant, source_tenant=self.tenant_id):
+                    print(f"❌ Failed to bootstrap root '{root_tenant}'")
+                    return False
+
+            stateinfo_ready = self._ensure_stateinfo_for_tenant(tenant_code, display_name)
+
+            for module in enable_modules:
+                self._enable_module_for_tenant(tenant_code, module)
+
+            if users:
+                print(f"\n👥 Ensuring {len(users)} user(s) for tenant '{tenant_code}'...")
+                for user_def in users:
+                    self._create_user_for_tenant(tenant_code, user_def)
+
+            return stateinfo_ready
 
         print(f"📝 Creating tenant '{tenant_code}'...")
 
-        # Derive display name if not provided
-        if not display_name:
-            display_name = tenant_code.replace(".", " ").title()
+        # Use the canonical tenant code as the persisted label for generated
+        # tenant records. This keeps tenant.tenants, StateInfo, and tenant
+        # localization aligned with the actual tenant identifier instead of a
+        # caller-provided friendly label.
+        tenant_label = tenant_code
 
         # Bootstrap new root if needed (e.g. "ethiopia" when creating "ethiopia.kenya")
-        session_root = self.tenant_id.split(".")[0] if "." in self.tenant_id else self.tenant_id
         if root_tenant != session_root:
             if not self._bootstrap_tenant_root(root_tenant, source_tenant=self.tenant_id):
                 print(f"❌ Failed to bootstrap root '{root_tenant}'")
@@ -173,13 +194,13 @@ class CRSLoader:
         create_url = f"{self.base_url}/mdms-v2/v2/_create/tenant.tenants"
         tenant_data = {
             "code": tenant_code,
-            "name": display_name,
+            "name": tenant_label,
             "tenantId": tenant_code,
             "type": "CITY",
             "city": {
                 "code": tenant_code.upper().replace(".", "_"),
-                "name": display_name,
-                "districtName": display_name
+                "name": tenant_label,
+                "districtName": tenant_label
             }
         }
 
@@ -203,12 +224,12 @@ class CRSLoader:
             print(f"✅ Tenant '{tenant_code}' created successfully!")
 
             # Ensure tenant has branding metadata used by UI localization bootstrap
-            if not self._ensure_stateinfo_for_tenant(tenant_code, display_name):
+            if not self._ensure_stateinfo_for_tenant(tenant_code, tenant_label):
                 print(f"❌ Failed to ensure StateInfo for '{tenant_code}'")
                 return False
 
             # Seed tenant display name localization (UI dropdown shows raw key without this)
-            self._seed_tenant_name_localization(tenant_code, display_name, root_tenant)
+            self._seed_tenant_name_localization(tenant_code, tenant_label, root_tenant)
 
             # Enable modules for the tenant
             for module in enable_modules:
@@ -344,30 +365,16 @@ class CRSLoader:
         if failed > 0:
             print(f"   ⚠️  Some schemas failed but continuing — non-critical schemas may be optional")
 
-        # Step 2: Create root self-record (required by idgen for city code resolution)
-        root_data = {
-            "code": target_root,
-            "name": target_root.title(),
-            "tenantId": target_root,
-            "description": f"State tenant root: {target_root}",
-            "city": {
-                "code": target_root.upper(),
-                "name": target_root.title(),
-                "districtCode": target_root.upper(),
-                "districtName": target_root.title()
-            }
-        }
-        result = self.uploader.create_mdms_data(
-            schema_code='tenant.tenants', data_list=[root_data], tenant=target_root
-        )
-        root_created = result.get('created', 0) + result.get('exists', 0)
-        if root_created > 0:
-            print(f"   ✅ Root tenant record created for '{target_root}'")
-        else:
-            print(f"   ❌ Could not create root tenant record (required for ID generation)")
+        # Schema create returning 200 does not always mean the runtime MDMS data
+        # APIs can use the schema immediately. Wait for the critical tenant schema
+        # to become visible before copying tenant-scoped bootstrap data.
+        if not self._wait_for_schema_ready(target_root, "tenant.tenants"):
+            print(f"   ❌ Schema 'tenant.tenants' is not yet usable on '{target_root}'")
             return False
 
-        # Step 3: Copy essential MDMS data records from source
+        # Step 2: Copy essential MDMS data records from source.
+        # Keep tenant.tenants limited to actual city tenants and skip adding a
+        # synthetic root record like "juiceee".
         essential_schemas = [
             'common-masters.IdFormat',
             'common-masters.Department',
@@ -418,19 +425,19 @@ class CRSLoader:
 
         print(f"   📦 Data: {data_copied} records copied, {data_skipped} already existed")
 
-        # Step 3b: Ensure InboxQueryConfiguration has a "pgr-services" module record
+        # Step 2b: Ensure InboxQueryConfiguration has a "pgr-services" module record
         # The source may have "RAINMAKER-PGR" but the inbox service looks up by
         # moduleName from the UI request which is "pgr-services".
         self._ensure_inbox_pgr_config(target_root)
 
-        # Step 4: Seed essential localization messages for new tenant
+        # Step 3: Seed essential localization messages for new tenant
         # Without these, the DIGIT UI shows raw i18n keys (CORE_COMMON_LOGIN, etc.)
         self._seed_essential_localizations(target_root, source_tenant)
 
-        # Step 5: Create citymodule entries so PGR/HRMS modules are enabled for the root
+        # Step 4: Create citymodule entries so PGR/HRMS modules are enabled for the root
         self._bootstrap_citymodule(target_root, source_tenant)
 
-        # Step 6: Copy workflow business service definitions
+        # Step 5: Copy workflow business service definitions
         # Note: workflow search requires tenantId as a query parameter, not in body
         wf_search_url = f"{self.base_url}/egov-workflow-v2/egov-wf/businessservice/_search"
         wf_create_url = f"{self.base_url}/egov-workflow-v2/egov-wf/businessservice/_create"
@@ -498,6 +505,91 @@ class CRSLoader:
 
         print(f"   ✅ Bootstrap complete for '{target_root}'\n")
         return True
+
+    def _wait_for_schema_ready(self, tenant: str, schema_code: str,
+                               attempts: int = 10, delay_seconds: float = 1.5) -> bool:
+        """Poll MDMS schema search until a schema is visible for runtime data APIs.
+
+        In this environment, schema creation can persist before the data-create
+        APIs are ready to resolve the new tenant's schema. Poll the schema API
+        instead of using a blind sleep so bootstrap only waits when needed.
+        """
+        schema_search_url = f"{self.base_url}/mdms-v2/schema/v1/_search"
+
+        for attempt in range(1, attempts + 1):
+            payload = {
+                "RequestInfo": {
+                    "apiId": "Rainmaker",
+                    "authToken": self.auth_token,
+                    "userInfo": self.user_info
+                },
+                "SchemaDefCriteria": {
+                    "tenantId": tenant,
+                    "codes": [schema_code],
+                    "limit": 10,
+                    "offset": 0
+                }
+            }
+
+            try:
+                resp = requests.post(
+                    schema_search_url,
+                    json=payload,
+                    headers={"Content-Type": "application/json"},
+                    timeout=REQUEST_TIMEOUT,
+                )
+                if resp.ok:
+                    definitions = resp.json().get("SchemaDefinitions", [])
+                    if any(d.get("code") == schema_code for d in definitions):
+                        if attempt > 1:
+                            print(f"   ✅ Schema '{schema_code}' became ready on attempt {attempt}/{attempts}")
+                        return True
+            except Exception:
+                pass
+
+            if attempt < attempts:
+                print(f"   ⏳ Waiting for schema '{schema_code}' on '{tenant}' ({attempt}/{attempts})")
+                time.sleep(delay_seconds)
+
+        return False
+
+    def _create_mdms_with_schema_retry(self, schema_code: str, data_list: list, tenant: str,
+                                       attempts: int = 5, delay_seconds: float = 1.5) -> dict:
+        """Retry MDMS create when the tenant schema exists but is not yet queryable.
+
+        This is intentionally narrow: only the schema-not-found case is retried.
+        Validation errors and other failures still fail fast.
+        """
+        last_result = None
+
+        for attempt in range(1, attempts + 1):
+            result = self.uploader.create_mdms_data(
+                schema_code=schema_code,
+                data_list=data_list,
+                tenant=tenant,
+            )
+            last_result = result
+
+            if result.get('created', 0) > 0 or result.get('exists', 0) > 0:
+                return result
+
+            errors = result.get('errors', [])
+            schema_not_found = any(
+                "schema definition against which data is being created is not found" in
+                str(err.get('error', '')).lower()
+                for err in errors
+            )
+
+            if not schema_not_found or attempt == attempts:
+                return result
+
+            print(
+                f"   ⏳ Schema '{schema_code}' not ready for data create on '{tenant}' "
+                f"(attempt {attempt}/{attempts}); retrying..."
+            )
+            time.sleep(delay_seconds)
+
+        return last_result or {'created': 0, 'exists': 0, 'failed': len(data_list), 'errors': []}
 
     def _seed_essential_localizations(self, target_tenant: str, source_tenant: str = "pg"):
         """Seed all en_IN localization messages for a new tenant.
@@ -711,8 +803,9 @@ class CRSLoader:
         """Create citymodule entries for a new root tenant.
 
         Copies module definitions (PGR, HRMS, etc.) from source tenant and
-        creates them under the target root with the root as the initial tenant.
-        Without citymodule entries, module UIs won't load.
+        creates them under the target root without pre-seeding the root tenant
+        into each module's tenants list. Actual city tenants are added later by
+        _enable_module_for_tenant().
         """
         # Search citymodule from source
         search_url = f"{self.base_url}/mdms-v2/v1/_search"
@@ -739,8 +832,10 @@ class CRSLoader:
         created = 0
         for module in source_modules:
             module_copy = deepcopy(module)
-            # Replace source tenants with target root
-            module_copy["tenants"] = [{"code": target_root}]
+            # Do not pre-seed the root tenant into citymodule. Keep the module
+            # definition present on the root tenant, but let actual city tenants
+            # like "juiceee.kwale" be added explicitly later.
+            module_copy["tenants"] = []
 
             create_payload = {
                 "RequestInfo": {
@@ -1402,13 +1497,14 @@ class CRSLoader:
         # 2. Load complaint types
         print(f"\n[2/2] Loading complaint types...")
         complaint_data, complaint_loc = reader.read_complaint_types(tenant, dept_name_to_code)
+        complaint_tenant = tenant.split(".")[0] if "." in tenant else tenant
 
         if complaint_data:
-            print(f"   Creating {len(complaint_data)} complaint types...")
+            print(f"   Creating {len(complaint_data)} complaint types on '{complaint_tenant}'...")
             results['complaint_types'] = self.uploader.create_mdms_data(
                 schema_code='RAINMAKER-PGR.ServiceDefs',
                 data_list=complaint_data,
-                tenant=tenant,
+                tenant=complaint_tenant,
                 sheet_name='Complaint Type',
                 excel_file=excel_path
             )
@@ -1690,12 +1786,13 @@ class CRSLoader:
         print(f"File: {os.path.basename(json_path)}")
 
         tenant = target_tenant or self.tenant_id
-        print(f"Tenant: {tenant}")
+        workflow_tenant = tenant.split(".")[0] if "." in tenant else tenant
+        print(f"Tenant: {workflow_tenant}")
         print(f"Business Service: {business_service}")
 
         # Load workflow config from JSON file
         print(f"\n[1/3] Loading workflow config from JSON...")
-        workflow_config = self._load_workflow_from_json(json_path, tenant)
+        workflow_config = self._load_workflow_from_json(json_path, workflow_tenant)
 
         if not workflow_config:
             return {'status': 'failed', 'error': 'Failed to load workflow config from JSON'}
@@ -1706,7 +1803,7 @@ class CRSLoader:
 
         # Check if workflow already exists
         print(f"\n[2/3] Checking for existing workflow...")
-        existing = self.uploader.search_workflow(tenant, business_service)
+        existing = self.uploader.search_workflow(workflow_tenant, business_service)
 
         if existing:
             print(f"   Found existing workflow: {existing.get('businessService')}")
@@ -1726,7 +1823,7 @@ class CRSLoader:
             # Copy UUIDs from existing to new config for update
             workflow_config = self._merge_workflow_uuids(existing, workflow_config)
 
-            result = self.uploader.update_workflow(tenant, workflow_config)
+            result = self.uploader.update_workflow(workflow_tenant, workflow_config)
 
             if result.get('updated'):
                 print(f"   Workflow updated successfully")
@@ -1740,7 +1837,7 @@ class CRSLoader:
             print(f"   No existing workflow found")
             print(f"\n[3/3] Creating workflow...")
 
-            result = self.uploader.create_workflow(tenant, workflow_config)
+            result = self.uploader.create_workflow(workflow_tenant, workflow_config)
 
             if result.get('created'):
                 states = len(workflow_config.get('states', []))
