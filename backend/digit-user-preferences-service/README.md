@@ -1,8 +1,19 @@
 # User Preferences Service (`digit-user-preferences-service`)
 
+Manage per-user notification preferences and consent for the DIGIT platform.
+
+## Overview
+
 A lightweight Go microservice that manages per-user notification preferences and consent for the DIGIT platform. It stores which notification channels a user has opted into, their preferred language, and the scope of their consent.
 
-## Features
+## Pre-requisites
+
+Before you proceed with the configuration, make sure the following prerequisites are met:
+
+- Go 1.23+
+- PostgreSQL 12+
+
+## Key Functionalities
 
 - **Per-channel consent** for WhatsApp, SMS, and Email (GRANTED / REVOKED)
 - **Consent scoping** — `GLOBAL` (applies everywhere) or `TENANT`-specific
@@ -11,7 +22,22 @@ A lightweight Go microservice that manages per-user notification preferences and
 - **JSONB storage** — flexible payload structure, no schema migrations needed for changes
 - **Auto-migration** — database table and indexes created automatically on startup
 
-## Data Model
+## Database Diagram
+
+```mermaid
+erDiagram
+    user_preference {
+        UUID id PK
+        VARCHAR(64) user_id "UK"
+        VARCHAR(64) tenant_id "UK"
+        VARCHAR(128) preference_code "UK"
+        JSONB payload
+        VARCHAR(64) created_by
+        VARCHAR(64) last_modified_by
+        BIGINT created_time
+        BIGINT last_modified_time
+    }
+```
 
 **Table:** `user_preference`
 
@@ -104,11 +130,6 @@ curl -X POST "http://<host>/user-preference/v1/_search" \
 3. Logs skipped notifications as `SKIPPED` in the dispatch log
 
 ## Setup
-
-### Prerequisites
-
-- Go 1.23+
-- PostgreSQL 12+
 
 ### Running Locally
 
