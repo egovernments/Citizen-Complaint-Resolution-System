@@ -1,0 +1,33 @@
+@startuml
+title PGR Outbound WhatsApp Notification Flow
+
+actor "PGR Service" as PGR
+queue "Kafka" as Kafka
+participant "digit-novu-bridge" as Bridge
+participant "Config Service" as Config
+participant "User Preferences Service" as Prefs
+participant "Novu" as Novu
+participant "WhatsApp Provider" as WA
+
+PGR -> Kafka: Publish workflow event\n(PGR_CREATED / PGR_STATUS_CHANGED)
+Kafka -> Bridge: Consume event
+
+Bridge -> Config: Fetch notification policy\n(eventType, tenantId)
+Config --> Bridge: Active policy + template bindings
+
+Bridge -> Prefs: Fetch preferences\n(userId, tenantId)
+Prefs --> Bridge: Consent + preferredLanguage
+
+Bridge -> Config: Fetch template content\n(templateCode, locale)
+Config --> Bridge: Template + variables
+
+Bridge -> Bridge: Render message text\n(policy + template + event payload)
+
+Bridge -> Novu: Trigger workflow\n(subscriberId, payload, transactionId)
+Novu -> WA: Send WhatsApp message
+WA --> Novu: Delivery status
+Novu --> Bridge: Trigger response
+
+Bridge -> Bridge: Audit/log outcome\n(configSetId, transactionId)
+
+@enduml

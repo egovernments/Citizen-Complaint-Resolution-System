@@ -14,13 +14,26 @@ Usage:
     loader.load_employees("Employee Master.xlsx")
 """
 
-from unified_loader import UnifiedExcelReader, APIUploader
+try:
+    from .unified_loader import UnifiedExcelReader, APIUploader
+except (ImportError, ModuleNotFoundError):
+    from unified_loader import UnifiedExcelReader, APIUploader
 from typing import Optional, Dict
+from copy import deepcopy
 import os
 import json
 import requests
+import time
 
 REQUEST_TIMEOUT = 30  # seconds - prevent indefinite hangs on unresponsive services
+
+try:
+    from .telemetry import send_event as _send_telemetry
+except Exception:
+    try:
+        from telemetry import send_event as _send_telemetry
+    except Exception:
+        def _send_telemetry(*a, **kw): pass
 
 # kubectl API server URL (for environments without kubectl access)
 KUBECTL_API_URL = os.environ.get('KUBECTL_API_URL', 'http://localhost:8765')
@@ -96,8 +109,13 @@ class CRSLoader:
                       enable_modules: list = None, users: list = None) -> bool:
         """Create a tenant if it doesn't exist
 
+        Automatically bootstraps new tenant roots. When creating a tenant like
+        "ethiopia.kenya", detects that "ethiopia" is a new root (not "pg") and
+        copies all required schema definitions and essential MDMS data from "pg"
+        before creating the tenant.
+
         Args:
-            tenant_code: Tenant code (e.g., "statea.chakshu", "pg.citya")
+            tenant_code: Tenant code (e.g., "pg.citya", "ethiopia.kenya")
             display_name: Display name (derived from code if not provided)
             enable_modules: List of modules to enable (default: ["PGR", "HRMS"])
             users: List of users to create for this tenant. Each user is a dict:
@@ -106,7 +124,7 @@ class CRSLoader:
                    Default roles: ["EMPLOYEE"]. Type defaults to "EMPLOYEE".
 
         Returns:
-            bool: True if tenant exists or was created successfully
+            bool: True if tenant exists/was created and StateInfo is present
 
         Example:
             loader.login(username="ADMIN", password="eGov@123", tenant_id="pg")
@@ -116,32 +134,28 @@ class CRSLoader:
             ])
         """
         self._check_auth()
+        _send_telemetry("dataloader", "create", "tenant")
 
         if enable_modules is None:
             enable_modules = ["PGR", "HRMS"]
 
-        # Check if tenant exists
-        search_url = f"{self.base_url}/mdms-v2/v1/_search"
-        search_payload = {
-            "MdmsCriteria": {
-                "tenantId": "pg",
-                "moduleDetails": [{"moduleName": "tenant", "masterDetails": [{"name": "tenants"}]}]
-            },
-            "RequestInfo": {"apiId": "Rainmaker"}
-        }
+        # Determine root tenant: "ethiopia.kenya" -> "ethiopia", "pg.citya" -> "pg"
+        root_tenant = tenant_code.split(".")[0] if "." in tenant_code else tenant_code
 
-        resp = requests.post(search_url, json=search_payload, headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
-        existing_tenants = []
-        if resp.ok:
-            try:
-                tenants = resp.json().get("MdmsRes", {}).get("tenant", {}).get("tenants", [])
-                existing_tenants = [t.get("code", "").lower() for t in tenants]
-            except:
-                pass
+        # Check if tenant exists (search under both pg and the target root)
+        existing_tenants = set()
+        for search_root in {self.tenant_id, root_tenant}:
+            records = self.uploader.search_mdms_data(
+                schema_code='tenant.tenants', tenant=search_root, limit=500
+            )
+            for r in records:
+                code = r.get('code', '')
+                if code:
+                    existing_tenants.add(code.lower())
 
         if tenant_code.lower() in existing_tenants:
             print(f"✅ Tenant '{tenant_code}' already exists")
-            return True
+            return self._ensure_stateinfo_for_tenant(tenant_code, display_name)
 
         print(f"📝 Creating tenant '{tenant_code}'...")
 
@@ -149,7 +163,29 @@ class CRSLoader:
         if not display_name:
             display_name = tenant_code.replace(".", " ").title()
 
-        # Create tenant via MDMS v2 API
+        # Check if this is a new root tenant and bootstrap it if needed
+        session_root = self.tenant_id.split(".")[0] if "." in self.tenant_id else self.tenant_id
+        if root_tenant != session_root:
+            print(f"🔧 New root tenant detected: '{root_tenant}' (different from session root '{session_root}')")
+            # Check if root tenant schemas exist by trying to search for tenant.tenants
+            root_check = self.uploader.search_mdms_data(
+                schema_code='tenant.tenants', tenant=root_tenant, limit=1
+            )
+            if root_check == []:
+                print(f"🚀 Bootstrapping new root tenant '{root_tenant}'...")
+                if not self._bootstrap_tenant_root(root_tenant, source_tenant=session_root):
+                    print(f"❌ Failed to bootstrap root tenant '{root_tenant}'")
+                    return False
+                print(f"✅ Root tenant '{root_tenant}' bootstrapped successfully")
+            elif root_check is None:
+                print(f"❌ Failed to check whether root tenant '{root_tenant}' is bootstrapped")
+                return False
+            else:
+                print(f"✅ Root tenant '{root_tenant}' already bootstrapped")
+        else:
+            print(f"✅ Using existing root tenant: '{session_root}'")
+
+        # Create tenant record under its own root
         create_url = f"{self.base_url}/mdms-v2/v2/_create/tenant.tenants"
         tenant_data = {
             "code": tenant_code,
@@ -170,7 +206,7 @@ class CRSLoader:
                 "userInfo": self.user_info
             },
             "Mdms": {
-                "tenantId": "pg",
+                "tenantId": root_tenant,  # Create tenant under its own root, not hardcoded "pg"
                 "schemaCode": "tenant.tenants",
                 "data": tenant_data,
                 "isActive": True
@@ -181,6 +217,11 @@ class CRSLoader:
 
         if resp.ok:
             print(f"✅ Tenant '{tenant_code}' created successfully!")
+
+            # Ensure tenant has branding metadata used by UI localization bootstrap
+            if not self._ensure_stateinfo_for_tenant(tenant_code, display_name):
+                print(f"❌ Failed to ensure StateInfo for '{tenant_code}'")
+                return False
 
             # Enable modules for the tenant
             for module in enable_modules:
@@ -206,98 +247,775 @@ class CRSLoader:
                 print(f"   Response: {resp.text[:200]}")
             return False
 
-    def _enable_module_for_tenant(self, tenant_code: str, module_code: str):
-        """Add tenant to citymodule for a specific module (internal)
+    def _bootstrap_tenant_root(self, target_root: str, source_tenant: str = "pg") -> bool:
+        """Bootstrap a new tenant root by copying schemas and essential data from an existing root.
 
-        Note: MDMS v2 API doesn't support updating unique fields or deleting records easily.
-        This function updates the database directly via SQL if the API approach fails.
+        When creating a tenant like "ethiopia.kenya", the "ethiopia" root needs all
+        MDMS schema definitions and essential data (departments, designations, roles,
+        ID formats, etc.) before any services can operate on it.
+
+        This mirrors the MCP server's tenant_bootstrap tool.
+
+        Args:
+            target_root: New root tenant to bootstrap (e.g., "ethiopia")
+            source_tenant: Existing root to copy from (default: "pg")
+
+        Returns:
+            bool: True if bootstrap succeeded
         """
-        # Search for existing citymodule config
-        search_url = f"{self.base_url}/mdms-v2/v1/_search"
+        print(f"\n🔧 Bootstrapping new tenant root '{target_root}' from '{source_tenant}'...")
+        
+        # Update localStorage to set the new root tenant for UI rendering
+        print(f"   📝 Setting STATE_LEVEL_TENANT_ID to '{target_root}' for UI rendering...")
+        try:
+            import os
+            # This would be used by frontend applications to detect the current root tenant
+            os.environ['STATE_LEVEL_TENANT_ID'] = target_root
+            print(f"   ✓ Environment variable STATE_LEVEL_TENANT_ID set to '{target_root}'")
+            
+            # Also update globalConfigs.js for persistent UI configuration
+            self._update_global_config_tenant(target_root)
+            
+        except Exception as e:
+            print(f"   ⚠️  Could not set environment variable: {e}")
+
+        # Step 1: Copy all schema definitions from source to target
+        schema_search_url = f"{self.base_url}/mdms-v2/schema/v1/_search"
+        schema_create_url = f"{self.base_url}/mdms-v2/schema/v1/_create"
+
         search_payload = {
-            "MdmsCriteria": {
-                "tenantId": "pg",
-                "moduleDetails": [{"moduleName": "tenant", "masterDetails": [{"name": "citymodule"}]}]
+            "RequestInfo": {
+                "apiId": "Rainmaker",
+                "authToken": self.auth_token,
+                "userInfo": self.user_info
             },
-            "RequestInfo": {"apiId": "Rainmaker"}
+            "SchemaDefCriteria": {
+                "tenantId": source_tenant,
+                "limit": 500,
+                "offset": 0
+            }
         }
 
-        resp = requests.post(search_url, json=search_payload, headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
+        resp = requests.post(schema_search_url, json=search_payload,
+                             headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
         if not resp.ok:
-            print(f"   ⚠️  Could not fetch citymodule config for {module_code}")
-            return
+            print(f"   ❌ Failed to fetch schemas from '{source_tenant}': {resp.status_code}")
+            return False
 
-        citymodules = resp.json().get("MdmsRes", {}).get("tenant", {}).get("citymodule", [])
+        schemas = resp.json().get("SchemaDefinitions", [])
+        copied = 0
+        skipped = 0
+        failed = 0
 
-        # Find the module config
-        module_config = None
-        for cm in citymodules:
-            if cm.get("code") == module_code:
-                module_config = cm
+        for schema in schemas:
+            code = schema.get("code", "")
+            create_payload = {
+                "RequestInfo": {
+                    "apiId": "Rainmaker",
+                    "authToken": self.auth_token,
+                    "userInfo": self.user_info
+                },
+                "SchemaDefinition": {
+                    "tenantId": target_root,
+                    "code": code,
+                    "description": schema.get("description", code),
+                    "definition": schema.get("definition", {})
+                }
+            }
+            try:
+                r = requests.post(schema_create_url, json=create_payload,
+                                  headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
+                if r.ok:
+                    copied += 1
+                elif any(kw in r.text.lower() for kw in ["duplicate", "already exists", "unique"]):
+                    skipped += 1
+                else:
+                    failed += 1
+            except Exception:
+                failed += 1
+
+        print(f"   📋 Schemas: {copied} copied, {skipped} already existed, {failed} failed (of {len(schemas)} total)")
+
+        if failed > 0:
+            print(f"   ⚠️  Some schemas failed but continuing — non-critical schemas may be optional")
+            
+        # Wait for schema propagation before creating data
+        if copied > 0:
+            print(f"   ⏳ Waiting 10 seconds for schema propagation...")
+            import time
+            time.sleep(10)
+
+
+
+
+      # Step 1.5: Create essential schemas that might be missing
+        essential_schemas_to_create = {
+            "common-masters.StateInfo": {
+                "type": "object",
+                "title": "State Information",
+                "$schema": "http://json-schema.org/draft-07/schema#",
+                "required": ["code", "name"],
+                "x-unique": ["code"],
+                "properties": {
+                    "code": {"type": "string"},
+                    "name": {"type": "string"},
+                    "logoId": {"type": ["string", "null"]},
+                    "bannerUrl": {"type": ["string", "null"]},
+                    "hasLocalisation": {"type": "boolean"},
+                    "defaultUrl": {"type": ["string", "null"]},
+                    "localizationModules": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "string"},
+                                "message": {"type": "string"}
+                            }
+                        }
+                    },
+                    "languages": {
+                        "type": "array", 
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "label": {"type": "string"},
+                                "value": {"type": "string"}
+                            }
+                        }
+                    }
+                }
+            },
+            "boundary-v2.BoundaryType": {
+                "type": "object",
+                "title": "Boundary Type",
+                "$schema": "http://json-schema.org/draft-07/schema#",
+                "required": ["code", "name", "hierarchyType"],
+                "x-unique": ["code"],
+                "properties": {
+                    "code": {"type": "string"},
+                    "name": {"type": "string"},
+                    "hierarchyType": {"type": "string"},
+                    "parent": {"type": ["string", "null"]},
+                    "active": {"type": "boolean"}
+                }
+            },
+            "boundary-v2.HierarchyType": {
+                "type": "object", 
+                "title": "Hierarchy Type",
+                "$schema": "http://json-schema.org/draft-07/schema#",
+                "required": ["code", "name"],
+                "x-unique": ["code"],
+                "properties": {
+                    "code": {"type": "string"},
+                    "name": {"type": "string"},
+                    "active": {"type": "boolean"}
+                }
+            },
+            "project-factory.CampaignType": {
+                "type": "object",
+                "title": "Campaign Type", 
+                "$schema": "http://json-schema.org/draft-07/schema#",
+                "required": ["code", "name"],
+                "x-unique": ["code"],
+                "properties": {
+                    "code": {"type": "string"},
+                    "name": {"type": "string"},
+                    "active": {"type": "boolean"},
+                    "description": {"type": ["string", "null"]}
+                }
+            }
+        }
+
+        
+        for schema_code, definition in essential_schemas_to_create.items():
+            create_payload = {
+                "RequestInfo": {
+                    "apiId": "Rainmaker",
+                    "authToken": self.auth_token,
+                    "userInfo": self.user_info
+                },
+                "SchemaDefinition": {
+                    "tenantId": target_root,
+                    "code": schema_code,
+                    "description": f"Essential schema: {schema_code}",
+                    "definition": definition
+                }
+            }
+            try:
+                r = requests.post(schema_create_url, json=create_payload,
+                                  headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
+                if r.ok:
+                    print(f"   ✅ Created essential schema: {schema_code}")
+                elif any(kw in r.text.lower() for kw in ["duplicate", "already exists", "unique"]):
+                    pass  # Already exists, fine
+                else:
+                    print(f"   ⚠️  Failed to create schema {schema_code}: {r.text[:100]}")
+            except Exception as e:
+                print(f"   ⚠️  Error creating schema {schema_code}: {e}")
+                
+        # Additional wait after essential schema creation
+        print(f"   ⏳ Waiting 5 more seconds after essential schema creation...")
+        import time
+        time.sleep(5)
+
+        # Step 1.6: Create essential boundary data for template generation
+        essential_boundary_data = [
+            {
+                "schema_code": "boundary-v2.HierarchyType",
+                "data": [
+                    {"code": "ADMIN", "name": "Administrative", "active": True}
+                ]
+            },
+            {
+                "schema_code": "boundary-v2.BoundaryType", 
+                "data": [
+                    {"code": "State", "name": "State", "hierarchyType": "ADMIN", "active": True},
+                    {"code": "District", "name": "District", "hierarchyType": "ADMIN", "parent": "State", "active": True},
+                    {"code": "Locality", "name": "Locality", "hierarchyType": "ADMIN", "parent": "District", "active": True}
+                ]
+            },
+            {
+                "schema_code": "project-factory.CampaignType",
+                "data": [
+                    {"code": "BOUNDARY_SETUP", "name": "Boundary Setup Campaign", "active": True, "description": "Campaign for boundary template generation"}
+                ]
+            }
+        ]
+        
+        for boundary_item in essential_boundary_data:
+            try:
+                result = self.uploader.create_mdms_data(
+                    schema_code=boundary_item["schema_code"], 
+                    data_list=boundary_item["data"], 
+                    tenant=target_root
+                )
+                created = result.get('created', 0)
+                if created > 0:
+                    print(f"   ✅ Created {created} {boundary_item['schema_code']} records")
+                else:
+                    print(f"   ⚠️  {boundary_item['schema_code']} records already exist")
+            except Exception as e:
+                print(f"   ⚠️  Error creating {boundary_item['schema_code']} data: {e}")
+
+        # Skip creating tenant.tenants in bootstrap - main create_tenant flow will create the city
+        print(f"   ✅ Skipping tenant.tenants creation (city will be created by main flow)")
+
+        # Step 3: Copy essential MDMS data records from source
+        essential_schemas = [
+            'common-masters.IdFormat',          # ID generation patterns
+            'common-masters.Department',        # Department hierarchy
+            'common-masters.Designation',       # Employee designations  
+            'common-masters.GenderType',        # Gender types
+            # StateInfo handled separately via direct DB copy in _copy_stateinfo_direct
+            'egov-hrms.EmployeeStatus',        # HR configurations
+            'egov-hrms.EmployeeType',
+            'egov-hrms.DeactivationReason',
+            'ACCESSCONTROL-ROLES.roles',       # User roles and permissions
+            'RAINMAKER-PGR.ServiceDefs',       # Complaint type definitions
+            'tenant.citymodule',               # CRITICAL: Copy citymodule configs for all modules
+            'tenant.tenants',                  # Tenant registry - schema needed for city creation
+            'DataSecurity.EncryptionPolicy',   # Data security configurations
+            'DataSecurity.DecryptionABAC',
+            'DataSecurity.MaskingPatterns',
+            'CRS-ADMIN-CONSOLE.adminSchema',   # CRS Admin Console schema for boundary management
+        ]
+
+        data_copied = 0
+        data_skipped = 0
+        for schema_code in essential_schemas:
+            records = self.uploader.search_mdms_data(
+                schema_code=schema_code, tenant=source_tenant, limit=500
+            )
+            if not records:
+                continue
+
+            # Strip internal fields before copying
+            clean_records = []
+            for r in records:
+                rec = {k: v for k, v in r.items() if not k.startswith('_')}
+                
+                # Special handling for tenant.citymodule: initialize with empty tenants for new root
+                if schema_code == 'tenant.citymodule':
+                    rec['tenants'] = []  # Start with empty tenant list for new root
+                    print(f"   🔄 Initializing empty citymodule '{rec.get('code', 'unknown')}' for root '{target_root}'")
+                
+                # Special handling for StateInfo: update code to match new root tenant
+                elif schema_code == 'common-masters.StateInfo':
+                    rec['code'] = target_root
+                    rec['name'] = target_root.title()
+                    print(f"   🔄 Updating StateInfo code to '{target_root}' (keeps localizationModules for UI)")
+                
+                clean_records.append(rec)
+
+            result = self.uploader.create_mdms_data(
+                schema_code=schema_code, data_list=clean_records, tenant=target_root
+            )
+            data_copied += result.get('created', 0)
+            data_skipped += result.get('exists', 0)
+
+        print(f"   📦 Data: {data_copied} records copied, {data_skipped} already existed")
+
+        # Step 3.5: Copy ID generation formats to new root tenant
+        print(f"   🔧 Copying ID generation formats...")
+        try:
+            idgen_copy_result = self._copy_idgen_formats(source_tenant, target_root)
+            created = idgen_copy_result.get('created', 0)
+            error = idgen_copy_result.get('error')
+            
+            if created > 0:
+                print(f"   ✅ ID formats: {created} formats copied")
+            elif error:
+                print(f"   ⚠️  ID formats: {error}")
+            else:
+                print(f"   ℹ️  ID formats: No new formats needed (may already exist)")
+        except Exception as e:
+            print(f"   ⚠️  ID formats copy failed: {str(e)[:100]}")
+
+        # Step 3.6: Create core admin user for new root tenant  
+        print(f"   👤 Creating core admin user...")
+        try:
+            admin_result = self._create_core_admin_user(target_root)
+            if admin_result:
+                print(f"   ✅ Admin user created for root '{target_root}'")
+            else:
+                print(f"   ⚠️  Admin user may already exist")
+        except Exception as e:
+            print(f"   ⚠️  Admin user creation failed: {str(e)[:100]}")
+
+        # Step 4: Skip workflow business service copying for root tenant
+        # Root tenants don't need workflow business services - only child tenants do
+        print(f"   ℹ️  Skipping workflow services for root tenant '{target_root}' (child tenants will get them)")
+
+        # Step 5: Copy and fix StateInfo directly via DB
+        print(f"   🔧 Copying and fixing StateInfo for new root...")
+        if not self._copy_stateinfo_direct(source_tenant, target_root):
+            print(f"   ❌ Failed to copy StateInfo for root '{target_root}'")
+            return False
+        
+        # Step 6: Copy localization messages
+        print(f"   🔧 Copying localization messages...")
+        self._copy_localization_messages(source_tenant, target_root)
+
+        # Step 6: Update global config placeholder
+        print(f"   🔧 Updating global config for UI...")
+        self._update_global_config_tenant(target_root)
+
+        print(f"   ✅ Bootstrap complete for '{target_root}'\n")
+        print(f"   💡 To use the new tenant in UI, restart: tilt up")
+        return True
+
+    def _copy_stateinfo_direct(self, source_tenant: str, target_root: str) -> bool:
+        """Copy StateInfo from source tenant to target root via direct DB operations"""
+        try:
+            import psycopg2
+            
+            # Database connection
+            conn = psycopg2.connect(
+                host="postgres-db",
+                port="5432", 
+                database="egov",
+                user="egov",
+                password="egov123"
+            )
+            
+            with conn:
+                with conn.cursor() as cur:
+                    # First, delete existing StateInfo for target root (if any)
+                    cur.execute("""
+                        DELETE FROM eg_mdms_data 
+                        WHERE schemacode = 'common-masters.StateInfo' 
+                        AND tenantid = %s
+                    """, (target_root,))
+                    
+                    deleted_count = cur.rowcount
+                    print(f"   🗑️  Deleted {deleted_count} existing StateInfo records for '{target_root}'")
+                    
+                    # Copy StateInfo from source, updating code and name for new root
+                    cur.execute("""
+                        INSERT INTO eg_mdms_data (
+                            id, tenantid, uniqueidentifier, schemacode, data, 
+                            isactive, createdby, lastmodifiedby, 
+                            createdtime, lastmodifiedtime
+                        )
+                        SELECT 
+                            gen_random_uuid(),
+                            %s as tenantid,
+                            %s as uniqueidentifier,
+                            schemacode,
+                            jsonb_set(
+                                jsonb_set(data, '{code}', to_jsonb(%s::text)),
+                                '{name}', to_jsonb(initcap(%s::text))
+                            ) as data,
+                            isactive,
+                            'bootstrap-stateinfo' as createdby,
+                            'bootstrap-stateinfo' as lastmodifiedby,
+                            extract(epoch from now()) * 1000,
+                            extract(epoch from now()) * 1000
+                        FROM eg_mdms_data
+                        WHERE schemacode = 'common-masters.StateInfo' 
+                        AND tenantid = %s
+                        LIMIT 1
+                    """, (target_root, target_root, target_root, target_root, source_tenant))
+                    
+                    created_count = cur.rowcount
+                    if created_count <= 0:
+                        print(f"   ⚠️  No StateInfo template found for source tenant '{source_tenant}'")
+                        return False
+                    print(f"   ✅ Created {created_count} StateInfo record for '{target_root}' with correct code")
+                    
+            conn.close()
+            return True
+            
+        except Exception as e:
+            print(f"   ⚠️  Failed to copy StateInfo directly: {e}")
+            return False
+
+    def _copy_idgen_formats(self, source_tenant: str, target_root: str) -> Dict:
+        """Copy ID generation formats from pg to new root tenant using direct DB connection"""
+        try:
+            import psycopg2
+            
+            # Database connection using Docker service name
+            conn = psycopg2.connect(
+                host="postgres-db",
+                port="5432", 
+                database="egov",
+                user="egov",
+                password="egov123"
+            )
+            
+            with conn:
+                with conn.cursor() as cur:
+                    # Get source prefix dynamically instead of hardcoding 'PB-'
+                    source_prefix = source_tenant.upper() + '-'
+                    target_prefix = target_root.upper() + '-'
+                    
+                    # Copy ID formats with proper tenant substitution
+                    copy_sql = """
+                    INSERT INTO id_generator (idname, tenantid, format, sequencenumber)
+                    SELECT 
+                        idname, 
+                        %s as tenantid,
+                        CASE 
+                            WHEN format LIKE (%s || '%%') THEN REPLACE(format, %s, %s)
+                            ELSE format 
+                        END as format,
+                        1 as sequencenumber
+                    FROM id_generator 
+                    WHERE tenantid = %s
+                    ON CONFLICT (idname, tenantid) DO NOTHING;
+                    """
+                    
+                    cur.execute(copy_sql, (target_root, source_prefix, source_prefix, target_prefix, source_tenant))
+                    
+                    # Get count of copied formats
+                    cur.execute("SELECT COUNT(*) FROM id_generator WHERE tenantid = %s", (target_root,))
+                    actual_count = cur.fetchone()[0]
+                    
+                    print(f"   ✅ Copied ID formats from '{source_tenant}' to '{target_root}' (total: {actual_count})")
+                    return {'created': actual_count}
+                    
+        except ImportError:
+            print(f"   ⚠️  psycopg2 not available, skipping ID format copy")
+            return {'created': 0, 'error': 'psycopg2 not installed'}
+        except Exception as e:
+            print(f"   ⚠️  ID format copy failed: {str(e)[:100]}")
+            return {'created': 0, 'error': f'ID format copy failed: {str(e)}'}
+
+    def _copy_localization_messages(self, source_tenant: str, target_root: str):
+        """Copy localization messages from source tenant to target root tenant"""
+        try:
+            import psycopg2
+            
+            conn = psycopg2.connect(
+                host="postgres-db",
+                port="5432", 
+                database="egov",
+                user="egov",
+                password="egov123"
+            )
+            
+            with conn:
+                with conn.cursor() as cur:
+                    # Get count before copy for reference
+                    cur.execute("SELECT COUNT(*) FROM message WHERE tenantid = %s", (target_root,))
+                    before_count = cur.fetchone()[0]
+                    
+                    # Copy all localization messages with correct column names
+                    copy_sql = """
+                    INSERT INTO message (id, locale, code, message, tenantid, module, createdby, createddate, lastmodifiedby, lastmodifieddate)
+                    SELECT 
+                        gen_random_uuid() as id,
+                        locale,
+                        code, 
+                        message,
+                        %s as tenantid,
+                        module,
+                        createdby,
+                        now() as createddate,
+                        lastmodifiedby,
+                        now() as lastmodifieddate
+                    FROM message 
+                    WHERE tenantid = %s
+                    ON CONFLICT (tenantid, locale, module, code) DO NOTHING;
+                    """
+                    
+                    cur.execute(copy_sql, (target_root, source_tenant))
+                    copied_count = cur.rowcount
+                    
+                    # Get final count
+                    cur.execute("SELECT COUNT(*) FROM message WHERE tenantid = %s", (target_root,))
+                    after_count = cur.fetchone()[0]
+                    
+                    # Show modules copied
+                    cur.execute("SELECT DISTINCT module FROM message WHERE tenantid = %s ORDER BY module", (target_root,))
+                    modules = [row[0] for row in cur.fetchall()]
+                    
+                    print(f"   ✅ Localization: {copied_count} new messages copied to '{target_root}'")
+                    print(f"   📊 Total messages: {after_count} across {len(modules)} modules")
+                    print(f"   📦 Modules: {', '.join(modules)}")
+                    
+                    return {
+                        'status': 'completed',
+                        'copied_count': copied_count,
+                        'total_count': after_count,
+                        'modules': modules
+                    }
+
+        except Exception as e:
+            error_msg = str(e)[:100]
+            print(f"   ⚠️  Localization copy failed: {error_msg}")
+            return {
+                'status': 'failed',
+                'error': error_msg,
+                'copied_count': 0,
+                'modules': []
+            }
+
+    def _create_core_admin_user(self, target_root: str) -> bool:
+        """Create core admin user for new root tenant
+        
+        Creates ADMIN user with SUPERUSER, EMPLOYEE roles for basic system operations
+        """
+        try:
+            # Create core roles first if they don't exist
+            core_roles = [
+                {"code": "SUPERUSER", "name": "Super User", "description": "System Administrator"},
+                {"code": "EMPLOYEE", "name": "Employee", "description": "Default role for all employees"},
+                {"code": "CITIZEN", "name": "Citizen", "description": "Citizen who can raise complaints"}
+            ]
+            
+            self._ensure_roles_exist(target_root, [r['code'] for r in core_roles])
+            
+            # Create admin user
+            admin_user = {
+                "username": "ADMIN",
+                "password": "eGov@123",  # Default password
+                "name": "Administrator", 
+                "mobile": "9999999999",
+                "roles": ["SUPERUSER", "EMPLOYEE"],
+                "type": "EMPLOYEE"
+            }
+            
+            self._create_user_for_tenant(target_root, admin_user)
+            return True
+            
+        except Exception as e:
+            print(f"   Error creating admin user: {str(e)}")
+            return False
+
+    def _update_global_config_tenant(self, target_root: str):
+        """Update the stateTenantId in globalConfigs.js to match the target root tenant"""
+        try:
+            import os
+            import re
+            
+            # Path to globalConfigs.js
+            global_config_path = os.path.join(os.path.dirname(__file__), '../../nginx/globalConfigs.js')
+            
+            if not os.path.exists(global_config_path):
+                print(f"   ⚠️ GlobalConfigs.js not found at {global_config_path}")
+                return
+            
+            # Read current content
+            with open(global_config_path, 'r') as f:
+                content = f.read()
+            
+            # Update stateTenantId using regex
+            pattern = r'var\s+stateTenantId\s*=\s*["\'][^"\']*["\'];'
+            replacement = f'var stateTenantId = "{target_root}";'
+            
+            updated_content = re.sub(pattern, replacement, content)
+            
+            if updated_content != content:
+                with open(global_config_path, 'w') as f:
+                    f.write(updated_content)
+                print(f"   ✅ Updated stateTenantId to '{target_root}' in globalConfigs.js")
+            else:
+                print(f"   ⚠️ No stateTenantId variable found to update in globalConfigs.js")
+            return True
+            
+        except Exception as e:
+            print(f"   ⚠️  Could not update globalConfigs.js: {str(e)}")
+            return False
+
+    def _ensure_stateinfo_for_tenant(self, tenant_code: str, display_name: str = None) -> bool:
+        """Ensure common-masters.StateInfo exists for tenant.
+
+        DIGIT UI depends on StateInfo (especially localizationModules/languages)
+        during login/bootstrap. Missing StateInfo can lead to raw i18n codes in UI.
+        """
+        # Already present for tenant -> nothing to do
+        existing_records = self.uploader.search_mdms_data(
+            schema_code='common-masters.StateInfo',
+            tenant=tenant_code,
+            limit=5
+        )
+        existing = any((r.get('code') or '').lower() == tenant_code.lower() for r in existing_records)
+        if existing:
+            print(f"   ✅ StateInfo already present for '{tenant_code}'")
+            return True
+
+        # Try to clone a baseline template from parent/root tenants
+        candidate_tenants = []
+        parent_tenant = tenant_code.split('.')[0] if '.' in tenant_code else tenant_code
+        for candidate in [parent_tenant, self.tenant_id, "pg"]:
+            if candidate and candidate not in candidate_tenants:
+                candidate_tenants.append(candidate)
+
+        template = None
+        for candidate in candidate_tenants:
+            records = self.uploader.search_mdms_data(
+                schema_code='common-masters.StateInfo',
+                tenant=candidate,
+                limit=5
+            )
+            if records:
+                matched = next((r for r in records if (r.get('code') or '').lower() == candidate.lower()), None)
+                template = matched or records[0]
                 break
 
-        if not module_config:
-            print(f"   ⚠️  Module '{module_code}' not found in citymodule")
-            return
+        if not template:
+            print(f"   ⚠️  Could not find a StateInfo template in tenants: {candidate_tenants}")
+            print("   ⚠️  Run load_tenant() with Tenant And Branding Master to create branding manually.")
+            return False
 
-        # Check if tenant already in module
-        existing_tenants = [t.get("code", "").lower() for t in module_config.get("tenants", [])]
-        if tenant_code.lower() in existing_tenants:
-            print(f"   ✅ {module_code} already enabled")
-            return
+        stateinfo = deepcopy(template)
+        stateinfo.pop('_isActive', None)
+        stateinfo.pop('_uniqueIdentifier', None)
+        stateinfo['code'] = tenant_code
+        if display_name:
+            stateinfo['name'] = display_name
 
-        # Try database update via persister (if available)
-        # This uses the internal MDMS database update
+        result = self.uploader.create_mdms_data(
+            schema_code='common-masters.StateInfo',
+            data_list=[stateinfo],
+            tenant=tenant_code
+        )
+        created = result.get('created', 0)
+        exists = result.get('exists', 0)
+        if created > 0 or exists > 0:
+            print(f"   ✅ StateInfo ensured for '{tenant_code}'")
+            return True
+
+        print(f"   ❌ Failed to create StateInfo for '{tenant_code}'")
+        return False
+
+    def _enable_module_for_tenant(self, tenant_code: str, module_code: str):
+        """Add tenant to citymodule for a specific module
+        
+        Simple logic:
+        1. Extract root from tenant_code (e.g., nitish.man -> nitish)
+        2. Check if citymodule exists for this root
+        3. If exists: append tenant to existing citymodule
+        4. If not exists: create new citymodule entry with this tenant
+        """
+        root_tenant = tenant_code.split(".")[0] if "." in tenant_code else tenant_code
+        
+        print(f"   🔧 Adding '{tenant_code}' to {module_code} citymodule under root '{root_tenant}'")
+        
         try:
-            self._update_citymodule_db(module_code, tenant_code, module_config)
-        except Exception as e:
-            print(f"   ⚠️  {module_code}: Add tenant manually to citymodule (MDMS v2 API limitation)")
-
-    def _update_citymodule_db(self, module_code: str, tenant_code: str, current_config: dict):
-        """Update citymodule via database query through boundary-service workaround"""
-        import subprocess
-        import json as json_lib
-
-        # Add tenant to config
-        new_tenants = current_config.get("tenants", []) + [{"code": tenant_code}]
-        new_config = current_config.copy()
-        new_config["tenants"] = new_tenants
-
-        # Try to use psql to update directly (if running locally with Docker)
-        try:
-            # Get unique identifier hash
-            import hashlib
-            config_str = json_lib.dumps(new_config, sort_keys=True, separators=(',', ':'))
-
-            # Construct SQL update (parameterized to prevent SQL injection)
-            update_sql = """
-            UPDATE eg_mdms_data
-            SET data = :'new_data'::jsonb,
-                lastmodifiedtime = EXTRACT(EPOCH FROM NOW())::bigint * 1000
-            WHERE schemacode = 'tenant.citymodule'
-              AND tenantid = 'pg'
-              AND data->>'code' = :'mod_code';
-            """
-
-            result = subprocess.run(
-                ["docker", "exec", "docker-postgres", "psql", "-U", "egov", "-d", "egov",
-                 "-v", f"new_data={json_lib.dumps(new_config)}",
-                 "-v", f"mod_code={module_code}",
-                 "-c", update_sql],
-                capture_output=True, text=True, timeout=10
+            import psycopg2
+            
+            conn = psycopg2.connect(
+                host="postgres-db",
+                port="5432", 
+                database="egov",
+                user="egov",
+                password="egov123"
             )
-
-            if result.returncode == 0 and "UPDATE 1" in result.stdout:
-                print(f"   ✅ {module_code} enabled (via DB)")
-            else:
-                raise Exception(f"SQL update failed: {result.stderr or result.stdout}")
-
-        except subprocess.TimeoutExpired:
-            raise Exception("Database update timed out")
-        except FileNotFoundError:
-            raise Exception("Docker not available")
+            
+            with conn:
+                with conn.cursor() as cur:
+                    # Check if citymodule exists for this root and module
+                    check_sql = """
+                    SELECT COUNT(*) FROM eg_mdms_data 
+                    WHERE tenantid = %s 
+                      AND schemacode = 'tenant.citymodule' 
+                      AND data->>'code' = %s;
+                    """
+                    
+                    cur.execute(check_sql, (root_tenant, module_code))
+                    citymodule_exists = cur.fetchone()[0] > 0
+                    
+                    if citymodule_exists:
+                        # Append tenant to existing citymodule
+                        update_sql = """
+                        UPDATE eg_mdms_data
+                        SET data = jsonb_set(
+                            data, 
+                            '{tenants}', 
+                            COALESCE(data->'tenants', '[]'::jsonb) || jsonb_build_array(jsonb_build_object('code', %s))
+                        ),
+                        lastmodifiedtime = EXTRACT(EPOCH FROM NOW())::bigint * 1000
+                        WHERE tenantid = %s 
+                          AND schemacode = 'tenant.citymodule'
+                          AND data->>'code' = %s
+                          AND NOT (data->'tenants' @> jsonb_build_array(jsonb_build_object('code', %s)));
+                        """
+                        
+                        cur.execute(update_sql, (tenant_code, root_tenant, module_code, tenant_code))
+                        
+                        if cur.rowcount > 0:
+                            print(f"   ✅ {module_code}: Added '{tenant_code}' to existing citymodule")
+                        else:
+                            print(f"   ℹ️  {module_code}: '{tenant_code}' already exists in citymodule")
+                            
+                    else:
+                        # Create new citymodule entry for this root with the tenant
+                        import json
+                        citymodule_data = {
+                            "code": module_code,
+                            "module": module_code, 
+                            "active": True,
+                            "order": 2,
+                            "tenants": [{"code": tenant_code}]
+                        }
+                        
+                        insert_sql = """
+                        INSERT INTO eg_mdms_data (
+                            id, tenantid, uniqueidentifier, schemacode, data, isactive, 
+                            createdby, lastmodifiedby, createdtime, lastmodifiedtime
+                        ) VALUES (
+                            gen_random_uuid(),
+                            %s,
+                            %s,
+                            'tenant.citymodule',
+                            %s,
+                            true,
+                            'system',
+                            'system',
+                            EXTRACT(EPOCH FROM NOW())::bigint * 1000,
+                            EXTRACT(EPOCH FROM NOW())::bigint * 1000
+                        );
+                        """
+                        
+                        cur.execute(insert_sql, (root_tenant, module_code, json.dumps(citymodule_data)))
+                        print(f"   ✅ {module_code}: Created new citymodule for root '{root_tenant}' with '{tenant_code}'")
+                    
         except Exception as e:
-            raise Exception(str(e))
+            print(f"   ⚠️  {module_code}: Citymodule update failed - {str(e)[:100]}")
+
 
     def _ensure_roles_exist(self, state_tenant: str, role_codes: list):
         """Ensure all required roles exist for the state tenant, create if missing
@@ -602,22 +1320,67 @@ class CRSLoader:
             print(f"   ERROR: Failed to create hierarchy: {e}")
             return None
 
-        # Step 3: Generate template
+        # Step 3: Generate template (with fallback)
         print(f"\n[3/4] Generating template...")
-        gen_result = self.uploader.generate_boundary_template(tenant, name)
-
-        if not gen_result:
-            print(f"   ERROR: Template generation failed")
+        
+        # First ensure we have the boundary schemas needed
+        root_tenant = tenant.split('.')[0]
+        
+        # Check if boundary schemas exist, if not create them
+        try:
+            # Create boundary campaign type if missing
+            campaign_data = [{
+                "code": "BOUNDARY_SETUP",
+                "name": "Boundary Setup Campaign",
+                "active": True,
+                "description": "Campaign for boundary template generation"
+            }]
+            
+            self.uploader.create_mdms_data(
+                schema_code="project-factory.CampaignType",
+                data_list=campaign_data,
+                tenant=root_tenant
+            )
+            print(f"   ✅ Ensured campaign type schema exists")
+            
+        except Exception as e:
+            print(f"   ⚠️  Could not create campaign schema: {e}")
+        
+        # Try template generation
+        try:
+            gen_result = self.uploader.generate_boundary_template(tenant, name)
+            if not gen_result:
+                print(f"   ❌ Boundary service template generation failed")
+                print(f"   💡 WORKAROUND: Create Excel manually with columns: Code | Name | Type | Parent")
+                print(f"   📝 Example for {root_tenant}:")
+                print(f"      {root_tenant.upper()}_STATE | {root_tenant.title()} State | State | ")
+                if len(levels) > 1:
+                    print(f"      {root_tenant.upper()}_DISTRICT | {root_tenant.title()} District | {levels[1]} | {root_tenant.upper()}_STATE")
+                if len(levels) > 2:
+                    print(f"      {root_tenant.upper()}_LOCALITY | {root_tenant.title()} Locality | {levels[2]} | {root_tenant.upper()}_DISTRICT")
+                return None
+                
+        except Exception as e:
+            print(f"   ❌ Template generation API failed: {e}")
+            print(f"   💡 WORKAROUND: Create Excel manually with boundary structure shown above")
             return None
 
         # Step 4: Poll for completion and download
         print(f"\n[4/4] Waiting for template...")
         poll_result = self.uploader.poll_boundary_template_status(tenant, name)
 
-        if not poll_result or poll_result.get('status') == 'failed':
-            print(f"   ERROR: Template generation failed")
-            error = poll_result.get('error') if poll_result else 'Unknown error'
-            print(f"   Details: {error}")
+        poll_status = poll_result.get('status') if poll_result else None
+        error_details = {}
+        if poll_result:
+            error_details = poll_result.get('additionalDetails', {}).get('error', {})
+
+        if not poll_result or poll_status == 'failed':
+            print(f"   ❌ Template generation failed")
+            if error_details:
+                print(f"   🔍 Error details: {error_details}")
+            print(f"   💡 SOLUTION: Create Excel manually with these columns:")
+            print(f"      Code | Name | Type | Parent")
+            print(f"   📝 Save as boundaries.xlsx and proceed to Phase 2b")
             return None
 
         filestore_id = poll_result.get('fileStoreid')
@@ -709,6 +1472,7 @@ class CRSLoader:
             dict: Summary of operations for each master type
         """
         self._check_auth()
+        _send_telemetry("dataloader", "load", "common-masters")
 
         print(f"\n{'='*60}")
         print(f"PHASE 3: COMMON MASTERS")
@@ -798,6 +1562,7 @@ class CRSLoader:
             bool: True if employee was created or already exists
         """
         self._check_auth()
+        _send_telemetry("dataloader", "create", "employee")
 
         state_tenant = tenant.split(".")[0] if "." in tenant else tenant
         name = name or username
@@ -921,6 +1686,7 @@ class CRSLoader:
             dict: Summary of localization upload and StateInfo update
         """
         self._check_auth()
+        _send_telemetry("dataloader", "load", "localizations")
 
         print(f"\n{'='*60}")
         print(f"PHASE 5: LOCALIZATIONS")
@@ -971,6 +1737,56 @@ class CRSLoader:
         self._print_summary("Localizations", results)
         return results
 
+    def copy_localization_messages(self, source_tenant: str = "pg", target_tenant: str = None) -> Dict:
+        """Copy all localization messages from source tenant to target tenant
+        
+        This method copies all localization messages across all modules from one tenant to another.
+        Useful for bootstrapping new root tenants with complete localization coverage.
+        
+        Args:
+            source_tenant: Source tenant to copy from (default: "pg")
+            target_tenant: Target tenant to copy to (uses self.tenant_id if not provided)
+            
+        Returns:
+            dict: Summary of copy operation with counts and modules
+        """
+        self._check_auth()
+        _send_telemetry("dataloader", "copy", "localizations")
+        
+        if not target_tenant:
+            target_tenant = self.tenant_id
+            
+        if not target_tenant:
+            raise ValueError("target_tenant must be provided or set via login()")
+            
+        if source_tenant == target_tenant:
+            raise ValueError("source_tenant and target_tenant cannot be the same")
+
+        print(f"\n{'='*60}")
+        print(f"COPY LOCALIZATION MESSAGES")
+        print(f"{'='*60}")
+        print(f"Source tenant: {source_tenant}")
+        print(f"Target tenant: {target_tenant}")
+        
+        # Use the existing private method and check result
+        result = self._copy_localization_messages(source_tenant, target_tenant)
+        
+        if result and result.get('status') == 'completed':
+            return {
+                "status": "completed", 
+                "source": source_tenant, 
+                "target": target_tenant,
+                "copied": result.get('copied_count', 0),
+                "modules": result.get('modules', [])
+            }
+        else:
+            return {
+                "status": "failed",
+                "source": source_tenant,
+                "target": target_tenant, 
+                "error": result.get('error', 'Unknown error') if result else 'No result returned'
+            }
+
     def load_workflow(self, json_path: str, target_tenant: str = None,
                       business_service: str = "PGR") -> Dict:
         """Phase 6: Load/update workflow business service configuration from JSON file
@@ -985,6 +1801,7 @@ class CRSLoader:
             dict: {status: 'created'|'updated'|'exists'|'failed', error: str or None}
         """
         self._check_auth()
+        _send_telemetry("dataloader", "load", "workflow")
 
         print(f"\n{'='*60}")
         print(f"PHASE 6: WORKFLOW")

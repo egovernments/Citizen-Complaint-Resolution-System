@@ -201,6 +201,12 @@ dc_resource('pgr-services', labels=['pgr'],
         link('http://localhost:18083/pgr-services/health', 'Health'),
     ])
 
+# One-shot seed container — auto_init=False prevents tilt ci from failing on exit
+dc_resource('pgr-workflow-seed', labels=['pgr'],
+    resource_deps=['egov-workflow-v2'],
+    auto_init=False,
+)
+
 dc_resource('jupyter', labels=['pgr'], auto_init=True,
     links=[
         link('http://localhost:18888/lab', 'Jupyter Lab'),
@@ -234,6 +240,9 @@ dc_resource('egov-bndry-mgmnt', labels=['core-services'],
     links=[
         link('http://localhost:18081/boundary-management/actuator/health', 'Health'),
     ])
+
+# ==================== Telemetry ====================
+dc_resource('telemetry', labels=['infrastructure'])
 
 # ==================== Local Resources ====================
 
@@ -326,7 +335,6 @@ cmd_button(
 #   - Postgres:      15432
 #   - Redis:         16379
 #   - Redpanda:      19092
-#   - Elasticsearch: 19200
 #
 # API Gateway (Kong):
 #   - Proxy:         18000 (external access point)

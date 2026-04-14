@@ -1,0 +1,220 @@
+{
+  "info": {
+    "_postman_id": "cb9d44d5-a4a8-4cad-b8a9-8f44fbfe9db6",
+    "name": "Novu Bridge",
+    "description": "Postman collection to test novu-bridge APIs without Kafka.\n\nSet collection variables before running:\n- baseUrl (default: http://localhost:18290)\n- authToken (Digit user token if auth is enabled)\n- tenantId\n- subscriberUuid\n- mobileE164\n- templateKey\n- transactionId\n",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Dispatch Validate",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}",
+            "disabled": true
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"RequestInfo\": {\n    \"apiId\": \"novu-bridge\",\n    \"ver\": \"1.0\",\n    \"ts\": 0,\n    \"action\": \"_validate\",\n    \"did\": \"1\",\n    \"key\": \"\",\n    \"msgId\": \"req-001\",\n    \"requesterId\": \"\",\n    \"authToken\": \"{{authToken}}\"\n  },\n  \"send\": false,\n  \"event\": {\n    \"eventId\": \"evt-pgr-apply-001\",\n    \"eventType\": \"COMPLAINTS_WORKFLOW_TRANSITIONED\",\n    \"eventTime\": \"2026-02-18T15:30:00+05:30\",\n    \"producer\": \"complaints-service\",\n    \"module\": \"Complaints\",\n    \"eventName\": \"COMPLAINTS.WORKFLOW.APPLY\",\n    \"entityType\": \"COMPLAINT\",\n    \"entityId\": \"CMP-2026-02-001\",\n    \"tenantId\": \"{{tenantId}}\",\n    \"actor\": {\n      \"userId\": \"{{subscriberUuid}}\",\n      \"userType\": \"EMPLOYEE\"\n    },\n    \"workflow\": {\n      \"action\": \"APPLY\",\n      \"fromState\": \"NA\",\n      \"toState\": \"OPEN\"\n    },\n    \"stakeholders\": [\n      {\n        \"type\": \"CITIZEN\",\n        \"userId\": \"{{subscriberUuid}}\",\n        \"mobile\": \"+919000000000\"\n      }\n    ],\n    \"context\": {\n      \"locale\": \"en_IN\"\n    },\n    \"data\": {\n      \"complaintNo\": \"CMP-2026-02-001\",\n      \"status\": \"OPEN\",\n      \"serviceName\": \"Streetlights\",\n      \"citizenName\": \"Subhashini\",\n      \"mobileNumber\": \"9000000000\",\n      \"departmentName\": \"Civic Works Department\"\n    }\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/novu-adapter/v1/dispatch/_validate",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "novu-adapter",
+            "v1",
+            "dispatch",
+            "_validate"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Dispatch Dry Run",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}",
+            "disabled": true
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"RequestInfo\": {\n    \"apiId\": \"novu-bridge\",\n    \"ver\": \"1.0\",\n    \"ts\": 0,\n    \"action\": \"_dry-run\",\n    \"did\": \"1\",\n    \"key\": \"\",\n    \"msgId\": \"req-002\",\n    \"requesterId\": \"\",\n    \"authToken\": \"{{authToken}}\"\n  },\n  \"send\": false,\n  \"event\": {\n    \"eventId\": \"evt-pgr-apply-002\",\n    \"eventType\": \"COMPLAINTS_WORKFLOW_TRANSITIONED\",\n    \"eventTime\": \"2026-02-18T15:30:00+05:30\",\n    \"producer\": \"complaints-service\",\n    \"module\": \"Complaints\",\n    \"eventName\": \"COMPLAINTS.WORKFLOW.APPLY\",\n    \"entityType\": \"COMPLAINT\",\n    \"entityId\": \"CMP-2026-02-001\",\n    \"tenantId\": \"{{tenantId}}\",\n    \"actor\": {\n      \"userId\": \"{{subscriberUuid}}\",\n      \"userType\": \"EMPLOYEE\"\n    },\n    \"workflow\": {\n      \"action\": \"APPLY\",\n      \"fromState\": \"NA\",\n      \"toState\": \"OPEN\"\n    },\n    \"stakeholders\": [\n      {\n        \"type\": \"CITIZEN\",\n        \"userId\": \"{{subscriberUuid}}\",\n        \"mobile\": \"+919000000000\"\n      }\n    ],\n    \"context\": {\n      \"locale\": \"en_IN\"\n    },\n    \"data\": {\n      \"complaintNo\": \"CMP-2026-02-001\",\n      \"status\": \"OPEN\",\n      \"serviceName\": \"Streetlights\",\n      \"citizenName\": \"Subhashini\",\n      \"mobileNumber\": \"9000000000\",\n      \"departmentName\": \"Civic Works Department\"\n    }\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/novu-adapter/v1/dispatch/_dry-run",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "novu-adapter",
+            "v1",
+            "dispatch",
+            "_dry-run"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Dispatch Dry Run (send=true)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}",
+            "disabled": true
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"RequestInfo\": {\n    \"apiId\": \"novu-bridge\",\n    \"ver\": \"1.0\",\n    \"ts\": 0,\n    \"action\": \"_dry-run\",\n    \"did\": \"1\",\n    \"key\": \"\",\n    \"msgId\": \"req-003\",\n    \"requesterId\": \"\",\n    \"authToken\": \"{{authToken}}\"\n  },\n  \"send\": true,\n  \"event\": {\n    \"eventId\": \"evt-pgr-apply-003\",\n    \"eventType\": \"COMPLAINTS_WORKFLOW_TRANSITIONED\",\n    \"eventTime\": \"2026-02-18T15:30:00+05:30\",\n    \"producer\": \"complaints-service\",\n    \"module\": \"Complaints\",\n    \"eventName\": \"COMPLAINTS.WORKFLOW.APPLY\",\n    \"entityType\": \"COMPLAINT\",\n    \"entityId\": \"CMP-2026-02-001\",\n    \"tenantId\": \"{{tenantId}}\",\n    \"actor\": {\n      \"userId\": \"{{subscriberUuid}}\",\n      \"userType\": \"EMPLOYEE\"\n    },\n    \"workflow\": {\n      \"action\": \"APPLY\",\n      \"fromState\": \"NA\",\n      \"toState\": \"OPEN\"\n    },\n    \"stakeholders\": [\n      {\n        \"type\": \"CITIZEN\",\n        \"userId\": \"{{subscriberUuid}}\",\n        \"mobile\": \"+919000000000\"\n      }\n    ],\n    \"context\": {\n      \"locale\": \"en_IN\"\n    },\n    \"data\": {\n      \"complaintNo\": \"CMP-2026-02-001\",\n      \"status\": \"OPEN\",\n      \"serviceName\": \"Streetlights\",\n      \"citizenName\": \"Subhashini\",\n      \"mobileNumber\": \"9000000000\",\n      \"departmentName\": \"Civic Works Department\"\n    }\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/novu-adapter/v1/dispatch/_dry-run",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "novu-adapter",
+            "v1",
+            "dispatch",
+            "_dry-run"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Test Trigger (direct Novu)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}",
+            "disabled": true
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"RequestInfo\": {\n    \"apiId\": \"novu-bridge\",\n    \"ver\": \"1.0\",\n    \"ts\": 0,\n    \"action\": \"_test-trigger\",\n    \"did\": \"1\",\n    \"key\": \"\",\n    \"msgId\": \"req-004\",\n    \"requesterId\": \"\",\n    \"authToken\": \"{{authToken}}\"\n  },\n  \"templateKey\": \"{{templateKey}}\",\n  \"subscriberId\": \"tenant:{{subscriberUuid}}\",\n  \"phone\": \"{{mobileE164}}\",\n  \"contentSid\": \"{{twilioContentSid}}\",\n  \"contentVariables\": {\n    \"1\": \"Streetlights\",\n    \"2\": \"CMP-2026-02-001\",\n    \"3\": \"OPEN\",\n    \"4\": \"Subhashini Srinivasan\",\n    \"5\": \"Civic Works Department\"\n  },\n  \"transactionId\": \"{{transactionId}}\",\n  \"payload\": {\n    \"eventId\": \"evt-pgr-apply-004\",\n    \"eventType\": \"COMPLAINTS_WORKFLOW_TRANSITIONED\",\n    \"eventTime\": \"2026-02-18T15:30:00+05:30\",\n    \"producer\": \"complaints-service\",\n    \"module\": \"Complaints\",\n    \"eventName\": \"COMPLAINTS.WORKFLOW.APPLY\",\n    \"tenantId\": \"{{tenantId}}\",\n    \"entityType\": \"COMPLAINT\",\n    \"entityId\": \"CMP-2026-02-001\",\n    \"workflowState\": \"OPEN\",\n    \"complaintNo\": \"CMP-2026-02-001\",\n    \"serviceName\": \"Streetlights\",\n    \"status\": \"OPEN\",\n    \"citizenName\": \"Subhashini\",\n    \"mobileNumber\": \"9000000000\",\n    \"departmentName\": \"Civic Works Department\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/novu-adapter/v1/dispatch/_test-trigger",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "novu-adapter",
+            "v1",
+            "dispatch",
+            "_test-trigger"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Direct Novu Trigger (Twilio ContentSid Override)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "ApiKey {{novuApiKey}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"{{templateKey}}\",\n  \"to\": {\n    \"subscriberId\": \"tenant:{{subscriberUuid}}\",\n    \"phone\": \"whatsapp:{{mobileE164}}\"\n  },\n  \"payload\": {\n    \"serviceName\": \"Streetlights\",\n    \"complaintNo\": \"CMP-2026-02-010\",\n    \"status\": \"OPEN\",\n    \"citizenName\": \"Subhashini Srinivasan\",\n    \"departmentName\": \"Civic Works Department\"\n  },\n  \"overrides\": {\n    \"providers\": {\n      \"twilio\": {\n        \"_passthrough\": {\n          \"body\": {\n            \"contentSid\": \"{{twilioContentSid}}\",\n            \"contentVariables\": \"{\\\"1\\\":\\\"Streetlights\\\",\\\"2\\\":\\\"CMP-2026-02-010\\\",\\\"3\\\":\\\"OPEN\\\",\\\"4\\\":\\\"Subhashini Srinivasan\\\",\\\"5\\\":\\\"Civic Works Department\\\"}\"\n          }\n        }\n      }\n    }\n  },\n  \"transactionId\": \"{{transactionId}}-direct\"\n}"
+        },
+        "url": {
+          "raw": "{{novuBaseUrl}}/v1/events/trigger",
+          "host": [
+            "{{novuBaseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "events",
+            "trigger"
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:18290"
+    },
+    {
+      "key": "authToken",
+      "value": ""
+    },
+    {
+      "key": "tenantId",
+      "value": "pb.amritsar"
+    },
+    {
+      "key": "subscriberUuid",
+      "value": "00000000-0000-0000-0000-000000000001"
+    },
+    {
+      "key": "mobileE164",
+      "value": "+919000000000"
+    },
+    {
+      "key": "templateKey",
+      "value": "complaints-workflow-apply-42yz"
+    },
+    {
+      "key": "transactionId",
+      "value": "evt-test-001"
+    },
+    {
+      "key": "novuBaseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "novuApiKey",
+      "value": "b6185fa03caf3efb9b57f6363c34ec42"
+    },
+    {
+      "key": "twilioContentSid",
+      "value": "HX158f8edc7079e2c2b76d9c8f68e87791"
+    }
+  ]
+}

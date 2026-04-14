@@ -3,7 +3,7 @@ labels:
   app: "egov-bndry-mgmnt"
   group: "rainmaker"
 
-namespace: urban
+namespace: egov
 
 # Ingress Configs
 ingress:
@@ -21,10 +21,12 @@ initContainers:
     schemaTable: "egov-bndry-mgmnt_schema"
     image:
       repository: "egov-bndry-mgmnt-db"
+      tag: "bndry-mgmnt-8b5fc86"
 
 # Container Configs
 image:
   repository: "egov-bndry-mgmnt"
+  tag: "bndry-mgmnt-8b5fc86"
 replicas: "1"
 appType: "java-spring"
 tracing-enabled: true
@@ -77,15 +79,15 @@ env: |
   - name: FILE_STORE_SERVICE_END_POINT
     value: filestore/v1/files 
   - name: EGOV_MDMS_V2_SEARCH_ENDPOINT
-    value: {{ .Values.mdmsV2SearchEndpoint | default "egov-mdms-service/v2/_search" }}
+    value: {{ .Values.mdmsV2SearchEndpoint | default "mdms-v2/v2/_search" }}
   - name: EGOV_MDMS_V2_CREATE_ENDPOINT
-    value: {{ .Values.mdmsV2CreateEndpoint | default "egov-mdms-service/v2/_create" }}
+    value: {{ .Values.mdmsV2CreateEndpoint | default "mdms-v2/v2/_create" }}
   - name: EGOV_MDMS_V2_UPDATE_ENDPOINT
-    value: {{ .Values.mdmsV2UpdateEndpoint | default "egov-mdms-service/v2/_update" }}
+    value: {{ .Values.mdmsV2UpdateEndpoint | default "mdms-v2/v2/_update" }}
   - name: EGOV_MDMS_V1_SEARCH_ENDPOINT
-    value: {{ .Values.mdmsV1SearchEndpoint | default "egov-mdms-service/v1/_search" }}
+    value: {{ .Values.mdmsV1SearchEndpoint | default "mdms-v2/v1/_search" }}
   - name: EGOV_MDMS_SCHEMA_PATH
-    value: {{ .Values.mdmsV1SchemaSearchEndpoint | default "egov-mdms-service/schema/v1/_search" }}
+    value: {{ .Values.mdmsV1SchemaSearchEndpoint | default "mdms-v2/schema/v1/_search" }}
   - name: EGOV_BOUNDARY_RELATIONSHIP_SEARCHPATH
     value: boundary-service/boundary-relationships/_search
   - name: EGOV_BOUNDARY_SERVICE_SEARCHPATH

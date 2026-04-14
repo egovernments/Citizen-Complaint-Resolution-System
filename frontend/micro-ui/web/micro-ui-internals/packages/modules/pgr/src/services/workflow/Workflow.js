@@ -1,6 +1,35 @@
 import Urls from "../../utils/urls";
 import { Request } from "@egovernments/digit-ui-libraries";
 
+// Helper function to mask phone numbers (show last 4 digits only)
+const maskPhoneNumber = (phone) => {
+  if (!phone || phone.length < 4) return phone;
+  return 'XXXXXX' + phone.slice(-4);
+};
+
+// Helper function to get assigner details for timeline
+const getAssignerDetails = (instance, previousInstance, moduleCode) => {
+  // For ASSIGN or REASSIGN actions, show the assignee details
+  if ((instance.action === "ASSIGN" || instance.action === "REASSIGN") && instance.assignes && instance.assignes.length > 0) {
+    const assignee = instance.assignes[0];
+    return {
+      name: assignee.name,
+      mobileNumber: assignee.mobileNumber,
+      roles: assignee.roles
+    };
+  }
+
+  // For other actions, show the assigner (person who took the action)
+  if (instance.assigner) {
+    return {
+      name: instance.assigner.name,
+      mobileNumber: instance.assigner.mobileNumber,
+      roles: instance.assigner.roles
+    };
+  }
+
+  return null;
+};
 
 const makeCommentsSubsidariesOfPreviousActions = async (wf) => {
   const TimelineMap = new Map();
@@ -110,7 +139,9 @@ export const WorkflowService = {
                   lastModifiedEpoch: instance.auditDetails.lastModifiedTime,
                 },
                 timeLineActions: instance.nextActions
-                  ? instance.nextActions.filter((action) => action.roles.includes(role)).map((action) => action?.action)
+                  ? (role === "SUPERUSER"
+                    ? instance.nextActions.map((action) => action?.action)
+                    : instance.nextActions.filter((action) => action.roles.includes(role)).map((action) => action?.action))
                   : null,
               };
               return checkPoint;

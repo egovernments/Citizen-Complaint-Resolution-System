@@ -110,7 +110,7 @@ services:
       resources:
         limits:
           memory: 300M
-          cpus: '0.5'
+          cpus: '1'
     networks:
       egov-network:
         aliases:
@@ -249,11 +249,11 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 180s
     deploy:
       resources:
         limits:
-          memory: 300M
+          memory: 384M
           cpus: '0.25'
     networks:
       - egov-network
@@ -294,11 +294,11 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 120s
+      start_period: 240s
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 384M
           cpus: '0.25'
     networks:
       - egov-network
@@ -348,7 +348,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 120s
+      start_period: 240s
     deploy:
       resources:
         limits:
@@ -392,11 +392,11 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 120s
+      start_period: 240s
     deploy:
       resources:
         limits:
-          memory: 320M
+          memory: 448M
           cpus: '0.25'
     networks:
       - egov-network
@@ -425,7 +425,7 @@ services:
       SPRING_REDIS_PORT: 6379
       SERVER_PORT: 8096
       OTEL_TRACES_EXPORTER: none
-      JAVA_TOOL_OPTIONS: -Xms64m -Xmx256m
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx512m
     ports:
       - 18096:8096
     healthcheck:
@@ -433,11 +433,11 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 120s
+      start_period: 240s
     deploy:
       resources:
         limits:
-          memory: 320M
+          memory: 640M
           cpus: '1'
     networks:
       - egov-network
@@ -481,11 +481,11 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 120s
+      start_period: 240s
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 384M
           cpus: '0.25'
     networks:
       - egov-network
@@ -519,11 +519,11 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 120s
+      start_period: 240s
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 384M
           cpus: '0.25'
     networks:
       - egov-network
@@ -559,11 +559,11 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 120s
+      start_period: 240s
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 384M
           cpus: '0.25'
     networks:
       - egov-network
@@ -659,7 +659,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 384M
           cpus: '0.25'
     networks:
       - egov-network
@@ -742,7 +742,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 192M
+          memory: 320M
           cpus: '0.25'
     networks:
       - egov-network
@@ -797,7 +797,7 @@ services:
       PGR_STATELEVEL_TENANTID: pg
       STATE_LEVEL_TENANT_ID: pg
       EGOV_STATE_LEVEL_TENANT_ID: pg
-      JAVA_OPTS: '-Xmx192m -Xms192m'
+      JAVA_OPTS: '-Xmx256m -Xms256m'
       OTEL_TRACES_EXPORTER: none
     ports:
       - "18083:8080"
@@ -806,11 +806,11 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 120s
+      start_period: 240s
     deploy:
       resources:
         limits:
-          memory: 300M
+          memory: 448M
           cpus: '0.25'
     networks:
       - egov-network
@@ -818,13 +818,14 @@ services:
   digit-ui:
     image: egovio/digit-ui:multiarch-d448cb7
     container_name: digit-ui
+    restart: on-failure
     ports:
       - "18080:80"
     volumes:
       - ./nginx/digit-ui.conf:/etc/nginx/conf.d/default.conf:ro
       - ./nginx/globalConfigs.js:/var/web/digit-ui/globalConfigs.js:ro
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:80/digit-ui/ >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/digit-ui/ >/dev/null 2>&1 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -889,6 +890,41 @@ services:
     volumes:
       - ./db/pgr-workflow-config.json:/pgr-workflow-config.json:ro
     entrypoint: ["sh", "-c", "echo 'Seeding PGR workflow business service...' && HTTP_CODE=$(curl -sS -o /tmp/response.txt -w '%{http_code}' -X POST 'http://egov-workflow-v2:8109/egov-workflow-v2/egov-wf/businessservice/_create' -H 'Content-Type: application/json' -d @/pgr-workflow-config.json) && echo \"PGR workflow seed done (HTTP $HTTP_CODE)\" && cat /tmp/response.txt && echo || (echo 'PGR workflow seed FAILED' && cat /tmp/response.txt 2>/dev/null && exit 1)"]
+    networks:
+      - egov-network
+    restart: "no"
+
+  # Seed localization data for pg tenant (one-shot init container)
+  # The full DB dump only has translations under 'statea' tenant.
+  # The UI fetches with tenantId=pg, so we need pg-specific records
+  # for login labels, tenant names, and PGR/HRMS translations.
+  localization-seed:
+    image: postgres:16
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+    volumes:
+      - ./db/localization-seed.sql:/localization-seed.sql:ro
+    entrypoint: >
+      bash -c "
+        echo 'Seeding localization data for pg tenant...' &&
+        psql postgresql://egov:${POSTGRES_PASSWORD:-egov123}@postgres:5432/egov -f /localization-seed.sql &&
+        echo 'Localization seed complete'
+      "
+    networks:
+      - egov-network
+    restart: "no"
+
+  # Flush localization cache after seed so egov-localization picks up new data.
+  # Without this, cached empty results for pg tenant cause raw keys on login page.
+  localization-cache-bust:
+    image: redis:7.2.4
+    depends_on:
+      egov-localization:
+        condition: service_healthy
+      localization-seed:
+        condition: service_completed_successfully
+    entrypoint: ["redis-cli", "-h", "redis", "DEL", "messages", "computedMessages"]
     networks:
       - egov-network
     restart: "no"
@@ -958,6 +994,34 @@ services:
           cpus: '0.25'
     networks:
       - egov-network
+
+  # Telemetry sidecar — monitors Docker lifecycle via the socket and
+  # sends opt-in events (start/stop/health) to Matomo.
+  # Opt-out: TELEMETRY=false
+  telemetry:
+    image: alpine:3.20
+    container_name: digit-telemetry
+    entrypoint: ["sh", "/telemetry/sidecar.sh"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./telemetry:/telemetry:ro
+    environment:
+      TELEMETRY: "${TELEMETRY:-false}"
+      MATOMO_SITE_ID: "${MATOMO_SITE_ID:-5}"
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    stop_grace_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+          cpus: '0.05'
+    networks:
+      - egov-network
+    restart: unless-stopped
 
 networks:
   egov-network:

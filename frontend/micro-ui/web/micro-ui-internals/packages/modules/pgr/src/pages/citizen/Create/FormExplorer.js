@@ -37,7 +37,13 @@ const FormExplorer = () => {
   const client = useQueryClient();
   const match = useRouteMatch();
   const dispatch = useDispatch();
-  const tenantId = Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || Digit.ULBService.getCurrentTenantId()
+  const tenantId =
+
+    Digit.Utils.getMultiRootTenant()
+      ? Digit.ULBService.getCurrentTenantId()
+      :
+
+      Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || Digit.ULBService.getCurrentTenantId();
 
 
   // Use Custom MDMS hook for fetching Hierarchy Schema
@@ -175,7 +181,7 @@ const FormExplorer = () => {
     return {
       service: {
         active: true,
-        tenantId: formData?.SelectAddress?.city?.code || tenantId,
+        tenantId: Digit.Utils.getMultiRootTenant() ? Digit.ULBService.getCurrentTenantId() : formData?.SelectAddress?.city?.code || tenantId,
         serviceCode: getEffectiveServiceCode(formData?.SelectComplaintType, formData?.SelectSubComplaintType),
         description: formData?.description || "",
         applicationStatus: "CREATED",
@@ -230,7 +236,7 @@ const FormExplorer = () => {
           type: "CREATE_COMPLAINT",
           payload: { responseInfo: { status: "failed" } },
         });
-        history.push(`/digit-ui/citizen/pgr/response`);
+        history.push(`/${window.contextPath}/citizen/pgr/response`);
       },
       onSuccess: async (responseData) => {
         dispatch({
@@ -241,10 +247,10 @@ const FormExplorer = () => {
           const id = responseData.ServiceWrappers[0].service.serviceRequestId;
 
           await client.refetchQueries(["complaintsList"]);
-          history.push(`/digit-ui/citizen/pgr/response`);
+          history.push(`/${window.contextPath}/citizen/pgr/response`);
 
         } else {
-          history.push(`/digit-ui/citizen/pgr/response`);
+          history.push(`/${window.contextPath}/citizen/pgr/response`);
         }
       },
     });
@@ -271,9 +277,20 @@ const FormExplorer = () => {
     switch (fieldKey) {
       case "ComplaintImagesPoint":
         return Array.isArray(data?.ComplaintImagesPoint) && data.ComplaintImagesPoint.length > 0;
-      case "SelectAddress":
+      case "SelectAddress": {
+        // Check if all boundary levels are selected
+        const boundaryData = data?.boundaryComponent;
+        const lowestLevel = hierarchyData?.lowestHierarchy;
+        const highestLevel = hierarchyData?.highestHierarchy;
+        const levels = [highestLevel, lowestLevel].filter(Boolean);
+        const expectedLevels = new Set(levels).size;
+
+        if (expectedLevels > 0) {
+          return Array.isArray(boundaryData) && boundaryData.length >= expectedLevels;
+        }
         return (data?.SelectAddress && Object.keys(data.SelectAddress).length > 0) ||
-          (Array.isArray(data?.boundaryComponent) && data.boundaryComponent.length > 0);
+          (Array.isArray(boundaryData) && boundaryData.length > 0);
+      }
       case "description":
         return typeof data?.description === "string" && data.description.trim().length > 0;
       case "SelectComplaintType":

@@ -2,6 +2,7 @@ package org.egov.pgr.service;
 
 
 import com.jayway.jsonpath.JsonPath;
+import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.producer.Producer;
@@ -19,7 +20,9 @@ import org.springframework.util.CollectionUtils;
 import java.util.*;
 
 import static org.egov.pgr.util.PGRConstants.MDMS_DEPARTMENT_SEARCH;
+import static org.egov.pgr.util.PGRConstants.MDMS_SERVICENAME_SEARCH;
 
+@Slf4j
 @org.springframework.stereotype.Service
 public class PGRService {
 
@@ -43,11 +46,14 @@ public class PGRService {
 
     private MDMSUtils mdmsUtils;
 
+    private ComplaintDomainEventService complaintDomainEventService;
+
 
     @Autowired
     public PGRService(EnrichmentService enrichmentService, UserService userService, WorkflowService workflowService,
                       ServiceRequestValidator serviceRequestValidator, ServiceRequestValidator validator, Producer producer,
-                      PGRConfiguration config, PGRRepository repository, MDMSUtils mdmsUtils) {
+                      PGRConfiguration config, PGRRepository repository, MDMSUtils mdmsUtils,
+                      ComplaintDomainEventService complaintDomainEventService) {
         this.enrichmentService = enrichmentService;
         this.userService = userService;
         this.workflowService = workflowService;
@@ -57,6 +63,7 @@ public class PGRService {
         this.config = config;
         this.repository = repository;
         this.mdmsUtils = mdmsUtils;
+        this.complaintDomainEventService = complaintDomainEventService;
     }
 
 
@@ -67,6 +74,7 @@ public class PGRService {
      */
     public ServiceRequest create(ServiceRequest request){
         String tenantId = request.getService().getTenantId();
+        String fromState = request.getService().getApplicationStatus();
         Object mdmsData = mdmsUtils.mDMSCall(request);
         validator.validateCreate(request, mdmsData);
         enrichmentService.enrichCreateRequest(request);
@@ -75,7 +83,9 @@ public class PGRService {
         Service service = request.getService();
         Map<String, Object> additionalDetailMap = new HashMap<>();
         additionalDetailMap.put("department", getDepartmentFromMDMS(request, mdmsData));
+        additionalDetailMap.put("serviceName", getServiceNameFromMDMS(request, mdmsData));
         service.setAdditionalDetail(additionalDetailMap);
+        complaintDomainEventService.publishWorkflowTransitionEvent(request, fromState);
 
         producer.push(tenantId,config.getCreateTopic(),request);
         producer.push(tenantId,config.getInboxCreateTopic(),request);
@@ -134,10 +144,21 @@ public class PGRService {
      */
     public ServiceRequest update(ServiceRequest request){
         String tenantId = request.getService().getTenantId();
+        String fromState = request.getService().getApplicationStatus();
         Object mdmsData = mdmsUtils.mDMSCall(request);
         validator.validateUpdate(request, mdmsData);
         enrichmentService.enrichUpdateRequest(request);
         workflowService.updateWorkflowStatus(request);
+
+        Service updateService = request.getService();
+        Object existingDetail = updateService.getAdditionalDetail();
+        Map<String, Object> updateAdditionalDetailMap = existingDetail instanceof Map
+                ? new HashMap<>((Map<String, Object>) existingDetail) : new HashMap<>();
+        updateAdditionalDetailMap.put("department", getDepartmentFromMDMS(request, mdmsData));
+        updateAdditionalDetailMap.put("serviceName", getServiceNameFromMDMS(request, mdmsData));
+        updateService.setAdditionalDetail(updateAdditionalDetailMap);
+
+        complaintDomainEventService.publishWorkflowTransitionEvent(request, fromState);
         producer.push(tenantId,config.getUpdateTopic(),request);
         producer.push(tenantId,config.getInboxUpdateTopic(),request);
         return request;
@@ -219,12 +240,34 @@ public class PGRService {
             List<String> department = JsonPath.read(mdmsData, jsonPath);
 
             if (department == null || department.isEmpty()) {
-                throw new CustomException("DEPARTMENT_NOT_FOUND", "No department found for service: " + serviceCode);
+                log.warn("No department found in MDMS for service: {}. Defaulting to NA.", serviceCode);
+                return "NA";
             }
 
             return department.get(0);
         } catch (Exception e) {
-            throw new CustomException("JSONPATH_ERROR", "Failed to parse mdms response for service: " + serviceCode);
+            log.warn("Failed to parse MDMS response for department lookup, service: {}. Defaulting to NA.", serviceCode, e);
+            return "NA";
+        }
+    }
+
+    private String getServiceNameFromMDMS(ServiceRequest request, Object mdmsData) {
+
+        String serviceCode = request.getService().getServiceCode();
+        String jsonPath = MDMS_SERVICENAME_SEARCH.replace("{SERVICEDEF}", serviceCode);
+
+        try {
+            List<String> names = JsonPath.read(mdmsData, jsonPath);
+
+            if (names == null || names.isEmpty()) {
+                log.warn("No service name found in MDMS for service: {}. Falling back to serviceCode.", serviceCode);
+                return serviceCode;
+            }
+
+            return names.get(0);
+        } catch (Exception e) {
+            log.warn("Failed to parse MDMS response for service name lookup, service: {}. Falling back to serviceCode.", serviceCode, e);
+            return serviceCode;
         }
     }
 

@@ -25,10 +25,10 @@ import GeoLocations from "./components/GeoLocations";
 import SelectAddress from "../../pgr/src/pages/citizen/Create/Steps/SelectAddress";
 import SelectImages from "../../pgr/src/pages/citizen/Create/Steps/SelectImages";
 import CreatePGRFlow from "./pages/citizen/Create/FormExplorer";
-
+import TrackOnWhatsApp from "./components/TrackOnWhatsApp";
+import Complaint from "./components/Complaint";
 
 export const PGRReducers = getRootReducer;
-
 
 export const PGRModule = ({ stateCode, userType, tenants }) => {
   const { path, url } = useRouteMatch();
@@ -68,6 +68,8 @@ export const PGRModule = ({ stateCode, userType, tenants }) => {
   }
 };
 
+// Added new component to render links on citizen home page for PGR module
+
 const PGRLinks = ({ matchPath }) => {
   const { t } = useTranslation();
   const [params, setParams, clearParams] = Digit.Hooks.useSessionStorage(PGR_CITIZEN_CREATE_COMPLAINT, {});
@@ -99,17 +101,19 @@ const componentsToRegister = {
   PGRTimeLineWrapper: TimelineWrapper,
   PGRAssigneeComponent: AssigneeComponent,
   PGRSearchInbox,
-  PGRCreateComplaint: CreateComplaint,
   PGRResponse: Response,
+  PGRCreateComplaint: CreateComplaint,
   PGRBreadCrumbs: BreadCrumbs,
   PGRComplaintsList: ComplaintsList,
   PGRComplaintDetailsPage: ComplaintDetailsPage,
   PGRSelectRating: SelectRating,
   PGRResponseCitzen: ResponseCitizen,
+  CreatePGRFlow: CreatePGRFlow,
   GeoLocations,
   SelectAddress,
   SelectImages,
-  CreatePGRFlow: CreatePGRFlow,
+  PGRTrackOnWhatsApp: TrackOnWhatsApp,
+  PGRComplaint: Complaint,
 };
 
 export const initPGRComponents = () => {
