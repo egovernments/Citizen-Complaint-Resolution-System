@@ -37,13 +37,13 @@ const FormExplorer = () => {
   const client = useQueryClient();
   const match = useRouteMatch();
   const dispatch = useDispatch();
-  const tenantId = 
-  
-  Digit.Utils.getMultiRootTenant()
-    ? Digit.ULBService.getCurrentTenantId()
-    : 
-    
-    Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || Digit.ULBService.getCurrentTenantId();
+  const tenantId =
+
+    Digit.Utils.getMultiRootTenant()
+      ? Digit.ULBService.getCurrentTenantId()
+      :
+
+      Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || Digit.ULBService.getCurrentTenantId();
 
 
   // Use Custom MDMS hook for fetching Hierarchy Schema

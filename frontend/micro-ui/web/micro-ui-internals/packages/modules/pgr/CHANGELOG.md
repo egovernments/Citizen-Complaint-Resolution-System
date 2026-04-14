@@ -1,6 +1,17 @@
 # Changelog
 All notable changes to this module will be documented in this file.
 
+## [1.0.24] - 2026-04-10
+
+### Updated
+- Version bumped to 1.0.24
+
+
+## [1.0.23] - 2026-04-09
+
+### Updated
+- Version bumped to 1.0.23
+
 ## [1.0.22] - 2026-04-06
 
 ### Fixed

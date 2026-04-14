@@ -158,7 +158,7 @@ WHERE NOT EXISTS (
 
 -- schema/RAINMAKER-PGR.json :: RAINMAKER-PGR.ServiceDefs
 INSERT INTO eg_mdms_schema_definition (id, tenantid, code, description, definition, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT '22c1101e-c277-44f1-8c2d-4164641b6635'::uuid, 'pg', 'RAINMAKER-PGR.ServiceDefs', 'RAINMAKER-PGR.ServiceDefs', '{"$schema":"http://json-schema.org/draft-07/schema#","additionalProperties":false,"properties":{"active":{"type":"boolean"},"department":{"type":"string"},"keywords":{"type":"string"},"menuPath":{"type":"string"},"name":{"type":"string"},"order":{"type":"number"},"serviceCode":{"type":"string"},"slaHours":{"type":"number"}},"required":["serviceCode","name","keywords","department","slaHours","active"],"title":"Generated schema for Root","type":"object","x-ref-schema":[],"x-unique":["serviceCode"]}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT '22c1101e-c277-44f1-8c2d-4164641b6635'::uuid, 'pg', 'RAINMAKER-PGR.ServiceDefs', 'RAINMAKER-PGR.ServiceDefs', '{"type":"object","title":"Generated schema for Root","$schema":"http://json-schema.org/draft-07/schema#","required":["serviceCode","name","keywords","department","slaHours","active","menuPath","menuPathName"],"x-unique":["serviceCode"],"properties":{"name":{"type":"string"},"order":{"type":"number"},"active":{"type":"boolean"},"keywords":{"type":"string"},"menuPath":{"type":"string"},"slaHours":{"type":"number"},"department":{"type":"string"},"serviceCode":{"type":"string"},"menuPathName":{"type":"string"}},"x-ref-schema":[],"additionalProperties":false}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_schema_definition WHERE tenantid = 'pg' AND code = 'RAINMAKER-PGR.ServiceDefs'
 );
@@ -7095,231 +7095,231 @@ WHERE NOT EXISTS (
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #1
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT '0eb85ed7-fb61-4d86-a803-08ab1e4d86e6'::uuid, 'pg', '618236d9e50cae30d3ffc09509cce2d23c2f63cea5a2c402ef1022a634c5a928', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_10","keywords":"other, miscellaneous,ad,playgrounds,burial,slaughterhouse, misc, tax, revenue","menuPath":"","name":"Others","order":6,"serviceCode":"Others","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT '0eb85ed7-fb61-4d86-a803-08ab1e4d86e6'::uuid, 'pg', '618236d9e50cae30d3ffc09509cce2d23c2f63cea5a2c402ef1022a634c5a928', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_10","keywords":"other, miscellaneous,ad,playgrounds,burial,slaughterhouse, misc, tax, revenue","menuPath":"","menuPathName":"","name":"Others","order":6,"serviceCode":"Others","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = '618236d9e50cae30d3ffc09509cce2d23c2f63cea5a2c402ef1022a634c5a928'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #2
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT '200a5d2c-6326-4465-ad50-1028ed9973d7'::uuid, 'pg', '3209714d2eb0424463febe037709d1a05dadcb2d44c56fac7ab0b2eb63f61b57', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_5","keywords":"open, defecation, waste, human, privy, toilet","menuPath":"Parks","name":"Park requires maintenance","serviceCode":"ParkRequiresMaintenance","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT '200a5d2c-6326-4465-ad50-1028ed9973d7'::uuid, 'pg', '3209714d2eb0424463febe037709d1a05dadcb2d44c56fac7ab0b2eb63f61b57', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_5","keywords":"open, defecation, waste, human, privy, toilet","menuPath":"Parks","menuPathName":"Parks","name":"Park requires maintenance","serviceCode":"ParkRequiresMaintenance","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = '3209714d2eb0424463febe037709d1a05dadcb2d44c56fac7ab0b2eb63f61b57'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #3
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT '4dddf16f-bb81-4b95-9aa6-a92fe084d9ba'::uuid, 'pg', '8b75d2734e008e4eeb3c01eb19b9fd620efc211c30f2528d07d6c5212074cc96', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_3","keywords":"open, defecation, waste, human, privy, toilet","menuPath":"OpenDefecation","name":"Open Defecation","serviceCode":"OpenDefecation","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT '4dddf16f-bb81-4b95-9aa6-a92fe084d9ba'::uuid, 'pg', '8b75d2734e008e4eeb3c01eb19b9fd620efc211c30f2528d07d6c5212074cc96', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_3","keywords":"open, defecation, waste, human, privy, toilet","menuPath":"OpenDefecation","menuPathName":"Open Defecation","name":"Open Defecation","serviceCode":"OpenDefecation","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = '8b75d2734e008e4eeb3c01eb19b9fd620efc211c30f2528d07d6c5212074cc96'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #4
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT '86cc3524-d84d-449a-93f2-2cb69c396bc1'::uuid, 'pg', 'fde2581b6ae874a3ebfc7292873e1520d170d9bfda54b601b7bc132ecc12545a', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_5","keywords":"tree, remove, trim, fallen, cut, plant, branch","menuPath":"Trees","name":"Cutting/trimming of tree required","serviceCode":"CuttingOrTrimmingOfTreeRequired","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT '86cc3524-d84d-449a-93f2-2cb69c396bc1'::uuid, 'pg', 'fde2581b6ae874a3ebfc7292873e1520d170d9bfda54b601b7bc132ecc12545a', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_5","keywords":"tree, remove, trim, fallen, cut, plant, branch","menuPath":"Trees","menuPathName":"Trees","name":"Cutting/trimming of tree required","serviceCode":"CuttingOrTrimmingOfTreeRequired","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = 'fde2581b6ae874a3ebfc7292873e1520d170d9bfda54b601b7bc132ecc12545a'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #5
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT '3b801a2f-6a60-4174-8123-ebc770f0bb75'::uuid, 'pg', 'c4c18a87679b920a67de5e2bcef58f2bf53cdc69b8007e69f1414dfa24e85283', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_5","keywords":"tree, cut, illegal, unathourized, remove, plant","menuPath":"Trees","name":"Illegal Cutting of trees","serviceCode":"IllegalCuttingOfTrees","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT '3b801a2f-6a60-4174-8123-ebc770f0bb75'::uuid, 'pg', 'c4c18a87679b920a67de5e2bcef58f2bf53cdc69b8007e69f1414dfa24e85283', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_5","keywords":"tree, cut, illegal, unathourized, remove, plant","menuPath":"Trees","menuPathName":"Trees","name":"Illegal Cutting of trees","serviceCode":"IllegalCuttingOfTrees","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = 'c4c18a87679b920a67de5e2bcef58f2bf53cdc69b8007e69f1414dfa24e85283'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #6
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT 'b7a02ea9-0715-4901-be05-87f13ddf123d'::uuid, 'pg', 'd13784be2b06cb1f1fd02aaaf3955221081e1ea6cefc785b4331598489954a1c', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_6","keywords":"illegal, parking, car, vehicle, space, removal, road, street, vehicle","menuPath":"LandViolations","name":"Illegal parking","serviceCode":"IllegalParking","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT 'b7a02ea9-0715-4901-be05-87f13ddf123d'::uuid, 'pg', 'd13784be2b06cb1f1fd02aaaf3955221081e1ea6cefc785b4331598489954a1c', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_6","keywords":"illegal, parking, car, vehicle, space, removal, road, street, vehicle","menuPath":"LandViolations","menuPathName":"Land Violations","name":"Illegal parking","serviceCode":"IllegalParking","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = 'd13784be2b06cb1f1fd02aaaf3955221081e1ea6cefc785b4331598489954a1c'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #7
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT 'a7b5ddea-e0e4-41d5-9e87-b914d8e9d254'::uuid, 'pg', 'acfc88dcf316fb72ea7b8e7ab2fb75f3c9fd27d09da48ef948a9bb05f3e4f8cc', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_6","keywords":"illegal, violation, property, public, space, land, unathourised, site, construction, wrong, build","menuPath":"LandViolations","name":"Illegal constructions","serviceCode":"IllegalConstructions","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT 'a7b5ddea-e0e4-41d5-9e87-b914d8e9d254'::uuid, 'pg', 'acfc88dcf316fb72ea7b8e7ab2fb75f3c9fd27d09da48ef948a9bb05f3e4f8cc', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_6","keywords":"illegal, violation, property, public, space, land, unathourised, site, construction, wrong, build","menuPath":"LandViolations","menuPathName":"Land Violations","name":"Illegal constructions","serviceCode":"IllegalConstructions","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = 'acfc88dcf316fb72ea7b8e7ab2fb75f3c9fd27d09da48ef948a9bb05f3e4f8cc'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #8
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT '4fc80e51-0213-4f32-9ad4-f5f7afe2f0c9'::uuid, 'pg', '08bcfcc187c07ab8360741ce8b415933386610b616aaa7b5a8e79e6215bd8e11', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_6","keywords":"illegal, shop, footpath, violation, property, public, space, land, unathourised, site, construction, wrong","menuPath":"LandViolations","name":"Illegal shops on footpath","serviceCode":"IllegalShopsOnFootPath","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT '4fc80e51-0213-4f32-9ad4-f5f7afe2f0c9'::uuid, 'pg', '08bcfcc187c07ab8360741ce8b415933386610b616aaa7b5a8e79e6215bd8e11', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_6","keywords":"illegal, shop, footpath, violation, property, public, space, land, unathourised, site, construction, wrong","menuPath":"LandViolations","menuPathName":"Land Violations","name":"Illegal shops on footpath","serviceCode":"IllegalShopsOnFootPath","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = '08bcfcc187c07ab8360741ce8b415933386610b616aaa7b5a8e79e6215bd8e11'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #9
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT '457ca570-3057-46f7-b393-ba9edddbdee5'::uuid, 'pg', '52c5dfbce2e9c8b2bd1a163fce7eedadba2c3ada55c2fa7dc60dda6c381c41ed', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_3","keywords":"toilet, public, restroom, bathroom, urinal, electricity, water, working","menuPath":"PublicToilets","name":"No water/electricity in public toilet","serviceCode":"NoWaterOrElectricityinPublicToilet","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT '457ca570-3057-46f7-b393-ba9edddbdee5'::uuid, 'pg', '52c5dfbce2e9c8b2bd1a163fce7eedadba2c3ada55c2fa7dc60dda6c381c41ed', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_3","keywords":"toilet, public, restroom, bathroom, urinal, electricity, water, working","menuPath":"PublicToilets","menuPathName":"Public Toilets","name":"No water/electricity in public toilet","serviceCode":"NoWaterOrElectricityinPublicToilet","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = '52c5dfbce2e9c8b2bd1a163fce7eedadba2c3ada55c2fa7dc60dda6c381c41ed'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #10
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT 'db69c436-afe4-415c-b769-98c42faa296f'::uuid, 'pg', '71a153d1fead021601206a7f75819c1290727db0480fff4362725cde18a28ccb', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_3","keywords":"toilet, public, restroom, bathroom, urinal, block, working","menuPath":"PublicToilets","name":"Public toilet damaged","serviceCode":"PublicToiletIsDamaged","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT 'db69c436-afe4-415c-b769-98c42faa296f'::uuid, 'pg', '71a153d1fead021601206a7f75819c1290727db0480fff4362725cde18a28ccb', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_3","keywords":"toilet, public, restroom, bathroom, urinal, block, working","menuPath":"PublicToilets","menuPathName":"Public Toilets","name":"Public toilet damaged","serviceCode":"PublicToiletIsDamaged","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = '71a153d1fead021601206a7f75819c1290727db0480fff4362725cde18a28ccb'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #11
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT '6289c23e-abde-4841-8c03-e967f73caa79'::uuid, 'pg', '98028661d2544afb899cfef5b3801d13d351f443affd7d21fc25077d3d923e57', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_3","keywords":"toilet, public, restroom, bathroom, urinal, smell, dirty","menuPath":"PublicToilets","name":"Dirty/smelly public toilet","serviceCode":"DirtyOrSmellyPublicToilets","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT '6289c23e-abde-4841-8c03-e967f73caa79'::uuid, 'pg', '98028661d2544afb899cfef5b3801d13d351f443affd7d21fc25077d3d923e57', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_3","keywords":"toilet, public, restroom, bathroom, urinal, smell, dirty","menuPath":"PublicToilets","menuPathName":"Public Toilets","name":"Dirty/smelly public toilet","serviceCode":"DirtyOrSmellyPublicToilets","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = '98028661d2544afb899cfef5b3801d13d351f443affd7d21fc25077d3d923e57'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #12
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT '7d5c2e51-e2e2-44a1-993b-0d955e880471'::uuid, 'pg', 'cd31f8eabdd1453409c4438fef3b64ad5a4537292442d6db0def4f3ead948d3b', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_3","keywords":"stray, cow, cows, cattle, bull, bulls, graze, grazing, dung, menace","menuPath":"Animals","name":"Dead animals","serviceCode":"DeadAnimals","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT '7d5c2e51-e2e2-44a1-993b-0d955e880471'::uuid, 'pg', 'cd31f8eabdd1453409c4438fef3b64ad5a4537292442d6db0def4f3ead948d3b', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_3","keywords":"stray, cow, cows, cattle, bull, bulls, graze, grazing, dung, menace","menuPath":"Animals","menuPathName":"Animals","name":"Dead animals","serviceCode":"DeadAnimals","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = 'cd31f8eabdd1453409c4438fef3b64ad5a4537292442d6db0def4f3ead948d3b'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #13
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT 'e2e4f1d4-2d36-43ec-bd4c-896aa60653f7'::uuid, 'pg', '6437703971569eb090fe603cdb6cf8d172e83eebb2d814089f330c68a90fe89c', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_3","keywords":"stray, dog, dogs, menace, animal, animals, attack, attacking, bite, biting, bark, barking","menuPath":"Animals","name":"Stray animals","serviceCode":"StrayAnimals","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT 'e2e4f1d4-2d36-43ec-bd4c-896aa60653f7'::uuid, 'pg', '6437703971569eb090fe603cdb6cf8d172e83eebb2d814089f330c68a90fe89c', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_3","keywords":"stray, dog, dogs, menace, animal, animals, attack, attacking, bite, biting, bark, barking","menuPath":"Animals","menuPathName":"Animals","name":"Stray animals","serviceCode":"StrayAnimals","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = '6437703971569eb090fe603cdb6cf8d172e83eebb2d814089f330c68a90fe89c'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #14
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT '567adebd-9cab-4c22-b180-72fa99844167'::uuid, 'pg', '3b99e7f9ef22310d79294d0882ba37fdcdc5758912d9b52a4a367aa67eb69a8b', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_3","keywords":"mosquito, menace, fog, spray, kill, health, dengue, malaria, disease, clean","menuPath":"Mosquitos","name":"Request spraying/ fogging operations","serviceCode":"RequestSprayingOrFoggingOperation","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT '567adebd-9cab-4c22-b180-72fa99844167'::uuid, 'pg', '3b99e7f9ef22310d79294d0882ba37fdcdc5758912d9b52a4a367aa67eb69a8b', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_3","keywords":"mosquito, menace, fog, spray, kill, health, dengue, malaria, disease, clean","menuPath":"Mosquitos","menuPathName":"Mosquitos","name":"Request spraying/ fogging operations","serviceCode":"RequestSprayingOrFoggingOperation","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = '3b99e7f9ef22310d79294d0882ba37fdcdc5758912d9b52a4a367aa67eb69a8b'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #15
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT '4a3a727a-59be-45cf-a4e1-15ef1a153cf1'::uuid, 'pg', '7369b4e6aaaac7c675933f7b6ed83ae430a7e838910ddff84593d97b776545f8', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_4","keywords":"illegal, shop, footpath, walk, remove, occupy, path","menuPath":"RoadsAndFootpaths","name":"Construction material lying on the road","serviceCode":"ConstructionMaterialLyingOntheRoad","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT '4a3a727a-59be-45cf-a4e1-15ef1a153cf1'::uuid, 'pg', '7369b4e6aaaac7c675933f7b6ed83ae430a7e838910ddff84593d97b776545f8', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_4","keywords":"illegal, shop, footpath, walk, remove, occupy, path","menuPath":"RoadsAndFootpaths","menuPathName":"Roads And Footpaths","name":"Construction material lying on the road","serviceCode":"ConstructionMaterialLyingOntheRoad","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = '7369b4e6aaaac7c675933f7b6ed83ae430a7e838910ddff84593d97b776545f8'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #16
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT 'cdcb74eb-81f0-4170-a6dd-c575537c52fc'::uuid, 'pg', '605198eb5c17c2730aaeda35f8e08af766816edc20108b2fa9e881737f4641a5', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_4","keywords":"footpath, repair, broken, surface, damage, patch, hole, maintenance, walk, path","menuPath":"RoadsAndFootpaths","name":"Damaged/blocked footpath","serviceCode":"DamagedOrBlockedFootpath","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT 'cdcb74eb-81f0-4170-a6dd-c575537c52fc'::uuid, 'pg', '605198eb5c17c2730aaeda35f8e08af766816edc20108b2fa9e881737f4641a5', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_4","keywords":"footpath, repair, broken, surface, damage, patch, hole, maintenance, walk, path","menuPath":"RoadsAndFootpaths","menuPathName":"Roads And Footpaths","name":"Damaged/blocked footpath","serviceCode":"DamagedOrBlockedFootpath","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = '605198eb5c17c2730aaeda35f8e08af766816edc20108b2fa9e881737f4641a5'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #17
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT '2bea4554-0271-4eb6-86d0-5bbada247c50'::uuid, 'pg', '5108cd9845f39676ca27c01c9318e9bfa8f94b04e7134bfeb8a2021fce17e07a', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_4","keywords":"road, street, manhole, hole, cover, lid, footpath, open, man, drainage, damage, repair, fix","menuPath":"RoadsAndFootpaths","name":"Manhole cover is missing/damaged","serviceCode":"ManholeCoverMissingOrDamaged","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT '2bea4554-0271-4eb6-86d0-5bbada247c50'::uuid, 'pg', '5108cd9845f39676ca27c01c9318e9bfa8f94b04e7134bfeb8a2021fce17e07a', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_4","keywords":"road, street, manhole, hole, cover, lid, footpath, open, man, drainage, damage, repair, fix","menuPath":"RoadsAndFootpaths","menuPathName":"Roads And Footpaths","name":"Manhole cover is missing/damaged","serviceCode":"ManholeCoverMissingOrDamaged","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = '5108cd9845f39676ca27c01c9318e9bfa8f94b04e7134bfeb8a2021fce17e07a'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #18
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT 'fe672748-67f4-4bd9-8088-6b0963d66703'::uuid, 'pg', 'a8e2093b11f4cf933c4793a107ee653069283ac886abc462ff157ac7169c6307', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_4","keywords":"road, drainage, water, block, puddle, street, flood, overflow, rain","menuPath":"RoadsAndFootpaths","name":"Water logged road","serviceCode":"WaterLoggedRoad","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT 'fe672748-67f4-4bd9-8088-6b0963d66703'::uuid, 'pg', 'a8e2093b11f4cf933c4793a107ee653069283ac886abc462ff157ac7169c6307', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_4","keywords":"road, drainage, water, block, puddle, street, flood, overflow, rain","menuPath":"RoadsAndFootpaths","menuPathName":"Roads And Footpaths","name":"Water logged road","serviceCode":"WaterLoggedRoad","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = 'a8e2093b11f4cf933c4793a107ee653069283ac886abc462ff157ac7169c6307'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #19
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT '55c86529-f026-435a-94df-1c3fd9ad13a1'::uuid, 'pg', 'dbd2af1cf0ecbcd6c1cc0ac53eb99e7189637d77bc978122a66806476d12cb26', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_4","keywords":"road, damage, hole, surface, repair, patch, broken, maintenance, street, construction, fix","menuPath":"RoadsAndFootpaths","name":"Damaged road","serviceCode":"DamagedRoad","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT '55c86529-f026-435a-94df-1c3fd9ad13a1'::uuid, 'pg', 'dbd2af1cf0ecbcd6c1cc0ac53eb99e7189637d77bc978122a66806476d12cb26', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_4","keywords":"road, damage, hole, surface, repair, patch, broken, maintenance, street, construction, fix","menuPath":"RoadsAndFootpaths","menuPathName":"Roads And Footpaths","name":"Damaged road","serviceCode":"DamagedRoad","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = 'dbd2af1cf0ecbcd6c1cc0ac53eb99e7189637d77bc978122a66806476d12cb26'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #20
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT 'fb47bf88-b426-42e4-87dc-32099b2bd608'::uuid, 'pg', 'c1509b5e9b213a67458a8cf5e73b4442c48db2158f94e1da655d2f2064c61048', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_4","keywords":"water, supply, connection, damage, repair, broken, pipe, piping, tap","menuPath":"WaterandSewage","name":"Water pressure is very less","serviceCode":"WaterPressureisVeryLess","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT 'fb47bf88-b426-42e4-87dc-32099b2bd608'::uuid, 'pg', 'c1509b5e9b213a67458a8cf5e73b4442c48db2158f94e1da655d2f2064c61048', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_4","keywords":"water, supply, connection, damage, repair, broken, pipe, piping, tap","menuPath":"WaterandSewage","menuPathName":"Water and Sewage","name":"Water pressure is very less","serviceCode":"WaterPressureisVeryLess","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = 'c1509b5e9b213a67458a8cf5e73b4442c48db2158f94e1da655d2f2064c61048'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #21
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT 'cebb1165-5568-469f-b23a-9dff215f7d2d'::uuid, 'pg', 'acb340a9ff7ae2d77259c882dda51c5abc8bb142b486b1f26b1072e4cf8a8a44', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_4","keywords":"water, supply, connection, damage, repair, broken, pipe, piping, tap","menuPath":"WaterandSewage","name":"Broken water pipe / Leakage","order":3,"serviceCode":"BrokenWaterPipeOrLeakage","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT 'cebb1165-5568-469f-b23a-9dff215f7d2d'::uuid, 'pg', 'acb340a9ff7ae2d77259c882dda51c5abc8bb142b486b1f26b1072e4cf8a8a44', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_4","keywords":"water, supply, connection, damage, repair, broken, pipe, piping, tap","menuPath":"WaterandSewage","menuPathName":"Water and Sewage","name":"Broken water pipe / Leakage","order":3,"serviceCode":"BrokenWaterPipeOrLeakage","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = 'acb340a9ff7ae2d77259c882dda51c5abc8bb142b486b1f26b1072e4cf8a8a44'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #22
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT '3c57b210-9bf8-4e1e-a7df-e168db07c59c'::uuid, 'pg', 'b5fb30535085de936a29538389630800739f8722ee3c60457a4bfc1e4b886b7c', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_4","keywords":"water, supply, connection, drink, dirty, contaminated, impure, health, clean","menuPath":"WaterandSewage","name":"Dirty water supply","serviceCode":"DirtyWaterSupply","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT '3c57b210-9bf8-4e1e-a7df-e168db07c59c'::uuid, 'pg', 'b5fb30535085de936a29538389630800739f8722ee3c60457a4bfc1e4b886b7c', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_4","keywords":"water, supply, connection, drink, dirty, contaminated, impure, health, clean","menuPath":"WaterandSewage","menuPathName":"Water and Sewage","name":"Dirty water supply","serviceCode":"DirtyWaterSupply","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = 'b5fb30535085de936a29538389630800739f8722ee3c60457a4bfc1e4b886b7c'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #23
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT '9ac108de-8a8a-4784-bd26-3c285bb35038'::uuid, 'pg', 'e546182e78b1205318256ac994a0f202f36b3ba4bbbe3bf06a165777fd34dc1b', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_4","keywords":"water, supply, connection, drink, tap","menuPath":"WaterandSewage","name":"No water supply","serviceCode":"NoWaterSupply","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT '9ac108de-8a8a-4784-bd26-3c285bb35038'::uuid, 'pg', 'e546182e78b1205318256ac994a0f202f36b3ba4bbbe3bf06a165777fd34dc1b', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_4","keywords":"water, supply, connection, drink, tap","menuPath":"WaterandSewage","menuPathName":"Water and Sewage","name":"No water supply","serviceCode":"NoWaterSupply","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = 'e546182e78b1205318256ac994a0f202f36b3ba4bbbe3bf06a165777fd34dc1b'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #24
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT '73a53952-75a2-435a-a54d-da5dedad4366'::uuid, 'pg', '8172c4f6af02aa670ff3988527fdd8e2431c493488d162d743f95ed91ce28cfb', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_4","keywords":"water, supply, shortage, drink, tap, connection,leakage,less","menuPath":"WaterandSewage","name":"Shortage of water","serviceCode":"ShortageOfWater","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT '73a53952-75a2-435a-a54d-da5dedad4366'::uuid, 'pg', '8172c4f6af02aa670ff3988527fdd8e2431c493488d162d743f95ed91ce28cfb', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_4","keywords":"water, supply, shortage, drink, tap, connection,leakage,less","menuPath":"WaterandSewage","menuPathName":"Water and Sewage","name":"Shortage of water","serviceCode":"ShortageOfWater","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = '8172c4f6af02aa670ff3988527fdd8e2431c493488d162d743f95ed91ce28cfb'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #25
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT '13a41f7e-65a7-4c45-87a8-b62ce3c327a4'::uuid, 'pg', 'eaf8f7b12778e92822bc189d66eb68d32cf5452501a6f754a78d912fc9d8357e', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_4","keywords":"water, supply, connection, damage, repair, broken, pipe, piping, tap","menuPath":"WaterandSewage","name":"Block / Overflowing sewage","order":2,"serviceCode":"BlockOrOverflowingSewage","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT '13a41f7e-65a7-4c45-87a8-b62ce3c327a4'::uuid, 'pg', 'eaf8f7b12778e92822bc189d66eb68d32cf5452501a6f754a78d912fc9d8357e', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_4","keywords":"water, supply, connection, damage, repair, broken, pipe, piping, tap","menuPath":"WaterandSewage","menuPathName":"Water and Sewage","name":"Block / Overflowing sewage","order":2,"serviceCode":"BlockOrOverflowingSewage","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = 'eaf8f7b12778e92822bc189d66eb68d32cf5452501a6f754a78d912fc9d8357e'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #26
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT 'ce628b6c-6391-43d4-9f98-b38aefd8bf85'::uuid, 'pg', 'e2fa26754783d193afe9f910b5552cdf8a7f4dba65500faa8ae4152c70424a93', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_4","keywords":"water, supply, connection, damage, repair, broken, pipe, piping, tap","menuPath":"WaterandSewage","name":"Illegal discharge of sewage","serviceCode":"illegalDischargeOfSewage","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT 'ce628b6c-6391-43d4-9f98-b38aefd8bf85'::uuid, 'pg', 'e2fa26754783d193afe9f910b5552cdf8a7f4dba65500faa8ae4152c70424a93', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_4","keywords":"water, supply, connection, damage, repair, broken, pipe, piping, tap","menuPath":"WaterandSewage","menuPathName":"Water and Sewage","name":"Illegal discharge of sewage","serviceCode":"illegalDischargeOfSewage","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = 'e2fa26754783d193afe9f910b5552cdf8a7f4dba65500faa8ae4152c70424a93'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #27
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT '38f3867d-b46a-4827-8084-6a94e66b3f53'::uuid, 'pg', 'fe3cc5febeca4a53e4d15fa0e81be3d6c69b5d5a8f466d3abb74eda04fbf827a', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_4","keywords":"drain, block, clean, debris, silt, drainage, water, clean, roadside, flow, remove, waste, garbage, clear, overflow, canal, fill, stagnate, rain, sanitation, sand, pipe, clog, stuck","menuPath":"Drains","name":"Overflowing/Blocked drain","serviceCode":"OverflowingOrBlockedDrain","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT '38f3867d-b46a-4827-8084-6a94e66b3f53'::uuid, 'pg', 'fe3cc5febeca4a53e4d15fa0e81be3d6c69b5d5a8f466d3abb74eda04fbf827a', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_4","keywords":"drain, block, clean, debris, silt, drainage, water, clean, roadside, flow, remove, waste, garbage, clear, overflow, canal, fill, stagnate, rain, sanitation, sand, pipe, clog, stuck","menuPath":"Drains","menuPathName":"Drains","name":"Overflowing/Blocked drain","serviceCode":"OverflowingOrBlockedDrain","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = 'fe3cc5febeca4a53e4d15fa0e81be3d6c69b5d5a8f466d3abb74eda04fbf827a'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #28
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT '78a8ff27-6009-43ba-99d7-8a2f8e517fc5'::uuid, 'pg', 'be5eda57a41acf74b015df1a4b24e5a175eda088833515ec7825788715820de2', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_3","keywords":"garbage, remove, burn, fire, health, waste, smoke, plastic, illegal","menuPath":"Garbage","name":"Burning of garbage","serviceCode":"BurningOfGarbage","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT '78a8ff27-6009-43ba-99d7-8a2f8e517fc5'::uuid, 'pg', 'be5eda57a41acf74b015df1a4b24e5a175eda088833515ec7825788715820de2', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_3","keywords":"garbage, remove, burn, fire, health, waste, smoke, plastic, illegal","menuPath":"Garbage","menuPathName":"Garbage","name":"Burning of garbage","serviceCode":"BurningOfGarbage","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = 'be5eda57a41acf74b015df1a4b24e5a175eda088833515ec7825788715820de2'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #29
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT '8dc80e12-47c3-4abf-a460-304cf979e8d8'::uuid, 'pg', 'd0d9fb62d6848179c23f4e4c9f0ff09f2156a1b47fe5b39b4e2a346056670f88', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_3","keywords":"garbage, waste, bin, dustbin, clean, remove, sanitation, overflow, smell, health, throw, dispose","menuPath":"Garbage","name":"Damaged garbage bin","serviceCode":"DamagedGarbageBin","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT '8dc80e12-47c3-4abf-a460-304cf979e8d8'::uuid, 'pg', 'd0d9fb62d6848179c23f4e4c9f0ff09f2156a1b47fe5b39b4e2a346056670f88', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_3","keywords":"garbage, waste, bin, dustbin, clean, remove, sanitation, overflow, smell, health, throw, dispose","menuPath":"Garbage","menuPathName":"Garbage","name":"Damaged garbage bin","serviceCode":"DamagedGarbageBin","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = 'd0d9fb62d6848179c23f4e4c9f0ff09f2156a1b47fe5b39b4e2a346056670f88'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #30
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT '49e6b340-f4b7-47dc-9f19-9917af943dd8'::uuid, 'pg', 'e9a1b5b0512ce027fa62d39b67900dd216bd582ca85d08535f66ef4f45afe878', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_3","keywords":"garbage, collect, litter, clean, door, waste, remove, sweeper, sanitation, dump, health, debris, throw","menuPath":"Garbage","name":"Garbage needs to be cleared","order":4,"serviceCode":"GarbageNeedsTobeCleared","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT '49e6b340-f4b7-47dc-9f19-9917af943dd8'::uuid, 'pg', 'e9a1b5b0512ce027fa62d39b67900dd216bd582ca85d08535f66ef4f45afe878', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_3","keywords":"garbage, collect, litter, clean, door, waste, remove, sweeper, sanitation, dump, health, debris, throw","menuPath":"Garbage","menuPathName":"Garbage","name":"Garbage needs to be cleared","order":4,"serviceCode":"GarbageNeedsTobeCleared","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = 'e9a1b5b0512ce027fa62d39b67900dd216bd582ca85d08535f66ef4f45afe878'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #31
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT 'c8e54525-c25a-4424-bb74-00e7429fb0fb'::uuid, 'pg', 'e950e23e70f51e054882787770097f64e41352a334f02eb8d0545a57bf98a67c', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_1","keywords":"streetlight, light, repair, work, pole, electric, power, repair, fix","menuPath":"StreetLights","name":"Streetlight not working","order":1,"serviceCode":"StreetLightNotWorking","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT 'c8e54525-c25a-4424-bb74-00e7429fb0fb'::uuid, 'pg', 'e950e23e70f51e054882787770097f64e41352a334f02eb8d0545a57bf98a67c', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_1","keywords":"streetlight, light, repair, work, pole, electric, power, repair, fix","menuPath":"StreetLights","menuPathName":"Street Lights","name":"Streetlight not working","order":1,"serviceCode":"StreetLightNotWorking","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = 'e950e23e70f51e054882787770097f64e41352a334f02eb8d0545a57bf98a67c'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #32
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT '7117299d-5a8d-4617-8657-8ec06368bca1'::uuid, 'pg', 'b222848808278f4f692118befce1e677df2c27e5bb963220aabacb88e0ecde48', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_3","keywords":"garbage, collect, litter, clean, door, waste, remove, sweeper, sanitation, dump, health, debris, throw","menuPath":"Garbage","name":"Non sweeping of road","order":5,"serviceCode":"NonSweepingOfRoad","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT '7117299d-5a8d-4617-8657-8ec06368bca1'::uuid, 'pg', 'b222848808278f4f692118befce1e677df2c27e5bb963220aabacb88e0ecde48', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_3","keywords":"garbage, collect, litter, clean, door, waste, remove, sweeper, sanitation, dump, health, debris, throw","menuPath":"Garbage","menuPathName":"Garbage","name":"Non sweeping of road","order":5,"serviceCode":"NonSweepingOfRoad","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = 'b222848808278f4f692118befce1e677df2c27e5bb963220aabacb88e0ecde48'
 );
 
 -- data/RAINMAKER-PGR/RAINMAKER-PGR.ServiceDefs.json :: RAINMAKER-PGR.ServiceDefs entry #33
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-SELECT '344495fc-c324-4923-b8b4-b8f44eda6093'::uuid, 'pg', '49b2ab679a5b95b6334884b2b0391f1cdd7cdab8dd476be8380a8c22f23e481a', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_1","keywords":"streetlight, light, repair, work, pole, electric, power, repair, damage, fix","menuPath":"StreetLights","name":"No streetlight","serviceCode":"NoStreetlight","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+SELECT '344495fc-c324-4923-b8b4-b8f44eda6093'::uuid, 'pg', '49b2ab679a5b95b6334884b2b0391f1cdd7cdab8dd476be8380a8c22f23e481a', 'RAINMAKER-PGR.ServiceDefs', '{"active":true,"department":"DEPT_1","keywords":"streetlight, light, repair, work, pole, electric, power, repair, damage, fix","menuPath":"StreetLights","menuPathName":"Street Lights","name":"No streetlight","serviceCode":"NoStreetlight","slaHours":336}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'RAINMAKER-PGR.ServiceDefs' AND uniqueidentifier = '49b2ab679a5b95b6334884b2b0391f1cdd7cdab8dd476be8380a8c22f23e481a'
 );
