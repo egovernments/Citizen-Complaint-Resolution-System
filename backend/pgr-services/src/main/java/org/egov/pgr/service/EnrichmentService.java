@@ -17,6 +17,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.egov.pgr.util.PGRConstants.USERTYPE_CITIZEN;
+import static org.egov.pgr.util.PGRConstants.DEFAULT_CITIZEN_SOURCE;
 
 @org.springframework.stereotype.Service
 public class EnrichmentService {
@@ -51,8 +52,12 @@ public class EnrichmentService {
         String tenantId = service.getTenantId();
 
         // Enrich accountId of the logged in citizen
-        if(requestInfo.getUserInfo().getType().equalsIgnoreCase(USERTYPE_CITIZEN))
+        if (requestInfo.getUserInfo().getType().equalsIgnoreCase(USERTYPE_CITIZEN)) {
             serviceRequest.getService().setAccountId(requestInfo.getUserInfo().getUuid());
+
+            // Set default source as "Online" for citizen submissions
+            service.setSource(DEFAULT_CITIZEN_SOURCE);
+        }
 
         userService.callUserService(serviceRequest);
 
