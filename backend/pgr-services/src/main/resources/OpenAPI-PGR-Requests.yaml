@@ -167,19 +167,15 @@ paths:
 components:
   schemas:
     RequestInfo:
-      $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/egov-common-contract/src/main/resources/egov-common-contract.yaml#/components/schemas/RequestInfo"
+      $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/RequestInfo"
     ResponseInfo:
-      $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/egov-common-contract/src/main/resources/egov-common-contract.yaml#/components/schemas/ResponseInfo"
+      $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/ResponseInfo"
     ErrorRes:
-      $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/egov-common-contract/src/main/resources/egov-common-contract.yaml#/components/schemas/ErrorRes"
-    User:
-      $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/egov-common-contract/src/main/resources/egov-common-contract.yaml#/components/schemas/User"
+      $ref: "https://raw.githubusercontent.com/egovernments/municipal-services/common-contract/docs/common-contract-v2-0-0.yml#/components/schemas/ErrorRes"
     Address:
-      $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/egov-common-contract/src/main/resources/egov-common-contract.yaml#/components/schemas/Address"
+      $ref: "https://raw.githubusercontent.com/egovernments/municipal-services/common-contract/docs/common-contract-v2-0-0.yml#/components/schemas/Address"
     AuditDetails:
-      $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/egov-common-contract/src/main/resources/egov-common-contract.yaml#/components/schemas/AuditDetails"
-    ProcessInstance:
-      $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/egov-common-contract/src/main/resources/egov-common-contract.yaml#/components/schemas/ProcessInstance"
+      $ref: "https://raw.githubusercontent.com/egovernments/municipal-services/common-contract/docs/common-contract-v2-0-0.yml#/components/schemas/AuditDetails"
     # Local wrappers and models
     RequestInfoWrapper:
       type: object
@@ -232,7 +228,7 @@ components:
           type: boolean
           default: true
         citizen:
-          $ref: '#/components/schemas/User'
+          $ref: 'https://raw.githubusercontent.com/egovernments/municipal-services/common-contract/docs/common-contract-v2-0-0.yml#/components/schemas/UserInfo'
         id:
           type: string
         tenantId:
@@ -256,9 +252,62 @@ components:
           type: string
         source:
           type: string
+        documents:
+          type: array
+          description: List of documents attached to this service request
+          items:
+            $ref: '#/components/schemas/Document'
         address:
           $ref: '#/components/schemas/Address'
         auditDetails:
           $ref: '#/components/schemas/AuditDetails'
-        processInstance:
-          $ref: '#/components/schemas/ProcessInstance'
+      required:
+        - tenantId
+        - serviceCode
+        - source
+        - address
+
+    Document:
+      type: object
+      description: Document attached to a service request
+      properties:
+        id:
+          type: string
+          description: Unique document identifier (UUID)
+          readOnly: true
+        documentType:
+          type: string
+          description: Document category (e.g. COMPLAINT_PHOTO)
+          maxLength: 64
+        fileStoreId:
+          type: string
+          description: Reference to file-store service
+          maxLength: 64
+        documentUid:
+          type: string
+          description: Optional unique document reference
+          maxLength: 64
+        additionalDetails:
+          type: object
+          description: Any additional metadata for the document
+
+    Workflow:
+      type: object
+      description: Workflow action details for a service request transition
+      properties:
+        action:
+          type: string
+          description: Workflow action to perform
+        assignes:
+          type: array
+          items:
+            type: string
+          description: List of assignee UUIDs
+        comments:
+          type: string
+          description: Comments for the workflow transition
+        verificationDocuments:
+          type: array
+          description: Documents attached during workflow verification
+          items:
+            $ref: '#/components/schemas/Document'
