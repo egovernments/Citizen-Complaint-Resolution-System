@@ -8,7 +8,7 @@ import _ from "lodash";
 
 const PGRSearchInbox = () => {
   const { t } = useTranslation();
-   // Detect if the user is on a mobile device
+  // Detect if the user is on a mobile device
   const isMobile = window.Digit.Utils.browser.isMobile();
 
   // Get current ULB tenant ID
@@ -43,13 +43,13 @@ const PGRSearchInbox = () => {
     return mdmsData || PGRSearchInboxConfig();
   }, [mdmsData]);
 
-// Fetch the list of service definitions (e.g., complaint types) for current tenant
+  // Fetch the list of service definitions (e.g., complaint types) for current tenant
   const serviceDefs = Digit.Hooks.pgr.useServiceDefs(tenantId, "PGR");
   /**
    * Reset or refresh config when the route changes
    */
   useEffect(() => {
-  if (configs) {
+    if (configs) {
       setPageConfig(_.cloneDeep(configs));
     }
   }, [location.pathname, configs]);
@@ -110,15 +110,16 @@ const PGRSearchInbox = () => {
           },
         },
       };
+    }  // close: if (processedConfig && validationRules ...)
 
-  return processedConfig;
+    return processedConfig;
   }, [pageConfig, serviceDefs, validationRules, t]);
 
- /**
-   * Show loader until necessary data is available
-   */
+  /**
+    * Show loader until necessary data is available
+    */
   if (isLoading || isValidationLoading || !pageConfig || !updatedConfig || serviceDefs?.length === 0) {
-        return <Loader />;
+    return <Loader />;
   }
 
   console.log("*** Log ===> 1", configs);
