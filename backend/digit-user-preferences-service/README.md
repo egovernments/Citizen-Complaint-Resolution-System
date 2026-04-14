@@ -167,4 +167,3 @@ Location: [`deploy-as-code/helm/charts/common-services/digit-user-preferences-se
 ## Resources
 
 - [OpenAPI Spec](https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/develop/docs/WhatsApp_Bidirectional/API%20specifications/user-preferences.openapi.yaml)
-- Postman Collection: Available in the project's Postman workspace

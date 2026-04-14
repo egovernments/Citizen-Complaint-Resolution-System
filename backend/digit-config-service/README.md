@@ -285,4 +285,8 @@ java -jar target/digit-config-service-0.1.0-SNAPSHOT.jar \
 | `state.level.tenantid` | `pg` | Tenant ID used for encryption keys |
 
 ---
-*For full API details, refer to the [OpenAPI Spec](../docs/Configs_Service/config-service.openapi.yaml).*
+### Helm Chart
+
+Location: [`deploy-as-code/helm/charts/common-services/digit-config-service`](https://github.com/egovernments/DIGIT-DevOps/tree/sandbox-demo/deploy-as-code/helm/charts/common-services/digit-config-service)
+---
+*For full API details, refer to the [OpenAPI Spec](https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/develop/docs/Configs_Service/config-service.openapi.yaml).*
