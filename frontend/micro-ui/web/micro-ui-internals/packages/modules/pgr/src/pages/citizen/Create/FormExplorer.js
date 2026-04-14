@@ -278,15 +278,18 @@ const FormExplorer = () => {
       case "ComplaintImagesPoint":
         return Array.isArray(data?.ComplaintImagesPoint) && data.ComplaintImagesPoint.length > 0;
       case "SelectAddress": {
-        // At least one boundary level must be selected.
-        // Users can stop at any level (e.g. County without selecting Ward).
+        // Check if all boundary levels are selected
         const boundaryData = data?.boundaryComponent;
-        const hasBoundary = boundaryData && (
-          (typeof boundaryData === 'object' && boundaryData.code) ||
-          (Array.isArray(boundaryData) && boundaryData.length > 0)
-        );
-        return hasBoundary ||
-          (data?.SelectAddress && Object.keys(data.SelectAddress).length > 0);
+        const lowestLevel = hierarchyData?.lowestHierarchy;
+        const highestLevel = hierarchyData?.highestHierarchy;
+        const levels = [highestLevel, lowestLevel].filter(Boolean);
+        const expectedLevels = new Set(levels).size;
+
+        if (expectedLevels > 0) {
+          return Array.isArray(boundaryData) && boundaryData.length >= expectedLevels;
+        }
+        return (data?.SelectAddress && Object.keys(data.SelectAddress).length > 0) ||
+          (Array.isArray(boundaryData) && boundaryData.length > 0);
       }
       case "description":
         return typeof data?.description === "string" && data.description.trim().length > 0;
