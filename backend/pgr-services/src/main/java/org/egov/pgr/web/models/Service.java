@@ -76,6 +76,7 @@ public class Service   {
         @JsonProperty("applicationStatus")
         private String applicationStatus = null;
 
+        @NotNull
         @SafeHtml
         @JsonProperty("source")
         private String source = null;

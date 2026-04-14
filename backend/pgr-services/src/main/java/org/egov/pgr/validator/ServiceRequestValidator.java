@@ -279,7 +279,7 @@ public class ServiceRequestValidator {
     /**
      * Validates if the source is valid against MDMS ComplaintSources or the
      * allowed.source property.
-     * If the source is empty, sets it to the default source defined in MDMS.
+     * If the source is not found in MDMS, sets it to the default source defined in MDMS.
      *
      * @param request  The service request
      * @param mdmsData The MDMS data containing ComplaintSources
@@ -289,42 +289,33 @@ public class ServiceRequestValidator {
         Service service = request.getService();
         String source = service.getSource();
 
-        if (source == null || source.isEmpty()) {
-            // Find default source from MDMS
-            String defaultSourceJsonPath = "$.MdmsRes.RAINMAKER-PGR.ComplaintSources[?(@.default==true)].code";
-            try {
-                List<String> defaultSources = JsonPath.read(mdmsData, defaultSourceJsonPath);
-                if (!CollectionUtils.isEmpty(defaultSources)) {
-                    service.setSource(defaultSources.get(0));
-                    source = service.getSource();
-                } else {
-                    errorMap.put("INVALID_SOURCE", "The source field is mandatory and no default source found in MDMS");
-                    return;
-                }
-            } catch (Exception e) {
-                errorMap.put("JSONPATH_ERROR", "Failed to parse mdms response for default complaint source");
-                return;
-            }
+        // Validate if source exists in MDMS
+        String jsonPath = MDMS_COMPLAINT_SOURCE_CODE_SEARCH.replace("{SOURCECODE}", source);
+
+        List<Object> res = null;
+
+        try {
+            res = JsonPath.read(mdmsData, jsonPath);
+        } catch (Exception e) {
+            errorMap.put("JSONPATH_ERROR", "Failed to parse mdms response for complaint sources");
+            return;
         }
 
-        if (source != null && !source.isEmpty()) {
-            String jsonPath = MDMS_COMPLAINT_SOURCE_CODE_SEARCH.replace("{SOURCECODE}", source);
-
-            List<Object> res = null;
-
-            try {
-                res = JsonPath.read(mdmsData, jsonPath);
-            } catch (Exception e) {
-                errorMap.put("JSONPATH_ERROR", "Failed to parse mdms response for complaint sources");
-                return;
-            }
-
-            if (CollectionUtils.isEmpty(res)) {
-                // Fallback: check if the source is in the allowed string config (for backwards
-                // compatibility if MDMS doesn't match)
-                List<String> allowedSourceStr = Arrays.asList(config.getAllowedSource().split(","));
-                if (!allowedSourceStr.contains(source)) {
-                    errorMap.put("INVALID_SOURCE", "The source: " + source + " is not valid");
+        if (CollectionUtils.isEmpty(res)) {
+            // Check if the source is in the allowed string config (for backwards compatibility)
+            List<String> allowedSourceStr = Arrays.asList(config.getAllowedSource().split(","));
+            if (!allowedSourceStr.contains(source)) {
+                // Source is not valid in MDMS, set default from MDMS
+                String defaultSourceJsonPath = "$.MdmsRes.RAINMAKER-PGR.ComplaintSources[?(@.default==true)].code";
+                try {
+                    List<String> defaultSources = JsonPath.read(mdmsData, defaultSourceJsonPath);
+                    if (!CollectionUtils.isEmpty(defaultSources)) {
+                        service.setSource(defaultSources.get(0));
+                    } else {
+                        errorMap.put("INVALID_SOURCE", "The source: " + source + " is not valid and no default source found in MDMS");
+                    }
+                } catch (Exception e) {
+                    errorMap.put("JSONPATH_ERROR", "Failed to parse mdms response for default complaint source");
                 }
             }
         }
