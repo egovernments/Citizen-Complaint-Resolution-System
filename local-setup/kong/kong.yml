@@ -12,12 +12,6 @@ consumers:
   tags:
   - admin
 plugins:
-- name: opentelemetry
-  config:
-    endpoint: http://otel-collector:4318/v1/traces
-    resource_attributes:
-      service.name: kong-gateway
-    header_type: w3c
 - name: cors
   config:
     origins:
@@ -46,40 +40,6 @@ plugins:
   config:
     allowed_payload_size: 10
     size_unit: megabytes
-- name: pre-function
-  config:
-    access:
-      - |
-        -- Auth enrichment: resolve authToken → userInfo (mirrors Spring Cloud Gateway AuthCheckFilterHelper)
-        local cjson = require("cjson")
-        local http = require("resty.http")
-        if kong.request.get_method() ~= "POST" then return end
-        local raw_body = kong.request.get_raw_body()
-        if not raw_body or raw_body == "" then return end
-        local ok, body = pcall(cjson.decode, raw_body)
-        if not ok or type(body) ~= "table" then return end
-        local ri = body["RequestInfo"]
-        if not ri or type(ri) ~= "table" then return end
-        local token = ri["authToken"]
-        if not token or type(token) ~= "string" or token == "" then return end
-        if ri["userInfo"] and type(ri["userInfo"]) == "table" then
-          local ui = ri["userInfo"]
-          if ui["uuid"] or ui["id"] or ui["userName"] then return end
-        end
-        local httpc = http.new()
-        httpc:set_timeout(5000)
-        local res, err = httpc:request_uri("http://egov-user-proxy:8107/user/_details?access_token=" .. token, {
-          method = "POST",
-          headers = { ["Content-Type"] = "application/json" },
-        })
-        if not res then kong.log.err("auth-enrichment: ", err); return end
-        if res.status ~= 200 then kong.log.err("auth-enrichment: status ", res.status); return end
-        local ok2, user = pcall(cjson.decode, res.body)
-        if not ok2 or type(user) ~= "table" then return end
-        if not user["uuid"] and not user["userName"] then return end
-        ri["userInfo"] = user
-        body["RequestInfo"] = ri
-        kong.service.request.set_raw_body(cjson.encode(body))
 services:
 - name: mdms-service
   url: http://egov-mdms-service:8094
@@ -91,7 +51,7 @@ services:
     - /mdms-v2
     strip_path: false
 - name: user-service
-  url: http://egov-user-proxy:8107
+  url: http://egov-user:8107
   tags:
   - core
   - auth
@@ -101,7 +61,7 @@ services:
     - /user
     strip_path: false
 - name: user-auth-public
-  url: http://egov-user-proxy:8107
+  url: http://egov-user:8107
   tags:
   - core
   - auth
@@ -113,23 +73,6 @@ services:
     strip_path: false
     methods:
     - POST
-- name: user-otp-mock
-  url: http://localhost:9999
-  tags:
-  - core
-  - auth
-  - mock
-  routes:
-  - name: user-otp-route
-    paths:
-    - /user-otp
-    strip_path: false
-  plugins:
-  - name: request-termination
-    config:
-      status_code: 200
-      content_type: application/json
-      body: '{"ResponseInfo":{"apiId":"Rainmaker","ver":".01","ts":"","resMsgId":"uief87324","msgId":"","status":"successful"},"otp":{"otp":"","UUID":"","isValidationSuccessful":true}}'
 - name: enc-service
   url: http://egov-enc-service:1234
   tags:
@@ -150,7 +93,7 @@ services:
     - /egov-idgen
     strip_path: false
 - name: workflow-service
-  url: http://egov-workflow-proxy:8109
+  url: http://egov-workflow-v2:8109
   tags:
   - core
   routes:
@@ -168,7 +111,7 @@ services:
     - /localization
     strip_path: false
 - name: location-service
-  url: http://boundary-service:8081
+  url: http://egov-location:8084
   tags:
   - core
   routes:
@@ -176,80 +119,6 @@ services:
     paths:
     - /egov-location
     strip_path: false
-  plugins:
-  - name: pre-function
-    config:
-      access:
-        - |
-          -- Adapter: egov-location → boundary-service with response transform
-          local cjson = require("cjson")
-          local http = require("resty.http")
-          local uri = kong.request.get_path_with_query()
-          if not uri:find("/boundarys/_search") then return end
-          local tenant = kong.request.get_query_arg("tenantId")
-          local hier = kong.request.get_query_arg("hierarchyTypeCode") or "ADMIN"
-          if not tenant then
-            kong.response.exit(400, cjson.encode({error="tenantId required"}), {["Content-Type"]="application/json"})
-            return
-          end
-          local raw_body = kong.request.get_raw_body() or "{}"
-          local httpc = http.new()
-          httpc:set_timeout(10000)
-          local search_url = "http://boundary-service:8081/boundary-service/boundary-relationships/_search?tenantId=" .. tenant .. "&hierarchyType=" .. hier .. "&includeChildren=true"
-          local res, err = httpc:request_uri(search_url, {
-            method = "POST", body = raw_body,
-            headers = { ["Content-Type"] = "application/json" },
-          })
-          if not res then
-            kong.response.exit(502, cjson.encode({error="boundary-service unreachable: " .. (err or "")}), {["Content-Type"]="application/json"})
-            return
-          end
-          if res.status ~= 200 then
-            kong.response.exit(res.status, res.body, {["Content-Type"]="application/json"})
-            return
-          end
-          local ok, data = pcall(cjson.decode, res.body)
-          if not ok then
-            kong.response.exit(502, res.body, {["Content-Type"]="application/json"})
-            return
-          end
-          -- Transform TenantBoundary to old egov-location format
-          -- cjson encodes empty Lua tables as {} (object), not [] (array).
-          -- Use cjson.empty_array to preserve empty arrays for boundary/children.
-          local empty_arr = cjson.empty_array
-          local function is_empty_table(t)
-            return type(t) == "table" and next(t) == nil
-          end
-          local tbs = data["TenantBoundary"] or {}
-          for _, tb in ipairs(tbs) do
-            local ht = tb["hierarchyType"]
-            if type(ht) == "string" then
-              tb["hierarchyType"] = { code = ht, name = ht }
-            elseif ht == nil or ht == cjson.null then
-              tb["hierarchyType"] = { code = hier, name = hier }
-            end
-            -- Add name/label fields to boundaries recursively
-            local function enrich(nodes)
-              for _, n in ipairs(nodes) do
-                if not n["name"] then n["name"] = n["code"] end
-                if not n["localname"] then n["localname"] = n["code"] end
-                if not n["label"] then n["label"] = n["boundaryType"] or "" end
-                local ch = n["children"]
-                if is_empty_table(ch) or ch == nil or ch == cjson.null then
-                  n["children"] = empty_arr
-                else
-                  enrich(ch)
-                end
-              end
-            end
-            local bs = tb["boundary"]
-            if is_empty_table(bs) or bs == nil or bs == cjson.null then
-              tb["boundary"] = empty_arr
-            elseif type(bs) == "table" then
-              enrich(bs)
-            end
-          end
-          kong.response.exit(200, cjson.encode(data), {["Content-Type"]="application/json"})
 - name: boundary-service
   url: http://boundary-service:8081
   tags:
@@ -292,7 +161,7 @@ services:
       replace:
         uri: /mdms-v2/health
 - name: health-user
-  url: http://egov-user-proxy:8107
+  url: http://egov-user:8107
   routes:
   - name: health-user-route
     paths:
@@ -304,7 +173,7 @@ services:
       replace:
         uri: /user/health
 - name: health-workflow
-  url: http://egov-workflow-proxy:8109
+  url: http://egov-workflow-v2:8109
   routes:
   - name: health-workflow-route
     paths:
@@ -396,48 +265,3 @@ services:
     paths:
     - /jupyter
     strip_path: false
-- name: grafana-service
-  url: http://grafana:3000
-  tags:
-  - observability
-  host: grafana
-  port: 3000
-  routes:
-  - name: grafana-route
-    paths:
-    - /grafana
-    strip_path: false
-    preserve_host: true
-  plugins:
-  - name: request-transformer
-    config:
-      add:
-        headers:
-        - "X-Forwarded-Proto:https"
-- name: indexer-service
-  url: http://egov-indexer:8080
-  tags:
-  - core
-  routes:
-  - name: indexer-route
-    paths:
-    - /egov-indexer
-    strip_path: false
-- name: inbox-service
-  url: http://inbox:8080
-  tags:
-  - analytics
-  routes:
-  - name: inbox-route
-    paths:
-    - /inbox
-    strip_path: false
-- name: tempo-service
-  url: http://tempo:3200
-  tags:
-  - observability
-  routes:
-  - name: tempo-route
-    paths:
-    - /tempo
-    strip_path: true

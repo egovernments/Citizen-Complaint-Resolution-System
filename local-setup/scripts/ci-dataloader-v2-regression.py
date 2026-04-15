@@ -422,6 +422,7 @@ def test_bootstrap_datasecurity_schemas():
     extra_schemas = [
         'Workflow.BusinessService',
         'INBOX.InboxQueryConfiguration',
+        'CRS-ADMIN-CONSOLE.adminSchema',
     ]
     for schema_code in extra_schemas:
         records = loader.uploader.search_mdms_data(
