@@ -400,6 +400,9 @@ class CRSLoader:
             # mapping by moduleName at the state-level tenant. Without this,
             # /inbox/v2/_search returns CONFIG_ERROR.
             'INBOX.InboxQueryConfiguration',
+            # Boundary template generation depends on tenant-scoped MDMS data
+            # under this schema, not just the schema definition itself.
+            'CRS-ADMIN-CONSOLE.adminSchema',
         ]
 
         data_copied = 0
@@ -417,7 +420,7 @@ class CRSLoader:
                 rec = {k: v for k, v in r.items() if not k.startswith('_')}
                 clean_records.append(rec)
 
-            result = self.uploader.create_mdms_data(
+            result = self._create_mdms_with_schema_retry(
                 schema_code=schema_code, data_list=clean_records, tenant=target_root
             )
             data_copied += result.get('created', 0)
