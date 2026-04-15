@@ -62,6 +62,12 @@ public class NovuBridgeConfiguration {
     @Value("${novu.bridge.user.search.path:/user/_search}")
     private String userSearchPath;
 
+    @Value("${mdms.host:http://localhost:8082}")
+    private String mdmsHost;
+
+    @Value("${mdms.search.path:/egov-mdms-service/v2/_search}")
+    private String mdmsSearchPath;
+
     @Value("${novu.base.url:http://localhost:3000}")
     private String novuBaseUrl;
 
