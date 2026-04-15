@@ -627,7 +627,20 @@ class UnifiedExcelReader:
         return employees
 
     def read_localization(self):
-        """Read localization with auto-determination of module and locale based on code pattern"""
+        """Read localization rows from Excel.
+
+        Expected sheet names:
+        - Localization
+        - localization
+
+        Supported columns:
+        - Required: Code
+        - Message source: Translation, Message, or English_Message
+        - Optional: Module, Locale
+
+        If Module/Locale are not provided, fall back to the historical
+        code-pattern defaults so older sheets still work.
+        """
         try:
             df = pd.read_excel(self.excel_file, sheet_name='Localization')
         except:
@@ -643,35 +656,52 @@ class UnifiedExcelReader:
         localizations = []
 
         for _, row in df.iterrows():
-            # Skip rows with missing required fields
-            if pd.notna(row.get('Code')) and pd.notna(row.get('Message')):
-                code = str(row['Code']).strip()
-                message = str(row['Message']).strip()
+            if pd.isna(row.get('Code')):
+                continue
 
-                # Skip if code or message is empty after stripping
-                if not code or not message:
-                    continue
+            code = str(row['Code']).strip()
+            if not code:
+                continue
 
-                # Determine module and locale based on code pattern
+            # Prefer Translation for language uploads; fall back to Message or
+            # English_Message for older localization workbooks.
+            message_value = None
+            for column_name in ('Translation', 'Message', 'English_Message'):
+                cell_value = row.get(column_name)
+                if pd.notna(cell_value) and str(cell_value).strip():
+                    message_value = str(cell_value).strip()
+                    break
+
+            if not message_value:
+                continue
+
+            module_value = row.get('Module')
+            locale_value = row.get('Locale')
+
+            module = str(module_value).strip() if pd.notna(module_value) and str(module_value).strip() else None
+            locale = str(locale_value).strip() if pd.notna(locale_value) and str(locale_value).strip() else None
+
+            # Historical fallback for older sheets that omitted module/locale.
+            if not module or not locale:
                 if code.startswith('SERVICEDFS.'):
-                    # Service definitions → rainmaker-pgr
-                    module = 'rainmaker-pgr'
-                    locale = 'en_IN'
+                    fallback_module = 'rainmaker-pgr'
+                    fallback_locale = 'en_IN'
                 elif code.startswith('COMMON_MASTERS_') or code.startswith('TENANT_TENANTS_'):
-                    # Common masters (departments, designations, tenants) → rainmaker-common
-                    module = 'rainmaker-common'
-                    locale = 'en_IN'
+                    fallback_module = 'rainmaker-common'
+                    fallback_locale = 'en_IN'
                 else:
-                    # Default fallback
-                    module = 'rainmaker-common'
-                    locale = 'en_IN'
+                    fallback_module = 'rainmaker-common'
+                    fallback_locale = 'en_IN'
 
-                localizations.append({
-                    'code': code,
-                    'message': message,
-                    'module': module,
-                    'locale': locale
-                })
+                module = module or fallback_module
+                locale = locale or fallback_locale
+
+            localizations.append({
+                'code': code,
+                'message': message_value,
+                'module': module,
+                'locale': locale
+            })
 
         return localizations
 
