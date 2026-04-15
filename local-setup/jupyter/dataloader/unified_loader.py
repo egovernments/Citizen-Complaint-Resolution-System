@@ -1855,29 +1855,33 @@ class APIUploader:
         def _is_duplicate_identity_error(error_text: str) -> bool:
             return 'core.DUPLICATE_MESSAGE_IDENTITY' in (error_text or '')
 
-        def _dedupe_batch_by_code(batch: List[Dict], locale: str, batch_num: int, total_batches: int) -> List[Dict]:
+        def _dedupe_batch_by_identity(batch: List[Dict], locale: str, batch_num: int, total_batches: int) -> List[Dict]:
             deduped = []
-            seen_codes = set()
+            seen_keys = set()
             skipped = 0
 
             for msg in batch:
                 code = msg.get('code', '')
-                if code in seen_codes:
+                module = msg.get('module') or 'rainmaker-common'
+                message_locale = msg.get('locale') or locale or 'en_IN'
+                identity = (message_locale, module, code)
+
+                if identity in seen_keys:
                     skipped += 1
                     continue
-                seen_codes.add(code)
+                seen_keys.add(identity)
                 deduped.append(msg)
 
             if skipped > 0:
                 print(
-                    f"      Skipped {skipped} duplicate code row(s) in "
+                    f"      Skipped {skipped} duplicate localization identity row(s) in "
                     f"batch {batch_num}/{total_batches} for locale {locale}"
                 )
 
             return deduped
 
         def _upload_batch(locale: str, batch: List[Dict], batch_num: int, total_batches: int) -> bool:
-            batch = _dedupe_batch_by_code(batch, locale, batch_num, total_batches)
+            batch = _dedupe_batch_by_identity(batch, locale, batch_num, total_batches)
             if not batch:
                 print(f"      Skipping empty batch {batch_num}/{total_batches} after dedupe")
                 return True
