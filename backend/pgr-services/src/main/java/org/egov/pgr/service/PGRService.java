@@ -8,6 +8,7 @@ import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.producer.Producer;
 import org.egov.pgr.repository.PGRRepository;
 import org.egov.pgr.util.MDMSUtils;
+import org.egov.pgr.util.PGRUtils;
 import org.egov.pgr.validator.ServiceRequestValidator;
 import org.egov.pgr.web.models.Service;
 import org.egov.pgr.web.models.ServiceWrapper;
@@ -47,13 +48,15 @@ public class PGRService {
     private MDMSUtils mdmsUtils;
 
     private ComplaintDomainEventService complaintDomainEventService;
+    
+    private PGRUtils pgrUtils;
 
 
     @Autowired
     public PGRService(EnrichmentService enrichmentService, UserService userService, WorkflowService workflowService,
                       ServiceRequestValidator serviceRequestValidator, ServiceRequestValidator validator, Producer producer,
                       PGRConfiguration config, PGRRepository repository, MDMSUtils mdmsUtils,
-                      ComplaintDomainEventService complaintDomainEventService) {
+                      ComplaintDomainEventService complaintDomainEventService, PGRUtils pgrUtils) {
         this.enrichmentService = enrichmentService;
         this.userService = userService;
         this.workflowService = workflowService;
@@ -64,6 +67,7 @@ public class PGRService {
         this.repository = repository;
         this.mdmsUtils = mdmsUtils;
         this.complaintDomainEventService = complaintDomainEventService;
+        this.pgrUtils = pgrUtils;
     }
 
 
@@ -72,25 +76,28 @@ public class PGRService {
      * @param request The service request containg the complaint information
      * @return
      */
-    public ServiceRequest create(ServiceRequest request){
-        String tenantId = request.getService().getTenantId();
-        String fromState = request.getService().getApplicationStatus();
-        Object mdmsData = mdmsUtils.mDMSCall(request);
-        validator.validateCreate(request, mdmsData);
-        enrichmentService.enrichCreateRequest(request);
-        workflowService.updateWorkflowStatus(request);
+	public ServiceRequest create(ServiceRequest request) {
+		String tenantId = request.getService().getTenantId();
+		String fromState = request.getService().getApplicationStatus();
+		Object mdmsData = mdmsUtils.mDMSCall(request);
+		validator.validateCreate(request, mdmsData);
+		enrichmentService.enrichCreateRequest(request);
+		workflowService.updateWorkflowStatus(request);
 
-        Service service = request.getService();
-        Map<String, Object> additionalDetailMap = new HashMap<>();
-        additionalDetailMap.put("department", getDepartmentFromMDMS(request, mdmsData));
-        additionalDetailMap.put("serviceName", getServiceNameFromMDMS(request, mdmsData));
-        service.setAdditionalDetail(additionalDetailMap);
-        complaintDomainEventService.publishWorkflowTransitionEvent(request, fromState);
+		Service service = request.getService();
 
-        producer.push(tenantId,config.getCreateTopic(),request);
-        producer.push(tenantId,config.getInboxCreateTopic(),request);
-        return request;
-    }
+		Map<String, Object> existing = pgrUtils.extractAdditionalDetails(service.getAdditionalDetail());
+		Map<String, Object> backend = new HashMap<>();
+		backend.put("department", getDepartmentFromMDMS(request, mdmsData));
+		backend.put("serviceName", getServiceNameFromMDMS(request, mdmsData));
+		Map<String, Object> merged = pgrUtils.deepMerge(existing, backend);
+		service.setAdditionalDetail(merged);
+		complaintDomainEventService.publishWorkflowTransitionEvent(request, fromState);
+
+		producer.push(tenantId, config.getCreateTopic(), request);
+		producer.push(tenantId, config.getInboxCreateTopic(), request);
+		return request;
+	}
 
 
     /**
@@ -151,12 +158,12 @@ public class PGRService {
         workflowService.updateWorkflowStatus(request);
 
         Service updateService = request.getService();
-        Object existingDetail = updateService.getAdditionalDetail();
-        Map<String, Object> updateAdditionalDetailMap = existingDetail instanceof Map
-                ? new HashMap<>((Map<String, Object>) existingDetail) : new HashMap<>();
-        updateAdditionalDetailMap.put("department", getDepartmentFromMDMS(request, mdmsData));
-        updateAdditionalDetailMap.put("serviceName", getServiceNameFromMDMS(request, mdmsData));
-        updateService.setAdditionalDetail(updateAdditionalDetailMap);
+		Map<String, Object> existing = pgrUtils.extractAdditionalDetails(updateService.getAdditionalDetail());
+		Map<String, Object> backend = new HashMap<>();
+		backend.put("department", getDepartmentFromMDMS(request, mdmsData));
+		backend.put("serviceName", getServiceNameFromMDMS(request, mdmsData));
+		Map<String, Object> merged = pgrUtils.deepMerge(existing, backend);
+		updateService.setAdditionalDetail(merged);
 
         complaintDomainEventService.publishWorkflowTransitionEvent(request, fromState);
         producer.push(tenantId,config.getUpdateTopic(),request);
