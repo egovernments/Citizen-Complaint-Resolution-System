@@ -2469,5 +2469,47 @@
     "actioncode": "",
     "tenantId": "{tenantid}",
     "id": 1748
+  },
+  {
+    "rolecode": "MDMS_ADMIN",
+    "actionid": 2561,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1749
+  },
+  {
+    "rolecode": "HRMS_ADMIN",
+    "actionid": 2561,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1750
+  },
+  {
+    "rolecode": "MDMS_ADMIN",
+    "actionid": 2559,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1751
+  },
+  {
+    "rolecode": "HRMS_ADMIN",
+    "actionid": 2559,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1752
+  },
+  {
+    "rolecode": "MDMS_ADMIN",
+    "actionid": 2561,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1753
+  },
+  {
+    "rolecode": "HRMS_ADMIN",
+    "actionid": 2561,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1754
   }
 ]
