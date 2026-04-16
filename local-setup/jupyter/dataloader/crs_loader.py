@@ -572,6 +572,7 @@ class CRSLoader:
                 tenant=tenant,
             )
             last_result = result
+            print(f"   Records: {last_result}")
 
             if result.get('created', 0) > 0 or result.get('exists', 0) > 0:
                 return result
@@ -1310,6 +1311,9 @@ class CRSLoader:
         # Ensure output directory exists
         os.makedirs(output_dir, exist_ok=True)
 
+        if not levels:
+            raise ValueError("levels must contain at least one boundary level")
+
         # Step 1: Build hierarchy data structure
         print(f"\n[1/4] Building hierarchy definition...")
         boundary_hierarchy = []
@@ -1342,6 +1346,28 @@ class CRSLoader:
                 print(f"   Hierarchy created successfully")
         except Exception as e:
             print(f"   ERROR: Failed to create hierarchy: {e}")
+            return None
+
+        # Step 2b: Create CMS boundary hierarchy schema MDMS entry
+        print(f"\n[2b/4] Creating boundary hierarchy MDMS config...")
+        mdms_payload = self._build_boundary_hierarchy_mdms(name=name, levels=levels)
+        try:
+            mdms_result = self._create_mdms_with_schema_retry(
+                schema_code="CMS-BOUNDARY.HierarchySchema",
+                data_list=[mdms_payload],
+                tenant=tenant,
+            )
+            if mdms_result.get('failed'):
+                print(f"   ERROR: Failed to create CMS boundary hierarchy MDMS config")
+                for err in mdms_result.get('errors', [])[:3]:
+                    print(f"   Details: {err.get('error', err)}")
+                return None
+            if mdms_result.get('exists'):
+                print(f"   Boundary hierarchy MDMS config already exists (OK)")
+            else:
+                print(f"   Boundary hierarchy MDMS config created successfully")
+        except Exception as e:
+            print(f"   ERROR: Failed to create CMS boundary hierarchy MDMS config: {e}")
             return None
 
         # Step 3: Generate template
@@ -1388,6 +1414,19 @@ class CRSLoader:
         else:
             print(f"   ERROR: Failed to download template")
             return None
+
+    def _build_boundary_hierarchy_mdms(self, name: str, levels: list) -> Dict:
+        """Build CMS boundary hierarchy MDMS data from the last two boundary levels."""
+        lowest_hierarchy = levels[-1]
+        highest_hierarchy = levels[-2] if len(levels) > 1 else levels[-1]
+
+        return {
+            "hierarchy": name,
+            "department": "All",
+            "moduleName": "CMS",
+            "lowestHierarchy": lowest_hierarchy,
+            "highestHierarchy": highest_hierarchy,
+        }
 
     def load_boundaries(self, excel_path: str, target_tenant: str = None,
                        hierarchy_type: str = "ADMIN") -> Dict:
