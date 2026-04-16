@@ -2441,5 +2441,33 @@
     "actioncode": "",
     "tenantId": "{tenantid}",
     "id": 1744
+  },
+  {
+    "rolecode": "MDMS_ADMIN",
+    "actionid": 26,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1745
+  },
+  {
+    "rolecode": "MDMS_ADMIN",
+    "actionid": 27,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1746
+  },
+  {
+    "rolecode": "MDMS_ADMIN",
+    "actionid": 28,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1747
+  },
+  {
+    "rolecode": "MDMS_ADMIN",
+    "actionid": 29,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1748
   }
 ]

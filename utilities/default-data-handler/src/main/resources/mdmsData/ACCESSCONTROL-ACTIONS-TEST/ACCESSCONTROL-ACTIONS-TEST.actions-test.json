@@ -1,4 +1,4 @@
-[
+[  
   {
     "id": 2634,
     "url": "/config-service/config/v1/_search",
@@ -2434,6 +2434,54 @@
     "parentModule": "",
     "enabled": true,
     "serviceCode": "egov-bnd-mgmt",
+    "code": "null",
+    "path": ""
+  },
+  {
+    "id": 26,
+    "name": "MDMS",
+    "url": "/mdms-v2/v2/_create/CMS-BOUNDARY.HierarchySchema",
+    "displayName": "Create CMS boundary hierarchy schema",
+    "orderNumber": 1,
+    "parentModule": "",
+    "enabled": true,
+    "serviceCode": "MDMS v2",
+    "code": "null",
+    "path": ""
+  },
+  {
+    "id": 27,
+    "name": "MDMS",
+    "url": "/mdms-v2/v2/_update/CMS-BOUNDARY.HierarchySchema",
+    "displayName": "update CMS boundary hierarchy schema",
+    "orderNumber": 1,
+    "parentModule": "",
+    "enabled": true,
+    "serviceCode": "MDMS",
+    "code": "null",
+    "path": ""
+  },
+  {
+    "id": 28,
+    "name": "MDMS",
+    "url": "/mdms-v2/v2/_create/common-masters.UserValidation",
+    "displayName": "Create Mobile number validation",
+    "orderNumber": 1,
+    "parentModule": "",
+    "enabled": true,
+    "serviceCode": "MDMS v2",
+    "code": "null",
+    "path": ""
+  },
+    {
+    "id": 29,
+    "name": "MDMS",
+    "url": "/mdms-v2/v2/_update/common-masters.UserValidation",
+    "displayName": "update Mobile number validation",
+    "orderNumber": 1,
+    "parentModule": "",
+    "enabled": true,
+    "serviceCode": "MDMS",
     "code": "null",
     "path": ""
   }
