@@ -128,6 +128,13 @@ WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_schema_definition WHERE tenantid = 'pg' AND code = 'egov-hrms.EmployeeStatus'
 );
 
+-- schema/CMS-BOUNDARY.json :: CMS-BOUNDARY.HierarchySchema
+INSERT INTO eg_mdms_schema_definition (id, tenantid, code, description, definition, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
+SELECT 'b3a1b0e1-2844-41a9-b429-810947fd70e7'::uuid, 'pg', 'CMS-BOUNDARY.HierarchySchema', 'Configuration to show boundary hierarchy levels in CMS UI', '{"$schema":"http://json-schema.org/draft-07/schema#","additionalProperties":false,"properties":{"department":{"type":"string"},"hierarchy":{"type":"string"},"highestHierarchy":{"type":"string"},"lowestHierarchy":{"type":"string"},"moduleName":{"type":"string"}},"required":["moduleName","department","hierarchy","highestHierarchy","lowestHierarchy"],"title":"Generated schema for Root","type":"object","x-ref-schema":[],"x-unique":["moduleName","department"]}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
+WHERE NOT EXISTS (
+SELECT 1 FROM eg_mdms_schema_definition WHERE tenantid = 'pg' AND code = 'CMS-BOUNDARY.HierarchySchema'
+);
+
 -- schema/egov-hrms.json :: egov-hrms.EmployeeType
 INSERT INTO eg_mdms_schema_definition (id, tenantid, code, description, definition, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
 SELECT '6b2371b7-f120-4677-9a9c-65e420202d84'::uuid, 'pg', 'egov-hrms.EmployeeType', 'egov-hrms.EmployeeType', '{"$schema":"http://json-schema.org/draft-07/schema#","additionalProperties":false,"properties":{"active":{"type":"boolean"},"code":{"type":"string"}},"required":["code","active"],"title":"Generated schema for Root","type":"object","x-ref-schema":[],"x-unique":["code"]}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
