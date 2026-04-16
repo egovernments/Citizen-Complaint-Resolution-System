@@ -32,13 +32,16 @@ const CreateComplaint = () => {
   // Fetch mobile validation config from MDMS
   const { validationRules, isLoading: isValidationLoading, getMinMaxValues } = Digit.Hooks.pgr.useMobileValidation(tenantId);
 
-  // Fetch MDMS config for Create Complaint screen (RAINMAKER-PGR.CreateComplaintConfig)
+  // Fetch MDMS config for Create Complaint screen (RAINMAKER-PGR.CreateComplaintConfig) and ComplaintSources
   const { data: mdmsData, isLoading } = Digit.Hooks.useCommonMDMS(
-    Digit.ULBService.getStateId(),
+    Digit.ULBService.getCurrentTenantId(),
     "RAINMAKER-PGR",
-    ["CreateComplaintConfig"],
+    ["CreateComplaintConfig", "ComplaintSources"],
     {
-      select: (data) => data?.["RAINMAKER-PGR"]?.CreateComplaintConfig?.[0],
+      select: (data) => ({
+        config: data?.["RAINMAKER-PGR"]?.CreateComplaintConfig?.[0],
+        complaintSources: data?.["RAINMAKER-PGR"]?.ComplaintSources
+      }),
       retry: false,
       enable: true,
     }
@@ -48,7 +51,8 @@ const CreateComplaint = () => {
   //  const serviceDefs = Digit.Hooks.pgr.useServiceDefs(tenantId, "PGR");
 
   // Use MDMS config if available, otherwise fallback to local static config
-  let configs = mdmsData || CreateComplaintConfig?.CreateComplaintConfig?.[0];
+  let configs = mdmsData?.config || CreateComplaintConfig?.CreateComplaintConfig?.[0];
+  const complaintSourcesFromMDMS = mdmsData?.complaintSources;
 
   /**
    * Preprocess config using translation and inject complaint types into the serviceCode dropdown
@@ -104,6 +108,7 @@ const CreateComplaint = () => {
       <CreateComplaintForm
         t={t}
         createComplaintConfig={configs}
+        complaintSourcesData={complaintSourcesFromMDMS}
         sessionFormData={sessionFormData}
         setSessionFormData={setSessionFormData}
         clearSessionFormData={clearSessionFormData}
