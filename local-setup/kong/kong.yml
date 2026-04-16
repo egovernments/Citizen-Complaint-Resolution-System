@@ -90,6 +90,10 @@ services:
     paths:
     - /mdms-v2
     strip_path: false
+  - name: mdms-v1-compat-route
+    paths:
+    - /egov-mdms-service
+    strip_path: false
 - name: user-service
   url: http://egov-user-proxy:8107
   tags:

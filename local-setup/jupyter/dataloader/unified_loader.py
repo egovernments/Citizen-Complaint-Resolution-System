@@ -415,13 +415,14 @@ class UnifiedExcelReader:
                 }
 
                 # Auto-generate localization for parent type (only once)
+                # UI key: "SERVICEDEFS." + menuPath.toUpperCase() → framework converts . and spaces to _
+                # DB key must be: SERVICEDEFS_POLICY_&_SYSTEMIC_SERVICE_FAILURES (not stripped)
                 if parent_type not in localized_parent_types:
-                    parent_type_code = ''.join(word.capitalize() for word in parent_type.split())
-                    loc_code = f"SERVICEDFS.{parent_type_code.upper()}"
+                    loc_code = f"SERVICEDEFS_{parent_type.upper().replace(' ', '_')}"
                     localizations.append({
                         'code': loc_code,
                         'message': parent_type,
-                        'module': 'rainmaker-pgr',
+                        'module': 'rainmaker-common',
                         'locale': 'en_IN'
                     })
                     localized_parent_types.add(parent_type)
@@ -456,11 +457,11 @@ class UnifiedExcelReader:
                 complaint_types.append(ct)
 
                 # Auto-generate localization for sub-type
-                loc_code = f"SERVICEDFS.{service_code.upper()}"
+                loc_code = f"SERVICEDEFS_{service_code.upper()}"
                 localizations.append({
                     'code': loc_code,
                     'message': sub_type_name,
-                    'module': 'rainmaker-pgr',
+                    'module': 'rainmaker-common',
                     'locale': 'en_IN'
                 })
 
@@ -652,7 +653,7 @@ class UnifiedExcelReader:
                     continue
 
                 # Determine module and locale based on code pattern
-                if code.startswith('SERVICEDFS.'):
+                if code.startswith('SERVICEDEFS_') or code.startswith('SERVICEDEFS.'):
                     # Service definitions → rainmaker-pgr
                     module = 'rainmaker-pgr'
                     locale = 'en_IN'

@@ -16,7 +16,8 @@ Flow:
   6. Load employees from generated XLSX
   7. Load PGR workflow
   8. Seed localization (with bundled JSON fallback)
-  9. Verify PGR complaint flow (create → assign → resolve)
+  9. Seed boundary localizations (type labels + boundary codes)
+ 10. Verify PGR complaint flow (create -> assign -> resolve)
 
 Environment variables:
   DIGIT_URL        - Kong gateway URL (default: http://localhost:18000)
@@ -520,6 +521,87 @@ def verify_pgr_flow(loader, tenant, service_code):
     return True
 
 
+def seed_boundary_code_localizations(loader, tenant):
+    """Seed localization messages for each boundary code (human-readable names).
+
+    After boundary creation, the UI shows raw codes like BOMET_CHEPALUNGU.
+    This queries the boundary service for all boundary entities and creates
+    a localization message mapping each code to its human-readable name.
+    """
+    import re
+
+    headers = {"Content-Type": "application/json"}
+    auth_info = {
+        "apiId": "Rainmaker",
+        "authToken": loader.auth_token,
+        "userInfo": loader.user_info,
+    }
+
+    # Fetch all boundaries for the tenant
+    resp = requests.post(
+        f"{loader.base_url}/boundary-service/boundary-relationships/_search",
+        json={"RequestInfo": auth_info},
+        params={"tenantId": tenant, "hierarchyType": "ADMIN"},
+        headers=headers, timeout=REQUEST_TIMEOUT,
+    )
+    if not resp.ok:
+        print(f"   Failed to fetch boundaries: {resp.status_code}")
+        return
+
+    tenant_boundaries = resp.json().get("TenantBoundary", [])
+    if not tenant_boundaries:
+        print("   No boundaries found")
+        return
+
+    # Collect all boundary codes and names from the tree
+    messages = []
+
+    def collect_boundaries(nodes):
+        if not nodes:
+            return
+        for node in (nodes if isinstance(nodes, list) else [nodes]):
+            code = node.get("code", "")
+            name = node.get("name", "")
+            if code and name:
+                # Convert camelCase/underscored names to human-readable
+                human_name = re.sub(r'([a-z])([A-Z])', r'\1 \2', name)
+                messages.append({
+                    "code": code,
+                    "message": human_name,
+                    "module": "rainmaker-common",
+                    "locale": "en_IN"
+                })
+            children = node.get("children", [])
+            if children:
+                collect_boundaries(children)
+
+    for tb in tenant_boundaries:
+        boundary = tb.get("boundary", [])
+        collect_boundaries(boundary)
+
+    if not messages:
+        print("   No boundary codes to localize")
+        return
+
+    # Upsert in batches
+    loc_upsert_url = f"{loader.base_url}/localization/messages/v1/_upsert"
+    root_tenant = tenant.split(".")[0]
+    upserted = 0
+    for i in range(0, len(messages), 500):
+        batch = messages[i:i+500]
+        upsert_payload = {
+            "RequestInfo": auth_info,
+            "tenantId": root_tenant,
+            "messages": batch
+        }
+        r = requests.post(loc_upsert_url, json=upsert_payload,
+                          headers=headers, timeout=REQUEST_TIMEOUT)
+        if r.ok:
+            upserted += len(batch)
+
+    print(f"   Boundary code localizations: {upserted} messages upserted")
+
+
 def main():
     print("=" * 60)
     print("CI DataLoader — XLSX-driven E2E Test")
@@ -538,7 +620,7 @@ def main():
     output_dir = os.path.join(os.path.dirname(INPUT_XLSX) or ".", "generated")
     os.makedirs(output_dir, exist_ok=True)
 
-    total_steps = 9
+    total_steps = 10
     failed = []
 
     # Step 1: Generate templates
@@ -633,8 +715,13 @@ def main():
     print(f"\n[8/{total_steps}] Seed localization for '{BOOT_TENANT}'")
     loader._seed_essential_localizations(BOOT_TENANT, source_tenant=ROOT_TENANT)
 
-    # Step 9: Verify PGR flow
-    print(f"\n[9/{total_steps}] Verify PGR complaint flow")
+    # Step 9: Seed boundary localizations (type labels + boundary codes)
+    print(f"\n[9/{total_steps}] Seed boundary localizations")
+    loader._seed_boundary_localizations(BOOT_ROOT, "ADMIN", hierarchy_levels)
+    seed_boundary_code_localizations(loader, BOOT_TENANT)
+
+    # Step 10: Verify PGR flow
+    print(f"\n[10/{total_steps}] Verify PGR complaint flow")
     # Find a service code from the loaded data (search city tenant first, then root)
     service_code = None
     for search_tenant in [BOOT_TENANT, BOOT_ROOT]:

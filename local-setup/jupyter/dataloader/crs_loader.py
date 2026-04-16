@@ -210,6 +210,10 @@ class CRSLoader:
             # Seed tenant display name localization (UI dropdown shows raw key without this)
             self._seed_tenant_name_localization(tenant_code, display_name, root_tenant)
 
+            # Copy ALL localization from root to city tenant (HRMS, PGR, common labels)
+            if root_tenant != tenant_code:
+                self._seed_essential_localizations(tenant_code, root_tenant)
+
             # Enable modules for the tenant
             for module in enable_modules:
                 self._enable_module_for_tenant(tenant_code, module)
@@ -373,9 +377,13 @@ class CRSLoader:
             'common-masters.Department',
             'common-masters.Designation',
             'common-masters.GenderType',
+            'common-masters.StateInfo',
             'egov-hrms.EmployeeStatus',
             'egov-hrms.EmployeeType',
             'egov-hrms.DeactivationReason',
+            'egov-hrms.Degree',
+            'egov-hrms.EmploymentTest',
+            'egov-hrms.Specalization',
             'ACCESSCONTROL-ROLES.roles',
             'RAINMAKER-PGR.ServiceDefs',
             # UI-critical schemas: without these the DIGIT UI shows blank pages or errors
@@ -393,6 +401,18 @@ class CRSLoader:
             # mapping by moduleName at the state-level tenant. Without this,
             # /inbox/v2/_search returns CONFIG_ERROR.
             'INBOX.InboxQueryConfiguration',
+            # Workflow MDMS config: egov-workflow-v2 reads these at startup.
+            # Without them, the service crashes with "Missing property $['MdmsRes']['Workflow']"
+            'Workflow.BusinessServiceConfig',
+            'Workflow.BusinessService',
+            'Workflow.BusinessServiceMasterConfig',
+            'Workflow.AutoEscalation',
+            'Workflow.AutoEscalationStatesToIgnore',
+            # Data security: egov-enc-service needs these for PII encryption/masking
+            'DataSecurity.DecryptionABAC',
+            'DataSecurity.EncryptionPolicy',
+            'DataSecurity.MaskingPatterns',
+            'DataSecurity.SecurityPolicy',
         ]
 
         data_copied = 0
@@ -496,111 +516,197 @@ class CRSLoader:
         except Exception as e:
             print(f"   ⚠️  Workflow copy skipped (service may not be ready): {e}")
 
+        # Step 7: Create INTERNAL_USER (system user for HRMS/inbox internal API calls)
+        # Services like egov-hrms and inbox look up this user at STATE_LEVEL_TENANT_ID
+        # on startup. Without it they crash with "Service returned null while fetching user".
+        self._ensure_internal_user(target_root)
+
         print(f"   ✅ Bootstrap complete for '{target_root}'\n")
         return True
 
+    def _ensure_internal_user(self, tenant_root: str):
+        """Create INTERNAL_USER system user at the given tenant root.
+
+        egov-hrms and inbox call initalizeSystemuser() on startup, which searches
+        for a user with INTERNAL_MICROSERVICE_ROLE at STATE_LEVEL_TENANT_ID.
+        If not found, the service crashes with "Service returned null while fetching user".
+
+        The search is by roleCodes (not userName), so the username can be tenant-specific
+        to avoid the global uniqueness constraint on usernames.
+        """
+        # First check if a user with this role already exists at this tenant
+        search_url = f"{self.base_url}/user/_search"
+        search_payload = {
+            "RequestInfo": {
+                "apiId": "Rainmaker",
+                "authToken": self.auth_token,
+                "userInfo": self.user_info
+            },
+            "tenantId": tenant_root,
+            "roleCodes": ["INTERNAL_MICROSERVICE_ROLE"]
+        }
+        try:
+            r = requests.post(search_url, json=search_payload,
+                              headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
+            if r.ok:
+                users = r.json().get("user", [])
+                if users:
+                    print(f"   ⏭️  INTERNAL_USER already exists at '{tenant_root}'")
+                    return
+        except Exception:
+            pass  # Proceed to create
+
+        create_url = f"{self.base_url}/user/users/_createnovalidate"
+        # Use a unique mobile number per tenant to avoid cross-tenant conflicts
+        import hashlib
+        mobile_hash = int(hashlib.md5(tenant_root.encode()).hexdigest(), 16) % 9000000000 + 1000000000
+        mobile = str(mobile_hash)
+
+        payload = {
+            "RequestInfo": {
+                "apiId": "Rainmaker",
+                "authToken": self.auth_token,
+                "userInfo": self.user_info
+            },
+            "user": {
+                "userName": f"INTERNAL_USER_{tenant_root.upper()}",
+                "name": "Internal Microservice User",
+                "mobileNumber": mobile,
+                "gender": "MALE",
+                "active": True,
+                "type": "SYSTEM",
+                "tenantId": tenant_root,
+                "password": "System@123",
+                "roles": [{
+                    "code": "INTERNAL_MICROSERVICE_ROLE",
+                    "name": "Internal Microservice Role",
+                    "tenantId": tenant_root
+                }]
+            }
+        }
+
+        try:
+            resp = requests.post(create_url, json=payload,
+                                 headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
+            if resp.ok and resp.json().get("user"):
+                print(f"   ✅ INTERNAL_USER created at '{tenant_root}'")
+            elif "duplicate" in resp.text.lower():
+                print(f"   ⏭️  INTERNAL_USER already exists at '{tenant_root}'")
+            else:
+                print(f"   ⚠️  INTERNAL_USER creation: {resp.text[:150]}")
+        except Exception as e:
+            print(f"   ⚠️  INTERNAL_USER creation failed: {e}")
+
     def _seed_essential_localizations(self, target_tenant: str, source_tenant: str = "pg"):
-        """Seed all en_IN localization messages for a new tenant.
+        """Copy ALL localization messages from source tenant to target (all locales).
 
         Without these messages, the DIGIT UI shows raw i18n keys like
-        CORE_COMMON_LOGIN, TENANT_TENANTS_UITEST, etc.
+        CORE_COMMON_LOGIN, HR_COMMON_BUTTON_HOME, etc.
 
         Strategy:
-          1. Try to copy from the source tenant API
-          2. If the API returns < 500 messages (likely cache/seed issue),
-             fall back to bundled JSON files from default-data-handler
-          3. Always create the tenant-specific display name message
+          1. Fetch ALL messages from source tenant via API (all locales)
+          2. If API returns too few, supplement with bundled JSON files
+          3. Upsert to target tenant for each locale found
+          4. Also copy to city-level tenant if target has a city child
+          5. Always create the tenant-specific display name message
         """
         import time
-        import json as _json
 
         loc_search_url = f"{self.base_url}/localization/messages/v1/_search"
         loc_upsert_url = f"{self.base_url}/localization/messages/v1/_upsert"
 
-        MIN_EXPECTED_MESSAGES = 500  # If API returns fewer, use bundled JSONs
-        copied = 0
-        skipped = 0
+        MIN_EXPECTED_MESSAGES = 500
+        total_copied = 0
+
+        # Locales to search — en_IN is primary, also copy default and hi_IN
+        LOCALES = ["en_IN", "default", "hi_IN"]
 
         try:
-            # Try to fetch from source tenant API first
-            source_messages = []
-            try:
-                resp = requests.post(
-                    loc_search_url,
-                    params={"tenantId": source_tenant, "locale": "en_IN"},
-                    json={"RequestInfo": {"apiId": "Rainmaker"}},
-                    headers={"Content-Type": "application/json"},
-                    timeout=60
-                )
-                if resp.ok:
-                    source_messages = resp.json().get("messages", [])
-            except Exception:
-                pass
+            for locale in LOCALES:
+                # Fetch from source tenant API
+                source_messages = []
+                try:
+                    resp = requests.post(
+                        loc_search_url,
+                        params={"tenantId": source_tenant, "locale": locale},
+                        json={"RequestInfo": {"apiId": "Rainmaker"}},
+                        headers={"Content-Type": "application/json"},
+                        timeout=60
+                    )
+                    if resp.ok:
+                        source_messages = resp.json().get("messages", [])
+                except Exception:
+                    pass
 
-            # If API returned too few messages, load from bundled JSON files
-            if len(source_messages) < MIN_EXPECTED_MESSAGES:
-                bundled = self._load_bundled_localizations()
-                if bundled:
-                    print(f"   API returned {len(source_messages)} messages, using {len(bundled)} bundled messages")
-                    source_messages = bundled
+                # For en_IN: supplement with bundled JSONs if API returned too few
+                if locale == "en_IN" and len(source_messages) < MIN_EXPECTED_MESSAGES:
+                    bundled = self._load_bundled_localizations()
+                    if bundled:
+                        # Merge: bundled fills gaps not in API results
+                        api_codes = {m.get("code") for m in source_messages}
+                        for bm in bundled:
+                            if bm.get("code") not in api_codes:
+                                source_messages.append(bm)
 
-            if not source_messages:
-                print(f"   ⚠️  No localization messages available (API or bundled)")
-                return
-
-            # Fetch existing messages on target to skip duplicates
-            existing_codes = set()
-            try:
-                tr = requests.post(
-                    loc_search_url,
-                    params={"tenantId": target_tenant, "locale": "en_IN"},
-                    json={"RequestInfo": {"apiId": "Rainmaker"}},
-                    headers={"Content-Type": "application/json"},
-                    timeout=60
-                )
-                if tr.ok:
-                    for m in tr.json().get("messages", []):
-                        existing_codes.add(m.get("code", ""))
-            except Exception:
-                pass
-
-            # Filter to new messages only
-            new_messages = []
-            for msg in source_messages:
-                code = msg.get("code", "")
-                if code in existing_codes:
-                    skipped += 1
+                if not source_messages:
                     continue
-                new_messages.append({
-                    "code": code,
-                    "message": msg.get("message", code),
-                    "module": msg.get("module", "rainmaker-common"),
-                    "locale": "en_IN"
-                })
 
-            # Upsert in batches of 500
-            for i in range(0, len(new_messages), 500):
-                batch = new_messages[i:i+500]
-                upsert_payload = {
-                    "RequestInfo": {
-                        "apiId": "Rainmaker",
-                        "authToken": self.auth_token,
-                        "userInfo": self.user_info
-                    },
-                    "tenantId": target_tenant,
-                    "messages": batch
-                }
-                r = requests.post(loc_upsert_url, json=upsert_payload,
-                                  headers={"Content-Type": "application/json"},
-                                  timeout=60)
-                if r.ok:
-                    copied += len(batch)
-                else:
-                    print(f"   ⚠️  Batch upsert failed: {r.status_code} {r.text[:200]}")
-                time.sleep(0.5)
+                # Fetch existing messages on target to skip duplicates
+                existing_keys = set()
+                try:
+                    tr = requests.post(
+                        loc_search_url,
+                        params={"tenantId": target_tenant, "locale": locale},
+                        json={"RequestInfo": {"apiId": "Rainmaker"}},
+                        headers={"Content-Type": "application/json"},
+                        timeout=60
+                    )
+                    if tr.ok:
+                        for m in tr.json().get("messages", []):
+                            existing_keys.add((m.get("code", ""), m.get("module", "")))
+                except Exception:
+                    pass
+
+                # Filter to new messages only
+                new_messages = []
+                for msg in source_messages:
+                    key = (msg.get("code", ""), msg.get("module", "rainmaker-common"))
+                    if key in existing_keys:
+                        continue
+                    new_messages.append({
+                        "code": msg.get("code", ""),
+                        "message": msg.get("message", msg.get("code", "")),
+                        "module": msg.get("module", "rainmaker-common"),
+                        "locale": locale
+                    })
+
+                # Upsert in batches
+                locale_copied = 0
+                for i in range(0, len(new_messages), 500):
+                    batch = new_messages[i:i+500]
+                    upsert_payload = {
+                        "RequestInfo": {
+                            "apiId": "Rainmaker",
+                            "authToken": self.auth_token,
+                            "userInfo": self.user_info
+                        },
+                        "tenantId": target_tenant,
+                        "messages": batch
+                    }
+                    r = requests.post(loc_upsert_url, json=upsert_payload,
+                                      headers={"Content-Type": "application/json"},
+                                      timeout=60)
+                    if r.ok:
+                        locale_copied += len(batch)
+                    else:
+                        print(f"   Localization batch upsert ({locale}): {r.status_code} {r.text[:150]}")
+                    time.sleep(0.3)
+
+                if locale_copied > 0:
+                    total_copied += locale_copied
 
         except Exception as e:
-            print(f"   ⚠️  Localization seeding failed: {e}")
+            print(f"   Localization seeding failed: {e}")
 
         # Create tenant-specific display name message
         tenant_key = "TENANT_TENANTS_" + target_tenant.upper().replace(".", "_")
@@ -620,11 +726,11 @@ class CRSLoader:
                               headers={"Content-Type": "application/json"},
                               timeout=REQUEST_TIMEOUT)
             if r.ok:
-                copied += 1
+                total_copied += 1
         except Exception as e:
-            print(f"   ⚠️  Tenant name localization failed: {e}")
+            print(f"   Tenant name localization failed: {e}")
 
-        print(f"   🌐 Localization: {copied} copied, {skipped} skipped for '{target_tenant}'")
+        print(f"   Localization: {total_copied} messages copied to '{target_tenant}'")
 
     def _load_bundled_localizations(self):
         """Load localization messages from bundled JSON files.
@@ -1024,6 +1130,160 @@ class CRSLoader:
             except Exception as e:
                 print(f"   ⚠️  Error creating role '{role_code}': {str(e)}")
 
+    def _seed_tenant_boundary_mdms(self, tenant: str, hierarchy_name: str, levels: list,
+                                    boundary_tree: dict = None):
+        """Seed egov-location.TenantBoundary MDMS data required by HRMS jurisdiction dropdown.
+
+        The HRMS module reads hierarchy types and boundary type labels from this MDMS
+        master. Without it, the jurisdiction dropdown is empty and employee creation fails.
+
+        Args:
+            tenant: State root tenant (e.g., "ke") — HRMS fetches at state level
+            hierarchy_name: Hierarchy type code (e.g., "ADMIN")
+            levels: List of boundary level names (e.g., ["County", "SubCounty", "Ward"])
+            boundary_tree: Optional full boundary tree dict. If None, creates a minimal
+                          skeleton with just the hierarchy structure.
+        """
+        # Build minimal boundary tree if none provided
+        if boundary_tree is None:
+            # Create a nested skeleton: Level1 -> Level2 -> Level3 (no actual data)
+            node = {"id": 1, "boundaryNum": 1, "name": levels[0], "localname": levels[0],
+                    "longitude": None, "latitude": None, "label": levels[0],
+                    "code": levels[0].upper(), "children": []}
+            current = node
+            for level in levels[1:]:
+                child = {"id": 1, "boundaryNum": 1, "name": level, "localname": level,
+                         "longitude": None, "latitude": None, "label": level,
+                         "code": level.upper(), "children": []}
+                current["children"] = [child]
+                current = child
+            boundary_tree = node
+
+        # CRITICAL: Root boundary.code MUST match the tenant code, not the boundary name.
+        # HRMS jurisdiction UI sends tenant code (from tenant.tenants dropdown) as the
+        # boundary value. Backend validates: TenantBoundary[boundary.code == tenant_code].
+        boundary_tree["code"] = tenant
+
+        tenant_boundary = {
+            "hierarchyType": {"code": hierarchy_name, "name": hierarchy_name},
+            "boundary": boundary_tree
+        }
+
+        # Ensure schema exists
+        schema_url = f"{self.base_url}/mdms-v2/schema/v1/_create"
+        schema_payload = {
+            "RequestInfo": {"apiId": "Rainmaker", "authToken": self.auth_token, "userInfo": self.user_info},
+            "SchemaDefinition": {
+                "tenantId": tenant,
+                "code": "egov-location.TenantBoundary",
+                "description": "Tenant boundary hierarchy for HRMS jurisdiction",
+                "definition": {
+                    "$schema": "http://json-schema.org/draft-07/schema#",
+                    "type": "object",
+                    "required": ["hierarchyType", "boundary"],
+                    "x-unique": ["hierarchyType.code"],
+                    "properties": {
+                        "hierarchyType": {"type": "object"},
+                        "boundary": {"type": "object"}
+                    }
+                },
+                "isActive": True
+            }
+        }
+        try:
+            resp = requests.post(schema_url, json=schema_payload,
+                                 headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
+            # OK if already exists
+        except Exception:
+            pass
+
+        # Create or update the MDMS record
+        create_url = f"{self.base_url}/mdms-v2/v2/_create/egov-location.TenantBoundary"
+        create_payload = {
+            "RequestInfo": {"apiId": "Rainmaker", "authToken": self.auth_token, "userInfo": self.user_info},
+            "Mdms": {
+                "tenantId": tenant,
+                "schemaCode": "egov-location.TenantBoundary",
+                "data": tenant_boundary,
+                "uniqueIdentifier": hierarchy_name,
+                "isActive": True
+            }
+        }
+
+        try:
+            resp = requests.post(create_url, json=create_payload,
+                                 headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
+            if resp.ok:
+                mdms_data = resp.json().get("mdms", [])
+                if mdms_data:
+                    print(f"   ✅ Seeded egov-location.TenantBoundary for {tenant} ({hierarchy_name})")
+                else:
+                    # Phantom 200 = already exists
+                    print(f"   ✅ TenantBoundary already exists for {tenant} ({hierarchy_name})")
+            else:
+                print(f"   ⚠️  TenantBoundary seed: {resp.text[:150]}")
+        except Exception as e:
+            print(f"   ⚠️  TenantBoundary seed error: {e}")
+
+    def _seed_boundary_localizations(self, target_tenant: str, hierarchy_name: str, levels: list):
+        """Seed localization messages for boundary type labels.
+
+        Without these, the UI shows raw keys like ADMIN_SUBCOUNTY,
+        EGOV_LOCATION_BOUNDARYTYPE_COUNTY instead of human-readable names.
+
+        Creates two message patterns per level:
+        - EGOV_LOCATION_BOUNDARYTYPE_<LEVEL> -> human name (e.g., "County")
+        - <HIERARCHY>_<LEVEL> -> human name (e.g., "Sub County")
+
+        Args:
+            target_tenant: Tenant to create localizations for
+            hierarchy_name: Hierarchy type code (e.g., "ADMIN")
+            levels: List of boundary level names (e.g., ["County", "SubCounty", "Ward"])
+        """
+        loc_upsert_url = f"{self.base_url}/localization/messages/v1/_upsert"
+
+        messages = []
+        for level in levels:
+            # Convert camelCase to human-readable: "SubCounty" -> "Sub County"
+            import re
+            human_name = re.sub(r'([a-z])([A-Z])', r'\1 \2', level)
+
+            messages.append({
+                "code": f"EGOV_LOCATION_BOUNDARYTYPE_{level.upper()}",
+                "message": human_name,
+                "module": "rainmaker-common",
+                "locale": "en_IN"
+            })
+            messages.append({
+                "code": f"{hierarchy_name}_{level.upper()}",
+                "message": human_name,
+                "module": "rainmaker-common",
+                "locale": "en_IN"
+            })
+
+        if not messages:
+            return
+
+        try:
+            upsert_payload = {
+                "RequestInfo": {
+                    "apiId": "Rainmaker",
+                    "authToken": self.auth_token,
+                    "userInfo": self.user_info
+                },
+                "tenantId": target_tenant,
+                "messages": messages
+            }
+            r = requests.post(loc_upsert_url, json=upsert_payload,
+                              headers={"Content-Type": "application/json"},
+                              timeout=REQUEST_TIMEOUT)
+            if r.ok:
+                print(f"   Boundary type localizations: {len(messages)} messages upserted")
+            else:
+                print(f"   Boundary type localizations failed: {r.text[:150]}")
+        except Exception as e:
+            print(f"   Boundary type localization error: {e}")
+
     def _create_user_for_tenant(self, tenant_code: str, user_def: dict):
         """Create a user for a specific tenant via egov-user API
 
@@ -1051,17 +1311,25 @@ class CRSLoader:
         email = user_def.get("email", f"{username.lower()}@digit.org")
         user_type = user_def.get("type", "EMPLOYEE")
 
-        # Build roles array with state-level tenant ID (roles are defined at state level)
-        # Extract state tenant: "statea.c" -> "statea", "pg.citya" -> "pg"
+        # Role definitions live at the state level, but role assignments on users
+        # must include BOTH state and city level. The DIGIT UI filters user roles
+        # by Employee.tenantId (the city), so city-level roles are required.
+        # Backend services may also check at the state root level.
         state_tenant = tenant_code.split(".")[0] if "." in tenant_code else tenant_code
 
-        # Ensure all required roles exist for the state tenant
+        # Ensure role definitions exist at state level
         self._ensure_roles_exist(state_tenant, roles)
 
+        # Assign roles at both state and city levels
         roles_array = [
             {"code": role, "name": role, "tenantId": state_tenant}
             for role in roles
         ]
+        if state_tenant != tenant_code:
+            roles_array += [
+                {"code": role, "name": role, "tenantId": tenant_code}
+                for role in roles
+            ]
 
         # Create user via egov-user API
         create_url = f"{self.base_url}/user/users/_createnovalidate"
@@ -1234,17 +1502,39 @@ class CRSLoader:
 
         print(f"   Created {len(levels)} level definitions")
 
-        # Step 2: Create hierarchy
+        # Step 2: Create hierarchy at city level
         print(f"\n[2/4] Creating hierarchy...")
         try:
             result = self.uploader.create_boundary_hierarchy(hierarchy_data)
             if result.get('exists'):
-                print(f"   Hierarchy already exists (OK)")
+                print(f"   Hierarchy already exists at {tenant} (OK)")
             else:
-                print(f"   Hierarchy created successfully")
+                print(f"   Hierarchy created at {tenant}")
         except Exception as e:
             print(f"   ERROR: Failed to create hierarchy: {e}")
             return None
+
+        # Also create hierarchy at state root — HRMS and boundary-service query at state level
+        root_tenant = tenant.split(".")[0] if "." in tenant else tenant
+        if root_tenant != tenant:
+            root_hierarchy = {**hierarchy_data, "tenantId": root_tenant}
+            try:
+                result = self.uploader.create_boundary_hierarchy(root_hierarchy)
+                if result.get('exists'):
+                    print(f"   Hierarchy already exists at {root_tenant} (OK)")
+                else:
+                    print(f"   Hierarchy created at {root_tenant}")
+            except Exception:
+                pass  # Non-fatal: city-level hierarchy is the primary one
+
+        # Step 2b: Seed egov-location.TenantBoundary MDMS (required by HRMS jurisdiction UI)
+        print(f"\n[2b/4] Seeding TenantBoundary MDMS for HRMS...")
+        self._seed_tenant_boundary_mdms(root_tenant, name, levels)
+        if root_tenant != tenant:
+            self._seed_tenant_boundary_mdms(tenant, name, levels)
+
+        # Seed boundary type localizations (ADMIN_COUNTY, EGOV_LOCATION_BOUNDARYTYPE_WARD, etc.)
+        self._seed_boundary_localizations(root_tenant, name, levels)
 
         # Step 3: Generate template
         print(f"\n[3/4] Generating template...")
@@ -1462,7 +1752,11 @@ class CRSLoader:
             return False
 
         self._ensure_roles_exist(state_tenant, roles)
+        # Assign roles at both state and city levels — DIGIT UI filters by city,
+        # backend services may check at state root
         role_objects = [{"code": r, "name": r, "tenantId": state_tenant} for r in roles]
+        if state_tenant != tenant:
+            role_objects += [{"code": r, "name": r, "tenantId": tenant} for r in roles]
 
         # HRMS _create ignores the password we pass and generates a random one.
         # unified_loader skips password update for "eGov@123", so use a sentinel.
