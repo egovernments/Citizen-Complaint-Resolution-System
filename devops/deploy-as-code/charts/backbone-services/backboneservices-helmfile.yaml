@@ -112,3 +112,17 @@ releases:
     - ./ingress-nginx/values.yaml
     - {{ .Values | toYaml | nindent 8 }}
     - domain: {{ .Values.global.domain }}
+
+- name: novu
+  installed: true
+  chart: ./novu
+  version: 0.1.0
+  <<: *default
+  values:
+    - ./novu/values.yaml
+    - {{ .Values | toYaml | nindent 8 }}
+    - namespace: backbone
+    - ingress:
+        host: {{ .Values.global.domain }}
+    - global:
+        hostName: "https://{{ .Values.global.domain }}"
