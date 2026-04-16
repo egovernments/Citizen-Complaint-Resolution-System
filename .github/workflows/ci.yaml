@@ -1,4 +1,4 @@
-name: Local Setup CI
+name: CI
 
 on:
   push:
@@ -16,7 +16,8 @@ defaults:
     working-directory: local-setup
 
 jobs:
-  test:
+  docker-compose:
+    name: Docker Compose Tests
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -441,6 +442,49 @@ jobs:
             exit 1
           fi
 
+      # ── Playwright PGR E2E Tests ─────────────────────────────────────
+
+      - name: Setup Playwright for E2E tests
+        run: |
+          cd tests
+          npx playwright install chromium --with-deps
+
+      - name: Setup pg.citya for Playwright PGR tests
+        run: |
+          # The CI dataloader already ran for pg.citest above.
+          # PGR Playwright tests need pg.citya (the default City A tenant)
+          # to have HRMS employee + departments configured.
+          set +e
+          CITYA_OUTPUT=$(DIGIT_URL=http://localhost:18000 TARGET_TENANT=pg.citya python3 scripts/ci-dataloader.py 2>&1)
+          CITYA_RC=$?
+          set -e
+          echo "$CITYA_OUTPUT"
+          if [ $CITYA_RC -ne 0 ]; then
+            echo "FATAL: ci-dataloader for pg.citya failed (exit code $CITYA_RC)"
+            exit 1
+          fi
+
+          # Parse service code for pg.citya
+          CITYA_SERVICE_CODE=$(echo "$CITYA_OUTPUT" | grep '^CI_SERVICE_CODE=' | cut -d= -f2)
+          echo "CITYA_SERVICE_CODE=${CITYA_SERVICE_CODE}" >> $GITHUB_ENV
+
+      - name: Run Playwright PGR E2E tests
+        env:
+          BASE_URL: http://localhost:18000
+          PGR_TENANT: pg.citya
+          PGR_STATE: pg
+          PGR_CITY: City A
+          PGR_USERNAME: ADMIN
+          PGR_PASSWORD: eGov@123
+          CI_USERNAME: CI-ADMIN
+          CI_PASSWORD: eGov@123
+        run: |
+          cd tests
+          CI_SERVICE_CODE="${CITYA_SERVICE_CODE:-RequestSprayingOrFoggingOperation}" \
+            npx playwright test e2e/pgr-flow.spec.ts --reporter list
+
+      # ── Telemetry & Cleanup ──────────────────────────────────────────
+
       - name: Verify telemetry events captured
         if: always()
         run: |
@@ -488,6 +532,94 @@ jobs:
         run: |
           echo "=== Docker Compose Logs ==="
           docker compose logs --tail=100
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker compose down -v --remove-orphans
+
+  # ── Tilt CI Job ────────────────────────────────────────────────────
+
+  tilt:
+    name: Tilt CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free disk space
+        working-directory: .
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          df -h
+
+      - name: Install Tilt
+        working-directory: .
+        run: |
+          TILT_VERSION="0.33.21"
+          curl -fsSL "https://github.com/tilt-dev/tilt/releases/download/v${TILT_VERSION}/tilt.${TILT_VERSION}.linux.x86_64.tar.gz" \
+            | tar -xzf - -C /usr/local/bin tilt
+          tilt version
+
+      - name: Run tilt ci
+        run: |
+          TELEMETRY=true tilt ci --timeout 20m
+
+      - name: Verify telemetry events captured
+        if: always()
+        run: |
+          echo "=== Telemetry Sidecar Logs ==="
+          LOGS=$(docker compose logs telemetry 2>&1 || echo "(no telemetry container)")
+          echo "$LOGS"
+
+          echo ""
+          echo "=== Telemetry Event Verification ==="
+          FAIL=0
+
+          # tilt ci exits as soon as resources are healthy, so the sidecar
+          # captures fewer events than the long-running docker compose job.
+          # Verify the sidecar started and is capturing events (>=1 each).
+
+          # Must have at least 1 start event
+          START_COUNT=$(echo "$LOGS" | grep -c '\[telemetry\] +' || true)
+          echo "  Container start events: $START_COUNT"
+          if [ "$START_COUNT" -lt 1 ]; then
+            echo "  FAIL: expected at least 1 start event"
+            FAIL=1
+          fi
+
+          # Must have at least 1 healthy event
+          HEALTHY_COUNT=$(echo "$LOGS" | grep -c '\[telemetry\] \.' || true)
+          echo "  Container healthy events: $HEALTHY_COUNT"
+          if [ "$HEALTHY_COUNT" -lt 1 ]; then
+            echo "  FAIL: expected at least 1 healthy event"
+            FAIL=1
+          fi
+
+          # Must have the setup start event
+          if echo "$LOGS" | grep -q "project=local-setup"; then
+            echo "  Setup start event: OK"
+          else
+            echo "  FAIL: no setup start event"
+            FAIL=1
+          fi
+
+          if [ "$FAIL" -ne 0 ]; then
+            echo ""
+            echo "FATAL: Telemetry event verification failed"
+            exit 1
+          fi
+          echo "=== All telemetry event checks passed ==="
+
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          echo "=== Docker Compose Logs (last 50 lines per service) ==="
+          docker compose logs --tail=50
 
       - name: Cleanup
         if: always()

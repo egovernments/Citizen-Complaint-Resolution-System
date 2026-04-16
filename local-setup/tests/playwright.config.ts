@@ -6,7 +6,7 @@ export default defineConfig({
   retries: 0,
   globalSetup: require.resolve('./global-setup'),
   use: {
-    baseURL: process.env.BASE_URL || 'http://localhost:18000',
+    baseURL: process.env.BASE_URL || 'http://127.0.0.1:18000',
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
   },

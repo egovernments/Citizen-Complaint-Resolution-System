@@ -1,0 +1,885 @@
+# Unified CI Workflow Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Merge `local-setup-ci.yaml`, `tilt-ci.yaml`, and new Playwright PGR tests into a single `ci.yaml` workflow.
+
+**Architecture:** Single workflow file with two parallel jobs — `docker-compose` (full test suite including Playwright) and `tilt` (Tilt CI mode). All work is on a remote machine at `root@204.168.184.167:/opt/ccrs`.
+
+**Tech Stack:** GitHub Actions, Docker Compose, Tilt, Playwright, Node.js, Python (ci-dataloader)
+
+**Spec:** `docs/superpowers/specs/2026-03-26-unified-ci-workflow-design.md`
+
+---
+
+## Remote Access
+
+All commands run via SSH to the remote machine. Use this pattern:
+
+```bash
+ssh -o StrictHostKeyChecking=no root@204.168.184.167 '<command>'
+```
+
+For multi-line files, use `scp` from local `/tmp/` to remote.
+
+---
+
+### Task 1: Commit Playwright test file and test config fixes
+
+**Files:**
+- Stage: `local-setup/tests/e2e/pgr-flow.spec.ts` (new, untracked)
+- Stage: `local-setup/tests/global-setup.ts` (modified — locale query param fix)
+- Stage: `local-setup/tests/playwright.config.ts` (modified — 127.0.0.1 fix)
+- Stage: `local-setup/tests/package.json` (modified — Playwright 1.58.2, TypeScript 5.9.3)
+- Stage: `local-setup/tests/package-lock.json` (modified — lockfile for above)
+
+These files are already written and validated (all 5 PGR tests pass). This commit captures the test infrastructure.
+
+- [ ] **Step 1: Stage the test files**
+
+```bash
+ssh root@204.168.184.167 'cd /opt/ccrs && git add \
+  local-setup/tests/e2e/pgr-flow.spec.ts \
+  local-setup/tests/global-setup.ts \
+  local-setup/tests/playwright.config.ts \
+  local-setup/tests/package.json \
+  local-setup/tests/package-lock.json'
+```
+
+- [ ] **Step 2: Verify staged changes look correct**
+
+```bash
+ssh root@204.168.184.167 'cd /opt/ccrs && git diff --cached --stat'
+```
+
+Expected: 5 files changed — 1 new file (pgr-flow.spec.ts), 4 modified.
+
+- [ ] **Step 3: Commit**
+
+```bash
+ssh root@204.168.184.167 'cd /opt/ccrs && git commit -m "$(cat <<'"'"'EOF'"'"'
+feat: add Playwright PGR E2E tests and fix test configs
+
+- Add pgr-flow.spec.ts with 5 tests (3 UI navigation + 2 API lifecycle)
+- Fix global-setup.ts: move locale/tenantId/module to query params
+- Fix playwright.config.ts: use 127.0.0.1 instead of localhost
+- Upgrade @playwright/test to 1.58.2, typescript to 5.9.3
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+EOF
+)"'
+```
+
+- [ ] **Step 4: Verify commit**
+
+```bash
+ssh root@204.168.184.167 'cd /opt/ccrs && git log --oneline -3'
+```
+
+Expected: New commit at HEAD with the feat message.
+
+---
+
+### Task 2: Create unified ci.yaml workflow
+
+**Files:**
+- Create: `.github/workflows/ci.yaml`
+
+This is the main deliverable. It combines both existing workflows into one file with two parallel jobs.
+
+- [ ] **Step 1: Write ci.yaml to local /tmp**
+
+Write the full workflow file to `/tmp/ci.yaml` with this exact content:
+
+```yaml
+name: CI
+
+on:
+  push:
+    branches: [main, master, feature/*]
+    paths:
+      - 'local-setup/**'
+  pull_request:
+    branches: [main, master, develop]
+    paths:
+      - 'local-setup/**'
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: local-setup
+
+jobs:
+  docker-compose:
+    name: Docker Compose Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free disk space
+        working-directory: .
+        run: |
+          # Remove unnecessary tools to free space
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          df -h
+
+      - name: Verify telemetry in all compose files and Tiltfile
+        run: |
+          echo "=== Verifying telemetry sidecar is present in all compose files ==="
+          FAIL=0
+
+          for f in docker-compose.yml docker-compose.deploy.yaml; do
+            echo -n "  $f ... "
+            if docker compose -f "$f" config --services 2>/dev/null | grep -q '^telemetry$'; then
+              echo "OK"
+            else
+              echo "FAIL (telemetry service missing)"
+              FAIL=1
+            fi
+          done
+
+          # Verify Tiltfile references telemetry
+          echo -n "  Tiltfile ... "
+          if grep -q "dc_resource('telemetry'" Tiltfile; then
+            echo "OK"
+          else
+            echo "FAIL (dc_resource('telemetry') missing)"
+            FAIL=1
+          fi
+
+          # Verify sidecar.sh exists and has browser-like UA
+          echo -n "  sidecar.sh user-agent ... "
+          if grep -q 'Mozilla' telemetry/sidecar.sh; then
+            echo "OK"
+          else
+            echo "FAIL (browser-like user-agent missing)"
+            FAIL=1
+          fi
+
+          # Verify telemetry.py has browser-like UA
+          echo -n "  telemetry.py user-agent ... "
+          if grep -q 'Mozilla' jupyter/dataloader/telemetry.py; then
+            echo "OK"
+          else
+            echo "FAIL (browser-like user-agent missing)"
+            FAIL=1
+          fi
+
+          # Verify telemetry.sh has browser-like UA
+          echo -n "  telemetry.sh user-agent ... "
+          if grep -q 'Mozilla' scripts/telemetry.sh; then
+            echo "OK"
+          else
+            echo "FAIL (browser-like user-agent missing)"
+            FAIL=1
+          fi
+
+          if [ "$FAIL" -ne 0 ]; then
+            echo ""
+            echo "FATAL: Telemetry checks failed. Every compose file must include the telemetry sidecar."
+            exit 1
+          fi
+          echo "=== All telemetry checks passed ==="
+
+      - name: Start services
+        run: |
+          TELEMETRY=true docker compose up -d
+          echo "Waiting for services to start..."
+
+      - name: Wait for infrastructure
+        run: |
+          echo "Waiting for Postgres..."
+          timeout 120 bash -c 'until docker exec docker-postgres pg_isready -U egov; do sleep 2; done'
+
+          echo "Waiting for Redis..."
+          timeout 60 bash -c 'until docker exec digit-redis redis-cli ping; do sleep 2; done'
+
+          echo "Waiting for Redpanda..."
+          timeout 120 bash -c 'until docker exec digit-redpanda rpk cluster health; do sleep 2; done'
+
+      - name: Wait for all containers healthy
+        run: |
+          echo "Waiting for all containers to be healthy (up to 15 minutes)..."
+          # Skip containers not required for API tests
+          SKIP_REGEX="digit-ui|digit-telemetry"
+          # Wait for all services to report healthy via Docker
+          timeout 900 bash -c '
+            while true; do
+              UNHEALTHY_NAMES=$(docker compose ps --format json | jq -r "select(.Health != \"healthy\" and .Health != \"\" and .State == \"running\") | .Name" | grep -vE "digit-ui|digit-telemetry" || true)
+              UNHEALTHY=$(echo "$UNHEALTHY_NAMES" | grep -c . || true)
+              TOTAL=$(docker compose ps --format json | jq -r "select(.State == \"running\") | .Name" | grep -vE "digit-ui|digit-telemetry" | wc -l)
+              echo "Healthy containers: $((TOTAL - UNHEALTHY))/$TOTAL (skipping digit-ui, digit-telemetry)"
+              if [ "$UNHEALTHY" -gt 0 ]; then
+                echo "  Waiting on: $UNHEALTHY_NAMES" | tr "\n" " "
+                echo ""
+              fi
+              if [ "$UNHEALTHY" -eq 0 ] && [ "$TOTAL" -gt 0 ]; then
+                echo "All required containers healthy!"
+                break
+              fi
+              sleep 10
+            done
+          '
+
+      - name: Wait for PGR workflow seed
+        run: |
+          echo "Waiting for pgr-workflow-seed to complete..."
+          timeout 120 bash -c '
+            while true; do
+              STATUS=$(docker compose ps -a --format json 2>/dev/null | jq -r "select(.Service == \"pgr-workflow-seed\") | .State" 2>/dev/null)
+              if [ "$STATUS" = "exited" ]; then
+                EXIT_CODE=$(docker compose ps -a --format json 2>/dev/null | jq -r "select(.Service == \"pgr-workflow-seed\") | .ExitCode" 2>/dev/null)
+                if [ "$EXIT_CODE" != "0" ]; then
+                  echo "pgr-workflow-seed FAILED (exit code $EXIT_CODE)"
+                  docker compose logs pgr-workflow-seed
+                  exit 1
+                fi
+                echo "pgr-workflow-seed completed successfully"
+                break
+              fi
+              echo "  pgr-workflow-seed status: $STATUS"
+              sleep 5
+            done
+          '
+
+      - name: Verify database data
+        run: |
+          echo "=== Verifying database data (loaded from dump) ==="
+
+          # Check schema definitions in database
+          echo "1. Checking MDMS schema definitions..."
+          SCHEMA_COUNT=$(docker exec docker-postgres psql -U egov -d egov -t -c "SELECT COUNT(*) FROM eg_mdms_schema_definition WHERE isactive = true;")
+          SCHEMA_COUNT=$(echo $SCHEMA_COUNT | tr -d ' ')
+          echo "   Found $SCHEMA_COUNT active schema definitions"
+          if [ "$SCHEMA_COUNT" -lt 10 ]; then
+            echo "ERROR: Expected at least 10 schema definitions, found $SCHEMA_COUNT"
+            exit 1
+          fi
+
+          # Check MDMS data records
+          echo "2. Checking MDMS data records..."
+          DATA_COUNT=$(docker exec docker-postgres psql -U egov -d egov -t -c "SELECT COUNT(*) FROM eg_mdms_data WHERE isactive = true;")
+          DATA_COUNT=$(echo $DATA_COUNT | tr -d ' ')
+          echo "   Found $DATA_COUNT active MDMS data records"
+          if [ "$DATA_COUNT" -lt 100 ]; then
+            echo "ERROR: Expected at least 100 MDMS data records, found $DATA_COUNT"
+            exit 1
+          fi
+
+          # Check tenant data via API
+          echo "3. Checking tenant data via MDMS API..."
+          TENANT_RESPONSE=$(curl -sS -X POST "http://localhost:18094/mdms-v2/v1/_search" \
+            -H 'Content-Type: application/json' \
+            -d '{"RequestInfo":{"apiId":"digit","ver":"1.0","ts":0},"MdmsCriteria":{"tenantId":"pg","moduleDetails":[{"moduleName":"tenant","masterDetails":[{"name":"tenants"}]}]}}')
+          if echo "$TENANT_RESPONSE" | grep -q '"tenantId"'; then
+            echo "   Tenant data verified via API"
+          else
+            echo "ERROR: Tenant data not found via API"
+            echo "$TENANT_RESPONSE"
+            exit 1
+          fi
+
+          # Check localization data
+          echo "4. Checking localization data..."
+          LOC_COUNT=$(docker exec docker-postgres psql -U egov -d egov -t -c "SELECT COUNT(*) FROM message;")
+          LOC_COUNT=$(echo $LOC_COUNT | tr -d ' ')
+          echo "   Found $LOC_COUNT localization messages"
+          if [ "$LOC_COUNT" -lt 50 ]; then
+            echo "ERROR: Expected at least 50 localization messages, found $LOC_COUNT"
+            exit 1
+          fi
+
+          # Check idgen table exists (created by egov-idgen Flyway migrations)
+          echo "5. Checking IDGEN table exists..."
+          TABLE_EXISTS=$(docker exec docker-postgres psql -U egov -d egov -t -c "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'id_generator');")
+          TABLE_EXISTS=$(echo $TABLE_EXISTS | tr -d ' ')
+          if [ "$TABLE_EXISTS" = "t" ]; then
+            echo "   IDGEN table exists (managed by egov-idgen Flyway)"
+          else
+            echo "ERROR: id_generator table does not exist"
+            exit 1
+          fi
+
+          echo "=== All seed data verification passed! ==="
+
+      - name: Run health checks
+        run: |
+          bash scripts/health-check.sh http://localhost
+
+      - name: Wait for PGR functional readiness
+        run: |
+          echo "Waiting for PGR to handle API requests (not just Spring actuator)..."
+          timeout 120 bash -c '
+            while true; do
+              HTTP_CODE=$(curl -sS -o /dev/null -w "%{http_code}" -X POST \
+                "http://localhost:18083/pgr-services/v2/request/_search?tenantId=pg.citya" \
+                -H "Content-Type: application/json" \
+                -d "{\"RequestInfo\":{\"apiId\":\"Rainmaker\"}}" 2>/dev/null)
+              # Any response (200, 400, etc) means PGR is processing requests.
+              # Only 000 (connection refused) or 5xx means it is not ready.
+              if [ "$HTTP_CODE" != "000" ] && [ "${HTTP_CODE:0:1}" != "5" ]; then
+                echo "PGR is functionally ready (HTTP $HTTP_CODE)"
+                break
+              fi
+              echo "  PGR not ready yet (HTTP $HTTP_CODE), retrying..."
+              sleep 5
+            done
+          '
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: local-setup/tests/package-lock.json
+
+      - name: Install test dependencies
+        run: |
+          cd tests
+          npm ci
+
+      - name: Run Node.js smoke tests
+        env:
+          BASE_URL: http://localhost
+          DB_HOST: localhost
+          DB_PORT: 15432
+          DB_PASSWORD: egov123
+        run: |
+          cd tests
+          npm test
+
+      - name: Test idgen service
+        run: |
+          echo "Testing idgen..."
+          RESPONSE=$(curl -s -X POST 'http://localhost:18088/egov-idgen/id/_generate' \
+            -H 'Content-Type: application/json' \
+            -d '{"RequestInfo":{"apiId":"digit","ver":"1.0"},"idRequests":[{"tenantId":"pg","idName":"pgr.servicerequestid"}]}')
+
+          if echo "$RESPONSE" | jq -e '.idResponses[0].id' > /dev/null 2>&1; then
+            ID=$(echo "$RESPONSE" | jq -r '.idResponses[0].id')
+            echo "idgen generated ID: $ID"
+          else
+            echo "idgen failed:"
+            echo "$RESPONSE" | jq .
+            exit 1
+          fi
+
+      - name: Run Postman core validation
+        run: |
+          npx newman@latest run postman/digit-core-validation.postman_collection.json \
+            --env-var "baseUrl=http://localhost"
+
+      - name: Run Postman complaints demo
+        run: |
+          # Install Python dependencies for ci-dataloader
+          pip install requests openpyxl pandas python-dotenv --quiet
+
+          # Run CI dataloader to create tenant, HRMS employee, and load masters
+          # Use set +e so bash -e doesn't swallow stdout on failure
+          set +e
+          CI_OUTPUT=$(DIGIT_URL=http://localhost:18000 TARGET_TENANT=pg.citest python3 scripts/ci-dataloader.py 2>&1)
+          CI_RC=$?
+          set -e
+          echo "$CI_OUTPUT"
+          if [ $CI_RC -ne 0 ]; then
+            echo "FATAL: ci-dataloader failed (exit code $CI_RC)"
+            exit 1
+          fi
+
+          # Parse output for service code
+          CI_SERVICE_CODE=$(echo "$CI_OUTPUT" | grep '^CI_SERVICE_CODE=' | cut -d= -f2)
+          if [ -z "$CI_SERVICE_CODE" ]; then
+            echo "FATAL: ci-dataloader did not output CI_SERVICE_CODE"
+            exit 1
+          fi
+          echo "Using serviceCode: $CI_SERVICE_CODE"
+
+          # Run the complaints demo collection through Kong gateway
+          npx newman@latest run postman/complaints-demo.postman_collection.json \
+            --env-var "url=http://localhost:18000" \
+            --env-var "username=CI-ADMIN" \
+            --env-var "password=eGov@123" \
+            --env-var "cityTenant=pg.citest" \
+            --env-var "stateTenant=pg" \
+            --env-var "userType=EMPLOYEE" \
+            --env-var "authorization=Basic ZWdvdi11c2VyLWNsaWVudDo=" \
+            --env-var "serviceCode=${CI_SERVICE_CODE}"
+
+      - name: Run cross-root bootstrap test
+        run: |
+          # Test that create_tenant auto-bootstraps a new tenant root (issue #225).
+          # Creates "ciboot.citya" which forces bootstrap of the "ciboot" root from "pg".
+          # Use set +e to capture output even on failure (bash -e would swallow stdout)
+          set +e
+          BOOT_OUTPUT=$(DIGIT_URL=http://localhost:18000 BOOT_TENANT=ciboot.citya python3 scripts/ci-dataloader-crossroot.py 2>&1)
+          BOOT_RC=$?
+          set -e
+          echo "$BOOT_OUTPUT"
+          if [ $BOOT_RC -ne 0 ]; then
+            echo "FATAL: cross-root bootstrap script failed (exit code $BOOT_RC)"
+            exit 1
+          fi
+
+          # Parse output for service code
+          BOOT_SERVICE_CODE=$(echo "$BOOT_OUTPUT" | grep '^BOOT_SERVICE_CODE=' | cut -d= -f2)
+          if [ -z "$BOOT_SERVICE_CODE" ]; then
+            echo "FATAL: cross-root bootstrap did not output BOOT_SERVICE_CODE"
+            exit 1
+          fi
+          echo "Using serviceCode: $BOOT_SERVICE_CODE"
+
+          # ── Verify bootstrap data integrity ──────────────────────────────
+          echo ""
+          echo "=== Verifying bootstrap data integrity on ciboot ==="
+          MDMS_URL="http://localhost:18000/mdms-v2/v1/_search"
+          FAIL=0
+
+          # 1. Verify IdFormat records were copied
+          echo -n "1. IdFormat records on ciboot... "
+          IDFORMAT=$(curl -sS -X POST "$MDMS_URL" -H 'Content-Type: application/json' \
+            -d '{"RequestInfo":{"apiId":"Rainmaker"},"MdmsCriteria":{"tenantId":"ciboot","moduleDetails":[{"moduleName":"common-masters","masterDetails":[{"name":"IdFormat"}]}]}}')
+          IDFORMAT_COUNT=$(echo "$IDFORMAT" | jq '[.MdmsRes."common-masters".IdFormat // [] | length] | .[0]')
+          if [ "$IDFORMAT_COUNT" -gt 0 ]; then
+            echo "OK ($IDFORMAT_COUNT records)"
+          else
+            echo "FAIL (expected >0, got $IDFORMAT_COUNT)"
+            FAIL=1
+          fi
+
+          # 2. Verify Department records were copied
+          echo -n "2. Department records on ciboot... "
+          DEPT=$(curl -sS -X POST "$MDMS_URL" -H 'Content-Type: application/json' \
+            -d '{"RequestInfo":{"apiId":"Rainmaker"},"MdmsCriteria":{"tenantId":"ciboot","moduleDetails":[{"moduleName":"common-masters","masterDetails":[{"name":"Department"}]}]}}')
+          DEPT_COUNT=$(echo "$DEPT" | jq '[.MdmsRes."common-masters".Department // [] | length] | .[0]')
+          if [ "$DEPT_COUNT" -gt 0 ]; then
+            echo "OK ($DEPT_COUNT records)"
+          else
+            echo "FAIL (expected >0, got $DEPT_COUNT)"
+            FAIL=1
+          fi
+
+          # 3. Verify ServiceDefs were copied
+          echo -n "3. ServiceDefs on ciboot... "
+          SVCDEFS=$(curl -sS -X POST "$MDMS_URL" -H 'Content-Type: application/json' \
+            -d '{"RequestInfo":{"apiId":"Rainmaker"},"MdmsCriteria":{"tenantId":"ciboot","moduleDetails":[{"moduleName":"RAINMAKER-PGR","masterDetails":[{"name":"ServiceDefs"}]}]}}')
+          SVCDEF_COUNT=$(echo "$SVCDEFS" | jq '[.MdmsRes."RAINMAKER-PGR".ServiceDefs // [] | length] | .[0]')
+          if [ "$SVCDEF_COUNT" -gt 0 ]; then
+            echo "OK ($SVCDEF_COUNT complaint types)"
+          else
+            echo "FAIL (expected >0, got $SVCDEF_COUNT)"
+            FAIL=1
+          fi
+
+          # 4. Verify workflow has all required states
+          echo -n "4. PGR workflow states on ciboot... "
+          WF=$(curl -sS "http://localhost:18000/egov-workflow-v2/egov-wf/businessservice/_search?tenantId=ciboot&businessServices=PGR" \
+            -H 'Content-Type: application/json' \
+            -d '{"RequestInfo":{"apiId":"Rainmaker"}}')
+          WF_STATES=$(echo "$WF" | jq '[.BusinessServices[0].states // [] | length] | .[0]')
+          if [ "$WF_STATES" -ge 6 ]; then
+            echo "OK ($WF_STATES states)"
+          else
+            echo "FAIL (expected >=6 states, got $WF_STATES)"
+            echo "$WF" | jq '.BusinessServices[0].states[].state' 2>/dev/null || true
+            FAIL=1
+          fi
+
+          # 5. Verify idgen works on bootstrapped root
+          echo -n "5. ID generation on ciboot.citya... "
+          IDGEN=$(curl -sS -X POST 'http://localhost:18000/egov-idgen/id/_generate' \
+            -H 'Content-Type: application/json' \
+            -d '{"RequestInfo":{"apiId":"Rainmaker"},"idRequests":[{"tenantId":"ciboot.citya","idName":"pgr.servicerequestid"}]}')
+          GENERATED_ID=$(echo "$IDGEN" | jq -r '.idResponses[0].id // empty')
+          if [ -n "$GENERATED_ID" ]; then
+            echo "OK (generated: $GENERATED_ID)"
+          else
+            echo "FAIL (no ID generated)"
+            echo "$IDGEN" | jq . 2>/dev/null || echo "$IDGEN"
+            FAIL=1
+          fi
+
+          if [ "$FAIL" -ne 0 ]; then
+            echo ""
+            echo "FATAL: Bootstrap data integrity checks failed"
+            exit 1
+          fi
+          echo "=== All bootstrap data integrity checks passed ==="
+          echo ""
+
+          # Run the same complaints-demo collection against the bootstrapped tenant
+          npx newman@latest run postman/complaints-demo.postman_collection.json \
+            --env-var "url=http://localhost:18000" \
+            --env-var "username=BOOT-ADMIN" \
+            --env-var "password=eGov@123" \
+            --env-var "cityTenant=ciboot.citya" \
+            --env-var "stateTenant=ciboot" \
+            --env-var "userType=EMPLOYEE" \
+            --env-var "authorization=Basic ZWdvdi11c2VyLWNsaWVudDo=" \
+            --env-var "serviceCode=${BOOT_SERVICE_CODE}"
+
+      - name: Run boundary template end-to-end test
+        run: |
+          # Tests the full boundary lifecycle:
+          # hierarchy creation → template generation → download → fill → upload → verify
+          set +e
+          BND_OUTPUT=$(DIGIT_URL=http://localhost:18000 TARGET_TENANT=pg.bndtest python3 scripts/ci-boundary-test.py 2>&1)
+          BND_RC=$?
+          set -e
+          echo "$BND_OUTPUT"
+          if [ $BND_RC -ne 0 ]; then
+            echo "FATAL: boundary end-to-end test failed (exit code $BND_RC)"
+            exit 1
+          fi
+
+      # ── Playwright PGR E2E Tests ─────────────────────────────────────
+
+      - name: Setup Playwright for E2E tests
+        run: |
+          cd tests
+          npx playwright install chromium --with-deps
+
+      - name: Setup pg.citya for Playwright PGR tests
+        run: |
+          # The CI dataloader already ran for pg.citest above.
+          # PGR Playwright tests need pg.citya (the default City A tenant)
+          # to have HRMS employee + departments configured.
+          set +e
+          CITYA_OUTPUT=$(DIGIT_URL=http://localhost:18000 TARGET_TENANT=pg.citya python3 scripts/ci-dataloader.py 2>&1)
+          CITYA_RC=$?
+          set -e
+          echo "$CITYA_OUTPUT"
+          if [ $CITYA_RC -ne 0 ]; then
+            echo "FATAL: ci-dataloader for pg.citya failed (exit code $CITYA_RC)"
+            exit 1
+          fi
+
+          # Parse service code for pg.citya
+          CITYA_SERVICE_CODE=$(echo "$CITYA_OUTPUT" | grep '^CI_SERVICE_CODE=' | cut -d= -f2)
+          echo "CITYA_SERVICE_CODE=${CITYA_SERVICE_CODE}" >> $GITHUB_ENV
+
+      - name: Run Playwright PGR E2E tests
+        env:
+          BASE_URL: http://localhost:18000
+          PGR_TENANT: pg.citya
+          PGR_STATE: pg
+          PGR_CITY: City A
+          PGR_USERNAME: ADMIN
+          PGR_PASSWORD: eGov@123
+          CI_USERNAME: CI-ADMIN
+          CI_PASSWORD: eGov@123
+        run: |
+          cd tests
+          CI_SERVICE_CODE="${CITYA_SERVICE_CODE:-RequestSprayingOrFoggingOperation}" \
+            npx playwright test e2e/pgr-flow.spec.ts --reporter list
+
+      # ── Telemetry & Cleanup ──────────────────────────────────────────
+
+      - name: Verify telemetry events captured
+        if: always()
+        run: |
+          echo "=== Telemetry Sidecar Logs ==="
+          LOGS=$(docker compose logs telemetry 2>&1 || echo "(no telemetry container)")
+          echo "$LOGS"
+
+          echo ""
+          echo "=== Telemetry Event Verification ==="
+          FAIL=0
+
+          # Must have start events
+          START_COUNT=$(echo "$LOGS" | grep -c '\[telemetry\] +' || true)
+          echo "  Container start events: $START_COUNT"
+          if [ "$START_COUNT" -lt 10 ]; then
+            echo "  FAIL: expected at least 10 start events"
+            FAIL=1
+          fi
+
+          # Must have healthy events
+          HEALTHY_COUNT=$(echo "$LOGS" | grep -c '\[telemetry\] \.' || true)
+          echo "  Container healthy events: $HEALTHY_COUNT"
+          if [ "$HEALTHY_COUNT" -lt 10 ]; then
+            echo "  FAIL: expected at least 10 healthy events"
+            FAIL=1
+          fi
+
+          # Must have the setup start event
+          if echo "$LOGS" | grep -q "project=local-setup"; then
+            echo "  Setup start event: OK"
+          else
+            echo "  FAIL: no setup start event"
+            FAIL=1
+          fi
+
+          if [ "$FAIL" -ne 0 ]; then
+            echo ""
+            echo "FATAL: Telemetry event verification failed"
+            exit 1
+          fi
+          echo "=== All telemetry event checks passed ==="
+
+      - name: Show service logs on failure
+        if: failure()
+        run: |
+          echo "=== Docker Compose Logs ==="
+          docker compose logs --tail=100
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker compose down -v --remove-orphans
+
+  # ── Tilt CI Job ────────────────────────────────────────────────────
+
+  tilt:
+    name: Tilt CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free disk space
+        working-directory: .
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          df -h
+
+      - name: Install Tilt
+        working-directory: .
+        run: |
+          TILT_VERSION="0.33.21"
+          curl -fsSL "https://github.com/tilt-dev/tilt/releases/download/v${TILT_VERSION}/tilt.${TILT_VERSION}.linux.x86_64.tar.gz" \
+            | tar -xzf - -C /usr/local/bin tilt
+          tilt version
+
+      - name: Run tilt ci
+        run: |
+          TELEMETRY=true tilt ci --timeout 20m
+
+      - name: Verify telemetry events captured
+        if: always()
+        run: |
+          echo "=== Telemetry Sidecar Logs ==="
+          LOGS=$(docker compose logs telemetry 2>&1 || echo "(no telemetry container)")
+          echo "$LOGS"
+
+          echo ""
+          echo "=== Telemetry Event Verification ==="
+          FAIL=0
+
+          # tilt ci exits as soon as resources are healthy, so the sidecar
+          # captures fewer events than the long-running docker compose job.
+          # Verify the sidecar started and is capturing events (>=1 each).
+
+          # Must have at least 1 start event
+          START_COUNT=$(echo "$LOGS" | grep -c '\[telemetry\] +' || true)
+          echo "  Container start events: $START_COUNT"
+          if [ "$START_COUNT" -lt 1 ]; then
+            echo "  FAIL: expected at least 1 start event"
+            FAIL=1
+          fi
+
+          # Must have at least 1 healthy event
+          HEALTHY_COUNT=$(echo "$LOGS" | grep -c '\[telemetry\] \.' || true)
+          echo "  Container healthy events: $HEALTHY_COUNT"
+          if [ "$HEALTHY_COUNT" -lt 1 ]; then
+            echo "  FAIL: expected at least 1 healthy event"
+            FAIL=1
+          fi
+
+          # Must have the setup start event
+          if echo "$LOGS" | grep -q "project=local-setup"; then
+            echo "  Setup start event: OK"
+          else
+            echo "  FAIL: no setup start event"
+            FAIL=1
+          fi
+
+          if [ "$FAIL" -ne 0 ]; then
+            echo ""
+            echo "FATAL: Telemetry event verification failed"
+            exit 1
+          fi
+          echo "=== All telemetry event checks passed ==="
+
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          echo "=== Docker Compose Logs (last 50 lines per service) ==="
+          docker compose logs --tail=50
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker compose down -v --remove-orphans
+```
+
+- [ ] **Step 2: Copy ci.yaml to remote**
+
+```bash
+scp /tmp/ci.yaml root@204.168.184.167:/opt/ccrs/.github/workflows/ci.yaml
+```
+
+- [ ] **Step 3: Verify the file landed correctly**
+
+```bash
+ssh root@204.168.184.167 'wc -l /opt/ccrs/.github/workflows/ci.yaml && head -5 /opt/ccrs/.github/workflows/ci.yaml'
+```
+
+Expected: ~430 lines, starts with `name: CI`.
+
+- [ ] **Step 4: Validate YAML syntax**
+
+```bash
+ssh root@204.168.184.167 'python3 -c "import yaml; yaml.safe_load(open(\"/opt/ccrs/.github/workflows/ci.yaml\")); print(\"YAML valid\")"'
+```
+
+Expected: `YAML valid`
+
+- [ ] **Step 5: Verify both jobs are present**
+
+```bash
+ssh root@204.168.184.167 'cd /opt/ccrs && python3 -c "
+import yaml
+wf = yaml.safe_load(open(\".github/workflows/ci.yaml\"))
+jobs = list(wf[\"jobs\"].keys())
+print(f\"Jobs: {jobs}\")
+assert \"docker-compose\" in jobs, \"Missing docker-compose job\"
+assert \"tilt\" in jobs, \"Missing tilt job\"
+print(\"Both jobs present\")
+"'
+```
+
+Expected: `Jobs: ['docker-compose', 'tilt']` and `Both jobs present`
+
+- [ ] **Step 6: Commit**
+
+```bash
+ssh root@204.168.184.167 'cd /opt/ccrs && git add .github/workflows/ci.yaml && git commit -m "$(cat <<'"'"'EOF'"'"'
+feat: add unified CI workflow with Docker Compose and Tilt jobs
+
+Single ci.yaml replaces local-setup-ci.yaml and tilt-ci.yaml.
+Docker Compose job includes all existing tests plus new Playwright
+PGR E2E tests. Tilt job unchanged.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+EOF
+)"'
+```
+
+---
+
+### Task 3: Delete old workflow files
+
+**Files:**
+- Delete: `.github/workflows/local-setup-ci.yaml`
+- Delete: `.github/workflows/tilt-ci.yaml`
+
+- [ ] **Step 1: Remove old files via git**
+
+```bash
+ssh root@204.168.184.167 'cd /opt/ccrs && git rm .github/workflows/local-setup-ci.yaml .github/workflows/tilt-ci.yaml'
+```
+
+- [ ] **Step 2: Verify only ci.yaml and dataloader-tests.yml remain**
+
+```bash
+ssh root@204.168.184.167 'ls /opt/ccrs/.github/workflows/'
+```
+
+Expected: `ci.yaml` and `dataloader-tests.yml` (only two files).
+
+- [ ] **Step 3: Commit**
+
+```bash
+ssh root@204.168.184.167 'cd /opt/ccrs && git commit -m "$(cat <<'"'"'EOF'"'"'
+chore: remove old CI workflows replaced by ci.yaml
+
+local-setup-ci.yaml and tilt-ci.yaml are now unified in ci.yaml.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+EOF
+)"'
+```
+
+---
+
+### Task 4: Final verification
+
+Verify all files are consistent and the git history is clean.
+
+- [ ] **Step 1: Verify git log shows all 4 commits**
+
+```bash
+ssh root@204.168.184.167 'cd /opt/ccrs && git log --oneline -6'
+```
+
+Expected: 4 new commits (spec, test files, ci.yaml, remove old workflows) on top of existing history.
+
+- [ ] **Step 2: Verify workflow references valid files**
+
+```bash
+ssh root@204.168.184.167 'cd /opt/ccrs && python3 -c "
+import yaml, os
+
+wf = yaml.safe_load(open(\".github/workflows/ci.yaml\"))
+dc_job = wf[\"jobs\"][\"docker-compose\"]
+
+# Verify referenced test paths exist
+test_files = [
+    \"local-setup/tests/e2e/pgr-flow.spec.ts\",
+    \"local-setup/tests/global-setup.ts\",
+    \"local-setup/tests/playwright.config.ts\",
+    \"local-setup/tests/package.json\",
+    \"local-setup/scripts/ci-dataloader.py\",
+    \"local-setup/scripts/ci-dataloader-crossroot.py\",
+    \"local-setup/scripts/ci-boundary-test.py\",
+    \"local-setup/scripts/health-check.sh\",
+    \"local-setup/postman/digit-core-validation.postman_collection.json\",
+    \"local-setup/postman/complaints-demo.postman_collection.json\",
+]
+
+missing = [f for f in test_files if not os.path.exists(f)]
+if missing:
+    print(f\"MISSING FILES: {missing}\")
+    exit(1)
+print(f\"All {len(test_files)} referenced files exist\")
+"'
+```
+
+Expected: `All 10 referenced files exist`
+
+- [ ] **Step 3: Verify no untracked workflow files**
+
+```bash
+ssh root@204.168.184.167 'cd /opt/ccrs && git status .github/workflows/'
+```
+
+Expected: Clean — no untracked or modified files in `.github/workflows/`.
+
+- [ ] **Step 4: Count workflow step names in ci.yaml to verify completeness**
+
+```bash
+ssh root@204.168.184.167 'cd /opt/ccrs && grep "^ *- name:" .github/workflows/ci.yaml | wc -l'
+```
+
+Expected: 31 steps total (24 in docker-compose job + 7 in tilt job).
+
+---
+
+## Summary
+
+| Task | Description | Commits |
+|------|-------------|---------|
+| 1 | Commit Playwright test files and config fixes | 1 |
+| 2 | Create unified ci.yaml workflow | 1 |
+| 3 | Delete old workflow files | 1 |
+| 4 | Final verification (no commit) | 0 |
+| **Total** | | **3 commits** |
