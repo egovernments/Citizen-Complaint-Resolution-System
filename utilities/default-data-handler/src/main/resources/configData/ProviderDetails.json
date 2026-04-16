@@ -1,0 +1,36 @@
+[
+  {
+    "apiUrl": "https://api.twilio.com/2010-04-01",
+    "channel": "WHATSAPP",
+    "priority": 1,
+    "novuApiKey": "<novu-api-key>",
+    "credentials": {
+      "authToken": "<your-twilio-authtoken>",
+      "accountSid": "<account-Sid>"
+    },
+    "providerName": "twilio",
+    "senderNumber": "whatsapp:+91<sender-whatsapp-number>"
+  },
+  {
+    "channel": "email",
+    "priority": 0,
+    "novuApiKey": "<novu-api-key>",
+    "credentials": {
+      "from": "<from>",
+      "authToken": "<auth-token>",
+      "accountSid": "<account-sid>"
+    },
+    "providerName": "twilio"
+  },
+  {
+    "channel": "sms",
+    "priority": 0,
+    "novuApiKey": "<novu-api-key>",
+    "credentials": {
+      "from": "<from>",
+      "authToken": "<auth-token>",
+      "accountSid": "<account-sid>"
+    },
+    "providerName": "twilio"
+  }
+]
