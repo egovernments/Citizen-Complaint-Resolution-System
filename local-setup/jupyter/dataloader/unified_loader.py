@@ -7,6 +7,7 @@ Users should not modify this file directly
 import pandas as pd
 import json
 import math
+import re
 import warnings
 import requests
 import time
@@ -2671,123 +2672,58 @@ class APIUploader:
                 print("   ⚠️ Could not fetch hierarchy, will use boundaryType from Excel")
                 boundary_types = df['boundaryType'].unique().tolist() if 'boundaryType' in df.columns else []
 
-            # Check if Excel has the standard format (code, name, boundaryType, parentCode)
-            if 'code' in df.columns and 'boundaryType' in df.columns:
-                print("   Using standard format (code, boundaryType, parentCode)")
+            # Pre-check: fetch existing boundary codes so we skip duplicates
+            existing_codes = set()
+            try:
+                search_resp = self._request_with_retry(
+                    f"{self.boundary_url}/boundary-relationships/_search",
+                    json={"RequestInfo": {"apiId": "Rainmaker", "authToken": self.auth_token, "userInfo": self.user_info}},
+                    params={"tenantId": tenant_id, "hierarchyType": hierarchy_type, "includeChildren": "true"},
+                    headers={"Content-Type": "application/json"}
+                )
+                if search_resp.status_code in [200, 201]:
+                    def _collect_codes(nodes):
+                        for n in nodes:
+                            existing_codes.add(n.get("code", ""))
+                            _collect_codes(n.get("children", []))
+                    for tb in search_resp.json().get("TenantBoundary", []):
+                        _collect_codes(tb.get("boundary", []))
+            except Exception:
+                pass  # If search fails, proceed without dedup — create API will catch duplicates
+            if existing_codes:
+                print(f"   Found {len(existing_codes)} existing boundary codes — will skip duplicates")
 
-                # Map Excel boundary types to hierarchy types if they don't match
-                # Common mappings for Punjab-style templates
-                type_mapping = {
-                    'State': 'Country',  # If hierarchy starts with Country
-                    'District': 'State',
-                    'Tehsil': 'City',
-                    'Block': 'Ward',
-                    'Village': 'Locality'
-                }
+            records = self._extract_boundary_records(df, boundary_types, hierarchy_type, existing_codes)
+            seen_codes = set(existing_codes)
+            seen_relationships = set()
 
-                # Check if we need mapping (Excel types vs hierarchy types)
-                excel_types = set(df['boundaryType'].unique())
-                hierarchy_set = set(boundary_types) if boundary_types else set()
+            for record in records:
+                code = record.get('code')
+                boundary_type = record.get('boundaryType')
+                parent_code = record.get('parentCode')
+                mapped_type = record.get('mappedBoundaryType', boundary_type)
 
-                # If Excel types match hierarchy, no mapping needed
-                if excel_types.issubset(hierarchy_set) or not hierarchy_set:
-                    use_mapping = False
-                    print("   Boundary types match hierarchy - no mapping needed")
-                else:
-                    use_mapping = True
-                    print(f"   ⚠️ Boundary type mismatch detected")
-                    print(f"      Excel types: {excel_types}")
-                    print(f"      Hierarchy types: {hierarchy_set}")
-                    print(f"      Will attempt to map types")
+                if not code or not boundary_type:
+                    continue
 
-                # Pre-check: fetch existing boundary codes so we skip duplicates
-                existing_codes = set()
-                try:
-                    search_resp = self._request_with_retry(
-                        f"{self.boundary_url}/boundary-relationships/_search",
-                        json={"RequestInfo": {"apiId": "Rainmaker", "authToken": self.auth_token, "userInfo": self.user_info}},
-                        params={"tenantId": tenant_id, "hierarchyType": hierarchy_type, "includeChildren": "true"},
-                        headers={"Content-Type": "application/json"}
-                    )
-                    if search_resp.status_code in [200, 201]:
-                        def _collect_codes(nodes):
-                            for n in nodes:
-                                existing_codes.add(n.get("code", ""))
-                                _collect_codes(n.get("children", []))
-                        for tb in search_resp.json().get("TenantBoundary", []):
-                            _collect_codes(tb.get("boundary", []))
-                except Exception:
-                    pass  # If search fails, proceed without dedup — create API will catch duplicates
-                if existing_codes:
-                    print(f"   Found {len(existing_codes)} existing boundary codes — will skip duplicates")
-
-                # Process each row
-                for idx, row in df.iterrows():
-                    code = str(row.get('code', '')).strip()
-                    boundary_type = str(row.get('boundaryType', '')).strip()
-                    parent_code = str(row.get('parentCode', '')).strip() if pd.notna(row.get('parentCode')) else None
-
-                    if not code or not boundary_type:
-                        continue
-
-                    if code in existing_codes:
-                        print(f"   ⏭️  Skipping {code} [{boundary_type}] — already exists")
-                        continue
-
-                    # Apply type mapping if needed
-                    mapped_type = type_mapping.get(boundary_type, boundary_type) if use_mapping else boundary_type
-
-                    # Create boundary entity
+                if code in existing_codes:
+                    print(f"   ⏭️  Skipping {code} [{boundary_type}] — already exists")
+                elif code not in seen_codes:
                     success = self._create_boundary_entity(tenant_id, code)
                     if success:
                         results['boundaries_created'] += 1
+                        seen_codes.add(code)
 
-                    # Create boundary relationship - try with original type first, then mapped
-                    rel_success = self._create_boundary_relationship(
-                        tenant_id, hierarchy_type, code, boundary_type, parent_code
-                    )
-                    if not rel_success and use_mapping and mapped_type != boundary_type:
-                        # Try with mapped type
-                        rel_success = self._create_boundary_relationship(
-                            tenant_id, hierarchy_type, code, mapped_type, parent_code
-                        )
-                    if rel_success:
-                        results['relationships_created'] += 1
-            else:
-                # Handle column-per-level format
-                print("   Using column-per-level format")
-                for boundary_type in boundary_types:
-                    if boundary_type not in df.columns:
-                        continue
+                relationship_key = (code, mapped_type, parent_code or '')
+                if relationship_key in seen_relationships:
+                    continue
 
-                    boundaries_at_level = df[boundary_type].dropna().unique()
-
-                    for boundary_code in boundaries_at_level:
-                        if pd.isna(boundary_code) or str(boundary_code).strip() == '':
-                            continue
-
-                        boundary_code = str(boundary_code).strip()
-                        if boundary_code in existing_codes:
-                            print(f"   ⏭️  Skipping {boundary_code} [{boundary_type}] — already exists")
-                            continue
-
-                        success = self._create_boundary_entity(tenant_id, boundary_code)
-                        if success:
-                            results['boundaries_created'] += 1
-
-                        parent_type_idx = boundary_types.index(boundary_type) - 1
-                        parent_code = None
-                        if parent_type_idx >= 0:
-                            parent_type = boundary_types[parent_type_idx]
-                            row = df[df[boundary_type] == boundary_code].iloc[0] if len(df[df[boundary_type] == boundary_code]) > 0 else None
-                            if row is not None and parent_type in df.columns:
-                                parent_code = str(row[parent_type]).strip() if pd.notna(row[parent_type]) else None
-
-                        rel_success = self._create_boundary_relationship(
-                            tenant_id, hierarchy_type, boundary_code, boundary_type, parent_code
-                        )
-                        if rel_success:
-                            results['relationships_created'] += 1
+                rel_success = self._create_boundary_relationship(
+                    tenant_id, hierarchy_type, code, mapped_type, parent_code
+                )
+                if rel_success:
+                    results['relationships_created'] += 1
+                    seen_relationships.add(relationship_key)
 
             results['status'] = 'completed'
             print(f"\n✅ Boundary processing completed!")
@@ -2800,6 +2736,230 @@ class APIUploader:
             results['errors'].append(str(e))
 
         return results
+
+    def _normalize_boundary_column_name(self, value: str) -> str:
+        """Normalize boundary Excel/header names for tolerant matching."""
+        return ''.join(ch.lower() for ch in str(value or '') if ch.isalnum())
+
+    def _extract_boundary_records(self, df: pd.DataFrame, boundary_types: List[str], hierarchy_type: str,
+                                  existing_codes: set = None) -> List[Dict[str, Any]]:
+        """Normalize either supported boundary sheet shape into canonical records."""
+        if 'code' in df.columns and 'boundaryType' in df.columns:
+            print("   Using standard format (code, boundaryType, parentCode)")
+            return self._extract_standard_boundary_records(df, boundary_types)
+
+        print("   Using column-per-level format")
+        return self._extract_column_level_boundary_records(df, boundary_types, hierarchy_type, existing_codes or set())
+
+    def _extract_standard_boundary_records(self, df: pd.DataFrame, boundary_types: List[str]) -> List[Dict[str, Any]]:
+        """Read the already-normalized standard boundary sheet."""
+        type_mapping = {
+            'State': 'Country',
+            'District': 'State',
+            'Tehsil': 'City',
+            'Block': 'Ward',
+            'Village': 'Locality'
+        }
+
+        excel_types = set(df['boundaryType'].dropna().astype(str).str.strip())
+        hierarchy_set = set(boundary_types) if boundary_types else set()
+        use_mapping = not (excel_types.issubset(hierarchy_set) or not hierarchy_set)
+
+        if use_mapping:
+            print(f"   ⚠️ Boundary type mismatch detected")
+            print(f"      Excel types: {excel_types}")
+            print(f"      Hierarchy types: {hierarchy_set}")
+            print(f"      Will attempt to map types")
+        else:
+            print("   Boundary types match hierarchy - no mapping needed")
+
+        records = []
+        seen = set()
+
+        for _, row in df.iterrows():
+            code = str(row.get('code', '')).strip()
+            boundary_type = str(row.get('boundaryType', '')).strip()
+            parent_code = str(row.get('parentCode', '')).strip() if pd.notna(row.get('parentCode')) else None
+            if not code or not boundary_type:
+                continue
+
+            mapped_type = type_mapping.get(boundary_type, boundary_type) if use_mapping else boundary_type
+            key = (code, mapped_type, parent_code or '')
+            if key in seen:
+                continue
+            seen.add(key)
+            records.append({
+                'code': code,
+                'name': str(row.get('name', '')).strip() if pd.notna(row.get('name')) else '',
+                'boundaryType': boundary_type,
+                'mappedBoundaryType': mapped_type,
+                'parentCode': parent_code
+            })
+
+        return records
+
+    def _extract_column_level_boundary_records(self, df: pd.DataFrame, boundary_types: List[str], hierarchy_type: str,
+                                               existing_codes: set) -> List[Dict[str, Any]]:
+        """Expand column-per-level rows into canonical boundary records."""
+        level_column_map = {}
+        unmatched_boundary_types = []
+
+        for boundary_type in boundary_types:
+            matched_column = self._find_best_column_match(df.columns, boundary_type, hierarchy_type)
+            if matched_column:
+                level_column_map[boundary_type] = matched_column
+            else:
+                unmatched_boundary_types.append(boundary_type)
+
+        if level_column_map:
+            printable_map = ", ".join(
+                f"{boundary_type} -> {column_name}"
+                for boundary_type, column_name in level_column_map.items()
+            )
+            print(f"   Matched hierarchy columns: {printable_map}")
+        if unmatched_boundary_types:
+            print(f"   ⚠️ No matching Excel column found for: {', '.join(unmatched_boundary_types)}")
+
+        code_column = self._find_best_column_match(df.columns, 'CRS_BOUNDARY_CODE', hierarchy_type)
+        has_explicit_codes = bool(code_column and not df[code_column].dropna().empty)
+        if code_column and not has_explicit_codes:
+            print("   CRS_BOUNDARY_CODE is blank — generating codes from hierarchy path values")
+
+        assigned_codes = set(existing_codes)
+        path_to_code = {}
+        records = []
+        seen_records = set()
+
+        for _, row in df.iterrows():
+            path_values = []
+            parent_code = None
+            row_entries = []
+
+            for boundary_type in boundary_types:
+                level_column = level_column_map.get(boundary_type)
+                if not level_column:
+                    continue
+
+                raw_value = row.get(level_column)
+                if pd.isna(raw_value) or str(raw_value).strip() == '':
+                    continue
+
+                raw_value = str(raw_value).strip()
+                path_values.append(raw_value)
+                row_entries.append((boundary_type, raw_value))
+
+            if not row_entries:
+                continue
+
+            leaf_explicit_code = None
+            if code_column:
+                explicit_value = row.get(code_column)
+                if pd.notna(explicit_value) and str(explicit_value).strip():
+                    leaf_explicit_code = str(explicit_value).strip()
+            row_uses_direct_codes = bool(
+                leaf_explicit_code and row_entries and row_entries[-1][1] == leaf_explicit_code
+            )
+
+            for idx, (boundary_type, raw_value) in enumerate(row_entries):
+                current_path_values = [value for _, value in row_entries[:idx + 1]]
+                path_key = tuple(current_path_values)
+                boundary_code = path_to_code.get(path_key)
+
+                if not boundary_code:
+                    if row_uses_direct_codes:
+                        boundary_code = raw_value
+                    elif idx == len(row_entries) - 1 and leaf_explicit_code:
+                        boundary_code = leaf_explicit_code
+                    else:
+                        boundary_code = self._generate_unique_boundary_code(current_path_values, assigned_codes)
+                    path_to_code[path_key] = boundary_code
+                    assigned_codes.add(boundary_code)
+
+                record_key = (boundary_code, boundary_type, parent_code or '')
+                if record_key not in seen_records:
+                    seen_records.add(record_key)
+                    records.append({
+                        'code': boundary_code,
+                        'name': '' if row_uses_direct_codes else raw_value,
+                        'boundaryType': boundary_type,
+                        'mappedBoundaryType': boundary_type,
+                        'parentCode': parent_code
+                    })
+
+                parent_code = boundary_code
+
+        return records
+
+    def _sanitize_boundary_code_part(self, value: str) -> str:
+        """Convert a free-text boundary label into a stable code segment."""
+        cleaned = re.sub(r'[^A-Za-z0-9]+', '_', str(value or '').strip())
+        return cleaned.strip('_').upper()
+
+    def _looks_like_boundary_code(self, value: str) -> bool:
+        """Heuristic to decide whether a cell already contains a boundary code."""
+        value = str(value or '').strip()
+        if not value:
+            return False
+        return value == self._sanitize_boundary_code_part(value) and any(ch.isupper() for ch in value)
+
+    def _generate_boundary_code_from_path(self, path_values: List[str]) -> str:
+        """Generate a stable boundary code from the non-empty labels in a hierarchy path."""
+        parts = [self._sanitize_boundary_code_part(value) for value in path_values if str(value or '').strip()]
+        return "_".join(part for part in parts if part)
+
+    def _generate_unique_boundary_code(self, path_values: List[str], seen_codes: set) -> str:
+        """Generate a unique boundary code for a hierarchy path."""
+        base_code = self._generate_boundary_code_from_path(path_values)
+        if base_code not in seen_codes:
+            return base_code
+
+        suffix = 2
+        while f"{base_code}_{suffix:03d}" in seen_codes:
+            suffix += 1
+        return f"{base_code}_{suffix:03d}"
+
+    def _find_best_column_match(self, columns, boundary_type: str, hierarchy_type: str = None) -> str:
+        """Match a hierarchy level to the best Excel column name.
+
+        Supports generated boundary templates like ADMIN_STATE / ADMIN_DISTRICT
+        in addition to exact level names like State / District.
+        """
+        if not boundary_type:
+            return None
+
+        columns = list(columns)
+        normalized_target = self._normalize_boundary_column_name(boundary_type)
+        normalized_hierarchy = self._normalize_boundary_column_name(hierarchy_type or '')
+
+        # 1. Exact match
+        if boundary_type in columns:
+            return boundary_type
+
+        # 2. Case-insensitive exact match
+        for column in columns:
+            if str(column).strip().lower() == str(boundary_type).strip().lower():
+                return column
+
+        # 3. Normalized exact match
+        for column in columns:
+            if self._normalize_boundary_column_name(column) == normalized_target:
+                return column
+
+        # 4. Normalized suffix/prefix match, ignoring hierarchy prefixes like ADMIN_
+        for column in columns:
+            normalized_column = self._normalize_boundary_column_name(column)
+            candidate = normalized_column
+            if normalized_hierarchy and candidate.startswith(normalized_hierarchy):
+                candidate = candidate[len(normalized_hierarchy):]
+
+            if candidate == normalized_target:
+                return column
+            if normalized_column.endswith(normalized_target):
+                return column
+            if normalized_target.endswith(candidate) and candidate:
+                return column
+
+        return None
 
     def _get_boundary_hierarchy(self, tenant_id: str, hierarchy_type: str) -> Dict:
         """Fetch boundary hierarchy definition"""
