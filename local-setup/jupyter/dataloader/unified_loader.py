@@ -418,7 +418,7 @@ class UnifiedExcelReader:
                 # Auto-generate localization for parent type (only once)
                 if parent_type not in localized_parent_types:
                     parent_type_code = ''.join(word.capitalize() for word in parent_type.split())
-                    loc_code = f"SERVICEDFS.{parent_type_code.upper()}"
+                    loc_code = f"SERVICEDEFS.{parent_type_code.upper()}"
                     localizations.append({
                         'code': loc_code,
                         'message': parent_type,
@@ -457,14 +457,22 @@ class UnifiedExcelReader:
 
                 complaint_types.append(ct)
 
-                # Auto-generate localization for sub-type
-                loc_code = f"SERVICEDFS.{service_code.upper()}"
+                # Auto-generate localization for sub-type. DIGIT UI resolves
+                # complaint labels using the department-scoped key when present.
+                loc_code = f"SERVICEDEFS.{service_code.upper()}"
                 localizations.append({
                     'code': loc_code,
                     'message': sub_type_name,
                     'module': 'rainmaker-pgr',
                     'locale': 'en_IN'
                 })
+                if current_parent and current_parent.get('department'):
+                    localizations.append({
+                        'code': f"{loc_code}.{current_parent['department']}",
+                        'message': sub_type_name,
+                        'module': 'rainmaker-pgr',
+                        'locale': 'en_IN'
+                    })
 
         return complaint_types, localizations
 
@@ -677,7 +685,7 @@ class UnifiedExcelReader:
 
             # Historical fallback for older sheets that omitted module/locale.
             if not module or not locale:
-                if code.startswith('SERVICEDFS.'):
+                if code.startswith('SERVICEDEFS.') or code.startswith('SERVICEDFS.'):
                     fallback_module = 'rainmaker-pgr'
                     fallback_locale = 'en_IN'
                 elif code.startswith('COMMON_MASTERS_') or code.startswith('TENANT_TENANTS_'):
@@ -2695,6 +2703,7 @@ class APIUploader:
             'status': 'processing',
             'boundaries_created': 0,
             'relationships_created': 0,
+            'localizations_upserted': 0,
             'errors': []
         }
 
@@ -2752,6 +2761,7 @@ class APIUploader:
                 print(f"   Found {len(existing_codes)} existing boundary codes — will skip duplicates")
 
             records = self._extract_boundary_records(df, boundary_types, hierarchy_type, existing_codes)
+            localization_messages = self._build_boundary_localizations(records)
             seen_codes = set(existing_codes)
             seen_relationships = set()
 
@@ -2783,10 +2793,22 @@ class APIUploader:
                     results['relationships_created'] += 1
                     seen_relationships.add(relationship_key)
 
+            if localization_messages:
+                localization_result = self.create_localization_messages(
+                    localization_list=localization_messages,
+                    tenant=tenant_id,
+                    sheet_name='Boundary'
+                )
+                results['localizations_upserted'] = (
+                    localization_result.get('upserted', 0) +
+                    localization_result.get('exists', 0)
+                )
+
             results['status'] = 'completed'
             print(f"\n✅ Boundary processing completed!")
             print(f"   Boundaries created: {results['boundaries_created']}")
             print(f"   Relationships created: {results['relationships_created']}")
+            print(f"   Localizations processed: {results['localizations_upserted']}")
 
         except Exception as e:
             print(f"❌ Error processing boundaries: {str(e)}")
@@ -2855,6 +2877,29 @@ class APIUploader:
             })
 
         return records
+
+    def _build_boundary_localizations(self, records: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+        """Build unique localization entries from normalized boundary records."""
+        localization_by_code = {}
+
+        for record in records:
+            code = str(record.get('code', '')).strip()
+            name = str(record.get('name', '')).strip()
+            if not code or not name:
+                continue
+
+            existing = localization_by_code.get(code)
+            if existing and existing.get('message'):
+                continue
+
+            localization_by_code[code] = {
+                'code': code,
+                'message': name,
+                'module': 'rainmaker-boundary',
+                'locale': 'en_IN'
+            }
+
+        return list(localization_by_code.values())
 
     def _extract_column_level_boundary_records(self, df: pd.DataFrame, boundary_types: List[str], hierarchy_type: str,
                                                existing_codes: set) -> List[Dict[str, Any]]:
@@ -2938,7 +2983,7 @@ class APIUploader:
                     seen_records.add(record_key)
                     records.append({
                         'code': boundary_code,
-                        'name': '' if row_uses_direct_codes else raw_value,
+                        'name': raw_value,
                         'boundaryType': boundary_type,
                         'mappedBoundaryType': boundary_type,
                         'parentCode': parent_code
