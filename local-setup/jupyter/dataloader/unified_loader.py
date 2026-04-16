@@ -1970,6 +1970,7 @@ class APIUploader:
         5. Aggregate upserted / exists / failed counters with concise logging.
         """
         url = f"{self.localization_url}/messages/v1/_upsert"
+        state_tenant = tenant.split(".")[0] if tenant and "." in tenant else tenant
         results = {
             'upserted': 0,
             'created': 0,
@@ -1979,7 +1980,10 @@ class APIUploader:
         }
 
         print(f"\n[UPLOADING] Localization Messages")
-        print(f"   Tenant: {tenant}")
+        print(f"   Tenant: {state_tenant}")
+        if tenant != state_tenant:
+            print(f"   Requested tenant: {tenant}")
+            print(f"   Using state-level tenant for localization: {state_tenant}")
         localization_list = self._normalize_localizations(localization_list)
         print(f"   Total Messages: {len(localization_list)}")
         print(f"   API URL: {url}")
@@ -2011,7 +2015,7 @@ class APIUploader:
 
                 upload_result = self._upload_localization_batch(
                     url=url,
-                    tenant=tenant,
+                    tenant=state_tenant,
                     locale=locale,
                     batch_num=batch_num,
                     total_batches=total_batches,
@@ -2741,6 +2745,7 @@ class APIUploader:
 
             # Pre-check: fetch existing boundary codes so we skip duplicates
             existing_codes = set()
+            existing_relationships = set()
             try:
                 search_resp = self._request_with_retry(
                     f"{self.boundary_url}/boundary-relationships/_search",
@@ -2749,12 +2754,16 @@ class APIUploader:
                     headers={"Content-Type": "application/json"}
                 )
                 if search_resp.status_code in [200, 201]:
-                    def _collect_codes(nodes):
+                    def _collect_existing(nodes, parent_code=''):
                         for n in nodes:
-                            existing_codes.add(n.get("code", ""))
-                            _collect_codes(n.get("children", []))
+                            code = str(n.get("code", "") or '').strip()
+                            boundary_type = str(n.get("boundaryType", "") or '').strip()
+                            if code:
+                                existing_codes.add(code)
+                                existing_relationships.add((code, boundary_type, parent_code))
+                            _collect_existing(n.get("children", []), code)
                     for tb in search_resp.json().get("TenantBoundary", []):
-                        _collect_codes(tb.get("boundary", []))
+                        _collect_existing(tb.get("boundary", []))
             except Exception:
                 pass  # If search fails, proceed without dedup — create API will catch duplicates
             if existing_codes:
@@ -2763,7 +2772,7 @@ class APIUploader:
             records = self._extract_boundary_records(df, boundary_types, hierarchy_type, existing_codes)
             localization_messages = self._build_boundary_localizations(records)
             seen_codes = set(existing_codes)
-            seen_relationships = set()
+            seen_relationships = set(existing_relationships)
 
             for record in records:
                 code = record.get('code')
@@ -2784,6 +2793,7 @@ class APIUploader:
 
                 relationship_key = (code, mapped_type, parent_code or '')
                 if relationship_key in seen_relationships:
+                    print(f"   ⏭️  Skipping relationship {code} [{mapped_type}] — already exists")
                     continue
 
                 rel_success = self._create_boundary_relationship(
@@ -2895,7 +2905,7 @@ class APIUploader:
             localization_by_code[code] = {
                 'code': code,
                 'message': name,
-                'module': 'rainmaker-boundary',
+                'module': 'rainmaker-pgr',
                 'locale': 'en_IN'
             }
 
@@ -2965,7 +2975,7 @@ class APIUploader:
 
             for idx, (boundary_type, raw_value) in enumerate(row_entries):
                 current_path_values = [value for _, value in row_entries[:idx + 1]]
-                path_key = tuple(current_path_values)
+                path_key = self._normalize_boundary_path_key(current_path_values)
                 boundary_code = path_to_code.get(path_key)
 
                 if not boundary_code:
@@ -2998,6 +3008,14 @@ class APIUploader:
         cleaned = re.sub(r'[^A-Za-z0-9]+', '_', str(value or '').strip())
         return cleaned.strip('_').upper()
 
+    def _normalize_boundary_path_key(self, path_values: List[str]) -> tuple:
+        """Normalize a hierarchy path so equivalent labels reuse the same generated code."""
+        return tuple(
+            self._sanitize_boundary_code_part(value)
+            for value in path_values
+            if str(value or '').strip()
+        )
+
     def _looks_like_boundary_code(self, value: str) -> bool:
         """Heuristic to decide whether a cell already contains a boundary code."""
         value = str(value or '').strip()
@@ -3011,15 +3029,9 @@ class APIUploader:
         return "_".join(part for part in parts if part)
 
     def _generate_unique_boundary_code(self, path_values: List[str], seen_codes: set) -> str:
-        """Generate a unique boundary code for a hierarchy path."""
+        """Generate the deterministic boundary code for a hierarchy path."""
         base_code = self._generate_boundary_code_from_path(path_values)
-        if base_code not in seen_codes:
-            return base_code
-
-        suffix = 2
-        while f"{base_code}_{suffix:03d}" in seen_codes:
-            suffix += 1
-        return f"{base_code}_{suffix:03d}"
+        return base_code
 
     def _find_best_column_match(self, columns, boundary_type: str, hierarchy_type: str = None) -> str:
         """Match a hierarchy level to the best Excel column name.
@@ -3031,8 +3043,8 @@ class APIUploader:
             return None
 
         columns = list(columns)
-        normalized_target = self._normalize_boundary_column_name(boundary_type)
-        normalized_hierarchy = self._normalize_boundary_column_name(hierarchy_type or '')
+        normalized_target = self._sanitize_boundary_code_part(boundary_type)
+        normalized_hierarchy = self._sanitize_boundary_code_part(hierarchy_type or '')
 
         # 1. Exact match
         if boundary_type in columns:
@@ -3045,21 +3057,20 @@ class APIUploader:
 
         # 3. Normalized exact match
         for column in columns:
-            if self._normalize_boundary_column_name(column) == normalized_target:
+            if self._sanitize_boundary_code_part(column) == normalized_target:
                 return column
 
-        # 4. Normalized suffix/prefix match, ignoring hierarchy prefixes like ADMIN_
+        # 4. Ignore hierarchy prefixes like ADMIN_
         for column in columns:
-            normalized_column = self._normalize_boundary_column_name(column)
+            normalized_column = self._sanitize_boundary_code_part(column)
             candidate = normalized_column
-            if normalized_hierarchy and candidate.startswith(normalized_hierarchy):
-                candidate = candidate[len(normalized_hierarchy):]
+            hierarchy_prefix = f"{normalized_hierarchy}_"
+            if normalized_hierarchy and candidate.startswith(hierarchy_prefix):
+                candidate = candidate[len(hierarchy_prefix):]
 
             if candidate == normalized_target:
                 return column
-            if normalized_column.endswith(normalized_target):
-                return column
-            if normalized_target.endswith(candidate) and candidate:
+            if normalized_column.endswith(f"_{normalized_target}"):
                 return column
 
         return None
