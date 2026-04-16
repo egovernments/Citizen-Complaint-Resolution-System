@@ -648,6 +648,8 @@ services:
       STATE_LEVEL_TENANT_ID: pg
       EGOV_STATELEVEL_TENANT: pg
       HRMS_SYSTEM_USERNAME: INTERNAL_USER
+      EGOV_HRMS_DEV_MODE: true
+      EGOV_HRMS_EMPLOYEE_DEFAULT_PASSWORD: eGov@123
     ports:
       - 18092:8092
     healthcheck:
@@ -816,7 +818,7 @@ services:
       - egov-network
 
   digit-ui:
-    image: egovio/digit-ui:multiarch-d448cb7
+    image: egovio/digit-ui:develop-773002d
     container_name: digit-ui
     restart: on-failure
     ports:
