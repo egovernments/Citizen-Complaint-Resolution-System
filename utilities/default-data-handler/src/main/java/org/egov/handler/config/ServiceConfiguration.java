@@ -158,4 +158,11 @@ public class ServiceConfiguration {
 
     @Value("${dev.localization.data.path}")
     private String devLocalizationDataPath;
+
+    // Config Data Configs
+    @Value("${egov.config.host}${egov.config.data.create.endpoint}")
+    private String configDataCreateURI;
+
+    @Value("${default.config.data.path}")
+    private String defaultConfigDataPath;
 }
