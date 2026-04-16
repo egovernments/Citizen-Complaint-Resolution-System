@@ -73,7 +73,7 @@ env: |
     valueFrom:
       configMapKeyRef:
         name: egov-service-host
-        key: mdms-v2
+        key: mdms-service-v2
   - name: MDMS_V2_SCHEMA_SEARCH_PATH
     value: "/mdms-v2/schema/v1/_search"
   - name: MDMS_V2_VALIDATION_ENABLED
