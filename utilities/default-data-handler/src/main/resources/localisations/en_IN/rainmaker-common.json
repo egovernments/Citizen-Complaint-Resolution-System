@@ -8944,5 +8944,41 @@
         "message": "Manage Localisation",
         "module": "rainmaker-common",
         "locale": "en_IN"
+    },
+    {
+        "code": "ADMIN_BLOCK",
+        "message": "Block",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ADMIN_LOCALITY",
+        "message": "Locality",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ADMIN_ZONE",
+        "message": "Zone",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ADMIN_CITY",
+        "message": "City",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "TENANT_TENANTS_STATEA_CITYA",
+        "message": "City A",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ULBGRADE_LOCAL_GOVERNMENT AUTHORITY",
+        "message": "Local Government Authority",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
     }
 ]
