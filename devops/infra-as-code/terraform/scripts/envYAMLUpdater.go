@@ -49,6 +49,9 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error parsing JSON: %v\n", err)
 		os.Exit(1)
 	}
+	endpoint := tfOutput.DBHost.Value
+	parts := strings.Split(endpoint, ":")
+	dbHost := parts[0]
 	// Read the YAML file
 	yamlBytes, err := ioutil.ReadFile("../../../deploy-as-code/charts/environments/env.yaml")
 	if err != nil {
@@ -57,6 +60,7 @@ func main() {
 	}
 	output := string(yamlBytes)
 
+	output = strings.ReplaceAll(output, "<db_host>", dbHost)
 	// Replace the placeholders with the actual volume IDs
 	output = strings.ReplaceAll(output, "<db_host_name>", tfOutput.DBHost.Value)
 	output = strings.ReplaceAll(output, "<db_name>", tfOutput.DBName.Value)
