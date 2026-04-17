@@ -3,7 +3,67 @@ The objective of this service is to provide a functionality to raise a complaint
 the citizen and will be updated by notifications whenever the status of the complaint progresses further.
 ### DB UML Diagram
 
-- NA
+```mermaid
+erDiagram
+    eg_pgr_service_v2 {
+        varchar(64)  id PK
+        varchar(256) tenantId PK
+        varchar(256) serviceCode
+        varchar(256) serviceRequestId
+        varchar(4000) description
+        varchar(256) accountId
+        jsonb        additionalDetails
+        varchar(128) applicationStatus
+        smallint     rating
+        varchar(256) source
+        boolean      active
+        varchar(256) createdby
+        bigint       createdtime
+        varchar(256) lastmodifiedby
+        bigint       lastmodifiedtime
+    }
+
+    eg_pgr_address_v2 {
+        varchar(256) id PK
+        varchar(256) tenantId
+        varchar(256) parentid FK
+        varchar(128) doorno
+        varchar(256) plotno
+        varchar(1024) buildingName
+        varchar(1024) street
+        varchar(1024) landmark
+        varchar(512) city
+        varchar(16)  pincode
+        varchar(128) locality
+        varchar(256) district
+        varchar(256) region
+        varchar(256) state
+        varchar(512) country
+        numeric(9_6) latitude
+        numeric(10_7) longitude
+        jsonb        additionaldetails
+        varchar(128) createdby
+        bigint       createdtime
+        varchar(128) lastmodifiedby
+        bigint       lastmodifiedtime
+    }
+
+    eg_pgr_document_v2 {
+        varchar(64) id PK
+        varchar(64) document_type
+        varchar(64) filestore_id
+        varchar(64) document_uid
+        varchar(64) service_id FK
+        jsonb       additional_details
+        varchar(64) created_by
+        varchar(64) last_modified_by
+        bigint      created_time
+        bigint      last_modified_time
+    }
+
+    eg_pgr_service_v2 ||--o{ eg_pgr_address_v2 : "has"
+    eg_pgr_service_v2 ||--o{ eg_pgr_document_v2 : "has"
+```
 
 ### Service Dependencies
 - egov-user
