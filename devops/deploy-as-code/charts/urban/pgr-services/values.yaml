@@ -17,7 +17,7 @@ initContainers:
     schemaTable: "pgr_services_schema"
     image:
       repository: "pgr-services-db"
-      tag: "master-2242e47"
+      tag: "develop-8392b8c"
     env: |
         {{- if index .Values "pgr-ismultischema-enabled" }}        
         - name: SCHEMA_NAME
@@ -49,7 +49,7 @@ initContainers:
 # Container Configs
 image:
   repository: "pgr-services"
-  tag: "master-2242e47"
+  tag: "develop-8392b8c"
 replicas: "1"
 healthChecks:
   enabled: true
