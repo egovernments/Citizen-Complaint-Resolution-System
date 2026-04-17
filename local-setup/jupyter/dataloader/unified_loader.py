@@ -363,7 +363,7 @@ class UnifiedExcelReader:
                     })
 
                     # Auto-generate designation localization
-                    loc_code = f"COMMON_MASTERS_{desig_code}"
+                    loc_code = f"COMMON_MASTERS_DESIGNATION_{desig_code}"
                     desig_localizations.append({
                         'code': loc_code,
                         'message': desig_name,
@@ -417,8 +417,8 @@ class UnifiedExcelReader:
 
                 # Auto-generate localization for parent type (only once)
                 if parent_type not in localized_parent_types:
-                    parent_type_code = ''.join(word.capitalize() for word in parent_type.split())
-                    loc_code = f"SERVICEDEFS.{parent_type_code.upper()}"
+                    parent_type_code = '_'.join(word.capitalize() for word in parent_type.split())
+                    loc_code = f"SERVICEDEFS_{parent_type_code.upper()}"
                     localizations.append({
                         'code': loc_code,
                         'message': parent_type,
@@ -433,7 +433,6 @@ class UnifiedExcelReader:
 
                 # Auto-generate service code from sub-type name
                 service_code = ''.join(word.capitalize() for word in sub_type_name.split())
-
                 menu_path_value = current_parent['type'] if current_parent else sub_type_name
 
                 ct = {
@@ -459,7 +458,7 @@ class UnifiedExcelReader:
 
                 # Auto-generate localization for sub-type. DIGIT UI resolves
                 # complaint labels using the department-scoped key when present.
-                loc_code = f"SERVICEDEFS.{service_code.upper()}"
+                loc_code = f"SERVICEDEFS_{service_code.upper()}"
                 localizations.append({
                     'code': loc_code,
                     'message': sub_type_name,
@@ -4478,3 +4477,46 @@ class APIUploader:
                 'error': str(e),
                 'data': None
             }
+
+    def _build_boundary_level_localizations(self, records: List[Dict[str, Any]], hierarchy_type: str = None) -> List[Dict[str, str]]:
+        """Build localization entries for boundary column level names and hierarchy type.
+
+        Localization code is built as {HIERARCHY}_{LEVEL} matching the Excel column name format.
+
+        Examples (hierarchy=ADMIN, levels=["State","District type","Locality"]):
+          ADMIN_STATE         -> "State"
+          ADMIN_DISTRICT_TYPE -> "District type"
+          ADMIN_LOCALITY      -> "Locality"
+          ADMIN               -> "ADMIN"  (hierarchy type)
+        """
+        localization_by_code = {}
+        seen_boundary_types = set()
+
+        for record in records:
+            boundary_type = str(record.get('boundaryType', '')).strip()
+            if boundary_type and boundary_type not in seen_boundary_types:
+                seen_boundary_types.add(boundary_type)
+                normalized_type = boundary_type.upper()
+                normalized_hierarchy = (hierarchy_type or '').upper().replace(' ', '_')
+
+                # e.g. ADMIN_STATE, ADMIN_DISTRICT_TYPE, ADMIN_LOCALITY
+                loc_key = f"{normalized_hierarchy}_{normalized_type}" if normalized_hierarchy else normalized_type
+                localization_by_code[loc_key] = {
+                    'code': loc_key,
+                    'message': boundary_type,
+                    'module': 'rainmaker-common',
+                    'locale': 'en_IN'
+                }
+
+        # Hierarchy type itself e.g. ADMIN -> "ADMIN"
+        if hierarchy_type:
+            normalized_hierarchy = hierarchy_type.upper()
+            if normalized_hierarchy not in localization_by_code:
+                localization_by_code[normalized_hierarchy] = {
+                    'code': normalized_hierarchy,
+                    'message': hierarchy_type,
+                    'module': 'rainmaker-common',
+                    'locale': 'en_IN'
+                }
+
+        return list(localization_by_code.values())
