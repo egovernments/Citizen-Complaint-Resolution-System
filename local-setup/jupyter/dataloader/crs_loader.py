@@ -1378,6 +1378,14 @@ class CRSLoader:
             print(f"   ERROR: Template generation failed")
             return None
 
+        print(f"\n[3/5] Loading boundary level localizations...")
+        level_loc_records = [{'boundaryType': level} for level in levels]
+        level_loc_messages = self.uploader._build_boundary_level_localizations(
+            records=level_loc_records,
+            hierarchy_type=name
+        )
+        self.uploader.create_localization_messages(level_loc_messages, tenant)
+
         # Step 4: Poll for completion and download
         print(f"\n[4/4] Waiting for template...")
         poll_result = self.uploader.poll_boundary_template_status(tenant, name)
