@@ -17,12 +17,12 @@ initContainers:
     schemaTable: "novu_bridge_schema"
     image:
       repository: "novu-bridge-db"
-      tag: "develop-0a8b0a7"
+      tag: "v2.11-a520687"
 
 # Container Configs
 image:
   repository: "novu-bridge"
-  tag: "develop-0a8b0a7"
+  tag: "v2.11-a520687"
 replicas: "1"
 httpPort: 8080
 appType: "java-spring"

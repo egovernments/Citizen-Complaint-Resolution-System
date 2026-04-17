@@ -14,7 +14,7 @@ initContainers: {}
 # Container Configs
 image:
   repository: "digit-ui"
-  tag: "develop-773002d"
+  tag: "v2.11-a520687"
 replicas: "1"
 httpPort: 80
 healthChecks:
