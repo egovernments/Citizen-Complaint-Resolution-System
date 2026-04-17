@@ -9,7 +9,7 @@ initContainers: {}
 # Container Configs
 image:
   repository: "egov-notification-sms"
-  tag: mobile-validation-user-otp-db06ec6
+  tag: "mobile-validation-user-otp-db06ec6"
 replicas: "1"
 appType: "java-spring"
 tracing-enabled: true

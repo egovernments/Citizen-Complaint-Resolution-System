@@ -17,12 +17,12 @@ initContainers:
     schemaTable: "digit_config_service_schema"
     image:
       repository: "digit-config-service-db"
-      tag: "master-2242e47"
+      tag: "v2.11-a520687"
 
 # Container Configs
 image:
   repository: "digit-config-service"
-  tag: "master-2242e47"
+  tag: "v2.11-a520687"
 replicas: "1"
 httpPort: 8080
 appType: "java-spring"
