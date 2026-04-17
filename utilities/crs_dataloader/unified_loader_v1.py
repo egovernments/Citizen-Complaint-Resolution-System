@@ -442,9 +442,12 @@ class UnifiedExcelReader:
         designations = uploader.fetch_designations(tenant_id)
         desig_name_to_code = {d.get('name'): d.get('code') for d in designations}
 
-        # Fetch roles and create name->code mapping
+        # Fetch roles and build lookup maps (name→code, code→code, case-insensitive)
         roles_list = uploader.fetch_roles(tenant_id)
-        role_name_to_code = {r.get('name'): r.get('code') for r in roles_list}
+        role_by_name_ci  = {r.get('name', '').strip().lower(): r for r in roles_list if r.get('name')}
+        role_by_code_ci  = {r.get('code', '').strip().lower(): r for r in roles_list if r.get('code')}
+        valid_role_codes = {r.get('code') for r in roles_list if r.get('code')}
+        print(f"   Available role codes: {', '.join(sorted(valid_role_codes))}")
 
         employees = []
         for idx, row in df.iterrows():
@@ -507,22 +510,47 @@ class UnifiedExcelReader:
             desig_name = str(row.get('Designation Name*', '')).strip()
             designation = desig_name_to_code.get(desig_name, desig_name)  # Fallback to name if not found
 
-            # Parse role NAMES and convert to CODES
-            role_names_str = str(row.get('Role Names (comma separated)*', '')).strip()
-            role_names = [r.strip() for r in role_names_str.split(',') if r.strip()]
-            role_codes = [role_name_to_code.get(name, name) for name in role_names]  # Convert names to codes
+            # Parse roles — accept both role names and role codes, comma/newline-separated.
+            # Try multiple column name variants to handle different template versions.
+            role_raw = (
+                row.get('Role Code (comma separated)*') or
+                row.get('Role Name (COPY THIS)') or
+                row.get('Role Names (comma separated)*') or
+                row.get('Role Names (comma separated)') or
+                row.get('Role Code') or
+                row.get('Role Name') or
+                ''
+            )
+            role_names_str = str(role_raw).strip() if pd.notna(role_raw) else ''
+            # Split on comma or newline, strip whitespace from each entry
+            import re as _re
+            raw_entries = [r.strip() for r in _re.split(r'[,\n]+', role_names_str) if r.strip()]
 
-            # Build roles list for both user and jurisdiction
             roles = []
-            for i, role_code in enumerate(role_codes):
-                # Get the original role name for this code
-                role_name = role_names[i] if i < len(role_names) else role_code
+            skipped_roles = []
+            for entry in raw_entries:
+                entry_lower = entry.lower()
+                # 1. Try exact code match (case-insensitive)
+                role_obj = role_by_code_ci.get(entry_lower)
+                # 2. Try name match (case-insensitive)
+                if not role_obj:
+                    role_obj = role_by_name_ci.get(entry_lower)
+                if role_obj:
+                    roles.append({
+                        'code': role_obj['code'],
+                        'name': role_obj.get('name', role_obj['code']),
+                        'tenantId': tenant_id
+                    })
+                else:
+                    skipped_roles.append(entry)
 
-                roles.append({
-                    'code': role_code,
-                    'name': role_name,
-                    'tenantId': tenant_id
-                })
+            if skipped_roles:
+                print(f"   ⚠️  Row {idx} ({user_name}): unrecognised roles skipped: {skipped_roles}")
+                print(f"       Valid codes: {', '.join(sorted(valid_role_codes))}")
+
+            if not roles:
+                print(f"   ❌ Row {idx} ({user_name}): no valid roles resolved — skipping employee")
+                continue
 
             # Get boundary info (defaults to City level)
             hierarchy = str(row.get('Hierarchy Type', 'ADMIN')).strip()
@@ -2233,11 +2261,8 @@ class APIUploader:
             with open(file_path, 'rb') as f:
                 files = {'file': (os.path.basename(file_path), f, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')}
                 data = {
-                    'tenantId': tenant_id,
                     'module': module
                 }
-                # DIGIT API gateway requires auth-token as a header and
-                # tenantId as a URL query param for non-JSON (multipart) requests
                 headers = {'auth-token': self.auth_token}
                 params  = {'tenantId': tenant_id}
 
@@ -2265,163 +2290,192 @@ class APIUploader:
             print(f"❌ Upload error: {str(e)[:200]}")
             return None
 
-    def process_boundary_data(self, tenant_id: str, filestore_id: str = None, hierarchy_type: str = "ADMIN", action: str = "create", excel_file: str = None) -> Dict:
-        """Process boundary data - creates boundaries one-by-one via direct API
+    def process_boundary_data(self, tenant_id: str, filestore_id: str = None,
+                              hierarchy_type: str = "ADMIN", action: str = "create",
+                              excel_file: str = None) -> Dict:
+        """Process boundary data via boundary management process API.
 
-        This method reads the boundary Excel file and creates boundaries directly
-        via the boundary-service API, avoiding the need for bulk upload services.
+        Uploads the Excel file to filestore (if not already uploaded) then
+        submits it to /egov-bndry-mgmnt/v1/_process and polls until completion.
 
         Args:
             tenant_id: Tenant ID
-            filestore_id: FileStore ID (optional, for compatibility)
+            filestore_id: FileStore ID of already-uploaded Excel (optional)
             hierarchy_type: Hierarchy type (default: ADMIN)
             action: Action type (create/update)
-            excel_file: Path to Excel file with boundary data
+            excel_file: Path to local Excel file to upload (required if filestore_id not given)
 
         Returns:
-            Dict with processing results
+            Dict with ResourceDetails from the process API
         """
-        import pandas as pd
+        if not filestore_id:
+            if not excel_file:
+                print("❌ Provide either excel_file or filestore_id")
+                return {}
+            filestore_id = self.upload_file_to_filestore(
+                file_path=excel_file,
+                tenant_id=tenant_id,
+                module='HCM-ADMIN-CONSOLE'
+            )
+            if not filestore_id:
+                print("❌ File upload failed — cannot process boundary data")
+                return {}
 
-        results = {
-            'status': 'processing',
-            'boundaries_created': 0,
-            'relationships_created': 0,
-            'errors': []
+        # Pre-validate: confirm the boundary service can fetch this file from filestore.
+        # This catches tenant mismatches or connectivity issues early with a clear message.
+        print(f"\n🔍 Verifying filestore access for ID: {filestore_id}")
+        try:
+            verify_url = f"{self.filestore_url}/v1/files/url"
+            verify_resp = requests.get(
+                verify_url,
+                params={"tenantId": tenant_id, "fileStoreIds": filestore_id},
+                headers={"auth-token": self.auth_token}
+            )
+            if verify_resp.ok:
+                fs_data = verify_resp.json()
+                url_list = fs_data.get("fileStoreIds", [])
+                if url_list and url_list[0].get("url"):
+                    print(f"   ✅ Filestore URL resolved: {url_list[0]['url'][:80]}...")
+                else:
+                    print(f"   ⚠️  Filestore returned no URL for this fileStoreId + tenant.")
+                    print(f"       Tenant used: {tenant_id}")
+                    print(f"       This is likely why the boundary service reports INVALID_FILE.")
+                    print(f"       Ensure the file was uploaded with the same tenant as the _process call.")
+            else:
+                print(f"   ⚠️  Filestore URL check failed ({verify_resp.status_code}): {verify_resp.text[:200]}")
+        except Exception as ve:
+            print(f"   ⚠️  Could not verify filestore URL: {str(ve)[:100]}")
+
+        url = f"{self.boundary_mgmt_url}/v1/_process"
+
+        user_info_copy = self.user_info.copy()
+        user_info_copy['tenantId'] = tenant_id
+
+        payload = {
+            "ResourceDetails": {
+                "tenantId": tenant_id,
+                "fileStoreId": filestore_id,
+                "hierarchyType": hierarchy_type,
+                "additionalDetails": {},
+                "action": action
+            },
+            "RequestInfo": {
+                "apiId": "Rainmaker",
+                "authToken": self.auth_token,
+                "userInfo": user_info_copy,
+                "msgId": f"{int(time.time() * 1000)}|en_IN",
+                "plainAccessRequest": {}
+            }
         }
 
-        if not excel_file:
-            print("❌ No Excel file provided")
-            results['status'] = 'failed'
-            results['errors'].append("No Excel file provided")
-            return results
-
         try:
-            # Read boundary data from Excel
-            print(f"\n📖 Reading boundary data from: {excel_file}")
+            response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'})
+            response.raise_for_status()
+            data = response.json()
 
-            # Try different sheet names
-            sheet_name = 'Boundary'
-            try:
-                df = pd.read_excel(excel_file, sheet_name='Boundary')
-            except:
-                try:
-                    df = pd.read_excel(excel_file, sheet_name='Boundary Data')
-                except:
-                    df = pd.read_excel(excel_file, sheet_name=0)  # First sheet
+            resource = data.get('ResourceDetails', {})
+            status = resource.get('status')
 
-            print(f"   Found {len(df)} boundary records")
-            print(f"   Columns: {list(df.columns)}")
+            print(f"\n✅ Boundary processing initiated")
+            print(f"   Status: {status}")
+            print(f"   Task ID: {resource.get('id')}")
 
-            # Get hierarchy definition to understand boundary types
-            hierarchy = self._get_boundary_hierarchy(tenant_id, hierarchy_type)
-            if hierarchy:
-                boundary_types = [h['boundaryType'] for h in hierarchy.get('boundaryHierarchy', [])]
-                print(f"   Hierarchy: {' → '.join(boundary_types)}")
-            else:
-                print("   ⚠️ Could not fetch hierarchy, will use boundaryType from Excel")
-                boundary_types = df['boundaryType'].unique().tolist() if 'boundaryType' in df.columns else []
+            return resource
 
-            # Check if Excel has the standard format (code, name, boundaryType, parentCode)
-            if 'code' in df.columns and 'boundaryType' in df.columns:
-                print("   Using standard format (code, boundaryType, parentCode)")
-
-                # Map Excel boundary types to hierarchy types if they don't match
-                # Common mappings for Punjab-style templates
-                type_mapping = {
-                    'State': 'Country',  # If hierarchy starts with Country
-                    'District': 'State',
-                    'Tehsil': 'City',
-                    'Block': 'Ward',
-                    'Village': 'Locality'
-                }
-
-                # Check if we need mapping (Excel types vs hierarchy types)
-                excel_types = set(df['boundaryType'].unique())
-                hierarchy_set = set(boundary_types) if boundary_types else set()
-
-                # If Excel types match hierarchy, no mapping needed
-                if excel_types.issubset(hierarchy_set) or not hierarchy_set:
-                    use_mapping = False
-                    print("   Boundary types match hierarchy - no mapping needed")
-                else:
-                    use_mapping = True
-                    print(f"   ⚠️ Boundary type mismatch detected")
-                    print(f"      Excel types: {excel_types}")
-                    print(f"      Hierarchy types: {hierarchy_set}")
-                    print(f"      Will attempt to map types")
-
-                # Process each row
-                for idx, row in df.iterrows():
-                    code = str(row.get('code', '')).strip()
-                    boundary_type = str(row.get('boundaryType', '')).strip()
-                    parent_code = str(row.get('parentCode', '')).strip() if pd.notna(row.get('parentCode')) else None
-
-                    if not code or not boundary_type:
-                        continue
-
-                    # Apply type mapping if needed
-                    mapped_type = type_mapping.get(boundary_type, boundary_type) if use_mapping else boundary_type
-
-                    # Create boundary entity
-                    success = self._create_boundary_entity(tenant_id, code)
-                    if success:
-                        results['boundaries_created'] += 1
-
-                    # Create boundary relationship - try with original type first, then mapped
-                    rel_success = self._create_boundary_relationship(
-                        tenant_id, hierarchy_type, code, boundary_type, parent_code
-                    )
-                    if not rel_success and use_mapping and mapped_type != boundary_type:
-                        # Try with mapped type
-                        rel_success = self._create_boundary_relationship(
-                            tenant_id, hierarchy_type, code, mapped_type, parent_code
-                        )
-                    if rel_success:
-                        results['relationships_created'] += 1
-            else:
-                # Handle column-per-level format
-                print("   Using column-per-level format")
-                for boundary_type in boundary_types:
-                    if boundary_type not in df.columns:
-                        continue
-
-                    boundaries_at_level = df[boundary_type].dropna().unique()
-
-                    for boundary_code in boundaries_at_level:
-                        if pd.isna(boundary_code) or str(boundary_code).strip() == '':
-                            continue
-
-                        boundary_code = str(boundary_code).strip()
-                        success = self._create_boundary_entity(tenant_id, boundary_code)
-                        if success:
-                            results['boundaries_created'] += 1
-
-                        parent_type_idx = boundary_types.index(boundary_type) - 1
-                        parent_code = None
-                        if parent_type_idx >= 0:
-                            parent_type = boundary_types[parent_type_idx]
-                            row = df[df[boundary_type] == boundary_code].iloc[0] if len(df[df[boundary_type] == boundary_code]) > 0 else None
-                            if row is not None and parent_type in df.columns:
-                                parent_code = str(row[parent_type]).strip() if pd.notna(row[parent_type]) else None
-
-                        rel_success = self._create_boundary_relationship(
-                            tenant_id, hierarchy_type, boundary_code, boundary_type, parent_code
-                        )
-                        if rel_success:
-                            results['relationships_created'] += 1
-
-            results['status'] = 'completed'
-            print(f"\n✅ Boundary processing completed!")
-            print(f"   Boundaries created: {results['boundaries_created']}")
-            print(f"   Relationships created: {results['relationships_created']}")
-
+        except requests.exceptions.HTTPError as e:
+            error_text = e.response.text if hasattr(e.response, 'text') else str(e)
+            print(f"❌ HTTP Error: {error_text[:300]}")
+            return {}
         except Exception as e:
-            print(f"❌ Error processing boundaries: {str(e)}")
-            results['status'] = 'failed'
-            results['errors'].append(str(e))
+            print(f"❌ Error: {str(e)}")
+            return {}
 
-        return results
+    def poll_boundary_process_status(self, tenant_id: str, hierarchy_type: str = "ADMIN",
+                                     max_attempts: int = 30, delay: int = 10) -> Dict:
+        """Poll /egov-bndry-mgmnt/v1/_process-search until processing completes or fails.
+
+        Args:
+            tenant_id: Tenant ID
+            hierarchy_type: Hierarchy type
+            max_attempts: Maximum polling attempts
+            delay: Seconds between polls
+
+        Returns:
+            Latest ResourceDetails dict (status: completed / failed / inprogress)
+        """
+        url = f"{self.boundary_mgmt_url}/v1/_process-search"
+
+        user_info_copy = self.user_info.copy()
+        user_info_copy['tenantId'] = tenant_id
+
+        payload = {
+            "RequestInfo": {
+                "apiId": "Rainmaker",
+                "authToken": self.auth_token,
+                "userInfo": user_info_copy,
+                "msgId": f"{int(time.time() * 1000)}|en_IN",
+                "plainAccessRequest": {}
+            },
+            "SearchCriteria": {
+                "tenantId": tenant_id,
+                "hierarchyType": hierarchy_type
+            }
+        }
+
+        print(f"\n⏳ Polling boundary process status (max {max_attempts} attempts, {delay}s interval)...")
+
+        for attempt in range(1, max_attempts + 1):
+            try:
+                response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'})
+                response.raise_for_status()
+                data = response.json()
+
+                resources = data.get('ResourceDetails', [])
+                if not resources:
+                    print(f"   Attempt {attempt}: No ResourceDetails found yet")
+                    time.sleep(delay)
+                    continue
+
+                latest = sorted(resources,
+                                key=lambda x: x.get('auditDetails', {}).get('createdTime', 0),
+                                reverse=True)[0]
+
+                status = latest.get('status', 'unknown')
+                print(f"   Attempt {attempt}: status = {status}")
+
+                if status == 'completed':
+                    processed_id = latest.get('processedFileStoreId')
+                    print(f"\n✅ Boundary processing completed!")
+                    if processed_id:
+                        print(f"   Processed FileStore ID: {processed_id}")
+                    return latest
+
+                if status == 'failed':
+                    additional = latest.get('additionalDetails', {})
+                    error_raw = additional.get('error', '')
+                    try:
+                        import json as _json
+                        error_obj = _json.loads(error_raw) if isinstance(error_raw, str) else error_raw
+                        error_code = error_obj.get('code', '')
+                        error_detail = error_obj.get('description', str(error_obj))
+                    except Exception:
+                        error_code = ''
+                        error_detail = str(error_raw)
+                    print(f"\n❌ Boundary processing failed!")
+                    if error_code:
+                        print(f"   Error code: {error_code}")
+                    if error_detail:
+                        print(f"   Details: {error_detail[:300]}")
+                    return latest
+
+                time.sleep(delay)
+
+            except Exception as e:
+                print(f"   Attempt {attempt}: Error polling status — {str(e)[:100]}")
+                time.sleep(delay)
+
+        print(f"\n⚠️ Polling timed out after {max_attempts} attempts")
+        return {}
 
     def _get_boundary_hierarchy(self, tenant_id: str, hierarchy_type: str) -> Dict:
         """Fetch boundary hierarchy definition"""
@@ -2451,92 +2505,6 @@ class APIUploader:
         except Exception as e:
             print(f"   ⚠️ Error fetching hierarchy: {str(e)[:100]}")
             return None
-
-    def _create_boundary_entity(self, tenant_id: str, code: str) -> bool:
-        """Create a single boundary entity"""
-        url = f"{self.boundary_url}/boundary/_create"
-
-        user_info_copy = self.user_info.copy()
-        user_info_copy['tenantId'] = tenant_id
-
-        payload = {
-            "RequestInfo": {
-                "apiId": "Rainmaker",
-                "msgId": f"create-boundary-{int(time.time()*1000)}",
-                "authToken": self.auth_token,
-                "userInfo": user_info_copy
-            },
-            "Boundary": [{
-                "tenantId": tenant_id,
-                "code": code,
-                "geometry": {"type": "Polygon", "coordinates": [[[0,0],[0,1],[1,1],[1,0],[0,0]]]}
-            }]
-        }
-
-        try:
-            response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'})
-            if response.status_code in [200, 201, 202]:
-                print(f"   ✅ Created boundary: {code}")
-                return True
-            else:
-                data = response.json()
-                error_code = data.get('Errors', [{}])[0].get('code', '')
-                error_msg = data.get('Errors', [{}])[0].get('message', '')
-                if error_code == 'DUPLICATE_CODE' or 'already exists' in str(error_msg).lower():
-                    print(f"   ⚠️ Boundary exists: {code}")
-                    return True  # Already exists is OK
-                else:
-                    print(f"   ❌ Failed to create boundary {code}: {error_code or error_msg or response.status_code}")
-                    return False
-        except Exception as e:
-            print(f"   ❌ Error creating boundary {code}: {str(e)[:100]}")
-            return False
-
-    def _create_boundary_relationship(self, tenant_id: str, hierarchy_type: str,
-                                       code: str, boundary_type: str, parent_code: str = None) -> bool:
-        """Create boundary relationship (parent-child link)"""
-        url = f"{self.boundary_url}/boundary-relationships/_create"
-
-        user_info_copy = self.user_info.copy()
-        user_info_copy['tenantId'] = tenant_id
-
-        payload = {
-            "RequestInfo": {
-                "apiId": "Rainmaker",
-                "msgId": f"create-relationship-{int(time.time()*1000)}",
-                "authToken": self.auth_token,
-                "userInfo": user_info_copy
-            },
-            "BoundaryRelationship": {
-                "tenantId": tenant_id,
-                "hierarchyType": hierarchy_type,
-                "code": code,
-                "boundaryType": boundary_type
-            }
-        }
-
-        if parent_code:
-            payload["BoundaryRelationship"]["parent"] = parent_code
-
-        try:
-            response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'})
-            if response.status_code in [200, 201, 202]:
-                parent_info = f" (parent: {parent_code})" if parent_code else " (root)"
-                print(f"   ✅ Created relationship: {code} [{boundary_type}]{parent_info}")
-                return True
-            else:
-                data = response.json()
-                error_code = data.get('Errors', [{}])[0].get('code', '')
-                error_msg = data.get('Errors', [{}])[0].get('message', '')
-                if 'already exists' in str(error_msg).lower() or error_code == 'DUPLICATE':
-                    print(f"   ⚠️ Relationship exists: {code}")
-                    return True
-                else:
-                    print(f"   ❌ Failed relationship {code}: {error_msg[:80] if error_msg else error_code or response.status_code}")
-                    return False
-        except Exception as e:
-            print(f"   ❌ Error creating relationship {code}: {str(e)[:100]}")
-            return False
 
     def delete_all_boundaries(self, tenant_id: str) -> Dict:
         """Delete all boundary entities for a tenant
@@ -3133,7 +3101,7 @@ class APIUploader:
             'Password',
             'Department Name*',
             'Designation Name*',
-            'Role Names (comma separated)*',
+            'Role Code (comma separated)*',
             'Employee Status',
             'Employee Type',
             'Gender',
@@ -3154,19 +3122,18 @@ class APIUploader:
             cell.font = header_font
             cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-            # Add comment to Role Names column
-            if header == 'Role Names (comma separated)*':
+            # Add comment to Role Code column
+            if header == 'Role Code (comma separated)*':
                 from openpyxl.comments import Comment
-                # Get list of available role names for the tooltip
-                available_roles = ', '.join([r.get('name', '') for r in roles[:10]])
+                available_codes = ', '.join([r.get('code', '') for r in roles[:10]])
                 if len(roles) > 10:
-                    available_roles += f', ... ({len(roles)} total roles)'
+                    available_codes += f', ... ({len(roles)} total roles)'
 
                 comment = Comment(
-                    f"💡 Enter comma-separated role names\n\n"
-                    f"Example: Employee,PGR Viewer,PGR Last Mile Employee\n\n"
-                    f"Available roles:\n{available_roles}\n\n"
-                    f"See 'Ref_Roles' sheet for complete list",
+                    f"💡 Enter comma-separated role CODES\n\n"
+                    f"Example: EMPLOYEE,PGR_VIEWER,PGR_LME\n\n"
+                    f"Available codes:\n{available_codes}\n\n"
+                    f"See 'README - Roles' sheet for complete list",
                     "System"
                 )
                 cell.comment = comment
@@ -3271,7 +3238,7 @@ class APIUploader:
         ws['C2'] = 'eGov@123'
         ws['D2'] = departments[0].get('name', 'Department 1') if departments else 'Department 1'
         ws['E2'] = designations[0].get('name', 'Designation 01') if designations else 'Designation 01'
-        ws['F2'] = 'Employee,PGR Viewer'  # Role NAMES, not codes
+        ws['F2'] = ','.join([r.get('code', '') for r in roles[:2]]) if roles else 'EMPLOYEE,PGR_VIEWER'
         ws['G2'] = employee_statuses[0] if employee_statuses else 'EMPLOYED'
         ws['H2'] = employee_types[0] if employee_types else 'PERMANENT'
         ws['I2'] = genders[0] if genders else 'MALE'
@@ -3294,24 +3261,24 @@ class APIUploader:
         instructions['A1'] = "📋 EMPLOYEE MASTER TEMPLATE - INSTRUCTIONS"
         instructions['A1'].font = Font(bold=True, size=14, color='0066cc')
 
-        instructions['A3'] = "✨ USER-FRIENDLY: Use NAMES everywhere! Codes are converted automatically."
+        instructions['A3'] = "✨ Department & Designation: use NAMES (dropdown). Roles: use CODES (see README - Roles sheet)."
         instructions['A5'] = "📝 Required Fields (marked with *):"
         instructions['A6'] = "  1. User Name* - Full name of the employee"
         instructions['A7'] = "  2. Mobile Number* - 10-digit mobile number"
         instructions['A8'] = "  3. Department Name* - Select from dropdown (e.g., 'Public Works')"
         instructions['A9'] = "  4. Designation Name* - Select from dropdown (e.g., 'Assistant Engineer')"
-        instructions['A10'] = "  5. Role Names* - Type comma-separated role names (see 'README - Roles' sheet)"
+        instructions['A10'] = "  5. Role Code* - Comma-separated role CODES (see 'README - Roles' sheet)"
         instructions['A11'] = "  6. Assignment From Date* - Use Excel date picker (e.g., 09/05/2024)"
         instructions['A12'] = "  7. Date of Appointment* - Use Excel date picker (e.g., 06/20/2024)"
 
         instructions['A14'] = "🎯 HOW TO SELECT MULTIPLE ROLES:"
         instructions['A15'] = "  1. Go to 'README - Roles' sheet"
         instructions['A16'] = "  2. Find the roles you want from the list"
-        instructions['A17'] = "  3. Copy role names (NOT codes) - example: 'Employee,PGR Viewer,PGR Admin'"
-        instructions['A18'] = "  4. Paste into the 'Role Names' column in Employee Master sheet"
+        instructions['A17'] = "  3. Copy the ROLE CODE (Column A, highlighted green) — NOT the name"
+        instructions['A18'] = "  4. Paste into the 'Role Code' column in Employee Master sheet, joining with commas"
         instructions['A19'] = "  "
-        instructions['A20'] = "  💡 TIP: You can copy multiple role names at once and join with commas"
-        instructions['A21'] = "  Example: Employee,PGR Viewer,PGR Last Mile Employee"
+        instructions['A20'] = "  💡 TIP: Join multiple codes with commas, no spaces"
+        instructions['A21'] = "  Example: EMPLOYEE,PGR_VIEWER,PGR_LME"
 
         instructions['A23'] = "💡 Optional Fields (with dropdowns):"
         instructions['A24'] = "  • Password - User password (default: eGov@123 if left blank)"
@@ -3323,8 +3290,8 @@ class APIUploader:
         instructions['A30'] = "  • Boundary Code - Select from available boundaries (default: tenant code)"
 
         instructions['A32'] = "⚠️  IMPORTANT NOTES:"
-        instructions['A33'] = "  1. USE NAMES NOT CODES - Department, Designation, and Role NAMES are used"
-        instructions['A34'] = "  2. Auto-Conversion - System converts names to codes when uploading"
+        instructions['A33'] = "  1. Department & Designation: enter NAMES (auto-converted to codes on upload)"
+        instructions['A34'] = "  2. Roles: enter CODES directly (e.g., EMPLOYEE, PGR_VIEWER)"
         instructions['A35'] = "  3. Employee Code - Auto-generated from User Name"
         instructions['A36'] = "  4. Jurisdiction - Automatically created using Boundary + Roles"
         instructions['A37'] = "  5. Roles - Same roles assigned to BOTH user and jurisdiction"
@@ -3337,7 +3304,7 @@ class APIUploader:
 
         # Create README - Roles sheet with all available roles
         readme_roles = wb.create_sheet("README - Roles")
-        readme_roles['A1'] = "📚 AVAILABLE ROLES - Copy & Paste Role Names"
+        readme_roles['A1'] = "📚 AVAILABLE ROLES - Copy & Paste Role Codes"
         readme_roles['A1'].font = Font(bold=True, size=14, color='0066cc')
         readme_roles['A2'] = f"Total Roles Available: {len(roles)}"
         readme_roles['A2'].font = Font(bold=True, color='006600')
@@ -3345,16 +3312,16 @@ class APIUploader:
         readme_roles['A4'] = "Instructions:"
         readme_roles['A4'].font = Font(bold=True, size=12, color='cc6600')
         readme_roles['A5'] = "  1. Find the roles you want to assign to the employee"
-        readme_roles['A6'] = "  2. Copy the ROLE NAME (Column B) - NOT the code!"
-        readme_roles['A7'] = "  3. For multiple roles, copy each name and join with commas"
-        readme_roles['A8'] = "  4. Paste into 'Role Names' column in Employee Master sheet"
+        readme_roles['A6'] = "  2. Copy the ROLE CODE (Column A) — highlighted in green"
+        readme_roles['A7'] = "  3. For multiple roles, join codes with commas (no spaces)"
+        readme_roles['A8'] = "  4. Paste into 'Role Code' column in Employee Master sheet"
         readme_roles['A9'] = ""
-        readme_roles['A10'] = "Example: Employee,PGR Viewer,PGR Last Mile Employee"
+        readme_roles['A10'] = "Example: EMPLOYEE,PGR_VIEWER,PGR_LME"
         readme_roles['A10'].font = Font(italic=True, color='0066cc')
 
         # Headers for role list
-        readme_roles['A12'] = "Role Code"
-        readme_roles['B12'] = "Role Name (COPY THIS)"
+        readme_roles['A12'] = "Role Code (COPY THIS)"
+        readme_roles['B12'] = "Role Name"
         readme_roles['C12'] = "Description"
         readme_roles['A12'].font = Font(bold=True, color='FFFFFF')
         readme_roles['B12'].font = Font(bold=True, color='FFFFFF')
@@ -3373,8 +3340,8 @@ class APIUploader:
             readme_roles[f'B{row}'] = role.get('name', '')
             readme_roles[f'C{row}'] = role.get('description', '')
 
-            # Highlight role name column for easy copying
-            readme_roles[f'B{row}'].font = Font(bold=True, color='006600')
+            # Highlight role CODE column for easy copying
+            readme_roles[f'A{row}'].font = Font(bold=True, color='006600')
             row += 1
 
         # Set column widths
@@ -3385,10 +3352,10 @@ class APIUploader:
         # Add note at bottom
         readme_roles[f'A{row+2}'] = "💡 Common Role Combinations:"
         readme_roles[f'A{row+2}'].font = Font(bold=True, size=11, color='cc6600')
-        readme_roles[f'A{row+3}'] = "  • Basic Employee: Employee"
-        readme_roles[f'A{row+4}'] = "  • PGR Complaint Resolver: PGR Last Mile Employee,PGR Viewer,Employee"
-        readme_roles[f'A{row+5}'] = "  • PGR Complaint Assessor: Grievance Routing Officer,PGR Viewer,Employee"
-        readme_roles[f'A{row+6}'] = "  • Admin User: HRMS Admin,MDMS ADMIN,Localisation admin,WORKFLOW ADMIN"
+        readme_roles[f'A{row+3}'] = "  • Basic Employee: EMPLOYEE"
+        readme_roles[f'A{row+4}'] = "  • PGR Complaint Resolver: PGR_LME,PGR_VIEWER,EMPLOYEE"
+        readme_roles[f'A{row+5}'] = "  • PGR Complaint Assessor: GRO,PGR_VIEWER,EMPLOYEE"
+        readme_roles[f'A{row+6}'] = "  • Admin User: HRMS_ADMIN,MDMS_ADMIN,LOC_ADMIN,WORKFLOW_ADMIN"
 
         # Save file
         if not output_path:
@@ -3418,7 +3385,7 @@ class APIUploader:
         print("\n💡 Template includes:")
         print("   ✓ Employee Master sheet - Main data entry sheet")
         print("   ✓ Instructions sheet - Complete usage guide")
-        print("   ✓ README - Roles sheet - All available roles with copy-paste ready names")
+        print("   ✓ README - Roles sheet - All available roles with copy-paste ready codes")
         print("   ✓ Hidden reference sheets (Departments, Designations, Roles, Boundaries)")
         print("   ✓ All dropdowns pre-filled from MDMS")
         print("   ✓ Sample row with default values")

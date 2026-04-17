@@ -610,33 +610,29 @@ def boundary_ui(state: State):
                 f"boundary_{state.boundary_tenant}_{state.boundary_hierarchy_type}.xlsx")
             _save_upload(bnd_file_w, path)
             print(f"Saved: {path}")
-            # Upload to filestore (for record-keeping / audit trail)
+            # Upload to filestore, then submit to boundary management process API
             fst_id = uploader.upload_file_to_filestore(
                 path, state.boundary_tenant, "HCM-ADMIN-CONSOLE")
             if not fst_id:
                 print("Filestore upload failed -- aborting"); return
-            # Process boundary data directly from the local Excel file
-            result = uploader.process_boundary_data(
+            resource = uploader.process_boundary_data(
                 state.boundary_tenant,
                 filestore_id=fst_id,
                 hierarchy_type=state.boundary_hierarchy_type,
                 action="create",
-                excel_file=path,          # ← required: reads boundaries from here
             )
-            if result and result.get("status") == "completed":
-                print(f"Phase 2 complete! "
-                      f"Boundaries: {result.get('boundaries_created', 0)} created, "
-                      f"Relationships: {result.get('relationships_created', 0)} created.")
-                errs = result.get("errors", [])
-                if errs:
-                    print(f"Errors ({len(errs)}):")
-                    for e in errs[:5]:
-                        print(f"  - {e}")
+            if not resource:
+                print("Boundary processing failed — could not submit job."); return
+            # Poll until the boundary management service finishes processing
+            final = uploader.poll_boundary_process_status(
+                state.boundary_tenant, state.boundary_hierarchy_type)
+            if final.get("status") == "completed":
+                print(f"Phase 2 complete! Boundary data processed successfully.")
+                processed_id = final.get("processedFileStoreId")
+                if processed_id:
+                    print(f"   Processed FileStore ID: {processed_id}")
             else:
-                errs = (result or {}).get("errors", [])
-                print("Boundary processing failed.")
-                for e in errs:
-                    print(f"  - {e}")
+                print(f"Boundary processing ended with status: {final.get('status', 'unknown')}")
     upload_bnd_btn.on_click(on_upload_bnd)
 
     acc = widgets.Accordion(children=[
@@ -645,7 +641,34 @@ def boundary_ui(state: State):
             b_tenant_w, tab_2a,
         ]),
         widgets.VBox([
-            widgets.HTML("<p style='color:#555'>Upload the filled template. Tenant/hierarchy taken from Step 2a.</p>"),
+            widgets.HTML(
+                "<p style='color:#555'>Upload the filled template. Tenant/hierarchy taken from Step 2a.</p>"
+                "<div style='background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;padding:12px;margin-bottom:10px'>"
+                "<b>How to fill the boundary template:</b>"
+                "<p style='margin:6px 0 4px'>Each row represents one boundary node. "
+                "Fill from left to right — repeat parent values on every child row, "
+                "and leave child columns blank when listing a parent-only row.</p>"
+                "<table style='border-collapse:collapse;font-size:13px;width:100%'>"
+                "<thead><tr style='background:#e9ecef'>"
+                "<th style='border:1px solid #ccc;padding:4px 10px'>ADMIN_CITY</th>"
+                "<th style='border:1px solid #ccc;padding:4px 10px'>ADMIN_ZONE</th>"
+                "<th style='border:1px solid #ccc;padding:4px 10px'>ADMIN_BLOCK</th>"
+                "<th style='border:1px solid #ccc;padding:4px 10px;color:#555'>Purpose</th>"
+                "</tr></thead>"
+                "<tbody>"
+                "<tr><td style='border:1px solid #ccc;padding:3px 10px'>AddisAbaba</td><td style='border:1px solid #ccc;padding:3px 10px'></td><td style='border:1px solid #ccc;padding:3px 10px'></td><td style='border:1px solid #ccc;padding:3px 10px;color:#555'>City only</td></tr>"
+                "<tr style='background:#f8f9fa'><td style='border:1px solid #ccc;padding:3px 10px'>AddisAbaba</td><td style='border:1px solid #ccc;padding:3px 10px'>Bole</td><td style='border:1px solid #ccc;padding:3px 10px'></td><td style='border:1px solid #ccc;padding:3px 10px;color:#555'>Zone under city</td></tr>"
+                "<tr><td style='border:1px solid #ccc;padding:3px 10px'>AddisAbaba</td><td style='border:1px solid #ccc;padding:3px 10px'>Bole</td><td style='border:1px solid #ccc;padding:3px 10px'>BoleAirport</td><td style='border:1px solid #ccc;padding:3px 10px;color:#555'>Block under Bole</td></tr>"
+                "<tr style='background:#f8f9fa'><td style='border:1px solid #ccc;padding:3px 10px'>AddisAbaba</td><td style='border:1px solid #ccc;padding:3px 10px'>Bole</td><td style='border:1px solid #ccc;padding:3px 10px'>BoleMedhaneAlem</td><td style='border:1px solid #ccc;padding:3px 10px;color:#555'>Another block under Bole</td></tr>"
+                "<tr><td style='border:1px solid #ccc;padding:3px 10px'>AddisAbaba</td><td style='border:1px solid #ccc;padding:3px 10px'>Yeka</td><td style='border:1px solid #ccc;padding:3px 10px'></td><td style='border:1px solid #ccc;padding:3px 10px;color:#555'>Second zone under city</td></tr>"
+                "<tr style='background:#f8f9fa'><td style='border:1px solid #ccc;padding:3px 10px'>AddisAbaba</td><td style='border:1px solid #ccc;padding:3px 10px'>Yeka</td><td style='border:1px solid #ccc;padding:3px 10px'>YekaMedhaneAlem</td><td style='border:1px solid #ccc;padding:3px 10px;color:#555'>Block under Yeka</td></tr>"
+                "</tbody></table>"
+                "<p style='margin:6px 0 0;color:#555;font-size:12px'>"
+                "<b>Rules:</b> Column names must match the hierarchy levels exactly (case-sensitive). "
+                "Always repeat the parent value in every child row. "
+                "Leave deeper columns empty when defining a higher-level boundary.</p>"
+                "</div>"
+            ),
             bnd_file_w, upload_bnd_btn, bnd_out,
         ]),
     ])
@@ -712,7 +735,7 @@ def common_masters_ui(state: State):
             ct_data, ct_loc = reader.read_complaint_types(state.selected_tenant, dept_name_to_code)
             if ct_data:
                 state.result_ct = uploader.create_mdms_data(
-                    "pgr-services.serviceDefinition", clean_nans(ct_data),
+                    "RAINMAKER-PGR.ServiceDefs", clean_nans(ct_data),
                     state.selected_tenant, "Complaint Type Master", dest)
                 r = state.result_ct
                 print(f"Complaint Types: {r.get('created',0)} created, "
@@ -844,27 +867,34 @@ _WORKFLOW_TEMPLATE = os.path.join(
 def workflow_ui(state: State):
     """Phase 5: download default workflow template, edit, then apply via create/update."""
     # ── Step 5a: download template ────────────────────────────────────────────
-    wf_t_w    = _txt("Tenant ID:", state.config.get("tenant_id", "pg"))
-    dl_wf_btn = _btn("Download Default Workflow Template", "primary")
-    dl_wf_out = widgets.Output()
-    _wf_path  = [None]
+    wf_t_w = _txt("Tenant ID:", state.config.get("tenant_id", "pg"))
 
-    def on_dl_wf(b):
-        with dl_wf_out:
-            clear_output()
-            if not os.path.exists(_WORKFLOW_TEMPLATE):
-                print(f"Template not found: {_WORKFLOW_TEMPLATE}"); return
-            dest = os.path.join("upload", "PgrWorkflowConfig.json")
-            os.makedirs("upload", exist_ok=True)
-            shutil.copy2(_WORKFLOW_TEMPLATE, dest)
-            _wf_path[0] = dest
-            display(HTML(
-                f"<div style='background:#d4edda;padding:12px;border-radius:6px'>"
-                f"<b>Template copied to:</b> <code>{dest}</code><br>"
-                f"<small>Edit the JSON (update tenantId, business service codes, etc.) "
-                f"then use Step 5b to apply.</small></div>"
-            ))
-    dl_wf_btn.on_click(on_dl_wf)
+    import base64 as _b64
+
+    def _build_wf_link(tenant):
+        try:
+            with open(_WORKFLOW_TEMPLATE, "r", encoding="utf-8") as _f:
+                content = _f.read()
+            content = content.replace("{tenantid}", tenant).replace("{tenantId}", tenant)
+            b64 = _b64.b64encode(content.encode("utf-8")).decode()
+            return (
+                f"<a href='data:application/json;base64,{b64}' "
+                f"download='PgrWorkflowConfig.json' "
+                f"style='display:inline-block;padding:7px 16px;background:#007bff;"
+                f"color:white;border-radius:4px;text-decoration:none;font-weight:bold;"
+                f"font-size:13px'>⬇ Download Default Workflow Template</a>"
+                f"<span style='margin-left:12px;color:#555;font-size:12px'>"
+                f"Tenant: <b>{tenant}</b> — edit, then apply via Step 5b.</span>"
+            )
+        except Exception as _e:
+            return f"<span style='color:#dc3545'>Template not found: {_e}</span>"
+
+    dl_wf_btn = widgets.HTML(_build_wf_link(wf_t_w.value))
+
+    def _on_wf_tenant_change(change):
+        dl_wf_btn.value = _build_wf_link(change['new'])
+
+    wf_t_w.observe(_on_wf_tenant_change, names='value')
 
     # ── Step 5b: apply modified workflow ─────────────────────────────────────
     wf_file_w = widgets.FileUpload(accept=".json", multiple=False,
@@ -915,14 +945,16 @@ def workflow_ui(state: State):
                     existing = uploader.search_workflow(svc_obj["tenantId"], svc_code)
                     if existing:
                         result = uploader.update_workflow(svc_obj["tenantId"], svc_obj)
-                        ok = result.get("updated", False)
-                        print(f"{svc_code}: updated" if ok
-                              else f"{svc_code}: update failed -- {result.get('error')}")
+                        if result.get("updated", False):
+                            print(f"✅ Workflow '{svc_code}' successfully updated for tenant '{svc_obj['tenantId']}'")
+                        else:
+                            print(f"❌ Workflow '{svc_code}' update failed — {result.get('error', 'unknown error')}")
                     else:
                         result = uploader.create_workflow(svc_obj["tenantId"], svc_obj)
-                        ok = result.get("created", False)
-                        print(f"{svc_code}: created" if ok
-                              else f"{svc_code}: create failed -- {result.get('error')}")
+                        if result.get("created", False):
+                            print(f"✅ Workflow '{svc_code}' successfully loaded for tenant '{svc_obj['tenantId']}'")
+                        else:
+                            print(f"❌ Workflow '{svc_code}' load failed — {result.get('error', 'unknown error')}")
             except Exception as ex:
                 print(f"Error: {ex}")
     up_wf_btn.on_click(on_up_wf)
@@ -930,8 +962,8 @@ def workflow_ui(state: State):
     acc5 = widgets.Accordion(children=[
         widgets.VBox([
             widgets.HTML("<p style='color:#555'>Downloads the default PGR workflow template "
-                         "to <code>upload/</code>. Edit it, then use Step 5b.</p>"),
-            wf_t_w, dl_wf_btn, dl_wf_out,
+                         "to your browser's Downloads folder. Edit it, then use Step 5b.</p>"),
+            wf_t_w, dl_wf_btn,
         ]),
         widgets.VBox([
             widgets.HTML("<p style='color:#555'>Upload your modified JSON. Applies create or "
