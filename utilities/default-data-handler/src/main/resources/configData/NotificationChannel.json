@@ -1,0 +1,9 @@
+[
+  {
+    "code": "WHATSAPP",
+    "name": "WhatsApp",
+    "enabled": true,
+    "providerName": "twilio",
+    "priority": 1
+  }
+]

@@ -73,7 +73,7 @@ env: |
     valueFrom:
       configMapKeyRef:
         name: egov-service-host
-        key: mdms-v2
+        key: mdms-service-v2
   - name: MDMS_V2_SCHEMA_SEARCH_PATH
     value: "/mdms-v2/schema/v1/_search"
   - name: MDMS_V2_VALIDATION_ENABLED
@@ -85,7 +85,10 @@ env: |
   - name: ENCRYPTION_SERVICE_ENABLED
     value: "true"
   - name: STATE_LEVEL_TENANT_ID
-    value: "pg"
+    valueFrom:
+      configMapKeyRef:
+        name: egov-config
+        key: egov-state-level-tenant-id  
   - name: HTTP_CLIENT_CONNECTION_TIMEOUT
     value: "30000"
   - name: HTTP_CLIENT_READ_TIMEOUT

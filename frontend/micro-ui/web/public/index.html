@@ -15,7 +15,6 @@
   <meta name="theme-color" content="#00bcd1" />
   <title>DIGIT</title>
   <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
-
   <!-- <script src="https://egov-dev-assets.s3.ap-south-1.amazonaws.com/globalConfigsWorkbenchDev.js"></script> -->
   <script>
     // DOM Override for Profile Page
@@ -119,14 +118,14 @@
               min-width: 0 !important;
 
               .padding-dropdown {
-                width: 100% !important;
+                border-color: #505a5f !important;
+                max-width: clamp(20rem, 50vw, 37.5rem) !important;
+                padding: 0rem 0.1rem 0rem 0.1rem !important;
                 display: flex !important;
                 justify-content: flex-start !important;
 
                 .digit-dropdown-employee-select-wrap {
-                  border-color: #505a5f !important;
-                  max-width: clamp(20rem, 50vw, 37.5rem) !important;
-                  padding: 0rem 0.1rem 0rem 0.1rem !important;
+                  width: 100% !important;
 
                   @media (min-aspect-ratio: 3/4) {
                     max-width: 37.5rem;
@@ -162,7 +161,7 @@
       gap: .25rem;
     }
 
-    .checkbox-wrap .input-emp {
+     .checkbox-wrap .input-emp {
       width: 24px;
       height: 24px;
     }

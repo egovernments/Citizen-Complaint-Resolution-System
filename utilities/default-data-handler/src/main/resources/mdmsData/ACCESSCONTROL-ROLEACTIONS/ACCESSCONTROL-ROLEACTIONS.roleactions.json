@@ -1,5 +1,61 @@
 [
   {
+    "rolecode": "EMPLOYEE",
+    "actionid": 2634,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1135
+  },
+  {
+    "rolecode": "CITIZEN",
+    "actionid": 2634,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1135
+  },
+  {
+    "rolecode": "SUPERUSER",
+    "actionid": 2634,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1135
+  },
+  {
+    "rolecode": "SUPERUSER",
+    "actionid": 2633,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1135
+  },
+  {
+    "rolecode": "SUPERUSER",
+    "actionid": 2632,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1135
+  },
+  {
+    "rolecode": "CONFIG_ADMIN",
+    "actionid": 2634,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1135
+  },
+  {
+    "rolecode": "CONFIG_ADMIN",
+    "actionid": 2633,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1135
+  },
+  {
+    "rolecode": "CONFIG_ADMIN",
+    "actionid": 2632,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1135
+  },
+  {
     "rolecode": "MDMS_ADMIN",
     "actionid": 2631,
     "actioncode": "",
@@ -2385,5 +2441,75 @@
     "actioncode": "",
     "tenantId": "{tenantid}",
     "id": 1744
+  },
+  {
+    "rolecode": "MDMS_ADMIN",
+    "actionid": 26,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1745
+  },
+  {
+    "rolecode": "MDMS_ADMIN",
+    "actionid": 27,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1746
+  },
+  {
+    "rolecode": "MDMS_ADMIN",
+    "actionid": 28,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1747
+  },
+  {
+    "rolecode": "MDMS_ADMIN",
+    "actionid": 29,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1748
+  },
+  {
+    "rolecode": "MDMS_ADMIN",
+    "actionid": 2561,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1749
+  },
+  {
+    "rolecode": "HRMS_ADMIN",
+    "actionid": 2561,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1750
+  },
+  {
+    "rolecode": "MDMS_ADMIN",
+    "actionid": 2559,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1751
+  },
+  {
+    "rolecode": "HRMS_ADMIN",
+    "actionid": 2559,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1752
+  },
+  {
+    "rolecode": "MDMS_ADMIN",
+    "actionid": 2561,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1753
+  },
+  {
+    "rolecode": "HRMS_ADMIN",
+    "actionid": 2561,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1754
   }
 ]

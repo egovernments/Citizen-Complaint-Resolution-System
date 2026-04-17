@@ -13,7 +13,7 @@
 
     <groupId>org.egov</groupId>
     <artifactId>digit-config-service</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>1.0.0</version>
     <name>digit-config-service</name>
     <description>DIGIT Config Service for runtime behavior, templates, and notification policies</description>
 

@@ -22,6 +22,7 @@ from typing import Optional, Dict
 from copy import deepcopy
 import os
 import json
+import time
 import requests
 
 REQUEST_TIMEOUT = 30  # seconds - prevent indefinite hangs on unresponsive services
@@ -140,6 +141,7 @@ class CRSLoader:
 
         # Determine root tenant: "ethiopia.kenya" -> "ethiopia", "pg.citya" -> "pg"
         root_tenant = tenant_code.split(".")[0] if "." in tenant_code else tenant_code
+        session_root = self.tenant_id.split(".")[0] if "." in self.tenant_id else self.tenant_id
 
         # Check if tenant exists (search under both pg and the target root)
         existing_tenants = set()
@@ -154,16 +156,35 @@ class CRSLoader:
 
         if tenant_code.lower() in existing_tenants:
             print(f"✅ Tenant '{tenant_code}' already exists")
-            return self._ensure_stateinfo_for_tenant(tenant_code, display_name)
+            # Existing tenant records may still be incomplete when the root was
+            # created earlier without full bootstrap. Ensure root schemas/data
+            # exist before trying tenant-scoped branding or user creation.
+            if root_tenant != session_root:
+                if not self._bootstrap_tenant_root(root_tenant, source_tenant=self.tenant_id):
+                    print(f"❌ Failed to bootstrap root '{root_tenant}'")
+                    return False
+
+            stateinfo_ready = self._ensure_stateinfo_for_tenant(tenant_code, display_name)
+
+            for module in enable_modules:
+                self._enable_module_for_tenant(tenant_code, module)
+
+            if users:
+                print(f"\n👥 Ensuring {len(users)} user(s) for tenant '{tenant_code}'...")
+                for user_def in users:
+                    self._create_user_for_tenant(tenant_code, user_def)
+
+            return stateinfo_ready
 
         print(f"📝 Creating tenant '{tenant_code}'...")
 
-        # Derive display name if not provided
-        if not display_name:
-            display_name = tenant_code.replace(".", " ").title()
+        # Use the canonical tenant code as the persisted label for generated
+        # tenant records. This keeps tenant.tenants, StateInfo, and tenant
+        # localization aligned with the actual tenant identifier instead of a
+        # caller-provided friendly label.
+        tenant_label = tenant_code
 
         # Bootstrap new root if needed (e.g. "ethiopia" when creating "ethiopia.kenya")
-        session_root = self.tenant_id.split(".")[0] if "." in self.tenant_id else self.tenant_id
         if root_tenant != session_root:
             if not self._bootstrap_tenant_root(root_tenant, source_tenant=self.tenant_id):
                 print(f"❌ Failed to bootstrap root '{root_tenant}'")
@@ -173,13 +194,13 @@ class CRSLoader:
         create_url = f"{self.base_url}/mdms-v2/v2/_create/tenant.tenants"
         tenant_data = {
             "code": tenant_code,
-            "name": display_name,
+            "name": tenant_label,
             "tenantId": tenant_code,
             "type": "CITY",
             "city": {
                 "code": tenant_code.upper().replace(".", "_"),
-                "name": display_name,
-                "districtName": display_name
+                "name": tenant_label,
+                "districtName": tenant_label
             }
         }
 
@@ -203,9 +224,12 @@ class CRSLoader:
             print(f"✅ Tenant '{tenant_code}' created successfully!")
 
             # Ensure tenant has branding metadata used by UI localization bootstrap
-            if not self._ensure_stateinfo_for_tenant(tenant_code, display_name):
+            if not self._ensure_stateinfo_for_tenant(tenant_code, tenant_label):
                 print(f"❌ Failed to ensure StateInfo for '{tenant_code}'")
                 return False
+
+            # Seed tenant display name localization (UI dropdown shows raw key without this)
+            self._seed_tenant_name_localization(tenant_code, tenant_label, root_tenant)
 
             # Enable modules for the tenant
             for module in enable_modules:
@@ -230,6 +254,25 @@ class CRSLoader:
             except:
                 print(f"   Response: {resp.text[:200]}")
             return False
+
+    def bootstrap_tenant(self, target_tenant: str, source_tenant: str = "pg") -> bool:
+        """Bootstrap a tenant root by copying schemas and essential data from a source.
+
+        Safe to run on existing roots — schemas and data that already exist are
+        skipped (idempotent). Use this to back-fill missing MDMS data on a root
+        that was created before new essential_schemas entries were added.
+
+        Args:
+            target_tenant: Tenant code (e.g. "uitest" or "uitest.cityb").
+                           The root is extracted automatically ("uitest").
+            source_tenant: Existing root to copy from (default: "pg")
+
+        Returns:
+            bool: True if bootstrap succeeded
+        """
+        self._check_auth()
+        target_root = target_tenant.split(".")[0]
+        return self._bootstrap_tenant_root(target_root, source_tenant)
 
     def _bootstrap_tenant_root(self, target_root: str, source_tenant: str = "pg") -> bool:
         """Bootstrap a new tenant root by copying schemas and essential data from an existing root.
@@ -279,6 +322,18 @@ class CRSLoader:
 
         for schema in schemas:
             code = schema.get("code", "")
+            defn = schema.get("definition", {})
+
+            # MDMS v2 schema create rejects definitions without x-unique.
+            # Seed-created schemas (e.g. tenant.tenants) may lack it.
+            # Infer a sensible unique key from required fields.
+            if "x-unique" not in defn or not defn.get("x-unique"):
+                props = list(defn.get("properties", {}).keys())
+                if "code" in props:
+                    defn["x-unique"] = ["code"]
+                elif props:
+                    defn["x-unique"] = [props[0]]
+
             create_payload = {
                 "RequestInfo": {
                     "apiId": "Rainmaker",
@@ -289,7 +344,7 @@ class CRSLoader:
                     "tenantId": target_root,
                     "code": code,
                     "description": schema.get("description", code),
-                    "definition": schema.get("definition", {})
+                    "definition": defn
                 }
             }
             try:
@@ -297,10 +352,11 @@ class CRSLoader:
                                   headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
                 if r.ok:
                     copied += 1
-                elif any(kw in r.text.lower() for kw in ["duplicate", "already exists", "unique"]):
+                elif any(kw in r.text.lower() for kw in ["duplicate", "already exists"]):
                     skipped += 1
                 else:
                     failed += 1
+                    print(f"   ⚠️  Schema '{code}': {r.text[:150]}")
             except Exception:
                 failed += 1
 
@@ -309,29 +365,16 @@ class CRSLoader:
         if failed > 0:
             print(f"   ⚠️  Some schemas failed but continuing — non-critical schemas may be optional")
 
-        # Step 2: Create root self-record (required by idgen for city code resolution)
-        root_data = {
-            "code": target_root,
-            "name": target_root.title(),
-            "description": f"State tenant root: {target_root}",
-            "city": {
-                "code": target_root.upper(),
-                "name": target_root.title(),
-                "districtCode": target_root.upper(),
-                "districtName": target_root.title()
-            }
-        }
-        result = self.uploader.create_mdms_data(
-            schema_code='tenant.tenants', data_list=[root_data], tenant=target_root
-        )
-        root_created = result.get('created', 0) + result.get('exists', 0)
-        if root_created > 0:
-            print(f"   ✅ Root tenant record created for '{target_root}'")
-        else:
-            print(f"   ❌ Could not create root tenant record (required for ID generation)")
+        # Schema create returning 200 does not always mean the runtime MDMS data
+        # APIs can use the schema immediately. Wait for the critical tenant schema
+        # to become visible before copying tenant-scoped bootstrap data.
+        if not self._wait_for_schema_ready(target_root, "tenant.tenants"):
+            print(f"   ❌ Schema 'tenant.tenants' is not yet usable on '{target_root}'")
             return False
 
-        # Step 3: Copy essential MDMS data records from source
+        # Step 2: Copy essential MDMS data records from source.
+        # Keep tenant.tenants limited to actual city tenants and skip adding a
+        # synthetic root record like "juiceee".
         essential_schemas = [
             'common-masters.IdFormat',
             'common-masters.Department',
@@ -342,6 +385,24 @@ class CRSLoader:
             'egov-hrms.DeactivationReason',
             'ACCESSCONTROL-ROLES.roles',
             'RAINMAKER-PGR.ServiceDefs',
+            # UI-critical schemas: without these the DIGIT UI shows blank pages or errors
+            'common-masters.uiHomePage',
+            'common-masters.wfSlaConfig',
+            'common-masters.CronJobAPIConfig',
+            'RAINMAKER-PGR.UIConstants',
+            # Citizen home page service cards (File a Complaint, My Complaints, etc.)
+            'ACCESSCONTROL-ACTIONS-TEST.actions-test',
+            # Role-action mappings: without this, egov-accesscontrol returns
+            # "Missing property ACCESSCONTROL-ROLEACTIONS" and the UI can't
+            # determine which actions are permitted for each role.
+            'ACCESSCONTROL-ROLEACTIONS.roleactions',
+            # Inbox v2 query configuration: the inbox service looks up ES index
+            # mapping by moduleName at the state-level tenant. Without this,
+            # /inbox/v2/_search returns CONFIG_ERROR.
+            'INBOX.InboxQueryConfiguration',
+            # Boundary template generation depends on tenant-scoped MDMS data
+            # under this schema, not just the schema definition itself.
+            'CRS-ADMIN-CONSOLE.adminSchema',
         ]
 
         data_copied = 0
@@ -359,7 +420,7 @@ class CRSLoader:
                 rec = {k: v for k, v in r.items() if not k.startswith('_')}
                 clean_records.append(rec)
 
-            result = self.uploader.create_mdms_data(
+            result = self._create_mdms_with_schema_retry(
                 schema_code=schema_code, data_list=clean_records, tenant=target_root
             )
             data_copied += result.get('created', 0)
@@ -367,7 +428,19 @@ class CRSLoader:
 
         print(f"   📦 Data: {data_copied} records copied, {data_skipped} already existed")
 
-        # Step 4: Copy workflow business service definitions
+        # Step 2b: Ensure InboxQueryConfiguration has a "pgr-services" module record
+        # The source may have "RAINMAKER-PGR" but the inbox service looks up by
+        # moduleName from the UI request which is "pgr-services".
+        self._ensure_inbox_pgr_config(target_root)
+
+        # Step 3: Seed essential localization messages for new tenant
+        # Without these, the DIGIT UI shows raw i18n keys (CORE_COMMON_LOGIN, etc.)
+        self._seed_essential_localizations(target_root, source_tenant)
+
+        # Step 4: Create citymodule entries so PGR/HRMS modules are enabled for the root
+        self._bootstrap_citymodule(target_root, source_tenant)
+
+        # Step 5: Copy workflow business service definitions
         # Note: workflow search requires tenantId as a query parameter, not in body
         wf_search_url = f"{self.base_url}/egov-workflow-v2/egov-wf/businessservice/_search"
         wf_create_url = f"{self.base_url}/egov-workflow-v2/egov-wf/businessservice/_create"
@@ -436,6 +509,406 @@ class CRSLoader:
         print(f"   ✅ Bootstrap complete for '{target_root}'\n")
         return True
 
+    def _wait_for_schema_ready(self, tenant: str, schema_code: str,
+                               attempts: int = 10, delay_seconds: float = 1.5) -> bool:
+        """Poll MDMS schema search until a schema is visible for runtime data APIs.
+
+        In this environment, schema creation can persist before the data-create
+        APIs are ready to resolve the new tenant's schema. Poll the schema API
+        instead of using a blind sleep so bootstrap only waits when needed.
+        """
+        schema_search_url = f"{self.base_url}/mdms-v2/schema/v1/_search"
+
+        for attempt in range(1, attempts + 1):
+            payload = {
+                "RequestInfo": {
+                    "apiId": "Rainmaker",
+                    "authToken": self.auth_token,
+                    "userInfo": self.user_info
+                },
+                "SchemaDefCriteria": {
+                    "tenantId": tenant,
+                    "codes": [schema_code],
+                    "limit": 10,
+                    "offset": 0
+                }
+            }
+
+            try:
+                resp = requests.post(
+                    schema_search_url,
+                    json=payload,
+                    headers={"Content-Type": "application/json"},
+                    timeout=REQUEST_TIMEOUT,
+                )
+                if resp.ok:
+                    definitions = resp.json().get("SchemaDefinitions", [])
+                    if any(d.get("code") == schema_code for d in definitions):
+                        if attempt > 1:
+                            print(f"   ✅ Schema '{schema_code}' became ready on attempt {attempt}/{attempts}")
+                        return True
+            except Exception:
+                pass
+
+            if attempt < attempts:
+                print(f"   ⏳ Waiting for schema '{schema_code}' on '{tenant}' ({attempt}/{attempts})")
+                time.sleep(delay_seconds)
+
+        return False
+
+    def _create_mdms_with_schema_retry(self, schema_code: str, data_list: list, tenant: str,
+                                       attempts: int = 5, delay_seconds: float = 1.5) -> dict:
+        """Retry MDMS create when the tenant schema exists but is not yet queryable.
+
+        This is intentionally narrow: only the schema-not-found case is retried.
+        Validation errors and other failures still fail fast.
+        """
+        last_result = None
+
+        for attempt in range(1, attempts + 1):
+            result = self.uploader.create_mdms_data(
+                schema_code=schema_code,
+                data_list=data_list,
+                tenant=tenant,
+            )
+            last_result = result
+            print(f"   Records: {last_result}")
+
+            if result.get('created', 0) > 0 or result.get('exists', 0) > 0:
+                return result
+
+            errors = result.get('errors', [])
+            schema_not_found = any(
+                "schema definition against which data is being created is not found" in
+                str(err.get('error', '')).lower()
+                for err in errors
+            )
+
+            if not schema_not_found or attempt == attempts:
+                return result
+
+            print(
+                f"   ⏳ Schema '{schema_code}' not ready for data create on '{tenant}' "
+                f"(attempt {attempt}/{attempts}); retrying..."
+            )
+            time.sleep(delay_seconds)
+
+        return last_result or {'created': 0, 'exists': 0, 'failed': len(data_list), 'errors': []}
+
+    def _seed_essential_localizations(self, target_tenant: str, source_tenant: str = "pg"):
+        """Seed all en_IN localization messages for a new tenant.
+
+        Without these messages, the DIGIT UI shows raw i18n keys like
+        CORE_COMMON_LOGIN, TENANT_TENANTS_UITEST, etc.
+
+        Strategy:
+          1. Try to copy from the source tenant API
+          2. If the API returns < 500 messages (likely cache/seed issue),
+             fall back to bundled JSON files from default-data-handler
+          3. Always create the tenant-specific display name message
+        """
+        import time
+        import json as _json
+
+        loc_search_url = f"{self.base_url}/localization/messages/v1/_search"
+        loc_upsert_url = f"{self.base_url}/localization/messages/v1/_upsert"
+
+        MIN_EXPECTED_MESSAGES = 500  # If API returns fewer, use bundled JSONs
+        copied = 0
+        skipped = 0
+
+        try:
+            # Try to fetch from source tenant API first
+            source_messages = []
+            try:
+                resp = requests.post(
+                    loc_search_url,
+                    params={"tenantId": source_tenant, "locale": "en_IN"},
+                    json={"RequestInfo": {"apiId": "Rainmaker"}},
+                    headers={"Content-Type": "application/json"},
+                    timeout=60
+                )
+                if resp.ok:
+                    source_messages = resp.json().get("messages", [])
+            except Exception:
+                pass
+
+            # If API returned too few messages, load from bundled JSON files
+            if len(source_messages) < MIN_EXPECTED_MESSAGES:
+                bundled = self._load_bundled_localizations()
+                if bundled:
+                    print(f"   API returned {len(source_messages)} messages, using {len(bundled)} bundled messages")
+                    source_messages = bundled
+
+            if not source_messages:
+                print(f"   ⚠️  No localization messages available (API or bundled)")
+                return
+
+            # Fetch existing messages on target to skip duplicates
+            existing_codes = set()
+            try:
+                tr = requests.post(
+                    loc_search_url,
+                    params={"tenantId": target_tenant, "locale": "en_IN"},
+                    json={"RequestInfo": {"apiId": "Rainmaker"}},
+                    headers={"Content-Type": "application/json"},
+                    timeout=60
+                )
+                if tr.ok:
+                    for m in tr.json().get("messages", []):
+                        existing_codes.add(m.get("code", ""))
+            except Exception:
+                pass
+
+            # Filter to new messages only
+            new_messages = []
+            for msg in source_messages:
+                code = msg.get("code", "")
+                if code in existing_codes:
+                    skipped += 1
+                    continue
+                new_messages.append({
+                    "code": code,
+                    "message": msg.get("message", code),
+                    "module": msg.get("module", "rainmaker-common"),
+                    "locale": "en_IN"
+                })
+
+            # Upsert in batches of 500
+            for i in range(0, len(new_messages), 500):
+                batch = new_messages[i:i+500]
+                upsert_payload = {
+                    "RequestInfo": {
+                        "apiId": "Rainmaker",
+                        "authToken": self.auth_token,
+                        "userInfo": self.user_info
+                    },
+                    "tenantId": target_tenant,
+                    "messages": batch
+                }
+                r = requests.post(loc_upsert_url, json=upsert_payload,
+                                  headers={"Content-Type": "application/json"},
+                                  timeout=60)
+                if r.ok:
+                    copied += len(batch)
+                else:
+                    print(f"   ⚠️  Batch upsert failed: {r.status_code} {r.text[:200]}")
+                time.sleep(0.5)
+
+        except Exception as e:
+            print(f"   ⚠️  Localization seeding failed: {e}")
+
+        # Create tenant-specific display name message
+        tenant_key = "TENANT_TENANTS_" + target_tenant.upper().replace(".", "_")
+        display_name = target_tenant.replace(".", " ").title()
+        try:
+            upsert_payload = {
+                "RequestInfo": {
+                    "apiId": "Rainmaker",
+                    "authToken": self.auth_token,
+                    "userInfo": self.user_info
+                },
+                "tenantId": target_tenant,
+                "messages": [{"code": tenant_key, "message": display_name,
+                              "module": "rainmaker-common", "locale": "en_IN"}]
+            }
+            r = requests.post(loc_upsert_url, json=upsert_payload,
+                              headers={"Content-Type": "application/json"},
+                              timeout=REQUEST_TIMEOUT)
+            if r.ok:
+                copied += 1
+        except Exception as e:
+            print(f"   ⚠️  Tenant name localization failed: {e}")
+
+        print(f"   🌐 Localization: {copied} copied, {skipped} skipped for '{target_tenant}'")
+
+    def _load_bundled_localizations(self):
+        """Load localization messages from bundled JSON files.
+
+        Falls back to these when the source tenant API doesn't have enough messages
+        (e.g., fresh install with minimal DB seed).
+        """
+        import json as _json
+
+        # Look for bundled JSONs in templates/localisations/
+        templates_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates", "localisations")
+        if not os.path.isdir(templates_dir):
+            return []
+
+        messages = []
+        seen_codes = set()
+        for fname in sorted(os.listdir(templates_dir)):
+            if not fname.endswith(".json"):
+                continue
+            fpath = os.path.join(templates_dir, fname)
+            try:
+                with open(fpath, "r") as f:
+                    data = _json.load(f)
+                for msg in data:
+                    code = msg.get("code", "")
+                    if code and code not in seen_codes:
+                        seen_codes.add(code)
+                        messages.append(msg)
+            except Exception as e:
+                print(f"   ⚠️  Failed to load {fname}: {e}")
+
+        return messages
+
+    def _ensure_inbox_pgr_config(self, target_root: str):
+        """Ensure InboxQueryConfiguration has a record with module='pgr-services'.
+
+        The inbox v2 service looks up configuration by moduleName from the UI request
+        (which sends 'pgr-services'), but the standard DIGIT seed data uses
+        module='RAINMAKER-PGR'. This creates the matching record if missing.
+        """
+        existing = self.uploader.search_mdms_data(
+            schema_code='INBOX.InboxQueryConfiguration', tenant=target_root, limit=50
+        )
+        for rec in existing:
+            if rec.get('module') == 'pgr-services':
+                print("   ✅ InboxQueryConfiguration 'pgr-services' already exists")
+                return
+
+        inbox_config = {
+            "index": "inbox-pgr-services",
+            "module": "pgr-services",
+            "sortBy": {"path": "Data.service.auditDetails.createdTime", "defaultOrder": "ASC"},
+            "sourceFilterPathList": [
+                "Data.currentProcessInstance",
+                "Data.service.serviceRequestId",
+                "Data.service.address.locality.code",
+                "Data.service.applicationStatus",
+                "Data.service.citizen",
+                "Data.service.auditDetails.createdTime",
+                "Data.auditDetails",
+                "Data.tenantId"
+            ],
+            "allowedSearchCriteria": [
+                {"name": "area", "path": "Data.service.address.locality.code.keyword", "operator": "EQUAL", "isMandatory": False},
+                {"name": "status", "path": "Data.currentProcessInstance.state.uuid.keyword", "operator": "EQUAL", "isMandatory": False},
+                {"name": "assignedToMe", "path": "Data.workflow.assignes.*.uuid.keyword", "operator": "EQUAL", "isMandatory": False},
+                {"name": "fromDate", "path": "Data.service.auditDetails.createdTime", "operator": "GTE", "isMandatory": False},
+                {"name": "toDate", "path": "Data.service.auditDetails.createdTime", "operator": "LTE", "isMandatory": False},
+                {"name": "complaintNumber", "path": "Data.service.serviceRequestId.keyword", "operator": "EQUAL", "isMandatory": False},
+                {"name": "mobileNumber", "path": "Data.service.citizen.mobileNumber.keyword", "operator": "EQUAL", "isMandatory": False},
+                {"name": "tenantId", "path": "Data.service.tenantId.keyword", "operator": "EQUAL", "isMandatory": False},
+                {"name": "assignee", "path": "Data.currentProcessInstance.assignes.uuid.keyword", "operator": "EQUAL", "isMandatory": False}
+            ]
+        }
+        result = self.uploader.create_mdms_data(
+            schema_code='INBOX.InboxQueryConfiguration', data_list=[inbox_config], tenant=target_root
+        )
+        if result.get('created', 0) > 0:
+            print("   ✅ InboxQueryConfiguration 'pgr-services' created")
+        else:
+            print("   ⚠️  InboxQueryConfiguration 'pgr-services' creation returned no new records")
+
+    def _bootstrap_citymodule(self, target_root: str, source_tenant: str = "pg"):
+        """Create citymodule entries for a new root tenant.
+
+        Copies module definitions (PGR, HRMS, etc.) from source tenant and
+        creates them under the target root without pre-seeding the root tenant
+        into each module's tenants list. Actual city tenants are added later by
+        _enable_module_for_tenant().
+        """
+        # Search citymodule from source
+        search_url = f"{self.base_url}/mdms-v2/v1/_search"
+        search_payload = {
+            "MdmsCriteria": {
+                "tenantId": source_tenant,
+                "moduleDetails": [{"moduleName": "tenant", "masterDetails": [{"name": "citymodule"}]}]
+            },
+            "RequestInfo": {"apiId": "Rainmaker"}
+        }
+
+        resp = requests.post(search_url, json=search_payload,
+                             headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
+        if not resp.ok:
+            print(f"   ⚠️  Could not fetch citymodule from '{source_tenant}'")
+            return
+
+        source_modules = resp.json().get("MdmsRes", {}).get("tenant", {}).get("citymodule", [])
+        if not source_modules:
+            print(f"   ⚠️  No citymodule entries found on '{source_tenant}'")
+            return
+
+        # Create each module entry under the target root
+        created = 0
+        for module in source_modules:
+            module_copy = deepcopy(module)
+            # Do not pre-seed the root tenant into citymodule. Keep the module
+            # definition present on the root tenant, but let actual city tenants
+            # like "juiceee.kwale" be added explicitly later.
+            module_copy["tenants"] = []
+
+            create_payload = {
+                "RequestInfo": {
+                    "apiId": "Rainmaker",
+                    "authToken": self.auth_token,
+                    "userInfo": self.user_info
+                },
+                "Mdms": {
+                    "tenantId": target_root,
+                    "schemaCode": "tenant.citymodule",
+                    "data": module_copy,
+                    "isActive": True
+                }
+            }
+
+            try:
+                r = requests.post(
+                    f"{self.base_url}/mdms-v2/v2/_create/tenant.citymodule",
+                    json=create_payload,
+                    headers={"Content-Type": "application/json"},
+                    timeout=REQUEST_TIMEOUT
+                )
+                if r.ok:
+                    created += 1
+                elif "already exists" in r.text.lower() or "duplicate" in r.text.lower():
+                    pass  # Already exists, skip silently
+                else:
+                    print(f"   ⚠️  citymodule '{module.get('code', '?')}': {r.text[:150]}")
+            except Exception as e:
+                print(f"   ⚠️  citymodule error: {e}")
+
+        if created > 0:
+            print(f"   📦 Citymodule: {created} module(s) created for '{target_root}'")
+        else:
+            print(f"   📦 Citymodule: modules already exist for '{target_root}'")
+
+    def _seed_tenant_name_localization(self, tenant_code: str, display_name: str,
+                                       root_tenant: str):
+        """Create localization message for a tenant's display name.
+
+        The DIGIT UI city dropdown shows TENANT_TENANTS_<CODE> as raw text
+        unless a localization message maps it to a human-readable name.
+        """
+        loc_upsert_url = f"{self.base_url}/localization/messages/v1/_upsert"
+        tenant_key = "TENANT_TENANTS_" + tenant_code.upper().replace(".", "_")
+
+        messages = [
+            {"code": tenant_key, "message": display_name,
+             "module": "rainmaker-common", "locale": "en_IN"},
+        ]
+
+        try:
+            upsert_payload = {
+                "RequestInfo": {
+                    "apiId": "Rainmaker",
+                    "authToken": self.auth_token,
+                    "userInfo": self.user_info
+                },
+                "tenantId": root_tenant,
+                "messages": messages
+            }
+            r = requests.post(loc_upsert_url, json=upsert_payload,
+                              headers={"Content-Type": "application/json"},
+                              timeout=REQUEST_TIMEOUT)
+            if r.ok:
+                print(f"   🌐 Localization: '{tenant_key}' = '{display_name}'")
+        except Exception as e:
+            print(f"   ⚠️  Tenant name localization failed: {e}")
+
     def _ensure_stateinfo_for_tenant(self, tenant_code: str, display_name: str = None) -> bool:
         """Ensure common-masters.StateInfo exists for tenant.
 
@@ -478,8 +951,10 @@ class CRSLoader:
             return False
 
         stateinfo = deepcopy(template)
-        stateinfo.pop('_isActive', None)
-        stateinfo.pop('_uniqueIdentifier', None)
+        # Strip all internal MDMS fields (prefixed with _)
+        for key in list(stateinfo.keys()):
+            if key.startswith('_'):
+                stateinfo.pop(key)
         stateinfo['code'] = tenant_code
         if display_name:
             stateinfo['name'] = display_name
@@ -499,97 +974,73 @@ class CRSLoader:
         return False
 
     def _enable_module_for_tenant(self, tenant_code: str, module_code: str):
-        """Add tenant to citymodule for a specific module (internal)
+        """Add tenant to citymodule for a specific module via MDMS v2 update API."""
+        root_tenant = tenant_code.split(".")[0] if "." in tenant_code else tenant_code
 
-        Note: MDMS v2 API doesn't support updating unique fields or deleting records easily.
-        This function updates the database directly via SQL if the API approach fails.
-        """
-        # Search for existing citymodule config
-        search_url = f"{self.base_url}/mdms-v2/v1/_search"
-        search_payload = {
-            "MdmsCriteria": {
-                "tenantId": "pg",
-                "moduleDetails": [{"moduleName": "tenant", "masterDetails": [{"name": "citymodule"}]}]
-            },
-            "RequestInfo": {"apiId": "Rainmaker"}
-        }
+        # Search citymodule records via MDMS v2 API (returns full records with id + auditDetails)
+        search_url = f"{self.base_url}/mdms-v2/v2/_search"
+        update_url = f"{self.base_url}/mdms-v2/v2/_update/tenant.citymodule"
+        records = []
+        citymodule_tenant = root_tenant
 
-        resp = requests.post(search_url, json=search_payload, headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
-        if not resp.ok:
+        for search_tenant in [root_tenant, self.tenant_id]:
+            search_payload = {
+                "RequestInfo": {
+                    "apiId": "Rainmaker",
+                    "authToken": self.auth_token,
+                    "userInfo": self.user_info
+                },
+                "MdmsCriteria": {
+                    "tenantId": search_tenant,
+                    "schemaCode": "tenant.citymodule",
+                    "limit": 50
+                }
+            }
+            resp = requests.post(search_url, json=search_payload,
+                                 headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
+            if resp.ok:
+                records = resp.json().get("mdms", [])
+                if records:
+                    citymodule_tenant = search_tenant
+                    break
+
+        if not records:
             print(f"   ⚠️  Could not fetch citymodule config for {module_code}")
             return
 
-        citymodules = resp.json().get("MdmsRes", {}).get("tenant", {}).get("citymodule", [])
-
-        # Find the module config
-        module_config = None
-        for cm in citymodules:
-            if cm.get("code") == module_code:
-                module_config = cm
+        # Find the matching module record
+        module_record = None
+        for r in records:
+            if r.get("data", {}).get("code") == module_code:
+                module_record = r
                 break
 
-        if not module_config:
+        if not module_record:
             print(f"   ⚠️  Module '{module_code}' not found in citymodule")
             return
 
-        # Check if tenant already in module
-        existing_tenants = [t.get("code", "").lower() for t in module_config.get("tenants", [])]
+        # Check if tenant already present
+        existing_tenants = [t.get("code", "").lower() for t in module_record["data"].get("tenants", [])]
         if tenant_code.lower() in existing_tenants:
             print(f"   ✅ {module_code} already enabled")
             return
 
-        # Try database update via persister (if available)
-        # This uses the internal MDMS database update
-        try:
-            self._update_citymodule_db(module_code, tenant_code, module_config)
-        except Exception as e:
-            print(f"   ⚠️  {module_code}: Add tenant manually to citymodule (MDMS v2 API limitation)")
-
-    def _update_citymodule_db(self, module_code: str, tenant_code: str, current_config: dict):
-        """Update citymodule via database query through boundary-service workaround"""
-        import subprocess
-        import json as json_lib
-
-        # Add tenant to config
-        new_tenants = current_config.get("tenants", []) + [{"code": tenant_code}]
-        new_config = current_config.copy()
-        new_config["tenants"] = new_tenants
-
-        # Try to use psql to update directly (if running locally with Docker)
-        try:
-            # Get unique identifier hash
-            import hashlib
-            config_str = json_lib.dumps(new_config, sort_keys=True, separators=(',', ':'))
-
-            # Construct SQL update (parameterized to prevent SQL injection)
-            update_sql = """
-            UPDATE eg_mdms_data
-            SET data = :'new_data'::jsonb,
-                lastmodifiedtime = EXTRACT(EPOCH FROM NOW())::bigint * 1000
-            WHERE schemacode = 'tenant.citymodule'
-              AND tenantid = 'pg'
-              AND data->>'code' = :'mod_code';
-            """
-
-            result = subprocess.run(
-                ["docker", "exec", "docker-postgres", "psql", "-U", "egov", "-d", "egov",
-                 "-v", f"new_data={json_lib.dumps(new_config)}",
-                 "-v", f"mod_code={module_code}",
-                 "-c", update_sql],
-                capture_output=True, text=True, timeout=10
-            )
-
-            if result.returncode == 0 and "UPDATE 1" in result.stdout:
-                print(f"   ✅ {module_code} enabled (via DB)")
-            else:
-                raise Exception(f"SQL update failed: {result.stderr or result.stdout}")
-
-        except subprocess.TimeoutExpired:
-            raise Exception("Database update timed out")
-        except FileNotFoundError:
-            raise Exception("Docker not available")
-        except Exception as e:
-            raise Exception(str(e))
+        # Add tenant and update via MDMS v2 API
+        module_record["data"]["tenants"] = module_record["data"].get("tenants", []) + [{"code": tenant_code}]
+        update_payload = {
+            "RequestInfo": {
+                "apiId": "Rainmaker",
+                "authToken": self.auth_token,
+                "userInfo": self.user_info
+            },
+            "Mdms": module_record
+        }
+        resp = requests.post(update_url, json=update_payload,
+                             headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
+        if resp.ok or resp.status_code == 202:
+            print(f"   ✅ {module_code} enabled for '{tenant_code}'")
+        else:
+            print(f"   ❌ {module_code}: failed to enable for '{tenant_code}': {resp.text[:200]}")
 
     def _ensure_roles_exist(self, state_tenant: str, role_codes: list):
         """Ensure all required roles exist for the state tenant, create if missing
@@ -860,6 +1311,9 @@ class CRSLoader:
         # Ensure output directory exists
         os.makedirs(output_dir, exist_ok=True)
 
+        if not levels:
+            raise ValueError("levels must contain at least one boundary level")
+
         # Step 1: Build hierarchy data structure
         print(f"\n[1/4] Building hierarchy definition...")
         boundary_hierarchy = []
@@ -892,6 +1346,28 @@ class CRSLoader:
                 print(f"   Hierarchy created successfully")
         except Exception as e:
             print(f"   ERROR: Failed to create hierarchy: {e}")
+            return None
+
+        # Step 2b: Create CMS boundary hierarchy schema MDMS entry
+        print(f"\n[2b/4] Creating boundary hierarchy MDMS config...")
+        mdms_payload = self._build_boundary_hierarchy_mdms(name=name, levels=levels)
+        try:
+            mdms_result = self._create_mdms_with_schema_retry(
+                schema_code="CMS-BOUNDARY.HierarchySchema",
+                data_list=[mdms_payload],
+                tenant=tenant,
+            )
+            if mdms_result.get('failed'):
+                print(f"   ERROR: Failed to create CMS boundary hierarchy MDMS config")
+                for err in mdms_result.get('errors', [])[:3]:
+                    print(f"   Details: {err.get('error', err)}")
+                return None
+            if mdms_result.get('exists'):
+                print(f"   Boundary hierarchy MDMS config already exists (OK)")
+            else:
+                print(f"   Boundary hierarchy MDMS config created successfully")
+        except Exception as e:
+            print(f"   ERROR: Failed to create CMS boundary hierarchy MDMS config: {e}")
             return None
 
         # Step 3: Generate template
@@ -938,6 +1414,19 @@ class CRSLoader:
         else:
             print(f"   ERROR: Failed to download template")
             return None
+
+    def _build_boundary_hierarchy_mdms(self, name: str, levels: list) -> Dict:
+        """Build CMS boundary hierarchy MDMS data from the last two boundary levels."""
+        lowest_hierarchy = levels[-1]
+        highest_hierarchy = levels[-2] if len(levels) > 1 else levels[-1]
+
+        return {
+            "hierarchy": name,
+            "department": "All",
+            "moduleName": "CMS",
+            "lowestHierarchy": lowest_hierarchy,
+            "highestHierarchy": highest_hierarchy,
+        }
 
     def load_boundaries(self, excel_path: str, target_tenant: str = None,
                        hierarchy_type: str = "ADMIN") -> Dict:
@@ -1050,13 +1539,14 @@ class CRSLoader:
         # 2. Load complaint types
         print(f"\n[2/2] Loading complaint types...")
         complaint_data, complaint_loc = reader.read_complaint_types(tenant, dept_name_to_code)
+        complaint_tenant = tenant.split(".")[0] if "." in tenant else tenant
 
         if complaint_data:
-            print(f"   Creating {len(complaint_data)} complaint types...")
+            print(f"   Creating {len(complaint_data)} complaint types on '{complaint_tenant}'...")
             results['complaint_types'] = self.uploader.create_mdms_data(
                 schema_code='RAINMAKER-PGR.ServiceDefs',
                 data_list=complaint_data,
-                tenant=tenant,
+                tenant=complaint_tenant,
                 sheet_name='Complaint Type',
                 excel_file=excel_path
             )
@@ -1123,6 +1613,7 @@ class CRSLoader:
             'jurisdictions': [{'hierarchy': 'REVENUE', 'boundaryType': 'City',
                                'boundary': tenant, 'tenantId': tenant, 'roles': role_objects}],
             'user': {'name': name, 'userName': username, 'mobileNumber': mobile,
+                     'dob': 946684800000,
                      'active': True, 'type': 'EMPLOYEE', 'tenantId': tenant,
                      'roles': role_objects, 'password': 'TempHRMS@999', 'otpReference': '12345'},
             'serviceHistory': [], 'education': [], 'tests': [],
@@ -1185,6 +1676,28 @@ class CRSLoader:
 
         print(f"   Found {len(employees)} employees")
 
+        # Fix 1: Restore original username from Excel (unified_loader strips underscores).
+        # Re-read the User Name* column and apply only uppercase + space→underscore,
+        # preserving underscores that unified_loader would have dropped.
+        try:
+            import pandas as pd
+            df = pd.read_excel(excel_path, sheet_name='Employee Master')
+            original_names = [
+                str(row).strip().upper().replace(' ', '_')
+                for row in df.get('User Name*', df.iloc[:, 0])
+                if pd.notna(row)
+            ]
+            for emp, original in zip(employees, original_names):
+                emp['code'] = original
+                emp.setdefault('user', {})['userName'] = original
+        except Exception as e:
+            print(f"   Warning: could not restore original usernames: {e}")
+
+        # Fix 2: Ensure every employee has a password; default to eGov@123 if missing
+        for emp in employees:
+            if not emp.get('user', {}).get('password'):
+                emp.setdefault('user', {})['password'] = 'eGov@123'
+
         # 2. Create employees via HRMS
         print(f"\n[2/2] Creating employees...")
         results = self.uploader.create_employees(
@@ -1193,6 +1706,33 @@ class CRSLoader:
             sheet_name='Employee Master',
             excel_file=excel_path
         )
+
+        # Fix 3: Force password update for ALL employees (created + exists) via HRMS _update.
+        # unified_loader skips password update for EXISTS case, so we handle it here.
+        hrms_svc = os.environ.get("HRMS_SERVICE", "/egov-hrms")
+        headers = {"Content-Type": "application/json"}
+        print(f"\n[2b/2] Setting passwords...")
+        for emp in employees:
+            username = emp.get('code')
+            password = emp.get('user', {}).get('password', 'eGov@123')
+            try:
+                sr = requests.post(
+                    f"{self.base_url}{hrms_svc}/employees/_search",
+                    json={"RequestInfo": {"apiId": "Rainmaker", "authToken": self.auth_token,
+                          "userInfo": self.user_info}, "codes": [username], "tenantId": tenant},
+                    headers=headers, params={"tenantId": tenant, "codes": username},
+                    timeout=REQUEST_TIMEOUT)
+                emp_data = sr.json().get("Employees", [{}])[0] if sr.ok else {}
+                if emp_data.get("id"):
+                    emp_data["user"]["password"] = password
+                    requests.post(
+                        f"{self.base_url}{hrms_svc}/employees/_update",
+                        json={"RequestInfo": {"apiId": "Rainmaker", "authToken": self.auth_token,
+                              "userInfo": self.user_info}, "Employees": [emp_data]},
+                        headers=headers, timeout=REQUEST_TIMEOUT)
+                    print(f"   Password set for '{username}'")
+            except Exception as e:
+                print(f"   Warning: password update failed for '{username}': {e}")
 
         self._print_summary("Employees", {'employees': results})
         return results
@@ -1288,12 +1828,13 @@ class CRSLoader:
         print(f"File: {os.path.basename(json_path)}")
 
         tenant = target_tenant or self.tenant_id
-        print(f"Tenant: {tenant}")
+        workflow_tenant = tenant.split(".")[0] if "." in tenant else tenant
+        print(f"Tenant: {workflow_tenant}")
         print(f"Business Service: {business_service}")
 
         # Load workflow config from JSON file
         print(f"\n[1/3] Loading workflow config from JSON...")
-        workflow_config = self._load_workflow_from_json(json_path, tenant)
+        workflow_config = self._load_workflow_from_json(json_path, workflow_tenant)
 
         if not workflow_config:
             return {'status': 'failed', 'error': 'Failed to load workflow config from JSON'}
@@ -1304,7 +1845,7 @@ class CRSLoader:
 
         # Check if workflow already exists
         print(f"\n[2/3] Checking for existing workflow...")
-        existing = self.uploader.search_workflow(tenant, business_service)
+        existing = self.uploader.search_workflow(workflow_tenant, business_service)
 
         if existing:
             print(f"   Found existing workflow: {existing.get('businessService')}")
@@ -1324,7 +1865,7 @@ class CRSLoader:
             # Copy UUIDs from existing to new config for update
             workflow_config = self._merge_workflow_uuids(existing, workflow_config)
 
-            result = self.uploader.update_workflow(tenant, workflow_config)
+            result = self.uploader.update_workflow(workflow_tenant, workflow_config)
 
             if result.get('updated'):
                 print(f"   Workflow updated successfully")
@@ -1338,7 +1879,7 @@ class CRSLoader:
             print(f"   No existing workflow found")
             print(f"\n[3/3] Creating workflow...")
 
-            result = self.uploader.create_workflow(tenant, workflow_config)
+            result = self.uploader.create_workflow(workflow_tenant, workflow_config)
 
             if result.get('created'):
                 states = len(workflow_config.get('states', []))

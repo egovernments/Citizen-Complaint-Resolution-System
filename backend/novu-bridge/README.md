@@ -1,8 +1,23 @@
 # Novu Bridge (`novu-bridge`)
 
+Manage central notification orchestration for the DIGIT platform.
+
+## Overview
+
 The central notification orchestrator for the DIGIT platform. It consumes domain events from Kafka, checks user consent, resolves the right template and provider from config-service, and triggers Novu (which delivers via Twilio to WhatsApp).
 
-## Features
+## Pre-requisites
+
+Before you proceed with the configuration, make sure the following prerequisites are met:
+
+- Java 17
+- PostgreSQL
+- Kafka / Redpanda
+- Novu self-hosted (API at port 3000)
+- Config Service running
+- User Preferences Service running
+
+## Key Functionalities
 
 - **Module-agnostic** — any module publishing domain events to Kafka can trigger notifications
 - **Consent-first** — checks user preferences before sending; skips if consent not granted
@@ -11,6 +26,28 @@ The central notification orchestrator for the DIGIT platform. It consumes domain
 - **Retry + DLQ** — failed events are retried, then moved to dead-letter queue
 - **Dispatch audit log** — every event logged with status, errors, and provider response
 - **Diagnostic endpoints** — `_validate`, `_dry-run`, `_test-trigger` for debugging
+
+## Database Diagram
+
+```mermaid
+erDiagram
+    nb_dispatch_log {
+        UUID id PK
+        VARCHAR(64) event_id
+        VARCHAR(256) reference_number
+        VARCHAR(128) module
+        VARCHAR(256) event_name
+        VARCHAR(256) tenant_id
+        VARCHAR(64) channel
+        VARCHAR(256) recipient_value
+        VARCHAR(256) template_key
+        VARCHAR(32) status
+        INT attempt_count
+        VARCHAR(128) last_error_code
+        TEXT last_error_message
+        JSONB provider_response_jsonb
+    }
+```
 
 ## Processing Pipeline
 
@@ -27,8 +64,6 @@ The central notification orchestrator for the DIGIT platform. It consumes domain
 10. Trigger Novu         (POST /v1/events/trigger)
 11. Persist log          (upsert to nb_dispatch_log)
 ```
-
-## Data Model
 
 **Table:** `nb_dispatch_log`
 
@@ -125,15 +160,6 @@ curl -X POST "http://<host>/novu-bridge/novu-adapter/v1/dispatch/_test-trigger" 
 | `novu-bridge.dlq` | Dead-letter queue after all retries exhausted |
 
 ## Setup
-
-### Prerequisites
-
-- Java 17
-- PostgreSQL
-- Kafka / Redpanda
-- Novu self-hosted (API at port 3000)
-- Config Service running
-- User Preferences Service running
 
 ### Database
 

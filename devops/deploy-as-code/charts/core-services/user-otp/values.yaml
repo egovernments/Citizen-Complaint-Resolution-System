@@ -15,7 +15,7 @@ initContainers: {}
 # Container Configs
 image:
   repository: "user-otp"
-  tag: v2.9.2-4a60f20
+  tag: mobile-validation-user-otp-12b1961
 healthChecks:
   enabled: true
   livenessProbePath: "/user-otp/health"
