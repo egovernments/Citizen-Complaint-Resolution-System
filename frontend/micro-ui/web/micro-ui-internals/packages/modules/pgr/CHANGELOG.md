@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to this module will be documented in this file.
 
+## [1.0.25] - 2026-04-21
+
+### Updated
+- HRMS version updated to 1.9.7
+
 ## [1.0.24] - 2026-04-10
 
 ### Updated
