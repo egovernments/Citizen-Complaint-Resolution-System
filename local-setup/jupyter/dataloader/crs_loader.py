@@ -1299,6 +1299,9 @@ class CRSLoader:
         """
         self._check_auth()
 
+        if not levels or len(levels) <= 1:
+            raise ValueError("levels must contain at least two boundary levels")
+
         print(f"\n{'='*60}")
         print(f"PHASE 2a: BOUNDARY HIERARCHY & TEMPLATE")
         print(f"{'='*60}")
@@ -1310,9 +1313,6 @@ class CRSLoader:
 
         # Ensure output directory exists
         os.makedirs(output_dir, exist_ok=True)
-
-        if not levels:
-            raise ValueError("levels must contain at least one boundary level")
 
         # Step 1: Build hierarchy data structure
         print(f"\n[1/4] Building hierarchy definition...")
@@ -1370,16 +1370,25 @@ class CRSLoader:
             print(f"   ERROR: Failed to create CMS boundary hierarchy MDMS config: {e}")
             return None
 
-        # Step 3: Generate template
-        print(f"\n[3/4] Generating template...")
+        # Step 3: Load boundary level localizations
+        print(f"\n[3/5] Loading boundary level localizations...")
+        level_loc_records = [{'boundaryType': level} for level in levels]
+        level_loc_messages = self.uploader._build_boundary_level_localizations(
+            records=level_loc_records,
+            hierarchy_type=name
+        )
+        self.uploader.create_localization_messages(level_loc_messages, tenant)
+
+        # Step 4: Generate template
+        print(f"\n[4/5] Generating template...")
         gen_result = self.uploader.generate_boundary_template(tenant, name)
 
         if not gen_result:
             print(f"   ERROR: Template generation failed")
             return None
 
-        # Step 4: Poll for completion and download
-        print(f"\n[4/4] Waiting for template...")
+        # Step 5: Poll for completion and download
+        print(f"\n[5/5] Waiting for template...")
         poll_result = self.uploader.poll_boundary_template_status(tenant, name)
 
         if not poll_result or poll_result.get('status') == 'failed':
