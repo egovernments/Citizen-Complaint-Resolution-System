@@ -22,8 +22,8 @@ const TYPE_CHOICES = [
 const defaults = {
   employeeType: 'PERMANENT',
   employeeStatus: 'EMPLOYED',
-  user: { type: 'EMPLOYEE', gender: 'MALE', roles: [{ code: 'EMPLOYEE' }] },
-  jurisdictions: [{ hierarchy: 'ADMIN', boundaryType: 'City', boundary: 'pg' }],
+  user: { type: 'EMPLOYEE', gender: 'MALE', roles: [{ code: 'EMPLOYEE', name: 'Employee' }] },
+  jurisdictions: [{ hierarchy: 'ADMIN', boundaryType: 'City', boundary: '' }],
   assignments: [{ department: 'DEPT_1', designation: 'DESG_1', fromDate: Date.now(), isCurrentAssignment: true }],
 };
 
@@ -33,6 +33,14 @@ export function EmployeeCreate() {
       <DigitFormInput source="user.name" label="Name" validate={v.name} />
       <DigitFormCodeInput source="code" label="Employee Code" deriveFrom="user.name" validate={v.codeRequired} />
       <DigitFormInput source="user.mobileNumber" label="Mobile Number" validate={v.mobileRequired} />
+      <DigitFormInput
+        source="user.dob"
+        label="Date of Birth"
+        type="date"
+        validate={v.required}
+        parse={(v: string) => v ? new Date(v).getTime() : null}
+        format={(v: number) => v ? new Date(v).toISOString().split('T')[0] : ''}
+      />
       <DigitFormSelect
         source="user.gender"
         label="Gender"
