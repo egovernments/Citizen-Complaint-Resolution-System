@@ -497,6 +497,27 @@ const PGRDetails = () => {
                     label: t("CS_COMPLAINT_DETAILS_AREA"),
                     value: t(pgrData?.ServiceWrappers[0].service?.address?.locality?.code || "NA"),
                   },
+                  ...((() => {
+                    const hierarchy = pgrData?.ServiceWrappers[0]?.service?.additionalDetail?.boundaryHierarchy;
+                    if (!hierarchy) return [];
+                    // Object format: { Region: "CODE", Block: "CODE" }
+                    if (typeof hierarchy === "object" && !Array.isArray(hierarchy)) {
+                      return Object.entries(hierarchy).map(([level, code]) => ({
+                        inline: true,
+                        label: t(`EGOV_LOCATION_BOUNDARYTYPE_${level.toUpperCase()}`),
+                        value: t(code),
+                      }));
+                    }
+                    // Flat array fallback: show joined
+                    if (Array.isArray(hierarchy) && hierarchy.length > 0) {
+                      return [{
+                        inline: true,
+                        label: t("CS_COMPLAINT_DETAILS_BOUNDARY_HIERARCHY"),
+                        value: hierarchy.map(code => t(code)).join(" > "),
+                      }];
+                    }
+                    return [];
+                  })()),
                   {
                     inline: true,
                     label: t("CS_COMPLAINT_DETAILS_CURRENT_STATUS"),

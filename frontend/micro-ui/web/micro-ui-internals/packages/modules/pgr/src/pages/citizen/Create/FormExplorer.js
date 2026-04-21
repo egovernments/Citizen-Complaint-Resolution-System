@@ -171,9 +171,23 @@ const FormExplorer = () => {
       }
       : user;
 
+    const boundaryHierarchy = (() => {
+      const bc = Array.isArray(formData?.boundaryComponent) ? formData.boundaryComponent : [];
+      const highestLevel = hierarchyData?.highestHierarchy;
+      const lowestLevel = hierarchyData?.lowestHierarchy;
+      if (highestLevel || lowestLevel) {
+        const obj = {};
+        if (highestLevel && bc[0]) obj[highestLevel] = bc[0];
+        if (lowestLevel && bc[bc.length - 1]) obj[lowestLevel] = bc[bc.length - 1];
+        return obj;
+      }
+      return bc;
+    })();
+
     const additionalDetail = {
       supervisorName: formData?.SupervisorName?.trim() || null,
       supervisorContactNumber: formData?.SupervisorContactNumber?.trim() || null,
+      boundaryHierarchy,
     };
 
     const geoLocation = formData?.GeoLocationsPoint || { lat: null, lng: null };
@@ -211,7 +225,7 @@ const FormExplorer = () => {
             longitude: geoLocation.lng,
           }),
         },
-        additionalDetail: JSON.stringify(additionalDetail),
+        additionalDetail: additionalDetail,
         auditDetails: {
           createdBy: user?.uuid,
           createdTime: timestamp,

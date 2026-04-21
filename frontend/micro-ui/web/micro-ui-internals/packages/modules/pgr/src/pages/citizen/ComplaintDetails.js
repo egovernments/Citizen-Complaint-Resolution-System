@@ -144,6 +144,38 @@ const ComplaintDetailsPage = (props) => {
                   />
                 ))}
               </StatusTable>
+              {(() => {
+                const hierarchy = complaintDetails?.service?.additionalDetail?.boundaryHierarchy;
+                if (!hierarchy) return null;
+                // Object format: { Region: "CODE", Block: "CODE" }
+                if (typeof hierarchy === "object" && !Array.isArray(hierarchy)) {
+                  return (
+                    <StatusTable>
+                      {Object.entries(hierarchy).map(([level, code], idx, arr) => (
+                        <Row
+                          key={level}
+                          label={t(`EGOV_LOCATION_BOUNDARYTYPE_${level.toUpperCase()}`)}
+                          text={t(code)}
+                          last={idx === arr.length - 1}
+                        />
+                      ))}
+                    </StatusTable>
+                  );
+                }
+                // Flat array fallback
+                if (Array.isArray(hierarchy) && hierarchy.length > 0) {
+                  return (
+                    <StatusTable>
+                      <Row
+                        label={t("CS_COMPLAINT_DETAILS_BOUNDARY_HIERARCHY")}
+                        text={hierarchy.map(code => t(code)).join(" > ")}
+                        last={true}
+                      />
+                    </StatusTable>
+                  );
+                }
+                return null;
+              })()}
               {!!(
                 complaintDetails?.service?.documents?.length ||
                 complaintDetails?.workflow?.verificationDocuments?.length

@@ -77,11 +77,6 @@
     "build:webpack": "yarn build:libraries &&cd .. && ls && cd ./web && ls && yarn build:prod",
     "clean": "rm -rf node_modules"
   },
-  "eslintConfig": {
-    "extends": [
-      "react-app"
-    ]
-  },
   "browserslist": {
     "production": [
       ">0.2%",
