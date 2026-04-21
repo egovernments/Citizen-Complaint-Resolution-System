@@ -226,7 +226,7 @@ const FormExplorer = () => {
             longitude: geoLocation.lng,
           }),
         },
-        additionalDetail: JSON.stringify(additionalDetail),
+        additionalDetail: additionalDetail,
         auditDetails: {
           createdBy: user?.uuid,
           createdTime: timestamp,

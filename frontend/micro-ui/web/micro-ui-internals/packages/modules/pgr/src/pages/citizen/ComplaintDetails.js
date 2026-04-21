@@ -133,9 +133,7 @@ const ComplaintDetailsPage = (props) => {
               <StatusTable>
                 {Object.keys(complaintDetails.details)
                   .filter((key) => {
-                    const additionalDetailRaw = complaintDetails?.service?.additionalDetail;
-                    const additionalDetail = typeof additionalDetailRaw === "string" && additionalDetailRaw.startsWith("{") ? JSON.parse(additionalDetailRaw) : additionalDetailRaw;
-                    const hierarchy = additionalDetail?.boundaryHierarchy;
+                    const hierarchy = complaintDetails?.service?.additionalDetail?.boundaryHierarchy;
 
                     const hasHierarchy = hierarchy && typeof hierarchy === "object" && !Array.isArray(hierarchy) && Object.keys(hierarchy).length > 0;
                     // Hide locality/area row if hierarchy is already showing it
@@ -158,9 +156,7 @@ const ComplaintDetailsPage = (props) => {
                   ))}
               </StatusTable>
               {(() => {
-                const additionalDetailRaw = complaintDetails?.service?.additionalDetail;
-                const additionalDetail = typeof additionalDetailRaw === "string" && additionalDetailRaw.startsWith("{") ? JSON.parse(additionalDetailRaw) : additionalDetailRaw;
-                const hierarchy = additionalDetail?.boundaryHierarchy;
+                const hierarchy = complaintDetails?.service?.additionalDetail?.boundaryHierarchy;
 
                 if (!hierarchy) return null;
                 // Object format: { Region: "CODE", Block: "CODE" }

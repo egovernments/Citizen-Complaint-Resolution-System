@@ -493,9 +493,7 @@ const PGRDetails = () => {
                     value: convertEpochFormateToDate(pgrData?.ServiceWrappers[0].service?.auditDetails?.createdTime) || t("NA"),
                   },
                   ...((() => {
-                    const additionalDetailRaw = pgrData?.ServiceWrappers[0]?.service?.additionalDetail;
-                    const additionalDetail = typeof additionalDetailRaw === "string" && additionalDetailRaw.startsWith("{") ? JSON.parse(additionalDetailRaw) : additionalDetailRaw;
-                    const hierarchy = additionalDetail?.boundaryHierarchy;
+                    const hierarchy = pgrData?.ServiceWrappers[0]?.service?.additionalDetail?.boundaryHierarchy;
 
                     // Object format: { Zone: "CODE", Locality: "CODE" } — show one row per level
                     if (hierarchy && typeof hierarchy === "object" && !Array.isArray(hierarchy) && Object.keys(hierarchy).length > 0) {
