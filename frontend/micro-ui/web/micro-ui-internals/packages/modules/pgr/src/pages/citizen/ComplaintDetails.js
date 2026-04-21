@@ -144,12 +144,15 @@ const ComplaintDetailsPage = (props) => {
                   />
                 ))}
               </StatusTable>
-              {!!(complaintDetails?.workflow?.verificationDocuments?.length) && (
-                <React.Fragment>
-                  <CardSubHeader>{t("CS_COMMON_ATTACHMENTS")}</CardSubHeader>
-                  <ComplaintPhotos serviceWrapper={complaintDetails} />
-                </React.Fragment>
-              )}
+              {!!(
+                complaintDetails?.service?.documents?.length ||
+                complaintDetails?.workflow?.verificationDocuments?.length
+              ) && (
+                  <React.Fragment>
+                    <CardSubHeader>{t("CS_COMMON_ATTACHMENTS")}</CardSubHeader>
+                    <ComplaintPhotos serviceWrapper={complaintDetails} />
+                  </React.Fragment>
+                )}
             </Card>
 
             {!!(geoLocation?.latitude && geoLocation?.longitude) && (

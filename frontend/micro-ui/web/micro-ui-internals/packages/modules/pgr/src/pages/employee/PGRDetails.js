@@ -514,21 +514,23 @@ const PGRDetails = () => {
                   },
                 ],
               },
-              ...(pgrData?.ServiceWrappers[0]?.workflow?.verificationDocuments?.length > 0
-                ? [{
-                  cardType: "primary",
-                  fieldPairs: [
-                    {
-                      inline: false,
-                      type: "custom",
-                      renderCustomContent: () => (
-                        <ComplaintPhotos t={t} serviceWrapper={pgrData?.ServiceWrappers[0]} />
-                      ),
-                    },
-                  ],
-                  header: t("CS_COMMON_ATTACHMENTS"),
-                }]
-                : []
+              ...(
+                (pgrData?.ServiceWrappers[0]?.service?.documents?.length > 0 ||
+                  pgrData?.ServiceWrappers[0]?.workflow?.verificationDocuments?.length > 0)
+                  ? [{
+                    cardType: "primary",
+                    fieldPairs: [
+                      {
+                        inline: false,
+                        type: "custom",
+                        renderCustomContent: () => (
+                          <ComplaintPhotos t={t} serviceWrapper={pgrData?.ServiceWrappers[0]} />
+                        ),
+                      },
+                    ],
+                    header: t("CS_COMMON_ATTACHMENTS"),
+                  }]
+                  : []
               ),
               // Conditionally include location section only if coordinates exist
               ...(pgrData?.ServiceWrappers[0]?.service?.address?.geoLocation?.latitude &&

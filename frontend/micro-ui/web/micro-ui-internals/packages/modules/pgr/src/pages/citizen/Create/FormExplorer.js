@@ -178,6 +178,15 @@ const FormExplorer = () => {
 
     const geoLocation = formData?.GeoLocationsPoint || { lat: null, lng: null };
 
+    const documentsList = Array.isArray(formData?.ComplaintImagesPoint)
+      ? formData.ComplaintImagesPoint.map((image) => ({
+        documentType: "PHOTO",
+        fileStoreId: image,
+        documentUid: "",
+        additionalDetails: {},
+      }))
+      : [];
+
     return {
       service: {
         active: true,
@@ -209,17 +218,11 @@ const FormExplorer = () => {
           lastModifiedBy: user?.uuid,
           lastModifiedTime: timestamp,
         },
+        documents: documentsList,
       },
       workflow: {
         action: "APPLY",
-        verificationDocuments: Array.isArray(formData?.ComplaintImagesPoint)
-          ? formData.ComplaintImagesPoint.map((image) => ({
-            documentType: "PHOTO",
-            fileStoreId: image,
-            documentUid: "",
-            additionalDetails: {},
-          }))
-          : [],
+        verificationDocuments: documentsList,
       },
     };
   };
