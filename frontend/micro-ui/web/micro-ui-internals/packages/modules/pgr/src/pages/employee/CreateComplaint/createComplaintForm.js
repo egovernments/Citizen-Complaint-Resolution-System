@@ -380,7 +380,10 @@ const CreateComplaintForm = ({
       }
     }
 
-    const payload = formPayloadToCreateComplaint(_data, tenantId, user?.info);
+    const payload = formPayloadToCreateComplaint(_data, tenantId, user?.info,
+      // Ordered array of selectable level names — maps 1:1 with boundaryComponent by index
+      [hierarchyData?.highestHierarchy, hierarchyData?.lowestHierarchy].filter(Boolean)
+    );
     handleResponseForCreateComplaint(payload);
   };
 

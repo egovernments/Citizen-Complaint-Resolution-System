@@ -131,21 +131,37 @@ const ComplaintDetailsPage = (props) => {
             <Card>
               <CardSubHeader style={{ marginBottom: "16px" }}>{t("CS_COMPLAINT_DETAILS_COMPLAINT_DETAILS")}</CardSubHeader>
               <StatusTable>
-                {Object.keys(complaintDetails.details).map((flag, index, arr) => (
-                  <Row
-                    key={index}
-                    label={t(flag)}
-                    text={
-                      Array.isArray(complaintDetails.details[flag])
-                        ? complaintDetails.details[flag].map((val) => (typeof val === "object" ? t(val?.code) : t(val)))
-                        : t(complaintDetails.details[flag]) || "N/A"
+                {Object.keys(complaintDetails.details)
+                  .filter((key) => {
+                    const additionalDetailRaw = complaintDetails?.service?.additionalDetail;
+                    const additionalDetail = typeof additionalDetailRaw === "string" && additionalDetailRaw.startsWith("{") ? JSON.parse(additionalDetailRaw) : additionalDetailRaw;
+                    const hierarchy = additionalDetail?.boundaryHierarchy;
+
+                    const hasHierarchy = hierarchy && typeof hierarchy === "object" && !Array.isArray(hierarchy) && Object.keys(hierarchy).length > 0;
+                    // Hide locality/area row if hierarchy is already showing it
+                    if (hasHierarchy && (key === "CS_ADDCOMPLAINT_LOCALITY" || key === "CS_COMPLAINT_DETAILS_LOCALITY" || key === "CS_COMPLAINT_DETAILS_AREA")) {
+                      return false;
                     }
-                    last={index === arr.length - 1}
-                  />
-                ))}
+                    return true;
+                  })
+                  .map((flag, index, arr) => (
+                    <Row
+                      key={index}
+                      label={t(flag)}
+                      text={
+                        Array.isArray(complaintDetails.details[flag])
+                          ? complaintDetails.details[flag].map((val) => (typeof val === "object" ? t(val?.code) : t(val)))
+                          : t(complaintDetails.details[flag]) || "N/A"
+                      }
+                      last={index === arr.length - 1}
+                    />
+                  ))}
               </StatusTable>
               {(() => {
-                const hierarchy = complaintDetails?.service?.additionalDetail?.boundaryHierarchy;
+                const additionalDetailRaw = complaintDetails?.service?.additionalDetail;
+                const additionalDetail = typeof additionalDetailRaw === "string" && additionalDetailRaw.startsWith("{") ? JSON.parse(additionalDetailRaw) : additionalDetailRaw;
+                const hierarchy = additionalDetail?.boundaryHierarchy;
+
                 if (!hierarchy) return null;
                 // Object format: { Region: "CODE", Block: "CODE" }
                 if (typeof hierarchy === "object" && !Array.isArray(hierarchy)) {

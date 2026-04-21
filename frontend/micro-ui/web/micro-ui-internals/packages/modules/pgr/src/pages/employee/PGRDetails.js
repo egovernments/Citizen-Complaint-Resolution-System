@@ -492,23 +492,20 @@ const PGRDetails = () => {
                     label: t("CS_COMPLAINT_FILED_DATE"),
                     value: convertEpochFormateToDate(pgrData?.ServiceWrappers[0].service?.auditDetails?.createdTime) || t("NA"),
                   },
-                  {
-                    inline: true,
-                    label: t("CS_COMPLAINT_DETAILS_AREA"),
-                    value: t(pgrData?.ServiceWrappers[0].service?.address?.locality?.code || "NA"),
-                  },
                   ...((() => {
-                    const hierarchy = pgrData?.ServiceWrappers[0]?.service?.additionalDetail?.boundaryHierarchy;
-                    if (!hierarchy) return [];
-                    // Object format: { Region: "CODE", Block: "CODE" }
-                    if (typeof hierarchy === "object" && !Array.isArray(hierarchy)) {
+                    const additionalDetailRaw = pgrData?.ServiceWrappers[0]?.service?.additionalDetail;
+                    const additionalDetail = typeof additionalDetailRaw === "string" && additionalDetailRaw.startsWith("{") ? JSON.parse(additionalDetailRaw) : additionalDetailRaw;
+                    const hierarchy = additionalDetail?.boundaryHierarchy;
+
+                    // Object format: { Zone: "CODE", Locality: "CODE" } — show one row per level
+                    if (hierarchy && typeof hierarchy === "object" && !Array.isArray(hierarchy) && Object.keys(hierarchy).length > 0) {
                       return Object.entries(hierarchy).map(([level, code]) => ({
                         inline: true,
                         label: t(`EGOV_LOCATION_BOUNDARYTYPE_${level.toUpperCase()}`),
                         value: t(code),
                       }));
                     }
-                    // Flat array fallback: show joined
+                    // Flat array fallback: show as joined breadcrumb
                     if (Array.isArray(hierarchy) && hierarchy.length > 0) {
                       return [{
                         inline: true,
@@ -516,7 +513,12 @@ const PGRDetails = () => {
                         value: hierarchy.map(code => t(code)).join(" > "),
                       }];
                     }
-                    return [];
+                    // No hierarchy — fall back to plain area field
+                    return [{
+                      inline: true,
+                      label: t("CS_COMPLAINT_DETAILS_AREA"),
+                      value: t(pgrData?.ServiceWrappers[0].service?.address?.locality?.code || "NA"),
+                    }];
                   })()),
                   {
                     inline: true,

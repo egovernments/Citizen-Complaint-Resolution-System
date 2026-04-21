@@ -173,12 +173,13 @@ const FormExplorer = () => {
 
     const boundaryHierarchy = (() => {
       const bc = Array.isArray(formData?.boundaryComponent) ? formData.boundaryComponent : [];
-      const highestLevel = hierarchyData?.highestHierarchy;
-      const lowestLevel = hierarchyData?.lowestHierarchy;
-      if (highestLevel || lowestLevel) {
+      // Ordered level names matching bc by index (highest → lowest)
+      const levelNames = [hierarchyData?.highestHierarchy, hierarchyData?.lowestHierarchy].filter(Boolean);
+      if (levelNames.length > 0) {
         const obj = {};
-        if (highestLevel && bc[0]) obj[highestLevel] = bc[0];
-        if (lowestLevel && bc[bc.length - 1]) obj[lowestLevel] = bc[bc.length - 1];
+        levelNames.forEach((levelName, i) => {
+          if (levelName && bc[i]) obj[levelName] = bc[i];
+        });
         return obj;
       }
       return bc;
@@ -225,7 +226,7 @@ const FormExplorer = () => {
             longitude: geoLocation.lng,
           }),
         },
-        additionalDetail: additionalDetail,
+        additionalDetail: JSON.stringify(additionalDetail),
         auditDetails: {
           createdBy: user?.uuid,
           createdTime: timestamp,

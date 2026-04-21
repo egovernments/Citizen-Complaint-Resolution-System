@@ -153,7 +153,7 @@ export const convertEpochFormateToDate = (dateEpoch) => {
 };
 
 
-export const formPayloadToCreateComplaint = (formData, tenantId, user, hierarchyLevels = {}) => {
+export const formPayloadToCreateComplaint = (formData, tenantId, user, hierarchyLevels = []) => {
   const userInfo = formData?.complaintUser?.code === "ANOTHER_USER" ? {
     "name": formData?.ComplainantName?.trim()?.length > 0 ? formData?.ComplainantName?.trim() : null,
     "mobileNumber": formData?.ComplainantContactNumber?.trim()?.length > 0 ? formData?.ComplainantContactNumber?.trim() : null,
@@ -163,15 +163,15 @@ export const formPayloadToCreateComplaint = (formData, tenantId, user, hierarchy
   } : user;
   const boundaryHierarchy = (() => {
     const bc = Array.isArray(formData?.boundaryComponent) ? formData.boundaryComponent : [];
-    const { highestLevel, lowestLevel } = hierarchyLevels;
-    if (highestLevel || lowestLevel) {
+    // hierarchyLevels is an ordered array of level names matching bc indices
+    if (Array.isArray(hierarchyLevels) && hierarchyLevels.length > 0) {
       const obj = {};
-      if (highestLevel && bc[0]) obj[highestLevel] = bc[0];
-      if (lowestLevel && bc[bc.length - 1] && bc[bc.length - 1] !== bc[0]) obj[lowestLevel] = bc[bc.length - 1];
-      else if (lowestLevel && bc[bc.length - 1]) obj[lowestLevel] = bc[bc.length - 1];
+      hierarchyLevels.forEach((levelName, i) => {
+        if (levelName && bc[i]) obj[levelName] = bc[i];
+      });
       return obj;
     }
-    return bc;
+    return bc; // flat array fallback
   })();
 
   const additionalDetail = {
@@ -210,7 +210,7 @@ export const formPayloadToCreateComplaint = (formData, tenantId, user, hierarchy
         },
         "geoLocation": {}
       },
-      "additionalDetail": additionalDetail,
+      "additionalDetail": JSON.stringify(additionalDetail),
       "auditDetails": {
         "createdBy": user?.uuid,
         "createdTime": timestamp,
