@@ -256,20 +256,20 @@ const CreateComplaintForm = ({
               disable: disabledFields[field.populators.name],
             };
           }
-          if (field.key === "boundaryComponent" && hierarchyData) {
+          if (field.key === "boundaryComponent") {
             return {
               ...field,
               populators: {
                 ...field.populators,
                 levelConfig: {
                   ...field.populators.levelConfig,
-                  lowestLevel: hierarchyData.lowestHierarchy || window?.globalConfigs?.getConfig("PGR_BOUNDARY_LOWEST_LEVEL") || "Ward",
-                  highestLevel: hierarchyData.highestHierarchy || window?.globalConfigs?.getConfig("PGR_BOUNDARY_HIGHEST_LEVEL") || "City",
+                  lowestLevel: hierarchyData?.lowestHierarchy || window?.globalConfigs?.getConfig("PGR_BOUNDARY_LOWEST_LEVEL") || "Ward",
+                  highestLevel: hierarchyData?.highestHierarchy || window?.globalConfigs?.getConfig("PGR_BOUNDARY_HIGHEST_LEVEL") || "City",
                   isSingleSelect: [
-                    hierarchyData.lowestHierarchy || window?.globalConfigs?.getConfig("PGR_BOUNDARY_LOWEST_LEVEL") || "Ward",
-                    hierarchyData.highestHierarchy || window?.globalConfigs?.getConfig("PGR_BOUNDARY_HIGHEST_LEVEL") || "City"]
+                    hierarchyData?.lowestHierarchy || window?.globalConfigs?.getConfig("PGR_BOUNDARY_LOWEST_LEVEL") || "Ward",
+                    hierarchyData?.highestHierarchy || window?.globalConfigs?.getConfig("PGR_BOUNDARY_HIGHEST_LEVEL") || "City"]
                 },
-                hierarchyType: hierarchyData.hierarchy || window?.globalConfigs?.getConfig("HIERARCHY_TYPE") || "ADMIN",
+                hierarchyType: hierarchyData?.hierarchy || window?.globalConfigs?.getConfig("HIERARCHY_TYPE") || "ADMIN",
               },
             };
           }
