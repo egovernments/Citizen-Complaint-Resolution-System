@@ -106,14 +106,14 @@ const CreateComplaintForm = ({
     return uniqueItems;
   }
 
-  function getSubTypesByDepartment(baseItem, allItems) {
+  function getSubTypesByMenuPath(baseItem, allItems) {
 
-    if (!baseItem || !baseItem.department || !Array.isArray(allItems)) {
-      console.warn("Invalid baseItem or allItems");
+    if (!baseItem || !baseItem.menuPath || !Array.isArray(allItems)) {
       return [];
     }
 
-    return allItems.filter(item => item.department === baseItem.department).map((item) => ({ ...item, i18nKey: "SERVICEDEFS_" + item.serviceCode.toUpperCase() }));
+    const filtered = allItems.filter(item => item.menuPath === baseItem.menuPath);
+    return filtered.map((item) => ({ ...item, i18nKey: "SERVICEDEFS_" + item.serviceCode.toUpperCase() }));
   }
 
 
@@ -295,12 +295,12 @@ const CreateComplaintForm = ({
   const onFormValueChange = (setValue, formData, formState, reset, setError, clearErrors) => {
 
     const selectedComplaintType = formData?.SelectComplaintType;
-    const newSubTypes = getSubTypesByDepartment(selectedComplaintType, serviceDefs);
+    const newSubTypes = getSubTypesByMenuPath(selectedComplaintType, serviceDefs);
     // const newCity = formData.SelectCity?.code;
 
     // Compare previous and new subtype list
-    const prevCodes = prevSubTypeRef.current.map(s => s.code).sort().join(",");
-    const newCodes = newSubTypes.map(s => s.code).sort().join(",");
+    const prevCodes = prevSubTypeRef.current.map(s => s.serviceCode).sort().join(",");
+    const newCodes = newSubTypes.map(s => s.serviceCode).sort().join(",");
 
     let needsSessionUpdate = false;
     let updatedData = { ...formData };
