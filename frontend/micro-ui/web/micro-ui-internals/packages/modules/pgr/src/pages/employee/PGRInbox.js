@@ -4,9 +4,10 @@ import { useTranslation } from "react-i18next";
 import PGRSearchInboxConfig from "../../configs/PGRSearchInboxConfig";
 import { useLocation } from "react-router-dom";
 import _ from "lodash";
+import PGRInboxV1 from "./PGRInboxV1";
 
 
-const PGRSearchInbox = () => {
+const PGRSearchInboxV2 = () => {
   const { t } = useTranslation();
   // Detect if the user is on a mobile device
   const isMobile = window.Digit.Utils.browser.isMobile();
@@ -16,10 +17,7 @@ const PGRSearchInbox = () => {
 
   const [pageConfig, setPageConfig] = useState(null);
 
-
-
   const location = useLocation();
-
 
   // Fetch mobile validation config from MDMS
   const { validationRules, isLoading: isValidationLoading, getMinMaxValues } = Digit.Hooks.pgr.useMobileValidation(tenantId);
@@ -45,6 +43,7 @@ const PGRSearchInbox = () => {
 
   // Fetch the list of service definitions (e.g., complaint types) for current tenant
   const serviceDefs = Digit.Hooks.pgr.useServiceDefs(tenantId, "PGR");
+
   /**
    * Reset or refresh config when the route changes
    */
@@ -110,20 +109,17 @@ const PGRSearchInbox = () => {
           },
         },
       };
-    }  // close: if (processedConfig && validationRules ...)
+    }
 
     return processedConfig;
   }, [pageConfig, serviceDefs, validationRules, t]);
 
   /**
-    * Show loader until necessary data is available
-    */
+   * Show loader until necessary data is available
+   */
   if (isLoading || isValidationLoading || !pageConfig || !updatedConfig || serviceDefs?.length === 0) {
     return <Loader />;
   }
-
-  console.log("*** Log ===> 1", configs);
-  console.log("*** Log ===> 11", updatedConfig);
 
   return (
     <div style={{ marginBottom: "80px" }}>
@@ -134,14 +130,12 @@ const PGRSearchInbox = () => {
             : { marginLeft: "15px", fontFamily: "calibri", color: "#FF0000" }
         }
       >
-        {
-          <HeaderComponent
-            className="digit-inbox-search-composer-header"
-            styles={{ marginBottom: "1.5rem" }}
-          >
-            {t("PGR_SEARCH_RESULTS_HEADING")}
-          </HeaderComponent>
-        }
+        <HeaderComponent
+          className="digit-inbox-search-composer-header"
+          styles={{ marginBottom: "1.5rem" }}
+        >
+          {t("PGR_SEARCH_RESULTS_HEADING")}
+        </HeaderComponent>
       </div>
 
       {/* Complaint search and filter interface */}
@@ -150,6 +144,19 @@ const PGRSearchInbox = () => {
       </div>
     </div>
   );
+};
+
+
+/**
+ * Toggle between Inbox v1 (legacy) and Inbox v2 (InboxSearchComposer) based on
+ * the USE_INBOX_V1 flag in globalConfigs.
+ *
+ * Set USE_INBOX_V1: true in globalConfigs (e.g. globalConfigsUrbanPGR.js) to use v1.
+ * Defaults to v2 when the flag is absent or false.
+ */
+const PGRSearchInbox = () => {
+  const useInboxV1 = window?.globalConfigs?.getConfig("USE_INBOX_V1") === true;
+  return useInboxV1 ? <PGRInboxV1 /> : <PGRSearchInboxV2 />;
 };
 
 export default PGRSearchInbox;
