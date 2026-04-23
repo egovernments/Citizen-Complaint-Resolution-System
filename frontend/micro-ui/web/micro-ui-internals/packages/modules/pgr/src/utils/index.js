@@ -211,7 +211,7 @@ export const formPayloadToCreateComplaint = (formData, tenantId, user, hierarchy
       "serviceCode": getEffectiveServiceCode(formData?.SelectComplaintType, formData?.SelectSubComplaintType),
       "description": formData?.description,
       "applicationStatus": "CREATED",
-      "source": "web",
+      "source": formData?.complaintSource?.code || "web",
       "citizen": userInfo,
       "isDeleted": false,
       "rowVersion": 1,
