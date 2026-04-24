@@ -19,6 +19,7 @@ public class User {
     private String name;
     private String type;
     private String mobileNumber;
+    private String countryCode;
     private String emailId;
     private List<Role> roles;
     private String tenantId;
