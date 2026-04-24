@@ -1312,8 +1312,9 @@ class CRSLoader:
         print(f"Hierarchy: {name}")
         print(f"Levels: {' -> '.join(levels)}")
 
-        # Ensure output directory exists
-        os.makedirs(output_dir, exist_ok=True)
+        # Ensure templates directory exists
+        templates_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
+        os.makedirs(templates_dir, exist_ok=True)
 
         # Step 1: Build hierarchy data structure
         print(f"\n[1/4] Building hierarchy definition...")
@@ -1404,7 +1405,7 @@ class CRSLoader:
             return None
 
         # Download template
-        output_path = os.path.join(output_dir, f"Boundary_Template_{tenant}_{name}.xlsx")
+        output_path = os.path.join(templates_dir, f"Boundary_Template_{tenant}_{name}.xlsx")
         downloaded_path = self.uploader.download_boundary_template(
             tenant_id=tenant,
             filestore_id=filestore_id,
