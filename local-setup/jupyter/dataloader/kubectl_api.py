@@ -111,10 +111,19 @@ def health():
 
 @app.route('/boundaries/delete', methods=['POST'])
 def delete_boundaries():
-    """Delete all boundaries for a tenant
+    """Delete all boundary-related data for a tenant.
 
     POST /boundaries/delete
-    Body: {"tenant_id": "statea", "env": "chakshu"}
+    Body:
+      {
+        "tenant_id": "statea",
+        "root_tenant": "statea",
+        "hierarchy_types": ["REVENUE"],
+        "boundary_codes": ["STATEA", "STATEA_DISTRICT_1"],
+        "hierarchy_level_codes": ["REVENUE_STATE", "REVENUE_DISTRICT", "REVENUE"],
+        "mdms_unique_ids": ["CMS|All|REVENUE"],
+        "env": "chakshu"
+      }
     Headers: X-API-Key: <key>
     """
     if not check_auth():
@@ -122,35 +131,127 @@ def delete_boundaries():
 
     data = request.json or {}
     tenant_id = data.get('tenant_id')
+    root_tenant = data.get('root_tenant') or tenant_id
+    hierarchy_types = data.get('hierarchy_types') or []
+    boundary_codes = data.get('boundary_codes') or []
+    hierarchy_level_codes = data.get('hierarchy_level_codes') or []
+    mdms_unique_ids = data.get('mdms_unique_ids') or []
     env = data.get('env', 'chakshu')
 
     if not tenant_id:
         return jsonify({'error': 'tenant_id required'}), 400
 
     try:
-        sql = f"""
-            DELETE FROM boundary_relationship WHERE tenantid='{tenant_id}';
-            DELETE FROM boundary WHERE tenantid='{tenant_id}';
-        """
+        def sql_literal(value):
+            return "'" + str(value).replace("'", "''") + "'"
+
+        def sql_in(values):
+            return ", ".join(sql_literal(value) for value in values if value)
+
+        sql_parts = []
+        if hierarchy_types:
+            hierarchy_in = sql_in(hierarchy_types)
+            sql_parts.append(
+                f"DELETE FROM eg_bm_generated_template "
+                f"WHERE tenantid={sql_literal(tenant_id)} AND hierarchytype IN ({hierarchy_in});"
+            )
+            sql_parts.append(
+                f"DELETE FROM eg_bm_processed_template "
+                f"WHERE tenantid={sql_literal(tenant_id)} AND hierarchytype IN ({hierarchy_in});"
+            )
+            sql_parts.append(
+                f"DELETE FROM boundary_hierarchy "
+                f"WHERE tenantid={sql_literal(tenant_id)} AND hierarchytype IN ({hierarchy_in});"
+            )
+            sql_parts.append(
+                f"DELETE FROM boundary_relationship "
+                f"WHERE tenantid={sql_literal(tenant_id)} AND hierarchytype IN ({hierarchy_in});"
+            )
+        else:
+            sql_parts.append(f"DELETE FROM eg_bm_generated_template WHERE tenantid={sql_literal(tenant_id)};")
+            sql_parts.append(f"DELETE FROM eg_bm_processed_template WHERE tenantid={sql_literal(tenant_id)};")
+            sql_parts.append(f"DELETE FROM boundary_hierarchy WHERE tenantid={sql_literal(tenant_id)};")
+            sql_parts.append(f"DELETE FROM boundary_relationship WHERE tenantid={sql_literal(tenant_id)};")
+
+        if boundary_codes:
+            boundary_in = sql_in(boundary_codes)
+            sql_parts.insert(
+                3,
+                f"DELETE FROM boundary "
+                f"WHERE tenantid={sql_literal(tenant_id)} AND code IN ({boundary_in});"
+            )
+            sql_parts.append(
+                f"DELETE FROM message "
+                f"WHERE tenantid={sql_literal(root_tenant)} AND module='rainmaker-pgr' "
+                f"AND code IN ({boundary_in});"
+            )
+        else:
+            sql_parts.insert(3, f"DELETE FROM boundary WHERE tenantid={sql_literal(tenant_id)};")
+
+        if hierarchy_level_codes:
+            level_code_in = sql_in(hierarchy_level_codes)
+            sql_parts.append(
+                f"DELETE FROM message "
+                f"WHERE tenantid={sql_literal(root_tenant)} AND module='rainmaker-common' "
+                f"AND code IN ({level_code_in});"
+            )
+
+        if mdms_unique_ids:
+            mdms_in = sql_in(mdms_unique_ids)
+            sql_parts.append(
+                f"UPDATE eg_mdms_data "
+                f"SET isactive=false "
+                f"WHERE tenantid={sql_literal(root_tenant)} "
+                f"AND schemacode='CMS-BOUNDARY.HierarchySchema' "
+                f"AND uniqueidentifier IN ({mdms_in}) "
+                f"AND isactive=true;"
+            )
+
+        sql = "\n".join(sql_parts)
         result = run_sql(sql, env)
 
-        # Parse DELETE counts
-        counts = []
+        delete_counts = []
+        update_counts = []
         for line in result['stdout'].strip().split('\n'):
             if line.strip().startswith('DELETE'):
                 try:
-                    counts.append(int(line.split()[1]))
+                    delete_counts.append(int(line.split()[1]))
+                except (IndexError, ValueError):
+                    pass
+            elif line.strip().startswith('UPDATE'):
+                try:
+                    update_counts.append(int(line.split()[1]))
                 except (IndexError, ValueError):
                     pass
 
-        rel_deleted = counts[0] if len(counts) > 0 else 0
-        deleted = counts[1] if len(counts) > 1 else 0
+        delete_labels = [
+            'generated_templates_deleted',
+            'processed_templates_deleted',
+            'hierarchies_deleted',
+            'boundaries_deleted',
+            'relationships_deleted',
+        ]
+        if boundary_codes:
+            delete_labels.append('boundary_localizations_deleted')
+        if hierarchy_level_codes:
+            delete_labels.append('hierarchy_localizations_deleted')
+
+        delete_totals = {label: 0 for label in delete_labels}
+        for label, count in zip(delete_labels, delete_counts):
+            delete_totals[label] = count
 
         return jsonify({
             'status': 'success',
-            'relationships_deleted': rel_deleted,
-            'boundaries_deleted': deleted,
-            'tenant_id': tenant_id
+            'tenant_id': tenant_id,
+            'root_tenant': root_tenant,
+            'generated_templates_deleted': delete_totals.get('generated_templates_deleted', 0),
+            'processed_templates_deleted': delete_totals.get('processed_templates_deleted', 0),
+            'hierarchies_deleted': delete_totals.get('hierarchies_deleted', 0),
+            'boundaries_deleted': delete_totals.get('boundaries_deleted', 0),
+            'relationships_deleted': delete_totals.get('relationships_deleted', 0),
+            'boundary_localizations_deleted': delete_totals.get('boundary_localizations_deleted', 0),
+            'hierarchy_localizations_deleted': delete_totals.get('hierarchy_localizations_deleted', 0),
+            'mdms_deactivated': update_counts[0] if update_counts else 0,
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
