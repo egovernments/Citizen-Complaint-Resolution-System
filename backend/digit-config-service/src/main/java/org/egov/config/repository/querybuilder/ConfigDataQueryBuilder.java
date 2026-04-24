@@ -41,7 +41,7 @@ public class ConfigDataQueryBuilder {
         return sql.toString();
     }
 
-    public String buildResolveQuery(String schemaCode, Map<String, String> filters,
+    public String buildResolveQuery(String schemaCode, Map<String, Object> filters,
                                      List<String> tenantChain, List<Object> params) {
         StringBuilder sql = new StringBuilder(BASE_SELECT);
         sql.append(" WHERE schemacode = ? AND isactive = true");
@@ -104,7 +104,7 @@ public class ConfigDataQueryBuilder {
         }
     }
 
-    private void appendJsonbFilter(Map<String, String> filters, StringBuilder sql, List<Object> params) {
+    private void appendJsonbFilter(Map<String, Object> filters, StringBuilder sql, List<Object> params) {
         if (CollectionUtils.isEmpty(filters)) return;
 
         if (isPostgres) {
@@ -113,7 +113,7 @@ public class ConfigDataQueryBuilder {
             params.add(QueryUtil.preparePartialJsonStringFromFilterMap(filters));
         } else {
             // H2 fallback: use LIKE on each filter key-value pair
-            for (Map.Entry<String, String> entry : filters.entrySet()) {
+            for (Map.Entry<String, Object> entry : filters.entrySet()) {
                 QueryUtil.addClauseIfRequired(sql, params);
                 sql.append(" data LIKE ?");
                 params.add("%" + entry.getKey() + "\"%:%" + entry.getValue() + "%");
