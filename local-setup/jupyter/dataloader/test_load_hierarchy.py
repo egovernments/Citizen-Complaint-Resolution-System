@@ -157,6 +157,35 @@ class LoadHierarchyTests(unittest.TestCase):
             tenant="ke",
         )
 
+    def test_load_hierarchy_writes_cms_boundary_mdms_to_root_tenant(self):
+        """CMS boundary hierarchy MDMS config should be created on the root tenant."""
+        loader = _build_loader()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = loader.load_hierarchy(
+                name="ADMIN",
+                levels=["State", "District", "Locality"],
+                target_tenant="statea.chakshu",
+                output_dir=tmpdir,
+            )
+
+            self.assertEqual(
+                output,
+                str(Path(tmpdir) / "Boundary_Template_statea.chakshu_ADMIN.xlsx"),
+            )
+
+        loader._create_mdms_with_schema_retry.assert_called_once_with(
+            schema_code="CMS-BOUNDARY.HierarchySchema",
+            data_list=[{
+                "hierarchy": "ADMIN",
+                "department": "All",
+                "moduleName": "CMS",
+                "lowestHierarchy": "Locality",
+                "highestHierarchy": "District",
+            }],
+            tenant="statea",
+        )
+
     def test_load_hierarchy_returns_none_on_hierarchy_creation_failure(self):
         """Returns None if boundary hierarchy API call fails."""
         loader = _build_loader()

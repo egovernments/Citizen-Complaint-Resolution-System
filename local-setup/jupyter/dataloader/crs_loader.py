@@ -1307,6 +1307,7 @@ class CRSLoader:
         print(f"{'='*60}")
 
         tenant = target_tenant or self.tenant_id
+        mdms_tenant = tenant.split(".")[0] if "." in tenant else tenant
         print(f"Tenant: {tenant}")
         print(f"Hierarchy: {name}")
         print(f"Levels: {' -> '.join(levels)}")
@@ -1355,7 +1356,7 @@ class CRSLoader:
             mdms_result = self._create_mdms_with_schema_retry(
                 schema_code="CMS-BOUNDARY.HierarchySchema",
                 data_list=[mdms_payload],
-                tenant=tenant,
+                tenant=mdms_tenant,
             )
             if mdms_result.get('failed'):
                 print(f"   ERROR: Failed to create CMS boundary hierarchy MDMS config")
@@ -1387,16 +1388,8 @@ class CRSLoader:
             print(f"   ERROR: Template generation failed")
             return None
 
-        print(f"\n[3/5] Loading boundary level localizations...")
-        level_loc_records = [{'boundaryType': level} for level in levels]
-        level_loc_messages = self.uploader._build_boundary_level_localizations(
-            records=level_loc_records,
-            hierarchy_type=name
-        )
-        self.uploader.create_localization_messages(level_loc_messages, tenant)
-
         # Step 4: Poll for completion and download
-        print(f"\n[4/4] Waiting for template...")
+        print(f"\n[5/5] Waiting for template...")
         poll_result = self.uploader.poll_boundary_template_status(tenant, name)
 
         if not poll_result or poll_result.get('status') == 'failed':
