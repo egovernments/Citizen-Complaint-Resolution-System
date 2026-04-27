@@ -2,11 +2,13 @@ package org.egov.pgr.service;
 
 
 import com.jayway.jsonpath.JsonPath;
+import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.producer.Producer;
 import org.egov.pgr.repository.PGRRepository;
 import org.egov.pgr.util.MDMSUtils;
+import org.egov.pgr.util.PGRUtils;
 import org.egov.pgr.validator.ServiceRequestValidator;
 import org.egov.pgr.web.models.Service;
 import org.egov.pgr.web.models.ServiceWrapper;
@@ -19,7 +21,10 @@ import org.springframework.util.CollectionUtils;
 import java.util.*;
 
 import static org.egov.pgr.util.PGRConstants.MDMS_DEPARTMENT_SEARCH;
+import static org.egov.pgr.util.PGRConstants.MDMS_DEPARTMENT_NAME_SEARCH;
+import static org.egov.pgr.util.PGRConstants.MDMS_SERVICENAME_SEARCH;
 
+@Slf4j
 @org.springframework.stereotype.Service
 public class PGRService {
 
@@ -43,11 +48,16 @@ public class PGRService {
 
     private MDMSUtils mdmsUtils;
 
+    private ComplaintDomainEventService complaintDomainEventService;
+    
+    private PGRUtils pgrUtils;
+
 
     @Autowired
     public PGRService(EnrichmentService enrichmentService, UserService userService, WorkflowService workflowService,
                       ServiceRequestValidator serviceRequestValidator, ServiceRequestValidator validator, Producer producer,
-                      PGRConfiguration config, PGRRepository repository, MDMSUtils mdmsUtils) {
+                      PGRConfiguration config, PGRRepository repository, MDMSUtils mdmsUtils,
+                      ComplaintDomainEventService complaintDomainEventService, PGRUtils pgrUtils) {
         this.enrichmentService = enrichmentService;
         this.userService = userService;
         this.workflowService = workflowService;
@@ -57,6 +67,8 @@ public class PGRService {
         this.config = config;
         this.repository = repository;
         this.mdmsUtils = mdmsUtils;
+        this.complaintDomainEventService = complaintDomainEventService;
+        this.pgrUtils = pgrUtils;
     }
 
 
@@ -65,22 +77,28 @@ public class PGRService {
      * @param request The service request containg the complaint information
      * @return
      */
-    public ServiceRequest create(ServiceRequest request){
-        String tenantId = request.getService().getTenantId();
-        Object mdmsData = mdmsUtils.mDMSCall(request);
-        validator.validateCreate(request, mdmsData);
-        enrichmentService.enrichCreateRequest(request);
-        workflowService.updateWorkflowStatus(request);
+	public ServiceRequest create(ServiceRequest request) {
+		String tenantId = request.getService().getTenantId();
+		String fromState = request.getService().getApplicationStatus();
+		Object mdmsData = mdmsUtils.mDMSCall(request);
+		validator.validateCreate(request, mdmsData);
+		enrichmentService.enrichCreateRequest(request);
+		workflowService.updateWorkflowStatus(request);
 
-        Service service = request.getService();
-        Map<String, Object> additionalDetailMap = new HashMap<>();
-        additionalDetailMap.put("department", getDepartmentFromMDMS(request, mdmsData));
-        service.setAdditionalDetail(additionalDetailMap);
+		Service service = request.getService();
 
-        producer.push(tenantId,config.getCreateTopic(),request);
-        producer.push(tenantId,config.getInboxCreateTopic(),request);
-        return request;
-    }
+		Map<String, Object> existing = pgrUtils.extractAdditionalDetails(service.getAdditionalDetail());
+		Map<String, Object> backend = new HashMap<>();
+		backend.put("department", getDepartmentFromMDMS(request, mdmsData));
+		backend.put("serviceName", getServiceNameFromMDMS(request, mdmsData));
+		Map<String, Object> merged = pgrUtils.deepMerge(existing, backend);
+		service.setAdditionalDetail(merged);
+		complaintDomainEventService.publishWorkflowTransitionEvent(request, fromState);
+
+		producer.push(tenantId, config.getCreateTopic(), request);
+		producer.push(tenantId, config.getInboxCreateTopic(), request);
+		return request;
+	}
 
 
     /**
@@ -134,10 +152,21 @@ public class PGRService {
      */
     public ServiceRequest update(ServiceRequest request){
         String tenantId = request.getService().getTenantId();
+        String fromState = request.getService().getApplicationStatus();
         Object mdmsData = mdmsUtils.mDMSCall(request);
         validator.validateUpdate(request, mdmsData);
         enrichmentService.enrichUpdateRequest(request);
         workflowService.updateWorkflowStatus(request);
+
+        Service updateService = request.getService();
+		Map<String, Object> existing = pgrUtils.extractAdditionalDetails(updateService.getAdditionalDetail());
+		Map<String, Object> backend = new HashMap<>();
+		backend.put("department", getDepartmentFromMDMS(request, mdmsData));
+		backend.put("serviceName", getServiceNameFromMDMS(request, mdmsData));
+		Map<String, Object> merged = pgrUtils.deepMerge(existing, backend);
+		updateService.setAdditionalDetail(merged);
+
+        complaintDomainEventService.publishWorkflowTransitionEvent(request, fromState);
         producer.push(tenantId,config.getUpdateTopic(),request);
         producer.push(tenantId,config.getInboxUpdateTopic(),request);
         return request;
@@ -216,15 +245,49 @@ public class PGRService {
         String jsonPath = MDMS_DEPARTMENT_SEARCH.replace("{SERVICEDEF}", serviceCode);
 
         try {
-            List<String> department = JsonPath.read(mdmsData, jsonPath);
+            List<String> departmentCodeList = JsonPath.read(mdmsData, jsonPath);
 
-            if (department == null || department.isEmpty()) {
-                throw new CustomException("DEPARTMENT_NOT_FOUND", "No department found for service: " + serviceCode);
+            if (departmentCodeList == null || departmentCodeList.isEmpty()) {
+                log.warn("No department found in MDMS for service: {}. Defaulting to NA.", serviceCode);
+                return "NA";
             }
 
-            return department.get(0);
+            String departmentCode = departmentCodeList.get(0);
+            String nameJsonPath = MDMS_DEPARTMENT_NAME_SEARCH.replace("{CODE}", departmentCode);
+
+            try {
+                List<String> departmentNameList = JsonPath.read(mdmsData, nameJsonPath);
+                if (departmentNameList != null && !departmentNameList.isEmpty()) {
+                    return departmentNameList.get(0);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to parse MDMS response for department name lookup, code: {}. Falling back to code.", departmentCode, e);
+            }
+
+            return departmentCode;
         } catch (Exception e) {
-            throw new CustomException("JSONPATH_ERROR", "Failed to parse mdms response for service: " + serviceCode);
+            log.warn("Failed to parse MDMS response for department lookup, service: {}. Defaulting to NA.", serviceCode, e);
+            return "NA";
+        }
+    }
+
+    private String getServiceNameFromMDMS(ServiceRequest request, Object mdmsData) {
+
+        String serviceCode = request.getService().getServiceCode();
+        String jsonPath = MDMS_SERVICENAME_SEARCH.replace("{SERVICEDEF}", serviceCode);
+
+        try {
+            List<String> names = JsonPath.read(mdmsData, jsonPath);
+
+            if (names == null || names.isEmpty()) {
+                log.warn("No service name found in MDMS for service: {}. Falling back to serviceCode.", serviceCode);
+                return serviceCode;
+            }
+
+            return names.get(0);
+        } catch (Exception e) {
+            log.warn("Failed to parse MDMS response for service name lookup, service: {}. Falling back to serviceCode.", serviceCode, e);
+            return serviceCode;
         }
     }
 

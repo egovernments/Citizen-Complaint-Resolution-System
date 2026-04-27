@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "title": "TemplateBinding",
+  "description": "Schema for event-to-template mappings per tenant",
+  "properties": {
+    "tenantId": {
+      "type": "string",
+      "description": "Tenant identifier"
+    },
+    "eventName": {
+      "type": "string",
+      "description": "Event name (e.g., complaint-assigned, complaint-resolved)"
+    },
+    "channel": {
+      "type": "string",
+      "description": "Communication channel (whatsapp, sms, email)"
+    },
+    "templateId": {
+      "type": "string",
+      "description": "Novu template identifier"
+    },
+    "locale": {
+      "type": "string",
+      "description": "Locale code for template (e.g., en_IN, hi_IN, en_US)",
+      "default": "en_IN",
+      "pattern": "^[a-z]{2}_[A-Z]{2}$"
+    },
+    "contentSid": {
+      "type": "string",
+      "description": "Provider-specific template ID (e.g., Twilio content SID)",
+      "pattern": "^HX[a-fA-F0-9]{32}$"
+    },
+    "paramOrder": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Ordered list of template parameters"
+    },
+    "requiredVars": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Required variables for template processing"
+    },
+    "novuApiKey": {
+      "type": "string",
+      "description": "Optional template-specific Novu API key",
+      "x-security": ["novuApiKey"]
+    }
+  },
+  "required": ["tenantId", "eventName", "channel", "templateId"],
+  "x-unique": ["tenantId", "eventName", "channel", "locale"]
+}

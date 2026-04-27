@@ -1,0 +1,400 @@
+{
+	"info": {
+		"name": "Novu Bootstrap – WhatsApp",
+		"description": "Bootstraps a self-hosted Novu instance with environment, Twilio integration, and workflows for WhatsApp complaint notifications.\n\nRun requests in order: 1 → 2 → 3 → 4 → 5 → 6 → 7",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{ "key": "NOVU_BASE_URL",        "value": "http://localhost:1336" },
+		{ "key": "NOVU_API_KEY",         "value": "" },
+		{ "key": "TWILIO_ACCOUNT_SID",   "value": "" },
+		{ "key": "TWILIO_AUTH_TOKEN",    "value": "" },
+		{ "key": "TWILIO_WHATSAPP_FROM", "value": "whatsapp:+14155238886" },
+		{ "key": "NOVU_ENV_NAME",        "value": "digit-dev" },
+		{ "key": "NOVU_ENV_COLOR",       "value": "#4F46E5" },
+		{ "key": "NOVU_ENV_ID",          "value": "" },
+		{ "key": "NOVU_INTEGRATION_ID",  "value": "" },
+		{ "key": "NOVU_WORKFLOW_ID",     "value": "complaints-whatsapp-v1" }
+	],
+	"auth": {
+		"type": "apikey",
+		"apikey": [
+			{ "key": "key",   "value": "Authorization", "type": "string" },
+			{ "key": "value", "value": "ApiKey {{NOVU_API_KEY}}", "type": "string" },
+			{ "key": "in",    "value": "header", "type": "string" }
+		]
+	},
+	"item": [
+		{
+			"name": "1. List Environments",
+			"request": {
+				"method": "GET",
+				"url": {
+					"raw": "{{NOVU_BASE_URL}}/v1/environments",
+					"host": ["{{NOVU_BASE_URL}}"],
+					"path": ["v1", "environments"]
+				},
+				"description": "Check existing environments. The test script auto-saves the matching environment ID."
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"var json = pm.response.json();",
+							"var envName = pm.collectionVariables.get('NOVU_ENV_NAME');",
+							"var data = json.data || json;",
+							"if (Array.isArray(data)) {",
+							"    var match = data.find(e => e.name === envName);",
+							"    if (match) {",
+							"        var id = match._id || match.id;",
+							"        pm.collectionVariables.set('NOVU_ENV_ID', id);",
+							"        pm.test('Environment found: ' + id, () => pm.expect(id).to.be.ok);",
+							"    } else {",
+							"        pm.test('Environment not found – run Create Environment next', () => pm.expect(true).to.be.true);",
+							"    }",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "2. Create Environment",
+			"request": {
+				"method": "POST",
+				"url": {
+					"raw": "{{NOVU_BASE_URL}}/v1/environments",
+					"host": ["{{NOVU_BASE_URL}}"],
+					"path": ["v1", "environments"]
+				},
+				"header": [
+					{ "key": "Content-Type", "value": "application/json" }
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"name\": \"{{NOVU_ENV_NAME}}\",\n  \"color\": \"{{NOVU_ENV_COLOR}}\"\n}"
+				},
+				"description": "Creates a new Novu environment. Skip if step 1 already found one."
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"var json = pm.response.json();",
+							"var d = json.data || json;",
+							"var id = d._id || d.id || (d.data && (d.data._id || d.data.id));",
+							"if (id) {",
+							"    pm.collectionVariables.set('NOVU_ENV_ID', id);",
+							"    pm.test('Created environment: ' + id, () => pm.expect(id).to.be.ok);",
+							"} else {",
+							"    pm.test('Environment create response', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "3. List Integrations",
+			"request": {
+				"method": "GET",
+				"url": {
+					"raw": "{{NOVU_BASE_URL}}/v1/integrations",
+					"host": ["{{NOVU_BASE_URL}}"],
+					"path": ["v1", "integrations"]
+				},
+				"description": "Check if the Twilio integration already exists."
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"var json = pm.response.json();",
+							"var data = json.data || json;",
+							"if (Array.isArray(data)) {",
+							"    var match = data.find(i => i.identifier === 'twilio-whatsapp');",
+							"    if (match) {",
+							"        var id = match._id || match.id;",
+							"        pm.collectionVariables.set('NOVU_INTEGRATION_ID', id);",
+							"        pm.test('Integration found: ' + id, () => pm.expect(id).to.be.ok);",
+							"    } else {",
+							"        pm.test('Integration not found – run Create Integration next', () => pm.expect(true).to.be.true);",
+							"    }",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "4. Create Twilio Integration",
+			"request": {
+				"method": "POST",
+				"url": {
+					"raw": "{{NOVU_BASE_URL}}/v1/integrations",
+					"host": ["{{NOVU_BASE_URL}}"],
+					"path": ["v1", "integrations"]
+				},
+				"header": [
+					{ "key": "Content-Type", "value": "application/json" }
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"name\": \"twilio-whatsapp\",\n  \"identifier\": \"twilio-whatsapp\",\n  \"_environmentId\": \"{{NOVU_ENV_ID}}\",\n  \"providerId\": \"twilio\",\n  \"channel\": \"sms\",\n  \"active\": true,\n  \"check\": false,\n  \"credentials\": {\n    \"accountSid\": \"{{TWILIO_ACCOUNT_SID}}\",\n    \"token\": \"{{TWILIO_AUTH_TOKEN}}\",\n    \"from\": \"{{TWILIO_WHATSAPP_FROM}}\"\n  }\n}"
+				},
+				"description": "Creates the Twilio SMS integration (used for WhatsApp via whatsapp:+phone). Skip if step 3 found it."
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"var json = pm.response.json();",
+							"var d = json.data || json;",
+							"var id = d._id || d.id || (d.data && (d.data._id || d.data.id));",
+							"if (id) {",
+							"    pm.collectionVariables.set('NOVU_INTEGRATION_ID', id);",
+							"    pm.test('Created integration: ' + id, () => pm.expect(id).to.be.ok);",
+							"} else {",
+							"    pm.test('Integration create response', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "5. List Workflows",
+			"request": {
+				"method": "GET",
+				"url": {
+					"raw": "{{NOVU_BASE_URL}}/v2/workflows?limit=100&page=0",
+					"host": ["{{NOVU_BASE_URL}}"],
+					"path": ["v2", "workflows"],
+					"query": [
+						{ "key": "limit", "value": "100" },
+						{ "key": "page",  "value": "0" }
+					]
+				},
+				"description": "List existing workflows to check if they need to be created."
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Workflows listed', () => pm.expect(pm.response.code).to.equal(200));"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "6a. Create Workflow – complaints-whatsapp-v1",
+			"request": {
+				"method": "POST",
+				"url": {
+					"raw": "{{NOVU_BASE_URL}}/v2/workflows",
+					"host": ["{{NOVU_BASE_URL}}"],
+					"path": ["v2", "workflows"]
+				},
+				"header": [
+					{ "key": "Content-Type", "value": "application/json" }
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"workflowId\": \"{{NOVU_WORKFLOW_ID}}\",\n  \"name\": \"Complaints WhatsApp Workflow\",\n  \"active\": true,\n  \"validatePayload\": false,\n  \"isTranslationEnabled\": false,\n  \"steps\": [\n    {\n      \"name\": \"Send WhatsApp via Twilio\",\n      \"type\": \"sms\",\n      \"controlValues\": {\n        \"body\": \"Complaint {{payload.complaintNo}} status is {{payload.status}}\"\n      }\n    }\n  ]\n}"
+				},
+				"description": "Creates the main WhatsApp workflow. Skip if step 5 showed it already exists."
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Workflow created', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "6b. Create Workflow – COMPLAINTS.WORKFLOW.APPLY",
+			"request": {
+				"method": "POST",
+				"url": {
+					"raw": "{{NOVU_BASE_URL}}/v2/workflows",
+					"host": ["{{NOVU_BASE_URL}}"],
+					"path": ["v2", "workflows"]
+				},
+				"header": [
+					{ "key": "Content-Type", "value": "application/json" }
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"workflowId\": \"COMPLAINTS.WORKFLOW.APPLY\",\n  \"name\": \"COMPLAINTS WORKFLOW APPLY\",\n  \"active\": true,\n  \"validatePayload\": false,\n  \"isTranslationEnabled\": false,\n  \"steps\": [\n    {\n      \"name\": \"Send WhatsApp via Twilio\",\n      \"type\": \"sms\",\n      \"controlValues\": {\n        \"body\": \"Complaint {{payload.complaintNo}} status {{payload.workflowState}} for tenant {{payload.tenantId}}\"\n      }\n    }\n  ]\n}"
+				},
+				"description": "Creates the APPLY event workflow. If Novu returns 422 (dots in ID), retry with slugified ID 'complaints-workflow-apply'."
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"if (pm.response.code === 422) {",
+							"    pm.test('Got 422 – retry with slugified ID (complaints-workflow-apply)', () => pm.expect(true).to.be.true);",
+							"} else {",
+							"    pm.test('Workflow created', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "6b-retry. Create Workflow – complaints-workflow-apply (slugified)",
+			"request": {
+				"method": "POST",
+				"url": {
+					"raw": "{{NOVU_BASE_URL}}/v2/workflows",
+					"host": ["{{NOVU_BASE_URL}}"],
+					"path": ["v2", "workflows"]
+				},
+				"header": [
+					{ "key": "Content-Type", "value": "application/json" }
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"workflowId\": \"complaints-workflow-apply\",\n  \"name\": \"COMPLAINTS WORKFLOW APPLY\",\n  \"active\": true,\n  \"validatePayload\": false,\n  \"isTranslationEnabled\": false,\n  \"steps\": [\n    {\n      \"name\": \"Send WhatsApp via Twilio\",\n      \"type\": \"sms\",\n      \"controlValues\": {\n        \"body\": \"Complaint {{payload.complaintNo}} status {{payload.workflowState}} for tenant {{payload.tenantId}}\"\n      }\n    }\n  ]\n}"
+				},
+				"description": "Slugified fallback for COMPLAINTS.WORKFLOW.APPLY if Novu rejects dots in workflow IDs. Only run if 6b returned 422."
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Workflow created (slugified)', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "6c. Create Workflow – COMPLAINTS.WORKFLOW.ASSIGN",
+			"request": {
+				"method": "POST",
+				"url": {
+					"raw": "{{NOVU_BASE_URL}}/v2/workflows",
+					"host": ["{{NOVU_BASE_URL}}"],
+					"path": ["v2", "workflows"]
+				},
+				"header": [
+					{ "key": "Content-Type", "value": "application/json" }
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"workflowId\": \"COMPLAINTS.WORKFLOW.ASSIGN\",\n  \"name\": \"COMPLAINTS WORKFLOW ASSIGN\",\n  \"active\": true,\n  \"validatePayload\": false,\n  \"isTranslationEnabled\": false,\n  \"steps\": [\n    {\n      \"name\": \"Send WhatsApp via Twilio\",\n      \"type\": \"sms\",\n      \"controlValues\": {\n        \"body\": \"Complaint {{payload.complaintNo}} status {{payload.workflowState}} for tenant {{payload.tenantId}}\"\n      }\n    }\n  ]\n}"
+				},
+				"description": "Creates the ASSIGN event workflow. If 422, retry with 'complaints-workflow-assign'."
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"if (pm.response.code === 422) {",
+							"    pm.test('Got 422 – retry with slugified ID (complaints-workflow-assign)', () => pm.expect(true).to.be.true);",
+							"} else {",
+							"    pm.test('Workflow created', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "6c-retry. Create Workflow – complaints-workflow-assign (slugified)",
+			"request": {
+				"method": "POST",
+				"url": {
+					"raw": "{{NOVU_BASE_URL}}/v2/workflows",
+					"host": ["{{NOVU_BASE_URL}}"],
+					"path": ["v2", "workflows"]
+				},
+				"header": [
+					{ "key": "Content-Type", "value": "application/json" }
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"workflowId\": \"complaints-workflow-assign\",\n  \"name\": \"COMPLAINTS WORKFLOW ASSIGN\",\n  \"active\": true,\n  \"validatePayload\": false,\n  \"isTranslationEnabled\": false,\n  \"steps\": [\n    {\n      \"name\": \"Send WhatsApp via Twilio\",\n      \"type\": \"sms\",\n      \"controlValues\": {\n        \"body\": \"Complaint {{payload.complaintNo}} status {{payload.workflowState}} for tenant {{payload.tenantId}}\"\n      }\n    }\n  ]\n}"
+				},
+				"description": "Slugified fallback for COMPLAINTS.WORKFLOW.ASSIGN. Only run if 6c returned 422."
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Workflow created (slugified)', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "7. Trigger – Test WhatsApp Notification",
+			"request": {
+				"method": "POST",
+				"url": {
+					"raw": "{{NOVU_BASE_URL}}/v1/events/trigger",
+					"host": ["{{NOVU_BASE_URL}}"],
+					"path": ["v1", "events", "trigger"]
+				},
+				"header": [
+					{ "key": "Content-Type", "value": "application/json" }
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"name\": \"complaints-whatsapp-v1\",\n  \"to\": {\n    \"subscriberId\": \"pg.citya:test-user-uuid\",\n    \"phone\": \"whatsapp:+916307817430\"\n  },\n  \"payload\": {\n    \"complaintNo\": \"PG-PGR-2026-03-03-000001\",\n    \"status\": \"PENDINGFORASSIGNMENT\",\n    \"serviceName\": \"OverflowingOrBlockedDrain\",\n    \"citizenName\": \"Test User\",\n    \"submittedDate\": \"03-Mar-2026 01:00PM\"\n  },\n  \"transactionId\": \"test-tx-001\",\n  \"overrides\": {\n    \"providers\": {\n      \"twilio\": {\n        \"_passthrough\": {\n          \"body\": {\n            \"contentSid\": \"HX350aa0b139780ea87f554276b1f68d6c\",\n            \"contentVariables\": \"{\\\"1\\\":\\\"OverflowingOrBlockedDrain\\\",\\\"2\\\":\\\"PG-PGR-2026-03-03-000001\\\",\\\"3\\\":\\\"03-Mar-2026 01:00PM\\\"}\"\n          }\n        }\n      }\n    }\n  }\n}"
+				},
+				"description": "Test trigger – sends a WhatsApp notification via the complaints-whatsapp-v1 workflow with Twilio content template overrides."
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Trigger accepted', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"response": []
+		}
+	]
+}

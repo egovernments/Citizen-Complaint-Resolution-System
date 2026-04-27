@@ -1,0 +1,56 @@
+[
+  {
+    "tenantId": "{tenantid}",
+    "code": "ProviderDetail",
+    "description": "Notification provider configuration per channel (e.g. Novu WhatsApp credentials)",
+    "definition": {
+      "type": "object",
+      "title": "ProviderDetail",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "providerName",
+        "channel",
+        "priority"
+      ],
+      "x-unique": [
+        "providerName",
+        "channel",
+        "priority"
+      ],
+      "properties": {
+        "channel": {
+          "type": "string",
+          "description": "Communication channel (whatsapp, sms, email)"
+        },
+        "isActive": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether this provider is active"
+        },
+        "priority": {
+          "type": "integer",
+          "default": 0,
+          "description": "Provider priority (lower = higher priority)"
+        },
+        "novuApiKey": {
+          "type": "string",
+          "description": "Optional provider-specific Novu API key"
+        },
+        "credentials": {
+          "type": "object",
+          "description": "Provider-specific credentials in Novu-compatible format"
+        },
+        "providerName": {
+          "type": "string",
+          "description": "Provider name (e.g., twilio, sendgrid, etc.)"
+        }
+      },
+      "x-security": [
+        "credentials",
+        "novuApiKey"
+      ],
+      "description": "Schema for provider configurations per tenant and channel"
+    },
+    "isActive": true
+  }
+]

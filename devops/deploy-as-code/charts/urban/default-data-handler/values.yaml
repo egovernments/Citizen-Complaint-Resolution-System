@@ -29,7 +29,7 @@ initContainers:
 # Container Configs
 image:
   repository: "default-data-handler"
-  tag: v0.0.1-3ef6b5f-34
+  tag: "develop-773002d"
 replicas: "1"
 healthChecks:
   enabled: true
@@ -102,6 +102,11 @@ env: |
       configMapKeyRef:
         name: egov-service-host
         key: boundary-service
+  - name: EGOC_CONFIG_HOST
+    valueFrom:
+      configMapKeyRef:
+        name: egov-service-host
+        key: digit-config-service
   - name: SPRING_KAFKA_CONSUMER_GROUP_ID
     value: default-data-handler
   - name: KAFKA_TOPICS_CREATE_TENANT

@@ -112,3 +112,12 @@ releases:
     - ./ingress-nginx/values.yaml
     - {{ .Values | toYaml | nindent 8 }}
     - domain: {{ .Values.global.domain }}
+
+- name: novu
+  installed: true
+  chart: ./novu
+  version: 2.3.0
+  namespace: novu
+  values:
+    - ./novu/values.yaml
+    - {{ .Values | toYaml | nindent 8 }}

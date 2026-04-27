@@ -243,6 +243,18 @@ public class PGRQueryBuilder {
 	}
 
 
+	private static final String DOCUMENT_QUERY = "SELECT id, document_type, filestore_id, document_uid, service_id, additional_details, created_by, last_modified_by, created_time, last_modified_time FROM {schema}.eg_pgr_document_v2 WHERE service_id IN ({SERVICE_IDS})";
+
+	public String getDocumentSearchQuery(List<String> serviceIds, List<Object> preparedStmtList) {
+		StringBuilder placeholders = new StringBuilder();
+		for (int i = 0; i < serviceIds.size(); i++) {
+			placeholders.append(" ?");
+			if (i != serviceIds.size() - 1) placeholders.append(",");
+			preparedStmtList.add(serviceIds.get(i));
+		}
+		return DOCUMENT_QUERY.replace("{SERVICE_IDS}", placeholders.toString());
+	}
+
 	public String getAverageResolutionTime(String tenantId, List<Object> preparedStmtListAverageResolutionTime) {
 		StringBuilder query = new StringBuilder("");
 		query.append(AVERAGE_RESOLUTION_TIME_QUERY);

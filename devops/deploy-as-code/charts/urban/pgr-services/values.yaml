@@ -17,7 +17,7 @@ initContainers:
     schemaTable: "pgr_services_schema"
     image:
       repository: "pgr-services-db"
-      tag: "v2.9.0-8b3aa24-4"
+      tag: "develop-8392b8c"
     env: |
         {{- if index .Values "pgr-ismultischema-enabled" }}        
         - name: SCHEMA_NAME
@@ -49,7 +49,7 @@ initContainers:
 # Container Configs
 image:
   repository: "pgr-services"
-  tag: "v2.9.0-8b3aa24-4"
+  tag: "develop-8392b8c"
 replicas: "1"
 healthChecks:
   enabled: true
@@ -220,6 +220,5 @@ env: |
       configMapKeyRef:
         name: egov-config
         key: state-level-tenant-id
-
-
-  
+  - name: EGOV_MDMS_SEARCH_ENDPOINT
+    value: {{ index .Values "egov.mdms.search.endpoint" | quote }}

@@ -40,8 +40,6 @@ const WorkflowComponent = ({ complaintDetails, id }) => {
     }
   );
 
-  console.log(`*** LOG ***`, cct);
-
   // CCSD-1766 Fix: Force revalidation on mount to ensure fresh data after rating submission.
   // If a rating was just submitted for this complaint, use a longer delay (3 s) so the
   // backend has time to commit the RATE transaction before the workflow/timeline API refetches.
@@ -133,25 +131,72 @@ const ComplaintDetailsPage = (props) => {
             <Card>
               <CardSubHeader style={{ marginBottom: "16px" }}>{t("CS_COMPLAINT_DETAILS_COMPLAINT_DETAILS")}</CardSubHeader>
               <StatusTable>
-                {Object.keys(complaintDetails.details).map((flag, index, arr) => (
-                  <Row
-                    key={index}
-                    label={t(flag)}
-                    text={
-                      Array.isArray(complaintDetails.details[flag])
-                        ? complaintDetails.details[flag].map((val) => (typeof val === "object" ? t(val?.code) : t(val)))
-                        : t(complaintDetails.details[flag]) || "N/A"
+                {Object.keys(complaintDetails.details)
+                  .filter((key) => {
+                    const hierarchy = complaintDetails?.service?.additionalDetail?.boundaryHierarchy;
+
+                    const hasHierarchy = hierarchy && typeof hierarchy === "object" && !Array.isArray(hierarchy) && Object.keys(hierarchy).length > 0;
+                    // Hide locality/area row if hierarchy is already showing it
+                    if (hasHierarchy && (key === "CS_ADDCOMPLAINT_LOCALITY" || key === "CS_COMPLAINT_DETAILS_LOCALITY" || key === "CS_COMPLAINT_DETAILS_AREA")) {
+                      return false;
                     }
-                    last={index === arr.length - 1}
-                  />
-                ))}
+                    return true;
+                  })
+                  .map((flag, index, arr) => (
+                    <Row
+                      key={index}
+                      label={t(flag)}
+                      text={
+                        Array.isArray(complaintDetails.details[flag])
+                          ? complaintDetails.details[flag].map((val) => (typeof val === "object" ? t(val?.code) : t(val)))
+                          : t(complaintDetails.details[flag]) || "N/A"
+                      }
+                      last={index === arr.length - 1}
+                    />
+                  ))}
               </StatusTable>
-              {!!(complaintDetails?.workflow?.verificationDocuments?.length) && (
-                <React.Fragment>
-                  <CardSubHeader>{t("CS_COMMON_ATTACHMENTS")}</CardSubHeader>
-                  <ComplaintPhotos serviceWrapper={complaintDetails} />
-                </React.Fragment>
-              )}
+              {(() => {
+                const hierarchy = complaintDetails?.service?.additionalDetail?.boundaryHierarchy;
+
+                if (!hierarchy) return null;
+                // Object format: { Region: "CODE", Block: "CODE" }
+                if (typeof hierarchy === "object" && !Array.isArray(hierarchy)) {
+                  return (
+                    <StatusTable>
+                      {Object.entries(hierarchy).map(([level, code], idx, arr) => (
+                        <Row
+                          key={level}
+                          label={t(`EGOV_LOCATION_BOUNDARYTYPE_${level.toUpperCase()}`)}
+                          text={t(code)}
+                          last={idx === arr.length - 1}
+                        />
+                      ))}
+                    </StatusTable>
+                  );
+                }
+                // Flat array fallback
+                if (Array.isArray(hierarchy) && hierarchy.length > 0) {
+                  return (
+                    <StatusTable>
+                      <Row
+                        label={t("CS_COMPLAINT_DETAILS_BOUNDARY_HIERARCHY")}
+                        text={hierarchy.map(code => t(code)).join(" > ")}
+                        last={true}
+                      />
+                    </StatusTable>
+                  );
+                }
+                return null;
+              })()}
+              {!!(
+                complaintDetails?.service?.documents?.length ||
+                complaintDetails?.workflow?.verificationDocuments?.length
+              ) && (
+                  <React.Fragment>
+                    <CardSubHeader>{t("CS_COMMON_ATTACHMENTS")}</CardSubHeader>
+                    <ComplaintPhotos serviceWrapper={complaintDetails} />
+                  </React.Fragment>
+                )}
             </Card>
 
             {!!(geoLocation?.latitude && geoLocation?.longitude) && (

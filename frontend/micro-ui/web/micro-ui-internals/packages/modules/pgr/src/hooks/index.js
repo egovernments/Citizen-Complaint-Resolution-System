@@ -19,9 +19,6 @@ const pgr = {
   useMobileValidation,
 };
 
-
-
-
 const Hooks = {
   pgr,
 };
@@ -39,4 +36,3 @@ export const CustomisedHooks = {
   Hooks,
   Utils,
 };
-

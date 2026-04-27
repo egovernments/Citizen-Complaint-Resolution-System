@@ -722,7 +722,7 @@ services:
       - egov-network
 
   digit-ui:
-    image: egovio/digit-ui:multiarch-d448cb7
+    image: egovio/digit-ui:develop-773002d
     container_name: digit-ui
     ports:
       - "18080:80"
@@ -844,6 +844,26 @@ services:
       - ./jupyter/DataLoader_v2.ipynb:/home/jovyan/work/DataLoader_v2.ipynb
     networks:
       - egov-network
+
+  telemetry:
+    image: alpine:3.20
+    container_name: digit-telemetry
+    entrypoint: ["sh", "/telemetry/sidecar.sh"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./telemetry:/telemetry:ro
+    environment:
+      TELEMETRY: "${TELEMETRY:-false}"
+      MATOMO_SITE_ID: "${MATOMO_SITE_ID:-5}"
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    stop_grace_period: 10s
+    networks:
+      - egov-network
+    restart: unless-stopped
 
 networks:
   egov-network:
