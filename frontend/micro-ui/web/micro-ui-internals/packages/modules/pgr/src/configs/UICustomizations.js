@@ -296,8 +296,13 @@ export const UICustomizations = {
 
       if (searchForm.mobileNumber) {
         clonedData.body.inbox.moduleSearchCriteria.mobileNumber = searchForm.mobileNumber;
+        clonedData.body.inbox.moduleSearchCriteria.countryCode =
+          searchForm.countryCode ||
+          window?.Digit?.MDMSValidationPatterns?.mobileNumberValidation?.prefix ||
+          "+91";
       } else {
         delete clonedData.body.inbox.moduleSearchCriteria.mobileNumber;
+        delete clonedData.body.inbox.moduleSearchCriteria.countryCode;
       }
 
       // Handle date range from search form directly
