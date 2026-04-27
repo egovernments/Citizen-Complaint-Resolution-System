@@ -90,7 +90,7 @@ public class ConfigDataRepository {
         return count != null ? count : 0;
     }
 
-    public ConfigData resolve(String schemaCode, Map<String, String> filters, List<String> tenantChain) {
+    public ConfigData resolve(String schemaCode, Map<String, Object> filters, List<String> tenantChain) {
         List<Object> params = new ArrayList<>();
         String sql = queryBuilder.buildResolveQuery(schemaCode, filters, tenantChain, params);
         List<ConfigData> results = jdbcTemplate.query(sql, params.toArray(), rowMapper);

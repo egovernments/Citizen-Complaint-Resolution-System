@@ -19,7 +19,7 @@ initContainers:
 # Container Configs
 image:
   repository: "digit-user-preferences-service"
-  tag: "master-2242e47"
+  tag: "v2.11-a520687"
 replicas: "1"
 httpPort: 8080
 

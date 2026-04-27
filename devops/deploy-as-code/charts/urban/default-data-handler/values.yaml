@@ -29,7 +29,7 @@ initContainers:
 # Container Configs
 image:
   repository: "default-data-handler"
-  tag: "develop-773002d"
+  tag: "v2.11-a520687"
 replicas: "1"
 healthChecks:
   enabled: true
