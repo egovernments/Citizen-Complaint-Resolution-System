@@ -525,8 +525,27 @@ const PGRDetails = () => {
                   },
                   {
                     inline: true,
-                    label: t("CS_COMPLAINT_LANDMARK__DETAILS"),
-                    value: pgrData?.ServiceWrappers[0].service?.address?.landmark || "NA",
+                    label: t("ES_CREATECOMPLAINT_ADDRESS"),
+                    value: (() => {
+                      const address = pgrData?.ServiceWrappers[0]?.service?.address;
+                      const tenantId = pgrData?.ServiceWrappers[0]?.service?.tenantId;
+                      const isMultiRoot = Digit.Utils.getMultiRootTenant();
+                      const localityKey = isMultiRoot
+                        ? address?.locality?.code
+                        : address?.locality?.name || address?.locality?.code;
+                      const parts = [
+                        address?.landmark,
+                        localityKey ? t(localityKey) : null,
+                        tenantId ? t(`TENANT_TENANTS_${tenantId?.toUpperCase?.()?.replace(".", "_")}`) : null,
+                        address?.pincode,
+                      ].filter(Boolean);
+                      if (parts.length === 0) return "NA";
+                      return (
+                        <div>
+                          {parts.map((p, i) => <div key={i}>{p}</div>)}
+                        </div>
+                      );
+                    })(),
                   },
                   {
                     inline: true,

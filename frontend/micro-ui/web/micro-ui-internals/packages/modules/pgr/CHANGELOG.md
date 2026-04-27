@@ -1,6 +1,19 @@
 # Changelog
 All notable changes to this module will be documented in this file.
 
+## [1.0.28] - 2026-04-27
+
+### Fixed
+
+- **Employee Complaint Details — Address Display (`PGRDetails.js`)**:
+  - Added combined address field to the employee complaint details page, mirroring the citizen-side pattern.
+  - Locality code is used directly as a translation key (no double `ADMIN_` prefix) for multi-root tenant deployments.
+  - Address parts (landmark, locality, tenant, pincode) now render line by line instead of comma-separated.
+
+- **PGR Inbox Search — Country Code (`UICustomizations.js`)**:
+  - Added `countryCode` alongside `mobileNumber` in the inbox search API criteria so mobile number lookups work correctly with country prefix validation.
+  - Falls back to `MDMSValidationPatterns.mobileNumberValidation.prefix` or `+91` when not set in the search form.
+
 ## [1.0.27] - 2026-04-27 - Code Merge
 
 ### Added / Fixed
