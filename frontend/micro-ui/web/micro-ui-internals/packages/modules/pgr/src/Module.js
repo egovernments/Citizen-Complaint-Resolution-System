@@ -25,6 +25,7 @@ import SelectImages from "../../pgr/src/pages/citizen/Create/Steps/SelectImages"
 import CreatePGRFlow from "./pages/citizen/Create/FormExplorer";
 import TrackOnWhatsApp from "./components/TrackOnWhatsApp";
 import Complaint from "./components/Complaint";
+import MobileNumberWithPrefix from "./components/MobileNumberWithPrefix";
 
 export const PGRReducers = getRootReducer;
 
@@ -112,6 +113,7 @@ const componentsToRegister = {
   SelectImages,
   PGRTrackOnWhatsApp: TrackOnWhatsApp,
   PGRComplaint: Complaint,
+  MobileNumberWithPrefix: MobileNumberWithPrefix,
 };
 
 export const initPGRComponents = () => {

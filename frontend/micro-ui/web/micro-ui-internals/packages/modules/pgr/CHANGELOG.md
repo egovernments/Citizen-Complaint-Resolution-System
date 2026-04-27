@@ -1,6 +1,28 @@
 # Changelog
 All notable changes to this module will be documented in this file.
 
+## [1.0.27] - 2026-04-27 - Code Merge
+
+### Added / Fixed
+
+- **Dynamic Mobile Validation & Prefix Support**: 
+  - Integrated full MDMS-driven validation rules into the Employee PGR workflows natively using the new `useMobileValidation` hook.
+  - Implemented the custom `MobileNumberWithPrefix` component to enforce consistent, standard-compliant mobile input dropdowns.
+  - Added real-time automated mapping for mapping and extracting `"countryCode"` based on the globally loaded MDMS `"default": true` configurations directly into backend `citizen` request payloads for the `_create` APIs.
+
+## [1.0.26] - 2026-04-23
+
+### Added
+
+- **Inbox Toggle (`USE_INBOX_V1`)**: Employee inbox now supports runtime switching between two inbox implementations via the `USE_INBOX_V1` flag in `globalConfigs.js`.
+  - `PGRInbox.js`: Wraps `PGRInboxV1` (legacy) and `PGRSearchInboxV2` (InboxSearchComposer-based). Reads `window.globalConfigs.getConfig("USE_INBOX_V1")` — if `true`, renders V1; otherwise renders V2.
+  - `globalConfigs.js` (`local-setup/nginx/`): Added `USE_INBOX_V1: true` entry and corresponding `getConfig` case to enable V1 by default in local development.
+
+### Fixed
+
+- **`PGRInboxV1` default filter**: Changed initial `assignee` filter from `[{ code: uuid }]` (current user only) to `[]` (all complaints) so the inbox is not empty on first load.
+- **`DesktopInbox` locality lookup**: Added `getLocalityCodeForMultiTenant()` helper and `Digit.Utils.getMultiRootTenant()` check to correctly resolve locality codes in multi-root tenant deployments (matches DIGIT-Frontend reference implementation).
+
 ## [1.0.24] - 2026-04-10
 
 ### Updated

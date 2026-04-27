@@ -338,13 +338,16 @@ const CreateComplaintForm = ({
       if (selectedUser === "MYSELF") {
         updatedData.ComplainantName = user?.info?.name || "";
         updatedData.ComplainantContactNumber = user?.info?.mobileNumber || "";
+        updatedData.countryCode = user?.info?.countryCode || "+91";
       } else if (selectedUser === "ANOTHER_USER") {
         updatedData.ComplainantName = "";
         updatedData.ComplainantContactNumber = "";
+        updatedData.countryCode = window?.Digit?.Hooks?.pgr?.useMobileValidation?.().validationRules?.prefix || "+91";
       }
 
       setValue("ComplainantName", updatedData.ComplainantName);
       setValue("ComplainantContactNumber", updatedData.ComplainantContactNumber);
+      setValue("countryCode", updatedData.countryCode);
     }
 
     if (needsSessionUpdate) {
