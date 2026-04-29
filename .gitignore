@@ -112,3 +112,11 @@ charts/*.tgz
 *.bak
 *.tmp
 *.orig
+<<<<<<< Updated upstream
+=======
+
+# Windows reserved device names
+nul
+NUL
+*.stackdump
+>>>>>>> Stashed changes
