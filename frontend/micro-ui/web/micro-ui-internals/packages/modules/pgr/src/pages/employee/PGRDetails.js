@@ -493,7 +493,8 @@ const PGRDetails = () => {
                     value: convertEpochFormateToDate(pgrData?.ServiceWrappers[0].service?.auditDetails?.createdTime) || t("NA"),
                   },
                   ...((() => {
-                    const hierarchy = pgrData?.ServiceWrappers[0]?.service?.additionalDetail?.boundaryHierarchy;
+                    const _rawHierarchy = pgrData?.ServiceWrappers[0]?.service?.additionalDetail?.boundaryHierarchy;
+                    const hierarchy = (() => { try { return typeof _rawHierarchy === "string" ? JSON.parse(_rawHierarchy) : _rawHierarchy; } catch (e) { return _rawHierarchy; } })();
 
                     // Object format: { Zone: "CODE", Locality: "CODE" } — show one row per level
                     if (hierarchy && typeof hierarchy === "object" && !Array.isArray(hierarchy) && Object.keys(hierarchy).length > 0) {
@@ -540,11 +541,7 @@ const PGRDetails = () => {
                         address?.pincode,
                       ].filter(Boolean);
                       if (parts.length === 0) return "NA";
-                      return (
-                        <div>
-                          {parts.map((p, i) => <div key={i}>{p}</div>)}
-                        </div>
-                      );
+                      return parts.join(", ");
                     })(),
                   },
                   {

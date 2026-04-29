@@ -13,7 +13,7 @@ const PGRInboxV1 = () => {
   const [pageSize, setPageSize] = useState(10);
   const [totalRecords, setTotalRecords] = useState(0);
   const [searchParams, setSearchParams] = useState({
-    filters: { wfFilters: { assignee: [{ code: uuid }] } },
+    filters: { wfFilters: { assignee: [] } },
     search: "",
     sort: {},
   });

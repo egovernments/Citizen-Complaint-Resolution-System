@@ -188,7 +188,7 @@ const FormExplorer = () => {
     const additionalDetail = {
       supervisorName: formData?.SupervisorName?.trim() || null,
       supervisorContactNumber: formData?.SupervisorContactNumber?.trim() || null,
-      boundaryHierarchy,
+      boundaryHierarchy: JSON.stringify(boundaryHierarchy),
     };
 
     const geoLocation = formData?.GeoLocationsPoint || { lat: null, lng: null };
