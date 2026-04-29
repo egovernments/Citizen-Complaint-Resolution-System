@@ -1,0 +1,18 @@
+{
+  "county": "Nairobi City",
+  "subCounties": {
+    "Makadara": [
+      "Harambee",
+      "Maringo/Hamza",
+      "Makongeni",
+      "Viwandani"
+    ],
+    "Kibra": [
+      "Sarang'ombe",
+      "Makina",
+      "Laini Saba",
+      "Silanga",
+      "Mashimoni"
+    ]
+  }
+}

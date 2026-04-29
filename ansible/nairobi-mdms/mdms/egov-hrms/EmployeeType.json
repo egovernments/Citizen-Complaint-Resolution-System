@@ -1,0 +1,387 @@
+[
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "CONTRACT",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "DAILYWAGES",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "DEPUTATION",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "PERMANENT",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "TEMPORARY",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "CONTRACT",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "DAILYWAGES",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "DEPUTATION",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "PERMANENT",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "TEMPORARY",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "CONTRACT",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "DAILYWAGES",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "DEPUTATION",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "PERMANENT",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "TEMPORARY",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "CONTRACT",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "DAILYWAGES",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "DEPUTATION",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "PERMANENT",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "TEMPORARY",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "CONTRACT",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "DAILYWAGES",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "DEPUTATION",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "PERMANENT",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "TEMPORARY",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "CONTRACT",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "DAILYWAGES",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "DEPUTATION",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "PERMANENT",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "TEMPORARY",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "CONTRACT",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "DAILYWAGES",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "DEPUTATION",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "PERMANENT",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "TEMPORARY",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "CONTRACT",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "DAILYWAGES",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "DEPUTATION",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "PERMANENT",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "TEMPORARY",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "CONTRACT",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "DAILYWAGES",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "DEPUTATION",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "PERMANENT",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "TEMPORARY",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "PERMANENT",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "DAILYWAGES",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "DEPUTATION",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "TEMPORARY",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "CONTRACT",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "CONTRACT",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "DAILYWAGES",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "DEPUTATION",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "PERMANENT",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "TEMPORARY",
+      "active": true
+    }
+  }
+]

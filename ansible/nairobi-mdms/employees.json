@@ -1,0 +1,362 @@
+[
+  {
+    "name": "Mr. Patrick Mbogo",
+    "department": "Lands & Urban Planning",
+    "designation": "CECM",
+    "mobileNumber": "722320295",
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Cicilia Koigu",
+    "department": "Lands",
+    "designation": "CCO",
+    "mobileNumber": "722308623",
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Patrick Analo",
+    "department": "Urban Planning",
+    "designation": "CCO",
+    "mobileNumber": "721242989",
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Godfrey Akumali",
+    "department": "Housing",
+    "designation": "CCO",
+    "mobileNumber": "720592454",
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Ruth Waruguru",
+    "department": "Urban Planning",
+    "designation": "Director",
+    "mobileNumber": "722875995",
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Tom Ochari",
+    "department": "Development Control",
+    "designation": "Director",
+    "mobileNumber": "722736906",
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Mr. Kinoti",
+    "department": "Housing",
+    "designation": "Director",
+    "mobileNumber": "721155043",
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Maureen Njeri",
+    "department": "Green Nairobi / Environment",
+    "designation": "CECM",
+    "mobileNumber": "717456086",
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Hibrahim Otieno",
+    "department": "Green Nairobi",
+    "designation": "CCO",
+    "mobileNumber": "729726493",
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Mr. Malawi",
+    "department": "Green Nairobi",
+    "designation": "Director",
+    "mobileNumber": "722168493",
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Elizabeth Njau",
+    "department": "Agriculture",
+    "designation": "Director",
+    "mobileNumber": "773453881",
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Mr. Mario",
+    "department": "Water",
+    "designation": "Director",
+    "mobileNumber": "729389861",
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Charles Kerich",
+    "department": "Finance & Economic Planning",
+    "designation": "CECM",
+    "mobileNumber": "722607124",
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Asha Abdi",
+    "department": "Finance",
+    "designation": "CCO",
+    "mobileNumber": "723218512",
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Mr. John Lintari",
+    "department": "Economic Planning",
+    "designation": "CCO",
+    "mobileNumber": "721216566",
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Mr. Tiras Njoroge",
+    "department": "Revenue Administration",
+    "designation": "CCO",
+    "mobileNumber": "728496535",
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Martha Wambugu",
+    "department": "Finance",
+    "designation": "Director",
+    "mobileNumber": "721257708",
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Mr. Sianga",
+    "department": "Economic Planning",
+    "designation": "Director",
+    "mobileNumber": "723746245",
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Nancy Kiruri",
+    "department": "Budget",
+    "designation": "Director",
+    "mobileNumber": "716271266",
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Dr. Ntoiti",
+    "department": "Revenue Administration",
+    "designation": "Director",
+    "mobileNumber": "722426370",
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Mr. S. G Mwangi",
+    "department": "Baroughs & Sub County Administration",
+    "designation": "CECM",
+    "mobileNumber": "722719153",
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Mr. Kiala",
+    "department": "Barough & Sub County Administrative",
+    "designation": "CCO",
+    "mobileNumber": "721211457",
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Joyce Kyengo",
+    "department": "Baroughs & Sub County Administration",
+    "designation": "Director",
+    "mobileNumber": "721499161",
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Sarah Gichamba",
+    "department": "Baroughs & Sub County Administration",
+    "designation": "Barough Manager",
+    "mobileNumber": "721615036",
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "John Saruni",
+    "department": "Baroughs & Sub County Administration",
+    "designation": "Barough Manager",
+    "mobileNumber": "722115177",
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Charles Mabonga",
+    "department": "Baroughs & Sub County Administration",
+    "designation": "Barough Manager",
+    "mobileNumber": "721734012",
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Lucas",
+    "department": "Baroughs & Sub County Administration",
+    "designation": "Barough Manager",
+    "mobileNumber": null,
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Janet Kimeu",
+    "department": "Baroughs & Sub County Administration",
+    "designation": "Barough Manager",
+    "mobileNumber": "721769629",
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Jane Ndanu",
+    "department": "Baroughs & Sub County Administration",
+    "designation": "Barough Manager",
+    "mobileNumber": "721716407",
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Maureen Ateka",
+    "department": null,
+    "designation": "Call Centre Employee",
+    "mobileNumber": null,
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Marion Malia Kapuya",
+    "department": null,
+    "designation": "Call Centre Employee",
+    "mobileNumber": null,
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Antonina Awino Ouma",
+    "department": null,
+    "designation": "Call Centre Employee",
+    "mobileNumber": null,
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Queenter Atieno Ololo",
+    "department": null,
+    "designation": "Call Centre Employee",
+    "mobileNumber": null,
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Honaline Chelangat",
+    "department": null,
+    "designation": "Call Centre Employee",
+    "mobileNumber": null,
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Grace Hellen Achieng",
+    "department": null,
+    "designation": "Call Centre Employee",
+    "mobileNumber": null,
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Lilian Akunga",
+    "department": null,
+    "designation": "Call Centre Employee",
+    "mobileNumber": null,
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Brenda Njeri Wangui",
+    "department": null,
+    "designation": "Call Centre Employee",
+    "mobileNumber": null,
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Ivy Wanjiru Waruguru",
+    "department": null,
+    "designation": "Call Centre Employee",
+    "mobileNumber": null,
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Nancy Gicheru",
+    "department": null,
+    "designation": "Call Centre Employee",
+    "mobileNumber": null,
+    "email": null,
+    "roles": null,
+    "wards": null
+  },
+  {
+    "name": "Pauline Mutheu",
+    "department": null,
+    "designation": "Call Centre Employee",
+    "mobileNumber": null,
+    "email": null,
+    "roles": null,
+    "wards": null
+  }
+]

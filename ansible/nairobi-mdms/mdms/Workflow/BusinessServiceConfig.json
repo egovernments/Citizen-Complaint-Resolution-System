@@ -1,0 +1,44 @@
+[
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "FIRENOC",
+      "isStateLevel": true
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "NEWTL",
+      "isStateLevel": true
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "FIRENOC",
+      "isStateLevel": true
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "NEWTL",
+      "isStateLevel": true
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "FIRENOC",
+      "isStateLevel": true
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "NEWTL",
+      "isStateLevel": true
+    }
+  }
+]
