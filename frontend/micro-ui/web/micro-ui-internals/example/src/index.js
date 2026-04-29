@@ -8,8 +8,6 @@ import { Loader } from "@egovernments/digit-ui-components";
 
 import { UICustomizations } from "./UICustomizations";
 import { pgrCustomizations, pgrComponents } from "./pgr";
-import { initWorkbenchComponents } from "@egovernments/digit-ui-module-workbench";
-import { initHRMSComponents } from "@egovernments/digit-ui-module-hrms";
 
 var Digit = window.Digit || {};
 
@@ -73,14 +71,13 @@ const initDigitUI = async () => {
   const [
     { initUtilitiesComponents },
     { initPGRComponents },
-    // {initWorkbenchComponents},
-    // {initHRMSComponents}
+    { initWorkbenchComponents },
+    { initHRMSComponents },
   ] = await Promise.all([
     import("@egovernments/digit-ui-module-utilities"),
     import("@egovernments/digit-ui-module-cms"),
-    // import("@egovernments/digit-ui-module-workbench"),
-    // import("@egovernments/digit-ui-module-hrms"),
-
+    import("@egovernments/digit-ui-module-workbench"),
+    import("@egovernments/digit-ui-module-hrms"),
   ]);
 
   // Initialize them in safe order

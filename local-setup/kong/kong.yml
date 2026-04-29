@@ -40,6 +40,67 @@ plugins:
   config:
     allowed_payload_size: 10
     size_unit: megabytes
+- name: pre-function
+  config:
+    access:
+    - |
+      local cjson = require("cjson.safe")
+      local http = require("resty.http")
+
+      local method = kong.request.get_method()
+      if method ~= "POST" and method ~= "PUT" and method ~= "PATCH" then
+        return
+      end
+
+      local ct = kong.request.get_header("content-type") or ""
+      if not ct:find("application/json", 1, true) then
+        return
+      end
+
+      ngx.req.read_body()
+      local body = ngx.req.get_body_data()
+      if not body or #body == 0 then
+        return
+      end
+
+      local parsed = cjson.decode(body)
+      if type(parsed) ~= "table" then
+        return
+      end
+
+      local ri = parsed.RequestInfo
+      if type(ri) ~= "table" or type(ri.authToken) ~= "string" or ri.authToken == "" or type(ri.userInfo) == "table" then
+        return
+      end
+
+      local query = kong.request.get_query()
+      local tenant_id = query.tenantId or "etmpo"
+
+      local httpc = http.new()
+      local res = httpc:request_uri(
+        "http://egov-user:8107/user/_details?access_token=" .. ri.authToken .. "&tenantId=" .. tenant_id,
+        {
+          method = "POST",
+          headers = { ["Content-Type"] = "application/json" },
+          body = '{"RequestInfo":{"apiId":"Rainmaker"}}',
+          ssl_verify = false
+        }
+      )
+      httpc:close()
+
+      if not res or res.status ~= 200 then
+        return
+      end
+
+      local user_data = cjson.decode(res.body)
+      if type(user_data) ~= "table" or not user_data.uuid then
+        return
+      end
+
+      parsed.RequestInfo.userInfo = user_data
+      local new_body = cjson.encode(parsed)
+      ngx.req.set_body_data(new_body)
+      kong.service.request.set_header("Content-Length", tostring(#new_body))
 services:
 - name: mdms-service
   url: http://egov-mdms-service:8094
