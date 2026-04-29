@@ -178,7 +178,7 @@ export const formPayloadToCreateComplaint = (formData, tenantId, user, hierarchy
   const additionalDetail = {
     supervisorName: formData?.SupervisorName?.trim()?.length > 0 ? formData?.SupervisorName?.trim() : null,
     supervisorContactNumber: formData?.SupervisorContactNumber?.trim()?.length > 0 ? formData?.SupervisorContactNumber?.trim() : null,
-    boundaryHierarchy,
+    boundaryHierarchy: JSON.stringify(boundaryHierarchy),
   };
 
   const documentsList = Array.isArray(formData?.ComplaintImagesPoint)
