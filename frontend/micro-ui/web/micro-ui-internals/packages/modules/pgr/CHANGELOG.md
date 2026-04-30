@@ -1,6 +1,22 @@
 # Changelog
 All notable changes to this module will be documented in this file.
 
+# Changelog
+All notable changes to this module will be documented in this file.
+
+## [1.0.29] - 2026-04-30
+
+  ### Changed
+  - Upgraded `@egovernments/digit-ui-module-cms` to version `1.0.29`.
+  - Integrated Matomo analytics script for usage tracking.
+  - Dynamic boundary hierarchy support in complaint details (PGR) — structured index-mapped object replacing flat array, with backward compatibility.
+  - WhatsApp consent flow fixes: explicit auth-token propagation and language-preference preservation during post-login preference sync.
+  - Inbox search, filter, and pagination restored after code migration.
+  - Minor bug fixes and stability improvements.
+
+
+
+
 ## [1.0.28] - 2026-04-27
 
 ### Fixed
