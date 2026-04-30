@@ -24,6 +24,10 @@ import MobileNumberWithPrefix from "../../../components/MobileNumberWithPrefix";
 const CreateComplaint = () => {
   const { t } = useTranslation();
 
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   // Get current ULB tenant ID
   const tenantId = Digit.ULBService.getCurrentTenantId();
   // Manage form session state using sessionStorage under key "COMPLAINT_CREATE"

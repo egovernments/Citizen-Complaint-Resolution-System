@@ -150,6 +150,10 @@ const PGRSearchInboxV2 = () => {
  * Defaults to v2 when the flag is absent or false.
  */
 const PGRSearchInbox = () => {
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   const useInboxV1 = window?.globalConfigs?.getConfig("USE_INBOX_V1") === true;
   return useInboxV1 ? <PGRInboxV1 /> : <PGRSearchInboxV2 />;
 };
