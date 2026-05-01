@@ -2,6 +2,7 @@ package org.egov.pgr.util;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jayway.jsonpath.JsonPath;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.pgr.config.PGRConfiguration;
@@ -12,11 +13,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
+import java.util.Collections;
 import java.util.List;
 
 import static org.egov.pgr.util.PGRConstants.HRMS_DEPARTMENT_JSONPATH;
+import static org.egov.pgr.util.PGRConstants.HRMS_REPORTING_TO_JSONPATH;
 
 @Component
+@Slf4j
 public class HRMSUtil {
 
 
@@ -59,6 +63,37 @@ public class HRMSUtil {
 
         return departments;
 
+    }
+
+    /**
+     * Given an employee UUID, find their supervisor's UUID from HRMS.
+     * Reads assignments[*].reportingTo from the current assignment.
+     * Returns null if no supervisor found.
+     */
+    public String getSupervisorUuid(String employeeUuid, RequestInfo requestInfo, String tenantId) {
+
+        StringBuilder url = getHRMSURI(Collections.singletonList(employeeUuid), tenantId);
+
+        RequestInfoWrapper requestInfoWrapper = RequestInfoWrapper.builder().requestInfo(requestInfo).build();
+
+        Object res = serviceRequestRepository.fetchResult(url, requestInfoWrapper);
+
+        if (res == null) {
+            log.warn("HRMS returned null for employee UUID: {}", employeeUuid);
+            return null;
+        }
+
+        try {
+            List<String> reportingTo = JsonPath.read(res, HRMS_REPORTING_TO_JSONPATH);
+            if (CollectionUtils.isEmpty(reportingTo)) {
+                log.info("No reportingTo found for employee UUID: {}", employeeUuid);
+                return null;
+            }
+            return reportingTo.get(0);
+        } catch (Exception e) {
+            log.warn("Failed to parse HRMS reportingTo for employee UUID: {}", employeeUuid, e);
+            return null;
+        }
     }
 
     /**

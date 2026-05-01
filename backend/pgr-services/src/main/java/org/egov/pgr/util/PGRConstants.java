@@ -151,6 +151,12 @@ public class PGRConstants {
 
     public static final String DEPARTMENT = "department";
 
+    public static final String ESCALATE = "ESCALATE";
 
+    public static final String MDMS_ESCALATION_CONFIG = "EscalationConfig";
+
+    public static final String MDMS_ESCALATION_CONFIG_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.EscalationConfig";
+
+    public static final String HRMS_REPORTING_TO_JSONPATH = "$.Employees[0].assignments[?(@.isCurrentAssignment==true)].reportingTo";
 
 }

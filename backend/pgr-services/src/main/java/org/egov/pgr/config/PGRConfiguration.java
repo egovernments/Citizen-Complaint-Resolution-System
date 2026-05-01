@@ -246,4 +246,23 @@ public class PGRConfiguration {
     @Value("${complaints.domain.events.default.locale:en_IN}")
     private String complaintsDomainEventDefaultLocale;
 
+    // Escalation
+    @Value("${pgr.escalation.enabled}")
+    private Boolean escalationEnabled;
+
+    @Value("${pgr.escalation.interval.ms}")
+    private Long escalationIntervalMs;
+
+    @Value("${pgr.escalation.batch.size}")
+    private Integer escalationBatchSize;
+
+    @Value("${pgr.escalation.default.sla.ms}")
+    private Long escalationDefaultSlaMs;
+
+    @Value("${pgr.escalation.max.depth}")
+    private Integer escalationMaxDepth;
+
+    @Value("${pgr.escalation.kafka.topic}")
+    private String escalationKafkaTopic;
+
 }

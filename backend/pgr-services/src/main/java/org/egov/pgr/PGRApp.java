@@ -11,10 +11,12 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Import;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 import java.util.TimeZone;
 
 @SpringBootApplication
+@EnableScheduling
 @ComponentScan(basePackages = { "org.egov.pgr", "org.egov.pgr.web.controllers" , "org.egov.pgr.config"})
 @Import({TracerConfiguration.class, MultiStateInstanceUtil.class})
 public class PGRApp {
