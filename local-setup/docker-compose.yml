@@ -766,6 +766,7 @@ services:
       egov-localization:
         condition: service_healthy
     environment:
+      EGOV_INTERNAL_MICROSERVICE_USER_UUID: ${EGOV_INTERNAL_MICROSERVICE_USER_UUID:-ef0947ca-a9ab-437d-af14-957c2e921c5b}
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}

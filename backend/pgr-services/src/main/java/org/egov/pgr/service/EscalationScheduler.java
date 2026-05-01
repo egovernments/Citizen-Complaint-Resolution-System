@@ -14,6 +14,7 @@ import org.egov.pgr.repository.ServiceRequestRepository;
 import org.egov.pgr.util.MDMSUtils;
 import org.egov.pgr.web.models.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
@@ -34,6 +35,9 @@ public class EscalationScheduler {
     private final MDMSUtils mdmsUtils;
     private final ObjectMapper mapper;
     private final MultiStateInstanceUtil multiStateInstanceUtil;
+
+    @Value("${egov.state.level.tenant.id:ke}")
+    private String stateLevelTenantId;
 
     @Autowired
     public EscalationScheduler(PGRConfiguration config, PGRRepository repository,
@@ -166,11 +170,16 @@ public class EscalationScheduler {
      * Builds a system RequestInfo for internal service-to-service calls.
      */
     private RequestInfo buildSystemRequestInfo() {
+        // The workflow validator looks up roles by tenantId (action's tenant + its
+        // state-level parent). A tenant-less Role never matches. Tag the SYSTEM
+        // role with the state-level tenant (e.g. "ke") so the validator's
+        // parent-tenant fallback (line 113-117 of WorkflowValidator.java) finds it
+        // for all city tenants like "ke.nairobi", "ke.bomet", etc.
         User systemUser = User.builder()
                 .uuid(config.getEgovInternalMicroserviceUserUuid())
                 .type("SYSTEM")
                 .roles(Collections.singletonList(
-                        Role.builder().code("SYSTEM").name("System").build()
+                        Role.builder().code("SYSTEM").name("System").tenantId(stateLevelTenantId).build()
                 ))
                 .build();
 
