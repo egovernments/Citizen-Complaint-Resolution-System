@@ -265,4 +265,11 @@ public class PGRConfiguration {
     @Value("${pgr.escalation.kafka.topic}")
     private String escalationKafkaTopic;
 
+    // Dashboard
+    @Value("${pgr.dashboard.refresh.enabled:true}")
+    private Boolean dashboardRefreshEnabled;
+
+    @Value("${pgr.dashboard.refresh.interval.ms:300000}")
+    private Long dashboardRefreshIntervalMs;
+
 }
