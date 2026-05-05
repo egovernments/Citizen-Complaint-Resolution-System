@@ -22,9 +22,9 @@ const app = express();
         { 
             target: envVariables.egovServices.egovServicesHost} // replace with your target
     ));
-    module.exports = app;
     return app;
 }
 
 const app = createAppServer();
+module.exports = app;
 app.listen(port, () => console.log(`XState-Chatbot-Server is running on port ${envVariables.port} with contextPath: ${envVariables.contextPath}`));

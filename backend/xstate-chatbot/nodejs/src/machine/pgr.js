@@ -19,7 +19,8 @@ const pgr =  {
       states: {
         type: {
           id: 'pgrType',
-          initial: 'complaintType2Step',
+          // Start with the frequent-complaints menu and fall back to category/item browsing via "more".
+          initial: 'complaintType',
           states: {
             complaintType: {
               id: 'complaintType',
