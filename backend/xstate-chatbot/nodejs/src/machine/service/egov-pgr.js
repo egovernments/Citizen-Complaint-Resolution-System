@@ -66,7 +66,7 @@ class PGRService {
       if (!complaintTypes.includes(data.serviceCode))
         complaintTypes.push(data.serviceCode);
     }
-    let localisationPrefix = "SERVICEDEFS.";
+    let localisationPrefix = "SERVICEDEFS_";
     let messageBundle = {};
     for (let complaintType of complaintTypes) {
       let message = localisationService.getMessageBundleForCode(
@@ -90,7 +90,7 @@ class PGRService {
     complaintCategories = complaintCategories.filter(
       (complaintCategory) => complaintCategory != ""
     ); // To remove any empty category
-    let localisationPrefix = "SERVICEDEFS.";
+    let localisationPrefix = "SERVICEDEFS_";
     let messageBundle = {};
     for (let complaintCategory of complaintCategories) {
       let message = localisationService.getMessageBundleForCode(
@@ -109,7 +109,7 @@ class PGRService {
       "ServiceDefs",
       '$.[?(@.active == true && @.menuPath == "' + category + '")].serviceCode'
     );
-    let localisationPrefix = "SERVICEDEFS.";
+    let localisationPrefix = "SERVICEDEFS_";
     let messageBundle = {};
     for (let complaintItem of complaintItems) {
       let message = localisationService.getMessageBundleForCode(
@@ -396,7 +396,7 @@ class PGRService {
     let serviceWrappers = responseBody.ServiceWrappers;
     var results = {};
     results["ServiceWrappers"] = [];
-    let localisationPrefix = "SERVICEDEFS.";
+    let localisationPrefix = "SERVICEDEFS_";
 
     let complaintLimit = config.pgrUseCase.complaintSearchLimit;
 

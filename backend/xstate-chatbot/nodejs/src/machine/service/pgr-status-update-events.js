@@ -12,7 +12,7 @@ const consumerGroupOptions = require('../../session/kafka/kafka-consumer-group-o
 const kafka = require('kafka-node');
 
 let citizenKeywordLocalization = "chatbot.template.citizen";
-let localisationPrefix = 'SERVICEDEFS.';
+let localisationPrefix = 'SERVICEDEFS_';
 class PGRStatusUpdateEventFormatter{
 
     constructor() {
