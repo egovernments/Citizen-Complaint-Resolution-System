@@ -7,12 +7,56 @@ const moment = require("moment-timezone");
 let event;
 const pgr =  {
   id: 'pgr',
-  initial: 'fileComplaint',
+  initial: 'menu',
   onEntry: assign((context, event) => {
     context.slots.pgr = {}
     context.pgr = {slots: {}};
   }),
   states: {
+    menu: {
+      id: 'pgrMenu',
+      initial: 'question',
+      states: {
+        question: {
+          onEntry: assign((context, event) => {
+            const message = dialog.get_message(messages.menu.question, context.user.locale);
+            context.grammer = grammer.menu.choice;
+            dialog.sendMessage(context, message);
+          }),
+          on: {
+            USER_MESSAGE: 'process'
+          }
+        },
+        process: {
+          onEntry: assign((context, event) => {
+            if (dialog.validateInputType(event, 'text')) {
+              context.intention = dialog.get_intention(context.grammer, event, true);
+            } else {
+              context.intention = dialog.INTENTION_UNKOWN;
+            }
+          }),
+          always: [
+            {
+              target: '#fileComplaint',
+              cond: (context) => context.intention == 'fileComplaint'
+            },
+            {
+              target: '#trackComplaint',
+              cond: (context) => context.intention == 'trackComplaint'
+            },
+            {
+              target: 'error'
+            }
+          ]
+        },
+        error: {
+          onEntry: assign((context, event) => {
+            dialog.sendMessage(context, dialog.get_message(dialog.global_messages.error.retry, context.user.locale), false);
+          }),
+          always: 'question'
+        }
+      }
+    },
     fileComplaint: {
       id: 'fileComplaint',
       initial: 'type',
@@ -835,11 +879,57 @@ const pgr =  {
           }
         },
       }, // fileComplaint.states
-    }  // fileComplaint
+    },  // fileComplaint
+    trackComplaint: {
+      id: 'trackComplaint',
+      invoke: {
+        id: 'fetchOpenComplaints',
+        src: (context) => pgrService.fetchOpenComplaints(context.user),
+        onDone: [
+          {
+            target: '#endstate',
+            cond: (context, event) => Array.isArray(event.data) && event.data.length > 0,
+            actions: assign((context, event) => {
+              let message = dialog.get_message(messages.trackComplaint.results.preamble, context.user.locale);
+              const complaints = event.data;
+              for (const complaint of complaints) {
+                let complaintMessage = dialog.get_message(
+                  messages.trackComplaint.results.complaintTemplate,
+                  context.user.locale
+                );
+                complaintMessage = complaintMessage
+                  .replace('{{complaintType}}', complaint.complaintType || 'Complaint')
+                  .replace('{{filedDate}}', complaint.filedDate || 'N/A')
+                  .replace('{{complaintStatus}}', complaint.complaintStatus || 'N/A');
+                message += `\n\n${complaintMessage}`;
+              }
+              message += dialog.get_message(messages.trackComplaint.results.closingStatement, context.user.locale);
+              dialog.sendMessage(context, message);
+            })
+          },
+          {
+            target: '#endstate',
+            actions: assign((context, event) => {
+              const message = dialog.get_message(messages.trackComplaint.noRecords, context.user.locale);
+              dialog.sendMessage(context, message);
+            })
+          }
+        ],
+        onError: {
+          target: '#system_error'
+        }
+      }
+    }
   } // pgr.states
 }; // pgr
 
 let messages = {
+  menu: {
+    question: {
+      en_IN: 'Please type and send the number for your option 👇\n\n*1.* File a new complaint\n*2.* Track existing complaints\n\n👉 To go back to the main menu, type and send *egov*.',
+      hi_IN: 'कृपया अपने विकल्प के लिए नंबर टाइप करें और भेजें 👇\n\n*1.* नई शिकायत दर्ज करें\n*2.* पुरानी शिकायतों की स्थिति देखें\n\n👉 मुख्य मेनू पर वापस जाने के लिए, टाइप करें और भेजें *egov*।'
+    }
+  },
   fileComplaint: {
     complaintType: {
       question: {
@@ -963,10 +1053,36 @@ let messages = {
         hi_IN: 'आपके द्वारा दर्ज किया गया स्थान गलत वर्तनी वाला है या हमारे सिस्टम रिकॉर्ड में मौजूद नहीं है।\nकृपया फिर से विवरण दर्ज करें।'
       }
     }
+  },
+  trackComplaint: {
+    results: {
+      preamble: {
+        en_IN: 'Here are your recent complaints 👇',
+        hi_IN: 'यहां आपकी हाल की शिकायतें हैं 👇'
+      },
+      complaintTemplate: {
+        en_IN: '*{{complaintType}}*\n\nFiled Date: {{filedDate}}\n\nComplaint Status: *{{complaintStatus}}*',
+        hi_IN: '*{{complaintType}}*\n\nदायर तिथि: {{filedDate}}\n\nशिकायत की स्थिति: *{{complaintStatus}}*'
+      },
+      closingStatement: {
+        en_IN: '\n\n👉 To go back to the main menu, type and send *egov*.',
+        hi_IN: '\n\n👉 मुख्य मेनू पर वापस जाने के लिए, टाइप करें और भेजें *egov*।'
+      }
+    },
+    noRecords: {
+      en_IN: 'No complaint records were found for your account.\n\n👉 To go back to the main menu, type and send *egov*.',
+      hi_IN: 'आपके खाते के लिए कोई शिकायत रिकॉर्ड नहीं मिला।\n\n👉 मुख्य मेनू पर वापस जाने के लिए, टाइप करें और भेजें *egov*।'
+    }
   }
 }; // messages
 
 let grammer = {
+  menu: {
+    choice: [
+      { intention: 'fileComplaint', recognize: ['1'] },
+      { intention: 'trackComplaint', recognize: ['2'] }
+    ]
+  },
   confirmation: {
     choice: [
       {intention: 'Yes', recognize: ['1',]},

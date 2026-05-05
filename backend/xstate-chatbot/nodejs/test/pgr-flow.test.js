@@ -134,6 +134,15 @@ function locationMessage(input) {
 
 function createHappyPathServiceStub(overrides = {}) {
   return {
+    fetchOpenComplaints: async () => [
+      {
+        complaintType: "Streetlight not working",
+        complaintNumber: "PGR-1",
+        filedDate: "15/04/2024",
+        complaintStatus: "Pending assignment",
+        complaintLink: "https://example.test/complaints/PGR-1",
+      },
+    ],
     fetchFrequentComplaints: async () => ({
       complaintTypes: [
         "StreetLightNotWorking",
@@ -206,6 +215,10 @@ test("happy path files a complaint through fuzzy city and locality search", asyn
 
   service.start();
   await settle();
+  assert.match(String(outputs.at(-1)), /File a new complaint/);
+
+  service.send(textMessage("1"));
+  await settle();
   assert.match(String(outputs.at(-1)), /What is the complaint about/);
 
   service.send(textMessage("1"));
@@ -237,10 +250,17 @@ test("invalid complaint choice retries and returns to the frequent complaints qu
   await settle();
   const promptCountBefore = outputs.length;
 
+  service.send(textMessage("1"));
+  await settle();
+
   service.send(textMessage("9"));
   await settle();
 
-  assert.match(String(outputs[promptCountBefore]), /Selected option seems to be invalid/);
+  assert.ok(
+    outputs.slice(promptCountBefore).some((message) =>
+      /Selected option seems to be invalid/.test(String(message))
+    )
+  );
   assert.match(String(outputs.at(-1)), /What is the complaint about/);
   assert.equal(
     service.state.matches({
@@ -256,6 +276,8 @@ test("see more path reaches complaint item selection", async () => {
   });
 
   service.start();
+  await settle();
+  service.send(textMessage("1"));
   await settle();
 
   service.send(textMessage("5"));
@@ -290,6 +312,8 @@ test("rejecting fuzzy city confirmation loops back to city entry", async () => {
   await settle();
   service.send(textMessage("1"));
   await settle();
+  service.send(textMessage("1"));
+  await settle();
 
   service.send(textMessage("ctya"));
   await settle();
@@ -306,6 +330,8 @@ test("shared geolocation with confirmed locality persists immediately", async ()
   });
 
   service.start();
+  await settle();
+  service.send(textMessage("1"));
   await settle();
   service.send(textMessage("1"));
   await settle();
@@ -335,6 +361,8 @@ test("persist complaint degrades gracefully when the backend omits complaint dat
   await settle();
   service.send(textMessage("1"));
   await settle();
+  service.send(textMessage("1"));
+  await settle();
   service.send(textMessage("CityA"));
   await settle();
   service.send(textMessage("LocalityA"));
@@ -355,5 +383,58 @@ test("service failure on startup routes to system error", async () => {
 
   service.start();
   await settle();
+  service.send(textMessage("1"));
+  await settle();
   assert.equal(outputs.at(-1), "SYSTEM_ERROR");
+});
+
+test("track complaint lists recent complaints and exits cleanly", async () => {
+  const { service, outputs } = createHarness({
+    serviceStub: createHappyPathServiceStub({
+      fetchOpenComplaints: async () => [
+        {
+          complaintType: "Streetlight not working",
+          complaintNumber: "PGR-1",
+          filedDate: "15/04/2024",
+          complaintStatus: "Pending assignment",
+          complaintLink: "https://example.test/complaints/PGR-1",
+        },
+        {
+          complaintType: "Garbage not cleared",
+          complaintNumber: "PGR-2",
+          filedDate: "18/04/2024",
+          complaintStatus: "Under review",
+          complaintLink: "https://example.test/complaints/PGR-2",
+        },
+      ],
+    }),
+  });
+
+  service.start();
+  await settle();
+  service.send(textMessage("2"));
+  await settle();
+
+  assert.match(String(outputs.at(-1)), /Here are your recent complaints/);
+  assert.match(String(outputs.at(-1)), /Streetlight not working/);
+  assert.match(String(outputs.at(-1)), /Garbage not cleared/);
+  assert.match(String(outputs.at(-1)), /Pending assignment/);
+  assert.match(String(outputs.at(-1)), /Under review/);
+  assert.equal(service.state.done, true);
+});
+
+test("track complaint handles no-records case", async () => {
+  const { service, outputs } = createHarness({
+    serviceStub: createHappyPathServiceStub({
+      fetchOpenComplaints: async () => [],
+    }),
+  });
+
+  service.start();
+  await settle();
+  service.send(textMessage("2"));
+  await settle();
+
+  assert.match(String(outputs.at(-1)), /No complaint records were found/);
+  assert.equal(service.state.done, true);
 });
