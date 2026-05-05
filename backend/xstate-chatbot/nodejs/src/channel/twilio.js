@@ -1,9 +1,18 @@
 const config = require('../env-variables');
 const fetch = require("node-fetch");
-const fs = require('fs');
 const axios = require('axios');
 var FormData = require("form-data");
-var uuid = require('uuid-random');
+
+const MIME_TYPE_EXTENSIONS = {
+    'image/jpeg': '.jpg',
+    'image/jpg': '.jpg',
+    'image/png': '.png',
+    'image/gif': '.gif',
+    'image/webp': '.webp',
+    'application/pdf': '.pdf',
+    'application/msword': '.doc',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx'
+};
 
 class TwilioWhatsAppProvider {
 
@@ -11,7 +20,7 @@ class TwilioWhatsAppProvider {
         this.accountSid = config.twilio.accountSid;
         this.authToken = config.twilio.authToken;
         this.whatsappNumber = config.twilio.whatsappNumber;
-        this.baseUrl = `https://api.twilio.com/2010-04-01/Accounts/${this.accountSid}/Messages.json`;
+        this.baseUrl = config.twilio.baseUrl || `https://api.twilio.com/2010-04-01/Accounts/${this.accountSid}/Messages.json`;
     }
 
     getAuthHeader() {
@@ -19,13 +28,26 @@ class TwilioWhatsAppProvider {
         return `Basic ${credentials}`;
     }
 
-    async fileStoreAPICall(fileName, fileData) {
+    getExtensionForMimeType(contentType) {
+        return MIME_TYPE_EXTENSIONS[contentType] || '';
+    }
+
+    getMimeTypeFromBase64(fileInBase64String) {
+        const matches = fileInBase64String.match(/^data:([^;]+);base64,/);
+        return matches ? matches[1] : 'application/octet-stream';
+    }
+
+    stripBase64Prefix(fileInBase64String) {
+        return fileInBase64String.replace(/^data:[^;]+;base64,/, '');
+    }
+
+    async fileStoreAPICall(fileName, fileData, contentType = 'application/octet-stream') {
         var url = config.egovServices.egovServicesHost + config.egovServices.egovFilestoreServiceUploadEndpoint;
         url = url + '&tenantId=' + config.rootTenantId;
         var form = new FormData();
         form.append("file", fileData, {
             filename: fileName,
-            contentType: "image/jpg"
+            contentType: contentType
         });
         let response = await axios.post(url, form, {
             headers: {
@@ -37,17 +59,19 @@ class TwilioWhatsAppProvider {
         return filestore['files'][0]['fileStoreId'];
     }
 
-    async convertFromBase64AndStore(imageInBase64String) {
-        if (!imageInBase64String || typeof imageInBase64String !== "string") {
-            throw new Error("Invalid imageInBase64String: Value is missing or not a string");
+    async convertFromBase64AndStore(fileInBase64String) {
+        if (!fileInBase64String || typeof fileInBase64String !== "string") {
+            throw new Error("Invalid fileInBase64String: Value is missing or not a string");
         }
 
-        imageInBase64String = imageInBase64String.replace(/ /g, '+');
-        let buff = Buffer.from(imageInBase64String, 'base64');
-        var tempName = 'pgr-whatsapp-' + Date.now() + '.jpg';
+        const contentType = this.getMimeTypeFromBase64(fileInBase64String);
+        const fileExtension = this.getExtensionForMimeType(contentType);
+        const base64Payload = this.stripBase64Prefix(fileInBase64String).replace(/ /g, '+');
+        let buff = Buffer.from(base64Payload, 'base64');
+        var tempName = 'pgr-whatsapp-' + Date.now() + fileExtension;
 
         try {
-            var filestoreId = await this.fileStoreAPICall(tempName, buff);
+            var filestoreId = await this.fileStoreAPICall(tempName, buff, contentType);
             return filestoreId;
         } catch (error) {
             console.error("Error in fileStoreAPICall:", error);
@@ -166,10 +190,18 @@ class TwilioWhatsAppProvider {
         // Check for media (image, document, etc.)
         else if (requestBody.NumMedia && parseInt(requestBody.NumMedia) > 0) {
             const mediaType = requestBody.MediaContentType0 || '';
+            const fileExtension = this.getExtensionForMimeType(mediaType);
 
             if (mediaType.startsWith('image/')) {
                 type = 'image';
-                // Download and store the image
+            } else if (mediaType) {
+                type = 'document';
+            } else {
+                type = 'unknown';
+                input = ' ';
+            }
+
+            if (type === 'image' || type === 'document') {
                 try {
                     const mediaUrl = requestBody.MediaUrl0;
                     const response = await axios.get(mediaUrl, {
@@ -179,19 +211,13 @@ class TwilioWhatsAppProvider {
                             password: this.authToken
                         }
                     });
-                    const imageBuffer = Buffer.from(response.data);
-                    const tempName = 'pgr-whatsapp-' + Date.now() + '.jpg';
-                    input = await this.fileStoreAPICall(tempName, imageBuffer);
+                    const fileBuffer = Buffer.from(response.data);
+                    const tempName = 'pgr-whatsapp-' + Date.now() + fileExtension;
+                    input = await this.fileStoreAPICall(tempName, fileBuffer, mediaType || response.headers['content-type']);
                 } catch (error) {
-                    console.error("Error downloading/storing image:", error);
+                    console.error("Error downloading/storing media:", error);
                     input = ' ';
                 }
-            } else if (mediaType === 'application/pdf') {
-                type = 'document';
-                input = ' ';
-            } else {
-                type = 'unknown';
-                input = ' ';
             }
         }
         // Text message
