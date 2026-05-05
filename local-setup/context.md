@@ -452,7 +452,7 @@ Chromium was not installed during initial attempts (`npx playwright install` nee
 | `jupyter/dataloader/crs_loader.py` | `load_boundaries`, `_autogenerate_boundary_codes`, `_autogen_standard_format`, `_autogen_level_format`, `_generate_boundary_code` |
 | `jupyter/dataloader/unified_loader.py` | `process_boundary_data`, `_create_boundary_entity`, `_create_boundary_relationship`, `create_localization_messages` |
 | `jupyter/dataloader/test_boundary_codes.py` | Unit tests for code generation and auto-gen (44 tests) |
-| `jupyter/DataLoader_v2.ipynb` | User-facing notebook (Phase 2a/2b cells) |
+| `jupyter/dataloader/DataLoader_v2.ipynb` | User-facing notebook (Phase 2a/2b cells) |
 | `jupyter/dataloader/templates/Kenya_Boundary_Master.xlsx` | Kenya boundary data (needs update) |
 
 ---
