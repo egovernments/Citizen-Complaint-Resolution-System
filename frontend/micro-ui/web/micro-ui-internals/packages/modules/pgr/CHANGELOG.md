@@ -4,6 +4,13 @@ All notable changes to this module will be documented in this file.
 # Changelog
 All notable changes to this module will be documented in this file.
 
+## [1.0.30] - 2026-05-05
+
+### Fixed
+- **Employee Complaint Details — Workflow Actions (`PGRDetails.js`)**:
+  - Filtered out purely citizen-facing actions (e.g., `RATE`, `COMMENT`, `REOPEN`) from the "Take Action" dropdown for `SUPERUSER` accounts on the employee UI.
+  - Ensured the "Take Action" button is completely hidden instead of appearing disabled on terminal states (like `REJECTED` or `RESOLVED`) where all possible next actions are restricted to citizens.
+
 ## [1.0.29] - 2026-04-30
 
   ### Changed

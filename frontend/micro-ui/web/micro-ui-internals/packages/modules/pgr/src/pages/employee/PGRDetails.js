@@ -381,6 +381,15 @@ const PGRDetails = () => {
     };
   };
 
+  // Roles that are purely citizen-facing — never show these as action options on the employee UI
+  const CITIZEN_ONLY_ROLES = ["CITIZEN"];
+
+  // Shared helper: returns true if ALL roles on an action are citizen-only (e.g. RATE, REOPEN, COMMENT)
+  const isCitizenOnlyAction = (action) =>
+    Array.isArray(action.roles) &&
+    action.roles.length > 0 &&
+    action.roles.every((role) => CITIZEN_ONLY_ROLES.includes(role));
+
   // Get list of valid actions for current user and state
   const getNextActionOptions = (workflowData, businessServiceResponse) => {
     const currentState = workflowData?.ProcessInstances?.[0]?.state;
@@ -388,14 +397,15 @@ const PGRDetails = () => {
     if (!matchingState) return [];
     const userRoles = userInfo?.info?.roles?.map((role) => role.code) || [];
 
-    // SUPERUSER gets all available actions without role filtering
+    // SUPERUSER gets all available actions without role filtering,
+    // but citizen-only actions (e.g. RATE with roles:["CITIZEN"]) are always excluded on the employee UI
     const hasSuperUserRole = userRoles.includes("SUPERUSER");
 
     if (!matchingState.actions) return [];
 
-    // Filter actions based on user roles, or return all if SUPERUSER
+    // Filter actions based on user roles, or return all employee-relevant ones if SUPERUSER
     const filteredActions = hasSuperUserRole
-      ? matchingState.actions
+      ? matchingState.actions.filter((action) => !isCitizenOnlyAction(action))
       : matchingState.actions.filter((action) => action.roles.some((role) => userRoles.includes(role)));
 
     return filteredActions.map((action) => ({
@@ -420,12 +430,14 @@ const PGRDetails = () => {
     // Check if user has SUPERUSER role - SUPERUSER bypasses ALL checks
     const hasSuperUserRole = userRoles.includes("SUPERUSER");
 
-    // SUPERUSER always sees action buttons if any actions exist
     if (hasSuperUserRole) {
-      return true;
+      // SUPERUSER sees the button only if there is at least one employee-relevant (non-citizen-only) action.
+      // e.g. on REJECTED/RESOLVED states where every action is CITIZEN-only, hide the button entirely.
+      return currentState.actions.some((action) => !isCitizenOnlyAction(action));
     }
 
-    // Get all roles from current state actions
+    // Get all roles from current state actions (employee path — citizen-only actions are naturally
+    // excluded because the employee won't have the CITIZEN role)
     const allActionRoles = [];
     currentState.actions.forEach(action => {
       if (action.roles) {
