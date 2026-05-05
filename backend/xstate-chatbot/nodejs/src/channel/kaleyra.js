@@ -61,7 +61,7 @@ class KaleyraWhatsAppProvider {
 
       let form = new FormData();
       
-      form.append("channel", "whatsapp");
+      form.append("channel", config.kaleyra.channel);
       form.append("from", extraInfo.whatsAppBusinessNumber);
       form.append("to", '91' + phone);
 

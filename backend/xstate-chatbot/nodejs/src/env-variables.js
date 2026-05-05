@@ -50,6 +50,7 @@ const envVariables = {
         sendMessageUrl: process.env.KALEYRA_SEND_MESSAGE_URL || 'https://api.kaleyra.io/v1/{{sid}}/messages',
         sid: process.env.KALEYRA_SID || '',
         apikey: process.env.KALEYRA_API_KEY || '',
+        channel: process.env.KALEYRA_CHANNEL || 'whatsapp',
     },
 
     twilio: {
