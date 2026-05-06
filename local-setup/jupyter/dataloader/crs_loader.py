@@ -1990,7 +1990,6 @@ class CRSLoader:
         print(f"DELETING BOUNDARIES")
         print(f"{'='*60}")
         print(f"Tenant: {tenant}")
-        print(f"Root Tenant: {cleanup_plan['root_tenant']}")
         print(f"Hierarchy Types: {', '.join(cleanup_plan['hierarchy_types']) or 'None'}")
         print(f"Boundary Codes: {len(cleanup_plan['boundary_codes'])}")
 
@@ -2002,10 +2001,8 @@ class CRSLoader:
 
     def _build_boundary_cleanup_plan(self, tenant: str) -> Dict[str, Any]:
         """Collect the tenant-scoped data created by load_hierarchy/load_boundaries."""
-        root_tenant = tenant.split(".")[0] if "." in tenant else tenant
         hierarchies = self.uploader.search_boundary_hierarchies(tenant) or []
         hierarchy_types = []
-        hierarchy_level_codes = set()
         boundary_codes = set()
 
         for hierarchy in hierarchies:
@@ -2013,39 +2010,16 @@ class CRSLoader:
             if not hierarchy_type:
                 continue
             hierarchy_types.append(hierarchy_type)
-            hierarchy_level_codes.add(hierarchy_type.upper())
-
-            for level in hierarchy.get('boundaryHierarchy', []) or []:
-                boundary_type = str(level.get('boundaryType', '')).strip()
-                if not boundary_type:
-                    continue
-                hierarchy_level_codes.add(
-                    f"{hierarchy_type.upper()}_{boundary_type.upper().replace(' ', '_')}"
-                )
 
             boundary_codes.update(self._fetch_boundary_codes_for_hierarchy(tenant, hierarchy_type))
 
         if not boundary_codes:
             boundary_codes.update(self._fetch_boundary_codes_from_service(tenant))
 
-        mdms_records = self.uploader.search_mdms_data_all(
-            schema_code="CMS-BOUNDARY.HierarchySchema",
-            tenant=root_tenant,
-        )
-        mdms_unique_ids = [
-            record.get('_uniqueIdentifier')
-            for record in mdms_records
-            if str(record.get('hierarchy', '')).strip() in hierarchy_types
-            and record.get('_uniqueIdentifier')
-        ]
-
         return {
             'tenant': tenant,
-            'root_tenant': root_tenant,
             'hierarchy_types': sorted(set(hierarchy_types)),
-            'hierarchy_level_codes': sorted(hierarchy_level_codes),
             'boundary_codes': sorted(boundary_codes),
-            'mdms_unique_ids': mdms_unique_ids,
         }
 
     def _fetch_boundary_codes_for_hierarchy(self, tenant: str, hierarchy_type: str) -> List[str]:
@@ -2147,51 +2121,21 @@ class CRSLoader:
         return ", ".join(self._sql_literal(value) for value in values if value)
 
     def _build_boundary_cleanup_sql(self, cleanup_plan: Dict[str, Any]) -> List[str]:
-        """Build DB cleanup statements for all tenant-scoped boundary artifacts."""
+        """Build DB cleanup statements for tenant-scoped boundaries."""
         tenant = cleanup_plan['tenant']
-        root_tenant = cleanup_plan['root_tenant']
         boundary_codes = cleanup_plan.get('boundary_codes', [])
         hierarchy_types = cleanup_plan.get('hierarchy_types', [])
-        hierarchy_level_codes = cleanup_plan.get('hierarchy_level_codes', [])
-        mdms_unique_ids = cleanup_plan.get('mdms_unique_ids', [])
 
         sql = []
 
         if hierarchy_types:
             hierarchy_in = self._sql_in_clause(hierarchy_types)
             sql.append(
-                f"DELETE FROM eg_bm_generated_template "
-                f"WHERE tenantid = {self._sql_literal(tenant)} "
-                f"AND hierarchytype IN ({hierarchy_in});"
-            )
-            sql.append(
-                f"DELETE FROM eg_bm_processed_template "
-                f"WHERE tenantid = {self._sql_literal(tenant)} "
-                f"AND hierarchytype IN ({hierarchy_in});"
-            )
-            sql.append(
-                f"DELETE FROM boundary_hierarchy "
-                f"WHERE tenantid = {self._sql_literal(tenant)} "
-                f"AND hierarchytype IN ({hierarchy_in});"
-            )
-            sql.append(
                 f"DELETE FROM boundary_relationship "
                 f"WHERE tenantid = {self._sql_literal(tenant)} "
                 f"AND hierarchytype IN ({hierarchy_in});"
             )
         else:
-            sql.append(
-                f"DELETE FROM eg_bm_generated_template "
-                f"WHERE tenantid = {self._sql_literal(tenant)};"
-            )
-            sql.append(
-                f"DELETE FROM eg_bm_processed_template "
-                f"WHERE tenantid = {self._sql_literal(tenant)};"
-            )
-            sql.append(
-                f"DELETE FROM boundary_hierarchy "
-                f"WHERE tenantid = {self._sql_literal(tenant)};"
-            )
             sql.append(
                 f"DELETE FROM boundary_relationship "
                 f"WHERE tenantid = {self._sql_literal(tenant)};"
@@ -2199,136 +2143,89 @@ class CRSLoader:
 
         if boundary_codes:
             boundary_in = self._sql_in_clause(boundary_codes)
-            sql.insert(
-                3,
+            sql.append(
                 f"DELETE FROM boundary "
                 f"WHERE tenantid = {self._sql_literal(tenant)} "
                 f"AND code IN ({boundary_in});"
             )
-            sql.append(
-                f"DELETE FROM message "
-                f"WHERE tenantid = {self._sql_literal(root_tenant)} "
-                f"AND module = 'rainmaker-pgr' "
-                f"AND code IN ({boundary_in});"
-            )
         else:
-            sql.insert(
-                3,
+            sql.append(
                 f"DELETE FROM boundary "
                 f"WHERE tenantid = {self._sql_literal(tenant)};"
             )
 
-        if hierarchy_level_codes:
-            level_code_in = self._sql_in_clause(hierarchy_level_codes)
+        if hierarchy_types:
+            hierarchy_in = self._sql_in_clause(hierarchy_types)
             sql.append(
-                f"DELETE FROM message "
-                f"WHERE tenantid = {self._sql_literal(root_tenant)} "
-                f"AND module = 'rainmaker-common' "
-                f"AND code IN ({level_code_in});"
+                f"DELETE FROM boundary_hierarchy "
+                f"WHERE tenantid = {self._sql_literal(tenant)} "
+                f"AND hierarchytype IN ({hierarchy_in});"
             )
-
-        if mdms_unique_ids:
-            mdms_in = self._sql_in_clause(mdms_unique_ids)
+        else:
             sql.append(
-                f"UPDATE eg_mdms_data "
-                f"SET isactive = false, lastmodifiedtime = {int(time.time() * 1000)} "
-                f"WHERE tenantid = {self._sql_literal(root_tenant)} "
-                f"AND schemacode = 'CMS-BOUNDARY.HierarchySchema' "
-                f"AND uniqueidentifier IN ({mdms_in}) "
-                f"AND isactive = true;"
+                f"DELETE FROM boundary_hierarchy "
+                f"WHERE tenantid = {self._sql_literal(tenant)};"
             )
 
         return sql
 
     def _delete_boundaries_via_db(self, cleanup_plan: Dict[str, Any]) -> Dict:
-        """Delete boundaries using direct database access (requires kubectl)"""
-        import subprocess
+        """Delete boundaries using direct database access."""
+        import psycopg2
 
         tenant = cleanup_plan['tenant']
         statements = self._build_boundary_cleanup_sql(cleanup_plan)
 
-        # Database connection details (from environment or defaults for local Docker)
+        # Database connection details (defaults match local Docker Compose)
         db_host = os.environ.get("BOUNDARY_DB_HOST", "postgres")
+        db_port = int(os.environ.get("BOUNDARY_DB_PORT", "5432"))
         db_name = os.environ.get("BOUNDARY_DB_NAME", "egov")
         db_user = os.environ.get("BOUNDARY_DB_USER", "egov")
-
-        # Get DB password from K8s secret
-        pw_result = subprocess.run(
-            ["kubectl", "get", "secret", "db", "-n", "egov", "-o", "jsonpath={.data.password}"],
-            capture_output=True, text=True
-        )
-
-        if pw_result.returncode != 0:
-            print("   WARNING: kubectl not available, cannot delete via DB")
-            print(f"{'='*60}")
-            return {'deleted': 0, 'relationships_deleted': 0, 'status': 'skipped',
-                    'error': 'kubectl not available'}
-
-        import base64
-        db_pass = base64.b64decode(pw_result.stdout).decode()
-
-        # Ensure cleanup pod exists
-        subprocess.run(["kubectl", "delete", "pod", "db-cleanup", "-n", "egov", "--ignore-not-found"],
-                      capture_output=True)
-        subprocess.run(["kubectl", "run", "db-cleanup", "--image=postgres:15", "-n", "egov",
-                       "--restart=Never", "--command", "--", "sleep", "3600"], capture_output=True)
-        subprocess.run(["kubectl", "wait", "--for=condition=Ready", "pod/db-cleanup", "-n", "egov",
-                       "--timeout=60s"], capture_output=True)
-
-        conn_str = f"postgresql://{db_user}:{db_pass}@{db_host}:5432/{db_name}"
-
-        delete_sql = " ".join(statements)
-        result = subprocess.run(
-            ["kubectl", "exec", "-n", "egov", "db-cleanup", "--",
-             "psql", conn_str, "-t",
-             "-c", delete_sql],
-            capture_output=True, text=True
-        )
+        db_pass = os.environ.get("BOUNDARY_DB_PASSWORD", os.environ.get("POSTGRES_PASSWORD", "egov123"))
 
         delete_counts = []
-        update_counts = []
-        for line in result.stdout.strip().split('\n'):
-            if line.strip().startswith('DELETE'):
-                delete_counts.append(int(line.split()[1]))
-            elif line.strip().startswith('UPDATE'):
-                update_counts.append(int(line.split()[1]))
+        try:
+            with psycopg2.connect(
+                host=db_host,
+                port=db_port,
+                dbname=db_name,
+                user=db_user,
+                password=db_pass,
+            ) as conn:
+                with conn.cursor() as cur:
+                    for statement in statements:
+                        cur.execute(statement)
+                        delete_counts.append(max(cur.rowcount, 0))
+        except Exception as e:
+            print(f"   WARNING: direct DB cleanup failed: {e}")
+            print(f"{'='*60}")
+            return {
+                'deleted': 0,
+                'relationships_deleted': 0,
+                'hierarchies_deleted': 0,
+                'status': 'failed',
+                'error': str(e)
+            }
 
         delete_labels = [
-            'generated_templates_deleted',
-            'processed_templates_deleted',
-            'hierarchies_deleted',
-            'boundaries_deleted',
             'relationships_deleted',
+            'boundaries_deleted',
+            'hierarchies_deleted',
         ]
-        if cleanup_plan.get('boundary_codes'):
-            delete_labels.append('boundary_localizations_deleted')
-        if cleanup_plan.get('hierarchy_level_codes'):
-            delete_labels.append('hierarchy_localizations_deleted')
 
         delete_totals = {label: 0 for label in delete_labels}
         for label, count in zip(delete_labels, delete_counts):
             delete_totals[label] = count
-        mdms_deactivated = update_counts[0] if update_counts else 0
 
-        print(f"   Generated templates deleted: {delete_totals.get('generated_templates_deleted', 0)}")
-        print(f"   Processed templates deleted: {delete_totals.get('processed_templates_deleted', 0)}")
-        print(f"   Hierarchies deleted: {delete_totals.get('hierarchies_deleted', 0)}")
-        print(f"   Boundaries deleted: {delete_totals.get('boundaries_deleted', 0)}")
         print(f"   Relationships deleted: {delete_totals.get('relationships_deleted', 0)}")
-        print(f"   Boundary localizations deleted: {delete_totals.get('boundary_localizations_deleted', 0)}")
-        print(f"   Hierarchy localizations deleted: {delete_totals.get('hierarchy_localizations_deleted', 0)}")
-        print(f"   CMS boundary MDMS deactivated: {mdms_deactivated}")
+        print(f"   Boundaries deleted: {delete_totals.get('boundaries_deleted', 0)}")
+        print(f"   Hierarchies deleted: {delete_totals.get('hierarchies_deleted', 0)}")
         print(f"{'='*60}")
 
         return {
             'deleted': delete_totals.get('boundaries_deleted', 0),
             'relationships_deleted': delete_totals.get('relationships_deleted', 0),
             'hierarchies_deleted': delete_totals.get('hierarchies_deleted', 0),
-            'generated_templates_deleted': delete_totals.get('generated_templates_deleted', 0),
-            'processed_templates_deleted': delete_totals.get('processed_templates_deleted', 0),
-            'boundary_localizations_deleted': delete_totals.get('boundary_localizations_deleted', 0),
-            'hierarchy_localizations_deleted': delete_totals.get('hierarchy_localizations_deleted', 0),
-            'mdms_deactivated': mdms_deactivated,
             'status': 'success'
         }
 
@@ -2344,11 +2241,8 @@ class CRSLoader:
                 f"{KUBECTL_API_URL}/boundaries/delete",
                 json={
                     'tenant_id': cleanup_plan['tenant'],
-                    'root_tenant': cleanup_plan['root_tenant'],
                     'hierarchy_types': cleanup_plan.get('hierarchy_types', []),
                     'boundary_codes': cleanup_plan.get('boundary_codes', []),
-                    'hierarchy_level_codes': cleanup_plan.get('hierarchy_level_codes', []),
-                    'mdms_unique_ids': cleanup_plan.get('mdms_unique_ids', []),
                     'env': env,
                 },
                 headers={'X-API-Key': KUBECTL_API_KEY},
