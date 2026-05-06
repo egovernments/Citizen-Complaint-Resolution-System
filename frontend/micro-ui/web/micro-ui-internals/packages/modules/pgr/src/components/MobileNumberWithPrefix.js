@@ -79,9 +79,10 @@ var MobileNumberWithPrefix = function (componentProps) {
     return true;
   };
 
-  // Sync prefix when MDMS data loads
+  // Sync prefix when MDMS data loads — only when no countryCode is already set
+  // (avoids overriding a user-chosen or session-restored prefix)
   useEffect(function () {
-    if (validationRules && validationRules.prefix) {
+    if (validationRules && validationRules.prefix && !formData.countryCode) {
       setSelectedPrefix(validationRules.prefix);
       if (setValue) setValue("countryCode", validationRules.prefix);
       if (onSelect) onSelect("countryCode", validationRules.prefix);
@@ -103,6 +104,9 @@ var MobileNumberWithPrefix = function (componentProps) {
   // Push value to form via all available channels
   var pushToForm = function (val, prefixOverride) {
     var prefixToUse = prefixOverride !== undefined ? prefixOverride : selectedPrefix;
+    if (config.onCountryCodeChange) {
+      config.onCountryCodeChange(prefixToUse);
+    }
     if (onSelect) {
       onSelect(fieldKey, val);
       onSelect("countryCode", prefixToUse);
