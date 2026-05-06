@@ -23,8 +23,8 @@ RUN useradd -m -s /bin/bash jovyan && \
 COPY --chown=jovyan:jovyan dataloader/ /home/jovyan/work/
 
 # Create templates directory (will be mounted)
-RUN mkdir -p /home/jovyan/work/templates && \
-    chown -R jovyan:jovyan /home/jovyan/work/templates
+RUN mkdir -p /home/jovyan/work && \
+    chown -R jovyan:jovyan /home/jovyan/work
 
 # Switch to jovyan user
 USER jovyan
