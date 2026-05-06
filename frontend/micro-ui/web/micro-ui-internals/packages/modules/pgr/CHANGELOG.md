@@ -4,6 +4,15 @@ All notable changes to this module will be documented in this file.
 # Changelog
 All notable changes to this module will be documented in this file.
 
+## [1.0.31] - 2026-05-06
+
+### Fixed
+
+- **Employee Create Complaint — Country Code Not Reflected in Payload (`createComplaintForm.js`, `MobileNumberWithPrefix.js`)**:
+  - Changing the country code dropdown in the mobile number field was not being captured in the `_create` API payload — it always sent `+91` regardless of selection.
+  - Root cause: `countryCode` was written via react-hook-form's `setValue` on an unregistered field name, so `watch()` and `getValues()` both returned `undefined` — the fallback `"+91"` always applied.
+  - Fix: `MobileNumberWithPrefix` now calls an `onCountryCodeChange` callback (injected via field config) that writes directly to a `countryCodeRef` in `createComplaintForm`. At submit time, `countryCodeRef.current` is used as the authoritative source, bypassing react-hook-form entirely.
+
 ## [1.0.30] - 2026-05-05
 
 ### Fixed
