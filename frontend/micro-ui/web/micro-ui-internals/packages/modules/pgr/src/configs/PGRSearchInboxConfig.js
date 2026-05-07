@@ -52,6 +52,7 @@ const PGRSearchInboxConfig = () => {
                     defaultValues: {
                         complaintNumber: "",
                         mobileNumber: "",
+                        countryCode: "",
                         range: null
 
                     },

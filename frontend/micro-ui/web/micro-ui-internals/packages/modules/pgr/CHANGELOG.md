@@ -1,6 +1,85 @@
 # Changelog
 All notable changes to this module will be documented in this file.
 
+# Changelog
+All notable changes to this module will be documented in this file.
+
+## [1.0.32] - 2026-05-07
+
+### Fixed
+
+- **PGR Inbox Search — Mobile Number Country Code Not Reflected in Payload (`PGRSearchInboxConfig.js`, `MobileNumberWithPrefix.js`, `UICustomizations.js`)**:
+  - Switching the country code dropdown in the inbox mobile number search always sent `+91` in the `countryCode` field regardless of selection.
+  - Root cause: `countryCode` was not declared in the search form's `defaultValues`, so React Hook Form never registered it as a tracked field. `setValue("countryCode", ...)` stored the value internally but `state.searchForm` never included it — UICustomizations always fell through to the `+91` hardcoded default.
+  - Fix:
+    - Added `countryCode: ""` to `defaultValues` in `PGRSearchInboxConfig.js` so RHF registers and tracks the field.
+    - `MobileNumberWithPrefix` now writes the selected prefix to `window.__PGR_INBOX_COUNTRY_CODE__` in both `pushToForm` and the MDMS-sync `useEffect`.
+    - `UICustomizations` reads `window.__PGR_INBOX_COUNTRY_CODE__` as a reliable fallback before the MDMS default / `+91`.
+
+## [1.0.31] - 2026-05-06
+
+### Fixed
+
+- **Employee Create Complaint — Country Code Not Reflected in Payload (`createComplaintForm.js`, `MobileNumberWithPrefix.js`)**:
+  - Changing the country code dropdown in the mobile number field was not being captured in the `_create` API payload — it always sent `+91` regardless of selection.
+  - Root cause: `countryCode` was written via react-hook-form's `setValue` on an unregistered field name, so `watch()` and `getValues()` both returned `undefined` — the fallback `"+91"` always applied.
+  - Fix: `MobileNumberWithPrefix` now calls an `onCountryCodeChange` callback (injected via field config) that writes directly to a `countryCodeRef` in `createComplaintForm`. At submit time, `countryCodeRef.current` is used as the authoritative source, bypassing react-hook-form entirely.
+
+## [1.0.30] - 2026-05-05
+
+### Fixed
+- **Employee Complaint Details — Workflow Actions (`PGRDetails.js`)**:
+  - Filtered out purely citizen-facing actions (e.g., `RATE`, `COMMENT`, `REOPEN`) from the "Take Action" dropdown for `SUPERUSER` accounts on the employee UI.
+  - Ensured the "Take Action" button is completely hidden instead of appearing disabled on terminal states (like `REJECTED` or `RESOLVED`) where all possible next actions are restricted to citizens.
+
+## [1.0.29] - 2026-04-30
+
+  ### Changed
+  - Upgraded `@egovernments/digit-ui-module-cms` to version `1.0.29`.
+  - Integrated Matomo analytics script for usage tracking.
+  - Dynamic boundary hierarchy support in complaint details (PGR) — structured index-mapped object replacing flat array, with backward compatibility.
+  - WhatsApp consent flow fixes: explicit auth-token propagation and language-preference preservation during post-login preference sync.
+  - Inbox search, filter, and pagination restored after code migration.
+  - Minor bug fixes and stability improvements.
+
+
+
+
+## [1.0.28] - 2026-04-27
+
+### Fixed
+
+- **Employee Complaint Details — Address Display (`PGRDetails.js`)**:
+  - Added combined address field to the employee complaint details page, mirroring the citizen-side pattern.
+  - Locality code is used directly as a translation key (no double `ADMIN_` prefix) for multi-root tenant deployments.
+  - Address parts (landmark, locality, tenant, pincode) now render line by line instead of comma-separated.
+
+- **PGR Inbox Search — Country Code (`UICustomizations.js`)**:
+  - Added `countryCode` alongside `mobileNumber` in the inbox search API criteria so mobile number lookups work correctly with country prefix validation.
+  - Falls back to `MDMSValidationPatterns.mobileNumberValidation.prefix` or `+91` when not set in the search form.
+
+## [1.0.27] - 2026-04-27 - Code Merge
+
+### Added / Fixed
+
+- **Dynamic Mobile Validation & Prefix Support**: 
+  - Integrated full MDMS-driven validation rules into the Employee PGR workflows natively using the new `useMobileValidation` hook.
+  - Implemented the custom `MobileNumberWithPrefix` component to enforce consistent, standard-compliant mobile input dropdowns.
+  - Added real-time automated mapping for mapping and extracting `"countryCode"` based on the globally loaded MDMS `"default": true` configurations directly into backend `citizen` request payloads for the `_create` APIs.
+
+## [1.0.26] - 2026-04-23
+
+### Added
+
+- **Inbox Toggle (`USE_INBOX_V1`)**: Employee inbox now supports runtime switching between two inbox implementations via the `USE_INBOX_V1` flag in `globalConfigs.js`.
+  - `PGRInbox.js`: Wraps `PGRInboxV1` (legacy) and `PGRSearchInboxV2` (InboxSearchComposer-based). Reads `window.globalConfigs.getConfig("USE_INBOX_V1")` — if `true`, renders V1; otherwise renders V2.
+  - `globalConfigs.js` (`local-setup/nginx/`): Added `USE_INBOX_V1: true` entry and corresponding `getConfig` case to enable V1 by default in local development.
+
+### Fixed
+
+- **`PGRInboxV1` default filter**: Changed initial `assignee` filter from `[{ code: uuid }]` (current user only) to `[]` (all complaints) so the inbox is not empty on first load.
+- **`DesktopInbox` locality lookup**: Added `getLocalityCodeForMultiTenant()` helper and `Digit.Utils.getMultiRootTenant()` check to correctly resolve locality codes in multi-root tenant deployments (matches DIGIT-Frontend reference implementation).
+
 ## [1.0.24] - 2026-04-10
 
 ### Updated

@@ -112,3 +112,11 @@ charts/*.tgz
 *.bak
 *.tmp
 *.orig
+
+# ─── Windows reserved device names ───────────────────────────────────────────
+nul
+NUL
+CON
+PRN
+AUX
+*.stackdump
