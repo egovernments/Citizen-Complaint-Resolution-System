@@ -61,6 +61,18 @@
         src: ../docker-compose.egov-digit.yaml
         dest: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
 
+    # ==================== OTEL Java Agent (fetched, not in git) ====================
+    # The 21 MB OTEL javaagent JAR is downloaded on the controller before the
+    # otel/ tree gets rsync'd to the target. Cached locally via the script's
+    # own existence check, so re-runs of the playbook are no-ops after the
+    # first download.
+    - name: Download OpenTelemetry Java Agent
+      shell: bash {{ playbook_dir }}/../otel/download-agent.sh
+      args:
+        creates: "{{ playbook_dir }}/../otel/opentelemetry-javaagent.jar"
+      delegate_to: localhost
+      become: false
+
     # ==================== Config Directories ====================
     - name: Synchronize config directories
       synchronize:

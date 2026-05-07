@@ -1,0 +1,3 @@
+
+# OTEL javaagent — fetched at deploy time by ansible (otel/download-agent.sh)
+otel/opentelemetry-javaagent.jar
