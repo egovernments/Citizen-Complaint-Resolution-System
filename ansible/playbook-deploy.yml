@@ -389,6 +389,139 @@
           Secrets path for this tenant: {{ secrets_path }}
       ignore_errors: yes
 
+    # ============================================================
+    # Infrastructure validation — runs before the heavy CI tests
+    # below. Cheap checks (curl-level), but every one of them is a
+    # required gate: if any fail, the deploy is marked failed and
+    # the heavy CI doesn't run.
+    # ============================================================
+    - name: "validate — every container in the compose is healthy"
+      ansible.builtin.shell: |
+        set -e
+        unhealthy=$(docker compose -f {{ digit_dir }}/docker-compose.egov-digit.yaml ps \
+                    --format '{{ "{{" }}.Name{{ "}}" }} {{ "{{" }}.Status{{ "}}" }}' \
+                    | grep -vE 'healthy|^$' \
+                    | grep -vE 'Exited.*0' || true)
+        if [ -n "$unhealthy" ]; then
+          echo "Unhealthy containers:"
+          echo "$unhealthy"
+          exit 1
+        fi
+      args:
+        chdir: "{{ digit_dir }}"
+      changed_when: false
+
+    - name: "validate — public UI returns 200 over HTTPS"
+      ansible.builtin.uri:
+        url: "https://{{ domain }}/digit-ui/"
+        status_code: [200]
+        timeout: 10
+        validate_certs: yes
+      retries: 3
+      delay: 5
+
+    - name: "validate — configurator returns 200 (when enabled)"
+      ansible.builtin.uri:
+        url: "https://{{ domain }}/configurator/"
+        status_code: [200]
+        timeout: 10
+        validate_certs: yes
+      when: nginx_features.configurator | default(false)
+
+    - name: "validate — gatus /status/ returns 200 (when enabled)"
+      ansible.builtin.uri:
+        url: "https://{{ domain }}/status/"
+        status_code: [200]
+        timeout: 10
+        validate_certs: yes
+      when: nginx_features.status | default(false)
+
+    - name: "validate — MCP HTTP transport responds 405 to HEAD (proves /mcp routed)"
+      ansible.builtin.uri:
+        url: "https://{{ domain }}/mcp"
+        method: HEAD
+        status_code: [405]
+        timeout: 10
+        validate_certs: yes
+      when: nginx_features.mcp | default(false)
+
+    - name: "validate — auth flow: ADMIN can mint a token"
+      ansible.builtin.uri:
+        url: "https://{{ domain }}/user/oauth/token"
+        method: POST
+        headers:
+          Authorization: "Basic ZWdvdi11c2VyLWNsaWVudDo="
+          Content-Type: "application/x-www-form-urlencoded"
+        body_format: form-urlencoded
+        body:
+          grant_type: password
+          username: "{{ bootstrap_user | default('ADMIN') }}"
+          password: "{{ bootstrap_password | default('eGov@123') }}"
+          scope: read
+          tenantId: "{{ bootstrap_tenant | default(state_tenant_id) }}"
+          userType: EMPLOYEE
+        status_code: [200]
+        timeout: 15
+      register: auth_probe
+      retries: 3
+      delay: 10
+      no_log: true
+
+    - name: "validate — auth probe returned an access_token"
+      ansible.builtin.assert:
+        that:
+          - auth_probe.json.access_token is defined
+          - auth_probe.json.access_token | length > 10
+        fail_msg: "Auth flow returned 200 but no access_token — egov-user may have wrong DB creds or schema migration didn't run."
+
+    - name: "validate — MDMS lookup: StateInfo returns at least one record"
+      ansible.builtin.uri:
+        url: "https://{{ domain }}/egov-mdms-service/v1/_search"
+        method: POST
+        headers:
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          RequestInfo:
+            apiId: "Rainmaker"
+            authToken: "{{ auth_probe.json.access_token }}"
+          MdmsCriteria:
+            tenantId: "{{ state_tenant_id }}"
+            moduleDetails:
+              - moduleName: "common-masters"
+                masterDetails:
+                  - name: "StateInfo"
+        status_code: [200]
+        timeout: 15
+      register: mdms_probe
+
+    - name: "validate — StateInfo response is non-empty"
+      ansible.builtin.assert:
+        that:
+          - mdms_probe.json.MdmsRes['common-masters'].StateInfo is defined
+          - mdms_probe.json.MdmsRes['common-masters'].StateInfo | length > 0
+        fail_msg: "MDMS returned 200 but no StateInfo record — persister may have missed the seed message or Kafka lag is high."
+
+    - name: "validate — OpenBao /v1/sys/health is unsealed + initialized"
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18200/v1/sys/health
+        status_code: [200]   # 200 = unsealed + initialized + active
+        timeout: 5
+
+    - name: "validate — summary"
+      ansible.builtin.debug:
+        msg:
+          - "===== INFRA VALIDATION RESULTS ====="
+          - "All containers:        HEALTHY"
+          - "Public UI:             200 OK"
+          - "Configurator:          {{ '200 OK' if nginx_features.configurator | default(false) else 'SKIPPED (disabled)' }}"
+          - "Gatus /status/:        {{ '200 OK' if nginx_features.status | default(false) else 'SKIPPED (disabled)' }}"
+          - "MCP /mcp:              {{ '200 OK' if nginx_features.mcp | default(false) else 'SKIPPED (disabled)' }}"
+          - "Auth flow:             access_token minted"
+          - "MDMS StateInfo:        non-empty"
+          - "OpenBao:               unsealed + initialized"
+          - "===================================="
+
     - name: Show MCP health status
       debug:
         msg: "DIGIT-MCP: {{ 'HEALTHY' if mcp_health.rc == 0 else 'UNHEALTHY (non-critical)' }}"
@@ -714,13 +847,20 @@
           - "Playwright E2E:          {{ 'PASS' if pw_rc|int == 0 else 'FAIL (exit ' + pw_rc|string + ')' }}"
           - "==========================="
 
-    - name: Fail if critical CI tests failed
+    - name: Fail if any CI test failed
       vars:
         xlsx_rc: "{{ xlsx_dataloader_result.rc | default(-1) }}"
+        dl_rc: "{{ dataloader_result.rc | default(-1) }}"
         pw_rc: "{{ playwright_result.rc | default(-1) }}"
       fail:
-        msg: "CI tests failed. XLSX DataLoader={{ xlsx_rc }}, Playwright={{ pw_rc }}"
-      when: xlsx_rc|int != 0 or pw_rc|int != 0
+        msg: |
+          CI tests failed. The infra came up but a functional flow is broken.
+            XLSX DataLoader (Bomet): exit {{ xlsx_rc }}
+            DataLoader regression:   exit {{ dl_rc }}
+            Playwright E2E:          exit {{ pw_rc }}
+          Re-run with `--start-at-task=...` to skip past the infra setup,
+          or check the per-test stdout above for the specific failure.
+      when: xlsx_rc|int != 0 or dl_rc|int != 0 or pw_rc|int != 0
 
   handlers:
     - name: Reload nginx
