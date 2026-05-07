@@ -392,6 +392,38 @@
               proxy_set_header Connection "upgrade";
             }
 
+            # Gatus health page — exposed at /status/. Gatus's SPA hardcodes
+            # absolute root paths (/css/, /js/, /api/v1/, webpack publicPath
+            # `s.p="/"`, Vue Router base `("/")`) so we sub_filter every layer
+            # to make the assets resolve through this same proxy.
+            location /status/ {
+              proxy_pass http://127.0.0.1:18889/;
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $scheme;
+
+              # sub_filter can't rewrite gzipped bodies — force identity.
+              proxy_set_header Accept-Encoding "";
+              sub_filter_once off;
+              sub_filter_types text/html application/javascript text/javascript application/json;
+              sub_filter 'src="/js/'                'src="/status/js/';
+              sub_filter 'href="/css/'              'href="/status/css/';
+              sub_filter 'href="/favicon'           'href="/status/favicon';
+              sub_filter 'href="/apple-touch-icon'  'href="/status/apple-touch-icon';
+              sub_filter 'href="/manifest.json'     'href="/status/manifest.json';
+              sub_filter '"/api/v1/'                '"/status/api/v1/';
+              sub_filter "'/api/v1/"                "'/status/api/v1/";
+              sub_filter 's.p="/"'                  's.p="/status/"';
+              sub_filter '("/"),routes:'            '("/status/"),routes:';
+              sub_filter "`/api/v1/"                "`/status/api/v1/";
+            }
+
+            # Backwards-compat redirect: /gatus/ → /status/.
+            location /gatus/ {
+              return 301 $scheme://$host/status/;
+            }
+
             # DIGIT MCP server (HTTP transport at /mcp; healthcheck at /mcp/healthz)
             # Streaming-friendly: long timeouts and buffering disabled for SSE.
             # WARNING: this exposes admin tools (mdms_create, user_create,

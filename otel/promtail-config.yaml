@@ -1,0 +1,47 @@
+# Promtail tails every Docker container's stdout/stderr off the host's
+# /var/lib/docker/containers/*/*-json.log files and ships to Loki. Adds Loki
+# labels so the existing dashboard can query both OTLP-emitted Java logs AND
+# raw container stdout (Node services, nginx fronts, MinIO, Postgres, etc.).
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+limits_config:
+  # Drop log entries older than 7 days (matches Loki's reject threshold) so
+  # the first sweep over historical /var/lib/docker/containers/*-json.log
+  # files doesn't hammer Loki with 400s.
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 15s
+    relabel_configs:
+      # `compose_service` is what compose stamps on every container it starts.
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        target_label: 'compose_service'
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: 'container'
+      - source_labels: ['__meta_docker_container_log_stream']
+        target_label: 'stream'
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_project']
+        target_label: 'compose_project'
+      # Mirror compose_service to service_name so the existing Loki dashboard's
+      # service-name selector picks up non-OTEL containers too. OTLP-emitted
+      # entries already carry their own `service_name` from OTEL resource
+      # attributes — both populate the same Loki label.
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        target_label: 'service_name'
+    pipeline_stages:
+      # Docker JSON log driver wraps each line in {"log":"...","stream":"...","time":"..."}
+      - docker: {}
