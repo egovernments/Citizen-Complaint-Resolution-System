@@ -659,6 +659,7 @@
         src: "/etc/nginx/sites-available/{{ domain }}"
         dest: "/etc/nginx/sites-enabled/{{ domain }}"
         state: link
+        force: yes   # convert pre-existing regular-file copies (older deploys) into a symlink
       notify: Reload nginx
 
     - name: "Host nginx — remove default site"
