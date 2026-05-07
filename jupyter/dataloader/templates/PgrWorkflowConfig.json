@@ -1,0 +1,373 @@
+{
+  "RequestInfo": {
+    "apiId": "Rainmaker",
+    "action": "",
+    "did": 1,
+    "key": "",
+    "msgId": "20170310130900|en_IN",
+    "requesterId": "",
+    "ts": 1513579888683,
+    "ver": ".01",
+    "userInfo": {
+      "id": 73,
+      "userName": null,
+      "name": null,
+      "type": "EMPLOYEE",
+      "mobileNumber": null,
+      "emailId": null,
+      "roles": [
+        {
+          "id": 2,
+          "name": "Customer Support Representative",
+          "code": null,
+          "tenantId": null
+        }
+      ],
+      "tenantId": null,
+      "uuid": "uuid"
+    }
+  },
+  "BusinessServices": [
+    {
+      "tenantId": "{tenantid}",
+      "businessService": "PGR",
+      "business": "pgr-services",
+      "businessServiceSla": 432000000,
+      "states": [
+        {
+          "tenantId": "{tenantid}",
+          "sla": null,
+          "state": null,
+          "applicationStatus": null,
+          "docUploadRequired": false,
+          "isStartState": true,
+          "isTerminateState": false,
+          "isStateUpdatable": true,
+          "actions": [
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "ce08d758-1788-4b56-b1ec-91db449d41a4",
+              "action": "APPLY",
+              "nextState": "PENDINGFORASSIGNMENT",
+              "roles": [
+                "CITIZEN",
+                "CSR"
+              ],
+              "active": true
+            }
+          ]
+        },
+        {
+          "tenantId": "{tenantid}",
+          "sla": null,
+          "state": "PENDINGFORASSIGNMENT",
+          "applicationStatus": "PENDINGFORASSIGNMENT",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": false,
+          "isStateUpdatable": false,
+          "actions": [
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "PENDINGFORASSIGNMENT",
+              "action": "ASSIGNEDBYAUTOESCALATION",
+              "nextState": "PENDINGATLME",
+              "roles": [
+                "AUTO_ESCALATE"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "PENDINGFORASSIGNMENT",
+              "action": "COMMENT",
+              "nextState": "PENDINGFORASSIGNMENT",
+              "roles": [
+                "CITIZEN"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "PENDINGFORASSIGNMENT",
+              "action": "ASSIGN",
+              "nextState": "PENDINGATLME",
+              "roles": [
+                "GRO",
+                "PGR_VIEWER"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "PENDINGFORASSIGNMENT",
+              "action": "REJECT",
+              "nextState": "REJECTED",
+              "roles": [
+                "GRO",
+                "PGR_VIEWER"
+              ],
+              "active": true
+            }
+          ]
+        },
+        {
+          "tenantId": "{tenantid}",
+          "sla": 300000,
+          "state": "PENDINGFORREASSIGNMENT",
+          "applicationStatus": "PENDINGFORREASSIGNMENT",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": false,
+          "isStateUpdatable": false,
+          "actions": [
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "PENDINGFORREASSIGNMENT",
+              "action": "COMMENT",
+              "nextState": "PENDINGFORREASSIGNMENT",
+              "roles": [
+                "CITIZEN"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "PENDINGFORREASSIGNMENT",
+              "action": "REJECT",
+              "nextState": "REJECTED",
+              "roles": [
+                "GRO",
+                "PGR_VIEWER"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "PENDINGFORREASSIGNMENT",
+              "action": "ASSIGN",
+              "nextState": "PENDINGATLME",
+              "roles": [
+                "GRO",
+                "PGR_VIEWER"
+              ],
+              "active": true
+            }
+          ]
+        },
+        {
+          "tenantId": "{tenantid}",
+          "sla": 300000,
+          "state": "PENDINGATLME",
+          "applicationStatus": "PENDINGATLME",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": false,
+          "isStateUpdatable": false,
+          "actions": [
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "PENDINGATLME",
+              "action": "REASSIGN",
+              "nextState": "PENDINGFORREASSIGNMENT",
+              "roles": [
+                "PGR_LME",
+                "PGR_VIEWER"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "PENDINGATLME",
+              "action": "COMMENT",
+              "nextState": "PENDINGATLME",
+              "roles": [
+                "CITIZEN"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "PENDINGATLME",
+              "action": "RESOLVE",
+              "nextState": "RESOLVED",
+              "roles": [
+                "PGR_LME",
+                "PGR_VIEWER"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "PENDINGATLME",
+              "action": "FORWARD",
+              "nextState": "04752227-e267-43e3-bfd8-6e48bdbfd97a",
+              "roles": [
+                "AUTO_ESCALATE"
+              ],
+              "active": true
+            }
+          ]
+        },
+        {
+          "tenantId": "{tenantid}",
+          "sla": 300000,
+          "state": "REJECTED",
+          "applicationStatus": "REJECTED",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": true,
+          "isStateUpdatable": false,
+          "actions": [
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "REJECTED",
+              "action": "COMMENT",
+              "nextState": "REJECTED",
+              "roles": [
+                "CITIZEN"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "REJECTED",
+              "action": "REOPEN",
+              "nextState": "PENDINGFORASSIGNMENT",
+              "roles": [
+                "CFC",
+                "CITIZEN",
+                "CSR",
+                "PGR_VIEWER"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "REJECTED",
+              "action": "RATE",
+              "nextState": "CLOSEDAFTERREJECTION",
+              "roles": [
+                "CFC",
+                "CITIZEN"
+              ],
+              "active": true
+            }
+          ]
+        },
+        {
+          "tenantId": "{tenantid}",
+          "sla": 300000,
+          "state": "RESOLVED",
+          "applicationStatus": "RESOLVED",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": true,
+          "isStateUpdatable": false,
+          "actions": [
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "RESOLVED",
+              "action": "RATE",
+              "nextState": "CLOSEDAFTERRESOLUTION",
+              "roles": [
+                "CFC",
+                "CITIZEN"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "RESOLVED",
+              "action": "REOPEN",
+              "nextState": "PENDINGFORASSIGNMENT",
+              "roles": [
+                "CFC",
+                "CITIZEN",
+                "CSR",
+                "PGR_VIEWER"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "RESOLVED",
+              "action": "COMMENT",
+              "nextState": "RESOLVED",
+              "roles": [
+                "CITIZEN"
+              ],
+              "active": true
+            }
+          ]
+        },
+        {
+          "tenantId": "{tenantid}",
+          "sla": null,
+          "state": "CLOSEDAFTERREJECTION",
+          "applicationStatus": "CLOSEDAFTERREJECTION",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": true,
+          "isStateUpdatable": false,
+          "actions": null
+        },
+        {
+          "tenantId": "{tenantid}",
+          "sla": null,
+          "state": "CLOSEDAFTERRESOLUTION",
+          "applicationStatus": "CLOSEDAFTERRESOLUTION",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": true,
+          "isStateUpdatable": false,
+          "actions": null
+        },
+        {
+          "tenantId": "{tenantid}",
+          "sla": 300000,
+          "state": "PENDINGATSUPERVISOR",
+          "applicationStatus": "PENDINGATSUPERVISOR",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": false,
+          "isStateUpdatable": false,
+          "actions": [
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "04752227-e267-43e3-bfd8-6e48bdbfd97a",
+              "action": "RESOLVEBYSUPERVISOR",
+              "nextState": "e80e3dd6-8336-4586-b84a-c191dcd80c98",
+              "roles": [
+                "SUPERVISOR"
+              ],
+              "active": true
+            }
+          ]
+        },
+        {
+          "tenantId": "{tenantid}",
+          "sla": null,
+          "state": "RESOLVEDBYSUPERVISOR",
+          "applicationStatus": "RESOLVEDBYSUPERVISOR",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": true,
+          "isStateUpdatable": false,
+          "actions": null
+        },
+        {
+          "tenantId": "{tenantid}",
+          "sla": null,
+          "state": "CANCELLED",
+          "applicationStatus": "CANCELLED",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": true,
+          "isStateUpdatable": false,
+          "actions": null
+        }
+      ]
+    }
+  ]
+}
