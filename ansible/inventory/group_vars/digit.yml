@@ -1,0 +1,79 @@
+# DIGIT-stack defaults — every tenant inherits these unless its host_vars
+# overrides a specific key. Keep this list lean; only put things here that
+# (a) are shared across at least two tenants today, or (b) have a sensible
+# default that new tenants can keep without thinking.
+#
+# Per-tenant secrets (DB passwords, Keycloak admin, OAuth client secrets,
+# registry creds) DO NOT belong in this file. They live in OpenBao and
+# are referenced via `secrets_path:` in host_vars.
+
+# ──────────────────────────────────────────────────────────────────────
+# globalConfigs.js — values that the digit-ui SPA reads at boot
+# ──────────────────────────────────────────────────────────────────────
+
+# Default state-tenant id. Every Kenya deployment sits under root tenant
+# `ke`; tenants override `state_tenant_id` to a city slug (`ke.nairobi`)
+# when the citizen-side UI should pin to a single city.
+state_tenant_id: ke
+
+context_path: digit-ui
+gmaps_api_key: ""
+fin_env: dev
+central_instance_enabled: false
+digit_home_url: "https://www.digit.org/"
+asset_s3_bucket: "pg-egov-assets"
+config_module_name: "commonMDMSConfig"
+locale_region: "IN"
+locale_default: "en"
+mdms_context: "mdms-v2"
+hrms_context: "egov-hrms"
+invalid_employee_roles: ["SYSTEM"]
+auth_provider: "digit"
+
+# PGR boundary level taxonomy. Kenya uses County → Sub-County → Ward.
+pgr_boundary_highest_level: "County"
+pgr_boundary_lowest_level: "Ward"
+boundary_type: "Ward"
+
+# Mobile-number validation. Kenya: 9 digits starting with 1 or 7, +254 prefix.
+core_mobile_configs:
+  mobilePrefix: "+254"
+  mobileNumberPattern: "^[17][0-9]{8}$"
+  mobileNumberLength: 9
+  mobileNumberAllowedStartingCharacters: ["1", "7"]
+  mobileNumberErrorMessage: "CORE_COMMON_MOBILE_ERROR"
+
+# Footer logos — generic eGov defaults. Tenants that ship their own brand
+# assets at /var/www/brand/ override these in host_vars.
+footer_logo_url: "https://s3.ap-south-1.amazonaws.com/egov-uat-assets/digit-footer.png"
+footer_bw_logo_url: "https://s3.ap-south-1.amazonaws.com/egov-uat-assets/digit-footer-bw.png"
+
+# Tenant-restriction lists. Empty = no filtering (any tenant in MDMS can
+# log in / use any module). Override in host_vars when a deployment
+# wants to surface only its own tenant or hide modules.
+login_tenant_allowlist: []
+employee_module_denylist: []
+
+# ──────────────────────────────────────────────────────────────────────
+# nginx vhost — feature flags + upstream ports
+# ──────────────────────────────────────────────────────────────────────
+# Each toggle controls whether a `location` block is rendered. New
+# tenants typically enable everything; legacy tenants flip features off
+# until their server has the prerequisite assets/services.
+
+nginx_features:
+  brand_assets: false       # /brand/ alias — requires /var/www/brand on host
+  configurator: true        # /configurator + /configurator/assets
+  configurator_caching: false  # adds /configurator/assets/ cache headers (Nairobi-style)
+  status: true              # /status/ Gatus board (sub_filter rewrites)
+  api_pgr: true             # /api/pgr/ proxied to MCP for the dashboard
+  mcp: false                # /mcp HTTP transport — see CLAUDE.md security note
+  esbuild_root: true        # all unmatched / → esbuild on 18080 (vs. Kong on 18000)
+
+# Upstreams (host-side ports). The container ports are fixed in compose;
+# these are how the host nginx reaches them.
+upstream_kong_port: 18000
+upstream_grafana_port: 13000
+upstream_gatus_port: 18889
+upstream_mcp_port: 13101
+upstream_esbuild_port: 18080

@@ -1,0 +1,42 @@
+# Nairobi City County Government — naipepea.digit.org
+# VPC IP: 10.0.0.5 — SSH alias `egov-nairobi`
+
+ansible_host: 10.0.0.5
+domain: naipepea.digit.org
+
+# Tenancy
+state_tenant_id: ke.nairobi      # citizen UI pins to this single city
+boot_tenant: ke.nairobi
+tenant_id: ke.nairobi
+
+# Map centre — Nairobi CBD
+map_center:
+  lat: -1.2921
+  lng: 36.8219
+
+# Tenant restrictions
+login_tenant_allowlist:
+  - ke.nairobi
+employee_module_denylist:
+  - IM
+
+# Brand assets are mirrored locally to /var/www/brand/ so the SPA pulls
+# them from the same origin (avoids CORS on theme.config images).
+footer_logo_url: "https://naipepea.digit.org/brand/digit-footer.png"
+footer_bw_logo_url: "https://naipepea.digit.org/brand/digit-footer-bw.png"
+
+# nginx features — Nairobi is the canonical "everything on" deployment.
+nginx_features:
+  brand_assets: true
+  configurator: true
+  configurator_caching: true
+  status: true
+  api_pgr: true
+  mcp: true
+  esbuild_root: true
+
+# Pointer to the OpenBao path holding this tenant's secrets (DB password,
+# Keycloak admin, OAuth client secrets, registry creds, …). The path
+# itself is non-sensitive; what's behind it is. Once OpenBao is online,
+# the playbook does `vault_kv2_get(secrets_path)` to pull values.
+secrets_path: kv/digit/nairobi

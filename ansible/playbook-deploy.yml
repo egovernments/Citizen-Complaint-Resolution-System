@@ -1,9 +1,37 @@
 ---
 - name: Deploy DIGIT stack from public registry
-  hosts: targets
+  # `digit` is the group defined in inventory/hosts.yml. Per-tenant config
+  # comes from inventory/host_vars/<host>.yml; defaults from group_vars/.
+  # Run via: ./deploy.sh <tenant>  (NOT `ansible-playbook` directly).
+  hosts: digit
   become: true
-  vars:
-    digit_dir: /opt/digit
+
+  pre_tasks:
+    # The host-side `digit-ui` Docker container binds port 18080. The
+    # esbuild HMR dev process (tmux session `esbuild` at /opt/digit-ui-esbuild)
+    # binds the same port. If both try to come up, one fails — and the
+    # symptom on first deploy is a baffling "port already allocated" from
+    # docker that's actually about a tmux session.
+    - name: "Detect running esbuild HMR session"
+      ansible.builtin.command: tmux has-session -t esbuild
+      register: esbuild_session
+      failed_when: false
+      changed_when: false
+      check_mode: false
+
+    - name: "Fail fast if esbuild HMR is running on the target"
+      ansible.builtin.fail:
+        msg: |
+          esbuild HMR is currently running on {{ inventory_hostname }}
+          (tmux session 'esbuild'). Ansible will start the digit-ui
+          container which also binds port 18080 and would collide.
+
+          Choose one:
+            (a) keep HMR — abort this deploy.
+            (b) switch to Docker mode — run:
+                  ssh {{ ansible_user }}@{{ ansible_host }} "tmux kill-session -t esbuild"
+                then re-run ./deploy.sh {{ inventory_hostname }}
+      when: esbuild_session.rc == 0
 
   tasks:
     # ==================== Docker Installation ====================
@@ -101,19 +129,20 @@
     # links match the tenant's actual domain). Compose auto-loads .env from the
     # working directory, so no extra wiring is needed in the compose file.
     - name: Write per-tenant compose .env
-      copy:
+      template:
+        src: templates/digit.env.j2
         dest: "{{ digit_dir }}/.env"
-        content: |
-          GF_SERVER_DOMAIN={{ domain }}
-          GF_SERVER_ROOT_URL=https://{{ domain }}/grafana/
         mode: '0644'
 
-    # ==================== Configure digit-ui for native auth ====================
-    - name: Switch digit-ui authProvider from keycloak to digit
-      replace:
-        path: "{{ digit_dir }}/nginx/globalConfigs.js"
-        regexp: 'var authProvider = "keycloak"'
-        replace: 'var authProvider = "digit"'
+    # ==================== digit-ui globalConfigs.js (per-tenant) ====================
+    # Boot-time config for the digit-ui SPA. Every value comes from the
+    # inventory (host_vars overrides group_vars). Add new keys to the
+    # template + inventory; never edit the rendered file on the server.
+    - name: Render digit-ui globalConfigs.js
+      template:
+        src: templates/globalConfigs.js.j2
+        dest: "{{ digit_dir }}/nginx/globalConfigs.js"
+        mode: '0644'
 
     - name: Add API proxy to digit-ui nginx config
       copy:
@@ -371,101 +400,10 @@
         state: present
 
     - name: Deploy configurator nginx site config
-      copy:
-        content: |
-          server {
-            listen 80;
-            server_name {{ domain }};
-
-            # Configurator SPA
-            location /configurator {
-              alias /var/www/configurator/;
-              try_files $uri $uri/ /configurator/index.html;
-            }
-
-            # DIGIT UI (proxied to Docker)
-            location /digit-ui {
-              proxy_pass http://127.0.0.1:18080;
-              proxy_set_header Host $host;
-              proxy_set_header X-Real-IP $remote_addr;
-              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-              proxy_set_header X-Forwarded-Proto $scheme;
-            }
-
-            # Grafana dashboard
-            location /grafana/ {
-              proxy_pass http://127.0.0.1:13000;
-              proxy_set_header Host $host;
-              proxy_set_header X-Real-IP $remote_addr;
-              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-              proxy_set_header X-Forwarded-Proto $scheme;
-              proxy_http_version 1.1;
-              proxy_set_header Upgrade $http_upgrade;
-              proxy_set_header Connection "upgrade";
-            }
-
-            # Gatus health page — exposed at /status/. Gatus's SPA hardcodes
-            # absolute root paths (/css/, /js/, /api/v1/, webpack publicPath
-            # `s.p="/"`, Vue Router base `("/")`) so we sub_filter every layer
-            # to make the assets resolve through this same proxy.
-            location /status/ {
-              proxy_pass http://127.0.0.1:18889/;
-              proxy_set_header Host $host;
-              proxy_set_header X-Real-IP $remote_addr;
-              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-              proxy_set_header X-Forwarded-Proto $scheme;
-
-              # sub_filter can't rewrite gzipped bodies — force identity.
-              proxy_set_header Accept-Encoding "";
-              sub_filter_once off;
-              sub_filter_types text/html application/javascript text/javascript application/json;
-              sub_filter 'src="/js/'                'src="/status/js/';
-              sub_filter 'href="/css/'              'href="/status/css/';
-              sub_filter 'href="/favicon'           'href="/status/favicon';
-              sub_filter 'href="/apple-touch-icon'  'href="/status/apple-touch-icon';
-              sub_filter 'href="/manifest.json'     'href="/status/manifest.json';
-              sub_filter '"/api/v1/'                '"/status/api/v1/';
-              sub_filter "'/api/v1/"                "'/status/api/v1/";
-              sub_filter 's.p="/"'                  's.p="/status/"';
-              sub_filter '("/"),routes:'            '("/status/"),routes:';
-              sub_filter "`/api/v1/"                "`/status/api/v1/";
-            }
-
-            # Backwards-compat redirect: /gatus/ → /status/.
-            location /gatus/ {
-              return 301 $scheme://$host/status/;
-            }
-
-            # DIGIT MCP server (HTTP transport at /mcp; healthcheck at /mcp/healthz)
-            # Streaming-friendly: long timeouts and buffering disabled for SSE.
-            # WARNING: this exposes admin tools (mdms_create, user_create,
-            # employee_create, tenant_bootstrap, pgr_update, …) without auth.
-            # Only safe for test deployments.
-            location /mcp {
-              proxy_pass http://127.0.0.1:13101;
-              proxy_set_header Host $host;
-              proxy_set_header X-Real-IP $remote_addr;
-              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-              proxy_set_header X-Forwarded-Proto $scheme;
-              proxy_http_version 1.1;
-              proxy_set_header Connection "";
-              proxy_buffering off;
-              proxy_read_timeout 24h;
-              proxy_send_timeout 24h;
-            }
-
-            # Kong API gateway
-            location / {
-              proxy_pass http://127.0.0.1:18000;
-              proxy_set_header Host $host;
-              proxy_set_header X-Real-IP $remote_addr;
-              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-              proxy_set_header X-Forwarded-Proto $scheme;
-              proxy_read_timeout 120s;
-              proxy_buffering off;
-            }
-          }
+      template:
+        src: templates/nginx-site.conf.j2
         dest: "/etc/nginx/sites-available/{{ domain }}"
+        mode: '0644'
       notify: Reload nginx
 
     - name: Enable configurator nginx site

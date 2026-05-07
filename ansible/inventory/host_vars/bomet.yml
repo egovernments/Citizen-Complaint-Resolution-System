@@ -1,0 +1,46 @@
+# Bomet County Government — bometfeedbackhub.digit.org
+# VPC IP: 10.0.0.2 — SSH alias `egov-bomet`
+
+ansible_host: 10.0.0.2
+domain: bometfeedbackhub.digit.org
+
+# Tenancy
+# Bomet's globalConfigs.js currently has stateTenantId="ke" (root, not
+# the city) — citizens see all KE tenants in the picker, not just Bomet.
+# That's the live state on naipepea.digit.org's sibling deployment; we
+# preserve it in step 1 (value-preserving extraction) and revisit in a
+# follow-up if Bomet wants the same single-county lock-in Nairobi has.
+state_tenant_id: ke
+boot_tenant: ke.bomet
+tenant_id: ke.bomet
+
+# Map centre — Bomet town
+map_center:
+  lat: -0.7817
+  lng: 35.3428
+
+# No tenant restrictions today — Bomet's UI shows the full Kenya tenant
+# list and doesn't denylist any module. (Nairobi denylists "IM"; Bomet
+# may want the same once IM is confirmed unsupported in their deploy.)
+login_tenant_allowlist: []
+employee_module_denylist: []
+
+# Bomet still uses the generic eGov S3 footer placeholders (no local
+# /var/www/brand/). When/if Bomet ships its own brand assets, set
+# `nginx_features.brand_assets: true` and override these URLs.
+# (Defaults inherited from group_vars/digit.yml.)
+
+# nginx features — Bomet is currently a subset of Nairobi's setup.
+# Step 1 preserves the live state; flipping these to true in a follow-up
+# PR will upgrade Bomet to match Nairobi (after seeding the prerequisite
+# /var/www/brand assets and confirming MCP exposure is desired).
+nginx_features:
+  brand_assets: false
+  configurator: true
+  configurator_caching: false
+  status: true
+  api_pgr: true
+  mcp: false
+  esbuild_root: true
+
+secrets_path: kv/digit/bomet
