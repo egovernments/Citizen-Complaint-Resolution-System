@@ -4,6 +4,18 @@ All notable changes to this module will be documented in this file.
 # Changelog
 All notable changes to this module will be documented in this file.
 
+## [1.0.32] - 2026-05-07
+
+### Fixed
+
+- **PGR Inbox Search — Mobile Number Country Code Not Reflected in Payload (`PGRSearchInboxConfig.js`, `MobileNumberWithPrefix.js`, `UICustomizations.js`)**:
+  - Switching the country code dropdown in the inbox mobile number search always sent `+91` in the `countryCode` field regardless of selection.
+  - Root cause: `countryCode` was not declared in the search form's `defaultValues`, so React Hook Form never registered it as a tracked field. `setValue("countryCode", ...)` stored the value internally but `state.searchForm` never included it — UICustomizations always fell through to the `+91` hardcoded default.
+  - Fix:
+    - Added `countryCode: ""` to `defaultValues` in `PGRSearchInboxConfig.js` so RHF registers and tracks the field.
+    - `MobileNumberWithPrefix` now writes the selected prefix to `window.__PGR_INBOX_COUNTRY_CODE__` in both `pushToForm` and the MDMS-sync `useEffect`.
+    - `UICustomizations` reads `window.__PGR_INBOX_COUNTRY_CODE__` as a reliable fallback before the MDMS default / `+91`.
+
 ## [1.0.31] - 2026-05-06
 
 ### Fixed
