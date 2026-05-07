@@ -435,24 +435,20 @@
         timeout: 120
       when: digit_ui_mode == "hmr"
 
-    - name: "digit-ui — verify /digit-ui/ serves 200 (mode-agnostic, hits via host nginx after reload)"
-      ansible.builtin.shell: |
-        # Static mode: hits host nginx /digit-ui/ alias.
-        # HMR mode: hits esbuild on :18080 directly (host nginx may
-        # not be reloaded yet at this point in the playbook).
-        if [ "{{ digit_ui_mode }}" = "static" ]; then
-          # Reload nginx now so the new /digit-ui/ alias is live for
-          # the validation block below.
-          systemctl reload nginx 2>/dev/null || true
-          curl -sf https://{{ domain }}/digit-ui/ -o /dev/null
-        else
-          curl -sf http://127.0.0.1:18080/digit-ui/ -o /dev/null
-        fi
+    # In HMR mode, esbuild is up on :18080 — probe it directly here. In
+    # static mode the host nginx that aliases /digit-ui/ to
+    # /opt/digit-ui-esbuild/build/ hasn't been re-templated yet (that
+    # happens at the "Deploy configurator nginx site config" task far
+    # below), so the /digit-ui/ probe lives in the validation block at
+    # the end of the play, AFTER nginx has been reloaded.
+    - name: "digit-ui mode=hmr — verify /digit-ui/ serves 200 via esbuild"
+      ansible.builtin.shell: curl -sf http://127.0.0.1:18080/digit-ui/ -o /dev/null
       register: ui_early_check
       retries: 30
       delay: 10
       until: ui_early_check.rc == 0
       changed_when: false
+      when: digit_ui_mode == "hmr"
 
     # ==================== Wait for MCP Server ====================
     - name: Wait for digit-mcp health (up to 2 min)
@@ -628,6 +624,51 @@
 
           Secrets path for this tenant: {{ secrets_path }}
       ignore_errors: yes
+
+    # ============================================================
+    # Host nginx — must be in place + reloaded BEFORE the validation
+    # block so the public-URL probes hit the freshly-rendered template
+    # (with the /digit-ui/ alias for static mode, /mcp / /status / etc.
+    # for whichever features the host_vars enables).
+    # ============================================================
+    - name: "Configurator SPA — ensure /var/www/configurator dir"
+      ansible.builtin.file:
+        path: /var/www/configurator
+        state: directory
+
+    - name: "Configurator SPA — sync build"
+      ansible.builtin.synchronize:
+        src: "{{ configurator_build | default('/var/www/crs-mockup/') }}"
+        dest: /var/www/configurator/
+      ignore_errors: yes   # missing source dir is non-fatal — configurator may be served elsewhere
+
+    - name: "Host nginx — install if missing"
+      ansible.builtin.apt:
+        name: nginx
+        state: present
+
+    - name: "Host nginx — render site config from template"
+      ansible.builtin.template:
+        src: templates/nginx-site.conf.j2
+        dest: "/etc/nginx/sites-available/{{ domain }}"
+        mode: '0644'
+      notify: Reload nginx
+
+    - name: "Host nginx — enable site"
+      ansible.builtin.file:
+        src: "/etc/nginx/sites-available/{{ domain }}"
+        dest: "/etc/nginx/sites-enabled/{{ domain }}"
+        state: link
+      notify: Reload nginx
+
+    - name: "Host nginx — remove default site"
+      ansible.builtin.file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify: Reload nginx
+
+    - name: "Host nginx — flush handlers so reload happens before validation"
+      ansible.builtin.meta: flush_handlers
 
     # ============================================================
     # Infrastructure validation — runs before the heavy CI tests
@@ -832,87 +873,13 @@
           }
         dest: /root/.mcp.json
 
-    # ==================== Configurator SPA ====================
-    - name: Create configurator web directory
-      file:
-        path: /var/www/configurator
-        state: directory
-
-    - name: Synchronize configurator build
-      synchronize:
-        src: "{{ configurator_build | default('/var/www/crs-mockup/') }}"
-        dest: /var/www/configurator/
-
-    - name: Add configurator nginx config to digit-ui
-      copy:
-        content: |
-          resolver 127.0.0.11 valid=10s;
-
-          server
-          {
-            listen 80;
-            underscores_in_headers on;
-
-            sub_filter_once on;
-            sub_filter_types text/html;
-
-            location /digit-ui
-            {
-              root /var/web;
-              index index.html index.htm;
-              try_files $uri $uri/ /digit-ui/index.html;
-
-              sub_filter '</head>' '<script src="/digit-ui/globalConfigs.js"></script></head>';
-            }
-
-            location = /digit-ui/globalConfigs.js {
-              alias /var/web/digit-ui/globalConfigs.js;
-              default_type application/javascript;
-            }
-
-            location = /digit-ui/silent-check-sso.html {
-              alias /var/web/digit-ui/silent-check-sso.html;
-              default_type text/html;
-            }
-
-            # Proxy API calls to Kong gateway
-            location / {
-              set $kong http://kong-gateway:8000;
-              proxy_pass $kong;
-              proxy_set_header Host $host;
-              proxy_set_header X-Real-IP $remote_addr;
-              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-              proxy_set_header X-Forwarded-Proto $scheme;
-              proxy_read_timeout 120s;
-              proxy_buffering off;
-            }
-          }
-        dest: "{{ digit_dir }}/nginx/digit-ui.conf"
-
-    - name: Install nginx on host (for configurator + SSL termination)
-      apt:
-        name: nginx
-        state: present
-
-    - name: Deploy configurator nginx site config
-      template:
-        src: templates/nginx-site.conf.j2
-        dest: "/etc/nginx/sites-available/{{ domain }}"
-        mode: '0644'
-      notify: Reload nginx
-
-    - name: Enable configurator nginx site
-      file:
-        src: "/etc/nginx/sites-available/{{ domain }}"
-        dest: "/etc/nginx/sites-enabled/{{ domain }}"
-        state: link
-      notify: Reload nginx
-
-    - name: Remove default nginx site
-      file:
-        path: /etc/nginx/sites-enabled/default
-        state: absent
-      notify: Reload nginx
+    # ==================================================================
+    # (Configurator SPA + host nginx setup moved earlier in the play —
+    # see "Host nginx — render site config from template" before the
+    # validation block. Validation requires nginx to already be live
+    # with the new template, so the install/render/reload happens
+    # there, not here.)
+    # ==================================================================
 
     # ==================================================================
     # CI TESTS — Stage A: XLSX-Driven DataLoader E2E
