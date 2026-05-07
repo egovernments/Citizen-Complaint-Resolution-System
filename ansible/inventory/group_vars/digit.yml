@@ -23,6 +23,17 @@ state_tenant_id: ke
 # requests, killing the off-mode runner first to free port 18080.
 digit_ui_mode: static
 
+# Optional service profiles. Default to lean (no search stack). Tenants
+# that actively use Elasticsearch + egov-indexer + inbox-v2 opt in via
+# host_vars. `digit-inbox` is broken on naipepea and bomet right now
+# (Exited 1) so flipping the flag off there will simply stop trying.
+#
+#   search — elasticsearch + egov-indexer + inbox-v2 (heavy; ~2 GB RAM)
+#
+# Compose profiles work via `docker compose --profile search up -d`. The
+# playbook resolves these flags into the right --profile flags.
+enable_search_stack: false
+
 context_path: digit-ui
 gmaps_api_key: ""
 fin_env: dev

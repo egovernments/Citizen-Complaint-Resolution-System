@@ -256,15 +256,44 @@
       when: mcp_image_check.stdout != ""
 
     # ==================== Pull & Start ====================
+    # COMPOSE_PROFILES drives which optional service groups are included.
+    # Today: `search` covers elasticsearch + egov-indexer + inbox-v2.
+    # Default off; tenants opt in via `enable_search_stack: true`.
+    - name: "Compute compose profiles for this tenant"
+      ansible.builtin.set_fact:
+        compose_profiles: "{{ ([] + (['search'] if enable_search_stack | default(false) else [])) | join(',') }}"
+
+    - name: "Show active compose profiles"
+      ansible.builtin.debug:
+        msg: "Active compose profiles for {{ inventory_hostname }}: {{ compose_profiles or '(none — lean stack)' }}"
+
     - name: Pull all images from VPC registry
-      shell: docker compose -f docker-compose.egov-digit.yaml pull --ignore-pull-failures
+      shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose -f docker-compose.egov-digit.yaml pull --ignore-pull-failures
       args:
         chdir: "{{ digit_dir }}"
 
     - name: Start DIGIT stack
-      shell: docker compose -f docker-compose.egov-digit.yaml up -d
+      shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose -f docker-compose.egov-digit.yaml up -d
       args:
         chdir: "{{ digit_dir }}"
+
+    # If a tenant just flipped enable_search_stack: true → false, the
+    # previously-running search containers (digit-elasticsearch,
+    # egov-indexer, digit-inbox) won't be stopped by the up -d above
+    # because compose only manages services in the active profiles.
+    # Sweep them explicitly when search is OFF.
+    - name: "Sweep search-stack containers when profile is OFF"
+      ansible.builtin.shell: |
+        for c in digit-elasticsearch egov-indexer digit-inbox; do
+          if docker ps --filter name=^${c}$ --format '{{ "{{" }}.Names{{ "}}" }}' | grep -q "^${c}$"; then
+            docker stop "$c" >/dev/null
+            docker rm "$c" >/dev/null
+            echo "swept $c"
+          fi
+        done
+      register: search_sweep
+      changed_when: search_sweep.stdout | length > 0
+      when: not (enable_search_stack | default(false))
 
     # ==================== Health Check ====================
     - name: Wait for Kong gateway to be healthy (up to 10 min)
@@ -565,7 +594,7 @@
       no_log: true
 
     - name: "Recreate services with the new env (no-op if secrets unchanged)"
-      ansible.builtin.shell: docker compose -f docker-compose.egov-digit.yaml up -d
+      ansible.builtin.shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose -f docker-compose.egov-digit.yaml up -d
       args:
         chdir: "{{ digit_dir }}"
       register: post_secrets_recreate

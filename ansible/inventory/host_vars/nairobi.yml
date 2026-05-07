@@ -35,6 +35,13 @@ footer_bw_logo_url: "https://naipepea.digit.org/brand/digit-footer-bw.png"
 # Nairobi runs HMR for active dev; Bomet runs static for stability.
 digit_ui_mode: hmr
 
+# Nairobi runs the search stack today (egov-indexer + elasticsearch are
+# healthy; digit-inbox itself has been Exited(1) for weeks but the
+# indexer + ES are live and may be queried by other services). Keep it
+# enabled to preserve the current state. Flip to false on the next
+# deploy if you want to drop the broken inbox + lighten the box.
+enable_search_stack: true
+
 # nginx features — Nairobi is the canonical "everything on" deployment.
 nginx_features:
   brand_assets: true

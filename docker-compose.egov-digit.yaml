@@ -235,6 +235,7 @@ services:
 
   elasticsearch:
     image: registry.preview.egov.theflywheel.in/docker.elastic.co/elasticsearch/elasticsearch:8.10.3
+    profiles: ["search"]
     container_name: digit-elasticsearch
     environment:
     - discovery.type=single-node
@@ -259,6 +260,7 @@ services:
   # ===========================================================================
   egov-indexer:
     image: registry.preview.egov.theflywheel.in/egovio/egov-indexer:v2.9.2-4a60f20
+    profiles: ["search"]
     container_name: egov-indexer
     depends_on:
       pgbouncer:
@@ -325,6 +327,7 @@ services:
   # ===========================================================================
   inbox:
     image: registry.preview.egov.theflywheel.in/egovio/inbox:state-tenant-fix
+    profiles: ["search"]
     container_name: digit-inbox
     depends_on:
       pgbouncer:

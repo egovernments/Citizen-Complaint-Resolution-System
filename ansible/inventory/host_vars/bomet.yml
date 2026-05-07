@@ -36,6 +36,12 @@ employee_module_denylist: []
 # `node esbuild.build.js` at deploy time to produce the bundle.
 digit_ui_mode: static
 
+# Bomet runs egov-indexer + elasticsearch today (both healthy);
+# digit-inbox is Exited(1). Keep search-stack on for now to preserve
+# state; flip to false in a follow-up to drop the broken inbox + free
+# ~2 GB RAM.
+enable_search_stack: true
+
 # nginx features — Bomet is currently a subset of Nairobi's setup.
 # Step 1 preserves the live state; flipping these to true in a follow-up
 # PR will upgrade Bomet to match Nairobi (after seeding the prerequisite
