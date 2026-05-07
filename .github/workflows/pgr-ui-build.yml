@@ -1,5 +1,5 @@
 name: Build Pipeline
-run-name: Build ${{ github.event.inputs.pipeline_name }}
+run-name: Build ${{ github.event.inputs.pipeline_name || 'digit-ui' }}
 
 on:
   workflow_dispatch:
@@ -10,6 +10,11 @@ on:
         type: choice
         options:
           - digit-ui
+  push:
+    branches:
+      - dev
+    paths:
+      - 'frontend/**'
 
 env:
   DOCKER_USERNAME: ${{ vars.DOCKER_USERNAME }}
@@ -17,7 +22,7 @@ env:
 
 jobs:
   resolve-config:
-    name: Resolve ${{ github.event.inputs.pipeline_name }} config
+    name: Resolve ${{ github.event.inputs.pipeline_name || 'digit-ui' }} config
     runs-on: ubuntu-latest
     outputs:
       work_dir:    ${{ steps.setenv.outputs.work_dir }}
@@ -38,7 +43,7 @@ jobs:
       - name: Resolve env from build-config.yml
         id: setenv
         run: |
-          PIPELINE_NAME="${{ github.event.inputs.pipeline_name }}"
+          PIPELINE_NAME="${{ github.event.inputs.pipeline_name || 'digit-ui' }}"
           DEFAULT_DOCKERFILE="Dockerfile"
           echo "### Pipeline Name - $PIPELINE_NAME" >> $GITHUB_STEP_SUMMARY
 
@@ -142,9 +147,9 @@ jobs:
         uses: actions/cache@v3
         with:
           path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-${{ matrix.arch }}-buildx-${{ github.event.inputs.pipeline_name }}-${{ github.ref_name }}
+          key: ${{ runner.os }}-${{ matrix.arch }}-buildx-${{ github.event.inputs.pipeline_name || 'digit-ui' }}-${{ github.ref_name }}
           restore-keys: |
-            ${{ runner.os }}-${{ matrix.arch }}-buildx-${{ github.event.inputs.pipeline_name }}-
+            ${{ runner.os }}-${{ matrix.arch }}-buildx-${{ github.event.inputs.pipeline_name || 'digit-ui' }}-
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v2

@@ -84,6 +84,7 @@ var MobileNumberWithPrefix = function (componentProps) {
   useEffect(function () {
     if (validationRules && validationRules.prefix && !formData.countryCode) {
       setSelectedPrefix(validationRules.prefix);
+      window.__PGR_INBOX_COUNTRY_CODE__ = validationRules.prefix;
       if (setValue) setValue("countryCode", validationRules.prefix);
       if (onSelect) onSelect("countryCode", validationRules.prefix);
     }
@@ -104,6 +105,8 @@ var MobileNumberWithPrefix = function (componentProps) {
   // Push value to form via all available channels
   var pushToForm = function (val, prefixOverride) {
     var prefixToUse = prefixOverride !== undefined ? prefixOverride : selectedPrefix;
+    // Cache in window so UICustomizations can read it even when RHF doesn't track unregistered fields
+    window.__PGR_INBOX_COUNTRY_CODE__ = prefixToUse;
     if (config.onCountryCodeChange) {
       config.onCountryCodeChange(prefixToUse);
     }
