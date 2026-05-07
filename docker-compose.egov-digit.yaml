@@ -1655,7 +1655,11 @@ services:
     ports:
       - "13101:3000"
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/healthz"]
+      # 127.0.0.1, not localhost: Alpine's wget resolves localhost to ::1
+      # (IPv6) per /etc/hosts order; the MCP server binds IPv4-only, so
+      # the probe gets "Connection refused" and the container is marked
+      # unhealthy even though it's serving fine on :3000.
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/healthz"]
       interval: 15s
       timeout: 5s
       retries: 5
