@@ -250,7 +250,7 @@
       become: false
 
     - name: Transfer digit-mcp Docker image to target
-      shell: docker save digit-mcp:latest | ssh -o StrictHostKeyChecking=no {{ ansible_user }}@{{ inventory_hostname }} "docker load"
+      shell: docker save digit-mcp:latest | ssh -o StrictHostKeyChecking=no {{ ansible_user }}@{{ ansible_host }} "docker load"
       delegate_to: localhost
       become: false
       when: mcp_image_check.stdout != ""
