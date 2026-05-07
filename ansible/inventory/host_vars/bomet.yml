@@ -51,5 +51,12 @@ nginx_features:
 secrets_path: kv/digit/bomet
 
 # Bootstrap secrets — seeded once into OpenBao on first deploy. See
-# host_vars/nairobi.yml for the contract. Empty map for now.
-bootstrap_secrets: {}
+# host_vars/nairobi.yml for the contract. Defaults match values
+# previously inlined in compose; rotate via `bao kv put kv/digit/bomet`.
+bootstrap_secrets:
+  postgres_password: egov123
+  mcp_db_password: mcp123
+  minio_root_user: minioadmin
+  minio_root_password: minioadmin
+  elasticsearch_master_password: "asd@#$@$!132123"
+  egov_hrms_default_password: "eGov@123"

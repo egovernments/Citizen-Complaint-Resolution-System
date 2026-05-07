@@ -51,13 +51,24 @@ nginx_features:
 secrets_path: kv/digit/nairobi
 
 # Bootstrap secrets — seeded once into OpenBao on first deploy ONLY.
-# Subsequent edits should happen via `bao kv put` / the UI, not by
-# editing this file (the playbook uses cas=0 on the seed write so it
-# won't overwrite later versions). Empty map = no auto-seeding; you
-# can populate later from the UI.
+# Subsequent edits happen via `bao kv put` / the UI, not by editing
+# this file (the playbook uses cas=0 on the seed — once OpenBao has
+# v1, edits here are ignored).
 #
-# Once OpenBao is the source of truth, sensitive values like
-# postgres_password, keycloak_admin_password, registry creds, etc.
-# move under this key. For now we seed nothing (the inline values in
-# compose still apply); the next PR replaces those with vault lookups.
-bootstrap_secrets: {}
+# These exact keys are pulled at every deploy (via vault_kv2_get) and
+# written to /opt/digit/.env, which docker compose auto-loads. So the
+# values below become the seed values; rotate via OpenBao.
+#
+# Defaults below match the values previously inlined in
+# docker-compose.egov-digit.yaml, so the first deploy after this PR is
+# no-op — the secrets just move from YAML literals to OpenBao with no
+# change in effect. After deploy, rotate any of them via:
+#   ssh -L 18200:127.0.0.1:18200 egov-nairobi
+#   bao kv put kv/digit/nairobi postgres_password='new-strong'
+bootstrap_secrets:
+  postgres_password: egov123
+  mcp_db_password: mcp123
+  minio_root_user: minioadmin
+  minio_root_password: minioadmin
+  elasticsearch_master_password: "asd@#$@$!132123"
+  egov_hrms_default_password: "eGov@123"

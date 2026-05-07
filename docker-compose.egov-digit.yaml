@@ -201,8 +201,8 @@ services:
     container_name: digit-minio
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     volumes:
       - minio_data:/data
     ports:
@@ -419,7 +419,7 @@ services:
       OTEL_SERVICE_NAME: egov-enc-service
       OTEL_METRICS_EXPORTER: otlp
       OTEL_LOGS_EXPORTER: none
-      MASTER_PASSWORD: asd@#$@$!132123
+      MASTER_PASSWORD: ${ELASTICSEARCH_MASTER_PASSWORD:-asd@#$@$!132123}
       MASTER_SALT: qweasdzx
       MASTER_INITIALVECTOR: qweasdzxqwea
       MASTER_PASSWORD_PROVIDER: software
@@ -1011,8 +1011,8 @@ services:
       # MinIO/S3 storage (local S3-compatible storage for dev)
       ISS3ENABLED: 'true'
       MINIO_URL: http://minio:9000
-      AWS_KEY: minioadmin
-      AWS_SECRETKEY: minioadmin
+      AWS_KEY: ${AWS_KEY:-${MINIO_ROOT_USER:-minioadmin}}
+      AWS_SECRETKEY: ${AWS_SECRETKEY:-${MINIO_ROOT_PASSWORD:-minioadmin}}
       IS_BUCKET_FIXED: 'true'
       FIXED_BUCKETNAME: egov-rainmaker
       # From CCRS env.yaml - complete MIME type mapping
@@ -1121,7 +1121,7 @@ services:
       STATE_LEVEL_TENANT_ID: pg
       EGOV_STATELEVEL_TENANT: pg
       HRMS_SYSTEM_USERNAME: INTERNAL_USER
-      EGOV_HRMS_DEFAULT_PASSWORD: eGov@123
+      EGOV_HRMS_DEFAULT_PASSWORD: ${EGOV_HRMS_DEFAULT_PASSWORD:-eGov@123}
     ports:
       - 18092:8092
     healthcheck:
@@ -1471,10 +1471,10 @@ services:
       SERVER_CONTEXTPATH: /egov-url-shortening
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
-      SPRING_DATASOURCE_PASSWORD: egov123
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_FLYWAY_URL: jdbc:postgresql://postgres-db:5432/egov
       SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: egov123
+      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       JAVA_OPTS: '-Xmx96m -Xms96m'
     networks:
       - egov-network

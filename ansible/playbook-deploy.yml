@@ -528,6 +528,49 @@
       when: bootstrap_secrets is defined and bootstrap_secrets | length > 0
       no_log: true
 
+    # ============================================================
+    # Pull live secrets back from OpenBao and write them into
+    # /opt/digit/.env. docker compose auto-loads .env from its
+    # working directory, so the next `up -d` (recreate-on-change)
+    # picks them up — services that reference ${POSTGRES_PASSWORD}
+    # etc. now read from OpenBao instead of compose-inline defaults.
+    # ============================================================
+    - name: "OpenBao — read tenant secrets for compose env"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
+        headers:
+          X-Vault-Token: "{{ bao_root_token }}"
+        status_code: [200]
+      register: bao_secrets
+      no_log: true
+
+    - name: "OpenBao — write secrets into compose .env (idempotent block)"
+      ansible.builtin.blockinfile:
+        path: "{{ digit_dir }}/.env"
+        block: |
+          # Pulled from OpenBao at deploy time. Edit via:
+          #   bao kv put {{ secrets_path }} <key>=<value>
+          # NOT by editing this file directly (it's regenerated each deploy).
+          POSTGRES_PASSWORD={{ bao_secrets.json.data.data.postgres_password }}
+          MCP_DB_PASSWORD={{ bao_secrets.json.data.data.mcp_db_password }}
+          MINIO_ROOT_USER={{ bao_secrets.json.data.data.minio_root_user }}
+          MINIO_ROOT_PASSWORD={{ bao_secrets.json.data.data.minio_root_password }}
+          AWS_KEY={{ bao_secrets.json.data.data.minio_root_user }}
+          AWS_SECRETKEY={{ bao_secrets.json.data.data.minio_root_password }}
+          ELASTICSEARCH_MASTER_PASSWORD={{ bao_secrets.json.data.data.elasticsearch_master_password }}
+          EGOV_HRMS_DEFAULT_PASSWORD={{ bao_secrets.json.data.data.egov_hrms_default_password }}
+        marker: "# {mark} TENANT SECRETS"
+        create: false           # .env was already written by the digit.env.j2 template earlier
+        mode: '0600'            # tighten — was 0644 from the template; secrets bump to 0600
+      no_log: true
+
+    - name: "Recreate services with the new env (no-op if secrets unchanged)"
+      ansible.builtin.shell: docker compose -f docker-compose.egov-digit.yaml up -d
+      args:
+        chdir: "{{ digit_dir }}"
+      register: post_secrets_recreate
+      changed_when: "'Recreated' in post_secrets_recreate.stdout or 'Started' in post_secrets_recreate.stdout"
+
     - name: "OpenBao — show access info"
       ansible.builtin.debug:
         msg: |
