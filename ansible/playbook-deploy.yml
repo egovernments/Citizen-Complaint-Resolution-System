@@ -353,11 +353,25 @@
         state: present
       when: digit_ui_mode == "static"
 
-    - name: "digit-ui mode=static — install npm deps if node_modules missing"
-      ansible.builtin.command: npm install
-      args:
-        chdir: /opt/digit-ui-esbuild
-        creates: /opt/digit-ui-esbuild/node_modules/.package-lock.json
+    - name: "digit-ui mode=static — npm install if package.json is newer than node_modules"
+      ansible.builtin.shell: |
+        # `creates: node_modules/.package-lock.json` was wrong: it assumed
+        # any prior install means deps are in sync. But when the repo gets
+        # `git pull`'d and a new dep enters package.json (e.g. @turf/*),
+        # node_modules is stale and esbuild.build.js fails to resolve.
+        # Re-run if package.json or package-lock.json is newer than the
+        # node_modules root, or if node_modules doesn't exist at all.
+        cd /opt/digit-ui-esbuild
+        if [ ! -d node_modules ] \
+           || [ package.json -nt node_modules ] \
+           || [ package-lock.json -nt node_modules ]; then
+          npm install --legacy-peer-deps
+          echo installed
+        else
+          echo skipped
+        fi
+      register: npm_install
+      changed_when: npm_install.stdout == "installed"
       when: digit_ui_mode == "static"
 
     - name: "digit-ui mode=static — run esbuild.build.js (idempotent: skips if build/ index newer than sources)"
