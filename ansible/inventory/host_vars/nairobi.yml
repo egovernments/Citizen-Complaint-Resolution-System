@@ -29,9 +29,9 @@ footer_bw_logo_url: "https://naipepea.digit.org/brand/digit-footer-bw.png"
 #   hmr     → host-side esbuild.dev.js in tmux session `esbuild`,
 #             watching /opt/digit-ui-esbuild for live reload. Pull a
 #             code change with `cd /opt/digit-ui-esbuild && git pull`.
-#   static  → digit-ui Docker container serving the pre-built bundle
-#             baked into the image (no live reload).
-# Both modes bind port 18080 and serve / under nginx.
+#   static  → host nginx serves /opt/digit-ui-esbuild/build/ directly
+#             (no Docker container, no esbuild dev server). Bundle is
+#             produced by `node esbuild.build.js` at deploy time.
 # Nairobi runs HMR for active dev; Bomet runs static for stability.
 digit_ui_mode: hmr
 
@@ -43,7 +43,6 @@ nginx_features:
   status: true
   api_pgr: true
   mcp: true
-  esbuild_root: true
 
 # Pointer to the OpenBao path holding this tenant's secrets (DB password,
 # Keycloak admin, OAuth client secrets, registry creds, …). The path

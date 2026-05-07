@@ -30,9 +30,10 @@ employee_module_denylist: []
 # `nginx_features.brand_assets: true` and override these URLs.
 # (Defaults inherited from group_vars/digit.yml.)
 
-# digit-ui serving mode — see nairobi.yml for the contract.
-# Bomet runs the static bundle (digit-ui Docker container) for stability;
-# no live-reload, no host-side esbuild process to babysit.
+# digit-ui serving mode — see nairobi.yml for the contract. Bomet uses
+# `static`: host nginx serves /opt/digit-ui-esbuild/build/ directly
+# (no Docker container, no esbuild dev server). The playbook runs
+# `node esbuild.build.js` at deploy time to produce the bundle.
 digit_ui_mode: static
 
 # nginx features — Bomet is currently a subset of Nairobi's setup.
@@ -46,7 +47,6 @@ nginx_features:
   status: true
   api_pgr: true
   mcp: false
-  esbuild_root: true
 
 secrets_path: kv/digit/bomet
 

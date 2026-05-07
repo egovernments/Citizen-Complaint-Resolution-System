@@ -293,10 +293,68 @@
       changed_when: false
 
     # ==================== digit-ui mode convergence ====================
-    # `docker compose up -d` always starts the digit-ui container. In HMR
-    # mode we need to swap it for the host-side esbuild process: stop the
-    # container so port 18080 is free, then spawn esbuild in tmux. Static
-    # mode is the no-op path (the container is already what we want).
+    # Three runtime models, picked by host_vars `digit_ui_mode`:
+    #
+    #   static — host nginx serves /opt/digit-ui-esbuild/build/ directly
+    #            (no inner Docker container, no esbuild dev server).
+    #            Build is produced by `node esbuild.build.js` at deploy.
+    #
+    #   hmr    — host-side `node esbuild.dev.js` in tmux session `esbuild`,
+    #            watching /opt/digit-ui-esbuild for live reload. Binds
+    #            18080; nginx proxies / to it.
+    #
+    # Both modes can coexist on disk (same /opt/digit-ui-esbuild), but
+    # only one runs at a time. The off-mode runner is killed before the
+    # in-mode one starts, so port 18080 is unambiguously owned.
+
+    # --- static mode ---
+    - name: "digit-ui mode=static — stop digit-ui container if running (host nginx serves now)"
+      ansible.builtin.shell: |
+        if docker ps --filter name=^digit-ui$ --format '{% raw %}{{.Names}}{% endraw %}' | grep -q '^digit-ui$'; then
+          docker stop digit-ui
+          echo stopped
+        fi
+      register: stop_digit_ui_static
+      changed_when: stop_digit_ui_static.stdout == "stopped"
+      when: digit_ui_mode == "static"
+
+    - name: "digit-ui mode=static — install Node 20 if missing (esbuild.build.js needs it)"
+      ansible.builtin.apt:
+        name: nodejs
+        state: present
+      when: digit_ui_mode == "static"
+
+    - name: "digit-ui mode=static — install npm deps if node_modules missing"
+      ansible.builtin.command: npm install
+      args:
+        chdir: /opt/digit-ui-esbuild
+        creates: /opt/digit-ui-esbuild/node_modules/.package-lock.json
+      when: digit_ui_mode == "static"
+
+    - name: "digit-ui mode=static — run esbuild.build.js (idempotent: skips if build/ index newer than sources)"
+      ansible.builtin.shell: |
+        cd /opt/digit-ui-esbuild
+        # Quick freshness check: if build/index.html is newer than the
+        # most-recent source file, skip the rebuild (~5s saved on
+        # repeat deploys).
+        if [ -f build/index.html ]; then
+          newest_src=$(find products packages public package.json -type f -newer build/index.html 2>/dev/null | head -1)
+          if [ -z "$newest_src" ]; then
+            echo "build/ is up-to-date — skipping rebuild"
+            exit 0
+          fi
+        fi
+        # GLOBAL_CONFIGS lets the build inline the per-tenant config; nginx
+        # also serves the same file at /digit-ui/globalConfigs.js so a
+        # config change without a rebuild still propagates.
+        GLOBAL_CONFIGS={{ digit_dir }}/nginx/globalConfigs.js node esbuild.build.js
+      args:
+        executable: /bin/bash
+      register: esbuild_build
+      changed_when: "'skipping rebuild' not in esbuild_build.stdout"
+      when: digit_ui_mode == "static"
+
+    # --- hmr mode ---
     - name: "digit-ui mode=hmr — stop digit-ui container after compose brought it up"
       ansible.builtin.shell: |
         if docker ps --filter name=^digit-ui$ --format '{% raw %}{{.Names}}{% endraw %}' | grep -q '^digit-ui$'; then
@@ -319,14 +377,34 @@
       changed_when: start_esbuild.stdout == "started"
       when: digit_ui_mode == "hmr"
 
-    - name: "digit-ui — wait for the active mode to bind :18080"
+    # --- mode-agnostic verification ---
+    - name: "digit-ui mode=static — verify built bundle is on disk"
+      ansible.builtin.stat:
+        path: /opt/digit-ui-esbuild/build/index.html
+      register: built_bundle
+      failed_when: not built_bundle.stat.exists
+      when: digit_ui_mode == "static"
+
+    - name: "digit-ui mode=hmr — verify esbuild bound :18080"
       ansible.builtin.wait_for:
         host: 127.0.0.1
         port: 18080
         timeout: 120
+      when: digit_ui_mode == "hmr"
 
-    - name: "digit-ui — verify /digit-ui/ serves 200 (works for either mode)"
-      ansible.builtin.shell: curl -sf http://127.0.0.1:18080/digit-ui/ -o /dev/null
+    - name: "digit-ui — verify /digit-ui/ serves 200 (mode-agnostic, hits via host nginx after reload)"
+      ansible.builtin.shell: |
+        # Static mode: hits host nginx /digit-ui/ alias.
+        # HMR mode: hits esbuild on :18080 directly (host nginx may
+        # not be reloaded yet at this point in the playbook).
+        if [ "{{ digit_ui_mode }}" = "static" ]; then
+          # Reload nginx now so the new /digit-ui/ alias is live for
+          # the validation block below.
+          systemctl reload nginx 2>/dev/null || true
+          curl -sf https://{{ domain }}/digit-ui/ -o /dev/null
+        else
+          curl -sf http://127.0.0.1:18080/digit-ui/ -o /dev/null
+        fi
       register: ui_early_check
       retries: 30
       delay: 10

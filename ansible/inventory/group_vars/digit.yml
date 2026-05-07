@@ -75,7 +75,9 @@ nginx_features:
   status: true              # /status/ Gatus board (sub_filter rewrites)
   api_pgr: true             # /api/pgr/ proxied to MCP for the dashboard
   mcp: false                # /mcp HTTP transport — see CLAUDE.md security note
-  esbuild_root: true        # all unmatched / → esbuild on 18080 (vs. Kong on 18000)
+  # Note: `/` routing is now derived from `digit_ui_mode`:
+  #   static → host nginx serves /digit-ui/* + Kong gets / for API calls
+  #   hmr    → esbuild dev server on :18080 gets / (it serves both)
 
 # Upstreams (host-side ports). The container ports are fixed in compose;
 # these are how the host nginx reaches them.

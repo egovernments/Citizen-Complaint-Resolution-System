@@ -118,12 +118,30 @@ server {
   }
 
 {% endif %}
-{% if nginx_features.esbuild_root %}
-  # ALL other traffic through esbuild (serves UI + proxies API calls to
-  # Kong with logging). Switch to Kong directly by setting
-  # `nginx_features.esbuild_root: false` and adding a Kong-rooted location.
+{% if digit_ui_mode == "static" %}
+  # digit-ui in static mode: host nginx serves the build artifact from
+  # /opt/digit-ui-esbuild/build/ directly. Built by the playbook
+  # (`node esbuild.build.js`) — no inner Docker container, no esbuild
+  # dev server. Faster, fewer moving parts, smaller blast radius.
+  location = /digit-ui {
+    return 302 /digit-ui/;
+  }
+  location /digit-ui/ {
+    alias /opt/digit-ui-esbuild/build/;
+    try_files $uri $uri/ /digit-ui/index.html;
+    sub_filter_once on;
+    sub_filter_types text/html;
+    sub_filter '</head>' '<script src="/digit-ui/globalConfigs.js"></script></head>';
+  }
+  # Per-tenant boot config — overrides whatever was baked into the bundle.
+  location = /digit-ui/globalConfigs.js {
+    alias {{ digit_dir }}/nginx/globalConfigs.js;
+    default_type application/javascript;
+    add_header Cache-Control "no-cache, must-revalidate" always;
+  }
+  # API calls go to Kong directly.
   location / {
-    proxy_pass http://127.0.0.1:{{ upstream_esbuild_port }};
+    proxy_pass http://127.0.0.1:{{ upstream_kong_port }};
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -132,8 +150,11 @@ server {
     proxy_buffering off;
   }
 {% else %}
+  # digit-ui in HMR mode: esbuild dev server (tmux session) on :18080.
+  # Serves both /digit-ui/* (the SPA) and proxies API calls to Kong.
+  # Live reloads on file save in /opt/digit-ui-esbuild.
   location / {
-    proxy_pass http://127.0.0.1:{{ upstream_kong_port }};
+    proxy_pass http://127.0.0.1:{{ upstream_esbuild_port }};
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
