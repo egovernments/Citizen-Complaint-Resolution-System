@@ -16,6 +16,13 @@
 # when the citizen-side UI should pin to a single city.
 state_tenant_id: ke
 
+# digit-ui serving mode — `hmr` for live-reload dev (host-side esbuild in
+# tmux), `static` for the pre-built Docker image. Default is static; flip
+# to hmr only on hosts where you actively want live reload from
+# /opt/digit-ui-esbuild. The playbook converges to whichever the host
+# requests, killing the off-mode runner first to free port 18080.
+digit_ui_mode: static
+
 context_path: digit-ui
 gmaps_api_key: ""
 fin_env: dev

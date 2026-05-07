@@ -30,6 +30,11 @@ employee_module_denylist: []
 # `nginx_features.brand_assets: true` and override these URLs.
 # (Defaults inherited from group_vars/digit.yml.)
 
+# digit-ui serving mode — see nairobi.yml for the contract.
+# Bomet runs the static bundle (digit-ui Docker container) for stability;
+# no live-reload, no host-side esbuild process to babysit.
+digit_ui_mode: static
+
 # nginx features — Bomet is currently a subset of Nairobi's setup.
 # Step 1 preserves the live state; flipping these to true in a follow-up
 # PR will upgrade Bomet to match Nairobi (after seeding the prerequisite

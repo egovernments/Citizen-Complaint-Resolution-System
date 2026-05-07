@@ -7,31 +7,69 @@
   become: true
 
   pre_tasks:
-    # The host-side `digit-ui` Docker container binds port 18080. The
-    # esbuild HMR dev process (tmux session `esbuild` at /opt/digit-ui-esbuild)
-    # binds the same port. If both try to come up, one fails — and the
-    # symptom on first deploy is a baffling "port already allocated" from
-    # docker that's actually about a tmux session.
-    - name: "Detect running esbuild HMR session"
-      ansible.builtin.command: tmux has-session -t esbuild
-      register: esbuild_session
-      failed_when: false
-      changed_when: false
-      check_mode: false
+    # digit-ui can be served two ways, both binding port 18080:
+    #   - `static` mode: digit-ui Docker container with a pre-built bundle.
+    #   - `hmr` mode:    host-side `node esbuild.dev.js` in tmux session
+    #                    `esbuild`, watching /opt/digit-ui-esbuild.
+    # Whichever mode the host_vars asks for, we converge to it — kill
+    # the off-mode runner first (so port 18080 is free), bring up the
+    # requested one. Both branches are idempotent.
+    - name: "digit-ui — show requested mode"
+      ansible.builtin.debug:
+        msg: "Requested mode for {{ inventory_hostname }}: {{ digit_ui_mode }}"
 
-    - name: "Fail fast if esbuild HMR is running on the target"
+    - name: "digit-ui mode=static — kill stray esbuild tmux session if any"
+      ansible.builtin.shell: |
+        if tmux has-session -t esbuild 2>/dev/null; then
+          tmux kill-session -t esbuild
+          echo killed
+        fi
+      register: kill_esbuild
+      changed_when: kill_esbuild.stdout == "killed"
+      when: digit_ui_mode == "static"
+
+    - name: "digit-ui mode=hmr — stop digit-ui container if running"
+      ansible.builtin.shell: |
+        if docker ps --filter name=^digit-ui$ --format '{% raw %}{{.Names}}{% endraw %}' | grep -q '^digit-ui$'; then
+          docker stop digit-ui
+          echo stopped
+        fi
+      register: stop_digit_ui
+      changed_when: stop_digit_ui.stdout == "stopped"
+      when: digit_ui_mode == "hmr"
+
+    - name: "digit-ui mode=hmr — confirm /opt/digit-ui-esbuild exists"
+      ansible.builtin.stat:
+        path: /opt/digit-ui-esbuild/esbuild.dev.js
+      register: esbuild_repo
+      when: digit_ui_mode == "hmr"
+
+    - name: "digit-ui mode=hmr — fail clearly if /opt/digit-ui-esbuild is missing"
       ansible.builtin.fail:
         msg: |
-          esbuild HMR is currently running on {{ inventory_hostname }}
-          (tmux session 'esbuild'). Ansible will start the digit-ui
-          container which also binds port 18080 and would collide.
+          digit_ui_mode is `hmr` but /opt/digit-ui-esbuild/esbuild.dev.js
+          doesn't exist on {{ inventory_hostname }}.
 
-          Choose one:
-            (a) keep HMR — abort this deploy.
-            (b) switch to Docker mode — run:
-                  ssh {{ ansible_user }}@{{ ansible_host }} "tmux kill-session -t esbuild"
+          Either:
+            (a) Switch this host to `digit_ui_mode: static` in
+                inventory/host_vars/{{ inventory_hostname }}.yml, OR
+            (b) Clone the esbuild repo on the target:
+                  ssh {{ ansible_user }}@{{ ansible_host }} \
+                    "git clone https://github.com/theflywheel/digit-ui-esbuild.git /opt/digit-ui-esbuild"
                 then re-run ./deploy.sh {{ inventory_hostname }}
-      when: esbuild_session.rc == 0
+      when:
+        - digit_ui_mode == "hmr"
+        - not esbuild_repo.stat.exists
+
+    - name: "digit-ui mode=hmr — git pull /opt/digit-ui-esbuild"
+      ansible.builtin.command:
+        cmd: git pull
+        chdir: /opt/digit-ui-esbuild
+      register: esbuild_pull
+      changed_when: "'Already up to date' not in esbuild_pull.stdout"
+      when:
+        - digit_ui_mode == "hmr"
+        - esbuild_repo.stat.exists
 
   tasks:
     # ==================== Docker Installation ====================
@@ -67,15 +105,21 @@
         update_cache: yes
 
     # ==================== Docker Configuration ====================
+    # check_mode: false forces this to run even under `--check`, so the
+    # version-compare task below has a real value to test against.
     - name: Verify Docker Compose version >= 2.20
       shell: docker compose version --short
       register: compose_version
       changed_when: false
+      check_mode: false
 
     - name: Fail if Docker Compose too old
       fail:
-        msg: "Docker Compose {{ compose_version.stdout }} is too old. Need >= 2.20"
-      when: compose_version.stdout is version('2.20', '<')
+        msg: "Docker Compose {{ compose_version.stdout | default('UNKNOWN') }} is too old. Need >= 2.20"
+      when:
+        - compose_version.stdout is defined
+        - compose_version.stdout | length > 0
+        - compose_version.stdout is version('2.20', '<')
 
     # ==================== Deploy Directory ====================
     - name: Create DIGIT directory
@@ -248,14 +292,46 @@
       until: hrms_health.stdout == 'healthy'
       changed_when: false
 
-    - name: Verify digit-ui container is running
-      shell: curl -sf http://127.0.0.1:18080/digit-ui/ -o /dev/null
+    # ==================== digit-ui mode convergence ====================
+    # `docker compose up -d` always starts the digit-ui container. In HMR
+    # mode we need to swap it for the host-side esbuild process: stop the
+    # container so port 18080 is free, then spawn esbuild in tmux. Static
+    # mode is the no-op path (the container is already what we want).
+    - name: "digit-ui mode=hmr — stop digit-ui container after compose brought it up"
+      ansible.builtin.shell: |
+        if docker ps --filter name=^digit-ui$ --format '{% raw %}{{.Names}}{% endraw %}' | grep -q '^digit-ui$'; then
+          docker stop digit-ui
+          echo stopped
+        fi
+      register: post_up_stop_digit_ui
+      changed_when: post_up_stop_digit_ui.stdout == "stopped"
+      when: digit_ui_mode == "hmr"
+
+    - name: "digit-ui mode=hmr — start tmux esbuild session"
+      ansible.builtin.shell: |
+        if ! tmux has-session -t esbuild 2>/dev/null; then
+          cd /opt/digit-ui-esbuild
+          tmux new-session -d -s esbuild \
+            "PORT=18080 GLOBAL_CONFIGS={{ digit_dir }}/nginx/globalConfigs.js node esbuild.dev.js 2>&1 | tee /var/log/esbuild.log"
+          echo started
+        fi
+      register: start_esbuild
+      changed_when: start_esbuild.stdout == "started"
+      when: digit_ui_mode == "hmr"
+
+    - name: "digit-ui — wait for the active mode to bind :18080"
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 18080
+        timeout: 120
+
+    - name: "digit-ui — verify /digit-ui/ serves 200 (works for either mode)"
+      ansible.builtin.shell: curl -sf http://127.0.0.1:18080/digit-ui/ -o /dev/null
       register: ui_early_check
       retries: 30
       delay: 10
       until: ui_early_check.rc == 0
       changed_when: false
-      ignore_errors: yes
 
     # ==================== Wait for MCP Server ====================
     - name: Wait for digit-mcp health (up to 2 min)

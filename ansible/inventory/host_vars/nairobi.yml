@@ -25,6 +25,16 @@ employee_module_denylist:
 footer_logo_url: "https://naipepea.digit.org/brand/digit-footer.png"
 footer_bw_logo_url: "https://naipepea.digit.org/brand/digit-footer-bw.png"
 
+# digit-ui serving mode:
+#   hmr     → host-side esbuild.dev.js in tmux session `esbuild`,
+#             watching /opt/digit-ui-esbuild for live reload. Pull a
+#             code change with `cd /opt/digit-ui-esbuild && git pull`.
+#   static  → digit-ui Docker container serving the pre-built bundle
+#             baked into the image (no live reload).
+# Both modes bind port 18080 and serve / under nginx.
+# Nairobi runs HMR for active dev; Bomet runs static for stability.
+digit_ui_mode: hmr
+
 # nginx features — Nairobi is the canonical "everything on" deployment.
 nginx_features:
   brand_assets: true
