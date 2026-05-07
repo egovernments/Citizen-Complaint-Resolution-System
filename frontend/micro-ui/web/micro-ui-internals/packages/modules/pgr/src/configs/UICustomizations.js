@@ -298,6 +298,7 @@ export const UICustomizations = {
         clonedData.body.inbox.moduleSearchCriteria.mobileNumber = searchForm.mobileNumber;
         clonedData.body.inbox.moduleSearchCriteria.countryCode =
           searchForm.countryCode ||
+          window.__PGR_INBOX_COUNTRY_CODE__ ||
           window?.Digit?.MDMSValidationPatterns?.mobileNumberValidation?.prefix ||
           "+91";
       } else {
