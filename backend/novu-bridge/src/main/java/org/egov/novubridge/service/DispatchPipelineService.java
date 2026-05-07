@@ -87,22 +87,19 @@ public class DispatchPipelineService {
                 resolvedTemplate.getRequiredVars(), resolvedTemplate.getParamOrder());
         validateTemplateConfig(resolvedTemplate);
         
-        // Resolve providers by channel only, then select by priority
+        // Resolve providers by channel with priority=1, pick the first one
         List<ResolvedProvider> availableProviders = configServiceClient.resolveProvidersByChannel(event.getTenantId(), context.getChannel());
-        ResolvedProvider resolvedProvider = availableProviders.stream()
-                .filter(ResolvedProvider::getIsActive)
-                .sorted(Comparator.comparing(ResolvedProvider::getPriority))
-                .findFirst()
-                .orElseThrow(() -> new CustomException("NB_NO_ACTIVE_PROVIDER", 
-                        "No active provider found for tenant=" + event.getTenantId() + " channel=" + context.getChannel()));
-        
+        if (availableProviders.isEmpty()) {
+            throw new CustomException("NB_NO_ACTIVE_PROVIDER",
+                    "No provider found with priority 1 for tenant=" + event.getTenantId() + " channel=" + context.getChannel());
+        }
+        ResolvedProvider resolvedProvider = availableProviders.get(0);
+
         log.info("Resolved provider: eventId={}, provider={}, channel={}, isActive={}, priority={}, credentialKeys={}, senderNumber={}, availableCount={}",
                 event.getEventId(), resolvedProvider.getProviderName(), resolvedProvider.getChannel(),
-                resolvedProvider.getIsActive(), resolvedProvider.getPriority(), 
+                resolvedProvider.getIsActive(), resolvedProvider.getPriority(),
                 resolvedProvider.getCredentials() != null ? resolvedProvider.getCredentials().keySet() : "null",
                 resolvedProvider.getSenderNumber(), availableProviders.size());
-        
-        // Provider is already filtered for active status above, no need to check again
         
         List<String> missingVars = findMissingRequiredVars(resolvedTemplate, event.getData());
         if (!missingVars.isEmpty()) {

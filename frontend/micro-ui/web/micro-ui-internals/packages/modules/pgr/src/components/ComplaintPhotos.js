@@ -9,11 +9,17 @@ const ComplaintPhotos = ({ serviceWrapper }) => {
 
     useEffect(() => {
         (async () => {
-            const workflow = serviceWrapper?.workflow;
-            const verificationDocuments = workflow?.verificationDocuments;
+            // Prefer service.documents (new API), fall back to workflow.verificationDocuments
+            const serviceDocs = serviceWrapper?.service?.documents;
+            const verificationDocs = serviceWrapper?.workflow?.verificationDocuments;
+            const documents = (Array.isArray(serviceDocs) && serviceDocs.length > 0)
+                ? serviceDocs
+                : (Array.isArray(verificationDocs) && verificationDocs.length > 0)
+                    ? verificationDocs
+                    : null;
 
-            if (verificationDocuments && verificationDocuments.length > 0) {
-                const fileStoreIds = verificationDocuments.map((doc) => doc.fileStoreId).join(",");
+            if (documents && documents.length > 0) {
+                const fileStoreIds = documents.map((doc) => doc.fileStoreId).join(",");
                 try {
                     const res = await Digit.UploadServices.Filefetch([fileStoreIds], tenantId);
                     if (res && res.data) {

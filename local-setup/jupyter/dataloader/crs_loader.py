@@ -18,7 +18,7 @@ try:
     from .unified_loader import UnifiedExcelReader, APIUploader
 except (ImportError, ModuleNotFoundError):
     from unified_loader import UnifiedExcelReader, APIUploader
-from typing import Optional, Dict
+from typing import Optional, Dict, List, Any
 from copy import deepcopy
 import os
 import json
@@ -1299,20 +1299,22 @@ class CRSLoader:
         """
         self._check_auth()
 
+        if not levels or len(levels) <= 1:
+            raise ValueError("levels must contain at least two boundary levels")
+
         print(f"\n{'='*60}")
         print(f"PHASE 2a: BOUNDARY HIERARCHY & TEMPLATE")
         print(f"{'='*60}")
 
         tenant = target_tenant or self.tenant_id
+        mdms_tenant = tenant.split(".")[0] if "." in tenant else tenant
         print(f"Tenant: {tenant}")
         print(f"Hierarchy: {name}")
         print(f"Levels: {' -> '.join(levels)}")
 
-        # Ensure output directory exists
-        os.makedirs(output_dir, exist_ok=True)
-
-        if not levels:
-            raise ValueError("levels must contain at least one boundary level")
+        # Ensure templates directory exists
+        templates_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
+        os.makedirs(templates_dir, exist_ok=True)
 
         # Step 1: Build hierarchy data structure
         print(f"\n[1/4] Building hierarchy definition...")
@@ -1355,7 +1357,7 @@ class CRSLoader:
             mdms_result = self._create_mdms_with_schema_retry(
                 schema_code="CMS-BOUNDARY.HierarchySchema",
                 data_list=[mdms_payload],
-                tenant=tenant,
+                tenant=mdms_tenant,
             )
             if mdms_result.get('failed'):
                 print(f"   ERROR: Failed to create CMS boundary hierarchy MDMS config")
@@ -1370,14 +1372,7 @@ class CRSLoader:
             print(f"   ERROR: Failed to create CMS boundary hierarchy MDMS config: {e}")
             return None
 
-        # Step 3: Generate template
-        print(f"\n[3/4] Generating template...")
-        gen_result = self.uploader.generate_boundary_template(tenant, name)
-
-        if not gen_result:
-            print(f"   ERROR: Template generation failed")
-            return None
-
+        # Step 3: Load boundary level localizations
         print(f"\n[3/5] Loading boundary level localizations...")
         level_loc_records = [{'boundaryType': level} for level in levels]
         level_loc_messages = self.uploader._build_boundary_level_localizations(
@@ -1386,8 +1381,16 @@ class CRSLoader:
         )
         self.uploader.create_localization_messages(level_loc_messages, tenant)
 
+        # Step 4: Generate template
+        print(f"\n[4/5] Generating template...")
+        gen_result = self.uploader.generate_boundary_template(tenant, name)
+
+        if not gen_result:
+            print(f"   ERROR: Template generation failed")
+            return None
+
         # Step 4: Poll for completion and download
-        print(f"\n[4/4] Waiting for template...")
+        print(f"\n[5/5] Waiting for template...")
         poll_result = self.uploader.poll_boundary_template_status(tenant, name)
 
         if not poll_result or poll_result.get('status') == 'failed':
@@ -1402,7 +1405,7 @@ class CRSLoader:
             return None
 
         # Download template
-        output_path = os.path.join(output_dir, f"Boundary_Template_{tenant}_{name}.xlsx")
+        output_path = os.path.join(templates_dir, f"Boundary_Template_{tenant}_{name}.xlsx")
         downloaded_path = self.uploader.download_boundary_template(
             tenant_id=tenant,
             filestore_id=filestore_id,
@@ -1968,124 +1971,265 @@ class CRSLoader:
         return new_config
 
     def delete_boundaries(self, target_tenant: str = None, use_db: bool = False) -> Dict:
-        """Delete all boundary entities for a tenant
+        """Delete all boundary data created for a tenant.
 
         Args:
             target_tenant: Tenant ID (e.g., 'statea', 'pg.citya')
-            use_db: If True, use direct DB access (requires kubectl). Default: False (use API)
+            use_db: Retained for backward compatibility. Boundary cleanup now uses
+                    direct DB cleanup so hierarchy, entities, relationships,
+                    templates, MDMS config, and localization messages stay in sync.
 
         Returns:
             dict: {deleted: int, relationships_deleted: int, status: str}
         """
         self._check_auth()
         tenant = target_tenant or self.tenant_id
+        cleanup_plan = self._build_boundary_cleanup_plan(tenant)
 
         print(f"\n{'='*60}")
         print(f"DELETING BOUNDARIES")
         print(f"{'='*60}")
         print(f"Tenant: {tenant}")
+        print(f"Hierarchy Types: {', '.join(cleanup_plan['hierarchy_types']) or 'None'}")
+        print(f"Boundary Codes: {len(cleanup_plan['boundary_codes'])}")
 
-        if use_db:
-            return self._delete_boundaries_via_db(tenant)
-        else:
-            return self._delete_boundaries_via_api(tenant)
-
-    def _delete_boundaries_via_api(self, tenant: str) -> Dict:
-        """Delete boundaries using the boundary service API
-
-        Fallback chain:
-        1. Boundary service API (delete_all_boundaries)
-        2. Direct kubectl DB access
-        3. kubectl API server (for CI environments)
-        """
-        # Try boundary service API first
-        result = self.uploader.delete_all_boundaries(tenant)
-
-        deleted = result.get('deleted', 0)
-        failed = result.get('failed', 0)
-
-        # If API worked, return result
-        if deleted > 0 or (deleted == 0 and failed == 0):
-            print(f"   Boundaries deleted: {deleted}")
-            print(f"   Failed: {failed}")
-            print(f"{'='*60}")
-            return {
-                'deleted': deleted,
-                'relationships_deleted': 0,
-                'failed': failed,
-                'status': 'success' if failed == 0 else 'partial'
-            }
-
-        # Try direct kubectl DB access
-        print("   Boundary API didn't delete, trying DB method...")
-        db_result = self._delete_boundaries_via_db(tenant)
-        if db_result.get('status') == 'success':
-            return db_result
-
-        # Try kubectl API server (for CI without kubectl)
+        db_result = self._delete_boundaries_via_db(cleanup_plan)
         if db_result.get('status') == 'skipped':
             print("   kubectl not available, trying kubectl API server...")
-            return self._delete_boundaries_via_kubectl_api(tenant)
-
+            return self._delete_boundaries_via_kubectl_api(cleanup_plan)
         return db_result
 
-    def _delete_boundaries_via_db(self, tenant: str) -> Dict:
-        """Delete boundaries using direct database access (requires kubectl)"""
-        import subprocess
+    def _build_boundary_cleanup_plan(self, tenant: str) -> Dict[str, Any]:
+        """Collect the tenant-scoped data created by load_hierarchy/load_boundaries."""
+        hierarchies = self.uploader.search_boundary_hierarchies(tenant) or []
+        hierarchy_types = []
+        boundary_codes = set()
 
-        # Database connection details (from environment or defaults for local Docker)
+        for hierarchy in hierarchies:
+            hierarchy_type = str(hierarchy.get('hierarchyType', '')).strip()
+            if not hierarchy_type:
+                continue
+            hierarchy_types.append(hierarchy_type)
+
+            boundary_codes.update(self._fetch_boundary_codes_for_hierarchy(tenant, hierarchy_type))
+
+        if not boundary_codes:
+            boundary_codes.update(self._fetch_boundary_codes_from_service(tenant))
+
+        return {
+            'tenant': tenant,
+            'hierarchy_types': sorted(set(hierarchy_types)),
+            'boundary_codes': sorted(boundary_codes),
+        }
+
+    def _fetch_boundary_codes_for_hierarchy(self, tenant: str, hierarchy_type: str) -> List[str]:
+        """Fetch all boundary codes linked to a hierarchy through the relationship tree."""
+        if not hierarchy_type:
+            return []
+
+        url = f"{self.uploader.boundary_url}/boundary-relationships/_search"
+        user_info_copy = self.user_info.copy()
+        user_info_copy['tenantId'] = tenant
+        payload = {
+            "RequestInfo": {
+                "apiId": "Rainmaker",
+                "authToken": self.auth_token,
+                "userInfo": user_info_copy,
+            }
+        }
+
+        try:
+            response = self.uploader._request_with_retry(
+                url,
+                json=payload,
+                params={
+                    "tenantId": tenant,
+                    "hierarchyType": hierarchy_type,
+                    "includeChildren": "true",
+                },
+                headers={"Content-Type": "application/json"},
+            )
+            response.raise_for_status()
+        except Exception:
+            return []
+
+        codes = set()
+
+        def _collect(nodes):
+            for node in nodes or []:
+                code = str(node.get("code", "") or "").strip()
+                if code:
+                    codes.add(code)
+                _collect(node.get("children", []))
+
+        for tenant_boundary in response.json().get("TenantBoundary", []):
+            _collect(tenant_boundary.get("boundary", []))
+
+        return sorted(codes)
+
+    def _fetch_boundary_codes_from_service(self, tenant: str) -> List[str]:
+        """Fallback boundary search when no hierarchy metadata is available."""
+        url = f"{self.uploader.boundary_url}/boundary/_search"
+        user_info_copy = self.user_info.copy()
+        user_info_copy['tenantId'] = tenant
+        payload = {
+            "RequestInfo": {
+                "apiId": "Rainmaker",
+                "authToken": self.auth_token,
+                "userInfo": user_info_copy,
+                "msgId": f"{int(time.time() * 1000)}|en_IN",
+            },
+            "Boundary": {
+                "tenantId": tenant,
+                "limit": 500,
+                "offset": 0,
+            }
+        }
+
+        try:
+            response = self.uploader._request_with_retry(
+                url,
+                json=payload,
+                headers={"Content-Type": "application/json"},
+            )
+            response.raise_for_status()
+        except Exception:
+            return []
+
+        codes = set()
+
+        def _collect(nodes):
+            for node in nodes or []:
+                if isinstance(node, dict):
+                    code = str(node.get("code", "") or "").strip()
+                    if code:
+                        codes.add(code)
+                    _collect(node.get("children", []))
+
+        for tenant_boundary in response.json().get("TenantBoundary", []):
+            boundary = tenant_boundary.get("boundary", [])
+            if isinstance(boundary, dict):
+                boundary = [boundary]
+            _collect(boundary)
+
+        return sorted(codes)
+
+    def _sql_literal(self, value: str) -> str:
+        return "'" + str(value).replace("'", "''") + "'"
+
+    def _sql_in_clause(self, values: List[str]) -> str:
+        return ", ".join(self._sql_literal(value) for value in values if value)
+
+    def _build_boundary_cleanup_sql(self, cleanup_plan: Dict[str, Any]) -> List[str]:
+        """Build DB cleanup statements for tenant-scoped boundaries."""
+        tenant = cleanup_plan['tenant']
+        boundary_codes = cleanup_plan.get('boundary_codes', [])
+        hierarchy_types = cleanup_plan.get('hierarchy_types', [])
+
+        sql = []
+
+        if hierarchy_types:
+            hierarchy_in = self._sql_in_clause(hierarchy_types)
+            sql.append(
+                f"DELETE FROM boundary_relationship "
+                f"WHERE tenantid = {self._sql_literal(tenant)} "
+                f"AND hierarchytype IN ({hierarchy_in});"
+            )
+        else:
+            sql.append(
+                f"DELETE FROM boundary_relationship "
+                f"WHERE tenantid = {self._sql_literal(tenant)};"
+            )
+
+        if boundary_codes:
+            boundary_in = self._sql_in_clause(boundary_codes)
+            sql.append(
+                f"DELETE FROM boundary "
+                f"WHERE tenantid = {self._sql_literal(tenant)} "
+                f"AND code IN ({boundary_in});"
+            )
+        else:
+            sql.append(
+                f"DELETE FROM boundary "
+                f"WHERE tenantid = {self._sql_literal(tenant)};"
+            )
+
+        if hierarchy_types:
+            hierarchy_in = self._sql_in_clause(hierarchy_types)
+            sql.append(
+                f"DELETE FROM boundary_hierarchy "
+                f"WHERE tenantid = {self._sql_literal(tenant)} "
+                f"AND hierarchytype IN ({hierarchy_in});"
+            )
+        else:
+            sql.append(
+                f"DELETE FROM boundary_hierarchy "
+                f"WHERE tenantid = {self._sql_literal(tenant)};"
+            )
+
+        return sql
+
+    def _delete_boundaries_via_db(self, cleanup_plan: Dict[str, Any]) -> Dict:
+        """Delete boundaries using direct database access."""
+        import psycopg2
+
+        tenant = cleanup_plan['tenant']
+        statements = self._build_boundary_cleanup_sql(cleanup_plan)
+
+        # Database connection details (defaults match local Docker Compose)
         db_host = os.environ.get("BOUNDARY_DB_HOST", "postgres")
+        db_port = int(os.environ.get("BOUNDARY_DB_PORT", "5432"))
         db_name = os.environ.get("BOUNDARY_DB_NAME", "egov")
         db_user = os.environ.get("BOUNDARY_DB_USER", "egov")
+        db_pass = os.environ.get("BOUNDARY_DB_PASSWORD", os.environ.get("POSTGRES_PASSWORD", "egov123"))
 
-        # Get DB password from K8s secret
-        pw_result = subprocess.run(
-            ["kubectl", "get", "secret", "db", "-n", "egov", "-o", "jsonpath={.data.password}"],
-            capture_output=True, text=True
-        )
-
-        if pw_result.returncode != 0:
-            print("   WARNING: kubectl not available, cannot delete via DB")
+        delete_counts = []
+        try:
+            with psycopg2.connect(
+                host=db_host,
+                port=db_port,
+                dbname=db_name,
+                user=db_user,
+                password=db_pass,
+            ) as conn:
+                with conn.cursor() as cur:
+                    for statement in statements:
+                        cur.execute(statement)
+                        delete_counts.append(max(cur.rowcount, 0))
+        except Exception as e:
+            print(f"   WARNING: direct DB cleanup failed: {e}")
             print(f"{'='*60}")
-            return {'deleted': 0, 'relationships_deleted': 0, 'status': 'skipped',
-                    'error': 'kubectl not available'}
+            return {
+                'deleted': 0,
+                'relationships_deleted': 0,
+                'hierarchies_deleted': 0,
+                'status': 'failed',
+                'error': str(e)
+            }
 
-        import base64
-        db_pass = base64.b64decode(pw_result.stdout).decode()
+        delete_labels = [
+            'relationships_deleted',
+            'boundaries_deleted',
+            'hierarchies_deleted',
+        ]
 
-        # Ensure cleanup pod exists
-        subprocess.run(["kubectl", "delete", "pod", "db-cleanup", "-n", "egov", "--ignore-not-found"],
-                      capture_output=True)
-        subprocess.run(["kubectl", "run", "db-cleanup", "--image=postgres:15", "-n", "egov",
-                       "--restart=Never", "--command", "--", "sleep", "3600"], capture_output=True)
-        subprocess.run(["kubectl", "wait", "--for=condition=Ready", "pod/db-cleanup", "-n", "egov",
-                       "--timeout=60s"], capture_output=True)
+        delete_totals = {label: 0 for label in delete_labels}
+        for label, count in zip(delete_labels, delete_counts):
+            delete_totals[label] = count
 
-        conn_str = f"postgresql://{db_user}:{db_pass}@{db_host}:5432/{db_name}"
-
-        # Delete relationships first, then boundaries (parameterized to prevent SQL injection)
-        delete_sql = "DELETE FROM boundary_relationship WHERE tenantid = :'tenant_id'; DELETE FROM boundary WHERE tenantid = :'tenant_id';"
-        result = subprocess.run(
-            ["kubectl", "exec", "-n", "egov", "db-cleanup", "--",
-             "psql", conn_str, "-t",
-             "-v", f"tenant_id={tenant}",
-             "-c", delete_sql],
-            capture_output=True, text=True
-        )
-
-        # Parse DELETE counts
-        counts = [int(line.split()[1]) for line in result.stdout.strip().split('\n')
-                  if line.strip().startswith('DELETE')]
-        rel_deleted = counts[0] if len(counts) > 0 else 0
-        deleted = counts[1] if len(counts) > 1 else 0
-
-        print(f"   Relationships deleted: {rel_deleted}")
-        print(f"   Boundaries deleted: {deleted}")
+        print(f"   Relationships deleted: {delete_totals.get('relationships_deleted', 0)}")
+        print(f"   Boundaries deleted: {delete_totals.get('boundaries_deleted', 0)}")
+        print(f"   Hierarchies deleted: {delete_totals.get('hierarchies_deleted', 0)}")
         print(f"{'='*60}")
 
-        return {'deleted': deleted, 'relationships_deleted': rel_deleted, 'status': 'success'}
+        return {
+            'deleted': delete_totals.get('boundaries_deleted', 0),
+            'relationships_deleted': delete_totals.get('relationships_deleted', 0),
+            'hierarchies_deleted': delete_totals.get('hierarchies_deleted', 0),
+            'status': 'success'
+        }
 
-    def _delete_boundaries_via_kubectl_api(self, tenant: str, env: str = 'chakshu') -> Dict:
+    def _delete_boundaries_via_kubectl_api(self, cleanup_plan: Dict[str, Any], env: str = 'chakshu') -> Dict:
         """Delete boundaries using the kubectl API server (for CI environments)
 
         The kubectl API server wraps kubectl commands and exposes them via HTTP.
@@ -2095,7 +2239,12 @@ class CRSLoader:
         try:
             response = requests.post(
                 f"{KUBECTL_API_URL}/boundaries/delete",
-                json={'tenant_id': tenant, 'env': env},
+                json={
+                    'tenant_id': cleanup_plan['tenant'],
+                    'hierarchy_types': cleanup_plan.get('hierarchy_types', []),
+                    'boundary_codes': cleanup_plan.get('boundary_codes', []),
+                    'env': env,
+                },
                 headers={'X-API-Key': KUBECTL_API_KEY},
                 timeout=120
             )
