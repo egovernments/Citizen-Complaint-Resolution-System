@@ -677,16 +677,22 @@
     # required gate: if any fail, the deploy is marked failed and
     # the heavy CI doesn't run.
     # ============================================================
-    - name: "validate — every container in the compose is healthy"
+    - name: "validate — no container is restarting / unhealthy / crash-looping"
       ansible.builtin.shell: |
+        # Only flag genuinely broken states. Many services don't define
+        # a healthcheck at all (default-data-handler, digit-gatus,
+        # digit-otel-collector, digit-jupyter, etc.) and show plain "Up X"
+        # with no health suffix — that's normal, not unhealthy.
+        # Bad signals: "Restarting", "Exited" (with non-zero), or
+        # "(unhealthy)". One-shot init containers that finished
+        # successfully report "Exited (0)" — those are fine too.
         set -e
-        unhealthy=$(docker compose -f {{ digit_dir }}/docker-compose.egov-digit.yaml ps \
-                    --format '{{ "{{" }}.Name{{ "}}" }} {{ "{{" }}.Status{{ "}}" }}' \
-                    | grep -vE 'healthy|^$' \
-                    | grep -vE 'Exited.*0' || true)
-        if [ -n "$unhealthy" ]; then
-          echo "Unhealthy containers:"
-          echo "$unhealthy"
+        bad=$(docker compose -f {{ digit_dir }}/docker-compose.egov-digit.yaml ps \
+                --format '{{ "{{" }}.Name{{ "}}" }} {{ "{{" }}.Status{{ "}}" }}' \
+              | grep -E 'Restarting|\(unhealthy\)|Exited \([1-9]' || true)
+        if [ -n "$bad" ]; then
+          echo "Broken containers:"
+          echo "$bad"
           exit 1
         fi
       args:
