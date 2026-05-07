@@ -44,3 +44,7 @@ nginx_features:
   esbuild_root: true
 
 secrets_path: kv/digit/bomet
+
+# Bootstrap secrets — seeded once into OpenBao on first deploy. See
+# host_vars/nairobi.yml for the contract. Empty map for now.
+bootstrap_secrets: {}

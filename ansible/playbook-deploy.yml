@@ -265,6 +265,128 @@
       delay: 10
       until: mcp_health.rc == 0
       changed_when: false
+
+    # ==================== OpenBao bootstrap ====================
+    # Per-tenant secrets backend. Initialized once; subsequent runs
+    # auto-unseal using the keys captured at init. The init JSON lives
+    # at /opt/digit/.openbao/init.json (0600) — back it up out-of-band
+    # because losing it = losing access to every secret in this tenant's
+    # OpenBao until you re-init (which loses all stored secrets).
+
+    - name: "OpenBao — directory for init state"
+      ansible.builtin.file:
+        path: "{{ digit_dir }}/.openbao"
+        state: directory
+        mode: '0700'
+
+    - name: "OpenBao — wait for container to bind 18200"
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 18200
+        timeout: 60
+
+    - name: "OpenBao — check init status"
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18200/v1/sys/init
+        status_code: [200]
+      register: bao_init_status
+
+    - name: "OpenBao — initialize if first deploy (writes init.json with 0600)"
+      when: not bao_init_status.json.initialized
+      block:
+        - name: "OpenBao — operator init"
+          ansible.builtin.uri:
+            url: http://127.0.0.1:18200/v1/sys/init
+            method: POST
+            body_format: json
+            body:
+              secret_shares: 1
+              secret_threshold: 1
+            status_code: [200]
+          register: bao_init_response
+
+        - name: "OpenBao — persist init state"
+          ansible.builtin.copy:
+            dest: "{{ digit_dir }}/.openbao/init.json"
+            content: "{{ bao_init_response.json | to_nice_json }}"
+            mode: '0600'
+          no_log: true
+
+    - name: "OpenBao — load init state"
+      ansible.builtin.slurp:
+        src: "{{ digit_dir }}/.openbao/init.json"
+      register: bao_init_file
+      no_log: true
+
+    - name: "OpenBao — parse init state"
+      ansible.builtin.set_fact:
+        bao_unseal_key: "{{ (bao_init_file.content | b64decode | from_json).keys_base64[0] }}"
+        bao_root_token: "{{ (bao_init_file.content | b64decode | from_json).root_token }}"
+      no_log: true
+
+    - name: "OpenBao — read seal status"
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18200/v1/sys/seal-status
+        status_code: [200]
+      register: bao_seal_status
+
+    - name: "OpenBao — unseal if sealed"
+      when: bao_seal_status.json.sealed
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18200/v1/sys/unseal
+        method: POST
+        body_format: json
+        body:
+          key: "{{ bao_unseal_key }}"
+        status_code: [200]
+      no_log: true
+
+    - name: "OpenBao — enable kv v2 mount at kv/ (idempotent)"
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18200/v1/sys/mounts/kv
+        method: POST
+        headers:
+          X-Vault-Token: "{{ bao_root_token }}"
+        body_format: json
+        body:
+          type: kv
+          options:
+            version: "2"
+        status_code: [204, 400]   # 400 = already exists (idempotent)
+      register: bao_kv_mount
+      failed_when: bao_kv_mount.status == 400 and 'path is already in use' not in (bao_kv_mount.json.errors | join(' '))
+      no_log: true
+
+    - name: "OpenBao — seed bootstrap secrets from host_vars (only writes missing keys)"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
+        method: POST
+        headers:
+          X-Vault-Token: "{{ bao_root_token }}"
+        body_format: json
+        body:
+          options:
+            cas: 0   # only write if no version exists yet — won't overwrite later edits
+          data: "{{ bootstrap_secrets | default({}) }}"
+        status_code: [200, 400]   # 400 = cas check failed (already seeded)
+      register: bao_seed
+      failed_when: bao_seed.status == 400 and 'check-and-set' not in (bao_seed.json.errors | join(' '))
+      when: bootstrap_secrets is defined and bootstrap_secrets | length > 0
+      no_log: true
+
+    - name: "OpenBao — show access info"
+      ansible.builtin.debug:
+        msg: |
+          OpenBao is up at https://{{ domain }}:18200 (localhost-only on the box).
+
+          Tunnel from your laptop:
+            ssh -L 18200:127.0.0.1:18200 {{ ansible_user }}@{{ ansible_host }}
+            open http://localhost:18200/ui
+
+          Root token + unseal key (DO NOT lose):
+            scp {{ ansible_user }}@{{ ansible_host }}:{{ digit_dir }}/.openbao/init.json ./init-{{ inventory_hostname }}.json
+
+          Secrets path for this tenant: {{ secrets_path }}
       ignore_errors: yes
 
     - name: Show MCP health status

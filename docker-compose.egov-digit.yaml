@@ -1698,6 +1698,57 @@ services:
     networks:
       - egov-network
 
+  # ==================== OpenBao (secrets backend) ====================
+  # Per-tenant secrets store. File-backed KV v2; the playbook handles
+  # init + auto-unseal on first deploy and stores the unseal keys at
+  # /opt/digit/.openbao/init.json (0600). Subsequent restarts unseal
+  # automatically using those keys.
+  #
+  # CAVEAT: with the unseal keys on the same host, this protects against
+  # plaintext secrets in git + adds an audit trail, but does NOT protect
+  # data-at-rest if the box itself is compromised. A real production model
+  # uses cloud-KMS auto-unseal or operator-held Shamir shares; that's a
+  # follow-up once we have a KMS to point at.
+  #
+  # Access:
+  #   ssh -L 18200:127.0.0.1:18200 egov-{nairobi,bomet}
+  #   open http://localhost:18200/ui     (UI)
+  #   bao login <root-token-from-init.json>
+  openbao:
+    image: openbao/openbao:latest
+    container_name: openbao
+    restart: unless-stopped
+    cap_add:
+      - IPC_LOCK
+    environment:
+      BAO_ADDR: http://127.0.0.1:8200
+      BAO_API_ADDR: http://openbao:8200
+      BAO_LOCAL_CONFIG: |
+        {
+          "storage": { "file": { "path": "/openbao/file" } },
+          "listener": [{ "tcp": { "address": "0.0.0.0:8200", "tls_disable": true } }],
+          "default_lease_ttl": "168h",
+          "max_lease_ttl": "720h",
+          "ui": true
+        }
+    command: ["server"]
+    volumes:
+      - openbao_data:/openbao/file
+    ports:
+      - "127.0.0.1:18200:8200"
+    networks:
+      - egov-network
+    healthcheck:
+      # 200 = unsealed+active, 429 = unsealed+standby, 472 = data-recovery
+      # 473 = perf-standby, 501 = uninitialized, 503 = sealed.
+      # Treat sealed/uninitialized as healthy (the playbook will init/unseal).
+      test: ["CMD", "wget", "-qO-", "--header=X-Vault-Request: true",
+             "http://127.0.0.1:8200/v1/sys/health?standbyok=true&sealedcode=200&uninitcode=200"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+
 networks:
   egov-network:
     driver: bridge
@@ -1713,3 +1764,4 @@ volumes:
   loki_data: null
   promtail_data: null
   mcp_postgres_data: null
+  openbao_data: null

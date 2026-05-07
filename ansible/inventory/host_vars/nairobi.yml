@@ -40,3 +40,15 @@ nginx_features:
 # itself is non-sensitive; what's behind it is. Once OpenBao is online,
 # the playbook does `vault_kv2_get(secrets_path)` to pull values.
 secrets_path: kv/digit/nairobi
+
+# Bootstrap secrets — seeded once into OpenBao on first deploy ONLY.
+# Subsequent edits should happen via `bao kv put` / the UI, not by
+# editing this file (the playbook uses cas=0 on the seed write so it
+# won't overwrite later versions). Empty map = no auto-seeding; you
+# can populate later from the UI.
+#
+# Once OpenBao is the source of truth, sensitive values like
+# postgres_password, keycloak_admin_password, registry creds, etc.
+# move under this key. For now we seed nothing (the inline values in
+# compose still apply); the next PR replaces those with vault lookups.
+bootstrap_secrets: {}
