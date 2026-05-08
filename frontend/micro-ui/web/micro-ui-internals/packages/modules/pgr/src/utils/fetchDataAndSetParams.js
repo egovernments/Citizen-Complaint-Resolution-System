@@ -158,9 +158,10 @@ export const formPayloadToCreateComplaint = (formData, tenantId, user, hierarchy
     "name": formData?.ComplainantName?.trim()?.length > 0 ? formData?.ComplainantName?.trim() : null,
     "mobileNumber": formData?.ComplainantContactNumber?.trim()?.length > 0 ? formData?.ComplainantContactNumber?.trim() : null,
     "userName": formData?.ComplainantContactNumber?.trim()?.length > 0 ? formData?.ComplainantContactNumber?.trim() : null,
+    "countryCode": formData?.countryCode || "+91",
     "type": "EMPLOYEE",
     "tenantId": tenantId,
-  } : user;
+  } : { ...user, countryCode: formData?.countryCode || user?.countryCode || "+91" };
   const boundaryHierarchy = (() => {
     const bc = Array.isArray(formData?.boundaryComponent) ? formData.boundaryComponent : [];
     // hierarchyLevels is an ordered array of level names matching bc indices
@@ -177,7 +178,7 @@ export const formPayloadToCreateComplaint = (formData, tenantId, user, hierarchy
   const additionalDetail = {
     supervisorName: formData?.SupervisorName?.trim()?.length > 0 ? formData?.SupervisorName?.trim() : null,
     supervisorContactNumber: formData?.SupervisorContactNumber?.trim()?.length > 0 ? formData?.SupervisorContactNumber?.trim() : null,
-    boundaryHierarchy,
+    boundaryHierarchy: boundaryHierarchy,
   };
 
   const documentsList = Array.isArray(formData?.ComplaintImagesPoint)

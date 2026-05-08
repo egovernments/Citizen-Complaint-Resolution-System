@@ -247,13 +247,14 @@ const CreateComplaintForm = ({
       return {
         ...section,
         body: section.body.map(field => {
-          if (
-            field.populators?.name === "ComplainantName" ||
-            field.populators?.name === "ComplainantContactNumber"
-          ) {
+          if (field.populators?.name === "ComplainantName") {
+            return { ...field, disable: disabledFields["ComplainantName"] };
+          }
+          if (field.populators?.name === "ComplainantContactNumber") {
             return {
               ...field,
-              disable: disabledFields[field.populators.name],
+              disable: disabledFields["ComplainantContactNumber"],
+              onCountryCodeChange: (code) => { countryCodeRef.current = code; },
             };
           }
           if (field.key === "boundaryComponent") {
@@ -291,8 +292,12 @@ const CreateComplaintForm = ({
 
   const prevSubTypeRef = React.useRef([]);
   const prevCityRef = React.useRef(null);
+  const getValuesRef = React.useRef(null);
+  const countryCodeRef = React.useRef("+91");
 
-  const onFormValueChange = (setValue, formData, formState, reset, setError, clearErrors) => {
+  const onFormValueChange = (setValue, formData, formState, reset, setError, clearErrors, trigger, getValues) => {
+    // Capture getValues so onFormSubmit can read unregistered fields like countryCode
+    if (getValues) getValuesRef.current = getValues;
 
     const selectedComplaintType = formData?.SelectComplaintType;
     const newSubTypes = getSubTypesByMenuPath(selectedComplaintType, serviceDefs);
@@ -338,13 +343,16 @@ const CreateComplaintForm = ({
       if (selectedUser === "MYSELF") {
         updatedData.ComplainantName = user?.info?.name || "";
         updatedData.ComplainantContactNumber = user?.info?.mobileNumber || "";
+        updatedData.countryCode = user?.info?.countryCode || "+91";
       } else if (selectedUser === "ANOTHER_USER") {
         updatedData.ComplainantName = "";
         updatedData.ComplainantContactNumber = "";
+        updatedData.countryCode = window?.Digit?.Hooks?.pgr?.useMobileValidation?.().validationRules?.prefix || "+91";
       }
 
       setValue("ComplainantName", updatedData.ComplainantName);
       setValue("ComplainantContactNumber", updatedData.ComplainantContactNumber);
+      setValue("countryCode", updatedData.countryCode);
     }
 
     if (needsSessionUpdate) {
@@ -380,8 +388,10 @@ const CreateComplaintForm = ({
       }
     }
 
-    const payload = formPayloadToCreateComplaint(_data, tenantId, user?.info,
-      // Ordered array of selectable level names — maps 1:1 with boundaryComponent by index
+    const resolvedCountryCode = countryCodeRef.current || sessionFormData?.countryCode || "+91";
+    const payload = formPayloadToCreateComplaint(
+      { ..._data, countryCode: resolvedCountryCode },
+      tenantId, user?.info,
       [hierarchyData?.highestHierarchy, hierarchyData?.lowestHierarchy].filter(Boolean)
     );
     handleResponseForCreateComplaint(payload);
@@ -443,6 +453,7 @@ const CreateComplaintForm = ({
         config={updatedConfig?.form}
         className="custom-form"
         onFormValueChange={onFormValueChange}
+        getFormAccessors={({ getValues }) => { getValuesRef.current = getValues; }}
         isDisabled={false}
         label={t("CS_COMMON_SUBMIT")}
       />
