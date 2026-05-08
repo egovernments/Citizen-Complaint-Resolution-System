@@ -1,0 +1,184 @@
+# Changelog
+All notable changes to this module will be documented in this file.
+
+# Changelog
+All notable changes to this module will be documented in this file.
+
+## [1.0.32] - 2026-05-07
+
+### Fixed
+
+- **PGR Inbox Search — Mobile Number Country Code Not Reflected in Payload (`PGRSearchInboxConfig.js`, `MobileNumberWithPrefix.js`, `UICustomizations.js`)**:
+  - Switching the country code dropdown in the inbox mobile number search always sent `+91` in the `countryCode` field regardless of selection.
+  - Root cause: `countryCode` was not declared in the search form's `defaultValues`, so React Hook Form never registered it as a tracked field. `setValue("countryCode", ...)` stored the value internally but `state.searchForm` never included it — UICustomizations always fell through to the `+91` hardcoded default.
+  - Fix:
+    - Added `countryCode: ""` to `defaultValues` in `PGRSearchInboxConfig.js` so RHF registers and tracks the field.
+    - `MobileNumberWithPrefix` now writes the selected prefix to `window.__PGR_INBOX_COUNTRY_CODE__` in both `pushToForm` and the MDMS-sync `useEffect`.
+    - `UICustomizations` reads `window.__PGR_INBOX_COUNTRY_CODE__` as a reliable fallback before the MDMS default / `+91`.
+
+## [1.0.31] - 2026-05-06
+
+### Fixed
+
+- **Employee Create Complaint — Country Code Not Reflected in Payload (`createComplaintForm.js`, `MobileNumberWithPrefix.js`)**:
+  - Changing the country code dropdown in the mobile number field was not being captured in the `_create` API payload — it always sent `+91` regardless of selection.
+  - Root cause: `countryCode` was written via react-hook-form's `setValue` on an unregistered field name, so `watch()` and `getValues()` both returned `undefined` — the fallback `"+91"` always applied.
+  - Fix: `MobileNumberWithPrefix` now calls an `onCountryCodeChange` callback (injected via field config) that writes directly to a `countryCodeRef` in `createComplaintForm`. At submit time, `countryCodeRef.current` is used as the authoritative source, bypassing react-hook-form entirely.
+
+## [1.0.30] - 2026-05-05
+
+### Fixed
+- **Employee Complaint Details — Workflow Actions (`PGRDetails.js`)**:
+  - Filtered out purely citizen-facing actions (e.g., `RATE`, `COMMENT`, `REOPEN`) from the "Take Action" dropdown for `SUPERUSER` accounts on the employee UI.
+  - Ensured the "Take Action" button is completely hidden instead of appearing disabled on terminal states (like `REJECTED` or `RESOLVED`) where all possible next actions are restricted to citizens.
+
+## [1.0.29] - 2026-04-30
+
+  ### Changed
+  - Upgraded `@egovernments/digit-ui-module-cms` to version `1.0.29`.
+  - Integrated Matomo analytics script for usage tracking.
+  - Dynamic boundary hierarchy support in complaint details (PGR) — structured index-mapped object replacing flat array, with backward compatibility.
+  - WhatsApp consent flow fixes: explicit auth-token propagation and language-preference preservation during post-login preference sync.
+  - Inbox search, filter, and pagination restored after code migration.
+  - Minor bug fixes and stability improvements.
+
+
+
+
+## [1.0.28] - 2026-04-27
+
+### Fixed
+
+- **Employee Complaint Details — Address Display (`PGRDetails.js`)**:
+  - Added combined address field to the employee complaint details page, mirroring the citizen-side pattern.
+  - Locality code is used directly as a translation key (no double `ADMIN_` prefix) for multi-root tenant deployments.
+  - Address parts (landmark, locality, tenant, pincode) now render line by line instead of comma-separated.
+
+- **PGR Inbox Search — Country Code (`UICustomizations.js`)**:
+  - Added `countryCode` alongside `mobileNumber` in the inbox search API criteria so mobile number lookups work correctly with country prefix validation.
+  - Falls back to `MDMSValidationPatterns.mobileNumberValidation.prefix` or `+91` when not set in the search form.
+
+## [1.0.27] - 2026-04-27 - Code Merge
+
+### Added / Fixed
+
+- **Dynamic Mobile Validation & Prefix Support**: 
+  - Integrated full MDMS-driven validation rules into the Employee PGR workflows natively using the new `useMobileValidation` hook.
+  - Implemented the custom `MobileNumberWithPrefix` component to enforce consistent, standard-compliant mobile input dropdowns.
+  - Added real-time automated mapping for mapping and extracting `"countryCode"` based on the globally loaded MDMS `"default": true` configurations directly into backend `citizen` request payloads for the `_create` APIs.
+
+## [1.0.26] - 2026-04-23
+
+### Added
+
+- **Inbox Toggle (`USE_INBOX_V1`)**: Employee inbox now supports runtime switching between two inbox implementations via the `USE_INBOX_V1` flag in `globalConfigs.js`.
+  - `PGRInbox.js`: Wraps `PGRInboxV1` (legacy) and `PGRSearchInboxV2` (InboxSearchComposer-based). Reads `window.globalConfigs.getConfig("USE_INBOX_V1")` — if `true`, renders V1; otherwise renders V2.
+  - `globalConfigs.js` (`local-setup/nginx/`): Added `USE_INBOX_V1: true` entry and corresponding `getConfig` case to enable V1 by default in local development.
+
+### Fixed
+
+- **`PGRInboxV1` default filter**: Changed initial `assignee` filter from `[{ code: uuid }]` (current user only) to `[]` (all complaints) so the inbox is not empty on first load.
+- **`DesktopInbox` locality lookup**: Added `getLocalityCodeForMultiTenant()` helper and `Digit.Utils.getMultiRootTenant()` check to correctly resolve locality codes in multi-root tenant deployments (matches DIGIT-Frontend reference implementation).
+
+## [1.0.24] - 2026-04-10
+
+### Updated
+- Version bumped to 1.0.24
+
+
+## [1.0.23] - 2026-04-09
+
+### Updated
+- Version bumped to 1.0.23
+
+## [1.0.22] - 2026-04-06
+
+### Fixed
+
+- **CCSD-1777**: Employee UI — Timeline assignee display now strictly follows business rule: employee info is shown **only when a user explicitly selected an assignee** (`assignes[0]` present). Previously, the `instance.assigner` (always populated by the backend) was being shown for non-assign actions, causing creator/rejector/resolver names to appear incorrectly.
+  - `TimeLineWrapper.js`: Replaced action-type check (`ASSIGN`/`REASSIGN`) with a direct `assignes[0]` presence check — handles all six scenarios correctly including CSR reopen-with-assignee edge case.
+  - **Affected actions now fixed**: `CREATE` (complaint filed), `REJECT` (GRO rejects), `RESOLVE` (LME resolves), `REOPEN` without assignee selection (CSR reopens).
+  - **Unaffected / already correct**: `ASSIGN` (GRO → LME), `REASSIGN` (LME → GRO), `REOPEN` with assignee selected.
+
+- **CCSD-Rating Flow**: Citizen rating submission now correctly updates `ComplaintDetails` and timeline without requiring a manual page refresh.
+  - `SelectRating.js`: Calls `revalidateComplaint()` immediately after rating API completes to invalidate the SWR cache; writes `PGR_LAST_RATING` to session storage as a reliable fallback for the Response page banner.
+  - `Response.js`: Added 800 ms loading state to allow Redux to settle; added session storage fallback so the success banner is always shown even if Redux state hasn't populated yet.
+  - `ComplaintDetails.js`: Both `useComplaintDetails` and `useWorkflowDetails` revalidation delays extended from 1.5 s → 3 s when a rating was just submitted (detected via `PGR_LAST_RATING` session flag), giving the backend time to commit the `RATE` transition before the next fetch.
+
+## [1.0.14] - 2026-03-16
+### Fixed
+ -var Digit = window.Digit || {}; removed
+
+## [1.0.13] - 2026-03-16
+### Fixed
+- Fixed complaint subtype localization keys showing raw keys instead of translated labels
+  - Changed `SERVICEDEFS.` (dot separator) to `SERVICEDEFS_` (underscore separator) to match localization entries
+  - Updated across useServiceDefs hook, UICustomizations, Complaint component, and SelectSubType step
+
+## [1.0.12] - 2026-03-13
+- Fixed back button on complaint-success page to navigate to sandbox home with correct query params when in multi-.root tenant mode
+
+## [1.0.11] - 2026-03-11
+- multi-root tenant mode changes 
+
+## [1.0.10] - 2026-03-11
+- SUPERUSER Role added
+
+## [1.0.9] - 2026-03-10
+- Multiroot tenant city id updated and logics added
+
+## [1.0.8] - 2026-03-10
+- CMS Create multiroot tenant city id updated
+
+## [1.0.7] - 2026-03-10
+- CMS Create multiroot tenant city id updated
+
+## [1.0.6] - 2026-03-10
+- Digit-ui-libraries updated into 1.9.4
+
+## [1.0.5] - 2026-03-10
+### Updated
+- **Libraries Package**: Updated digit-ui-libraries to version 1.9.4
+
+### Version 1.0.4
+- **Fixed**: Clear search button in PGR inbox now clears both text fields and search results in a single click
+  - Updated `minReqFields` from 1 to 0 in PGRSearchInboxConfig.js to allow search with empty criteria
+  - Previously required two clicks: one to clear fields, another to refresh results
+  - Now automatically triggers search with cleared criteria on first click
+
+## [1.0.3] - 2026-03-05
+### Fixed
+- **PGR Inbox Search and Filter Issues**
+  - Fixed search and filter inputs losing values while typing
+  - Fixed "Assigned to Me" filter triggering incorrect API calls
+  - Fixed state mutation in UICustomizations preProcess function
+  - Added mobile number validation with proper prefix and pattern rules
+  - Memoized config object to prevent unnecessary re-renders
+  - Consolidated config processing for better performance
+  - Fixed lodash import in PGRInbox.js
+  - Updated useEffect dependencies to prevent config reset on every render
+
+**Files Modified:**
+- `src/pages/employee/PGRInbox.js` - Config memoization, mobile validation, proper React hooks
+- `src/configs/UICustomizations.js` - Deep cloning to avoid state mutation, improved filter handling
+
+**Impact:**
+- Search and filter inputs now retain values when typing
+- "Assigned to Me" / "Assigned to All" filters work correctly
+- Mobile validation active with MDMS rules
+- No state corruption or unnecessary re-renders
+- Search and filter operate independently
+
+## [1.0.2] - 2026-02-27
+### Fixed
+- CCSD-1617: Employee inbox — restored broken search, filter, and pagination functionality on the PGR inbox page
+
+## [1.0.1] - 2026-02-18
+### Fixed
+- CCSD-1616: Citizen header logo override — rewrote script with persistent dual-observer approach to survive React re-renders; added citizen-route guard so override only applies on `/citizen` pages - Header Removed
+
+- Core version Updated in to 1.9.12
+
+## 0.0.1 - 2025-02-13
+### Intial Commit
+  1. Initial commit with pgr module
