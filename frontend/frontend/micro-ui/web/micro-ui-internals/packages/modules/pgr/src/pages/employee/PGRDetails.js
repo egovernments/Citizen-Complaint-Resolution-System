@@ -1,0 +1,694 @@
+import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { useHistory, useParams } from "react-router-dom/cjs/react-router-dom.min";
+import { HeaderComponent, Button, Card, Footer, ActionBar, SummaryCard, Tag, Timeline, Toast, NoResultsFound } from "@egovernments/digit-ui-components";
+import { Loader, DisplayPhotos, ImageViewer } from "@egovernments/digit-ui-react-components";
+import { convertEpochFormateToDate } from "../../utils";
+import TimelineWrapper from "../../components/TimeLineWrapper";
+import PGRWorkflowModal from "../../components/PGRWorkflowModal";
+import ComplaintLocationMap from "../../components/ComplaintLocationMap";
+import Urls from "../../utils/urls";
+import ComplaintPhotos from "../../components/ComplaintPhotos";
+
+// Action configurations used for handling different workflow actions like ASSIGN, REJECT, RESOLVE
+// TO DO: Move this to MDMS for handling Action Modal properties
+const ACTION_CONFIGS = [
+  {
+    actionType: "ASSIGN",
+    formConfig: {
+      label: {
+        heading: "CS_ACTION_ASSIGN",
+        cancel: "CS_COMMON_CANCEL",
+        submit: "CS_COMMON_SUBMIT",
+      },
+      form: [
+        {
+          body: [
+            {
+              type: "component",
+              isMandatory: false,
+              component: "PGRAssigneeComponent",
+              key: "SelectedAssignee",
+              label: "CS_COMMON_EMPLOYEE_NAME",
+              populators: { name: "SelectedAssignee" },
+            },
+            {
+              type: "textarea",
+              isMandatory: true,
+              key: "SelectedComments",
+              label: "CS_COMMON_EMPLOYEE_COMMENTS",
+              populators: {
+                name: "SelectedComments",
+                maxLength: 1000,
+                validation: { required: true },
+                error: "CORE_COMMON_REQUIRED_ERRMSG",
+              },
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    actionType: "REOPEN",
+    formConfig: {
+      label: {
+        heading: "CS_ACTION_REOPEN",
+        cancel: "CS_COMMON_CANCEL",
+        submit: "CS_COMMON_SUBMIT",
+      },
+      form: [
+        {
+          body: [
+            {
+              type: "component",
+              isMandatory: false,
+              component: "PGRAssigneeComponent",
+              key: "SelectedAssignee",
+              label: "CS_COMMON_EMPLOYEE_NAME",
+              populators: { name: "SelectedAssignee" },
+            },
+            {
+              type: "textarea",
+              isMandatory: true,
+              key: "SelectedComments",
+              label: "CS_COMMON_EMPLOYEE_COMMENTS",
+              populators: {
+                name: "SelectedComments",
+                maxLength: 1000,
+                validation: { required: true },
+                error: "CORE_COMMON_REQUIRED_ERRMSG",
+              },
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    actionType: "REJECT",
+    formConfig: {
+      label: {
+        heading: "PGR_ACTION_REJECT",
+        cancel: "CS_COMMON_CANCEL",
+        submit: "CS_COMMON_SUBMIT",
+      },
+      form: [
+        {
+          body: [
+            {
+              type: "textarea",
+              isMandatory: true,
+              key: "SelectedComments",
+              label: "CS_COMMON_EMPLOYEE_COMMENTS",
+              populators: {
+                name: "SelectedComments",
+                maxLength: 1000,
+                validation: { required: true },
+                error: "CORE_COMMON_REQUIRED_ERRMSG",
+              },
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    actionType: "RESOLVE",
+    formConfig: {
+      label: {
+        heading: "PGR_ACTION_RESOLVE",
+        cancel: "CS_COMMON_CANCEL",
+        submit: "CS_COMMON_SUBMIT",
+      },
+      form: [
+        {
+          body: [
+            {
+              type: "textarea",
+              isMandatory: true,
+              key: "SelectedComments",
+              label: "CS_COMMON_EMPLOYEE_COMMENTS",
+              populators: {
+                name: "SelectedComments",
+                maxLength: 1000,
+                validation: { required: true },
+                error: "CORE_COMMON_REQUIRED_ERRMSG",
+              },
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    actionType: "REASSIGN",
+    formConfig: {
+      label: {
+        heading: "CS_ACTION_REASSIGN",
+        cancel: "CS_COMMON_CANCEL",
+        submit: "CS_COMMON_SUBMIT",
+      },
+      form: [
+        {
+          body: [
+            {
+              type: "component",
+              isMandatory: false,
+              component: "PGRAssigneeComponent",
+              key: "SelectedAssignee",
+              label: "CS_COMMON_EMPLOYEE_NAME",
+              populators: { name: "SelectedAssignee" },
+            },
+            {
+              type: "textarea",
+              isMandatory: true,
+              key: "SelectedComments",
+              label: "CS_COMMON_EMPLOYEE_COMMENTS",
+              populators: {
+                name: "SelectedComments",
+                maxLength: 1000,
+                validation: { required: true },
+                error: "CORE_COMMON_REQUIRED_ERRMSG",
+              },
+            },
+          ],
+        },
+      ],
+    },
+  },
+];
+
+const PGRDetails = () => {
+  // Hooks for local state management
+  const [openModal, setOpenModal] = useState(false);
+  const { t } = useTranslation();
+  const tenantId = Digit.ULBService.getCurrentTenantId();
+  const history = useHistory();
+  const { id } = useParams();
+  const [selectedAction, setSelectedAction] = useState(null);
+  const [toast, setToast] = useState({ show: false, label: "", type: "" });
+  const userInfo = Digit.UserService.getUser();
+
+  // Persist session data for complaint update
+  const UpdateComplaintSession = Digit.Hooks.useSessionStorage("COMPLAINT_UPDATE", {});
+  const [sessionFormData, setSessionFormData, clearSessionFormData] = UpdateComplaintSession;
+
+  // Load master data from MDMS
+  const { isLoading: isMDMSLoading, data: serviceDefs } = Digit.Hooks.useCustomMDMS(
+    tenantId,
+    "RAINMAKER-PGR",
+    [{ name: "ServiceDefs" }],
+    {
+      cacheTime: Infinity,
+      select: (data) => data?.["RAINMAKER-PGR"]?.ServiceDefs,
+    },
+    { schemaCode: "SERVICE_DEFS_MASTER_DATA" }
+  );
+
+  function getServiceCategoryByCode(serviceCode, services) {
+    if (!serviceCode || !Array.isArray(services)) return null;
+    const match = services.find(item => item.serviceCode === serviceCode);
+    // Return category if available, fallback to menuPath for backward compatibility
+    return match?.category || match?.menuPath || null;
+  }
+
+  function getServiceNameByCode(serviceCode, services) {
+    if (!serviceCode || !Array.isArray(services)) return null;
+
+    const match = services.find(item => item.serviceCode === serviceCode);
+    return match?.name || null;
+  }
+
+  // Fetch complaint details
+  const { isLoading, isError, error, data: pgrData, revalidate: pgrSearchRevalidate } = Digit.Hooks.pgr.usePGRSearch({ serviceRequestId: id }, tenantId);
+
+  // Hook to update the complaint
+  const { mutate: UpdateComplaintMutation } = Digit.Hooks.pgr.usePGRUpdate(tenantId);
+
+  // Fetch workflow details
+  const { isLoading: isWorkflowLoading, data: workflowData, revalidate: workFlowRevalidate } = Digit.Hooks.useCustomAPIHook({
+    url: "/egov-workflow-v2/egov-wf/process/_search",
+    params: { tenantId, history: true, businessIds: id },
+    config: { enabled: true },
+    changeQueryName: id,
+  });
+
+  // Fetch business service metadata
+  const { isLoading: isBusinessServiceLoading, data: businessServiceData } = Digit.Hooks.useCustomAPIHook({
+    url: Urls.workflow.businessServiceSearch,
+    params: { tenantId, businessServices: "PGR" },
+    config: { enabled: true },
+  });
+
+  // Automatically dismiss toast messages after 3 seconds
+  useEffect(() => {
+    if (toast?.show) {
+      setTimeout(() => {
+        handleToastClose();
+      }, 3000);
+    }
+  }, [toast?.show]);
+
+  const handleToastClose = () => {
+    setToast({ show: false, label: "", type: "" });
+  };
+
+  // Prepare and submit the update complaint request
+  const handleActionSubmit = (_data) => {
+    const actionConfig = ACTION_CONFIGS.find((config) => config.actionType === selectedAction.action);
+
+    if (!actionConfig) return;
+
+    const missingFields = [];
+
+    actionConfig.formConfig.form.forEach((section) => {
+      section.body.forEach((field) => {
+        if (field.isMandatory) {
+          const fieldKey = field.key;
+          const fieldValue = _data?.[fieldKey];
+
+          // For dropdowns or components, also check if selected value is valid object or string
+          const isEmpty =
+            fieldValue === undefined ||
+            fieldValue === null ||
+            (typeof fieldValue === "string" && fieldValue.trim() === "") ||
+            (typeof fieldValue === "object" && Object.keys(fieldValue).length === 0);
+
+          if (isEmpty) {
+            missingFields.push(t(field.label));
+          }
+        }
+      });
+    });
+
+    if (missingFields.length > 0) {
+      setToast({
+        show: true,
+        label: t("CS_COMMON_REQUIRED_FIELDS_MISSING") + ": " + missingFields.join(", "),
+        type: "error",
+      });
+      return;
+    }
+    const updateRequest = {
+      service: { ...pgrData?.ServiceWrappers[0].service },
+      workflow: {
+        action: selectedAction.action,
+        assignes: _data?.SelectedAssignee?.uuid ? [_data?.SelectedAssignee?.uuid] : null,
+        hrmsAssignes: _data?.SelectedAssignee?.uuid ? [_data?.SelectedAssignee?.uuid] : null,
+        comments: _data?.SelectedComments || "",
+      },
+    };
+    handleResponseForUpdateComplaint(updateRequest);
+  };
+
+  // Refresh the complaint and workflow data
+  const refreshData = async () => {
+    await pgrSearchRevalidate();
+    await workFlowRevalidate();
+  };
+
+  // Handle response after updating complaint
+  const handleResponseForUpdateComplaint = async (payload) => {
+    setOpenModal(false);
+    await UpdateComplaintMutation(payload, {
+      onError: () => setToast({ show: true, label: t("FAILED_TO_UPDATE_COMPLAINT"), type: "error" }),
+      onSuccess: async (responseData) => {
+        const msg = payload.workflow.action || "RESOLVE";
+        if (responseData?.ResponseInfo?.Errors) {
+          setToast({ show: true, label: t("FAILED_TO_UPDATE_COMPLAINT"), type: "error" });
+        } else {
+          setToast({ show: true, label: t(`${msg}_SUCCESSFULLY`), type: "success" });
+          await refreshData();
+          clearSessionFormData();
+        }
+      },
+    });
+  };
+
+  // Enhance config with roles and department dynamically
+  const getUpdatedConfig = (selectedAction, workflowData, configs, serviceDefs, complaintData, businessServiceResponse) => {
+    const actionConfig = configs.find((config) => config.actionType === selectedAction.action);
+    const department = serviceDefs?.find((def) => def.serviceCode === complaintData?.ServiceWrappers[0]?.service?.serviceCode)?.department;
+    if (!actionConfig) return null;
+
+    // Get the next state UUID from the selected action
+    const nextStateUuid = selectedAction?.nextState;
+
+    // Find all roles from the next state's actions by searching in BusinessService states
+    let nextStateRoles = [];
+    if (nextStateUuid && businessServiceResponse?.states) {
+      // Search through business service states to find the state with matching UUID
+      const nextState = businessServiceResponse.states.find(
+        (state) => state?.uuid === nextStateUuid
+      );
+
+      if (nextState?.actions) {
+        // Filter actions that contain PGR_VIEWER role
+        const actionsWithPgrViewer = nextState.actions.filter((action) =>
+          action.roles && Array.isArray(action.roles) && action.roles.includes("PGR_VIEWER")
+        );
+
+        // Collect all unique roles from filtered actions
+        const allRoles = new Set();
+        actionsWithPgrViewer.forEach((action) => {
+          action.roles.forEach((role) => allRoles.add(role));
+        });
+        nextStateRoles = Array.from(allRoles);
+      }
+    }
+
+    // Use next state roles if found, otherwise fall back to current action roles
+    // Filter out PGR_VIEWER role from the final list
+    const roles = (nextStateRoles.length > 0 ? nextStateRoles : (selectedAction?.roles || [])).filter(
+      (role) => role !== "PGR_VIEWER"
+    );
+
+    return {
+      ...actionConfig.formConfig,
+      form: actionConfig.formConfig.form.map((formItem) => ({
+        ...formItem,
+        body: formItem.body.map((bodyItem) => ({
+          ...bodyItem,
+          populators: {
+            ...bodyItem.populators,
+            roles,
+            department,
+            props: { ...bodyItem.populators.props, department },
+          },
+        })),
+      })),
+    };
+  };
+
+  // Roles that are purely citizen-facing — never show these as action options on the employee UI
+  const CITIZEN_ONLY_ROLES = ["CITIZEN"];
+
+  // Shared helper: returns true if ALL roles on an action are citizen-only (e.g. RATE, REOPEN, COMMENT)
+  const isCitizenOnlyAction = (action) =>
+    Array.isArray(action.roles) &&
+    action.roles.length > 0 &&
+    action.roles.every((role) => CITIZEN_ONLY_ROLES.includes(role));
+
+  // Get list of valid actions for current user and state
+  const getNextActionOptions = (workflowData, businessServiceResponse) => {
+    const currentState = workflowData?.ProcessInstances?.[0]?.state;
+    const matchingState = businessServiceResponse?.states?.find((state) => state.uuid === currentState?.uuid);
+    if (!matchingState) return [];
+    const userRoles = userInfo?.info?.roles?.map((role) => role.code) || [];
+
+    // SUPERUSER gets all available actions without role filtering,
+    // but citizen-only actions (e.g. RATE with roles:["CITIZEN"]) are always excluded on the employee UI
+    const hasSuperUserRole = userRoles.includes("SUPERUSER");
+
+    if (!matchingState.actions) return [];
+
+    // Filter actions based on user roles, or return all employee-relevant ones if SUPERUSER
+    const filteredActions = hasSuperUserRole
+      ? matchingState.actions.filter((action) => !isCitizenOnlyAction(action))
+      : matchingState.actions.filter((action) => action.roles.some((role) => userRoles.includes(role)));
+
+    return filteredActions.map((action) => ({
+      action: action.action,
+      roles: action.roles,
+      nextState: action.nextState,
+      uuid: action.uuid,
+    }));
+  };
+
+  // Check if action button should be visible based on user roles
+  const shouldShowActionButton = () => {
+    const userRoles = userInfo?.info?.roles?.map((role) => role.code) || [];
+
+    // Get current state from ProcessInstances[0]
+    const currentState = workflowData?.ProcessInstances?.[0]?.state;
+
+    if (!currentState?.actions) {
+      return false;
+    }
+
+    // Check if user has SUPERUSER role - SUPERUSER bypasses ALL checks
+    const hasSuperUserRole = userRoles.includes("SUPERUSER");
+
+    if (hasSuperUserRole) {
+      // SUPERUSER sees the button only if there is at least one employee-relevant (non-citizen-only) action.
+      // e.g. on REJECTED/RESOLVED states where every action is CITIZEN-only, hide the button entirely.
+      return currentState.actions.some((action) => !isCitizenOnlyAction(action));
+    }
+
+    // Get all roles from current state actions (employee path — citizen-only actions are naturally
+    // excluded because the employee won't have the CITIZEN role)
+    const allActionRoles = [];
+    currentState.actions.forEach(action => {
+      if (action.roles) {
+        allActionRoles.push(...action.roles);
+      }
+    });
+
+    // Check if user has PGR_VIEWER role
+    const hasViewerRole = userRoles.includes("PGR_VIEWER");
+
+    // Get user roles excluding PGR_VIEWER
+    const userNonViewerRoles = userRoles.filter(role => role !== "PGR_VIEWER");
+
+    // Check if any non-viewer user role matches with action roles
+    const hasMatchingRole = userNonViewerRoles.some(userRole =>
+      allActionRoles.includes(userRole)
+    );
+
+    // For other users: Show button only if user has BOTH PGR_VIEWER AND other matching roles
+    return hasViewerRole && hasMatchingRole;
+  };
+
+  // Display loader until required data loads
+  if (isLoading || isMDMSLoading || isWorkflowLoading) return <Loader />;
+
+  return (
+    <React.Fragment>
+      {/* Header */}
+      <HeaderComponent className="digit-inbox-search-composer-header" styles={{ marginBottom: "1.5rem" }}>
+        {t("CS_COMPLAINT_DETAILS_COMPLAINT_DETAILS")}
+      </HeaderComponent>
+
+      {/* Complaint Summary Card */}
+      <div>
+        {pgrData?.ServiceWrappers?.length > 0 ? (
+          <SummaryCard
+            asSeperateCards
+            header="Heading"
+            layout={1}
+            sections={[
+              {
+                cardType: "primary",
+                fieldPairs: [
+                  {
+                    inline: true,
+                    label: t("CS_COMPLAINT_DETAILS_COMPLAINT_NO"),
+                    type: "text",
+                    value: pgrData?.ServiceWrappers[0].service?.serviceRequestId || "NA",
+                  },
+                  {
+                    inline: true,
+                    label: t("CS_COMPLAINT_DETAILS_COMPLAINT_TYPE"),
+                    type: "text",
+                    value: t(getServiceCategoryByCode(pgrData?.ServiceWrappers[0].service?.serviceCode, serviceDefs) || "NA"),
+                  },
+                  {
+                    inline: true,
+                    label: t("CS_COMPLAINT_DETAILS_COMPLAINT_SUBTYPE"),
+                    type: "text",
+                    value: t(getServiceNameByCode(pgrData?.ServiceWrappers[0].service?.serviceCode, serviceDefs) || "NA"),
+                  },
+                  {
+                    inline: true,
+                    label: t("CS_COMPLAINT_FILED_DATE"),
+                    value: convertEpochFormateToDate(pgrData?.ServiceWrappers[0].service?.auditDetails?.createdTime) || t("NA"),
+                  },
+                  ...((() => {
+                    const _rawHierarchy = pgrData?.ServiceWrappers[0]?.service?.additionalDetail?.boundaryHierarchy;
+                    const hierarchy = (() => { try { return typeof _rawHierarchy === "string" ? JSON.parse(_rawHierarchy) : _rawHierarchy; } catch (e) { return _rawHierarchy; } })();
+
+                    // Object format: { Zone: "CODE", Locality: "CODE" } — show one row per level
+                    if (hierarchy && typeof hierarchy === "object" && !Array.isArray(hierarchy) && Object.keys(hierarchy).length > 0) {
+                      return Object.entries(hierarchy).map(([level, code]) => ({
+                        inline: true,
+                        label: t(`EGOV_LOCATION_BOUNDARYTYPE_${level.toUpperCase()}`),
+                        value: t(code),
+                      }));
+                    }
+                    // Flat array fallback: show as joined breadcrumb
+                    if (Array.isArray(hierarchy) && hierarchy.length > 0) {
+                      return [{
+                        inline: true,
+                        label: t("CS_COMPLAINT_DETAILS_BOUNDARY_HIERARCHY"),
+                        value: hierarchy.map(code => t(code)).join(" > "),
+                      }];
+                    }
+                    // No hierarchy — fall back to plain area field
+                    return [{
+                      inline: true,
+                      label: t("CS_COMPLAINT_DETAILS_AREA"),
+                      value: t(pgrData?.ServiceWrappers[0].service?.address?.locality?.code || "NA"),
+                    }];
+                  })()),
+                  {
+                    inline: true,
+                    label: t("CS_COMPLAINT_DETAILS_CURRENT_STATUS"),
+                    value: t(`CS_COMMON_PGR_STATE_${pgrData?.ServiceWrappers[0].service?.applicationStatus || "NA"}`),
+                  },
+                  {
+                    inline: true,
+                    label: t("ES_CREATECOMPLAINT_ADDRESS"),
+                    value: (() => {
+                      const address = pgrData?.ServiceWrappers[0]?.service?.address;
+                      const tenantId = pgrData?.ServiceWrappers[0]?.service?.tenantId;
+                      const isMultiRoot = Digit.Utils.getMultiRootTenant();
+                      const localityKey = isMultiRoot
+                        ? address?.locality?.code
+                        : address?.locality?.name || address?.locality?.code;
+                      const parts = [
+                        address?.landmark,
+                        localityKey ? t(localityKey) : null,
+                        tenantId ? t(`TENANT_TENANTS_${tenantId?.toUpperCase?.()?.replace(".", "_")}`) : null,
+                        address?.pincode,
+                      ].filter(Boolean);
+                      if (parts.length === 0) return "NA";
+                      return parts.join(", ");
+                    })(),
+                  },
+                  {
+                    inline: true,
+                    label: t("CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS_DESCRIPTION"),
+                    value: pgrData?.ServiceWrappers[0].service?.description || "NA",
+                  },
+                ],
+              },
+              ...(
+                (pgrData?.ServiceWrappers[0]?.service?.documents?.length > 0 ||
+                  pgrData?.ServiceWrappers[0]?.workflow?.verificationDocuments?.length > 0)
+                  ? [{
+                    cardType: "primary",
+                    fieldPairs: [
+                      {
+                        inline: false,
+                        type: "custom",
+                        renderCustomContent: () => (
+                          <ComplaintPhotos t={t} serviceWrapper={pgrData?.ServiceWrappers[0]} />
+                        ),
+                      },
+                    ],
+                    header: t("CS_COMMON_ATTACHMENTS"),
+                  }]
+                  : []
+              ),
+              // Conditionally include location section only if coordinates exist
+              ...(pgrData?.ServiceWrappers[0]?.service?.address?.geoLocation?.latitude &&
+                pgrData?.ServiceWrappers[0]?.service?.address?.geoLocation?.longitude
+                ? [{
+                  cardType: "primary",
+                  fieldPairs: [
+                    {
+                      inline: false,
+                      type: "custom",
+                      renderCustomContent: () => {
+                        const geoLocation = pgrData?.ServiceWrappers[0]?.service?.address?.geoLocation;
+                        const address = pgrData?.ServiceWrappers[0]?.service?.address;
+
+                        // Construct a readable address from API data
+                        const addressParts = [
+                          address?.buildingName,
+                          address?.street,
+                          address?.landmark,
+                          address?.locality?.name || address?.locality?.code,
+                          address?.pincode
+                        ].filter(Boolean);
+
+                        const addressString = addressParts.length > 0 ? addressParts.join(", ") : null;
+
+                        return (
+                          <ComplaintLocationMap
+                            latitude={geoLocation.latitude}
+                            longitude={geoLocation.longitude}
+                            address={addressString}
+                          />
+                        );
+                      },
+                    },
+                  ],
+                  header: t("CS_COMPLAINT_LOCATION"),
+                }]
+                : []
+              ),
+              {
+                cardType: "primary",
+                fieldPairs: [
+                  {
+                    inline: false,
+                    type: "custom",
+                    renderCustomContent: () => (
+                      <TimelineWrapper isWorkFlowLoading={isWorkflowLoading} workflowData={workflowData} businessId={id} labelPrefix="WF_PGR_" />
+                    ),
+                  },
+                ],
+                header: t("CS_COMPLAINT_DETAILS_COMPLAINT_TIMELINE"),
+              },
+            ].filter(Boolean)}
+            type="primary"
+          />
+        ) : (
+          <NoResultsFound />
+        )}
+      </div>
+
+      {/* Footer Action Bar */}
+      {shouldShowActionButton() && (
+        <Footer
+          actionFields={[
+            <Button
+              className="custom-class"
+              isSearchable
+              onClick={function noRefCheck() { }}
+              menuStyles={{
+                bottom: "40px",
+              }}
+              isDisabled={getNextActionOptions(workflowData, businessServiceData?.BusinessServices?.[0]).length === 0}
+              key="action-button"
+              label={t("ES_COMMON_TAKE_ACTION")}
+              onOptionSelect={(selected) => {
+                console.log("*** Log ===> selected", selected);
+                setSelectedAction(selected);
+                setOpenModal(true);
+              }}
+              options={getNextActionOptions(workflowData, businessServiceData?.BusinessServices?.[0])}
+              optionsKey="action"
+              type="actionButton"
+            />,
+          ]}
+          className=""
+          maxActionFieldsAllowed={5}
+          setactionFieldsToRight
+          sortActionFields
+          style={{}}
+        />
+      )}
+
+      {/* Toast Message */}
+      {toast?.show && <Toast type={toast?.type} label={toast?.label} isDleteBtn onClose={handleToastClose} />}
+
+      {/* Workflow Modal for Actions */}
+      {openModal && selectedAction && (
+        <PGRWorkflowModal
+          selectedAction={selectedAction}
+          sessionFormData={sessionFormData}
+          setSessionFormData={setSessionFormData}
+          clearSessionFormData={clearSessionFormData}
+          config={getUpdatedConfig(selectedAction, workflowData, ACTION_CONFIGS, serviceDefs, pgrData, businessServiceData?.BusinessServices?.[0])}
+          closeModal={() => setOpenModal(false)}
+          onSubmit={handleActionSubmit}
+        />
+      )}
+    </React.Fragment>
+  );
+};
+
+export default PGRDetails;
