@@ -146,23 +146,30 @@
       become: false
 
     # ==================== Config Directories ====================
+    # Each entry is `dest_name -> src_path_relative_to_ansible_dir`.
+    # `dest_name` is what ends up under {{ digit_dir }}/ on the target.
+    # All eight live at the repo root since b8629c5f.
+    # `keycloak` was previously synced but no source dir exists in the
+    # repo — keycloak config ships baked into the keycloak image — so
+    # it's dropped from the list.
     - name: Synchronize config directories
       synchronize:
-        src: "../{{ item }}/"
-        dest: "{{ digit_dir }}/{{ item }}/"
-      loop:
-        - kong
-        - otel
-        - keycloak
-        - configs
-        - nginx
-        - db
-        - seeds
-        - gatus
-        - jupyter
+        src: "{{ item.value }}/"
+        dest: "{{ digit_dir }}/{{ item.key }}/"
+      loop: "{{ digit_config_dirs | dict2items }}"
+      vars:
+        digit_config_dirs:
+          otel:    ../otel
+          configs: ../configs
+          nginx:   ../nginx
+          kong:    ../kong
+          db:      ../db
+          seeds:   ../seeds
+          gatus:   ../gatus
+          jupyter: ../jupyter
 
-    # docker/ contains build contexts (db-migrations, pgr-services)
-    # Even though we use pre-built images, compose may validate volume mount paths
+    # docker/ contains build contexts (db-migrations, pgr-services).
+    # Even though we use pre-built images, compose may validate volume mount paths.
     - name: Synchronize docker build context dirs
       synchronize:
         src: "../docker/"
@@ -242,18 +249,20 @@
         replace: "{{ domain }}"
 
     # ==================== Transfer MCP Image ====================
-    - name: Check if digit-mcp image exists locally
-      shell: docker images -q digit-mcp:latest
-      register: mcp_image_check
-      changed_when: false
+    # digit-mcp ships from the VPC registry now (10.0.0.4:5000/digit-mcp:latest),
+    # alongside every other DIGIT image. The compose `pull` step picks it up
+    # like any other service — no controller-side `docker save | docker load`
+    # transfer needed. To rebuild + republish the image from /root/DIGIT-MCP/
+    # on the controller, run `ansible-playbook ... --tags mcp-publish`.
+    - name: Build + push digit-mcp image to VPC registry
+      shell: |
+        set -e
+        cd /root/DIGIT-MCP
+        docker build -t 10.0.0.4:5000/digit-mcp:latest .
+        docker push 10.0.0.4:5000/digit-mcp:latest
       delegate_to: localhost
       become: false
-
-    - name: Transfer digit-mcp Docker image to target
-      shell: docker save digit-mcp:latest | ssh -o StrictHostKeyChecking=no {{ ansible_user }}@{{ ansible_host }} "docker load"
-      delegate_to: localhost
-      become: false
-      when: mcp_image_check.stdout != ""
+      tags: ['mcp-publish', 'never']  # opt-in only; not part of default deploy
 
     # ==================== Pull & Start ====================
     # COMPOSE_PROFILES drives which optional service groups are included.
