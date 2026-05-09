@@ -148,6 +148,77 @@ bao kv put kv/digit/<tenant> postgres_password='new-strong-value'
 
 Full details in [`runbooks/01-openbao.md`](runbooks/01-openbao.md).
 
+## Domain & TLS — what the playbook does, what you do
+
+The `domain:` key in `host_vars/<tenant>.yml` is the public hostname.
+The playbook uses it in three places:
+
+1. **Host nginx server_name** — `templates/nginx-site.conf.j2` renders
+   `server_name {{ domain }};` so the host nginx site responds to that
+   hostname.
+2. **Grafana root URL** — `/opt/digit/.env` gets `GF_SERVER_DOMAIN={{ domain }}`
+   and `GF_SERVER_ROOT_URL=https://{{ domain }}/grafana/` so Grafana
+   generates correct absolute URLs (login redirects, asset paths,
+   share links).
+3. **Anywhere the playbook bakes a hostname into config** (notification
+   links, brand asset URLs in `globalConfigs.js`, …) — pulls from the
+   same `{{ domain }}`.
+
+That's all the playbook does. The hostname becoming a real,
+browser-resolvable URL is **not** automated. Two manual steps:
+
+### 1. DNS A record
+
+Point your hostname at the server's public IP. At your DNS provider
+(Cloudflare / Route53 / DigitalOcean / …):
+
+```
+your-domain.example.   A   203.0.113.42
+```
+
+Verify resolution before running the deploy:
+```bash
+dig +short your-domain.example
+# → 203.0.113.42
+```
+
+### 2. TLS certificate (certbot)
+
+The playbook does NOT install certbot or fetch a cert. On Nairobi /
+Bomet this was a one-time manual step. After the first deploy:
+
+```bash
+ssh root@your-server
+apt install -y certbot python3-certbot-nginx
+certbot --nginx -d your-domain.example
+```
+
+Certbot interactively edits the nginx site that Ansible templated to
+add `listen 443 ssl;` + `ssl_certificate ...`, sets up an HTTP→HTTPS
+301 redirect, and registers a systemd timer for auto-renewal. From
+this point `https://your-domain.example/` works.
+
+For a wildcard cert (e.g. `*.preview.example.com`) use the DNS-01
+challenge — the playbook can't help with this, but the DigitalOcean
+DNS plugin pattern documented in `~/server.md` works.
+
+### 3. Firewall
+
+Make sure the server allows inbound 80 + 443:
+- On the host: `ufw allow 80,443/tcp` (or equivalent)
+- On the cloud: VPC security group / firewall rule inbound from `0.0.0.0/0`
+
+### Verify after setup
+
+```bash
+curl -sI https://your-domain.example/grafana/api/health  # → 200
+curl -sI https://your-domain.example/status/             # → 200
+```
+
+If you get connection-refused → DNS or firewall. If TLS handshake
+fails → certbot didn't run / cert expired. If 502/504 → upstream
+container isn't healthy (`docker ps | grep -v healthy` on the host).
+
 ## Common operations
 
 ### Switch digit-ui between HMR and static

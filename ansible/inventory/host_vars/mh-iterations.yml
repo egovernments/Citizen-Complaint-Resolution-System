@@ -4,6 +4,11 @@
 ansible_host: 100.70.82.47
 domain: mh-iterations.local
 
+# No Let's Encrypt cert for this Tailscale-only sandbox. Renders nginx
+# without the `listen 443 ssl;` block + cert mounts. Default elsewhere
+# is true (Nairobi/Bomet have certbot-managed certs).
+tls_enabled: false
+
 # Tenancy — reuse Nairobi's keys for fixture parity, but at the city level.
 state_tenant_id: ke.nairobi
 boot_tenant: ke.nairobi

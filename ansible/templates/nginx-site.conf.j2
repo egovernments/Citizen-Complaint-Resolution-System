@@ -164,14 +164,23 @@ server {
   }
 {% endif %}
 
+{% if tls_enabled | default(true) %}
+    # Certbot-managed TLS. Set `tls_enabled: false` in host_vars/<tenant>.yml
+    # for boxes without a Let's Encrypt cert (e.g. iteration sandboxes).
     listen 443 ssl; # managed by Certbot
     ssl_certificate /etc/letsencrypt/live/{{ domain }}/fullchain.pem; # managed by Certbot
     ssl_certificate_key /etc/letsencrypt/live/{{ domain }}/privkey.pem; # managed by Certbot
     include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+{% else %}
+    # tls_enabled=false — listen on plain HTTP only (sandbox / no Let's Encrypt cert).
+    listen 80;
+{% endif %}
 
 }
+{% if tls_enabled | default(true) %}
 server {
+    # HTTP→HTTPS redirect (only meaningful when TLS is on).
     if ($host = {{ domain }}) {
         return 301 https://$host$request_uri;
     } # managed by Certbot
@@ -183,3 +192,4 @@ server {
 
 
 }
+{% endif %}

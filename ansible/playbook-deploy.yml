@@ -38,38 +38,22 @@
       changed_when: stop_digit_ui.stdout == "stopped"
       when: digit_ui_mode == "hmr"
 
-    - name: "digit-ui mode=hmr — confirm /opt/digit-ui-esbuild exists"
-      ansible.builtin.stat:
-        path: /opt/digit-ui-esbuild/esbuild.dev.js
-      register: esbuild_repo
-      when: digit_ui_mode == "hmr"
+    # Both digit_ui_mode values (hmr and static) need the digit-ui-esbuild
+    # source on disk — HMR runs `node esbuild.dev.js` from it, static
+    # builds via `node esbuild.build.js`. Make sure it's there. Idempotent:
+    # `git` module no-ops when the working tree already matches origin.
+    - name: "digit-ui — ensure /opt/digit-ui-esbuild repo is present and current"
+      ansible.builtin.git:
+        repo: "{{ digit_ui_esbuild_repo | default('https://github.com/theflywheel/digit-ui-esbuild.git') }}"
+        dest: /opt/digit-ui-esbuild
+        version: "{{ digit_ui_esbuild_branch | default('main') }}"
+        update: yes
+        # Deploy target, not a dev workspace. esbuild touches a few tracked
+        # files (e.g. public/vendor/tailwind.css) during the build, which
+        # would otherwise block the next git pull. Force-clean keeps the
+        # working tree byte-identical to origin/{branch}.
+        force: yes
 
-    - name: "digit-ui mode=hmr — fail clearly if /opt/digit-ui-esbuild is missing"
-      ansible.builtin.fail:
-        msg: |
-          digit_ui_mode is `hmr` but /opt/digit-ui-esbuild/esbuild.dev.js
-          doesn't exist on {{ inventory_hostname }}.
-
-          Either:
-            (a) Switch this host to `digit_ui_mode: static` in
-                inventory/host_vars/{{ inventory_hostname }}.yml, OR
-            (b) Clone the esbuild repo on the target:
-                  ssh {{ ansible_user }}@{{ ansible_host }} \
-                    "git clone https://github.com/theflywheel/digit-ui-esbuild.git /opt/digit-ui-esbuild"
-                then re-run ./deploy.sh {{ inventory_hostname }}
-      when:
-        - digit_ui_mode == "hmr"
-        - not esbuild_repo.stat.exists
-
-    - name: "digit-ui mode=hmr — git pull /opt/digit-ui-esbuild"
-      ansible.builtin.command:
-        cmd: git pull
-        chdir: /opt/digit-ui-esbuild
-      register: esbuild_pull
-      changed_when: "'Already up to date' not in esbuild_pull.stdout"
-      when:
-        - digit_ui_mode == "hmr"
-        - esbuild_repo.stat.exists
 
   tasks:
     # ==================== Docker Installation ====================
@@ -93,6 +77,24 @@
       args:
         creates: /etc/apt/sources.list.d/docker.list
 
+    # Ubuntu 24.04 ships `docker.io` + `docker-compose-v2` from the
+    # archive. Both conflict with Docker's upstream packages — they own
+    # the same `/usr/libexec/docker/cli-plugins/docker-compose` file —
+    # so dpkg refuses to install the upstream packages until the archive
+    # ones are removed. Idempotent: no-op if they're not installed.
+    - name: Remove conflicting Ubuntu-archive Docker packages
+      apt:
+        name:
+          - docker.io
+          - docker-doc
+          - docker-compose
+          - docker-compose-v2
+          - podman-docker
+          - containerd
+          - runc
+        state: absent
+        purge: yes
+
     - name: Install Docker Engine
       apt:
         name:
@@ -103,6 +105,14 @@
           - docker-compose-plugin
         state: present
         update_cache: yes
+
+    # apt installs docker.service `disabled` on Ubuntu 24.04 — enable +
+    # start it explicitly so subsequent tasks can talk to the daemon.
+    - name: Ensure docker daemon is enabled + running
+      service:
+        name: docker
+        state: started
+        enabled: yes
 
     # ==================== Docker Configuration ====================
     # The Hetzner VPC registry at 10.0.0.4:5000 (egov-ci) hosts every
@@ -729,57 +739,68 @@
         chdir: "{{ digit_dir }}"
       changed_when: false
 
-    - name: "validate — public UI returns 200 over HTTPS"
+    # When tls_enabled=false (sandbox), hit the box on plain HTTP and pass
+    # `Host: {{ domain }}` so nginx routes to the right server-name block.
+    # The hostname itself doesn't have to be DNS-resolvable.
+    - name: "validate — public UI returns 200"
       ansible.builtin.uri:
-        url: "https://{{ domain }}/digit-ui/"
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/digit-ui/"
         status_code: [200]
         timeout: 10
-        validate_certs: yes
+        validate_certs: "{{ tls_enabled | default(true) }}"
+        headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
       retries: 3
       delay: 5
 
     - name: "validate — configurator returns 200 (when enabled)"
       ansible.builtin.uri:
-        url: "https://{{ domain }}/configurator/"
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/configurator/"
         status_code: [200]
         timeout: 10
-        validate_certs: yes
+        validate_certs: "{{ tls_enabled | default(true) }}"
+        headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
       when: nginx_features.configurator | default(false)
 
     - name: "validate — gatus /status/ returns 200 (when enabled)"
       ansible.builtin.uri:
-        url: "https://{{ domain }}/status/"
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/status/"
         status_code: [200]
         timeout: 10
-        validate_certs: yes
+        validate_certs: "{{ tls_enabled | default(true) }}"
+        headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
       when: nginx_features.status | default(false)
 
     - name: "validate — MCP HTTP transport responds 405 to HEAD (proves /mcp routed)"
       ansible.builtin.uri:
-        url: "https://{{ domain }}/mcp"
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/mcp"
         method: HEAD
         status_code: [405]
         timeout: 10
-        validate_certs: yes
+        validate_certs: "{{ tls_enabled | default(true) }}"
+        headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
       when: nginx_features.mcp | default(false)
 
     - name: "validate — auth flow: ADMIN can mint a token"
       ansible.builtin.uri:
-        url: "https://{{ domain }}/user/oauth/token"
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/user/oauth/token"
         method: POST
-        headers:
-          Authorization: "Basic ZWdvdi11c2VyLWNsaWVudDo="
-          Content-Type: "application/x-www-form-urlencoded"
+        headers: >-
+          {{
+            {'Authorization': 'Basic ZWdvdi11c2VyLWNsaWVudDo=',
+             'Content-Type': 'application/x-www-form-urlencoded'}
+            | combine({'Host': domain} if not (tls_enabled | default(true)) else {})
+          }}
         body_format: form-urlencoded
         body:
           grant_type: password
           username: "{{ bootstrap_user | default('ADMIN') }}"
           password: "{{ bootstrap_password | default('eGov@123') }}"
           scope: read
-          tenantId: "{{ bootstrap_tenant | default(state_tenant_id) }}"
+          tenantId: "{{ bootstrap_tenant | default('pg') }}"
           userType: EMPLOYEE
         status_code: [200]
         timeout: 15
+        validate_certs: "{{ tls_enabled | default(true) }}"
       register: auth_probe
       retries: 3
       delay: 10
@@ -794,23 +815,27 @@
 
     - name: "validate — MDMS lookup: StateInfo returns at least one record"
       ansible.builtin.uri:
-        url: "https://{{ domain }}/egov-mdms-service/v1/_search"
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/egov-mdms-service/v1/_search"
         method: POST
-        headers:
-          Content-Type: "application/json"
+        headers: >-
+          {{
+            {'Content-Type': 'application/json'}
+            | combine({'Host': domain} if not (tls_enabled | default(true)) else {})
+          }}
         body_format: json
         body:
           RequestInfo:
             apiId: "Rainmaker"
             authToken: "{{ auth_probe.json.access_token }}"
           MdmsCriteria:
-            tenantId: "{{ state_tenant_id }}"
+            tenantId: "{{ bootstrap_tenant | default('pg') }}"
             moduleDetails:
               - moduleName: "common-masters"
                 masterDetails:
                   - name: "StateInfo"
         status_code: [200]
         timeout: 15
+        validate_certs: "{{ tls_enabled | default(true) }}"
       register: mdms_probe
 
     - name: "validate — StateInfo response is non-empty"
@@ -873,6 +898,15 @@
       register: cc_install
       changed_when: "'added' in cc_install.stdout"
       ignore_errors: yes
+
+    # If a previous run (or hand-edit) left a stale empty file at one of these
+    # paths, ansible's `state: directory` errors. Clear those out first.
+    - name: Remove stale Claude Code config files (must be directories)
+      ansible.builtin.shell: |
+        for p in /root/.claude /root/.claude/skills /root/.claude/plugins; do
+          if [ -f "$p" ]; then rm -f "$p"; fi
+        done
+      changed_when: false
 
     - name: Create Claude Code config directories
       file:
