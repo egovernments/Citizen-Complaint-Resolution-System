@@ -1,0 +1,43 @@
+# mh-iterations — test/iteration sandbox box reachable via Tailscale.
+# Used to dry-run deploy changes before touching naipepea/bomet.
+
+ansible_host: 100.70.82.47
+domain: mh-iterations.local
+
+# Tenancy — reuse Nairobi's keys for fixture parity, but at the city level.
+state_tenant_id: ke.nairobi
+boot_tenant: ke.nairobi
+tenant_id: ke.nairobi
+
+map_center:
+  lat: -1.2921
+  lng: 36.8219
+
+login_tenant_allowlist:
+  - ke.nairobi
+employee_module_denylist:
+  - IM
+
+footer_logo_url: ""
+footer_bw_logo_url: ""
+
+digit_ui_mode: static
+enable_search_stack: false
+
+nginx_features:
+  brand_assets: false
+  configurator: false
+  configurator_caching: false
+  status: true
+  api_pgr: false
+  mcp: true
+
+secrets_path: kv/digit/mh-iterations
+
+bootstrap_secrets:
+  postgres_password: egov123
+  mcp_db_password: mcp123
+  minio_root_user: minioadmin
+  minio_root_password: minioadmin
+  elasticsearch_master_password: "iteration@#$"
+  egov_hrms_default_password: "eGov@123"

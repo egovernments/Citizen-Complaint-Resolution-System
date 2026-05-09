@@ -105,6 +105,27 @@
         update_cache: yes
 
     # ==================== Docker Configuration ====================
+    # The Hetzner VPC registry at 10.0.0.4:5000 (egov-ci) hosts every
+    # custom-built DIGIT image (digit-mcp, sb35-rebuilt egov-* services)
+    # over plain HTTP. Without this entry Docker refuses to pull with
+    # `http: server gave HTTP response to HTTPS client`. Restart the
+    # daemon when the file changes so the new config takes effect.
+    - name: Configure Docker insecure-registries for VPC registry
+      copy:
+        dest: /etc/docker/daemon.json
+        content: |
+          {
+            "insecure-registries": ["10.0.0.4:5000"]
+          }
+        mode: '0644'
+      register: daemon_json
+
+    - name: Restart docker if daemon.json changed
+      service:
+        name: docker
+        state: restarted
+      when: daemon_json.changed
+
     # check_mode: false forces this to run even under `--check`, so the
     # version-compare task below has a real value to test against.
     - name: Verify Docker Compose version >= 2.20
