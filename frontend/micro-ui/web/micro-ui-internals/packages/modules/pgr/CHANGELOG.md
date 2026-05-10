@@ -4,6 +4,19 @@ All notable changes to this module will be documented in this file.
 # Changelog
 All notable changes to this module will be documented in this file.
 
+## [1.0.33] - 2026-05-10
+
+### Fixed
+
+- **PGR Inbox — Search Results column-header sort toggle did nothing (`PGRSearchInboxConfig.js`, `UICustomizations.js`)**:
+  - Clicking any column header in the Search Results table flipped the toggle arrow but never reordered the rows.
+  - Root cause: `ResultsDataTableWrapper` inside `@egovernments/digit-ui-components@0.2.4` passes a no-op `(rowA, rowB) => 0` to `react-data-table-component` whenever a column does not declare its own `sortFunction`. That overrides the library's built-in selector-based sort, so toggling has no effect.
+  - Fix:
+    - Added a generic `compareByJsonPath(jsonPath)` helper in `PGRSearchInboxConfig.js` and wired a per-column `sortFunction` for all 5 inbox result columns (`complaintNumber`, `locality`, `status`, `currentOwner`, `slaDaysRemaining`). The Current Owner column sorts on `ProcessInstance.assignes[0].name` to match the displayed value; SLA days uses numeric compare.
+- **PGR Inbox — Console flooded with `selectionHandler is not defined or is not a function` (`UICustomizations.js`)**:
+  - Upstream `ResultsDataTableWrapper` calls `configModule?.selectionHandler` (and `actionSelectHandler`, `linkColumnHandler`) unconditionally on every table update and `console.error`s when they are missing. PGR doesn't use row selection or row actions, but the warnings still flooded the console on every sort/render.
+  - Fix: declared no-op `selectionHandler`, `actionSelectHandler`, `linkColumnHandler` in `UICustomizations.PGRInboxConfig`.
+
 ## [1.0.32] - 2026-05-07
 
 ### Fixed

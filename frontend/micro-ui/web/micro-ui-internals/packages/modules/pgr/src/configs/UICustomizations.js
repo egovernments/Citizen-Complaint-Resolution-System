@@ -269,6 +269,14 @@ export const UICustomizations = {
   },
 
   PGRInboxConfig: {
+    // No-op handlers to satisfy upstream ResultsDataTableWrapper, which calls
+    // configModule?.selectionHandler / actionSelectHandler / linkColumnHandler
+    // unconditionally and console.errors when they are missing. PGR doesn't
+    // use row-selection or row actions, but the table still fires these
+    // callbacks on every render/sort, flooding the console.
+    selectionHandler: () => {},
+    actionSelectHandler: () => {},
+    linkColumnHandler: () => {},
     preProcess: (data) => {
       // Deep clone to avoid mutating original state
       const clonedData = _.cloneDeep(data);
