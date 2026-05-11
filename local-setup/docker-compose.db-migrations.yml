@@ -1262,9 +1262,7 @@ services:
     ports:
       - "18888:8888"
     volumes:
-      - ./jupyter/dataloader/templates:/home/jovyan/work/templates
-      - ./jupyter:/home/jovyan/work/dataloader
-      - ./jupyter/DataLoader_v2.ipynb:/home/jovyan/work/DataLoader_v2.ipynb
+      - ./jupyter/dataloader:/home/jovyan/work
     deploy:
       resources:
         limits:
