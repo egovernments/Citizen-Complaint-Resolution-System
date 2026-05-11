@@ -30,6 +30,26 @@ import MobileNumberWithPrefix from "./components/MobileNumberWithPrefix";
 
 export const PGRReducers = getRootReducer;
 
+// Inject PGR UI overrides into document.head once at module import time, so
+// they apply on the very first paint and survive page refreshes (a JSX <style>
+// element inside the component tree can race with the toast / inbox mount on
+// refresh and miss the first paint).
+if (typeof document !== "undefined" && !document.getElementById("pgr-ui-overrides")) {
+  const style = document.createElement("style");
+  style.id = "pgr-ui-overrides";
+  style.textContent = `
+    .digit-toast-success,
+    .digit-toast-success.animate {
+      bottom: 8rem !important;
+    }
+    .digit-inbox-search-wrapper {
+      max-width: 100%;
+      overflow-x: auto;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 export const PGRModule = ({ stateCode, userType, tenants }) => {
   const { path, url } = useRouteMatch();
   const tenantId = Digit.ULBService.getCurrentTenantId();
@@ -57,26 +77,11 @@ export const PGRModule = ({ stateCode, userType, tenants }) => {
     return <Loader />;
   }
 
-  const toastPositionOverride = (
-    <style>{`
-      .digit-toast-success,
-      .digit-toast-success.animate {
-        bottom: 8rem !important;
-      }
-    `}</style>
-  );
-
   if (userType === "citizen") {
-    return (
-      <React.Fragment>
-        {toastPositionOverride}
-        <CitizenApp />
-      </React.Fragment>
-    );
+    return <CitizenApp />;
   } else {
     return (
       <ProviderContext>
-        {toastPositionOverride}
         <EmployeeApp path={path} stateCode={stateCode} userType={userType} tenants={tenants} />
       </ProviderContext>
     );
