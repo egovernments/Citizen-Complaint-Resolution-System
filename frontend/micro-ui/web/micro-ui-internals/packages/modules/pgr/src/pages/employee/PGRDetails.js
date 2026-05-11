@@ -676,7 +676,13 @@ const PGRDetails = () => {
                     inline: false,
                     type: "custom",
                     renderCustomContent: () => (
-                      <TimelineWrapper isWorkFlowLoading={isWorkflowLoading} workflowData={workflowData} businessId={id} labelPrefix="WF_PGR_" />
+                      <TimelineWrapper
+                        isWorkFlowLoading={isWorkflowLoading}
+                        workflowData={workflowData}
+                        businessId={id}
+                        labelPrefix="WF_PGR_"
+                        rating={pgrData?.ServiceWrappers?.[0]?.service?.rating}
+                      />
                     ),
                   },
                 ],

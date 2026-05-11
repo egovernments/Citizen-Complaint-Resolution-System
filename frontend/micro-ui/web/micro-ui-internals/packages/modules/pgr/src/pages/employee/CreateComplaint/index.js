@@ -24,8 +24,40 @@ import MobileNumberWithPrefix from "../../../components/MobileNumberWithPrefix";
 const CreateComplaint = () => {
   const { t } = useTranslation();
 
+  // Scroll-to-top guard for this screen.
+  // On short laptop viewports the page nudges down ~50–100px when the form mounts.
+  // Cause: a component inside @egovernments/digit-ui-components (a Dropdown /
+  // stepper / option list) calls `element.scrollIntoView({ block: "center" })`
+  // on mount when its element is outside the viewport. On a tall form that
+  // element sits below the fold, so the call scrolls the page downward.
+  // Earlier attempts with multiple `window.scrollTo(0, 0)` couldn't compete
+  // with a smooth scrollIntoView() that fires after our re-pin timeout.
+  //
+  // Fix: neutralize Element.prototype.scrollIntoView for the first ~800ms
+  // after mount so the offending library call becomes a no-op. Also pin
+  // scroll position to the top on first paint. User-initiated focus and
+  // scrollIntoView still work normally after that window — and it's restored
+  // on unmount so we don't affect other screens.
   useEffect(() => {
+    const prevRestoration = window.history?.scrollRestoration;
+    if ("scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "manual";
+    }
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function () {};
     window.scrollTo(0, 0);
+    const raf = requestAnimationFrame(() => window.scrollTo(0, 0));
+    const restoreTimer = setTimeout(() => {
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+    }, 800);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(restoreTimer);
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+      if ("scrollRestoration" in window.history && prevRestoration) {
+        window.history.scrollRestoration = prevRestoration;
+      }
+    };
   }, []);
 
   // Get current ULB tenant ID
