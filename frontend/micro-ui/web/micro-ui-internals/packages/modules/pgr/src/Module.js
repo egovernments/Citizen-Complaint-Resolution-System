@@ -57,11 +57,26 @@ export const PGRModule = ({ stateCode, userType, tenants }) => {
     return <Loader />;
   }
 
+  const toastPositionOverride = (
+    <style>{`
+      .digit-toast-success,
+      .digit-toast-success.animate {
+        bottom: 8rem !important;
+      }
+    `}</style>
+  );
+
   if (userType === "citizen") {
-    return <CitizenApp />;
+    return (
+      <React.Fragment>
+        {toastPositionOverride}
+        <CitizenApp />
+      </React.Fragment>
+    );
   } else {
     return (
       <ProviderContext>
+        {toastPositionOverride}
         <EmployeeApp path={path} stateCode={stateCode} userType={userType} tenants={tenants} />
       </ProviderContext>
     );

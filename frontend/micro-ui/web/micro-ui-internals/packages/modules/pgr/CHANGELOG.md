@@ -4,6 +4,28 @@ All notable changes to this module will be documented in this file.
 # Changelog
 All notable changes to this module will be documented in this file.
 
+## [1.0.36] - 2026-05-11
+
+### Fixed
+
+- **Citizen Reopen — Attachment Not Visible on Complaint Details (`citizen/ReopenComplaint/AddtionalDetails.js`)**:
+  - When a citizen reopened a complaint with an attached photo, the file was only persisted on the `workflow.verificationDocuments` of the REOPEN `ProcessInstance`. The complaint's "Attachments" section (which iterates `service.documents`) never showed it, and on the employee side only a count surfaced — no preview.
+  - Fix: in `reopenComplaint()`, also append the uploaded docs (already shaped as `{ documentType, fileStoreId, documentUid, additionalDetails }` by the upload step) to `complaintDetails.service.documents`. Existing service documents (e.g. original create-time photos) are preserved via array spread; nothing is removed.
+  - Effect: reopen photos now render alongside the original complaint photos under the "Attachments" section on both citizen and employee detail pages — no timeline-render workaround needed.
+
+- **Employee Timeline — Star Rating Missing on RATE Step (`components/TimeLineWrapper.js`, `pages/employee/PGRDetails.js`)**:
+  - After a citizen submitted a star rating, the RATE step in the employee timeline showed only the action label — the star value itself was never rendered. The citizen-side `TimeLine.js` already handled this for `CLOSEDAFTERRESOLUTION`, but the new `TimelineWrapper` used on the employee `PGRDetails` page had no rating-render path.
+  - Fix:
+    - Added a `rating` prop to `TimelineWrapper` and imported the existing `StarRated` component (`Rating` from `digit-ui-react-components`).
+    - When an instance has `action === "RATE"`, the wrapper now pushes a `<StarRated>` element into that step's `subElements`. The rating value is resolved from `instance.rating` first (some backends expose it on the ProcessInstance) and falls back to the `rating` prop sourced from `service.rating`.
+    - The label uses the new key `CS_COMMON_CITIZEN_RATED` (with a plain-English `"Citizen rated "` fallback when the key isn't yet in the locale bundle) so the employee view doesn't read "You Rated".
+    - `PGRDetails.js` now passes `rating={pgrData?.ServiceWrappers?.[0]?.service?.rating}` to the wrapper.
+
+- **Employee Create Complaint — Page Auto-Scrolls Downward on Mount (`pages/employee/CreateComplaint/index.js`)**:
+  - On short laptop viewports the create-complaint page nudged ~50–100px downward when the form mounted, hiding the page header.
+  - Root cause: a component inside `@egovernments/digit-ui-components` calls `element.scrollIntoView({ behavior: "smooth", block: "center" })` on mount when its element is outside the visible viewport. On a tall form that element sits below the fold, so the smooth scroll pulls the page downward. A single `window.scrollTo(0, 0)` on mount couldn't compete with the still-animating smooth scroll.
+  - Fix: temporarily neutralize `Element.prototype.scrollIntoView` (replace with a no-op) for the first 800 ms after mount so the library's call becomes a no-op; pin `window.scrollTo(0, 0)` on mount and on the next animation frame; disable browser scroll restoration for the page. The override is restored after 800 ms and on unmount — user-initiated focus and validation-driven `scrollIntoView` work normally afterward.
+
 ## [1.0.33] - 2026-05-10
 
 ### Fixed
