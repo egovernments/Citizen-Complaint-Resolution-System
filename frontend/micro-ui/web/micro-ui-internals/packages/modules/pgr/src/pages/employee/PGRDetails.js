@@ -44,6 +44,14 @@ const ACTION_CONFIGS = [
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
               },
             },
+            {
+              type: "component",
+              isMandatory: false,
+              component: "PGRActionUploadComponent",
+              key: "SelectedDocuments",
+              label: "CS_COMMON_ATTACHMENTS",
+              populators: { name: "SelectedDocuments" },
+            },
           ],
         },
       ],
@@ -80,6 +88,14 @@ const ACTION_CONFIGS = [
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
               },
             },
+            {
+              type: "component",
+              isMandatory: false,
+              component: "PGRActionUploadComponent",
+              key: "SelectedDocuments",
+              label: "CS_COMMON_ATTACHMENTS",
+              populators: { name: "SelectedDocuments" },
+            },
           ],
         },
       ],
@@ -108,6 +124,14 @@ const ACTION_CONFIGS = [
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
               },
             },
+            {
+              type: "component",
+              isMandatory: false,
+              component: "PGRActionUploadComponent",
+              key: "SelectedDocuments",
+              label: "CS_COMMON_ATTACHMENTS",
+              populators: { name: "SelectedDocuments" },
+            },
           ],
         },
       ],
@@ -135,6 +159,14 @@ const ACTION_CONFIGS = [
                 validation: { required: true },
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
               },
+            },
+            {
+              type: "component",
+              isMandatory: false,
+              component: "PGRActionUploadComponent",
+              key: "SelectedDocuments",
+              label: "CS_COMMON_ATTACHMENTS",
+              populators: { name: "SelectedDocuments" },
             },
           ],
         },
@@ -171,6 +203,14 @@ const ACTION_CONFIGS = [
                 validation: { required: true },
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
               },
+            },
+            {
+              type: "component",
+              isMandatory: false,
+              component: "PGRActionUploadComponent",
+              key: "SelectedDocuments",
+              label: "CS_COMMON_ATTACHMENTS",
+              populators: { name: "SelectedDocuments" },
             },
           ],
         },
@@ -290,6 +330,15 @@ const PGRDetails = () => {
       });
       return;
     }
+    const verificationDocuments = Array.isArray(_data?.SelectedDocuments)
+      ? _data.SelectedDocuments.map((fileStoreId) => ({
+          documentType: "PHOTO",
+          fileStoreId,
+          documentUid: "",
+          additionalDetails: {},
+        }))
+      : [];
+
     const updateRequest = {
       service: { ...pgrData?.ServiceWrappers[0].service },
       workflow: {
@@ -297,6 +346,7 @@ const PGRDetails = () => {
         assignes: _data?.SelectedAssignee?.uuid ? [_data?.SelectedAssignee?.uuid] : null,
         hrmsAssignes: _data?.SelectedAssignee?.uuid ? [_data?.SelectedAssignee?.uuid] : null,
         comments: _data?.SelectedComments || "",
+        verificationDocuments,
       },
     };
     handleResponseForUpdateComplaint(updateRequest);

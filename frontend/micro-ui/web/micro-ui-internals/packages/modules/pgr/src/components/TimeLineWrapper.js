@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from "react-i18next";
 import { PopUp, Timeline, TimelineMolecule, Loader, DisplayPhotos } from '@egovernments/digit-ui-components';
+import { DisplayPhotos as LegacyDisplayPhotos, ImageViewer } from '@egovernments/digit-ui-react-components';
 import { useMyContext } from "../utils/context";
 import { convertEpochFormateToDate } from '../utils';
 
@@ -14,6 +15,52 @@ const maskName = (name) => {
 const maskPhoneNumber = (phone) => {
     if (!phone || phone.length < 4) return phone;
     return 'XXXXXX' + phone.slice(-4);
+};
+
+// Fetches and renders thumbnails for a list of workflow documents
+const WorkflowDocuments = ({ documents, tenantId }) => {
+    const [thumbs, setThumbs] = useState([]);
+    const [fullImages, setFullImages] = useState([]);
+    const [zoomedImage, setZoomedImage] = useState(null);
+    const [currentIndex, setCurrentIndex] = useState(0);
+
+    useEffect(() => {
+        if (!documents || documents.length === 0) return;
+        const ids = documents.map((d) => d.fileStoreId).join(",");
+        Digit.UploadServices.Filefetch([ids], tenantId)
+            .then((res) => {
+                if (!res?.data) return;
+                const t = [], f = [];
+                Object.keys(res.data).forEach((key) => {
+                    if (key === "fileStoreIds" || key === "responseInfo") return;
+                    const val = res.data[key];
+                    if (typeof val === "string") {
+                        const urls = val.split(",");
+                        const full = urls[0];
+                        const thumb = urls.find((u) => u.includes("small")) || full;
+                        f.push(full);
+                        t.push(thumb);
+                    }
+                });
+                setThumbs(t);
+                setFullImages(f);
+            })
+            .catch(() => {});
+    }, [documents, tenantId]);
+
+    if (thumbs.length === 0) return null;
+
+    return (
+        <div style={{ marginTop: "0.5rem" }}>
+            <LegacyDisplayPhotos
+                srcs={thumbs}
+                onClick={(src, index) => { setZoomedImage(fullImages[index]); setCurrentIndex(index); }}
+            />
+            {zoomedImage && (
+                <ImageViewer imageSrc={zoomedImage} onClose={() => setZoomedImage(null)} />
+            )}
+        </div>
+    );
 };
 
 const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPrefix = "" }) => {
@@ -54,19 +101,16 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
                     }`,
                     // Show masked mobile only when an assignee was explicitly selected
                     maskedMobile && `${t("ES_COMMON_CONTACT_DETAILS")}: ${maskedMobile}`,
-                    instance?.comment && `${t('CS_COMMON_EMPLOYEE_COMMENTS')} : "${instance.comment}"`
+                    instance?.comment && `${t('CS_COMMON_EMPLOYEE_COMMENTS')} : "${instance.comment}"`,
+                    // Render workflow document thumbnails inline in the timeline step
+                    instance?.documents?.length > 0 && (
+                        <WorkflowDocuments
+                            key={`wf-docs-${index}`}
+                            documents={instance.documents}
+                            tenantId={tenantId}
+                        />
+                    ),
                 ];
-
-                // Add attachments if available
-                if (instance?.documents && instance.documents.length > 0) {
-                    const fileStoreIds = instance.documents.map(doc => doc.fileStoreId);
-                    // Create a simple display of document count and links
-                    subElements.push(
-                        <div key={`attachments-${index}`}>
-                            <strong>{t('CS_COMMON_ATTACHMENTS')}:</strong> {instance.documents.length} {t('FILES')}
-                        </div>
-                    );
-                }
 
                 return {
                     label: t(`${labelPrefix}${instance?.action}`),
