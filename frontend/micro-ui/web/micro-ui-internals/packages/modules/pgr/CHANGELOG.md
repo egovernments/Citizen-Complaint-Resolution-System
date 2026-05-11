@@ -39,10 +39,17 @@ All notable changes to this module will be documented in this file.
   - Upstream `ResultsDataTableWrapper` calls `configModule?.selectionHandler` (and `actionSelectHandler`, `linkColumnHandler`) unconditionally on every table update and `console.error`s when they are missing. PGR doesn't use row selection or row actions, but the warnings still flooded the console on every sort/render.
   - Fix: declared no-op `selectionHandler`, `actionSelectHandler`, `linkColumnHandler` in `UICustomizations.PGRInboxConfig`.
 
-- **Citizen Reopen — Attachment Persisted on Workflow Instead of Complaint (`citizen/ReopenComplaint/AddtionalDetails.js`)**:
-  - When a citizen reopened a complaint with an attached photo, the file was being sent on `workflow.verificationDocuments` and persisted on the `ProcessInstance` only. The complaint's "Attachments" section (which iterates `service.documents`) never showed it, and on the employee timeline only the count surfaced — no thumbnail.
-  - Fix: in `reopenComplaint()`, append the uploaded docs (already shaped as `{documentType, fileStoreId, documentUid, additionalDetails}` from the upload step) to `complaintDetails.service.documents` and drop `verificationDocuments` from `getUpdatedWorkflow`'s REOPEN payload. Existing service documents (e.g. original create-time photos) are preserved.
-  - Effect: reopen photos now render alongside the original complaint photos under the "Attachments" section on both citizen and employee detail pages — no timeline-render workaround needed.
+- **Local Dev Proxy — Inbox Search returning HTML instead of JSON (`web/src/setupProxy.js`)**:
+  - PGR employee inbox search was failing locally because `/inbox/v2/_search` was not in `setupProxy.js`'s forwarded-path list. Webpack-dev-server's static handler was returning `index.html` instead of forwarding to the backend, causing JSON parse failures and an empty inbox.
+  - Fix: added `/inbox` to the proxied paths so all `/inbox/*` calls are forwarded to `REACT_APP_PROXY_URL`. Prod was unaffected (gateway handles it directly).
+
+### Changed
+
+- **Employee Action Modal — Upload Component (`ActionUploadComponent.js`)**:
+  - Replaced the bulky `ImageUploadHandler` (camera icon + large dropzone) with a compact custom uploader: a small "+ Add file" dashed button (DIGIT orange) and file-name chips with × remove buttons.
+  - Removed the duplicate "Attachments" label — the FormComposer's outer field label was already rendering it; the inner one is replaced with a one-line helper text ("Add screenshots or documents (max 2MB each)").
+  - Added a `tr(key, fallback)` helper so untranslated keys (`CS_COMMON_ADD_FILE`, `CS_COMMON_UPLOADING`, `CS_COMMON_REMOVE`, etc.) fall back to plain English instead of leaking the raw key into the UI.
+  - Maintains the original `Digit.UploadServices.Filestorage` contract — emits `fileStoreId[]` via `onSelect(config.key, ids)` so the form integration is unchanged. Supports JPG, PNG, and PDF up to 2MB; shows inline error for oversize files and an "Uploading…" state.
 
 ## [1.0.32] - 2026-05-07
 

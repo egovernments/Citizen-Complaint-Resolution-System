@@ -29,21 +29,16 @@ public class QueryUtil {
         preparedStmtList.addAll(values);
     }
 
-    public static String preparePartialJsonStringFromFilterMap(Map<String, Object> filterMap) {
+    public static String preparePartialJsonStringFromFilterMap(Map<String, String> filterMap) {
         if (filterMap == null || filterMap.isEmpty()) {
             return "{}";
         }
         StringBuilder sb = new StringBuilder("{");
         boolean first = true;
-        for (Map.Entry<String, Object> entry : filterMap.entrySet()) {
+        for (Map.Entry<String, String> entry : filterMap.entrySet()) {
             if (!first) sb.append(",");
             sb.append("\"").append(escapeJson(entry.getKey())).append("\":");
-            Object val = entry.getValue();
-            if (val instanceof String) {
-                sb.append("\"").append(escapeJson((String) val)).append("\"");
-            } else {
-                sb.append(val);
-            }
+            sb.append("\"").append(escapeJson(entry.getValue())).append("\"");
             first = false;
         }
         sb.append("}");

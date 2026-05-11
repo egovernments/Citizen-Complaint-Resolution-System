@@ -111,7 +111,7 @@ def health():
 
 @app.route('/boundaries/delete', methods=['POST'])
 def delete_boundaries():
-    """Delete all boundary-related data for a tenant.
+    """Delete all boundaries for a tenant
 
     POST /boundaries/delete
     Body:

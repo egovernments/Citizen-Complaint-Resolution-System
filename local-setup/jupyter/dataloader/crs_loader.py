@@ -18,7 +18,7 @@ try:
     from .unified_loader import UnifiedExcelReader, APIUploader
 except (ImportError, ModuleNotFoundError):
     from unified_loader import UnifiedExcelReader, APIUploader
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict
 from copy import deepcopy
 import os
 import json
@@ -1299,22 +1299,20 @@ class CRSLoader:
         """
         self._check_auth()
 
-        if not levels or len(levels) <= 1:
-            raise ValueError("levels must contain at least two boundary levels")
-
         print(f"\n{'='*60}")
         print(f"PHASE 2a: BOUNDARY HIERARCHY & TEMPLATE")
         print(f"{'='*60}")
 
         tenant = target_tenant or self.tenant_id
-        mdms_tenant = tenant.split(".")[0] if "." in tenant else tenant
         print(f"Tenant: {tenant}")
         print(f"Hierarchy: {name}")
         print(f"Levels: {' -> '.join(levels)}")
 
-        # Ensure templates directory exists
-        templates_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
-        os.makedirs(templates_dir, exist_ok=True)
+        # Ensure output directory exists
+        os.makedirs(output_dir, exist_ok=True)
+
+        if not levels:
+            raise ValueError("levels must contain at least one boundary level")
 
         # Step 1: Build hierarchy data structure
         print(f"\n[1/4] Building hierarchy definition...")
@@ -1357,7 +1355,7 @@ class CRSLoader:
             mdms_result = self._create_mdms_with_schema_retry(
                 schema_code="CMS-BOUNDARY.HierarchySchema",
                 data_list=[mdms_payload],
-                tenant=mdms_tenant,
+                tenant=tenant,
             )
             if mdms_result.get('failed'):
                 print(f"   ERROR: Failed to create CMS boundary hierarchy MDMS config")
@@ -1372,7 +1370,14 @@ class CRSLoader:
             print(f"   ERROR: Failed to create CMS boundary hierarchy MDMS config: {e}")
             return None
 
-        # Step 3: Load boundary level localizations
+        # Step 3: Generate template
+        print(f"\n[3/4] Generating template...")
+        gen_result = self.uploader.generate_boundary_template(tenant, name)
+
+        if not gen_result:
+            print(f"   ERROR: Template generation failed")
+            return None
+
         print(f"\n[3/5] Loading boundary level localizations...")
         level_loc_records = [{'boundaryType': level} for level in levels]
         level_loc_messages = self.uploader._build_boundary_level_localizations(
@@ -1381,16 +1386,8 @@ class CRSLoader:
         )
         self.uploader.create_localization_messages(level_loc_messages, tenant)
 
-        # Step 4: Generate template
-        print(f"\n[4/5] Generating template...")
-        gen_result = self.uploader.generate_boundary_template(tenant, name)
-
-        if not gen_result:
-            print(f"   ERROR: Template generation failed")
-            return None
-
         # Step 4: Poll for completion and download
-        print(f"\n[5/5] Waiting for template...")
+        print(f"\n[4/4] Waiting for template...")
         poll_result = self.uploader.poll_boundary_template_status(tenant, name)
 
         if not poll_result or poll_result.get('status') == 'failed':
@@ -1405,7 +1402,7 @@ class CRSLoader:
             return None
 
         # Download template
-        output_path = os.path.join(templates_dir, f"Boundary_Template_{tenant}_{name}.xlsx")
+        output_path = os.path.join(output_dir, f"Boundary_Template_{tenant}_{name}.xlsx")
         downloaded_path = self.uploader.download_boundary_template(
             tenant_id=tenant,
             filestore_id=filestore_id,
@@ -1971,20 +1968,17 @@ class CRSLoader:
         return new_config
 
     def delete_boundaries(self, target_tenant: str = None, use_db: bool = False) -> Dict:
-        """Delete all boundary data created for a tenant.
+        """Delete all boundary entities for a tenant
 
         Args:
             target_tenant: Tenant ID (e.g., 'statea', 'pg.citya')
-            use_db: Retained for backward compatibility. Boundary cleanup now uses
-                    direct DB cleanup so hierarchy, entities, relationships,
-                    templates, MDMS config, and localization messages stay in sync.
+            use_db: If True, use direct DB access (requires kubectl). Default: False (use API)
 
         Returns:
             dict: {deleted: int, relationships_deleted: int, status: str}
         """
         self._check_auth()
         tenant = target_tenant or self.tenant_id
-        cleanup_plan = self._build_boundary_cleanup_plan(tenant)
 
         print(f"\n{'='*60}")
         print(f"DELETING BOUNDARIES")
@@ -2053,48 +2047,42 @@ class CRSLoader:
         except Exception:
             return []
 
-        codes = set()
+        if use_db:
+            return self._delete_boundaries_via_db(tenant)
+        else:
+            return self._delete_boundaries_via_api(tenant)
 
-        def _collect(nodes):
-            for node in nodes or []:
-                code = str(node.get("code", "") or "").strip()
-                if code:
-                    codes.add(code)
-                _collect(node.get("children", []))
+    def _delete_boundaries_via_api(self, tenant: str) -> Dict:
+        """Delete boundaries using the boundary service API
 
-        for tenant_boundary in response.json().get("TenantBoundary", []):
-            _collect(tenant_boundary.get("boundary", []))
+        Fallback chain:
+        1. Boundary service API (delete_all_boundaries)
+        2. Direct kubectl DB access
+        3. kubectl API server (for CI environments)
+        """
+        # Try boundary service API first
+        result = self.uploader.delete_all_boundaries(tenant)
 
-        return sorted(codes)
+        deleted = result.get('deleted', 0)
+        failed = result.get('failed', 0)
 
-    def _fetch_boundary_codes_from_service(self, tenant: str) -> List[str]:
-        """Fallback boundary search when no hierarchy metadata is available."""
-        url = f"{self.uploader.boundary_url}/boundary/_search"
-        user_info_copy = self.user_info.copy()
-        user_info_copy['tenantId'] = tenant
-        payload = {
-            "RequestInfo": {
-                "apiId": "Rainmaker",
-                "authToken": self.auth_token,
-                "userInfo": user_info_copy,
-                "msgId": f"{int(time.time() * 1000)}|en_IN",
-            },
-            "Boundary": {
-                "tenantId": tenant,
-                "limit": 500,
-                "offset": 0,
+        # If API worked, return result
+        if deleted > 0 or (deleted == 0 and failed == 0):
+            print(f"   Boundaries deleted: {deleted}")
+            print(f"   Failed: {failed}")
+            print(f"{'='*60}")
+            return {
+                'deleted': deleted,
+                'relationships_deleted': 0,
+                'failed': failed,
+                'status': 'success' if failed == 0 else 'partial'
             }
-        }
 
-        try:
-            response = self.uploader._request_with_retry(
-                url,
-                json=payload,
-                headers={"Content-Type": "application/json"},
-            )
-            response.raise_for_status()
-        except Exception:
-            return []
+        # Try direct kubectl DB access
+        print("   Boundary API didn't delete, trying DB method...")
+        db_result = self._delete_boundaries_via_db(tenant)
+        if db_result.get('status') == 'success':
+            return db_result
 
         codes = set()
 
@@ -2167,7 +2155,7 @@ class CRSLoader:
                 f"WHERE tenantid = {self._sql_literal(tenant)};"
             )
 
-        return sql
+        return db_result
 
     def _delete_boundaries_via_db(self, cleanup_plan: Dict[str, Any]) -> Dict:
         """Delete boundaries using direct database access."""
@@ -2229,7 +2217,7 @@ class CRSLoader:
             'status': 'success'
         }
 
-    def _delete_boundaries_via_kubectl_api(self, cleanup_plan: Dict[str, Any], env: str = 'chakshu') -> Dict:
+    def _delete_boundaries_via_kubectl_api(self, tenant: str, env: str = 'chakshu') -> Dict:
         """Delete boundaries using the kubectl API server (for CI environments)
 
         The kubectl API server wraps kubectl commands and exposes them via HTTP.
