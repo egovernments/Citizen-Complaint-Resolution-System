@@ -9,6 +9,7 @@ import BoundaryComponent from "./components/BoundaryComponent";
 import PGRDetails from "./pages/employee/PGRDetails";
 import TimelineWrapper from "./components/TimeLineWrapper";
 import AssigneeComponent from "./components/AssigneeComponent";
+import ActionUploadComponent from "./components/ActionUploadComponent";
 import PGRSearchInbox from "./pages/employee/PGRInbox";
 import CreateComplaint from "./pages/employee/CreateComplaint";
 import Response from "./components/Response";
@@ -25,6 +26,7 @@ import SelectImages from "../../pgr/src/pages/citizen/Create/Steps/SelectImages"
 import CreatePGRFlow from "./pages/citizen/Create/FormExplorer";
 import TrackOnWhatsApp from "./components/TrackOnWhatsApp";
 import Complaint from "./components/Complaint";
+import MobileNumberWithPrefix from "./components/MobileNumberWithPrefix";
 
 export const PGRReducers = getRootReducer;
 
@@ -98,6 +100,7 @@ const componentsToRegister = {
   PGRComplaintDetails: PGRDetails,
   PGRTimeLineWrapper: TimelineWrapper,
   PGRAssigneeComponent: AssigneeComponent,
+  PGRActionUploadComponent: ActionUploadComponent,
   PGRSearchInbox,
   PGRResponse: Response,
   PGRCreateComplaint: CreateComplaint,
@@ -107,11 +110,12 @@ const componentsToRegister = {
   PGRSelectRating: SelectRating,
   PGRResponseCitzen: ResponseCitizen,
   CreatePGRFlow: CreatePGRFlow,
-  GeoLocations,
   SelectAddress,
   SelectImages,
+  GeoLocations,
   PGRTrackOnWhatsApp: TrackOnWhatsApp,
   PGRComplaint: Complaint,
+  MobileNumberWithPrefix: MobileNumberWithPrefix,
 };
 
 export const initPGRComponents = () => {

@@ -25,21 +25,23 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
     {
       select: (data) => {
         const allValidations = data?.[moduleName]?.UserValidation || [];
+        const mobileValidations = allValidations.filter(item => item.fieldType === "mobile");
 
         // Build config for each entry
-        const allConfigs = allValidations.map((item) => ({
+        const allConfigs = mobileValidations.map((item) => ({
           fieldType: item.fieldType,
+          isDefault: item.default === true,
           prefix: item.attributes?.prefix || "+91",
           pattern: item.rules?.pattern || "^[6-9][0-9]{9}$",
           maxLength: item.rules?.maxLength || 10,
           minLength: item.rules?.minLength || 10,
           errorMessage: item.rules?.errorMessage || "ES_SEARCH_APPLICATION_MOBILE_INVALID",
           allowedStartingCharacters: item.rules?.allowedStartingCharacters,
-          isActive: item.isActive,
+          isActive: item.isActive !== false,
         }));
 
-        // Default config is the one with fieldType "mobile"
-        const defaultConfig = allConfigs.find((c) => c.fieldType === "mobile") || allConfigs[0] || {
+        // Default config is the one flagged as default
+        const defaultConfig = allConfigs.find((c) => c.isDefault) || allConfigs[0] || {
           prefix: "+91",
           pattern: "^[6-9][0-9]{9}$",
           maxLength: 10,

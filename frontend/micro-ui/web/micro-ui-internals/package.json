@@ -29,6 +29,7 @@
     "clean": "rm -rf node_modules"
   },
   "resolutions": {
+    "**/axios": "0.27.2",
     "**/babel-loader": "8.2.2",
     "**/@babel/core": "7.14.0",
     "**/@babel/preset-env": "7.14.0",
@@ -54,8 +55,9 @@
   },
   "dependencies": {
     "@egovernments/digit-ui-libraries": "1.9.4",
-    "@egovernments/digit-ui-components": "0.2.0-beta.45",
-    "@egovernments/digit-ui-react-components": "1.8.21",
+    "@egovernments/digit-ui-components": "0.2.5",
+    "@egovernments/digit-ui-react-components": "1.9.3",
+    "@egovernments/digit-ui-module-hrms": "1.9.10",
     "ajv": "8.12.0",
     "lodash": "4.17.21",
     "microbundle-crl": "0.13.11",

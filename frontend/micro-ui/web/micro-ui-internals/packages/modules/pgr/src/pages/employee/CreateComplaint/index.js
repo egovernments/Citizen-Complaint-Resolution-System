@@ -19,9 +19,14 @@ import { Loader } from "@egovernments/digit-ui-components";
 import CreateComplaintForm from "./createComplaintForm";
 import { CreateComplaintConfig } from "../../../configs/CreateComplaintConfig";
 import { useLocation } from "react-router-dom";
+import MobileNumberWithPrefix from "../../../components/MobileNumberWithPrefix";
 
 const CreateComplaint = () => {
   const { t } = useTranslation();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
 
   // Get current ULB tenant ID
   const tenantId = Digit.ULBService.getCurrentTenantId();
@@ -29,8 +34,8 @@ const CreateComplaint = () => {
   const CreateComplaintSession = Digit.Hooks.useSessionStorage("COMPLAINT_CREATE", {});
   const [sessionFormData, setSessionFormData, clearSessionFormData] = CreateComplaintSession;
 
-  // Fetch mobile validation config from MDMS
-  const { validationRules, isLoading: isValidationLoading, getMinMaxValues } = Digit.Hooks.pgr.useMobileValidation(tenantId);
+  // Mobile validation loading check
+  const { isLoading: isValidationLoading } = Digit.Hooks.pgr.useMobileValidation(tenantId);
 
   // Fetch MDMS config for Create Complaint screen (RAINMAKER-PGR.CreateComplaintConfig)
   const { data: mdmsData, isLoading } = Digit.Hooks.useCommonMDMS(
@@ -55,9 +60,8 @@ const CreateComplaint = () => {
    * and inject mobile validation from MDMS
    */
 
-  // Inject mobile validation rules from MDMS into the config
-  if (configs && validationRules) {
-    const { min, max } = getMinMaxValues();
+  // Replace mobile number field with MobileNumberWithPrefix component
+  if (configs) {
     configs = {
       ...configs,
       form: configs.form.map((section) => {
@@ -68,19 +72,13 @@ const CreateComplaint = () => {
               if (field.label === "COMPLAINTS_COMPLAINANT_CONTACT_NUMBER") {
                 return {
                   ...field,
+                  type: "component",
+                  component: MobileNumberWithPrefix,
+                  key: field.populators?.name || "ComplainantContactNumber",
                   populators: {
                     ...field.populators,
-                    componentInFront: validationRules.prefix,
-                    prefix: validationRules.prefix,
-                    validation: {
-                      required: true,
-                      minlength: validationRules.minLength,
-                      maxlength: validationRules.maxLength,
-                      min: min,
-                      max: max,
-                      pattern: validationRules.pattern,
-                    },
-                    error: validationRules.errorMessage || "CORE_COMMON_MOBILE_ERROR",
+                    validation: { required: true },
+                    error: "",
                   },
                 };
               }

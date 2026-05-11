@@ -269,6 +269,14 @@ export const UICustomizations = {
   },
 
   PGRInboxConfig: {
+    // No-op handlers to satisfy upstream ResultsDataTableWrapper, which calls
+    // configModule?.selectionHandler / actionSelectHandler / linkColumnHandler
+    // unconditionally and console.errors when they are missing. PGR doesn't
+    // use row-selection or row actions, but the table still fires these
+    // callbacks on every render/sort, flooding the console.
+    selectionHandler: () => {},
+    actionSelectHandler: () => {},
+    linkColumnHandler: () => {},
     preProcess: (data) => {
       // Deep clone to avoid mutating original state
       const clonedData = _.cloneDeep(data);
@@ -296,8 +304,14 @@ export const UICustomizations = {
 
       if (searchForm.mobileNumber) {
         clonedData.body.inbox.moduleSearchCriteria.mobileNumber = searchForm.mobileNumber;
+        clonedData.body.inbox.moduleSearchCriteria.countryCode =
+          searchForm.countryCode ||
+          window.__PGR_INBOX_COUNTRY_CODE__ ||
+          window?.Digit?.MDMSValidationPatterns?.mobileNumberValidation?.prefix ||
+          "+91";
       } else {
         delete clonedData.body.inbox.moduleSearchCriteria.mobileNumber;
+        delete clonedData.body.inbox.moduleSearchCriteria.countryCode;
       }
 
       // Handle date range from search form directly
