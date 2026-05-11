@@ -47,7 +47,8 @@ const CreateComplaintForm = ({
   const { mutate: CreateComplaintMutation } = Digit.Hooks.pgr.useCreateComplaint(tenantId);
 
   // Fetch the list of service definitions (e.g., complaint types) for current tenant
-  const serviceDefs = Digit.Hooks.pgr.useServiceDefs(tenantId, "PGR");
+  // const serviceDefs = Digit.Hooks.pgr.useServiceDefs(tenantId, "PGR");
+  const serviceDefs = [{   "name": "Pension Schemes",   "active": true,   "keywords": "",   "menuPath": "SocialEntitlement",   "slaHours": 7,   "department": "",   "serviceCode": "PensionSchemes",   "menuPathName": "Social Entitlement" }, {   "name": "Food Security",   "active": true,   "keywords": "",   "menuPath": "SocialEntitlement",   "slaHours": 7,   "department": "",   "serviceCode": "FoodSecurity",   "menuPathName": "Social Entitlement" }];
 
 
 

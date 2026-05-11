@@ -195,15 +195,6 @@ export const formPayloadToCreateComplaint = (formData, tenantId, user, hierarchy
     boundaryHierarchy: boundaryHierarchy,
   };
 
-  const documentsList = Array.isArray(formData?.ComplaintImagesPoint)
-    ? formData.ComplaintImagesPoint.map((image) => ({
-      documentType: "PHOTO",
-      fileStoreId: image,
-      documentUid: "",
-      additionalDetails: {},
-    }))
-    : [];
-
   const timestamp = Date.now();
   let complaint = {
     "service": {
@@ -233,11 +224,9 @@ export const formPayloadToCreateComplaint = (formData, tenantId, user, hierarchy
         "lastModifiedBy": user?.uuid,
         "lastModifiedTime": timestamp
       },
-      "documents": documentsList,
     },
     "workflow": {
       "action": "APPLY",
-      "verificationDocuments": documentsList,
     }
   }
 

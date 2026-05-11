@@ -237,7 +237,6 @@ const FormExplorer = () => {
       },
       workflow: {
         action: "APPLY",
-        verificationDocuments: documentsList,
       },
     };
   };

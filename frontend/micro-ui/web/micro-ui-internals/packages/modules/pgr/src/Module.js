@@ -9,6 +9,7 @@ import BoundaryComponent from "./components/BoundaryComponent";
 import PGRDetails from "./pages/employee/PGRDetails";
 import TimelineWrapper from "./components/TimeLineWrapper";
 import AssigneeComponent from "./components/AssigneeComponent";
+import ActionUploadComponent from "./components/ActionUploadComponent";
 import PGRSearchInbox from "./pages/employee/PGRInbox";
 import CreateComplaint from "./pages/employee/CreateComplaint";
 import Response from "./components/Response";
@@ -99,6 +100,7 @@ const componentsToRegister = {
   PGRComplaintDetails: PGRDetails,
   PGRTimeLineWrapper: TimelineWrapper,
   PGRAssigneeComponent: AssigneeComponent,
+  PGRActionUploadComponent: ActionUploadComponent,
   PGRSearchInbox,
   PGRResponse: Response,
   PGRCreateComplaint: CreateComplaint,
