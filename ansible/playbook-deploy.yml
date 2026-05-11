@@ -164,6 +164,14 @@
         src: ../docker-compose.egov-digit.yaml
         dest: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
 
+    # Opt-in DB fast-path overlay. See docker-compose.fast-path.yml for
+    # what it changes and why it's gated. Default off; sandbox tenants
+    # can flip `db_fast_path: true` in inventory/host_vars/<tenant>.yml.
+    - name: Copy fast-path overlay (used only when db_fast_path is true)
+      copy:
+        src: ../docker-compose.fast-path.yml
+        dest: "{{ digit_dir }}/docker-compose.fast-path.yml"
+
     # ==================== OTEL Java Agent (fetched, not in git) ====================
     # The 21 MB OTEL javaagent JAR is downloaded on the controller before the
     # otel/ tree gets rsync'd to the target. Cached locally via the script's
@@ -307,13 +315,28 @@
       ansible.builtin.debug:
         msg: "Active compose profiles for {{ inventory_hostname }}: {{ compose_profiles or '(none — lean stack)' }}"
 
+    # Tenants opt into the DB fast-path with `db_fast_path: true` in their
+    # host_vars. When on, layer the overlay onto every compose invocation
+    # below (pull, up, recreate). Default off — never touches live tenants.
+    - name: "Compute compose -f flags (fast-path overlay opt-in)"
+      ansible.builtin.set_fact:
+        compose_files: >-
+          {{
+            '-f docker-compose.egov-digit.yaml' +
+            (' -f docker-compose.fast-path.yml' if (db_fast_path | default(false)) else '')
+          }}
+
+    - name: "Show compose file stack"
+      ansible.builtin.debug:
+        msg: "compose files for {{ inventory_hostname }}: {{ compose_files }}"
+
     - name: Pull all images from VPC registry
-      shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose -f docker-compose.egov-digit.yaml pull --ignore-pull-failures
+      shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} pull --ignore-pull-failures
       args:
         chdir: "{{ digit_dir }}"
 
     - name: Start DIGIT stack
-      shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose -f docker-compose.egov-digit.yaml up -d
+      shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d
       args:
         chdir: "{{ digit_dir }}"
 
@@ -644,7 +667,7 @@
       no_log: true
 
     - name: "Recreate services with the new env (no-op if secrets unchanged)"
-      ansible.builtin.shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose -f docker-compose.egov-digit.yaml up -d
+      ansible.builtin.shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d
       args:
         chdir: "{{ digit_dir }}"
       register: post_secrets_recreate

@@ -274,7 +274,7 @@ services:
       otel-collector:
         condition: service_started
     volumes:
-      - ./configs/indexer:/indexer-config:ro
+      - ./configs/egov-indexer:/indexer-config:ro
       - ./otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
@@ -959,7 +959,7 @@ services:
       # Kafka consumer concurrency — process more messages in parallel
       SPRING_KAFKA_LISTENER_CONCURRENCY: '3'
     volumes:
-    - ./configs/persister:/persister-config:ro
+    - ./configs/egov-persister:/persister-config:ro
     - ./otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
     ports:
     - 18091:8091
