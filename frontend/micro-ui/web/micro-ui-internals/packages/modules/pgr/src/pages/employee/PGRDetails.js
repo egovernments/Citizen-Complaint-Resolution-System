@@ -705,7 +705,7 @@ const PGRDetails = () => {
               isSearchable
               onClick={function noRefCheck() { }}
               menuStyles={{
-                bottom: "40px",
+                bottom: "56px",
               }}
               isDisabled={getNextActionOptions(workflowData, businessServiceData?.BusinessServices?.[0]).length === 0}
               key="action-button"
