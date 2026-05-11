@@ -722,7 +722,7 @@ services:
       - egov-network
 
   digit-ui:
-    image: egovio/digit-ui:develop-773002d
+    image: egovio/digit-ui:develop-d9b2be1
     container_name: digit-ui
     ports:
       - "18080:80"
