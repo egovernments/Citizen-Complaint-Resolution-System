@@ -107,7 +107,6 @@ const componentsToRegister = {
   PGRComplaintsList: ComplaintsList,
   PGRCreateComplaint: CreateComplaint,
   PGRComplaintDetailsPage: ComplaintDetailsPage,
-  PGRSelectRating: SelectRating,
   PGRResponseCitzen: ResponseCitizen,
   CreatePGRFlow: CreatePGRFlow,
   PGRSelectRating: SelectRating,
