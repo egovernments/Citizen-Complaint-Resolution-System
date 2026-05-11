@@ -10,6 +10,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./db/full-dump.sql:/docker-entrypoint-initdb.d/01-full-dump.sql:ro
+      - ./db/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
     ports:
       - 15432:5432
     healthcheck:
