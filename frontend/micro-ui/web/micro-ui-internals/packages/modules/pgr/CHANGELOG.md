@@ -4,6 +4,34 @@ All notable changes to this module will be documented in this file.
 # Changelog
 All notable changes to this module will be documented in this file.
 
+## [1.0.37] - 2026-05-12
+
+### Fixed
+
+- **Employee Take Action — Workflow Options Overlap Button (`pages/employee/PGRDetails.js`)**:
+  - On the complaint details page, clicking the orange "Take action" button opened the workflow options (`Assign`, `Reject`, etc.) menu so close to the button that the last option overlapped it.
+  - Fix: bumped the `actionButton`'s `menuStyles.bottom` from `40px` to `56px` so the menu floats clear of the button.
+
+- **Toast Position + Inbox Horizontal Slide on Small Screens (`Module.js`)**:
+  - At 1280x720, the bottom-centred toast (`.digit-toast-success`) sat at `bottom: 4.5rem` and overlapped the Submit footer on `/employee/pgr/complaint/create` and the bottom rows on `/employee/pgr/inbox`. Inline `style` props on the `<Toast>` component lose to the upstream CSS animation's `forwards` fill, so a normal React style override couldn't push the toast higher. Additionally the inbox grid on small screens forced the whole page to slide horizontally.
+  - Fix: at module-import time `PGRModule` now injects a `<style id="pgr-ui-overrides">` element into `document.head` with `.digit-toast-success, .digit-toast-success.animate { bottom: 8rem !important; }` and `.digit-inbox-search-wrapper { max-width: 100%; overflow-x: auto; }`. `!important` outranks the animation in the cascade, and the rule lands before any React mount so it survives refreshes.
+
+- **Citizen Complaint Summary — Section Titles Rendered as Plain Text on Deploy (`pages/citizen/ComplaintDetails.js`, `components/TimeLine.js`)**:
+  - "Complaint Details", "Attachments", "Complaint Location", and "Complaint Timeline" subheaders rendered as plain text on the sandbox deploy (typography CSS missing/lost in the deployed bundle), even though they appeared bold locally.
+  - Fix: applied inline heading styles (`fontSize: 24px, fontWeight: 700, lineHeight: 28px, color: #0b0c0c`) directly on each `<CardSubHeader>` so they render correctly without depending on external CSS being present. The timeline-wrapper's existing inline `<style>` block now also forces `font-weight: 700` on checkpoint labels so timeline statuses (e.g. "Complaint resolved") render bold instead of plain.
+
+- **Citizen Complaint Summary — Boundary Row Label Overflows Value Column (`pages/citizen/ComplaintDetails.js`)**:
+  - When a boundary level's locale key was missing (e.g. `EGOV_LOCATION_BOUNDARYTYPE_REGION`), `t()` returned the raw key. The long key overflowed the `<Row>` component's label column and visually overlapped the value (`Southwest ETPMO People's Region`).
+  - Fix: added a `labelForLevel(level)` helper. When `t(key) === key` (no translation), it falls back to a title-cased level name (`REGION` → `Region`, `WARD` → `Ward`) so the label stays short enough to align with the value column. If/when the locale key is added to MDMS later, the translated string takes precedence automatically.
+
+- **Citizen Complaint Details — Stars Missing After Rating Submission (`pages/citizen/ComplaintDetails.js`, `components/TimeLine.js`, `components/timelineInstances/resolved.js`)**:
+  - After submitting a rating, the citizen sometimes saw the timeline render without stars: the read API briefly returned stale data (cached or pre-RATE-commit), the page painted, and stars only appeared after a background revalidate landed. On slow connections / Ubuntu the original single fixed-delay retry could miss the commit entirely.
+  - Fix:
+    - `ComplaintDetailsPage` and `WorkflowComponent` now gate their first render on a `hasFreshDetails` / `hasFreshWorkflow` flag plus a 700ms minimum wait. On mount the page shows `<Loader />` while `revalidate()` runs; only after the gate clears does the page paint — so the freshly-fetched `audit.rating` is in the data on first paint, no flash of stale state.
+    - `TimeLine.js` now passes `rating` to the `Resolved` checkpoint (`index <= 1 ? rating : undefined`) — was previously commented out.
+    - `resolved.js` renders `<StarRated />` in the `RESOLVE` action branch so stars are visible under the RESOLVED checkpoint even before the workflow transitions to `CLOSEDAFTERRESOLUTION`.
+  - Effect: rating stars are reliably visible on the first paint after the user navigates back from rating submission, regardless of network speed or backend commit timing. No session-storage shadow state — single source of truth is the API.
+
 ## [1.0.36] - 2026-05-11
 
 ### Fixed

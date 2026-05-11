@@ -114,7 +114,7 @@ const TimeLine = ({ isLoading, data, serviceRequestId, complaintWorkflow, rating
             nextActions={index <= 1 && timeLineActions}
             complaintDetails={complaintDetails}
             ComplainMaxIdleTime={ComplainMaxIdleTime}
-            //rating={index <= 1 && rating}
+            rating={index <= 1 ? rating : undefined}
             serviceRequestId={serviceRequestId}
             reopenDate={Digit.DateUtils.ConvertTimestampToDate(auditDetails.lastModifiedTime)}
             customChild={getCommentsInCustomChildComponent({ comment, thumbnailsToShow, auditDetails, assigner })}
@@ -160,17 +160,21 @@ const TimeLine = ({ isLoading, data, serviceRequestId, complaintWorkflow, rating
     <React.Fragment>
       <style>
         {`
-          .timeline-wrapper h2, 
-          .timeline-wrapper h3, 
-          .timeline-wrapper h4, 
-          .timeline-wrapper p,
+          .timeline-wrapper h2,
+          .timeline-wrapper h3,
+          .timeline-wrapper h4,
           .timeline-wrapper header,
           .timeline-wrapper .checkpoint-label {
              font-size: 18px !important;
+             font-weight: 700 !important;
+             color: #0b0c0c !important;
+          }
+          .timeline-wrapper p {
+             font-size: 16px !important;
           }
         `}
       </style>
-      <CardSubHeader style={{ marginBottom: "15px" }}>{t(`${LOCALIZATION_KEY.CS_COMPLAINT_DETAILS}_COMPLAINT_TIMELINE`)}</CardSubHeader>
+      <CardSubHeader style={{ marginBottom: "15px", fontSize: "24px", fontWeight: 700, lineHeight: "28px", color: "#0b0c0c" }}>{t(`${LOCALIZATION_KEY.CS_COMPLAINT_DETAILS}_COMPLAINT_TIMELINE`)}</CardSubHeader>
       {timeline && totalTimelineLength > 0 ? (
         <div className="timeline-wrapper">
           <ConnectingCheckPoints>

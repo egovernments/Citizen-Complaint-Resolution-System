@@ -40,37 +40,30 @@ const WorkflowComponent = ({ complaintDetails, id }) => {
     }
   );
 
-  // CCSD-1766 Fix: Force revalidation on mount to ensure fresh data after rating submission.
-  // If a rating was just submitted for this complaint, use a longer delay (3 s) so the
-  // backend has time to commit the RATE transaction before the workflow/timeline API refetches.
+  // Always re-fetch on mount and block render for a minimum window so the fresh
+  // API response can land before we paint. Without this gate, a warm cache
+  // would render stale data instantly and only flip to fresh data after the
+  // background revalidate returned — causing a visible flash where stars were
+  // missing right after a RATE submission.
+  const FRESH_WAIT_MS = 700;
+  const [hasFreshWorkflow, setHasFreshWorkflow] = useState(false);
   useEffect(() => {
-    const ratingSession = Digit.SessionStorage.get("PGR_LAST_RATING");
-    const SESSION_TTL_MS = 2 * 60 * 1000;
-    const isJustRated =
-      ratingSession &&
-      ratingSession.id === id &&
-      Date.now() - ratingSession.timestamp < SESSION_TTL_MS;
-
+    setHasFreshWorkflow(false);
     workFlowDetails.revalidate();
-    const delay = isJustRated ? 3000 : 1500;
-    const timer = setTimeout(() => {
-      workFlowDetails.revalidate();
-    }, delay);
-    return () => clearTimeout(timer);
-  }, []);
+    const t = setTimeout(() => setHasFreshWorkflow(true), FRESH_WAIT_MS);
+    return () => clearTimeout(t);
+  }, [id]);
+
+  if (workFlowDetails.isLoading || !hasFreshWorkflow) return <Loader />;
 
   return (
-    !workFlowDetails.isLoading && (
-      <TimeLine
-        // isLoading={workFlowDetails.isLoading}
-        data={workFlowDetails.data}
-        serviceRequestId={id}
-        complaintWorkflow={complaintDetails.workflow}
-        rating={complaintDetails.audit.rating}
-        complaintDetails={complaintDetails}
-      // ComplainMaxIdleTime={ComplainMaxIdleTime}
-      />
-    )
+    <TimeLine
+      data={workFlowDetails.data}
+      serviceRequestId={id}
+      complaintWorkflow={complaintDetails.workflow}
+      rating={complaintDetails?.audit?.rating}
+      complaintDetails={complaintDetails}
+    />
   );
 };
 
@@ -83,25 +76,20 @@ const ComplaintDetailsPage = (props) => {
     : Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || Digit.ULBService.getCurrentTenantId();
   const { isLoading, error, isError, complaintDetails, revalidate } = Digit.Hooks.pgr.useComplaintDetails({ tenantId, id });
 
-  // CCSD-1766 Fix: Force fresh fetch of complaint data on mount so rating is not stale after submission.
-  // Use a longer delay when navigating back from a fresh rating submission.
+  // Always re-fetch on mount and block render for a fixed minimum window so
+  // the fresh API response can land before we paint. Cached data is ignored —
+  // any update (e.g. RATE) is reflected on first paint instead of a flash of
+  // stale data followed by an in-place re-render.
+  const FRESH_WAIT_MS = 700;
+  const [hasFreshDetails, setHasFreshDetails] = useState(false);
   useEffect(() => {
-    const ratingSession = Digit.SessionStorage.get("PGR_LAST_RATING");
-    const SESSION_TTL_MS = 2 * 60 * 1000;
-    const isJustRated =
-      ratingSession &&
-      ratingSession.id === id &&
-      Date.now() - ratingSession.timestamp < SESSION_TTL_MS;
-
+    setHasFreshDetails(false);
     revalidate();
-    const delay = isJustRated ? 3000 : 1500;
-    const timer = setTimeout(() => {
-      revalidate();
-    }, delay);
-    return () => clearTimeout(timer);
-  }, []);
+    const t = setTimeout(() => setHasFreshDetails(true), FRESH_WAIT_MS);
+    return () => clearTimeout(t);
+  }, [id]);
 
-  if (isLoading) {
+  if (isLoading || !hasFreshDetails) {
     return <Loader />;
   }
 
@@ -129,7 +117,7 @@ const ComplaintDetailsPage = (props) => {
         {complaintDetails && Object.keys(complaintDetails).length > 0 ? (
           <React.Fragment>
             <Card>
-              <CardSubHeader style={{ marginBottom: "16px" }}>{t("CS_COMPLAINT_DETAILS_COMPLAINT_DETAILS")}</CardSubHeader>
+              <CardSubHeader style={{ marginBottom: "16px", fontSize: "24px", fontWeight: 700, lineHeight: "28px", color: "#0b0c0c" }}>{t("CS_COMPLAINT_DETAILS_COMPLAINT_DETAILS")}</CardSubHeader>
               <StatusTable>
                 {Object.keys(complaintDetails.details)
                   .filter((key) => {
@@ -163,12 +151,19 @@ const ComplaintDetailsPage = (props) => {
                 if (!hierarchy) return null;
                 // Object format: { Region: "CODE", Block: "CODE" }
                 if (typeof hierarchy === "object" && !Array.isArray(hierarchy)) {
+                  const labelForLevel = (level) => {
+                    const key = `EGOV_LOCATION_BOUNDARYTYPE_${level.toUpperCase()}`;
+                    const translated = t(key);
+                    // Fall back to a humanised level name when the key is missing,
+                    // so the row label stays short enough to align with the value column.
+                    return translated === key ? level.charAt(0).toUpperCase() + level.slice(1).toLowerCase() : translated;
+                  };
                   return (
                     <StatusTable>
                       {Object.entries(hierarchy).map(([level, code], idx, arr) => (
                         <Row
                           key={level}
-                          label={t(`EGOV_LOCATION_BOUNDARYTYPE_${level.toUpperCase()}`)}
+                          label={labelForLevel(level)}
                           text={t(code)}
                           last={idx === arr.length - 1}
                         />
@@ -195,7 +190,7 @@ const ComplaintDetailsPage = (props) => {
                 complaintDetails?.workflow?.verificationDocuments?.length
               ) && (
                   <React.Fragment>
-                    <CardSubHeader>{t("CS_COMMON_ATTACHMENTS")}</CardSubHeader>
+                    <CardSubHeader style={{ fontSize: "24px", fontWeight: 700, lineHeight: "28px", color: "#0b0c0c" }}>{t("CS_COMMON_ATTACHMENTS")}</CardSubHeader>
                     <ComplaintPhotos serviceWrapper={complaintDetails} />
                   </React.Fragment>
                 )}
@@ -203,7 +198,7 @@ const ComplaintDetailsPage = (props) => {
 
             {!!(geoLocation?.latitude && geoLocation?.longitude) && (
               <Card>
-                <CardSubHeader style={{ marginBottom: "16px" }}>{t("CS_COMPLAINT_LOCATION")}</CardSubHeader>
+                <CardSubHeader style={{ marginBottom: "16px", fontSize: "24px", fontWeight: 700, lineHeight: "28px", color: "#0b0c0c" }}>{t("CS_COMPLAINT_LOCATION")}</CardSubHeader>
                 <ComplaintLocationMap
                   latitude={geoLocation.latitude}
                   longitude={geoLocation.longitude}
