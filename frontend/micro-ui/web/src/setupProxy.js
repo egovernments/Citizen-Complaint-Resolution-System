@@ -9,6 +9,7 @@ module.exports = function (app) {
     "/egov-location",
     "/localization",
     "/egov-workflow-v2",
+    "/inbox",
     "/pgr-services",
     "/filestore",
     "/egov-hrms",
