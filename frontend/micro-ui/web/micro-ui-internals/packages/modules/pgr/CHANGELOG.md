@@ -4,6 +4,27 @@ All notable changes to this module will be documented in this file.
 # Changelog
 All notable changes to this module will be documented in this file.
 
+## [1.0.39] - 2026-05-12
+
+### Fixed
+
+- **Citizen Complaint Details — Timeline inconsistent / rating missing on slow connections and non-Chrome browsers (`pages/citizen/ComplaintDetails.js`, `components/TimeLine.js`)**:
+  - Symptom (reproducible on Ubuntu / Firefox / throttled 3G): after submitting a rating the timeline sometimes painted without stars, sometimes without the synthetic "Complaint Filed" step. After "a while" it filled in. Inconsistent between page loads.
+  - Two underlying bugs:
+    1. **Stale-data flash on warm cache.** `ComplaintDetailsPage` and `WorkflowComponent` previously gated their first paint on a fixed 700ms `setTimeout` plus the hook's `isLoading`. With cached data react-query returns `isLoading=false` immediately and runs the refetch in the background. On a slow connection the 700ms timer expired *before* the refetch returned, so stale cached data painted (missing stars / wrong status) and only flipped to fresh data when the network later caught up — visible as a flash and "rating sometimes not showing."
+    2. **Mutating timeline append.** `TimeLine.js` appended a synthetic `COMPLAINT_FILED` checkpoint inside a `useEffect` by calling `timeline.push(...)` directly. Because no state update followed, the appended entry only became visible whenever some *other* trigger caused a re-render — non-deterministic on slow networks and producing the "timeline inconsistent / filed step sometimes missing" symptom.
+  - Fix:
+    - `ComplaintDetailsPage` and `WorkflowComponent` now await the Promise returned by `revalidate()` (which is `queryClient.invalidateQueries(...)` and resolves only after the matched refetches complete) and only flip `hasFreshDetails` / `hasFreshWorkflow` to true after that resolution. The fixed 700ms timer is gone. The loader stays up for exactly as long as the refetch takes, regardless of network speed — slow connections wait longer, fast/cached cases barely show the loader. Defensive fallback to `Promise.resolve()` if `revalidate()` is ever sync.
+    - `TimeLine.js` converts the timeline-append `useEffect` into a pure `useMemo` returning a new array (`augmentedTimeline`). No mutation, deterministic on every render, and re-derives whenever the underlying `timeline` reference changes — eliminating the "depends on a re-render lottery" race.
+  - Effect: rating stars and the full timeline are reliably visible on the first paint after the user navigates back from rating submission, regardless of browser or network speed. No flash of stale state, no "appears after a while" behaviour.
+
+- **Citizen Complaint Details — Stars Missing After Citizen Rates a REJECTED Complaint (`components/TimeLine.js`)**:
+  - Reproducer: employee rejects a complaint → citizen submits a rating from the timeline RATE link → complaint workflow transitions REJECTED → CLOSEDAFTERREJECTION → citizen returns to the detail page. The new "Closed after rejection" checkpoint at the top of the timeline rendered with the user's comment but **no star icons**.
+  - Root cause: `TimeLine.js` had no `case "CLOSEDAFTERREJECTION":` branch — it fell through to the `default` case which only renders a label, never the `<StarRated />` element. The happy-path equivalent (`CLOSEDAFTERRESOLUTION`) does render stars.
+  - Fix: added `case "CLOSEDAFTERREJECTION":` mirroring the existing `CLOSEDAFTERRESOLUTION` branch — renders the standard checkpoint label plus `<StarRated text={t("CS_ADDCOMPLAINT_YOU_RATED")} rating={rating} />` when a rating exists.
+  - Design choice: the `rating` prop on `case "REJECTED":` is intentionally **not** passed (it stays out of the JSX), mirroring how `resolved.js` keeps its `action === "RATE"` branch's `<StarRated />` commented out. Stars belong to the rating checkpoint above (`CLOSEDAFTERREJECTION` / `CLOSEDAFTERRESOLUTION`), not to the parent action checkpoint — passing `rating` to both produced duplicate "You Rated ★★★" rows.
+  - Effect: rating stars now show consistently on `CLOSEDAFTERREJECTION` in the rejection-path flow, symmetric with the existing `CLOSEDAFTERRESOLUTION` behaviour on the happy path. Exactly one "You Rated" row in either flow.
+
 ## [1.0.38] - 2026-05-12
 
 ### Fixed

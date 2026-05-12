@@ -42,27 +42,31 @@ const TimeLine = ({ isLoading, data, serviceRequestId, complaintWorkflow, rating
     zoomImage((newIndex > -1 && thumbnailsToShow?.fullImage?.[newIndex]) || imageSource);
   }
 
-  let { timeline } = data || {};
-  const totalTimelineLength = useMemo(() => timeline?.length, [timeline])
+  const { timeline } = data || {};
 
-  useEffect(() => {
-    let filteredTimeline = timeline?.filter((status, index, array) => {
-      if (index === array.length - 1 && status.status === "PENDINGFORASSIGNMENT") {
-        return true;
-      } else {
-        return false;
-      }
-    });
-    const [{ auditDetails }] = filteredTimeline?.length > 0 ? filteredTimeline : [{}];
-
-    const onlyPendingForAssignmentStatusArray = timeline?.filter(e => e?.status === "PENDINGFORASSIGNMENT")
-    const duplicateCheckpointOfPendingForAssignment = onlyPendingForAssignmentStatusArray.at(-1)
-    timeline?.push({
-      ...duplicateCheckpointOfPendingForAssignment,
-      performedAction: "FILED",
-      status: "COMPLAINT_FILED",
-    });
+  // Append a synthetic "COMPLAINT_FILED" checkpoint at the end of the timeline,
+  // mirroring the original PENDINGFORASSIGNMENT entry. Done as a useMemo
+  // returning a new array — the previous implementation mutated the source
+  // array inside a useEffect, so the appended entry only became visible
+  // whenever some unrelated event triggered a re-render. On slow networks the
+  // timing of that re-render varied, producing the "timeline inconsistent /
+  // sometimes the filed step is missing" symptom.
+  const augmentedTimeline = useMemo(() => {
+    if (!timeline?.length) return timeline;
+    const lastPendingForAssignment = timeline
+      .filter((e) => e?.status === "PENDINGFORASSIGNMENT")
+      .at(-1);
+    if (!lastPendingForAssignment) return timeline;
+    return [
+      ...timeline,
+      {
+        ...lastPendingForAssignment,
+        performedAction: "FILED",
+        status: "COMPLAINT_FILED",
+      },
+    ];
   }, [timeline]);
+  const totalTimelineLength = augmentedTimeline?.length;
 
   const getCommentsInCustomChildComponent = ({ comment, thumbnailsToShow, auditDetails, assigner, status }) => {
     const captionDetails = {
@@ -129,7 +133,11 @@ const TimeLine = ({ isLoading, data, serviceRequestId, complaintWorkflow, rating
             nextActions={index <= 1 && timeLineActions}
             complaintDetails={complaintDetails}
             ComplainMaxIdleTime={ComplainMaxIdleTime}
-            //rating={index <= 1 && rating}
+            // rating intentionally NOT passed here — stars belong to the
+            // CLOSEDAFTERREJECTION checkpoint above, mirroring how resolved.js
+            // suppresses stars on its action === "RATE" branch and leaves
+            // them to CLOSEDAFTERRESOLUTION. Passing rating here would cause
+            // duplicate "You Rated ★★★" rows on the timeline.
             serviceRequestId={serviceRequestId}
             reopenDate={Digit.DateUtils.ConvertTimestampToDate(auditDetails.lastModifiedTime)}
             customChild={getCommentsInCustomChildComponent({ comment, thumbnailsToShow, auditDetails, assigner })}
@@ -137,6 +145,8 @@ const TimeLine = ({ isLoading, data, serviceRequestId, complaintWorkflow, rating
         );
       case "CLOSEDAFTERRESOLUTION":
         return <CheckPoint isCompleted={isCurrent} key={index} label={t(`CS_COMMON_${`CS_COMMON_${status}`}`)} customChild={<div>{getCommentsInCustomChildComponent({ comment, thumbnailsToShow, auditDetails, assigner })}{rating ? <StarRated text={t("CS_ADDCOMPLAINT_YOU_RATED")} rating={rating} /> : null}</div>} />;
+      case "CLOSEDAFTERREJECTION":
+        return <CheckPoint isCompleted={isCurrent} key={index} label={t(`CS_COMMON_${status}`)} customChild={<div>{getCommentsInCustomChildComponent({ comment, thumbnailsToShow, auditDetails, assigner })}{rating ? <StarRated text={t("CS_ADDCOMPLAINT_YOU_RATED")} rating={rating} /> : null}</div>} />;
 
       // case "RESOLVE":
       // return (
@@ -175,10 +185,10 @@ const TimeLine = ({ isLoading, data, serviceRequestId, complaintWorkflow, rating
         `}
       </style>
       <CardSubHeader style={{ marginBottom: "15px", fontSize: "24px", fontWeight: 700, lineHeight: "28px", color: "#0b0c0c" }}>{t(`${LOCALIZATION_KEY.CS_COMPLAINT_DETAILS}_COMPLAINT_TIMELINE`)}</CardSubHeader>
-      {timeline && totalTimelineLength > 0 ? (
+      {augmentedTimeline && totalTimelineLength > 0 ? (
         <div className="timeline-wrapper">
           <ConnectingCheckPoints>
-            {timeline.map(({ status, caption, auditDetails, timeLineActions, performedAction, wfComment: comment, thumbnailsToShow, assigner }, index, array) => {
+            {augmentedTimeline.map(({ status, caption, auditDetails, timeLineActions, performedAction, wfComment: comment, thumbnailsToShow, assigner }, index, array) => {
               return getCheckPoint({ status, caption, auditDetails, timeLineActions, index, array, performedAction, comment, thumbnailsToShow, assigner, totalTimelineLength });
             })}
           </ConnectingCheckPoints>

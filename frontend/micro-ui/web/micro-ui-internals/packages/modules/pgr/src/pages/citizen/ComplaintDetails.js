@@ -40,18 +40,22 @@ const WorkflowComponent = ({ complaintDetails, id }) => {
     }
   );
 
-  // Always re-fetch on mount and block render for a minimum window so the fresh
-  // API response can land before we paint. Without this gate, a warm cache
-  // would render stale data instantly and only flip to fresh data after the
-  // background revalidate returned — causing a visible flash where stars were
-  // missing right after a RATE submission.
-  const FRESH_WAIT_MS = 700;
+  // Always re-fetch on mount and block render until the refetch resolves, so
+  // stale cached data never flashes before the fresh response lands. We await
+  // the Promise returned by revalidate() (which is queryClient.invalidateQueries
+  // and resolves when the matched refetches complete) instead of a fixed timer
+  // — a fixed timer can expire before a slow refetch finishes, painting stale
+  // data and then re-rendering when the network catches up.
   const [hasFreshWorkflow, setHasFreshWorkflow] = useState(false);
   useEffect(() => {
+    let cancelled = false;
     setHasFreshWorkflow(false);
-    workFlowDetails.revalidate();
-    const t = setTimeout(() => setHasFreshWorkflow(true), FRESH_WAIT_MS);
-    return () => clearTimeout(t);
+    const result = workFlowDetails.revalidate?.();
+    const promise = result && typeof result.then === "function" ? result : Promise.resolve();
+    promise.finally(() => {
+      if (!cancelled) setHasFreshWorkflow(true);
+    });
+    return () => { cancelled = true; };
   }, [id]);
 
   if (workFlowDetails.isLoading || !hasFreshWorkflow) return <Loader />;
@@ -76,17 +80,21 @@ const ComplaintDetailsPage = (props) => {
     : Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || Digit.ULBService.getCurrentTenantId();
   const { isLoading, error, isError, complaintDetails, revalidate } = Digit.Hooks.pgr.useComplaintDetails({ tenantId, id });
 
-  // Always re-fetch on mount and block render for a fixed minimum window so
-  // the fresh API response can land before we paint. Cached data is ignored —
-  // any update (e.g. RATE) is reflected on first paint instead of a flash of
-  // stale data followed by an in-place re-render.
-  const FRESH_WAIT_MS = 700;
+  // Always re-fetch on mount and block render until the refetch actually
+  // resolves. See WorkflowComponent above for the same pattern and rationale —
+  // we replaced the previous 700ms timer because on slow connections / Ubuntu
+  // the timer often expired before the network round-trip finished, letting
+  // cached stale data paint and then flicker to fresh.
   const [hasFreshDetails, setHasFreshDetails] = useState(false);
   useEffect(() => {
+    let cancelled = false;
     setHasFreshDetails(false);
-    revalidate();
-    const t = setTimeout(() => setHasFreshDetails(true), FRESH_WAIT_MS);
-    return () => clearTimeout(t);
+    const result = revalidate?.();
+    const promise = result && typeof result.then === "function" ? result : Promise.resolve();
+    promise.finally(() => {
+      if (!cancelled) setHasFreshDetails(true);
+    });
+    return () => { cancelled = true; };
   }, [id]);
 
   if (isLoading || !hasFreshDetails) {
