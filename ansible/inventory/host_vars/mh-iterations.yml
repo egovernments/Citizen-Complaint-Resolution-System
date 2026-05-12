@@ -15,6 +15,12 @@ tls_enabled: false
 # (off) because the dump pre-dates their tenant data.
 db_fast_path: true
 
+# Run the post-deploy CI suite (XLSX dataloader + Playwright). Requires a
+# sibling digit-ui-fix/ clone next to this repo on the controller. Off by
+# default elsewhere — Bomet/Nairobi production deploys skip it; only the
+# sandbox runs the regression battery on every deploy.
+run_ci_tests: true
+
 # Tenancy — reuse Nairobi's keys for fixture parity, but at the city level.
 state_tenant_id: ke.nairobi
 boot_tenant: ke.nairobi

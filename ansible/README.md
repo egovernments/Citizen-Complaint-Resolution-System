@@ -28,6 +28,24 @@ ansible/
 └── inventory.ini              # Legacy — kept for backwards compat
 ```
 
+## What you need locally before deploying
+
+Only one repo is strictly required on the controller — this one (CCRS).
+Everything else is either pulled by the playbook from a registry / git
+remote, or is optional and gated behind an inventory flag:
+
+| What | When you need it | Default if missing |
+|---|---|---|
+| **This repo** (`Citizen-Complaint-Resolution-System`) | always — `deploy.sh` runs from `ansible/` inside it | required |
+| `digit-ui-esbuild` | auto-cloned on the target from `theflywheel/digit-ui-esbuild` (no controller-side clone needed) | playbook handles it |
+| `digit-ui-fix` (sibling clone next to CCRS) | only when `run_ci_tests: true` — Playwright + XLSX dataloader suite | task block skipped |
+| Built `digit-configurator` (`dist/`) under `configurator_build` | only when `nginx_features.configurator: true` | sync task ignored, nginx still renders without `/configurator/` location |
+| `/root/DIGIT-MCP/` on the controller | only with `--tags=mcp-publish` (rebuilds + pushes the MCP image) | tagged `never`, won't run otherwise |
+
+In other words: clone CCRS, fill out `inventory/host_vars/<tenant>.yml`,
+seed OpenBao, run `./deploy.sh <tenant>`. Production deploys
+(Bomet/Nairobi) keep `run_ci_tests: false` and so don't need any sibling.
+
 ## Quick start
 
 ```bash

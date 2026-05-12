@@ -699,11 +699,18 @@
         path: /var/www/configurator
         state: directory
 
+    # Only fires when the tenant has the configurator location enabled AND
+    # the operator has pointed `configurator_build` at a built dist/ dir
+    # on the controller. The old default ('/var/www/crs-mockup/') was a
+    # path on Chakshu's dev box — other operators don't have it, so the
+    # default behaviour is now to skip entirely.
     - name: "Configurator SPA — sync build"
       ansible.builtin.synchronize:
-        src: "{{ configurator_build | default('/var/www/crs-mockup/') }}"
+        src: "{{ configurator_build }}/"
         dest: /var/www/configurator/
-      ignore_errors: yes   # missing source dir is non-fatal — configurator may be served elsewhere
+      when:
+        - nginx_features.configurator | default(false)
+        - configurator_build is defined
 
     - name: "Host nginx — install if missing"
       ansible.builtin.apt:
@@ -976,18 +983,32 @@
     # ==================================================================
 
     # ==================================================================
+    # CI TESTS — opt-in only. The scripts + Playwright suite live in a
+    # sibling clone (../../digit-ui-fix/local-setup/...) that's specific
+    # to the dev machine. Set `run_ci_tests: true` in host_vars to enable
+    # the whole block; on any host without that sibling repo (production
+    # deploys, third-party installers), it stays skipped — the playbook
+    # finishes at "validate — summary" above and the infra is the deploy.
+    - name: "CI tests — skipped (set run_ci_tests: true to enable)"
+      ansible.builtin.debug:
+        msg: "CI test stage disabled. Set run_ci_tests: true in host_vars to enable."
+      when: not (run_ci_tests | default(false))
+
+    # ==================================================================
     # CI TESTS — Stage A: XLSX-Driven DataLoader E2E
     # ==================================================================
     - name: Install Python3 and pip
       apt:
         name: [python3, python3-pip]
         state: present
+      when: run_ci_tests | default(false)
 
     - name: Install Python dependencies for DataLoader
       pip:
         name: [requests, openpyxl, pandas, python-dotenv]
         extra_args: --break-system-packages
 
+      when: run_ci_tests | default(false)
     - name: Create CI tests directory structure
       file:
         path: "{{ digit_dir }}/ci-tests/{{ item }}"
@@ -997,35 +1018,41 @@
         - jupyter/dataloader/templates/localisations
         - data
 
+      when: run_ci_tests | default(false)
     - name: Copy XLSX-driven CI DataLoader script
       copy:
         src: ../../digit-ui-fix/local-setup/scripts/ci-dataloader-xlsx.py
         dest: "{{ digit_dir }}/ci-tests/scripts/ci-dataloader-xlsx.py"
         mode: "0755"
 
+      when: run_ci_tests | default(false)
     - name: Copy crossroot bootstrap script (fallback)
       copy:
         src: ../../digit-ui-fix/local-setup/scripts/ci-dataloader-crossroot.py
         dest: "{{ digit_dir }}/ci-tests/scripts/ci-dataloader-crossroot.py"
         mode: "0755"
 
+      when: run_ci_tests | default(false)
     - name: Copy DataLoader regression test script
       copy:
         src: ../../digit-ui-fix/local-setup/scripts/ci-dataloader-v2-regression.py
         dest: "{{ digit_dir }}/ci-tests/scripts/ci-dataloader-v2-regression.py"
         mode: "0755"
 
+      when: run_ci_tests | default(false)
     - name: Synchronize DataLoader library (digit-ui-fix version)
       synchronize:
         src: "../../digit-ui-fix/local-setup/jupyter/dataloader/"
         dest: "{{ digit_dir }}/ci-tests/jupyter/dataloader/"
 
+      when: run_ci_tests | default(false)
     - name: Copy county input XLSX (Bomet)
       copy:
         src: "{{ county_xlsx | default('county-data-bomet.xlsx') }}"
         dest: "{{ digit_dir }}/ci-tests/data/county-data.xlsx"
 
     # CI TESTS — Stage A1: XLSX-driven Bomet County E2E
+      when: run_ci_tests | default(false)
     - name: Run XLSX-driven DataLoader (Bomet County E2E)
       shell: |
         cd {{ digit_dir }}/ci-tests/scripts
@@ -1040,11 +1067,13 @@
       timeout: 600
       ignore_errors: yes
 
+      when: run_ci_tests | default(false)
     - name: Show XLSX DataLoader results
       debug:
         var: xlsx_dataloader_result.stdout_lines | default(['(no output)'])
 
     # CI TESTS — Stage A2: DataLoader v2 regression tests (pg tenant)
+      when: run_ci_tests | default(false)
     - name: Run DataLoader v2 regression tests
       shell: |
         cd {{ digit_dir }}/ci-tests/scripts
@@ -1059,6 +1088,7 @@
       timeout: 900
       ignore_errors: yes
 
+      when: run_ci_tests | default(false)
     - name: Show DataLoader regression test results
       debug:
         var: dataloader_result.stdout_lines | default(['(no output - possibly timed out)'])
@@ -1066,37 +1096,44 @@
     # ==================================================================
     # CI TESTS — Stage B: Playwright E2E Tests
     # ==================================================================
+      when: run_ci_tests | default(false)
     - name: Create E2E tests directory
       file:
         path: "{{ digit_dir }}/e2e-tests"
         state: directory
 
+      when: run_ci_tests | default(false)
     - name: Copy Playwright package.json
       copy:
         src: ../../digit-ui-fix/local-setup/tests/package.json
         dest: "{{ digit_dir }}/e2e-tests/package.json"
 
+      when: run_ci_tests | default(false)
     - name: Synchronize E2E test suite
       synchronize:
         src: "../../digit-ui-fix/local-setup/tests/e2e/"
         dest: "{{ digit_dir }}/e2e-tests/e2e/"
 
+      when: run_ci_tests | default(false)
     - name: Copy tsconfig.json for tests
       copy:
         src: ../../digit-ui-fix/local-setup/tests/tsconfig.json
         dest: "{{ digit_dir }}/e2e-tests/tsconfig.json"
 
+      when: run_ci_tests | default(false)
     - name: Install npm dependencies
       shell: npm install
       args:
         chdir: "{{ digit_dir }}/e2e-tests"
 
+      when: run_ci_tests | default(false)
     - name: Install Playwright Chromium with system dependencies
       shell: npx playwright install --with-deps chromium
       args:
         chdir: "{{ digit_dir }}/e2e-tests"
       timeout: 300
 
+      when: run_ci_tests | default(false)
     - name: Wait for DIGIT UI to serve pages (up to 10 min)
       shell: curl -sf http://127.0.0.1:18080/digit-ui/ -o /dev/null
       register: ui_health
@@ -1105,6 +1142,7 @@
       until: ui_health.rc == 0
       changed_when: false
 
+      when: run_ci_tests | default(false)
     - name: Run Playwright E2E tests (Bomet tenant)
       shell: |
         cd {{ digit_dir }}/e2e-tests
@@ -1128,6 +1166,7 @@
       timeout: 900
       ignore_errors: yes
 
+      when: run_ci_tests | default(false)
     - name: Show Playwright test results
       debug:
         var: playwright_result.stdout_lines | default(['(no output - possibly timed out)'])
@@ -1135,6 +1174,7 @@
     # ==================================================================
     # CI Results Summary
     # ==================================================================
+      when: run_ci_tests | default(false)
     - name: CI test results summary
       vars:
         xlsx_rc: "{{ xlsx_dataloader_result.rc | default(-1) }}"
@@ -1148,6 +1188,7 @@
           - "Playwright E2E:          {{ 'PASS' if pw_rc|int == 0 else 'FAIL (exit ' + pw_rc|string + ')' }}"
           - "==========================="
 
+      when: run_ci_tests | default(false)
     - name: Fail if any CI test failed
       vars:
         xlsx_rc: "{{ xlsx_dataloader_result.rc | default(-1) }}"
