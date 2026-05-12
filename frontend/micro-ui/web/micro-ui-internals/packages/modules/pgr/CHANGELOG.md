@@ -4,6 +4,18 @@ All notable changes to this module will be documented in this file.
 # Changelog
 All notable changes to this module will be documented in this file.
 
+## [1.0.38] - 2026-05-12
+
+### Fixed
+
+- **Employee Create Complaint / Inbox — Page Auto-Scrolls Downward on First Load — Proper Fix (`public/index.html` in host app; `pages/employee/CreateComplaint/index.js`, `pages/employee/PGRInbox.js`)**:
+  - The 1.0.37 fix (`useEffect`-based mount-time neutralization with an 800ms→1500ms timeout) was a misdiagnosis. The buggy `scrollIntoView` fires from inside the `Dropdown` component itself *after* MDMS resolves, so a mount-time window in the parent CreateComplaint / PGRInbox screens was racing the async smooth scroll on first load / hard reload — which is exactly the "happens on hard reload but not on cached nav" symptom users reported.
+  - Real root cause: the `Dropdown` component in `@egovernments/digit-ui-components@0.2.5` runs a mount-time `useEffect(()=>{...},[])` that calls `scrollIntoView({behavior:"smooth",block:"center",inline:"center"})` on *its own root `<div>`* (class `digit-dropdown-employee-select-wrap` / `digit-dropdown-select-wrap`) whenever `getBoundingClientRect()` reports it as off-screen. Tall PGR forms render many Dropdowns below the fold, each one scrolls the page, the last one wins. On cached internal navigation the form mounts before layout has expanded to its tall size, so the off-screen check fails and the bug is silently skipped.
+  - Fix:
+    - Removed the brittle per-screen `useEffect` workaround from `CreateComplaint/index.js` and `PGRInbox.js` (it raced async MDMS and only worked when the MDMS round-trip finished inside the timeout window).
+    - Added a host-app patch to `public/index.html` that wraps `Element.prototype.scrollIntoView`. The wrapper no-ops the call **only** when (a) the target's className matches the Dropdown root regex **and** (b) `location.pathname` matches `/employee/pgr/complaint/create` or `/employee/pgr/inbox`. Every other page and every other `scrollIntoView` call (stepper active-step, OTP focus, validation focus, etc.) passes through unchanged.
+    - Patch was added to all known host-app `index.html` files: `DIGIT-Frontend/micro-ui/web/public/index.html`, `DIGIT-Frontend/micro-ui/web/micro-ui-internals/example/public/index.html`, `Citizen-Complaint-Resolution-System/frontend/micro-ui/web/public/index.html`, `Citizen-Complaint-Resolution-System/frontend/micro-ui/web/micro-ui-internals/example/public/index.html`, `DIGIT-UI-LIBRARIES/react/example/public/index.html`. **Deployments that don't pick up this `index.html` change will still see the bug.**
+
 ## [1.0.37] - 2026-05-12
 
 ### Fixed
@@ -51,8 +63,9 @@ All notable changes to this module will be documented in this file.
 
 - **Employee Create Complaint — Page Auto-Scrolls Downward on Mount (`pages/employee/CreateComplaint/index.js`)**:
   - On short laptop viewports the create-complaint page nudged ~50–100px downward when the form mounted, hiding the page header.
-  - Root cause: a component inside `@egovernments/digit-ui-components` calls `element.scrollIntoView({ behavior: "smooth", block: "center" })` on mount when its element is outside the visible viewport. On a tall form that element sits below the fold, so the smooth scroll pulls the page downward. A single `window.scrollTo(0, 0)` on mount couldn't compete with the still-animating smooth scroll.
-  - Fix: temporarily neutralize `Element.prototype.scrollIntoView` (replace with a no-op) for the first 800 ms after mount so the library's call becomes a no-op; pin `window.scrollTo(0, 0)` on mount and on the next animation frame; disable browser scroll restoration for the page. The override is restored after 800 ms and on unmount — user-initiated focus and validation-driven `scrollIntoView` work normally afterward.
+  - Root cause (as understood at the time): a component inside `@egovernments/digit-ui-components` calls `element.scrollIntoView({ behavior: "smooth", block: "center" })` on mount when its element is outside the visible viewport. On a tall form that element sits below the fold, so the smooth scroll pulls the page downward. A single `window.scrollTo(0, 0)` on mount couldn't compete with the still-animating smooth scroll.
+  - Fix: temporarily neutralize `Element.prototype.scrollIntoView` (replace with a no-op) for the first 800 ms after mount so the library's call becomes a no-op; pin `window.scrollTo(0, 0)` on mount and on the next animation frame; disable browser scroll restoration for the page.
+  - **Note:** this workaround did not survive first-load / hard-reload because the offending Dropdown mount runs *after* MDMS resolves, often outside the 800ms window. Superseded by the proper fix in 1.0.38.
 
 ## [1.0.33] - 2026-05-10
 

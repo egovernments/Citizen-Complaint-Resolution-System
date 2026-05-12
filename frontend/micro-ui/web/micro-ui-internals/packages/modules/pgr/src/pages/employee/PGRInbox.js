@@ -109,6 +109,10 @@ const PGRSearchInboxV2 = () => {
     return processedConfig;
   }, [pageConfig, serviceDefs, t]);
 
+  // Scroll-to-top guard is handled globally in public/index.html — it
+  // monkey-patches Element.prototype.scrollIntoView to no-op when the target
+  // is a @egovernments/digit-ui-components Dropdown root (the buggy element).
+
   /**
    * Show loader until necessary data is available
    */
@@ -150,10 +154,8 @@ const PGRSearchInboxV2 = () => {
  * Defaults to v2 when the flag is absent or false.
  */
 const PGRSearchInbox = () => {
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
-
+  // Scroll-to-top guard lives inside PGRSearchInboxV2, where the data-ready
+  // signal is known — see the matching fix in CreateComplaint/index.js.
   const useInboxV1 = window?.globalConfigs?.getConfig("USE_INBOX_V1") === true;
   return useInboxV1 ? <PGRInboxV1 /> : <PGRSearchInboxV2 />;
 };
