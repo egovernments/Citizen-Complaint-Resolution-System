@@ -1064,7 +1064,12 @@ services:
   # HRMS Service - Employee management
   # ===========================================================================
   egov-hrms:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-hrms:default-pwd
+    # digit-common-boundary: fixes CCRS#482 (custom password on employee
+    # create) + CCRS#484 (null tenantId on User object breaking MDMS
+    # mobile validation). EGOV_HRMS_DEV_MODE=true must be set so
+    # enrichUser() respects the password supplied in the request instead
+    # of overwriting with the default/auto-generated one.
+    image: registry.preview.egov.theflywheel.in/egovio/egov-hrms:digit-common-boundary
     container_name: egov-hrms
     depends_on:
       pgbouncer:
@@ -1117,6 +1122,10 @@ services:
       EGOV_STATELEVEL_TENANT: pg
       HRMS_SYSTEM_USERNAME: INTERNAL_USER
       EGOV_HRMS_DEFAULT_PASSWORD: ${EGOV_HRMS_DEFAULT_PASSWORD:-eGov@123}
+      # Enables enrichUser() to honor passwords supplied in the create
+      # request rather than overwriting with the default/auto-generated
+      # one. Required by the CCRS#482 fix in :digit-common-boundary.
+      EGOV_HRMS_DEV_MODE: 'true'
     ports:
       - 18092:8092
     healthcheck:

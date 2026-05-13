@@ -227,6 +227,7 @@
           seeds:   ../seeds
           gatus:   ../gatus
           jupyter: ../jupyter
+          scripts: ../scripts
 
     # docker/ contains build contexts (db-migrations, pgr-services).
     # Even though we use pre-built images, compose may validate volume mount paths.
@@ -1113,6 +1114,34 @@
       ansible.builtin.debug:
         msg: "{{ dataloader_e2e.stdout_lines | select('match', '^(\\[[0-9]+/|   PASS|   FAIL)') | list }}"
 
+    # CRSLoader v2 regression suite. 11 focused tests covering the
+    # fixes added in #263 (root tenant creation, designation dedup,
+    # department count accuracy, tenant-scoped counts, boundary 403 →
+    # PermissionError) plus follow-up regression cases (workflow nextState
+    # resolution, DataSecurity schema bootstrap, MDMS inactive
+    # reactivation, employee password via user service,
+    # INTERNAL_MICROSERVICE_ROLE handling, workflow copy idempotency).
+    # Each test creates its own throwaway tenant; no cleanup — the next
+    # deploy starts from the dump's clean state.
+    #
+    # This suite is the contract for new-tenant bootstrap — any failure
+    # breaks the deploy. Re-run with `--start-at-task=` to skip past
+    # infra setup if you're iterating on the regression itself.
+    - name: "CI — CRSLoader v2 regression suite (#263 fixes)"
+      ansible.builtin.shell: |
+        cd {{ digit_dir }}/scripts
+        DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }} \
+        DIGIT_USERNAME=ADMIN \
+        DIGIT_PASSWORD=eGov@123 \
+        ROOT_TENANT=pg \
+        python3 ci-dataloader-v2-regression.py
+      register: dataloader_regression
+      changed_when: false
+
+    - name: "CI — show CRSLoader v2 regression results"
+      ansible.builtin.debug:
+        msg: "{{ dataloader_regression.stdout_lines | select('match', '^(TEST:|RESULTS:|✅|❌|   PermissionError|   After |   City |   Root )') | list }}"
+
     # ==================================================================
     # CI TESTS — opt-in only. The scripts + Playwright suite live in a
     # sibling clone (../../../digit-ui-fix/local-setup/...) that's specific
@@ -1164,13 +1193,9 @@
         mode: "0755"
 
       when: run_ci_tests | default(false)
-    - name: Copy DataLoader regression test script
-      copy:
-        src: ../../../digit-ui-fix/local-setup/scripts/ci-dataloader-v2-regression.py
-        dest: "{{ digit_dir }}/ci-tests/scripts/ci-dataloader-v2-regression.py"
-        mode: "0755"
-
-      when: run_ci_tests | default(false)
+    # (Removed: Copy DataLoader regression test script — it now lives in-repo
+    # at local-setup/scripts/ and is run as part of the core CI block above,
+    # not gated on run_ci_tests.)
 
     # Use OUR canonical, deduped dataloader (local-setup/jupyter/) — not
     # a sibling repo's copy. The sibling copy used to drift (e.g. it had
@@ -1208,26 +1233,10 @@
       debug:
         var: xlsx_dataloader_result.stdout_lines | default(['(no output)'])
 
-    # CI TESTS — Stage A2: DataLoader v2 regression tests (pg tenant)
-      when: run_ci_tests | default(false)
-    - name: Run DataLoader v2 regression tests
-      shell: |
-        cd {{ digit_dir }}/ci-tests/scripts
-        DIGIT_URL=http://127.0.0.1:18000 \
-        DIGIT_USERNAME=ADMIN \
-        DIGIT_PASSWORD=eGov@123 \
-        ROOT_TENANT=pg \
-        python3 ci-dataloader-v2-regression.py
-      args:
-        chdir: "{{ digit_dir }}/ci-tests/scripts"
-      register: dataloader_result
-      timeout: 900
-      ignore_errors: yes
-
-      when: run_ci_tests | default(false)
-    - name: Show DataLoader regression test results
-      debug:
-        var: dataloader_result.stdout_lines | default(['(no output - possibly timed out)'])
+    # (Removed: Stage A2 DataLoader v2 regression tests — now run in the core
+    # CI block as "CI — CRSLoader v2 regression suite", which exercises the
+    # in-repo `local-setup/scripts/ci-dataloader-v2-regression.py`. The
+    # summary below reads `dataloader_regression` from that task.)
 
     # ==================================================================
     # CI TESTS — Stage B: Playwright E2E Tests
@@ -1314,7 +1323,7 @@
     - name: CI test results summary
       vars:
         xlsx_rc: "{{ xlsx_dataloader_result.rc | default(-1) }}"
-        dl_rc: "{{ dataloader_result.rc | default(-1) }}"
+        dl_rc: "{{ dataloader_regression.rc | default(-1) }}"
         pw_rc: "{{ playwright_result.rc | default(-1) }}"
       debug:
         msg:
@@ -1328,7 +1337,7 @@
     - name: Fail if any CI test failed
       vars:
         xlsx_rc: "{{ xlsx_dataloader_result.rc | default(-1) }}"
-        dl_rc: "{{ dataloader_result.rc | default(-1) }}"
+        dl_rc: "{{ dataloader_regression.rc | default(-1) }}"
         pw_rc: "{{ playwright_result.rc | default(-1) }}"
       fail:
         msg: |
