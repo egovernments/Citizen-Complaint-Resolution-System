@@ -183,7 +183,7 @@ public class NotificationUtil {
      * @param notificationCode Notification Code
      * @return Return Customized Message
      */
-    public String getCustomizedMsgForPlaceholder(String localizationMessage,String notificationCode) {
+    public String    getCustomizedMsgForPlaceholder(String localizationMessage,String notificationCode) {
         String path = "$..messages[?(@.code==\"{}\")].message";
         path = path.replace("{}", notificationCode);
         String message = null;
