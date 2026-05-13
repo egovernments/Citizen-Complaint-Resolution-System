@@ -1563,7 +1563,7 @@
     },
     {
       "key": "username",
-      "value": "ADMIN"
+      "value": "CI-ADMIN"
     },
     {
       "key": "password",
@@ -1571,7 +1571,7 @@
     },
     {
       "key": "cityTenant",
-      "value": "pg.citya"
+      "value": "pg.citest"
     },
     {
       "key": "userType",

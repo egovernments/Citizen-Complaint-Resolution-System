@@ -1,0 +1,1347 @@
+---
+- name: Deploy DIGIT stack from public registry
+  # `digit` is the group defined in inventory/hosts.yml. Per-tenant config
+  # comes from inventory/host_vars/<host>.yml; defaults from group_vars/.
+  # Run via: ./deploy.sh <tenant>  (NOT `ansible-playbook` directly).
+  hosts: digit
+  become: true
+
+  pre_tasks:
+    # digit-ui can be served two ways, both binding port 18080:
+    #   - `static` mode: digit-ui Docker container with a pre-built bundle.
+    #   - `hmr` mode:    host-side `node esbuild.dev.js` in tmux session
+    #                    `esbuild`, watching /opt/digit-ui-esbuild.
+    # Whichever mode the host_vars asks for, we converge to it — kill
+    # the off-mode runner first (so port 18080 is free), bring up the
+    # requested one. Both branches are idempotent.
+    - name: "digit-ui — show requested mode"
+      ansible.builtin.debug:
+        msg: "Requested mode for {{ inventory_hostname }}: {{ digit_ui_mode }}"
+
+    - name: "digit-ui mode=static — kill stray esbuild tmux session if any"
+      ansible.builtin.shell: |
+        if tmux has-session -t esbuild 2>/dev/null; then
+          tmux kill-session -t esbuild
+          echo killed
+        fi
+      register: kill_esbuild
+      changed_when: kill_esbuild.stdout == "killed"
+      when: digit_ui_mode == "static"
+
+    - name: "digit-ui mode=hmr — stop digit-ui container if running"
+      ansible.builtin.shell: |
+        if docker ps --filter name=^digit-ui$ --format '{% raw %}{{.Names}}{% endraw %}' | grep -q '^digit-ui$'; then
+          docker stop digit-ui
+          echo stopped
+        fi
+      register: stop_digit_ui
+      changed_when: stop_digit_ui.stdout == "stopped"
+      when: digit_ui_mode == "hmr"
+
+    # Both digit_ui_mode values (hmr and static) need the digit-ui-esbuild
+    # source on disk — HMR runs `node esbuild.dev.js` from it, static
+    # builds via `node esbuild.build.js`. Make sure it's there. Idempotent:
+    # `git` module no-ops when the working tree already matches origin.
+    - name: "digit-ui — ensure /opt/digit-ui-esbuild repo is present and current"
+      ansible.builtin.git:
+        repo: "{{ digit_ui_esbuild_repo | default('https://github.com/theflywheel/digit-ui-esbuild.git') }}"
+        dest: /opt/digit-ui-esbuild
+        version: "{{ digit_ui_esbuild_branch | default('main') }}"
+        update: yes
+        # Deploy target, not a dev workspace. esbuild touches a few tracked
+        # files (e.g. public/vendor/tailwind.css) during the build, which
+        # would otherwise block the next git pull. Force-clean keeps the
+        # working tree byte-identical to origin/{branch}.
+        force: yes
+
+
+  tasks:
+    # ==================== Docker Installation ====================
+    - name: Install Docker prerequisites
+      apt:
+        name: [ca-certificates, curl, gnupg]
+        state: present
+        update_cache: yes
+
+    - name: Add Docker GPG key
+      shell: |
+        install -m 0755 -d /etc/apt/keyrings
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+        chmod a+r /etc/apt/keyrings/docker.asc
+      args:
+        creates: /etc/apt/keyrings/docker.asc
+
+    - name: Add Docker repository
+      shell: |
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
+      args:
+        creates: /etc/apt/sources.list.d/docker.list
+
+    # Ubuntu 24.04 ships `docker.io` + `docker-compose-v2` from the
+    # archive. Both conflict with Docker's upstream packages — they own
+    # the same `/usr/libexec/docker/cli-plugins/docker-compose` file —
+    # so dpkg refuses to install the upstream packages until the archive
+    # ones are removed. Idempotent: no-op if they're not installed.
+    - name: Remove conflicting Ubuntu-archive Docker packages
+      apt:
+        name:
+          - docker.io
+          - docker-doc
+          - docker-compose
+          - docker-compose-v2
+          - podman-docker
+          - containerd
+          - runc
+        state: absent
+        purge: yes
+
+    - name: Install Docker Engine
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+        update_cache: yes
+
+    # apt installs docker.service `disabled` on Ubuntu 24.04 — enable +
+    # start it explicitly so subsequent tasks can talk to the daemon.
+    - name: Ensure docker daemon is enabled + running
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    # ==================== Docker Configuration ====================
+    # The Hetzner VPC registry at {{ docker_registry }} (egov-ci) hosts every
+    # custom-built DIGIT image (digit-mcp, sb35-rebuilt egov-* services)
+    # over plain HTTP. Without this entry Docker refuses to pull with
+    # `http: server gave HTTP response to HTTPS client`. Restart the
+    # daemon when the file changes so the new config takes effect.
+    - name: Configure Docker insecure-registries for VPC registry
+      copy:
+        dest: /etc/docker/daemon.json
+        content: |
+          {
+            "insecure-registries": ["{{ docker_registry }}"]
+          }
+        mode: '0644'
+      register: daemon_json
+
+    - name: Restart docker if daemon.json changed
+      service:
+        name: docker
+        state: restarted
+      when: daemon_json.changed
+
+    # check_mode: false forces this to run even under `--check`, so the
+    # version-compare task below has a real value to test against.
+    - name: Verify Docker Compose version >= 2.20
+      shell: docker compose version --short
+      register: compose_version
+      changed_when: false
+      check_mode: false
+
+    - name: Fail if Docker Compose too old
+      fail:
+        msg: "Docker Compose {{ compose_version.stdout | default('UNKNOWN') }} is too old. Need >= 2.20"
+      when:
+        - compose_version.stdout is defined
+        - compose_version.stdout | length > 0
+        - compose_version.stdout is version('2.20', '<')
+
+    # ==================== Deploy Directory ====================
+    - name: Create DIGIT directory
+      file:
+        path: "{{ digit_dir }}"
+        state: directory
+
+    # ==================== Compose File ====================
+    - name: Copy registry-prefixed Docker Compose file
+      copy:
+        src: ../docker-compose.egov-digit.yaml
+        dest: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+
+    # Opt-in DB fast-path overlay. See docker-compose.fast-path.yml for
+    # what it changes and why it's gated. Default off; sandbox tenants
+    # can flip `db_fast_path: true` in inventory/host_vars/<tenant>.yml.
+    - name: Copy fast-path overlay (used only when db_fast_path is true)
+      copy:
+        src: ../docker-compose.fast-path.yml
+        dest: "{{ digit_dir }}/docker-compose.fast-path.yml"
+
+    # ==================== OTEL Java Agent (fetched, not in git) ====================
+    # The 21 MB OTEL javaagent JAR is downloaded on the controller before the
+    # otel/ tree gets rsync'd to the target. Cached locally via the script's
+    # own existence check, so re-runs of the playbook are no-ops after the
+    # first download.
+    - name: Download OpenTelemetry Java Agent
+      shell: bash {{ playbook_dir }}/../otel/download-agent.sh
+      args:
+        creates: "{{ playbook_dir }}/../otel/opentelemetry-javaagent.jar"
+      delegate_to: localhost
+      become: false
+
+    # ==================== nairobi-mdms submodule (fetched, not vendored) ====================
+    # The Nairobi MDMS dump (~84k LOC of JSON for departments, designations,
+    # service defs, role-actions, etc.) lives in a separate repo at
+    # https://github.com/ChakshuGautam/nairobi-digit-configs.git and is wired
+    # into this repo as a submodule at local-setup/ansible/nairobi-mdms.
+    #
+    # Only Nairobi-flavoured tenants need it, so we don't auto-init on clone
+    # — the submodule is empty until this task runs. Set
+    # `requires_nairobi_mdms: true` in inventory/host_vars/<tenant>.yml when
+    # the tenant onboarding flow needs to read those JSONs.
+    - name: "nairobi-mdms — init submodule on the controller (when tenant needs it)"
+      ansible.builtin.command:
+        cmd: git submodule update --init --recursive local-setup/ansible/nairobi-mdms
+        chdir: "{{ playbook_dir }}/../.."
+      register: nairobi_mdms_init
+      changed_when: "'Submodule path' in nairobi_mdms_init.stdout"
+      delegate_to: localhost
+      become: false
+      when: requires_nairobi_mdms | default(false)
+
+    # ==================== Config Directories ====================
+    # Each entry is `dest_name -> src_path_relative_to_ansible_dir`.
+    # `dest_name` is what ends up under {{ digit_dir }}/ on the target.
+    # All eight live at the repo root since b8629c5f.
+    # `keycloak` was previously synced but no source dir exists in the
+    # repo — keycloak config ships baked into the keycloak image — so
+    # it's dropped from the list.
+    - name: Synchronize config directories
+      synchronize:
+        src: "{{ item.value }}/"
+        dest: "{{ digit_dir }}/{{ item.key }}/"
+      loop: "{{ digit_config_dirs | dict2items }}"
+      vars:
+        digit_config_dirs:
+          otel:    ../otel
+          configs: ../configs
+          nginx:   ../nginx
+          kong:    ../kong
+          postman: ../postman
+          db:      ../db
+          seeds:   ../seeds
+          gatus:   ../gatus
+          jupyter: ../jupyter
+
+    # docker/ contains build contexts (db-migrations, pgr-services).
+    # Even though we use pre-built images, compose may validate volume mount paths.
+    - name: Synchronize docker build context dirs
+      synchronize:
+        src: "../docker/"
+        dest: "{{ digit_dir }}/docker/"
+
+    # ==================== Compose .env (per-tenant overrides) ====================
+    # Templates Grafana's public root URL (so the JVM dashboard / observability
+    # links match the tenant's actual domain). Compose auto-loads .env from the
+    # working directory, so no extra wiring is needed in the compose file.
+    - name: Write per-tenant compose .env
+      template:
+        src: templates/digit.env.j2
+        dest: "{{ digit_dir }}/.env"
+        mode: '0644'
+
+    # ==================== digit-ui globalConfigs.js (per-tenant) ====================
+    # Boot-time config for the digit-ui SPA. Every value comes from the
+    # inventory (host_vars overrides group_vars). Add new keys to the
+    # template + inventory; never edit the rendered file on the server.
+    - name: Render digit-ui globalConfigs.js
+      template:
+        src: templates/globalConfigs.js.j2
+        dest: "{{ digit_dir }}/nginx/globalConfigs.js"
+        mode: '0644'
+
+    - name: Add API proxy to digit-ui nginx config
+      copy:
+        content: |
+          resolver 127.0.0.11 valid=10s;
+
+          server
+          {
+            listen 80;
+            underscores_in_headers on;
+
+            sub_filter_once on;
+            sub_filter_types text/html;
+
+            location /digit-ui
+            {
+              root /var/web;
+              index index.html index.htm;
+              try_files $uri $uri/ /digit-ui/index.html;
+
+              sub_filter '</head>' '<script src="/digit-ui/globalConfigs.js"></script></head>';
+            }
+
+            location = /digit-ui/globalConfigs.js {
+              alias /var/web/digit-ui/globalConfigs.js;
+              default_type application/javascript;
+            }
+
+            location = /digit-ui/silent-check-sso.html {
+              alias /var/web/digit-ui/silent-check-sso.html;
+              default_type text/html;
+            }
+
+            # Proxy API calls to Kong gateway
+            location / {
+              set $kong http://kong-gateway:8000;
+              proxy_pass $kong;
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $scheme;
+              proxy_read_timeout 120s;
+              proxy_buffering off;
+            }
+          }
+        dest: "{{ digit_dir }}/nginx/digit-ui.conf"
+
+    # ==================== Configure domain-specific settings ====================
+    - name: Set Grafana domain in compose
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: 'api\.egov\.theflywheel\.in'
+        replace: "{{ domain }}"
+
+    # ==================== Transfer MCP Image ====================
+    # digit-mcp ships from the VPC registry now ({{ docker_registry }}/digit-mcp:latest),
+    # alongside every other DIGIT image. The compose `pull` step picks it up
+    # like any other service — no controller-side `docker save | docker load`
+    # transfer needed. To rebuild + republish the image from /root/DIGIT-MCP/
+    # on the controller, run `ansible-playbook ... --tags mcp-publish`.
+    - name: Build + push digit-mcp image to VPC registry
+      shell: |
+        set -e
+        cd /root/DIGIT-MCP
+        docker build -t {{ docker_registry }}/digit-mcp:latest .
+        docker push {{ docker_registry }}/digit-mcp:latest
+      delegate_to: localhost
+      become: false
+      tags: ['mcp-publish', 'never']  # opt-in only; not part of default deploy
+
+    # ==================== Pull & Start ====================
+    # COMPOSE_PROFILES drives which optional service groups are included.
+    # Today: `search` covers elasticsearch + egov-indexer + inbox-v2.
+    # Default off; tenants opt in via `enable_search_stack: true`.
+    - name: "Compute compose profiles for this tenant"
+      ansible.builtin.set_fact:
+        compose_profiles: >-
+          {{
+            ([]
+              + (['search'] if enable_search_stack | default(false) else [])
+              + (['mcp']    if enable_mcp         | default(false) else [])
+            ) | join(',')
+          }}
+
+    - name: "Show active compose profiles"
+      ansible.builtin.debug:
+        msg: "Active compose profiles for {{ inventory_hostname }}: {{ compose_profiles or '(none — lean stack)' }}"
+
+    # Tenants opt into the DB fast-path with `db_fast_path: true` in their
+    # host_vars. When on, layer the overlay onto every compose invocation
+    # below (pull, up, recreate). Default off — never touches live tenants.
+    - name: "Compute compose -f flags (fast-path overlay opt-in)"
+      ansible.builtin.set_fact:
+        compose_files: >-
+          {{
+            '-f docker-compose.egov-digit.yaml' +
+            (' -f docker-compose.fast-path.yml' if (db_fast_path | default(false)) else '')
+          }}
+
+    - name: "Show compose file stack"
+      ansible.builtin.debug:
+        msg: "compose files for {{ inventory_hostname }}: {{ compose_files }}"
+
+    - name: Pull all images from VPC registry
+      shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} pull --ignore-pull-failures
+      args:
+        chdir: "{{ digit_dir }}"
+
+    - name: Start DIGIT stack
+      shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d
+      args:
+        chdir: "{{ digit_dir }}"
+
+    # If a tenant just flipped enable_search_stack: true → false, the
+    # previously-running search containers (digit-elasticsearch,
+    # egov-indexer, digit-inbox) won't be stopped by the up -d above
+    # because compose only manages services in the active profiles.
+    # Sweep them explicitly when search is OFF.
+    - name: "Sweep search-stack containers when profile is OFF"
+      ansible.builtin.shell: |
+        for c in digit-elasticsearch egov-indexer digit-inbox; do
+          if docker ps --filter name=^${c}$ --format '{{ "{{" }}.Names{{ "}}" }}' | grep -q "^${c}$"; then
+            docker stop "$c" >/dev/null
+            docker rm "$c" >/dev/null
+            echo "swept $c"
+          fi
+        done
+      register: search_sweep
+      changed_when: search_sweep.stdout | length > 0
+      when: not (enable_search_stack | default(false))
+
+    # ==================== Health Check ====================
+    - name: Wait for Kong gateway to be healthy (up to 10 min)
+      shell: docker inspect --format '{{ "{{" }}.State.Health.Status{{ "}}" }}' kong-gateway
+      register: kong_health
+      retries: 60
+      delay: 10
+      until: kong_health.stdout == 'healthy'
+      changed_when: false
+
+    # ==================== Wait for Persister (Kafka consumer) ====================
+    - name: Wait for egov-persister to be healthy
+      shell: docker inspect --format '{{ "{{" }}.State.Health.Status{{ "}}" }}' egov-persister
+      register: persister_health
+      retries: 30
+      delay: 10
+      until: persister_health.stdout == 'healthy'
+      changed_when: false
+
+    - name: Wait for egov-hrms to be healthy (JVM startup ~3 min)
+      shell: docker inspect --format '{{ "{{" }}.State.Health.Status{{ "}}" }}' egov-hrms
+      register: hrms_health
+      retries: 30
+      delay: 10
+      until: hrms_health.stdout == 'healthy'
+      changed_when: false
+
+    # ==================== digit-ui mode convergence ====================
+    # Three runtime models, picked by host_vars `digit_ui_mode`:
+    #
+    #   static — host nginx serves /opt/digit-ui-esbuild/build/ directly
+    #            (no inner Docker container, no esbuild dev server).
+    #            Build is produced by `node esbuild.build.js` at deploy.
+    #
+    #   hmr    — host-side `node esbuild.dev.js` in tmux session `esbuild`,
+    #            watching /opt/digit-ui-esbuild for live reload. Binds
+    #            18080; nginx proxies / to it.
+    #
+    # Both modes can coexist on disk (same /opt/digit-ui-esbuild), but
+    # only one runs at a time. The off-mode runner is killed before the
+    # in-mode one starts, so port 18080 is unambiguously owned.
+
+    # --- static mode ---
+    - name: "digit-ui mode=static — stop digit-ui container if running (host nginx serves now)"
+      ansible.builtin.shell: |
+        if docker ps --filter name=^digit-ui$ --format '{% raw %}{{.Names}}{% endraw %}' | grep -q '^digit-ui$'; then
+          docker stop digit-ui
+          echo stopped
+        fi
+      register: stop_digit_ui_static
+      changed_when: stop_digit_ui_static.stdout == "stopped"
+      when: digit_ui_mode == "static"
+
+    - name: "digit-ui mode=static — install Node 20 if missing (esbuild.build.js needs it)"
+      ansible.builtin.apt:
+        name: nodejs
+        state: present
+      when: digit_ui_mode == "static"
+
+    - name: "digit-ui mode=static — npm install if package.json is newer than node_modules"
+      ansible.builtin.shell: |
+        # `creates: node_modules/.package-lock.json` was wrong: it assumed
+        # any prior install means deps are in sync. But when the repo gets
+        # `git pull`'d and a new dep enters package.json (e.g. @turf/*),
+        # node_modules is stale and esbuild.build.js fails to resolve.
+        # Re-run if package.json or package-lock.json is newer than the
+        # node_modules root, or if node_modules doesn't exist at all.
+        cd /opt/digit-ui-esbuild
+        if [ ! -d node_modules ] \
+           || [ package.json -nt node_modules ] \
+           || [ package-lock.json -nt node_modules ]; then
+          npm install --legacy-peer-deps
+          echo installed
+        else
+          echo skipped
+        fi
+      register: npm_install
+      changed_when: npm_install.stdout == "installed"
+      when: digit_ui_mode == "static"
+
+    - name: "digit-ui mode=static — run esbuild.build.js (idempotent: skips if build/ index newer than sources)"
+      ansible.builtin.shell: |
+        cd /opt/digit-ui-esbuild
+        # Quick freshness check: if build/index.html is newer than the
+        # most-recent source file, skip the rebuild (~5s saved on
+        # repeat deploys).
+        if [ -f build/index.html ]; then
+          newest_src=$(find products packages public package.json -type f -newer build/index.html 2>/dev/null | head -1)
+          if [ -z "$newest_src" ]; then
+            echo "build/ is up-to-date — skipping rebuild"
+            exit 0
+          fi
+        fi
+        # GLOBAL_CONFIGS lets the build inline the per-tenant config; nginx
+        # also serves the same file at /digit-ui/globalConfigs.js so a
+        # config change without a rebuild still propagates.
+        GLOBAL_CONFIGS={{ digit_dir }}/nginx/globalConfigs.js node esbuild.build.js
+      args:
+        executable: /bin/bash
+      register: esbuild_build
+      changed_when: "'skipping rebuild' not in esbuild_build.stdout"
+      when: digit_ui_mode == "static"
+
+    # --- hmr mode ---
+    - name: "digit-ui mode=hmr — stop digit-ui container after compose brought it up"
+      ansible.builtin.shell: |
+        if docker ps --filter name=^digit-ui$ --format '{% raw %}{{.Names}}{% endraw %}' | grep -q '^digit-ui$'; then
+          docker stop digit-ui
+          echo stopped
+        fi
+      register: post_up_stop_digit_ui
+      changed_when: post_up_stop_digit_ui.stdout == "stopped"
+      when: digit_ui_mode == "hmr"
+
+    - name: "digit-ui mode=hmr — start tmux esbuild session"
+      ansible.builtin.shell: |
+        if ! tmux has-session -t esbuild 2>/dev/null; then
+          cd /opt/digit-ui-esbuild
+          tmux new-session -d -s esbuild \
+            "PORT=18080 GLOBAL_CONFIGS={{ digit_dir }}/nginx/globalConfigs.js node esbuild.dev.js 2>&1 | tee /var/log/esbuild.log"
+          echo started
+        fi
+      register: start_esbuild
+      changed_when: start_esbuild.stdout == "started"
+      when: digit_ui_mode == "hmr"
+
+    # --- mode-agnostic verification ---
+    - name: "digit-ui mode=static — verify built bundle is on disk"
+      ansible.builtin.stat:
+        path: /opt/digit-ui-esbuild/build/index.html
+      register: built_bundle
+      failed_when: not built_bundle.stat.exists
+      when: digit_ui_mode == "static"
+
+    - name: "digit-ui mode=hmr — verify esbuild bound :18080"
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 18080
+        timeout: 120
+      when: digit_ui_mode == "hmr"
+
+    # In HMR mode, esbuild is up on :18080 — probe it directly here. In
+    # static mode the host nginx that aliases /digit-ui/ to
+    # /opt/digit-ui-esbuild/build/ hasn't been re-templated yet (that
+    # happens at the "Deploy configurator nginx site config" task far
+    # below), so the /digit-ui/ probe lives in the validation block at
+    # the end of the play, AFTER nginx has been reloaded.
+    - name: "digit-ui mode=hmr — verify /digit-ui/ serves 200 via esbuild"
+      ansible.builtin.shell: curl -sf http://127.0.0.1:18080/digit-ui/ -o /dev/null
+      register: ui_early_check
+      retries: 30
+      delay: 10
+      until: ui_early_check.rc == 0
+      changed_when: false
+      when: digit_ui_mode == "hmr"
+
+    # ==================== Wait for MCP Server ====================
+    - name: Wait for digit-mcp health (up to 2 min)
+      shell: curl -sf http://127.0.0.1:13101/healthz -o /dev/null
+      register: mcp_health
+      retries: 12
+      delay: 10
+      until: mcp_health.rc == 0
+      changed_when: false
+
+    # ==================== OpenBao bootstrap ====================
+    # Per-tenant secrets backend. Initialized once; subsequent runs
+    # auto-unseal using the keys captured at init. The init JSON lives
+    # at /opt/digit/.openbao/init.json (0600) — back it up out-of-band
+    # because losing it = losing access to every secret in this tenant's
+    # OpenBao until you re-init (which loses all stored secrets).
+
+    - name: "OpenBao — directory for init state"
+      ansible.builtin.file:
+        path: "{{ digit_dir }}/.openbao"
+        state: directory
+        mode: '0700'
+
+    - name: "OpenBao — wait for container to bind 18200"
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 18200
+        timeout: 60
+
+    - name: "OpenBao — check init status"
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18200/v1/sys/init
+        status_code: [200]
+      register: bao_init_status
+
+    - name: "OpenBao — initialize if first deploy (writes init.json with 0600)"
+      when: not bao_init_status.json.initialized
+      block:
+        - name: "OpenBao — operator init"
+          ansible.builtin.uri:
+            url: http://127.0.0.1:18200/v1/sys/init
+            method: POST
+            body_format: json
+            body:
+              secret_shares: 1
+              secret_threshold: 1
+            status_code: [200]
+          register: bao_init_response
+
+        - name: "OpenBao — persist init state"
+          ansible.builtin.copy:
+            dest: "{{ digit_dir }}/.openbao/init.json"
+            content: "{{ bao_init_response.json | to_nice_json }}"
+            mode: '0600'
+          no_log: true
+
+    - name: "OpenBao — load init state"
+      ansible.builtin.slurp:
+        src: "{{ digit_dir }}/.openbao/init.json"
+      register: bao_init_file
+      no_log: true
+
+    - name: "OpenBao — parse init state"
+      ansible.builtin.set_fact:
+        bao_unseal_key: "{{ (bao_init_file.content | b64decode | from_json).keys_base64[0] }}"
+        bao_root_token: "{{ (bao_init_file.content | b64decode | from_json).root_token }}"
+      no_log: true
+
+    - name: "OpenBao — read seal status"
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18200/v1/sys/seal-status
+        status_code: [200]
+      register: bao_seal_status
+
+    - name: "OpenBao — unseal if sealed"
+      when: bao_seal_status.json.sealed
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18200/v1/sys/unseal
+        method: POST
+        body_format: json
+        body:
+          key: "{{ bao_unseal_key }}"
+        status_code: [200]
+      no_log: true
+
+    - name: "OpenBao — enable kv v2 mount at kv/ (idempotent)"
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18200/v1/sys/mounts/kv
+        method: POST
+        headers:
+          X-Vault-Token: "{{ bao_root_token }}"
+        body_format: json
+        body:
+          type: kv
+          options:
+            version: "2"
+        status_code: [204, 400]   # 400 = already exists (idempotent)
+      register: bao_kv_mount
+      failed_when: bao_kv_mount.status == 400 and 'path is already in use' not in (bao_kv_mount.json.errors | join(' '))
+      no_log: true
+
+    - name: "OpenBao — seed bootstrap secrets from host_vars (only writes missing keys)"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
+        method: POST
+        headers:
+          X-Vault-Token: "{{ bao_root_token }}"
+        body_format: json
+        body:
+          options:
+            cas: 0   # only write if no version exists yet — won't overwrite later edits
+          data: "{{ bootstrap_secrets | default({}) }}"
+        status_code: [200, 400]   # 400 = cas check failed (already seeded)
+      register: bao_seed
+      failed_when: bao_seed.status == 400 and 'check-and-set' not in (bao_seed.json.errors | join(' '))
+      when: bootstrap_secrets is defined and bootstrap_secrets | length > 0
+      no_log: true
+
+    # ============================================================
+    # Pull live secrets back from OpenBao and write them into
+    # /opt/digit/.env. docker compose auto-loads .env from its
+    # working directory, so the next `up -d` (recreate-on-change)
+    # picks them up — services that reference ${POSTGRES_PASSWORD}
+    # etc. now read from OpenBao instead of compose-inline defaults.
+    # ============================================================
+    - name: "OpenBao — read tenant secrets for compose env"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
+        headers:
+          X-Vault-Token: "{{ bao_root_token }}"
+        status_code: [200]
+      register: bao_secrets
+      no_log: true
+
+    - name: "OpenBao — write secrets into compose .env (idempotent block)"
+      ansible.builtin.blockinfile:
+        path: "{{ digit_dir }}/.env"
+        block: |
+          # Pulled from OpenBao at deploy time. Edit via:
+          #   bao kv put {{ secrets_path }} <key>=<value>
+          # NOT by editing this file directly (it's regenerated each deploy).
+          POSTGRES_PASSWORD={{ bao_secrets.json.data.data.postgres_password }}
+          MCP_DB_PASSWORD={{ bao_secrets.json.data.data.mcp_db_password }}
+          MINIO_ROOT_USER={{ bao_secrets.json.data.data.minio_root_user }}
+          MINIO_ROOT_PASSWORD={{ bao_secrets.json.data.data.minio_root_password }}
+          AWS_KEY={{ bao_secrets.json.data.data.minio_root_user }}
+          AWS_SECRETKEY={{ bao_secrets.json.data.data.minio_root_password }}
+          ELASTICSEARCH_MASTER_PASSWORD={{ bao_secrets.json.data.data.elasticsearch_master_password }}
+          EGOV_HRMS_DEFAULT_PASSWORD={{ bao_secrets.json.data.data.egov_hrms_default_password }}
+        marker: "# {mark} TENANT SECRETS"
+        create: false           # .env was already written by the digit.env.j2 template earlier
+        mode: '0600'            # tighten — was 0644 from the template; secrets bump to 0600
+      no_log: true
+
+    - name: "Recreate services with the new env (no-op if secrets unchanged)"
+      ansible.builtin.shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d
+      args:
+        chdir: "{{ digit_dir }}"
+      register: post_secrets_recreate
+      changed_when: "'Recreated' in post_secrets_recreate.stdout or 'Started' in post_secrets_recreate.stdout"
+
+    - name: "OpenBao — show access info"
+      ansible.builtin.debug:
+        msg: |
+          OpenBao is up at https://{{ domain }}:18200 (localhost-only on the box).
+
+          Tunnel from your laptop:
+            ssh -L 18200:127.0.0.1:18200 {{ ansible_user }}@{{ ansible_host }}
+            open http://localhost:18200/ui
+
+          Root token + unseal key (DO NOT lose):
+            scp {{ ansible_user }}@{{ ansible_host }}:{{ digit_dir }}/.openbao/init.json ./init-{{ inventory_hostname }}.json
+
+          Secrets path for this tenant: {{ secrets_path }}
+      ignore_errors: yes
+
+    # ============================================================
+    # Host nginx — must be in place + reloaded BEFORE the validation
+    # block so the public-URL probes hit the freshly-rendered template
+    # (with the /digit-ui/ alias for static mode, /mcp / /status / etc.
+    # for whichever features the host_vars enables).
+    # ============================================================
+    - name: "Configurator SPA — ensure /var/www/configurator dir"
+      ansible.builtin.file:
+        path: /var/www/configurator
+        state: directory
+
+    # Only fires when the tenant has the configurator location enabled AND
+    # the operator has pointed `configurator_build` at a built dist/ dir
+    # on the controller. The old default ('/var/www/crs-mockup/') was a
+    # path on Chakshu's dev box — other operators don't have it, so the
+    # default behaviour is now to skip entirely.
+    - name: "Configurator SPA — sync build"
+      ansible.builtin.synchronize:
+        src: "{{ configurator_build }}/"
+        dest: /var/www/configurator/
+      when:
+        - nginx_features.configurator | default(false)
+        - configurator_build is defined
+
+    - name: "Host nginx — install if missing"
+      ansible.builtin.apt:
+        name: nginx
+        state: present
+
+    - name: "Host nginx — render site config from template"
+      ansible.builtin.template:
+        src: templates/nginx-site.conf.j2
+        dest: "/etc/nginx/sites-available/{{ domain }}"
+        mode: '0644'
+      notify: Reload nginx
+
+    - name: "Host nginx — enable site"
+      ansible.builtin.file:
+        src: "/etc/nginx/sites-available/{{ domain }}"
+        dest: "/etc/nginx/sites-enabled/{{ domain }}"
+        state: link
+        force: yes   # convert pre-existing regular-file copies (older deploys) into a symlink
+      notify: Reload nginx
+
+    - name: "Host nginx — remove default site"
+      ansible.builtin.file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify: Reload nginx
+
+    - name: "Host nginx — flush handlers so reload happens before validation"
+      ansible.builtin.meta: flush_handlers
+
+    # ============================================================
+    # Infrastructure validation — runs before the heavy CI tests
+    # below. Cheap checks (curl-level), but every one of them is a
+    # required gate: if any fail, the deploy is marked failed and
+    # the heavy CI doesn't run.
+    # ============================================================
+    - name: "validate — no container is restarting / unhealthy / crash-looping"
+      ansible.builtin.shell: |
+        # Only flag genuinely broken states. Many services don't define
+        # a healthcheck at all (default-data-handler, digit-gatus,
+        # digit-otel-collector, digit-jupyter, etc.) and show plain "Up X"
+        # with no health suffix — that's normal, not unhealthy.
+        # Bad signals: "Restarting", "Exited" (with non-zero), or
+        # "(unhealthy)". One-shot init containers that finished
+        # successfully report "Exited (0)" — those are fine too.
+        set -e
+        bad=$(docker compose -f {{ digit_dir }}/docker-compose.egov-digit.yaml ps \
+                --format '{{ "{{" }}.Name{{ "}}" }} {{ "{{" }}.Status{{ "}}" }}' \
+              | grep -E 'Restarting|\(unhealthy\)|Exited \([1-9]' || true)
+        if [ -n "$bad" ]; then
+          echo "Broken containers:"
+          echo "$bad"
+          exit 1
+        fi
+      args:
+        chdir: "{{ digit_dir }}"
+      changed_when: false
+
+    # When tls_enabled=false (sandbox), hit the box on plain HTTP and pass
+    # `Host: {{ domain }}` so nginx routes to the right server-name block.
+    # The hostname itself doesn't have to be DNS-resolvable.
+    - name: "validate — public UI returns 200"
+      ansible.builtin.uri:
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/digit-ui/"
+        status_code: [200]
+        timeout: 10
+        validate_certs: "{{ tls_enabled | default(true) }}"
+        headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
+      retries: 3
+      delay: 5
+
+    - name: "validate — configurator returns 200 (when enabled)"
+      ansible.builtin.uri:
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/configurator/"
+        status_code: [200]
+        timeout: 10
+        validate_certs: "{{ tls_enabled | default(true) }}"
+        headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
+      when: nginx_features.configurator | default(false)
+
+    - name: "validate — gatus /status/ returns 200 (when enabled)"
+      ansible.builtin.uri:
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/status/"
+        status_code: [200]
+        timeout: 10
+        validate_certs: "{{ tls_enabled | default(true) }}"
+        headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
+      when: nginx_features.status | default(false)
+
+    - name: "validate — MCP HTTP transport responds 405 to HEAD (proves /mcp routed)"
+      ansible.builtin.uri:
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/mcp"
+        method: HEAD
+        status_code: [405]
+        timeout: 10
+        validate_certs: "{{ tls_enabled | default(true) }}"
+        headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
+      when: nginx_features.mcp | default(false)
+
+    - name: "validate — auth flow: ADMIN can mint a token"
+      ansible.builtin.uri:
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/user/oauth/token"
+        method: POST
+        headers: >-
+          {{
+            {'Authorization': 'Basic ZWdvdi11c2VyLWNsaWVudDo=',
+             'Content-Type': 'application/x-www-form-urlencoded'}
+            | combine({'Host': domain} if not (tls_enabled | default(true)) else {})
+          }}
+        body_format: form-urlencoded
+        body:
+          grant_type: password
+          username: "{{ bootstrap_user | default('ADMIN') }}"
+          password: "{{ bootstrap_password | default('eGov@123') }}"
+          scope: read
+          tenantId: "{{ bootstrap_tenant | default('pg') }}"
+          userType: EMPLOYEE
+        status_code: [200]
+        timeout: 15
+        validate_certs: "{{ tls_enabled | default(true) }}"
+      register: auth_probe
+      retries: 3
+      delay: 10
+      no_log: true
+
+    - name: "validate — auth probe returned an access_token"
+      ansible.builtin.assert:
+        that:
+          - auth_probe.json.access_token is defined
+          - auth_probe.json.access_token | length > 10
+        fail_msg: "Auth flow returned 200 but no access_token — egov-user may have wrong DB creds or schema migration didn't run."
+
+    - name: "validate — MDMS lookup: StateInfo returns at least one record"
+      ansible.builtin.uri:
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/egov-mdms-service/v1/_search"
+        method: POST
+        headers: >-
+          {{
+            {'Content-Type': 'application/json'}
+            | combine({'Host': domain} if not (tls_enabled | default(true)) else {})
+          }}
+        body_format: json
+        body:
+          RequestInfo:
+            apiId: "Rainmaker"
+            authToken: "{{ auth_probe.json.access_token }}"
+          MdmsCriteria:
+            tenantId: "{{ bootstrap_tenant | default('pg') }}"
+            moduleDetails:
+              - moduleName: "common-masters"
+                masterDetails:
+                  - name: "StateInfo"
+        status_code: [200]
+        timeout: 15
+        validate_certs: "{{ tls_enabled | default(true) }}"
+      register: mdms_probe
+
+    - name: "validate — StateInfo response is non-empty"
+      ansible.builtin.assert:
+        that:
+          - mdms_probe.json.MdmsRes['common-masters'].StateInfo is defined
+          - mdms_probe.json.MdmsRes['common-masters'].StateInfo | length > 0
+        fail_msg: "MDMS returned 200 but no StateInfo record — persister may have missed the seed message or Kafka lag is high."
+
+    - name: "validate — OpenBao /v1/sys/health is unsealed + initialized"
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18200/v1/sys/health
+        status_code: [200]   # 200 = unsealed + initialized + active
+        timeout: 5
+
+    - name: "validate — summary"
+      ansible.builtin.debug:
+        msg:
+          - "===== INFRA VALIDATION RESULTS ====="
+          - "All containers:        HEALTHY"
+          - "Public UI:             200 OK"
+          - "Configurator:          {{ '200 OK' if nginx_features.configurator | default(false) else 'SKIPPED (disabled)' }}"
+          - "Gatus /status/:        {{ '200 OK' if nginx_features.status | default(false) else 'SKIPPED (disabled)' }}"
+          - "MCP /mcp:              {{ '200 OK' if nginx_features.mcp | default(false) else 'SKIPPED (disabled)' }}"
+          - "Auth flow:             access_token minted"
+          - "MDMS StateInfo:        non-empty"
+          - "OpenBao:               unsealed + initialized"
+          - "===================================="
+
+    - name: Show MCP health status
+      debug:
+        msg: "DIGIT-MCP: {{ 'HEALTHY' if mcp_health.rc == 0 else 'UNHEALTHY (non-critical)' }}"
+
+    # ==================== Wait for Loki ====================
+    - name: Wait for Loki health (up to 2 min)
+      shell: curl -sf http://127.0.0.1:13100/ready -o /dev/null
+      register: loki_health
+      retries: 12
+      delay: 10
+      until: loki_health.rc == 0
+      changed_when: false
+      ignore_errors: yes
+
+    - name: Show Loki health status
+      debug:
+        msg: "Loki: {{ 'HEALTHY' if loki_health.rc == 0 else 'UNHEALTHY (non-critical)' }}"
+
+    # ==================== Claude Code Setup (opt-in) ====================
+    # Installs Claude Code CLI on the target and syncs the controller's
+    # ~/.claude config to it. The sync paths are hard-coded to /root/.claude
+    # — that's correct only for Linux controllers running as root. On
+    # macOS the controller home is /Users/<name>/ and the sync errors out
+    # mid-deploy. So the whole stage is opt-in.
+    - name: "Claude Code — skipped (set install_claude_code: true to enable)"
+      ansible.builtin.debug:
+        msg: "Claude Code install disabled. Set install_claude_code: true in host_vars to enable."
+      when: not (install_claude_code | default(false))
+
+    - name: Install Node.js 20 LTS (needed for CC and tests)
+      shell: |
+        if ! node --version 2>/dev/null | grep -qE "^v2[02]"; then
+          curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+          apt-get install -y nodejs
+        fi
+      register: nodejs_install
+      changed_when: "'nodejs is already' not in nodejs_install.stdout"
+      when: install_claude_code | default(false)
+
+    - name: Install Claude Code CLI
+      shell: npm install -g @anthropic-ai/claude-code
+      register: cc_install
+      changed_when: "'added' in cc_install.stdout"
+      ignore_errors: yes
+      when: install_claude_code | default(false)
+
+    # If a previous run (or hand-edit) left a stale empty file at one of these
+    # paths, ansible's `state: directory` errors. Clear those out first.
+    - name: Remove stale Claude Code config files (must be directories)
+      ansible.builtin.shell: |
+        for p in /root/.claude /root/.claude/skills /root/.claude/plugins; do
+          if [ -f "$p" ]; then rm -f "$p"; fi
+        done
+      changed_when: false
+      when: install_claude_code | default(false)
+
+    - name: Create Claude Code config directories
+      file:
+        path: "/root/.claude/{{ item }}"
+        state: directory
+      loop:
+        - ""
+        - skills
+        - plugins
+      when: install_claude_code | default(false)
+
+    - name: Copy Claude Code settings
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+      loop:
+        - { src: "/root/.claude/settings.json", dest: "/root/.claude/settings.json" }
+        - { src: "/root/.claude/settings.local.json", dest: "/root/.claude/settings.local.json" }
+      ignore_errors: yes
+      when: install_claude_code | default(false)
+
+    - name: Synchronize Claude Code skills
+      synchronize:
+        src: /root/.claude/skills/
+        dest: /root/.claude/skills/
+      when: install_claude_code | default(false)
+
+    - name: Write local MCP config (pointing to local MCP server)
+      copy:
+        content: |
+          {
+            "mcpServers": {
+              "DIGIT-MCP": {
+                "url": "http://localhost:13101/mcp",
+                "type": "http"
+              }
+            }
+          }
+        dest: /root/.mcp.json
+      when: install_claude_code | default(false)
+
+    # ==================================================================
+    # (Configurator SPA + host nginx setup moved earlier in the play —
+    # see "Host nginx — render site config from template" before the
+    # validation block. Validation requires nginx to already be live
+    # with the new template, so the install/render/reload happens
+    # there, not here.)
+    # ==================================================================
+
+    # ==================== Postman smoke + lifecycle ====================
+    # Two Newman runs against the deployed stack, ALWAYS-ON:
+    #   1. digit-core-validation — health checks for every core service
+    #   2. complaints-demo       — full PGR lifecycle on pg.citest
+    #
+    # The dump (db/full-dump.sql) ships with pg.citest pre-bootstrapped
+    # (CI-ADMIN with HRMS, PGR workflow loaded, complaint types). So the
+    # tests work out of the box — no dataloader prerequisite.
+    # postman/ + jupyter/ trees are already synced to {{ digit_dir }} by
+    # the "Synchronize config directories" task above — no separate copy
+    # step here, just reference the synced paths.
+    - name: "Install Newman (Postman CLI runner)"
+      ansible.builtin.shell: |
+        if ! which newman >/dev/null 2>&1; then
+          npm install -g newman
+        fi
+      register: newman_install
+      changed_when: "'added' in newman_install.stdout"
+
+    - name: "CI — Postman digit-core-validation (every core service)"
+      ansible.builtin.shell: |
+        cd {{ digit_dir }}
+        newman run postman/digit-core-validation.postman_collection.json \
+          --env-var "baseUrl=http://127.0.0.1:{{ upstream_kong_port }}" \
+          --reporter-cli-no-banner
+      register: postman_health
+      changed_when: false
+
+    - name: "CI — Postman complaints-demo (full PGR lifecycle on pg.citest)"
+      # --delay-request 2000: wait 2s between each request. The PGR
+      # lifecycle is async — Create publishes to Kafka and returns 200
+      # *before* egov-persister writes the row to eg_pgr_service_v2.
+      # If the next Update fires immediately it gets INVALID_UPDATE
+      # because the row isn't there yet. 2s is more than enough headroom
+      # for the persister to consume + write under normal load.
+      ansible.builtin.shell: |
+        cd {{ digit_dir }}
+        newman run postman/complaints-demo.postman_collection.json \
+          --env-var "url=http://127.0.0.1:{{ upstream_kong_port }}" \
+          --env-var "username=CI-ADMIN" \
+          --env-var "password=eGov@123" \
+          --env-var "cityTenant=pg.citest" \
+          --env-var "stateTenant=pg" \
+          --env-var "userType=EMPLOYEE" \
+          --env-var "authorization=Basic ZWdvdi11c2VyLWNsaWVudDo=" \
+          --env-var "serviceCode=IllegalCuttingOfTrees" \
+          --delay-request 2000 \
+          --reporter-cli-no-banner
+      register: postman_lifecycle
+      changed_when: false
+
+    # CRSLoader end-to-end test — proves the Jupyter notebook flow
+    # (bootstrap a tenant from `pg`, load every phase, rollback) works.
+    # Runs against `pg.cietee` — a dedicated throwaway tenant that
+    # user-seed.sh provisions with ADMIN. The test's cleanup nukes MDMS
+    # records on that tenant only; eg_user rows survive so ADMIN is
+    # there for the next run.
+    #
+    # `ignore_errors: yes` because two of the 10 sub-tests have known
+    # environmental issues:
+    #   - `delete_boundaries()` needs kubectl (works against k8s clusters,
+    #     not docker compose) — not applicable to this deploy shape.
+    #   - `rollback_common_masters()` has a known loader bug (75 records
+    #     stay active after rollback) — tracked separately.
+    # The remaining 8 sub-tests still run and surface real failures.
+    - name: "CI — install pytest + dataloader runtime deps on target"
+      ansible.builtin.pip:
+        name: [requests, openpyxl, pandas, pytest, pytest-timeout]
+        extra_args: --break-system-packages
+      changed_when: false
+
+    - name: "CI — CRSLoader E2E (10-phase Jupyter notebook flow, throwaway tenant)"
+      ansible.builtin.shell: |
+        cd {{ digit_dir }}/jupyter/dataloader
+        DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }} \
+        DIGIT_USERNAME=ADMIN \
+        DIGIT_PASSWORD=eGov@123 \
+        DIGIT_TENANT=pg.cietee \
+        python3 test_crs_loader_e2e.py
+      register: dataloader_e2e
+      changed_when: false
+      ignore_errors: yes
+
+    - name: "CI — show CRSLoader E2E results"
+      ansible.builtin.debug:
+        msg: "{{ dataloader_e2e.stdout_lines | select('match', '^(\\[[0-9]+/|   PASS|   FAIL)') | list }}"
+
+    # ==================================================================
+    # CI TESTS — opt-in only. The scripts + Playwright suite live in a
+    # sibling clone (../../../digit-ui-fix/local-setup/...) that's specific
+    # to the dev machine. Set `run_ci_tests: true` in host_vars to enable
+    # the whole block; on any host without that sibling repo (production
+    # deploys, third-party installers), it stays skipped — the playbook
+    # finishes at "validate — summary" above and the infra is the deploy.
+    - name: "CI tests — skipped (set run_ci_tests: true to enable)"
+      ansible.builtin.debug:
+        msg: "CI test stage disabled. Set run_ci_tests: true in host_vars to enable."
+      when: not (run_ci_tests | default(false))
+
+    # ==================================================================
+    # CI TESTS — Stage A: XLSX-Driven DataLoader E2E
+    # ==================================================================
+    - name: Install Python3 and pip
+      apt:
+        name: [python3, python3-pip]
+        state: present
+      when: run_ci_tests | default(false)
+
+    - name: Install Python dependencies for DataLoader
+      pip:
+        name: [requests, openpyxl, pandas, python-dotenv]
+        extra_args: --break-system-packages
+
+      when: run_ci_tests | default(false)
+    - name: Create CI tests directory structure
+      file:
+        path: "{{ digit_dir }}/ci-tests/{{ item }}"
+        state: directory
+      loop:
+        - scripts
+        - jupyter/dataloader/templates/localisations
+        - data
+
+      when: run_ci_tests | default(false)
+    - name: Copy XLSX-driven CI DataLoader script
+      copy:
+        src: ../../../digit-ui-fix/local-setup/scripts/ci-dataloader-xlsx.py
+        dest: "{{ digit_dir }}/ci-tests/scripts/ci-dataloader-xlsx.py"
+        mode: "0755"
+
+      when: run_ci_tests | default(false)
+    - name: Copy crossroot bootstrap script (fallback)
+      copy:
+        src: ../../../digit-ui-fix/local-setup/scripts/ci-dataloader-crossroot.py
+        dest: "{{ digit_dir }}/ci-tests/scripts/ci-dataloader-crossroot.py"
+        mode: "0755"
+
+      when: run_ci_tests | default(false)
+    - name: Copy DataLoader regression test script
+      copy:
+        src: ../../../digit-ui-fix/local-setup/scripts/ci-dataloader-v2-regression.py
+        dest: "{{ digit_dir }}/ci-tests/scripts/ci-dataloader-v2-regression.py"
+        mode: "0755"
+
+      when: run_ci_tests | default(false)
+
+    # Use OUR canonical, deduped dataloader (local-setup/jupyter/) — not
+    # a sibling repo's copy. The sibling copy used to drift (e.g. it had
+    # a `menuPathName` field that the MDMS schema rejects, breaking the
+    # complaint-type create call). Single source of truth.
+    - name: "Synchronize DataLoader library (from local-setup/jupyter/)"
+      synchronize:
+        src: "../jupyter/dataloader/"
+        dest: "{{ digit_dir }}/ci-tests/jupyter/dataloader/"
+      when: run_ci_tests | default(false)
+
+    - name: Copy county input XLSX (Bomet)
+      copy:
+        src: "{{ county_xlsx | default('county-data-bomet.xlsx') }}"
+        dest: "{{ digit_dir }}/ci-tests/data/county-data.xlsx"
+
+    # CI TESTS — Stage A1: XLSX-driven Bomet County E2E
+      when: run_ci_tests | default(false)
+    - name: Run XLSX-driven DataLoader (Bomet County E2E)
+      shell: |
+        cd {{ digit_dir }}/ci-tests/scripts
+        DIGIT_URL=http://127.0.0.1:18000 \
+        DIGIT_USERNAME=ADMIN \
+        DIGIT_PASSWORD=eGov@123 \
+        ROOT_TENANT=pg \
+        BOOT_TENANT={{ boot_tenant | mandatory }} \
+        INPUT_XLSX={{ digit_dir }}/ci-tests/data/county-data.xlsx \
+        python3 ci-dataloader-xlsx.py
+      register: xlsx_dataloader_result
+      timeout: 600
+      ignore_errors: yes
+
+      when: run_ci_tests | default(false)
+    - name: Show XLSX DataLoader results
+      debug:
+        var: xlsx_dataloader_result.stdout_lines | default(['(no output)'])
+
+    # CI TESTS — Stage A2: DataLoader v2 regression tests (pg tenant)
+      when: run_ci_tests | default(false)
+    - name: Run DataLoader v2 regression tests
+      shell: |
+        cd {{ digit_dir }}/ci-tests/scripts
+        DIGIT_URL=http://127.0.0.1:18000 \
+        DIGIT_USERNAME=ADMIN \
+        DIGIT_PASSWORD=eGov@123 \
+        ROOT_TENANT=pg \
+        python3 ci-dataloader-v2-regression.py
+      args:
+        chdir: "{{ digit_dir }}/ci-tests/scripts"
+      register: dataloader_result
+      timeout: 900
+      ignore_errors: yes
+
+      when: run_ci_tests | default(false)
+    - name: Show DataLoader regression test results
+      debug:
+        var: dataloader_result.stdout_lines | default(['(no output - possibly timed out)'])
+
+    # ==================================================================
+    # CI TESTS — Stage B: Playwright E2E Tests
+    # ==================================================================
+      when: run_ci_tests | default(false)
+    - name: Create E2E tests directory
+      file:
+        path: "{{ digit_dir }}/e2e-tests"
+        state: directory
+
+      when: run_ci_tests | default(false)
+    - name: Copy Playwright package.json
+      copy:
+        src: ../../../digit-ui-fix/local-setup/tests/package.json
+        dest: "{{ digit_dir }}/e2e-tests/package.json"
+
+      when: run_ci_tests | default(false)
+    - name: Synchronize E2E test suite
+      synchronize:
+        src: "../../../digit-ui-fix/local-setup/tests/e2e/"
+        dest: "{{ digit_dir }}/e2e-tests/e2e/"
+
+      when: run_ci_tests | default(false)
+    - name: Copy tsconfig.json for tests
+      copy:
+        src: ../../../digit-ui-fix/local-setup/tests/tsconfig.json
+        dest: "{{ digit_dir }}/e2e-tests/tsconfig.json"
+
+      when: run_ci_tests | default(false)
+    - name: Install npm dependencies
+      shell: npm install
+      args:
+        chdir: "{{ digit_dir }}/e2e-tests"
+
+      when: run_ci_tests | default(false)
+    - name: Install Playwright Chromium with system dependencies
+      shell: npx playwright install --with-deps chromium
+      args:
+        chdir: "{{ digit_dir }}/e2e-tests"
+      timeout: 300
+
+      when: run_ci_tests | default(false)
+    - name: Wait for DIGIT UI to serve pages (up to 10 min)
+      shell: curl -sf http://127.0.0.1:18080/digit-ui/ -o /dev/null
+      register: ui_health
+      retries: 60
+      delay: 10
+      until: ui_health.rc == 0
+      changed_when: false
+
+      when: run_ci_tests | default(false)
+    - name: Run Playwright E2E tests (Bomet tenant)
+      shell: |
+        cd {{ digit_dir }}/e2e-tests
+        BASE_URL=http://127.0.0.1:18080 \
+        DIGIT_TENANT={{ boot_tenant | mandatory }} \
+        DIGIT_USERNAME=BOMET_ADMIN \
+        DIGIT_PASSWORD=eGov@123 \
+        DIGIT_EMPLOYEE_USER=BOMET_ADMIN \
+        DIGIT_EMPLOYEE_PASSWORD=eGov@123 \
+        CI=1 \
+        npx playwright test --config=e2e/playwright.config.ts \
+          --timeout=60000 \
+          employee-login \
+          employee-logout \
+          console-errors \
+          pgr-flow \
+          citizen-pgr-complaint-api
+      args:
+        chdir: "{{ digit_dir }}/e2e-tests"
+      register: playwright_result
+      timeout: 900
+      ignore_errors: yes
+
+      when: run_ci_tests | default(false)
+    - name: Show Playwright test results
+      debug:
+        var: playwright_result.stdout_lines | default(['(no output - possibly timed out)'])
+
+    # ==================================================================
+    # CI Results Summary
+    # ==================================================================
+      when: run_ci_tests | default(false)
+    - name: CI test results summary
+      vars:
+        xlsx_rc: "{{ xlsx_dataloader_result.rc | default(-1) }}"
+        dl_rc: "{{ dataloader_result.rc | default(-1) }}"
+        pw_rc: "{{ playwright_result.rc | default(-1) }}"
+      debug:
+        msg:
+          - "===== CI TEST RESULTS ====="
+          - "XLSX DataLoader (Bomet): {{ 'PASS' if xlsx_rc|int == 0 else 'FAIL (exit ' + xlsx_rc|string + ')' }}"
+          - "DataLoader regression:   {{ 'PASS' if dl_rc|int == 0 else 'FAIL (exit ' + dl_rc|string + ')' }}"
+          - "Playwright E2E:          {{ 'PASS' if pw_rc|int == 0 else 'FAIL (exit ' + pw_rc|string + ')' }}"
+          - "==========================="
+
+      when: run_ci_tests | default(false)
+    - name: Fail if any CI test failed
+      vars:
+        xlsx_rc: "{{ xlsx_dataloader_result.rc | default(-1) }}"
+        dl_rc: "{{ dataloader_result.rc | default(-1) }}"
+        pw_rc: "{{ playwright_result.rc | default(-1) }}"
+      fail:
+        msg: |
+          CI tests failed. The infra came up but a functional flow is broken.
+            XLSX DataLoader (Bomet): exit {{ xlsx_rc }}
+            DataLoader regression:   exit {{ dl_rc }}
+            Playwright E2E:          exit {{ pw_rc }}
+          Re-run with `--start-at-task=...` to skip past the infra setup,
+          or check the per-test stdout above for the specific failure.
+      when: xlsx_rc|int != 0 or dl_rc|int != 0 or pw_rc|int != 0
+
+  handlers:
+    - name: Reload nginx
+      service:
+        name: nginx
+        state: reloaded

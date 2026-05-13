@@ -1,0 +1,31 @@
+# ═══════════════════════════════════════════════════════════════════
+# Reference example — committed for documentation, NOT auto-loaded.
+#
+# `deploy.sh` regenerates a real `inventory/hosts.yml` at every run
+# from the host_vars/*.yml files present on disk. So you typically
+# never edit hosts.yml manually — drop a file in host_vars/ and the
+# inventory updates itself.
+#
+# This file shows what the generated inventory looks like and what
+# vars apply group-wide. Useful for:
+#   - debugging an "host not found" or auth issue (`ls host_vars/` to
+#     confirm Ansible should see the host)
+#   - inspecting the common ansible_user / ssh args inherited by every
+#     tenant in the `digit` group
+#   - running ansible-playbook by hand with `-i hosts.yml.example`
+#
+# Real hosts.yml is gitignored — every operator's inventory is
+# generated locally from their own host_vars files.
+# ═══════════════════════════════════════════════════════════════════
+
+all:
+  children:
+    digit:
+      hosts:
+        # Filled in by deploy.sh from host_vars/*.yml at runtime.
+        # Example of what the rendered version looks like:
+        mytenant:
+        another-tenant:
+      vars:
+        ansible_user: root
+        ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
