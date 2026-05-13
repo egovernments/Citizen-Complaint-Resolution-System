@@ -14,6 +14,7 @@ var globalConfigs = (function () {
   var mdmsContext = "mdms-v2";
   var hrmsContext = "egov-hrms";
   var invalidEmployeeRoles = ["SYSTEM"];
+  var useInboxV1 = true;
 
   // Runtime locale fallback for local setup: force default language unless user explicitly changes it.
   try {
@@ -82,6 +83,8 @@ var globalConfigs = (function () {
       return hrmsContext;
     } else if (key === "INVALIDROLES") {
       return invalidEmployeeRoles;
+    } else if (key === "USE_INBOX_V1") {
+      return useInboxV1;
     }
   };
 
