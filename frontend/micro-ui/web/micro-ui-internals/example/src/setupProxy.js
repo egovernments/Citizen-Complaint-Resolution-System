@@ -111,6 +111,9 @@ module.exports = function (app) {
     "/health-individual",
     "/health-hrms/employees",
     "/inbox/v2/_search",
+    "/default-data-handler",
+    "/user-preference",
+    "/config-service"
   ].forEach((location) => app.use(location, createProxy));
   ["/pb-egov-assets"].forEach((location) => app.use(location, assetsProxy));
   ["/mdms-v2/v2/_create"].forEach((location) => app.use(location, mdmsProxy));

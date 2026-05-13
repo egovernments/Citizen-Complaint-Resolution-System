@@ -1,5 +1,10 @@
 [
   {
+    "code": "CONFIG_ADMIN",
+    "name": "Config Admin",
+    "description": "One who can access configs"
+  },
+  {
     "code": "TICKET_REPORT_VIEWER",
     "name": "Report Viewer",
     "description": "One who will view the reports of tickets"

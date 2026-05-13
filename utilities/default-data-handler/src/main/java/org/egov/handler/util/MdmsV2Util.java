@@ -71,13 +71,16 @@ public class MdmsV2Util {
 		try {
 			restTemplate.postForObject(uri.toString(), mdmsRequest, MdmsResponseV2.class);
 		} catch (Exception e) {
-			if (e instanceof HttpClientErrorException httpException && (httpException.getStatusCode().value() == 400)) {
+			if (e instanceof HttpClientErrorException) {
+				HttpClientErrorException httpException = (HttpClientErrorException) e;
+				if (httpException.getStatusCode().value() == 400) {
 					String responseBody = httpException.getResponseBodyAsString();
 					JsonNode errorNode = parseErrorResponse(responseBody);
 					if (errorNode != null && isDuplicateRecordError(errorNode)) {
 						log.error("Duplicate record error for schema {}: {}", mdmsRequest.getMdms().getSchemaCode(), httpException.getMessage());
 						return; // No need to throw further if it's a duplicate record
 					}
+				}
 			}
 			log.error("Error creating MDMS data for {} : {}", mdmsRequest.getMdms().getTenantId(), e.getMessage());
 			throw new CustomException("MDMS_DATA_CREATE_FAILED", "Failed to create mdms data for " + mdmsRequest.getMdms().getTenantId() + " : " + e.getMessage());

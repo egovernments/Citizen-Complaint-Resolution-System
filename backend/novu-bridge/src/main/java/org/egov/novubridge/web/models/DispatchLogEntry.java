@@ -15,6 +15,7 @@ import java.util.UUID;
 public class DispatchLogEntry {
     private UUID id;
     private String eventId;
+    private String referenceNumber;
     private String module;
     private String eventName;
     private String tenantId;

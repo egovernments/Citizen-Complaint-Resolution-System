@@ -1,0 +1,49 @@
+[
+  {
+    "tenantId": "{tenantid}",
+    "code": "NotificationChannel",
+    "description": "Available notification channels and their tenant-level configuration",
+    "definition": {
+      "type": "object",
+      "title": "NotificationChannel",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "code",
+        "name",
+        "enabled"
+      ],
+      "x-unique": [
+        "code"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "WHATSAPP",
+            "SMS",
+            "EMAIL"
+          ],
+          "description": "Channel identifier"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable channel name"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether this channel is active for the tenant"
+        },
+        "providerName": {
+          "type": "string",
+          "description": "Provider handling this channel (links to ProviderDetail)"
+        },
+        "priority": {
+          "type": "integer",
+          "description": "Dispatch priority (lower = higher priority)"
+        }
+      },
+      "additionalProperties": true
+    },
+    "isActive": true
+  }
+]

@@ -973,8 +973,8 @@ services:
       - ./db/localization-seed.sql:/localization-seed.sql:ro
     entrypoint: >
       bash -c "
-        echo 'Seeding localization data...';
-        psql postgresql://egov:${POSTGRES_PASSWORD:-egov123}@postgres:5432/egov -f /localization-seed.sql
+        echo 'Seeding localization data for ${ROOT_TENANT:-pg} tenant...';
+        psql postgresql://egov:${POSTGRES_PASSWORD:-egov123}@postgres:5432/egov -v tenant_id='${ROOT_TENANT:-pg}' -f /localization-seed.sql
         echo 'Localization seed complete'
       "
     networks:
@@ -1263,9 +1263,7 @@ services:
     ports:
       - "18888:8888"
     volumes:
-      - ./jupyter/dataloader/templates:/home/jovyan/work/templates
-      - ./jupyter:/home/jovyan/work/dataloader
-      - ./jupyter/DataLoader_v2.ipynb:/home/jovyan/work/DataLoader_v2.ipynb
+      - ./jupyter/dataloader:/home/jovyan/work
     deploy:
       resources:
         limits:

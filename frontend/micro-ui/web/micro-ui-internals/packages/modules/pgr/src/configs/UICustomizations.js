@@ -270,74 +270,82 @@ export const UICustomizations = {
 
   PGRInboxConfig: {
     preProcess: (data) => {
-      data.body.inbox.tenantId = Digit.ULBService.getCurrentTenantId();
-      data.body.inbox.processSearchCriteria.tenantId = Digit.ULBService.getCurrentTenantId();
-      // delete data.body.inbox.moduleSearchCriteria.assignedToMe
+      // Deep clone to avoid mutating original state
+      const clonedData = _.cloneDeep(data);
+
+      clonedData.body.inbox.tenantId = Digit.ULBService.getCurrentTenantId();
+      clonedData.body.inbox.processSearchCriteria.tenantId = Digit.ULBService.getCurrentTenantId();
+
       // Remove top-level sortOrder added by the table column sort (not required by backend).
-      // Also delete from state.tableForm so the framework cannot re-inject it after preProcess.
-      delete data.body.inbox.sortOrder;
-      if (data.state && data.state.tableForm) {
-        delete data.state.tableForm.sortOrder;
-      }
+      delete clonedData.body.inbox.sortOrder;
 
       // Manage limit and offset: ensure they are valid numbers with defaults
-      data.body.inbox.limit = data?.state?.tableForm?.limit || data.body.inbox.limit || 10;
-      var _tableOffset = data?.state?.tableForm?.offset;
-      var _bodyOffset = data.body.inbox.offset;
-      data.body.inbox.offset = _tableOffset != null ? _tableOffset : (_bodyOffset != null ? _bodyOffset : 0);
+      clonedData.body.inbox.limit = clonedData?.state?.tableForm?.limit || clonedData.body.inbox.limit || 10;
+      var _tableOffset = clonedData?.state?.tableForm?.offset;
+      var _bodyOffset = clonedData.body.inbox.offset;
+      clonedData.body.inbox.offset = _tableOffset != null ? _tableOffset : (_bodyOffset != null ? _bodyOffset : 0);
 
-      const requestDate = data?.body?.inbox?.moduleSearchCriteria?.range?.requestDate;
+      // Extract search fields from state rather than body to avoid stale data during 'Clear Search'
+      const searchForm = clonedData?.state?.searchForm || {};
+
+      if (searchForm.complaintNumber) {
+        clonedData.body.inbox.moduleSearchCriteria.complaintNumber = searchForm.complaintNumber;
+      } else {
+        delete clonedData.body.inbox.moduleSearchCriteria.complaintNumber;
+      }
+
+      if (searchForm.mobileNumber) {
+        clonedData.body.inbox.moduleSearchCriteria.mobileNumber = searchForm.mobileNumber;
+      } else {
+        delete clonedData.body.inbox.moduleSearchCriteria.mobileNumber;
+      }
+
+      // Handle date range from search form directly
+      const requestDate = searchForm?.range?.requestDate;
 
       if (requestDate?.startDate && requestDate?.endDate) {
         const fromDate = new Date(requestDate.startDate).getTime();
         const toDate = new Date(requestDate.endDate).getTime();
 
-        data.body.inbox.moduleSearchCriteria.fromDate = fromDate;
-        data.body.inbox.moduleSearchCriteria.toDate = toDate;
+        clonedData.body.inbox.moduleSearchCriteria.fromDate = fromDate;
+        clonedData.body.inbox.moduleSearchCriteria.toDate = toDate;
       }
       else {
-        delete data.body.inbox.moduleSearchCriteria.fromDate;
-        delete data.body.inbox.moduleSearchCriteria.toDate;
+        delete clonedData.body.inbox.moduleSearchCriteria.fromDate;
+        delete clonedData.body.inbox.moduleSearchCriteria.toDate;
       }
 
       // Always delete the full range object if it exists
-      delete data.body.inbox.moduleSearchCriteria.range;
+      delete clonedData.body.inbox.moduleSearchCriteria.range;
 
-      // Read assignedToMe from body first, fall back to filterForm state
-      // (framework may inject filterForm AFTER preProcess, so we read state as fallback)
-      const assignee = _.clone(data.body.inbox.moduleSearchCriteria.assignedToMe)
-        || _.clone(data?.state?.filterForm?.assignedToMe);
+      // Handle assignedToMe from filter form state (not from body to avoid interference with search)
+      const assignee = _.clone(clonedData?.state?.filterForm?.assignedToMe);
 
-      // Delete from body
-      delete data.body.inbox.moduleSearchCriteria.assignee;
-      delete data.body.inbox.moduleSearchCriteria.assignedToMe;
-
-      // Also delete from filterForm state to prevent framework re-injecting it after preProcess
-      if (data.state && data.state.filterForm) {
-        delete data.state.filterForm.assignedToMe;
-      }
+      // Delete from body to prevent sending wrong field names to backend
+      delete clonedData.body.inbox.moduleSearchCriteria.assignee;
+      delete clonedData.body.inbox.moduleSearchCriteria.assignedToMe;
 
       if (assignee && assignee.code === "ASSIGNED_TO_ME") {
-        data.body.inbox.moduleSearchCriteria.assignee = Digit.UserService.getUser().info.uuid;
+        clonedData.body.inbox.moduleSearchCriteria.assignee = Digit.UserService.getUser().info.uuid;
       }
       if (assignee && assignee.code === "ASSIGNED_TO_ALL") {
-        delete data.body.inbox.moduleSearchCriteria.assignee;
+        delete clonedData.body.inbox.moduleSearchCriteria.assignee;
       }
 
+      // --- Handle serviceCode from filter form ---
+      const serviceCodeFromFilter = _.clone(clonedData?.state?.filterForm?.serviceCode);
+      const serviceCodes = serviceCodeFromFilter?.serviceCode;
 
-
-      // --- Handle serviceCode ---
-      let serviceCodes = _.clone(data.body.inbox.moduleSearchCriteria.serviceCode || null);
-      serviceCodes = serviceCodes?.serviceCode;
-      delete data.body.inbox.moduleSearchCriteria.serviceCode;
-      if (serviceCodes != null) {
-        data.body.inbox.moduleSearchCriteria.complaintType = serviceCodes;
+      delete clonedData.body.inbox.moduleSearchCriteria.serviceCode;
+      if (serviceCodes != null && serviceCodes !== "") {
+        clonedData.body.inbox.moduleSearchCriteria.complaintType = serviceCodes;
       } else {
-        delete data.body.inbox.moduleSearchCriteria.serviceCode;
+        delete clonedData.body.inbox.moduleSearchCriteria.complaintType;
       }
 
-      delete data.body.inbox.moduleSearchCriteria.locality;
-      let rawLocality = data?.state?.filterForm?.locality;
+      // --- Handle locality from filter form ---
+      delete clonedData.body.inbox.moduleSearchCriteria.locality;
+      let rawLocality = clonedData?.state?.filterForm?.locality;
       let localityArray = [];
       if (rawLocality) {
         if (Array.isArray(rawLocality)) {
@@ -348,23 +356,22 @@ export const UICustomizations = {
       }
 
       if (localityArray.length > 0) {
-        delete data.body.inbox.moduleSearchCriteria.locality;
-        data.body.inbox.moduleSearchCriteria.area = localityArray;
+        clonedData.body.inbox.moduleSearchCriteria.area = localityArray;
       } else {
-        delete data.body.inbox.moduleSearchCriteria.area;
+        delete clonedData.body.inbox.moduleSearchCriteria.area;
       }
 
-      // --- Handle status from state.filterForm ---
-      const rawStatuses = _.clone(data?.state?.filterForm?.status || {});
+      // --- Handle status from filter form ---
+      const rawStatuses = _.clone(clonedData?.state?.filterForm?.status || {});
       const statuses = Object.keys(rawStatuses).filter((key) => rawStatuses[key] === true);
 
       if (statuses.length > 0) {
-        data.body.inbox.moduleSearchCriteria.status = statuses;
+        clonedData.body.inbox.moduleSearchCriteria.status = statuses;
       } else {
-        delete data.body.inbox.moduleSearchCriteria.status;
+        delete clonedData.body.inbox.moduleSearchCriteria.status;
       }
 
-      return data;
+      return clonedData;
     },
     additionalCustomizations: (row, key, column, value, t, searchResult) => {
       switch (key) {
@@ -378,7 +385,7 @@ export const UICustomizations = {
                   {String(value ? (column.translate ? t(column.prefix ? `${column.prefix}${value}` : value) : value) : t("ES_COMMON_NA"))}
                 </Link>
               </span>
-              <span>{t(`SERVICEDEFS.${row?.businessObject?.service?.serviceCode?.toUpperCase()}`)}</span>
+              <span>{t(`SERVICEDEFS_${row?.businessObject?.service?.serviceCode?.toUpperCase()}`)}</span>
             </div>
           );
 
@@ -400,3 +407,10 @@ export const UICustomizations = {
     },
   }
 };
+
+// CRITICAL FIX: The MDMS Database in Production identifies this module as "SearchInboxConfig",
+// whereas the local PGRSearchInboxConfig.js defines it as "PGRInboxConfig". 
+// Because this alias was missing, the Production server was completely ignoring the Search Clearing logic!
+// This explicitly forces Prod to execute the same fixes you authored for Local.
+UICustomizations.SearchInboxConfig = UICustomizations.PGRInboxConfig;
+UICustomizations.PGRSearchInboxConfig = UICustomizations.PGRInboxConfig;

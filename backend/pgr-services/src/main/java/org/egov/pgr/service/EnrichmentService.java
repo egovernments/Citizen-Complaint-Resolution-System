@@ -1,22 +1,25 @@
 package org.egov.pgr.service;
 
-import org.egov.common.contract.request.RequestInfo;
-import org.egov.pgr.config.PGRConfiguration;
-import org.egov.pgr.repository.IdGenRepository;
-import org.egov.pgr.util.PGRUtils;
-import org.egov.pgr.web.models.*;
-import org.egov.pgr.web.models.Idgen.IdResponse;
-import org.egov.tracer.model.CustomException;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.util.CollectionUtils;
-import org.springframework.util.StringUtils;
+import static org.egov.pgr.util.PGRConstants.USERTYPE_CITIZEN;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import static org.egov.pgr.util.PGRConstants.USERTYPE_CITIZEN;
+import org.egov.common.contract.request.RequestInfo;
+import org.egov.pgr.config.PGRConfiguration;
+import org.egov.pgr.repository.IdGenRepository;
+import org.egov.pgr.util.PGRUtils;
+import org.egov.pgr.web.models.AuditDetails;
+import org.egov.pgr.web.models.RequestSearchCriteria;
+import org.egov.pgr.web.models.Service;
+import org.egov.pgr.web.models.ServiceRequest;
+import org.egov.pgr.web.models.Workflow;
+import org.egov.pgr.web.models.Idgen.IdResponse;
+import org.egov.tracer.model.CustomException;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.util.CollectionUtils;
+import org.springframework.util.ObjectUtils;
 
 @org.springframework.stereotype.Service
 public class EnrichmentService {
@@ -71,7 +74,14 @@ public class EnrichmentService {
             });
         }
 
-        if(StringUtils.isEmpty(service.getAccountId()))
+        // Enrich service-level documents
+        if(service.getDocuments()!=null){
+            service.getDocuments().forEach(document -> {
+                document.setId(UUID.randomUUID().toString());
+            });
+        }
+
+        if(ObjectUtils.isEmpty(service.getAccountId()))
             service.setAccountId(service.getCitizen().getUuid());
 
         List<String> customIds = getIdList(requestInfo,tenantId,config.getServiceRequestIdGenName(),config.getServiceRequestIdGenFormat(),1);
@@ -93,6 +103,15 @@ public class EnrichmentService {
         AuditDetails auditDetails = utils.getAuditDetails(requestInfo.getUserInfo().getUuid(), service,false);
 
         service.setAuditDetails(auditDetails);
+
+        // Enrich new service-level documents added during update
+        if(service.getDocuments()!=null){
+            service.getDocuments().forEach(document -> {
+                if(ObjectUtils.isEmpty(document.getId())){
+                    document.setId(UUID.randomUUID().toString());
+                }
+            });
+        }
 
         userService.callUserService(serviceRequest);
     }

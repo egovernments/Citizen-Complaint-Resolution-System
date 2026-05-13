@@ -8944,5 +8944,815 @@
         "message": "Manage Localisation",
         "module": "rainmaker-common",
         "locale": "en_IN"
+    },
+    {
+        "code": "ADMIN_BLOCK",
+        "message": "Block",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ADMIN_LOCALITY",
+        "message": "Locality",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ADMIN_ZONE",
+        "message": "Zone",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ADMIN_CITY",
+        "message": "City",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "TENANT_TENANTS_STATEA_CITYA",
+        "message": "City A",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ULBGRADE_LOCAL_GOVERNMENT AUTHORITY",
+        "message": "Local Government Authority",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_INBOX",
+        "message": "Inbox",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_HEADER_COMPLAINT",
+        "message": "Citizen Complaint Resolution System",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_NEW_COMPLAINT",
+        "message": "New Complaint",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_INBOX_ASSIGNED_TO_ALL",
+        "message": "Assigned to All",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_INBOX_ASSIGNED_TO_ME",
+        "message": "Assigned to Me",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_INBOX_COMMON_SEARCH",
+        "message": "Search",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_INBOX_DATE_LATEST_FIRST",
+        "message": "Latest First",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_INBOX_DATE_LATEST_LAST",
+        "message": "Latest Last",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_INBOX_LOCALITY",
+        "message": "Locality",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_INBOX_SLA_DAYS_REMAINING",
+        "message": "SLA Days Remaining",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_INBOX_STATUS",
+        "message": "Status",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_INBOX_PLEASE_SPECIFY_LOCALITY",
+        "message": "If Others, Specify Locality",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_INBOX",
+        "message": "Inbox",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_TITLE_INBOX",
+        "message": "Inbox",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMPLAINT_RESOLVED_SUCCESS_MESSAGE",
+        "message": "You have marked the complaint as",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "INBOX_ENTER_BID",
+        "message": "Enter Application No",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "INBOX_QUICK_ACTION",
+        "message": "QUICK ACTION",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "INBOX_SORT_ICON",
+        "message": "Sort by SLA",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ERR_COMPLAINT_NUMBER_SEARCH",
+        "message": "Complaint No. should be at least 6 digits",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_PGR_REPORTS_HEADER",
+        "message": "Reports",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ACTION_TEST_CLOSED_COMPLAINTS",
+        "message": "Closed Complaints",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ACTION_TEST_NATIONAL_PGR",
+        "message": "Citizen Complaint Resolution System",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "MODULE_PGR",
+        "message": "Citizen Complaint Resolution System",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "EV_SLA_DAY_ONE",
+        "message": "day ago",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "EV_SLA_MINUTE",
+        "message": "Minutes ago",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "EV_SLA_MINUTE_ONE",
+        "message": "minute ago",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "EV_SLA_MONTH",
+        "message": "Months ago",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "EV_SLA_MONTH_ONE",
+        "message": "month ago ",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "EV_SLA_TIME",
+        "message": "hrs ago",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "EV_SLA_TIME_ONE",
+        "message": "hr ago",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "EV_SLA_WEEK",
+        "message": "Weeks ago",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "EV_SLA_WEEK_ONE",
+        "message": "Week ago",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "reports.pgr.datefrom",
+        "message": "From Date",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "reports.pgr.dateto",
+        "message": "To Date",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "reports.pgr.dept.name",
+        "message": "Department",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "reports.pgr.status",
+        "message": "Nature of complaint",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "DSS_OVERVIEW_CITIZEN_FEEDBACK_SCORE",
+        "message": "Citizen Feedback Score",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "DSS_SLA_ACHIEVED",
+        "message": "SLA Achieved",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "IS_AVG_COMPLAINT_RESOLUTION_TIME",
+        "message": "is the average complaint resolution time",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_PLEASE_ENTER_ALL_MANDATORY_FIELDS",
+        "message": "Please enter all mandatory fields",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_NO_DATA",
+        "message": "No Data Found",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_NO_ITEMS",
+        "message": "No Items",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_SEARCH",
+        "message": "Search",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_FILTER",
+        "message": "Filter",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_FILTERS",
+        "message": "Filters",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_FILTER_BY",
+        "message": "FILTER BY",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_CLEAR_ALL",
+        "message": "CLEAR ALL",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_CLEAR_SEARCH",
+        "message": "CLEAR SEARCH",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_STATUS",
+        "message": "Status",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_TAKE_ACTION",
+        "message": "Take action",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_VIEW_DETAILS",
+        "message": "View Details",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_HIDE_DETAILS",
+        "message": "Hide Details",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_MORE",
+        "message": "More",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_LESS",
+        "message": "Less",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_CANCEL",
+        "message": "Cancel",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_UPDATE",
+        "message": "Update",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_GOTO_HOME",
+        "message": "Go To Home",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_NA",
+        "message": "NA",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_SORT_BY_ASC",
+        "message": "Date(Latest Last)",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_SORT_BY_DESC",
+        "message": "Date(Latest First)",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_DATE",
+        "message": "Date",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_CREATED_FROM",
+        "message": "Created from",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_CREATED_TO",
+        "message": "Created to",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_CREATED_BY",
+        "message": "Created By",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_VALID_FROM",
+        "message": "Valid From",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_VALID_TO",
+        "message": "Valid To",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_BIRTHDATE",
+        "message": "Date of birth",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_DOOR_NO",
+        "message": "Door/ House number",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_STREET",
+        "message": "Street",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_STREET_NAME",
+        "message": "Street name",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_LOCATION",
+        "message": "Location",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_LOCATION_DETAILS",
+        "message": "Location Details",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_CATEGORY",
+        "message": "Category",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_ULB",
+        "message": "ULB",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_AMOUNT",
+        "message": "Amount (₹)",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_TOTAL_AMOUNT",
+        "message": "Total Amount",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_AADHAR",
+        "message": "Aadhaar",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_PHOTOGRAPH",
+        "message": "Photograph",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_NOTE",
+        "message": "Note",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_SEARCH_BY",
+        "message": "Search By",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_APPLICATION_SUBMIT",
+        "message": "Submit",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_DOWNLOADS",
+        "message": "Downloads",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_MIN_SEARCH_CRITERIA_MSG",
+        "message": "Please enter minimum 1 search criteria",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_ENTER_DATE_RANGE",
+        "message": "Enter valid date range",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_MOBILE_EXISTS_ERROR",
+        "message": "Mobile number already exists",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_AGE_GREATER_THAN_18_ERROR",
+        "message": "Age should be greater than 18 years",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_Y_DEL",
+        "message": "Yes, Delete",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_MODIFY",
+        "message": "Modify",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_USER_ULBS",
+        "message": "User Ulb(s)",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_INFO",
+        "message": "Info",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_RESPONSE",
+        "message": "Response",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_TIME",
+        "message": "Inspection Time",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_VALID_DAY",
+        "message": "Enter valid day",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_DOC_CATEGORY",
+        "message": "Document Category",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_DOC_DESCRIPTION",
+        "message": "Document Description",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_DOC_DOCUMENT",
+        "message": "Document",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_DOC_FILENAME",
+        "message": "File Name",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_DOC_NAME",
+        "message": "Document Name",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_APPLICATION_SEARCH",
+        "message": "Search Application",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_COMMON_SEARCH_APPLICATION",
+        "message": "Search Application",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ERR_DEFAULT_INPUT_FIELD_MSG",
+        "message": "Invalid Input",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ERR_SELECT_MANDATORY_FIELDS",
+        "message": "Please fill all the mandatory fields",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ERR_FILL_ALL_FIELDS",
+        "message": "Please fill all fields",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ERR_ENTER_ATLEAST_ONE_FIELD",
+        "message": "Enter at least one field",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ERR_FILL_ONE_FIELDS",
+        "message": "Please fill at least one field to start search",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ERR_FILL_VALID_FIELDS",
+        "message": "Please fill valid fields to start search",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ERR_FROM_TO_DATE_TOAST",
+        "message": "To and from date must be different",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ERR_INVALID_DATE",
+        "message": "Invalid Date",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ERR_HRMS_INVALID_MOB_NO",
+        "message": "Invalid mobile number",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ERR_HRMS_INVALID_CITY",
+        "message": "Invalid City",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ERR_MOBILE_NUMBER_NOT_REGISTERED",
+        "message": "This mobile number is not registered !",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ERR_OTP_RESENT",
+        "message": "OTP has been Resent",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ERR_PASSWORD_DO_NOT_MATCH",
+        "message": "Password do not match",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ERR_NOT_VALID_IMAGE",
+        "message": "The file is not a valid image",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ERR_FILE_MORE_THAN_FIVEMB",
+        "message": "The file is more than 5mb",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ERR_PLEASE_UPLOAD_PHOTO",
+        "message": "Please upload photo or write comments",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ERR_UPLOAD_FILE",
+        "message": "Please Upload file !",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ERR_TYPE_YOUR_COMMENTS",
+        "message": "Please type your comments",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ERR_PLEASE_MENSION_YOUR_REASON",
+        "message": "Please mention your reason",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ERR_PLEASE_PROVIDE_RATINGS",
+        "message": "Please provide ratings",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ERR_API_ERROR",
+        "message": "API error",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ERR_SEARCH_ERROR",
+        "message": "Workflow search error !",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ERR_VALUE_LESS_THAN_SIX_CHARACTERS",
+        "message": "Entered value is less than 6 characters in length.",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ERR_NO_ADMIN_BOUNDARY_FOR_TENANT",
+        "message": "There is no admin boundary data available for this tenant",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ERR_MOBILE_NUMBER_INCORRECT",
+        "message": "Provided mobile number not found in the system, Please fill all details manually",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ERR_FILL_FROM_DATE",
+        "message": "Please fill From Date",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ERR_FILL_ATLEAST_ONE_FIELD_WITH_CITY",
+        "message": "Please fill atleast one field along with city",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_SEARCH_APPLICATION_MOBILE_INVALID",
+        "message": "Please provide a valid mobile number",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "WF_COMMON_COMMENTS",
+        "message": "Comments",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
     }
 ]

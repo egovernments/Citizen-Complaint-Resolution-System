@@ -14,6 +14,7 @@ on:
           - digit-user-preferences-service
           - digit-config-service
           - novu-bridge
+          - xstate-chatbot
 
 
 env:

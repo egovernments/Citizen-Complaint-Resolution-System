@@ -38,7 +38,7 @@ public class DomainEventConsumer {
     public void listen(final HashMap<String, Object> record, @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
         ComplaintsDomainEvent event = mapper.convertValue(record, ComplaintsDomainEvent.class);
         try {
-            dispatchPipelineService.process(event, true);
+            dispatchPipelineService.process(event, true, null);
         } catch (CustomException ce) {
             log.error("Domain event processing failed for eventId={} code={}", event.getEventId(), ce.getCode(), ce);
             publishDlq(event, ce.getCode(), ce.getMessage());

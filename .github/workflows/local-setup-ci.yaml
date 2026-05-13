@@ -441,6 +441,20 @@ jobs:
             exit 1
           fi
 
+      # ── DataLoader v2 Regression Tests ─────────────────────────────
+
+      - name: Run DataLoader v2 regression tests
+        run: |
+          set +e
+          REGRESSION_OUTPUT=$(DIGIT_URL=http://localhost:18000 python3 scripts/ci-dataloader-v2-regression.py 2>&1)
+          REGRESSION_RC=$?
+          set -e
+          echo "$REGRESSION_OUTPUT"
+          if [ $REGRESSION_RC -ne 0 ]; then
+            echo "FATAL: DataLoader v2 regression tests failed (exit code $REGRESSION_RC)"
+            exit 1
+          fi
+
       - name: Verify telemetry events captured
         if: always()
         run: |

@@ -1,6 +1,7 @@
 package org.egov.novubridge.service;
 
 import lombok.extern.slf4j.Slf4j;
+import org.egov.common.contract.request.RequestInfo;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.repository.DispatchLogRepository;
 import org.egov.novubridge.web.models.*;
@@ -24,6 +25,7 @@ public class DispatchPipelineService {
     private final NovuClient novuClient;
     private final DispatchLogRepository dispatchLogRepository;
     private final NovuBridgeConfiguration config;
+    private final MdmsServiceClient mdmsServiceClient;
 
     public DispatchPipelineService(EnvelopeValidator envelopeValidator,
                                    PreferenceServiceClient preferenceServiceClient,
@@ -31,7 +33,8 @@ public class DispatchPipelineService {
                                    ConfigServiceClient configServiceClient,
                                    NovuClient novuClient,
                                    DispatchLogRepository dispatchLogRepository,
-                                   NovuBridgeConfiguration config) {
+                                   NovuBridgeConfiguration config,
+                                   MdmsServiceClient mdmsServiceClient) {
         this.envelopeValidator = envelopeValidator;
         this.preferenceServiceClient = preferenceServiceClient;
         this.userServiceClient = userServiceClient;
@@ -39,9 +42,10 @@ public class DispatchPipelineService {
         this.novuClient = novuClient;
         this.dispatchLogRepository = dispatchLogRepository;
         this.config = config;
+        this.mdmsServiceClient = mdmsServiceClient;
     }
 
-    public DispatchResult process(ComplaintsDomainEvent event, boolean send) {
+    public DispatchResult process(ComplaintsDomainEvent event, boolean send, RequestInfo requestInfo) {
         log.info("Processing domain event: eventId={}, eventName={}, tenant={}, module={}, send={}",
                 event.getEventId(), event.getEventName(), event.getTenantId(), event.getModule(), send);
 
@@ -83,22 +87,19 @@ public class DispatchPipelineService {
                 resolvedTemplate.getRequiredVars(), resolvedTemplate.getParamOrder());
         validateTemplateConfig(resolvedTemplate);
         
-        // Resolve providers by channel only, then select by priority
+        // Resolve providers by channel with priority=1, pick the first one
         List<ResolvedProvider> availableProviders = configServiceClient.resolveProvidersByChannel(event.getTenantId(), context.getChannel());
-        ResolvedProvider resolvedProvider = availableProviders.stream()
-                .filter(ResolvedProvider::getIsActive)
-                .sorted(Comparator.comparing(ResolvedProvider::getPriority))
-                .findFirst()
-                .orElseThrow(() -> new CustomException("NB_NO_ACTIVE_PROVIDER", 
-                        "No active provider found for tenant=" + event.getTenantId() + " channel=" + context.getChannel()));
-        
+        if (availableProviders.isEmpty()) {
+            throw new CustomException("NB_NO_ACTIVE_PROVIDER",
+                    "No provider found with priority 1 for tenant=" + event.getTenantId() + " channel=" + context.getChannel());
+        }
+        ResolvedProvider resolvedProvider = availableProviders.get(0);
+
         log.info("Resolved provider: eventId={}, provider={}, channel={}, isActive={}, priority={}, credentialKeys={}, senderNumber={}, availableCount={}",
                 event.getEventId(), resolvedProvider.getProviderName(), resolvedProvider.getChannel(),
-                resolvedProvider.getIsActive(), resolvedProvider.getPriority(), 
+                resolvedProvider.getIsActive(), resolvedProvider.getPriority(),
                 resolvedProvider.getCredentials() != null ? resolvedProvider.getCredentials().keySet() : "null",
                 resolvedProvider.getSenderNumber(), availableProviders.size());
-        
-        // Provider is already filtered for active status above, no need to check again
         
         List<String> missingVars = findMissingRequiredVars(resolvedTemplate, event.getData());
         if (!missingVars.isEmpty()) {
@@ -129,7 +130,7 @@ public class DispatchPipelineService {
                     .build();
         }
 
-        String whatsappPhone = formatWhatsappPhone(context.getRecipientMobile());
+        String whatsappPhone = formatWhatsappPhone(context.getRecipientMobile(), event.getTenantId(), requestInfo);
 
         log.info("Dispatching notification: eventId={}, eventName={}, tenant={}, complaintNo={}, " +
                  "templateKey={}, subscriberId={}, provider={}, channel={}, senderNumber={}",
@@ -186,12 +187,12 @@ public class DispatchPipelineService {
 
     public NovuClient.NovuResponse testTrigger(String templateKey, String subscriberId, String phone,
                                                Map<String, Object> payload, String transactionId,
-                                               String contentSid, Map<String, String> contentVariables) {
+                                               String contentSid, Map<String, String> contentVariables,RequestInfo requestInfo) {
         // Backward compatibility method for testing with Twilio-specific overrides
         return novuClient.trigger(
                 templateKey,
                 subscriberId,
-                formatWhatsappPhone(phone),
+                formatWhatsappPhone(phone, null, requestInfo),
                 payload,
                 transactionId,
                 buildTemplateOverrides(contentSid, contentVariables));
@@ -245,7 +246,7 @@ public class DispatchPipelineService {
         return overrides;
     }
 
-    private String formatWhatsappPhone(String mobile) {
+    private String formatWhatsappPhone(String mobile, String tenantId, RequestInfo requestInfo) {
         if (!StringUtils.hasText(mobile)) {
             return null;
         }
@@ -256,11 +257,21 @@ public class DispatchPipelineService {
         if (normalized.startsWith("+")) {
             return "whatsapp:" + normalized;
         }
-        // Assume Indian number if no country code — prepend +91
-        if (normalized.matches("^[6-9]\\d{9}$")) {
-            return "whatsapp:+91" + normalized;
+        // Fetch default country-code prefix from MDMS
+        if (!StringUtils.hasText(tenantId)) {
+            throw new CustomException("NB_TENANT_ID_MISSING",
+                    "tenantId is required to resolve phone country-code prefix from MDMS");
         }
-        return "whatsapp:+" + normalized;
+        MobileValidationConfig validationConfig = mdmsServiceClient.getMobileValidationConfig( tenantId, requestInfo );
+
+        if (normalized.matches(validationConfig.getPattern())) {
+
+            return "whatsapp:"+ validationConfig.getPrefix()+ normalized;
+        }
+        else {
+                throw new CustomException("INVALID_MOBILE_NUMBER",
+                    "Mobile number is not matching with default mobile pattern in MDMS");
+        }
     }
 
     private DerivedContext deriveContext(ComplaintsDomainEvent event) {
@@ -358,6 +369,7 @@ public class DispatchPipelineService {
                          Map<String, Object> providerResponse, Integer attemptCount) {
         dispatchLogRepository.upsert(DispatchLogEntry.builder()
                 .eventId(event.getEventId())
+                .referenceNumber(event.getEntityId())
                 .module(event.getModule())
                 .eventName(event.getEventName())
                 .tenantId(event.getTenantId())

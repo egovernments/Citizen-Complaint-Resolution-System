@@ -39,7 +39,7 @@ const PGRWorkflowModal = ({
   const { t } = useTranslation();
 
   const onFormValueChange = (setValue, formData, formState, reset, setError, clearErrors, trigger, getValues) => {
-    if (!_.isEqual(sessionFormData, formData)) {
+    if (JSON.stringify(sessionFormData) !== JSON.stringify(formData)) {
       setSessionFormData({ ...sessionFormData, ...formData });
     }
   }

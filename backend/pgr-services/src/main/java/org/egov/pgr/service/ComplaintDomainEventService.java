@@ -110,7 +110,7 @@ public class ComplaintDomainEventService {
             citizen.put("userId", StringUtils.hasText(request.getService().getCitizen().getUuid())
                     ? request.getService().getCitizen().getUuid()
                     : request.getService().getAccountId());
-            citizen.put("mobile", request.getService().getCitizen().getMobileNumber());
+            citizen.put("mobile", buildFullMobile(request.getService().getCitizen()));
             stakeholders.add(citizen);
         }
 
@@ -134,10 +134,10 @@ public class ComplaintDomainEventService {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("complaintNo", service.getServiceRequestId());
         data.put("status", service.getApplicationStatus());
-        data.put("serviceName", service.getServiceCode());
+        data.put("serviceName", getServiceName(service));
         data.put("citizenName", getCitizenName(request));
         data.put("departmentName", getDepartmentName(service));
-        data.put("mobileNumber", getCitizenMobile(request));
+        data.put("mobileNumber", buildFullMobile(request.getService().getCitizen()));
         data.put("submittedDate", getSubmittedDate(service));
         data.put("assigneeName", getAssigneeName(request));
         data.put("assigneeDesignation", getAssigneeDesignation(request));
@@ -157,6 +157,16 @@ public class ComplaintDomainEventService {
     }
 
     @SuppressWarnings("unchecked")
+    private String getServiceName(org.egov.pgr.web.models.Service service) {
+        Object additionalDetail = service.getAdditionalDetail();
+        if (additionalDetail instanceof Map) {
+            Object name = ((Map<String, Object>) additionalDetail).get("serviceName");
+            if (name != null) return name.toString();
+        }
+        return service.getServiceCode();
+    }
+
+    @SuppressWarnings("unchecked")
     private String getDepartmentName(org.egov.pgr.web.models.Service service) {
         Object additionalDetail = service.getAdditionalDetail();
         if (additionalDetail instanceof Map) {
@@ -166,11 +176,25 @@ public class ComplaintDomainEventService {
         return null;
     }
 
-    private String getCitizenMobile(ServiceRequest request) {
-        if (request.getService().getCitizen() != null) {
-            return request.getService().getCitizen().getMobileNumber();
+    private String buildFullMobile(org.egov.pgr.web.models.User citizen) {
+        if (citizen == null || !StringUtils.hasText(citizen.getMobileNumber())) {
+            return null;
         }
-        return null;
+        String mobile = citizen.getMobileNumber().trim();
+        // Already has country code prefix
+        if (mobile.startsWith("+")) {
+            return mobile;
+        }
+        // Combine countryCode + mobile if countryCode is available
+        if (StringUtils.hasText(citizen.getCountryCode())) {
+            String code = citizen.getCountryCode().trim();
+            if (!code.startsWith("+")) {
+                code = "+" + code;
+            }
+            return code + mobile;
+        }
+        // No country code — return raw mobile, novu-bridge will handle default
+        return mobile;
     }
 
     private static final DateTimeFormatter DATE_FORMATTER =

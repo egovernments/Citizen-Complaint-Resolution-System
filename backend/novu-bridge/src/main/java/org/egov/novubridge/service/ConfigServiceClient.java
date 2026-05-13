@@ -176,7 +176,7 @@ public class ConfigServiceClient {
         Map<String, Object> searchCriteria = new HashMap<>();
         searchCriteria.put("schemaCode", "ProviderDetail");
         searchCriteria.put("tenantId", tenantId);
-        searchCriteria.put("criteria", Map.of("channel", channel));
+        searchCriteria.put("criteria", Map.of("channel", channel, "priority", 1));
 
         Map<String, Object> payload = new HashMap<>();
         payload.put("RequestInfo", new HashMap<>());

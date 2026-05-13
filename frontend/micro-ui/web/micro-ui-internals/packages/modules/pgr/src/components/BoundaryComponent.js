@@ -60,8 +60,9 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData }) => {
         newSelectedValues[boundaryType] = selectedBoundary;
         setSelectedValues(newSelectedValues);
         setValue(newValue);
-        // always sending the last selected boundary code
 
+        // Send the deepest selected boundary as the form value.
+        // The user can stop at any level — we always use the deepest selection.
         onSelect(config.key, selectedBoundary);
 
         // Load child boundaries

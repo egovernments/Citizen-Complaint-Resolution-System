@@ -11,7 +11,9 @@ There are **two independent ways** to run this stack. Pick one:
 | **[Option A: Docker Compose](#option-a-docker-compose)** | Quick setup, no extra tools | Docker only |
 | **[Option B: Tilt](#option-b-tilt)** | Dashboard, grouped services, dev buttons | Docker + Tilt |
 
-Both options run the same services. Tilt adds a web dashboard on top of Docker Compose. **You do NOT need to follow both paths.**
+| **[Option C: Ansible (Remote Server)](#option-c-ansible-remote-server)** | Deploy to a remote Ubuntu machine | Docker + Ansible |
+
+Options A and B run locally. Option C deploys to a remote server, pulling pre-built images from a public registry. **Pick one.**
 
 ---
 
@@ -181,6 +183,162 @@ tilt up    # uses the default Tiltfile with hot reload
   ```bash
   cd ../frontend/micro-ui/web && yarn install && yarn build:webpack --watch
   ```
+
+---
+
+## Option C: Ansible (Remote Server)
+
+Deploy the full DIGIT stack to any fresh Ubuntu 24.04 machine using Ansible. Images are pulled from the public registry at `registry.preview.egov.theflywheel.in` — no VPC access or local builds needed.
+
+### Prerequisites
+
+On your **control machine** (laptop/CI server):
+
+| Tool | Install |
+|------|---------|
+| [Ansible](https://docs.ansible.com/ansible/latest/installation_guide/) | `pip install ansible` |
+| SSH access to the target machine | Key-based auth recommended |
+
+The **target machine** needs:
+- Ubuntu 24.04 (fresh install)
+- At least 8 vCPU, 16 GB RAM, 50 GB disk
+- Root or sudo access
+- Internet access (to pull images from the public registry)
+
+### Step 1: Configure inventory
+
+```bash
+cd local-setup/ansible
+cp inventory.ini.example inventory.ini
+```
+
+Edit `inventory.ini` and replace the placeholder IP with your target machine:
+
+```ini
+[targets]
+203.0.113.10 ansible_user=root
+```
+
+### Step 2: Run the playbook
+
+```bash
+ansible-playbook -i inventory.ini playbook-deploy.yml
+```
+
+The playbook will:
+1. Install Docker Engine and Docker Compose on the target
+2. Copy all config files (Kong, nginx, OTEL, DB seeds, etc.)
+3. Download the OpenTelemetry Java Agent (~21 MB)
+4. Pull ~30 container images from the public registry
+5. Start the DIGIT stack
+6. Wait for health checks (Kong, persister, HRMS, UI — up to 10 min)
+7. Run CI tests: XLSX-driven DataLoader (Bomet County) + Playwright E2E
+
+### Step 3: Access the application
+
+After the playbook completes, the stack is available on the target machine:
+
+| What | URL |
+|------|-----|
+| DIGIT UI (Employee login) | `http://<target-ip>:18000/digit-ui/employee` |
+| Kong Gateway (API base) | `http://<target-ip>:18000` |
+| Gatus Health Dashboard | `http://<target-ip>:18889` |
+| Grafana (Tracing) | `http://<target-ip>:13000` |
+
+### Customizing the deployment
+
+Override playbook variables to deploy with different tenant data:
+
+```bash
+ansible-playbook -i inventory.ini playbook-deploy.yml \
+  -e boot_tenant=mz.lilongwe \
+  -e county_xlsx=/path/to/your-county-data.xlsx
+```
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `boot_tenant` | `ke.bomet` | City tenant ID for E2E tests |
+| `county_xlsx` | Bomet county XLSX (bundled) | Path to county data Excel file |
+
+### Public Docker Registry
+
+All images are hosted at `registry.preview.egov.theflywheel.in` — a read-only HTTPS proxy to the internal build registry. No authentication required for pulls.
+
+```bash
+# Browse available images
+curl -s https://registry.preview.egov.theflywheel.in/v2/_catalog | jq .
+
+# Pull an image directly
+docker pull registry.preview.egov.theflywheel.in/egovio/pgr-services:latest
+```
+
+The registry is read-only — push operations return `405 Method Not Allowed`.
+
+### What the Ansible playbook deploys
+
+The playbook uses `docker-compose.registry.yml` which includes:
+
+| Category | Services |
+|----------|----------|
+| **Tracing** | OpenTelemetry Collector, Tempo, Grafana |
+| **Infrastructure** | PostgreSQL 16, PgBouncer, Redis, Redpanda (Kafka), MinIO, Elasticsearch |
+| **Core DIGIT** | MDMS v2, User, Workflow v2, Localization, Boundary, Access Control, IDGEN, Encryption, Persister, Filestore, HRMS, Indexer, Inbox |
+| **Application** | PGR Services, URL Shortening, Default Data Handler, Boundary Management |
+| **Frontend** | DIGIT UI (React), Kong API Gateway |
+| **Tools** | Jupyter Lab (DataLoader), Gatus (health monitoring) |
+| **Seeds** | Tenant data, security config, workflow config, localization, user accounts |
+
+### Files involved
+
+```
+local-setup/
+├── ansible/
+│   ├── playbook-deploy.yml         # Main deployment playbook
+│   └── inventory.ini.example       # Template inventory
+├── docker-compose.registry.yml     # Compose with public registry images
+├── kong/
+│   ├── kong.yml                    # API gateway routes + auth enrichment
+│   └── auth-enrichment.lua         # Kong pre-function: authToken → userInfo
+├── nginx/
+│   ├── digit-ui.conf               # UI + API proxy config
+│   ├── globalConfigs.js            # Runtime UI configuration
+│   ├── mdms-proxy.conf             # MDMS backward-compat proxy
+│   ├── user-proxy.conf             # User service load balancer
+│   ├── workflow-proxy.conf         # Workflow service load balancer
+├── otel/
+│   ├── download-agent.sh           # Downloads OTEL Java Agent (~21MB)
+│   ├── otel-collector-config.yaml  # Collector → Tempo pipeline
+│   ├── tempo-config.yaml           # Trace storage config
+│   └── grafana/provisioning/       # Grafana datasource for Tempo
+├── seeds/
+│   └── user-seed.sh                # Creates ADMIN + GRO users via API
+├── data/
+│   └── Bomet county...xlsx         # Sample county data for E2E tests
+├── configs/persister/              # Kafka consumer configs (9 YAML files)
+├── db/                             # SQL seeds + workflow JSON
+├── gatus/                          # Health monitoring config
+├── jupyter/                        # DataLoader library + notebook
+├── scripts/                        # CI dataloader scripts
+└── tests/                          # Playwright E2E + smoke tests
+```
+
+### Relationship to PR #318
+
+This deployment setup builds on the work from [PR #318](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/318) (Local setup enhancements and fixes), which added:
+
+- **DataLoader v2** (`jupyter/dataloader/crs_loader.py`) — rewritten loader with XLSX-driven tenant setup, boundary management, and rollback support
+- **Native auth config** (`nginx/globalConfigs.js`) — switched from Keycloak to DIGIT native auth provider
+- **PGR inbox components** — DesktopInbox, MobileInbox, Filter, ComplaintCard, search components
+- **Inbox data hooks** (`useInboxData`, `useComplaintStatus`, `useComplaintStatusCount`) — new React hooks for inbox queries
+- **Employee PGR inbox rewrite** — simplified PGRInbox page using the new components
+- **Playwright E2E tests** — tenant setup smoke tests (`pgr-tenant.test.ts`)
+
+This PR (#319) takes those local-setup enhancements and makes them deployable to any remote machine via Ansible, with:
+- A public Docker registry (no VPC access needed)
+- Full OTEL distributed tracing (Collector + Tempo + Grafana)
+- Kong auth enrichment (authToken → userInfo resolution)
+- Nginx reverse proxies for scaled services (user, workflow)
+- Automated CI test pipeline (XLSX DataLoader + Playwright)
 
 ---
 
@@ -481,33 +639,59 @@ docker compose up -d                       # Fresh start
 
 ```
 local-setup/
-├── docker-compose.yml              # Main service definitions (~3.8GB RAM)
+├── docker-compose.yml              # Main service definitions (~3.8GB RAM, local builds)
+├── docker-compose.registry.yml     # All images from public registry (for Ansible deploy)
 ├── docker-compose.deploy.yaml      # Deploy variant (no resource limits)
 ├── docker-compose.db-migrations.yml # DB migrations variant
 ├── Tiltfile                        # Tilt with hot reload (requires Maven/Yarn)
 ├── Tiltfile.db-dump                # Tilt with pre-built images (recommended)
+├── ansible/
+│   ├── playbook-deploy.yml         # Ansible: install Docker, deploy stack, run CI tests
+│   └── inventory.ini.example       # Template inventory with placeholder IP
 ├── kong/
-│   └── kong.yml                    # API gateway route config
+│   ├── kong.yml                    # API gateway routes + OTEL + auth enrichment
+│   └── auth-enrichment.lua         # Kong pre-function: resolve authToken → userInfo
+├── nginx/
+│   ├── digit-ui.conf               # UI serving + API proxy to Kong
+│   ├── globalConfigs.js            # Runtime UI config (auth provider, API endpoints)
+│   ├── mdms-proxy.conf             # MDMS v1→v2 backward-compat proxy
+│   ├── user-proxy.conf             # User service load balancer (scaled instances)
+│   └── workflow-proxy.conf         # Workflow service load balancer
+├── otel/
+│   ├── download-agent.sh           # Downloads OpenTelemetry Java Agent (~21MB)
+│   ├── otel-collector-config.yaml  # OTLP receiver → Tempo exporter pipeline
+│   ├── tempo-config.yaml           # Trace storage (local backend, 24h retention)
+│   └── grafana/provisioning/       # Grafana Tempo datasource auto-provisioning
+├── seeds/
+│   └── user-seed.sh                # Creates ADMIN, GRO, INTERNAL_USER via API
+├── data/
+│   └── Bomet county...xlsx         # Sample county data (47 types, 25 wards)
 ├── db/
-│   └── full-dump.sql               # Database seed (tenants, MDMS, users)
+│   ├── full-dump.sql               # Database seed (tenants, MDMS, users)
+│   ├── seed.sql                    # Core MDMS + access control data
+│   ├── tenant-seed.sql             # Root + city tenant records
+│   ├── localization-seed.sql       # UI label translations
+│   └── pgr-workflow-config.json    # PGR 11-state workflow definition
 ├── configs/
-│   └── persister/                  # Persister YAML configs
+│   └── persister/                  # Persister YAML configs (9 files)
 ├── jupyter/
 │   ├── Dockerfile                  # Jupyter container build
 │   └── dataloader/
 │       ├── DataLoader_v2.ipynb     # Interactive data loader notebook
 │       ├── crs_loader.py           # Loader library (used by notebook + CI)
 │       ├── unified_loader.py       # Low-level MDMS/HRMS API wrapper
-│       └── templates/              # Excel templates for master data
-├── postman/
-│   ├── complaints-demo.postman_collection.json    # PGR lifecycle tests
-│   └── digit-core-validation.postman_collection.json  # Core API tests
+│       └── templates/              # Excel templates + bundled localisations
 ├── scripts/
-│   ├── ci-dataloader.py            # Automated tenant + employee setup
+│   ├── ci-dataloader-xlsx.py       # XLSX-driven county E2E (Bomet)
+│   ├── ci-dataloader-v2-regression.py  # DataLoader v2 regression tests
+│   ├── ci-dataloader.py            # Simple automated tenant + employee setup
 │   ├── health-check.sh             # Service health verification
 │   ├── smoke-tests.sh              # API smoke tests
 │   └── run-postman.sh              # Newman wrapper
-├── nginx/                          # Nginx configs
+├── tests/
+│   ├── e2e/                        # Playwright E2E tests (login, PGR flow, citizen)
+│   └── smoke/                      # Smoke tests (pgr-workflow, pgr-tenant)
+├── postman/                        # Newman/Postman collections
 ├── gatus/                          # Health monitoring dashboard config
 └── docs/                           # Additional documentation
 

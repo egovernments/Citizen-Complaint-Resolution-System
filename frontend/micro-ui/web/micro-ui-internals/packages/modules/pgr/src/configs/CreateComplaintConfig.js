@@ -39,7 +39,7 @@ export const CreateComplaintConfig = {
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
                 validation: {
                   required: true,
-                  pattern: /^(?!.*[ _-]{2})(?!^[\s_-])(?!.*[\s_-]$)(?=^[A-Za-z][A-Za-z0-9 _\-\(\)]{4,29}$)^.*$/,
+                  pattern: /^(?!.*[ _-]{2})(?!^[\s_-])(?!.*[\s_-]$)(?=^[A-Za-z][A-Za-z0-9 _\-\(\)\.]{3,29}$)^.*$/,
                 }
               },
             },
