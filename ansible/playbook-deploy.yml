@@ -309,7 +309,13 @@
     # Default off; tenants opt in via `enable_search_stack: true`.
     - name: "Compute compose profiles for this tenant"
       ansible.builtin.set_fact:
-        compose_profiles: "{{ ([] + (['search'] if enable_search_stack | default(false) else [])) | join(',') }}"
+        compose_profiles: >-
+          {{
+            ([]
+              + (['search'] if enable_search_stack | default(false) else [])
+              + (['mcp']    if enable_mcp         | default(false) else [])
+            ) | join(',')
+          }}
 
     - name: "Show active compose profiles"
       ansible.builtin.debug:
@@ -913,7 +919,17 @@
       debug:
         msg: "Loki: {{ 'HEALTHY' if loki_health.rc == 0 else 'UNHEALTHY (non-critical)' }}"
 
-    # ==================== Claude Code Setup ====================
+    # ==================== Claude Code Setup (opt-in) ====================
+    # Installs Claude Code CLI on the target and syncs the controller's
+    # ~/.claude config to it. The sync paths are hard-coded to /root/.claude
+    # — that's correct only for Linux controllers running as root. On
+    # macOS the controller home is /Users/<name>/ and the sync errors out
+    # mid-deploy. So the whole stage is opt-in.
+    - name: "Claude Code — skipped (set install_claude_code: true to enable)"
+      ansible.builtin.debug:
+        msg: "Claude Code install disabled. Set install_claude_code: true in host_vars to enable."
+      when: not (install_claude_code | default(false))
+
     - name: Install Node.js 20 LTS (needed for CC and tests)
       shell: |
         if ! node --version 2>/dev/null | grep -qE "^v2[02]"; then
@@ -922,12 +938,14 @@
         fi
       register: nodejs_install
       changed_when: "'nodejs is already' not in nodejs_install.stdout"
+      when: install_claude_code | default(false)
 
     - name: Install Claude Code CLI
       shell: npm install -g @anthropic-ai/claude-code
       register: cc_install
       changed_when: "'added' in cc_install.stdout"
       ignore_errors: yes
+      when: install_claude_code | default(false)
 
     # If a previous run (or hand-edit) left a stale empty file at one of these
     # paths, ansible's `state: directory` errors. Clear those out first.
@@ -937,6 +955,7 @@
           if [ -f "$p" ]; then rm -f "$p"; fi
         done
       changed_when: false
+      when: install_claude_code | default(false)
 
     - name: Create Claude Code config directories
       file:
@@ -946,6 +965,7 @@
         - ""
         - skills
         - plugins
+      when: install_claude_code | default(false)
 
     - name: Copy Claude Code settings
       copy:
@@ -955,11 +975,13 @@
         - { src: "/root/.claude/settings.json", dest: "/root/.claude/settings.json" }
         - { src: "/root/.claude/settings.local.json", dest: "/root/.claude/settings.local.json" }
       ignore_errors: yes
+      when: install_claude_code | default(false)
 
     - name: Synchronize Claude Code skills
       synchronize:
         src: /root/.claude/skills/
         dest: /root/.claude/skills/
+      when: install_claude_code | default(false)
 
     - name: Write local MCP config (pointing to local MCP server)
       copy:
@@ -973,6 +995,7 @@
             }
           }
         dest: /root/.mcp.json
+      when: install_claude_code | default(false)
 
     # ==================================================================
     # (Configurator SPA + host nginx setup moved earlier in the play —

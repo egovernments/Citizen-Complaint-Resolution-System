@@ -21,6 +21,11 @@ db_fast_path: true
 # sandbox runs the regression battery on every deploy.
 run_ci_tests: true
 
+# Install Claude Code CLI + sync controller's ~/.claude config to the
+# target. Hard-codes /root/.claude paths — only safe when the controller
+# is a Linux box running as root. Default off for everyone else.
+install_claude_code: true
+
 # Tenancy — reuse Nairobi's keys for fixture parity, but at the city level.
 state_tenant_id: ke.nairobi
 boot_tenant: ke.nairobi
@@ -40,6 +45,9 @@ footer_bw_logo_url: ""
 
 digit_ui_mode: static
 enable_search_stack: false
+
+# Sandbox reaches the Hetzner VPC registry — pull + start digit-mcp.
+enable_mcp: true
 
 nginx_features:
   brand_assets: false

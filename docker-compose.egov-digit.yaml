@@ -1612,10 +1612,17 @@ services:
       - egov-network
 
   # ==================== DIGIT MCP Server ====================
+  # The MCP image is built off CCRS and lives in a private VPC registry
+  # (10.0.0.4:5000). Hosts outside the Hetzner egov VPC can't pull it.
+  # Both services are tagged `mcp` so they only start when the operator
+  # explicitly opts in (`COMPOSE_PROFILES=mcp docker compose up`). On a
+  # fresh public-internet box, the default deploy skips them entirely —
+  # nothing tries to pull an image it can't reach.
   mcp-postgres:
     image: postgres:16-alpine
     container_name: digit-mcp-postgres
     restart: unless-stopped
+    profiles: ["mcp"]
     environment:
       POSTGRES_DB: mcp_sessions
       POSTGRES_USER: mcp
@@ -1631,6 +1638,7 @@ services:
       - egov-network
 
   digit-mcp:
+    profiles: ["mcp"]
     # Built from /root/DIGIT-MCP/ on the controller and pushed to the
     # Hetzner VPC registry (10.0.0.4:5000, the egov-ci box). Tenants
     # pull it from there alongside every other DIGIT image. Override
