@@ -17,6 +17,7 @@ SELECT
         "city":{"type":"object","properties":{"code":{"type":"string"},"name":{"type":"string"}}}
       },
       "required":["code","name","tenantId"],
+      "x-unique":["code"],
       "title":"Tenant master"
     }'::jsonb,
     TRUE,

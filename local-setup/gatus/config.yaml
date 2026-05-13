@@ -36,6 +36,14 @@ endpoints:
     conditions:
       - "[CONNECTED] == true"
 
+  - name: Elasticsearch
+    group: Infrastructure
+    url: "http://elasticsearch:9200/_cluster/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].status == any(green, yellow)"
+
   # ==================== Core Services ====================
   - name: MDMS Service
     group: Core Services
@@ -75,6 +83,13 @@ endpoints:
   - name: Localization Service
     group: Core Services
     url: "http://egov-localization:8096/localization/actuator/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Location Service
+    group: Core Services
+    url: "http://egov-location:8084/egov-location/health"
     interval: 30s
     conditions:
       - "[STATUS] == 200"
@@ -134,6 +149,28 @@ endpoints:
   - name: DIGIT UI
     group: Application
     url: "http://digit-ui:80/digit-ui/"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  # ==================== Observability (OTEL) ====================
+  - name: OTEL Collector
+    group: Observability
+    url: "http://otel-collector:13133/"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Tempo
+    group: Observability
+    url: "http://tempo:3200/ready"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Grafana
+    group: Observability
+    url: "http://grafana:3000/api/health"
     interval: 30s
     conditions:
       - "[STATUS] == 200"

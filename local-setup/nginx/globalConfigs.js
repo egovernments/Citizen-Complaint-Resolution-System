@@ -1,5 +1,5 @@
 var globalConfigs = (function () {
-  var stateTenantId = "pg";
+  var stateTenantId = "ke";
   var contextPath = "digit-ui";
   var gmaps_api_key = "";
   var finEnv = "dev";
@@ -14,36 +14,10 @@ var globalConfigs = (function () {
   var mdmsContext = "mdms-v2";
   var hrmsContext = "egov-hrms";
   var invalidEmployeeRoles = ["SYSTEM"];
-
-  // Runtime locale fallback for local setup: force default language unless user explicitly changes it.
-  try {
-    var parseMaybeJSON = function (value) {
-      if (!value || value === "undefined" || value === "null") return null;
-      try { return JSON.parse(value); } catch (e) { return value; }
-    };
-
-    // Normalize tenant-id keys so DIGIT startup can bind tenant context correctly.
-    var employeeTenant = window.localStorage.getItem("Employee.tenant-id");
-    if (!employeeTenant) {
-      var employeeInfo = parseMaybeJSON(window.localStorage.getItem("Employee.user-info"));
-      var employeeInfoTenant = employeeInfo && (employeeInfo.tenantId || employeeInfo.tenantid);
-      if (employeeInfoTenant) window.localStorage.setItem("Employee.tenant-id", employeeInfoTenant);
-    }
-
-    var citizenTenant = window.localStorage.getItem("Citizen.tenant-id");
-    if (!citizenTenant) {
-      var citizenInfo = parseMaybeJSON(window.localStorage.getItem("Citizen.user-info"));
-      var citizenInfoTenant = citizenInfo && (citizenInfo.tenantId || citizenInfo.tenantid);
-      if (citizenInfoTenant) window.localStorage.setItem("Citizen.tenant-id", citizenInfoTenant);
-    }
-
-    var current = window.localStorage.getItem("selectedLanguage") || window.localStorage.getItem("locale");
-    if (!current || current === "undefined" || current === "null") {
-      window.localStorage.setItem("selectedLanguage", localeDefault);
-      window.localStorage.setItem("locale", localeDefault);
-      window.localStorage.setItem("i18nextLng", localeDefault);
-    }
-  } catch (e) {}
+  var authProvider = "digit";
+  var pgrBoundaryHighestLevel = "County";
+  var pgrBoundaryLowestLevel = "Ward";
+  var mapCenter = { lat: -1.0, lng: 37.0 };
 
   var getConfig = function (key) {
     if (key === "STATE_LEVEL_TENANT_ID") {
@@ -80,8 +54,16 @@ var globalConfigs = (function () {
       return mdmsContext;
     } else if (key === "HRMS_CONTEXT_PATH") {
       return hrmsContext;
+    } else if (key === "AUTH_PROVIDER") {
+      return authProvider;
     } else if (key === "INVALIDROLES") {
       return invalidEmployeeRoles;
+    } else if (key === "PGR_BOUNDARY_HIGHEST_LEVEL") {
+      return pgrBoundaryHighestLevel;
+    } else if (key === "PGR_BOUNDARY_LOWEST_LEVEL") {
+      return pgrBoundaryLowestLevel;
+    } else if (key === "MAP_CENTER") {
+      return mapCenter;
     }
   };
 

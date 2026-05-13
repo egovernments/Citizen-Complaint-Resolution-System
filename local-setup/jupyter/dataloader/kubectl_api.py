@@ -111,16 +111,10 @@ def health():
 
 @app.route('/boundaries/delete', methods=['POST'])
 def delete_boundaries():
-    """Delete all boundary-related data for a tenant.
+    """Delete all boundaries for a tenant
 
     POST /boundaries/delete
-    Body:
-      {
-        "tenant_id": "statea",
-        "hierarchy_types": ["REVENUE"],
-        "boundary_codes": ["STATEA", "STATEA_DISTRICT_1"],
-        "env": "chakshu"
-      }
+    Body: {"tenant_id": "statea", "env": "chakshu"}
     Headers: X-API-Key: <key>
     """
     if not check_auth():
@@ -128,75 +122,35 @@ def delete_boundaries():
 
     data = request.json or {}
     tenant_id = data.get('tenant_id')
-    hierarchy_types = data.get('hierarchy_types') or []
-    boundary_codes = data.get('boundary_codes') or []
     env = data.get('env', 'chakshu')
 
     if not tenant_id:
         return jsonify({'error': 'tenant_id required'}), 400
 
     try:
-        def sql_literal(value):
-            return "'" + str(value).replace("'", "''") + "'"
-
-        def sql_in(values):
-            return ", ".join(sql_literal(value) for value in values if value)
-
-        sql_parts = []
-        if hierarchy_types:
-            hierarchy_in = sql_in(hierarchy_types)
-            sql_parts.append(
-                f"DELETE FROM boundary_relationship "
-                f"WHERE tenantid={sql_literal(tenant_id)} AND hierarchytype IN ({hierarchy_in});"
-            )
-        else:
-            sql_parts.append(f"DELETE FROM boundary_relationship WHERE tenantid={sql_literal(tenant_id)};")
-
-        if boundary_codes:
-            boundary_in = sql_in(boundary_codes)
-            sql_parts.append(
-                f"DELETE FROM boundary "
-                f"WHERE tenantid={sql_literal(tenant_id)} AND code IN ({boundary_in});"
-            )
-        else:
-            sql_parts.append(f"DELETE FROM boundary WHERE tenantid={sql_literal(tenant_id)};")
-
-        if hierarchy_types:
-            hierarchy_in = sql_in(hierarchy_types)
-            sql_parts.append(
-                f"DELETE FROM boundary_hierarchy "
-                f"WHERE tenantid={sql_literal(tenant_id)} AND hierarchytype IN ({hierarchy_in});"
-            )
-        else:
-            sql_parts.append(f"DELETE FROM boundary_hierarchy WHERE tenantid={sql_literal(tenant_id)};")
-
-        sql = "\n".join(sql_parts)
+        sql = f"""
+            DELETE FROM boundary_relationship WHERE tenantid='{tenant_id}';
+            DELETE FROM boundary WHERE tenantid='{tenant_id}';
+        """
         result = run_sql(sql, env)
 
-        delete_counts = []
+        # Parse DELETE counts
+        counts = []
         for line in result['stdout'].strip().split('\n'):
             if line.strip().startswith('DELETE'):
                 try:
-                    delete_counts.append(int(line.split()[1]))
+                    counts.append(int(line.split()[1]))
                 except (IndexError, ValueError):
                     pass
 
-        delete_labels = [
-            'relationships_deleted',
-            'boundaries_deleted',
-            'hierarchies_deleted',
-        ]
-
-        delete_totals = {label: 0 for label in delete_labels}
-        for label, count in zip(delete_labels, delete_counts):
-            delete_totals[label] = count
+        rel_deleted = counts[0] if len(counts) > 0 else 0
+        deleted = counts[1] if len(counts) > 1 else 0
 
         return jsonify({
             'status': 'success',
-            'tenant_id': tenant_id,
-            'relationships_deleted': delete_totals.get('relationships_deleted', 0),
-            'boundaries_deleted': delete_totals.get('boundaries_deleted', 0),
-            'hierarchies_deleted': delete_totals.get('hierarchies_deleted', 0),
+            'relationships_deleted': rel_deleted,
+            'boundaries_deleted': deleted,
+            'tenant_id': tenant_id
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
