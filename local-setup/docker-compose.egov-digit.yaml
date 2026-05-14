@@ -1069,7 +1069,7 @@ services:
     # mobile validation). EGOV_HRMS_DEV_MODE=true must be set so
     # enrichUser() respects the password supplied in the request instead
     # of overwriting with the default/auto-generated one.
-    image: registry.preview.egov.theflywheel.in/egovio/egov-hrms:digit-common-boundary
+    image: registry.preview.egov.theflywheel.in/egovio/egov-hrms:digit-common-boundary-uuidlink
     container_name: egov-hrms
     depends_on:
       pgbouncer:
