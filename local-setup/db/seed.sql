@@ -79,6 +79,11 @@ WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_schema_definition WHERE tenantid = 'pg' AND code = 'common-masters.uiHomePage'
 );
 
+-- schema/common-masters.json :: common-masters.UserValidation
+INSERT INTO eg_mdms_schema_definition (id,tenantid,code,description,definition,isactive,createdby,lastmodifiedby,createdtime,lastmodifiedtime)
+SELECT '9f3c2d7a-6b4e-4c91-9a2f-8e5b1d3c7a21'::uuid,'pg','common-masters.UserValidation','Mobile Number Validation Configuration (with zone)','{"$schema":"http://json-schema.org/draft-07/schema#","title":"Mobile Number Validation Configuration","type":"object","required":["fieldType","rules","zone"],"x-unique":["zone","fieldType"],"properties":{"zone":{"type":"string"},"rules":{"type":"object","required":["pattern"],"properties":{"pattern":{"type":"string"},"maxLength":{"type":"number"},"minLength":{"type":"number"},"errorMessage":{"type":"string"},"allowedStartingCharacters":{"type":"array","items":{"type":"string"}}}},"default":{"type":"boolean","default":false},"fieldType":{"type":"string"},"attributes":{"type":"object","properties":{"prefix":{"type":"string"}}}}}'::jsonb,TRUE,'system-mdms-seed','system-mdms-seed',EXTRACT(EPOCH FROM NOW())*1000,EXTRACT(EPOCH FROM NOW())*1000
+WHERE NOT EXISTS (SELECT 1 FROM eg_mdms_schema_definition WHERE tenantid='pg' AND code='common-masters.UserValidation');
+
 -- schema/DataSecurity.json :: DataSecurity.DecryptionABAC
 INSERT INTO eg_mdms_schema_definition (id, tenantid, code, description, definition, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
 SELECT '64ba13dc-5b8b-47e0-9646-b2ab48fc81d1'::uuid, 'pg', 'DataSecurity.DecryptionABAC', 'DataSecurity.DecryptionABAC', '{"$schema":"http://json-schema.org/draft-07/schema#","additionalProperties":false,"properties":{"key":{"type":"string"},"roleAttributeAccessList":{"items":{"properties":{"attributeAccessList":{"items":{"properties":{"accessType":{"type":"string"},"attribute":{"properties":{"jsonPath":{"type":"string"},"maskingTechnique":{"type":"string"}},"required":["jsonPath"],"type":"object"}},"required":["attribute","accessType"],"type":"object"},"type":"array"},"roleCode":{"type":"string"}},"required":["roleCode","attributeAccessList"],"type":"object"},"type":"array"}},"required":["key","roleAttributeAccessList"],"title":"Generated schema for Root","type":"object","x-ref-schema":[],"x-unique":["key"]}'::jsonb, TRUE, 'system-mdms-seed', 'system-mdms-seed', 1766039437780, 1766039437780
@@ -6413,6 +6418,11 @@ SELECT 'b6928999-d759-467c-ac31-5ae772e78de6'::uuid, 'pg', '1a2bb136332122036861
 WHERE NOT EXISTS (
   SELECT 1 FROM eg_mdms_data WHERE tenantid = 'pg' AND schemacode = 'common-masters.wfSlaConfig' AND uniqueidentifier = '1a2bb136332122036861aec3d0c05826795bc6a12c46d44fe53d61e2b8e5a0bd'
 );
+
+-- data/common-masters/common-masters.UserValidation.json :: common-masters.UserValidation entry #1
+INSERT INTO eg_mdms_data (id,tenantid,uniqueidentifier,schemacode,data,isactive,createdby,lastmodifiedby,createdtime,lastmodifiedtime)
+SELECT 'b7a1c2d4-8f6e-4b3a-9d21-5c8e7f2a1b90'::uuid,'pg','mobile','common-masters.UserValidation','{"rules":{"pattern":"^[6-9][0-9]{9}$","maxLength":10,"minLength":10,"errorMessage":"Please enter a valid 10-digit mobile number starting with 6, 7, 8 or 9","allowedStartingCharacters":["6","7","8","9"]},"zone":"ind","fieldType":"mobile","default":true,"attributes":{"prefix":"+91"}}'::jsonb,TRUE,'system-mdms-seed','system-mdms-seed',EXTRACT(EPOCH FROM NOW())*1000,EXTRACT(EPOCH FROM NOW())*1000
+WHERE NOT EXISTS (SELECT 1 FROM eg_mdms_data WHERE tenantid='pg' AND schemacode='common-masters.UserValidation' AND uniqueidentifier='mobile');
 
 -- data/DataSecurity/DataSecurity.DecryptionABAC.json :: DataSecurity.DecryptionABAC entry #1
 INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)

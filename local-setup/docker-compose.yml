@@ -178,6 +178,8 @@ services:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8094
       OTEL_TRACES_EXPORTER: none
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8094/mdms-v2/health >/dev/null 2>&1 || exit 1"]
@@ -232,6 +234,8 @@ services:
       SPRING_FLYWAY_ENABLED: 'false'
       SERVER_PORT: 1234
       OTEL_TRACES_EXPORTER: none
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
       # DEV ONLY - override via .env or environment for non-local use
       MASTER_PASSWORD: ${ENC_MASTER_PASSWORD:-asd@#$@$!132123}
       MASTER_SALT: ${ENC_MASTER_SALT:-qweasdzx}
@@ -285,6 +289,8 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8088
       OTEL_TRACES_EXPORTER: none
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
       MANAGEMENT_HEALTH_DB_ENABLED: 'false'
       JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
     ports:
@@ -333,13 +339,15 @@ services:
       MDMS_V2_HOST: http://egov-mdms-service:8094
       EGOV_MDMS_V2_HOST: http://egov-mdms-service:8094
       MDMS_SEARCH_ENDPOINT: /mdms-v2/v1/_search
-      EGOV_OTP_HOST: http://egov-user:8107
+      EGOV_OTP_HOST: http://egov-otp:8089
       EGOV_ENC_HOST: http://egov-enc-service:1234
       EGOV_IDGEN_HOST: http://egov-idgen:8088
       EGOV_ACCESSCONTROL_HOST: http://egov-accesscontrol:8090
       EGOV_STATE_LEVEL_TENANT_ID: pg
       STATE_LEVEL_TENANT_ID: pg
       OTEL_TRACES_EXPORTER: none
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m
     ports:
       - 18107:8107
@@ -354,6 +362,125 @@ services:
         limits:
           memory: 512M
           cpus: '0.5'
+    networks:
+      - egov-network
+
+  egov-otp:
+    image: egovio/egov-otp:v2.9.2-4a60f20
+    container_name: egov-otp
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
+      SPRING_FLYWAY_ENABLED: 'false'
+      SERVER_PORT: 8089
+      EGOV_OTP_LENGTH: 6
+      EGOV_OTP_TTL: 900
+      EGOV_OTP_ENCRYPT: 'true'
+      OTEL_TRACES_EXPORTER: none
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
+    ports:
+      - 18089:8089
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8089/otp/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.2'
+    networks:
+      - egov-network
+
+  user-otp:
+    image: egovio/user-otp:mobile-validation-user-otp-12b1961
+    container_name: user-otp
+    depends_on:
+      egov-otp:
+        condition: service_healthy
+      egov-user:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: 8090
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      OTP_HOST: http://egov-otp:8089
+      OTP_CREATE_URL: /otp/v1/_create
+      USER_HOST: http://egov-user:8107/
+      SEARCH_USER_URL: /user/_search
+      SMS_TOPIC: egov.core.notification.sms.otp
+      EMAIL_TOPIC: egov.core.notification.email
+      EXPIRY_TIME_FOR_OTP: 300
+      EGOV_LOCALISATION_HOST: http://egov-localization:8096
+      EGOV_LOCALISATION_SEARCH_ENDPOINT: /localization/messages/v1/_search
+      EGOV_LOCALISATION_TENANTID_STRIP_SUFFIX_COUNT: 1
+      OTEL_TRACES_EXPORTER: none
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
+      EGOV_MDMS_HOST: http://egov-mdms-service:8094
+      EGOV_MDMS_SEARCH_ENDPOINT: /mdms-v2/v1/_search
+    ports:
+      - 18095:8090
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8090/user-otp/actuator/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.2'
+    networks:
+      - egov-network
+
+  egov-notification-sms:
+    image: egovio/egov-notification-sms:mobile-validation-user-otp-db06ec6
+    container_name: egov-notification-sms
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: 8080
+      KAFKA_CONFIG_BOOTSTRAP_SERVER_CONFIG: redpanda:9092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SMS_ENABLED: 'false'
+      KAFKA_TOPICS_NOTIFICATION_SMS_NAME: egov.core.notification.sms
+      OTEL_TRACES_EXPORTER: none
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx128m
+      SMS_PROVIDER_CLASS: Console
+    ports:
+      - 18093:8080
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/notification-sms/actuator/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.1'
     networks:
       - egov-network
 
@@ -384,7 +511,10 @@ services:
       EGOV_STATE_LEVEL_TENANT_ID: pg
       IS_ENVIRONMENT_CENTRAL_INSTANCE: 'false'
       OTEL_TRACES_EXPORTER: none
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms64m -Xmx256m
+      
     ports:
       - 18109:8109
     healthcheck:
@@ -425,6 +555,8 @@ services:
       SPRING_REDIS_PORT: 6379
       SERVER_PORT: 8096
       OTEL_TRACES_EXPORTER: none
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms64m -Xmx512m
     ports:
       - 18096:8096
@@ -471,6 +603,8 @@ services:
       EGOV_LOCALIZATION_HOST: http://egov-localization:8096
       STATE_LEVEL_TENANT_ID: pg
       OTEL_TRACES_EXPORTER: none
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
       OTEL_INSTRUMENTATION_JDBC_ENABLED: 'false'
       MANAGEMENT_HEALTH_DB_ENABLED: 'false'
       JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
@@ -511,6 +645,8 @@ services:
       SERVER_PORT: 8090
       EGOV_MDMS_HOST: http://egov-mdms-service:8094/
       OTEL_TRACES_EXPORTER: none
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
     ports:
       - 18090:8090
@@ -549,6 +685,8 @@ services:
       SERVER_PORT: 8091
       EGOV_PERSIST_YML_REPO_PATH: /persister-config/
       OTEL_TRACES_EXPORTER: none
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
     volumes:
       - ./configs/persister:/persister-config:ro
@@ -587,6 +725,8 @@ services:
       SPRING_FLYWAY_ENABLED: 'false'
       SERVER_PORT: 8083
       OTEL_TRACES_EXPORTER: none
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
       ISS3ENABLED: 'true'
       MINIO_URL: http://minio:9000
@@ -638,6 +778,8 @@ services:
       SPRING_KAFKA_CONSUMER_GROUP_ID: employee-group1
       SERVER_PORT: 8092
       OTEL_TRACES_EXPORTER: none
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
       EGOV_MDMS_HOST: http://egov-mdms-service:8094
       EGOV_IDGEN_HOST: http://egov-idgen:8088
@@ -731,6 +873,8 @@ services:
       SPRING_FLYWAY_ENABLED: 'false'
       SERVER_PORT: 8080
       OTEL_TRACES_EXPORTER: none
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
       OTEL_INSTRUMENTATION_JDBC_ENABLED: 'false'
       JAVA_TOOL_OPTIONS: -Xms64m -Xmx128m
     ports:
@@ -801,6 +945,8 @@ services:
       EGOV_STATE_LEVEL_TENANT_ID: pg
       JAVA_OPTS: '-Xmx256m -Xms256m'
       OTEL_TRACES_EXPORTER: none
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
     ports:
       - "18083:8080"
     healthcheck:

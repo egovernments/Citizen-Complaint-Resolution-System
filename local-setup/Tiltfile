@@ -186,6 +186,24 @@ dc_resource('egov-persister', labels=['core-services'],
         link('http://localhost:18091/common-persist/actuator/health', 'Health'),
     ])
 
+dc_resource('egov-otp', labels=['core-services'],
+    resource_deps=['pgbouncer'],
+    links=[
+        link('http://localhost:18089/otp/health', 'Health'),
+    ])
+
+dc_resource('user-otp', labels=['core-services'],
+    resource_deps=['egov-otp', 'egov-user'],
+    links=[
+        link('http://localhost:18095/user-otp/actuator/health', 'Health'),
+    ])
+
+dc_resource('egov-notification-sms', labels=['core-services'],
+    resource_deps=['redpanda'],
+    links=[
+        link('http://localhost:18093/notification-sms/actuator/health', 'Health'),
+    ])
+
 # ==================== API Gateway ====================
 dc_resource('kong', labels=['gateway'],
     links=[
