@@ -125,6 +125,38 @@ enable_search_stack: false
 # a public mirror) if you're not on the VPC.
 enable_mcp: true
 
+# ────────── Notifications (Novu + Twilio WhatsApp) ──────────
+# Turn on the `notifications` compose profile — adds 8 containers:
+#   digit-config-service, digit-user-preferences-service, novu-bridge,
+#   novu-api, novu-worker, novu-ws, novu-dashboard, novu-mongo.
+# Roughly +1GB RAM + ~5min slower first boot.
+#
+# Workflow when enable_novu: true:
+#   1. First deploy brings up the stack. Operator hits
+#      <scheme>://<host>/novu/ and signs up (creates the first
+#      organization + environment + API key in self-hosted Novu).
+#   2. Operator pastes the API key + Twilio creds into host_vars
+#      (or into OpenBao if they don't want them in plain text).
+#   3. Second deploy runs the bootstrap script, which creates the
+#      Twilio integration + workflow inside Novu, then seeds the
+#      DIGIT-side TemplateBinding records.
+#
+# Skip the bootstrap step entirely by leaving novu_api_key empty —
+# Novu still comes up, operator can configure it via the UI later.
+enable_novu: false
+
+# Pasted from the Novu dashboard after first sign-up.
+# https://docs.novu.co/sdks/api-keys for where to find it.
+novu_api_key: ""
+
+# Twilio credentials for the bootstrap script to register a Twilio
+# SMS integration with Novu. The "FROM" must be a WhatsApp-enabled
+# number — for testing, use the Twilio Sandbox number after enrolling
+# your test phone via the `join <code>` SMS dance.
+twilio_account_sid: ""
+twilio_auth_token: ""
+twilio_whatsapp_from: "whatsapp:+14155238886"   # Twilio Sandbox default
+
 # Init the nairobi-mdms git submodule on the controller. The submodule
 # lives in a separate repo and isn't auto-fetched on clone — turn this
 # on only if your tenant onboarding uses those JSONs. See

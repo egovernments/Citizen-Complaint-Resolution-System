@@ -140,6 +140,42 @@ server {
   }
 
 {% endif %}
+{% if enable_novu | default(false) %}
+  # Novu dashboard (SPA). The Vite build is hardcoded to `/novu` as
+  # base path (set via VITE_BASE_PATH in docker-compose.egov-digit.yaml),
+  # so no rewriting needed — just proxy through.
+  location = /novu { return 302 /novu/; }
+  location /novu/ {
+    proxy_pass http://127.0.0.1:14000/novu/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_http_version 1.1;
+  }
+
+  # Novu API (REST) — used by the dashboard SPA running in the
+  # browser. Exposed on the host so VITE_API_HOSTNAME can resolve.
+  location /novu-api/ {
+    proxy_pass http://127.0.0.1:14002/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Authorization $http_authorization;
+    proxy_http_version 1.1;
+  }
+
+  # novu-bridge REST endpoints (diagnostics: _validate, _dry-run,
+  # _test-trigger) are NOT exposed via host nginx by default. The
+  # bridge lives inside the egov-network and is reachable from kong,
+  # from MCP, and from any pod in the same compose. Operators who
+  # need to curl it can `docker exec novu-bridge curl ...` or open a
+  # shell into kong. Add a `location /novu-bridge/` block here if
+  # you want public access — but the diagnostic endpoints can leak
+  # subscriber info, so think before doing it.
+
+{% endif %}
 {% if digit_ui_mode == "static" %}
   # digit-ui in static mode: host nginx serves the build artifact from
   # /opt/digit-ui-esbuild/build/ directly. Built by the playbook

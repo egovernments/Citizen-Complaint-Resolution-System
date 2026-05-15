@@ -365,8 +365,9 @@
         compose_profiles: >-
           {{
             ([]
-              + (['search'] if enable_search_stack | default(false) else [])
-              + (['mcp']    if enable_mcp         | default(false) else [])
+              + (['search']        if enable_search_stack | default(false) else [])
+              + (['mcp']           if enable_mcp          | default(false) else [])
+              + (['notifications'] if enable_novu         | default(false) else [])
             ) | join(',')
           }}
 
@@ -961,6 +962,96 @@
       when:
         - state_tenant_id != 'pg'
         - enable_mcp | default(false)
+
+    # ────────────────────────────────────────────────────────────────
+    # Novu Twilio bootstrap. Runs only when:
+    #   1. enable_novu is true (the notifications profile is active)
+    #   2. The operator has filled in novu_api_key + twilio_* in host_vars
+    #
+    # The first deploy after `enable_novu: true` brings up the stack but
+    # leaves novu_api_key empty — operator signs up via the dashboard
+    # at <scheme>://<domain>/novu/, copies the API key into host_vars,
+    # re-runs deploy. Second deploy hits this task with all four values
+    # set and creates the Twilio integration + workflow inside Novu.
+    # ────────────────────────────────────────────────────────────────
+    - name: "novu-bootstrap — wait for novu-api health"
+      ansible.builtin.uri:
+        url: http://127.0.0.1:14002/v1/health-check
+        status_code: [200]
+        timeout: 10
+      register: novu_api_health
+      retries: 18
+      delay: 10
+      until: novu_api_health.status == 200
+      when:
+        - enable_novu | default(false)
+        - (novu_api_key | default('')) | length > 0
+        - (twilio_account_sid | default('')) | length > 0
+
+    - name: "novu-bootstrap — copy bootstrap script to target"
+      ansible.builtin.copy:
+        src: ../../backend/novu-bridge/config/bootstrap-novu-whatsapp.sh
+        dest: "{{ digit_dir }}/bootstrap-novu-whatsapp.sh"
+        mode: '0755'
+      when:
+        - enable_novu | default(false)
+        - (novu_api_key | default('')) | length > 0
+        - (twilio_account_sid | default('')) | length > 0
+
+    - name: "novu-bootstrap — run Twilio integration + workflow create"
+      ansible.builtin.shell: |
+        cd {{ digit_dir }}
+        NOVU_BASE_URL=http://127.0.0.1:14002 \
+        NOVU_API_KEY={{ novu_api_key }} \
+        TWILIO_ACCOUNT_SID={{ twilio_account_sid }} \
+        TWILIO_AUTH_TOKEN={{ twilio_auth_token }} \
+        TWILIO_WHATSAPP_FROM='{{ twilio_whatsapp_from | default("whatsapp:+14155238886") }}' \
+        bash bootstrap-novu-whatsapp.sh
+      register: novu_bootstrap_result
+      when:
+        - enable_novu | default(false)
+        - (novu_api_key | default('')) | length > 0
+        - (twilio_account_sid | default('')) | length > 0
+      changed_when: "'created' in (novu_bootstrap_result.stdout | default(''))"
+
+    - name: "novu-bootstrap — wire NOVU_API_KEY into compose .env"
+      ansible.builtin.lineinfile:
+        path: "{{ digit_dir }}/.env"
+        regexp: '^NOVU_API_KEY='
+        line: "NOVU_API_KEY={{ novu_api_key }}"
+        create: true
+        mode: '0600'
+      when:
+        - enable_novu | default(false)
+        - (novu_api_key | default('')) | length > 0
+
+    - name: "novu-bootstrap — recreate novu-bridge so it picks up NOVU_API_KEY"
+      ansible.builtin.shell: |
+        cd {{ digit_dir }}
+        COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d --force-recreate novu-bridge
+      when:
+        - enable_novu | default(false)
+        - (novu_api_key | default('')) | length > 0
+      changed_when: false
+
+    - name: "novu-bootstrap — operator setup hint (when api_key missing)"
+      ansible.builtin.debug:
+        msg: |
+          Novu containers are up. To finish setup:
+            1. Open {{ 'https://' + domain if (tls_enabled | default(true)) else 'http://' + domain }}/novu/
+            2. Sign up (first signup creates the org + API key)
+            3. Settings → API Keys → copy the API key
+            4. Set in host_vars/{{ inventory_hostname }}.yml:
+                 novu_api_key: <pasted key>
+                 twilio_account_sid: <from twilio console>
+                 twilio_auth_token: <from twilio console>
+                 twilio_whatsapp_from: 'whatsapp:+14155238886'  # Twilio Sandbox default
+            5. Re-run ./deploy.sh {{ inventory_hostname }}
+          The next deploy will run the bootstrap script and wire NOVU_API_KEY
+          into compose .env so novu-bridge can dispatch.
+      when:
+        - enable_novu | default(false)
+        - (novu_api_key | default('')) | length == 0
 
     # ────────────────────────────────────────────────────────────────
     # UI-tenant fall-back: until the operator's chosen state_tenant_id is

@@ -34,7 +34,7 @@ public class DispatchController {
         ResponseInfo responseInfo = responseInfoFactory.createResponseInfoFromRequestInfo(request.getRequestInfo(), true);
         DispatchDryRunResponse response = DispatchDryRunResponse.builder()
                 .responseInfo(responseInfo)
-                .result(dispatchPipelineService.process(request.getEvent(), false))
+                .result(dispatchPipelineService.process(request.getEvent(), false, request.getRequestInfo()))
                 .build();
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
@@ -45,7 +45,7 @@ public class DispatchController {
         ResponseInfo responseInfo = responseInfoFactory.createResponseInfoFromRequestInfo(request.getRequestInfo(), true);
         DispatchDryRunResponse response = DispatchDryRunResponse.builder()
                 .responseInfo(responseInfo)
-                .result(dispatchPipelineService.process(request.getEvent(), send))
+                .result(dispatchPipelineService.process(request.getEvent(), send, request.getRequestInfo()))
                 .build();
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
@@ -59,7 +59,8 @@ public class DispatchController {
                 request.getPayload(),
                 request.getTransactionId(),
                 request.getContentSid(),
-                request.getContentVariables());
+                request.getContentVariables(),
+                request.getRequestInfo());
 
         ResponseInfo responseInfo = responseInfoFactory.createResponseInfoFromRequestInfo(request.getRequestInfo(), true);
         TestTriggerResponse response = TestTriggerResponse.builder()
