@@ -1601,6 +1601,174 @@ services:
       retries: 30
       start_period: 5s
 
+  # ==================== Notification stack (opt-in) ====================
+  # `digit-config-service` + `digit-user-preferences-service` +
+  # `novu-bridge` work together to deliver event-driven WhatsApp/SMS via
+  # Twilio (through self-hosted Novu, which the operator opts into
+  # separately via the `notifications` profile that brings up
+  # novu-api/worker/ws/dashboard + mongo).
+  #
+  # The pipeline is:
+  #   1. A module (e.g. PGR) publishes a domain event to Kafka
+  #      (topic: complaints.domain.events).
+  #   2. novu-bridge consumes the event, checks the user's notification
+  #      consent via digit-user-preferences-service, resolves the
+  #      template via digit-config-service, and triggers Novu.
+  #   3. Novu's Twilio integration delivers the message to the user.
+  #
+  # All three are profile-gated — they don't start on a default
+  # `docker compose up`. Opt in with `COMPOSE_PROFILES=notifications`.
+  # The Ansible playbook flips this on when `enable_novu: true` in
+  # host_vars.
+  digit-config-service:
+    image: registry.preview.egov.theflywheel.in/egovio/digit-config-service:latest
+    container_name: digit-config-service
+    restart: unless-stopped
+    profiles: ["notifications"]
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    volumes:
+      - ./otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      # application.properties keeps Flyway URL separate from datasource;
+      # both env vars must be set or Flyway falls back to localhost.
+      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_FLYWAY_USER: egov
+      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_FLYWAY_ENABLED: 'true'
+      SPRING_FLYWAY_TABLE: digit_config_service_schema
+      SERVER_PORT: '8080'
+      SERVER_SERVLET_CONTEXT_PATH: /config-service
+      CONFIG_DEFAULT_OFFSET: '0'
+      CONFIG_DEFAULT_LIMIT: '100'
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: digit-config-service
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: none
+      JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m -javaagent:/otel/opentelemetry-javaagent.jar
+    healthcheck:
+      # management.endpoints.web.base-path=/ so actuator's /health is at
+      # /config-service/health (context-path) — NOT /config-service/actuator/health.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/config-service/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    networks:
+      - egov-network
+
+  digit-user-preferences-service:
+    image: registry.preview.egov.theflywheel.in/egovio/digit-user-preferences-service:latest
+    container_name: digit-user-preferences-service
+    restart: unless-stopped
+    profiles: ["notifications"]
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: '8080'
+      SERVER_CONTEXT_PATH: /user-preference
+      DB_HOST: postgres
+      DB_PORT: '5432'
+      DB_NAME: egov
+      DB_USER: egov
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      DB_SSL_MODE: disable
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - egov-network
+
+  novu-bridge:
+    image: registry.preview.egov.theflywheel.in/egovio/novu-bridge:latest
+    container_name: novu-bridge
+    restart: unless-stopped
+    profiles: ["notifications"]
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      digit-config-service:
+        condition: service_healthy
+      digit-user-preferences-service:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    volumes:
+      - ./otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      # application.properties hardcodes spring.flyway.url to localhost
+      # without an env placeholder — relaxed binding to SPRING_FLYWAY_*
+      # is the only way to override.
+      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_FLYWAY_USER: egov
+      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_FLYWAY_ENABLED: 'true'
+      SPRING_FLYWAY_TABLE: novu_bridge_schema
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      # application.properties also reads kafka.config.bootstrap_server_config
+      # (an egov-services-common convention); set both so any path that
+      # reads either picks up the right broker.
+      KAFKA_CONFIG_BOOTSTRAP_SERVER_CONFIG: redpanda:9092
+      SERVER_PORT: '8080'
+      SERVER_SERVLET_CONTEXT_PATH: /novu-bridge
+      # Kafka topics (bridge auto-creates if redpanda's
+      # auto.create.topics.enable=true; otherwise create them upfront).
+      NOVU_BRIDGE_KAFKA_INPUT_TOPIC: complaints.domain.events
+      NOVU_BRIDGE_KAFKA_RETRY_TOPIC: novu-bridge.retry
+      NOVU_BRIDGE_KAFKA_DLQ_TOPIC: novu-bridge.dlq
+      NOVU_BRIDGE_MAX_RETRIES: '3'
+      NOVU_BRIDGE_CHANNEL: WHATSAPP
+      NOVU_BRIDGE_DEFAULT_LOCALE: en_IN
+      NOVU_BRIDGE_PREFERENCE_ENABLED: 'true'
+      NOVU_BRIDGE_PREFERENCE_HOST: http://digit-user-preferences-service:8080
+      NOVU_BRIDGE_PREFERENCE_CHECK_PATH: /user-preference/v1/_check
+      NOVU_BRIDGE_PREFERENCE_CODE: USER_NOTIFICATION_PREFERENCES
+      NOVU_BRIDGE_CONFIG_HOST: http://digit-config-service:8080
+      NOVU_BRIDGE_CONFIG_RESOLVE_PATH: /config-service/v1/_resolve
+      NOVU_BRIDGE_CONFIG_SEARCH_PATH: /config-service/v1/_search
+      NOVU_BRIDGE_USER_HOST: http://egov-user:8107
+      NOVU_BRIDGE_USER_SEARCH_PATH: /user/_search
+      MDMS_SEARCH_PATH: /mdms-v2/v2/_search
+      # Novu API endpoints are populated in iteration 3 once novu-api
+      # is in the stack; bridge starts up but won't dispatch until
+      # NOVU_BASE_URL + NOVU_API_KEY resolve to a reachable Novu.
+      NOVU_BASE_URL: ${NOVU_BASE_URL:-http://novu-api:3000}
+      NOVU_API_KEY: ${NOVU_API_KEY:-changeme}
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: novu-bridge
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: none
+      JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m -javaagent:/otel/opentelemetry-javaagent.jar
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/novu-bridge/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    networks:
+      - egov-network
+
 networks:
   egov-network:
     driver: bridge
