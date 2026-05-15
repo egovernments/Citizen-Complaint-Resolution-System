@@ -1601,6 +1601,149 @@ services:
       retries: 30
       start_period: 5s
 
+  # ==================== Novu (self-hosted) ============================
+  # Five-container Novu community deployment: api + worker + ws +
+  # dashboard + dedicated mongo. Reuses the existing `redis` container
+  # on DB index 2 (Novu defaults to that index for its cache; the rest
+  # of DIGIT uses index 0). Profile-gated like the rest of the
+  # notifications stack — won't start unless
+  # `COMPOSE_PROFILES=notifications`.
+  #
+  # Secrets (jwt, encryption key, novu secret key) default to dev
+  # values; the Ansible playbook generates real per-tenant secrets
+  # from OpenBao before bringing the stack up.
+  novu-mongo:
+    image: registry.preview.egov.theflywheel.in/mongo:8.0.3
+    container_name: novu-mongo
+    restart: unless-stopped
+    profiles: ["notifications"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${NOVU_MONGO_USERNAME:-root}
+      MONGO_INITDB_ROOT_PASSWORD: ${NOVU_MONGO_PASSWORD:-secret}
+    volumes:
+      - novu_mongo_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.runCommand({ping:1}).ok' --username $${MONGO_INITDB_ROOT_USERNAME} --password $${MONGO_INITDB_ROOT_PASSWORD} --authenticationDatabase admin | grep -q 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - egov-network
+
+  novu-api:
+    image: ghcr.io/novuhq/novu/api:2.3.0
+    container_name: novu-api
+    restart: unless-stopped
+    profiles: ["notifications"]
+    depends_on:
+      novu-mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: ${NOVU_NODE_ENV:-local}
+      PORT: '3000'
+      API_ROOT_URL: ${NOVU_API_ROOT_URL:-http://localhost:14002}
+      FRONT_BASE_URL: ${NOVU_FRONT_BASE_URL:-http://localhost:14000/novu}
+      MONGO_URL: mongodb://${NOVU_MONGO_USERNAME:-root}:${NOVU_MONGO_PASSWORD:-secret}@novu-mongo:27017/novu-db?authSource=admin
+      MONGO_MIN_POOL_SIZE: '10'
+      MONGO_MAX_POOL_SIZE: '100'
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      REDIS_PASSWORD: ''
+      REDIS_DB_INDEX: '2'
+      JWT_SECRET: ${NOVU_JWT_SECRET:-dev-jwt-secret-change-in-production-please}
+      STORE_ENCRYPTION_KEY: ${NOVU_STORE_ENCRYPTION_KEY:-change-this-key-32-characters!!!}
+      NOVU_SECRET_KEY: ${NOVU_SECRET_KEY:-dev-novu-secret-key-change-in-production}
+      API_CONTEXT_PATH: ''
+      DISABLE_USER_REGISTRATION: 'false'
+      IS_API_IDEMPOTENCY_ENABLED: 'false'
+      IS_API_RATE_LIMITING_ENABLED: 'false'
+      IS_NEW_MESSAGES_API_RESPONSE_ENABLED: 'true'
+      IS_V2_ENABLED: 'true'
+      MONGO_AUTO_CREATE_INDEXES: 'true'
+    ports:
+      - "14002:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/v1/health-check >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - egov-network
+
+  novu-worker:
+    image: ghcr.io/novuhq/novu/worker:2.3.0
+    container_name: novu-worker
+    restart: unless-stopped
+    profiles: ["notifications"]
+    depends_on:
+      novu-mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: ${NOVU_NODE_ENV:-local}
+      MONGO_URL: mongodb://${NOVU_MONGO_USERNAME:-root}:${NOVU_MONGO_PASSWORD:-secret}@novu-mongo:27017/novu-db?authSource=admin
+      MONGO_MAX_POOL_SIZE: '500'
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      REDIS_PASSWORD: ''
+      REDIS_DB_INDEX: '2'
+      STORE_ENCRYPTION_KEY: ${NOVU_STORE_ENCRYPTION_KEY:-change-this-key-32-characters!!!}
+      BROADCAST_QUEUE_CHUNK_SIZE: '100'
+      MULTICAST_QUEUE_CHUNK_SIZE: '100'
+      IS_EMAIL_INLINE_CSS_DISABLED: 'false'
+      IS_USE_MERGED_DIGEST_ID_ENABLED: 'false'
+    networks:
+      - egov-network
+
+  novu-ws:
+    image: ghcr.io/novuhq/novu/ws:2.3.0
+    container_name: novu-ws
+    restart: unless-stopped
+    profiles: ["notifications"]
+    depends_on:
+      novu-mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: ${NOVU_NODE_ENV:-local}
+      PORT: '3002'
+      MONGO_URL: mongodb://${NOVU_MONGO_USERNAME:-root}:${NOVU_MONGO_PASSWORD:-secret}@novu-mongo:27017/novu-db?authSource=admin
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      REDIS_PASSWORD: ''
+      REDIS_DB_INDEX: '2'
+      JWT_SECRET: ${NOVU_JWT_SECRET:-dev-jwt-secret-change-in-production-please}
+    ports:
+      - "14003:3002"
+    networks:
+      - egov-network
+
+  novu-dashboard:
+    image: ghcr.io/novuhq/novu/dashboard:2.3.0
+    container_name: novu-dashboard
+    restart: unless-stopped
+    profiles: ["notifications"]
+    depends_on:
+      novu-api:
+        condition: service_started
+    environment:
+      VITE_API_HOSTNAME: ${NOVU_API_PUBLIC_URL:-http://localhost:14002}
+      VITE_WEBSOCKET_HOSTNAME: ${NOVU_WS_PUBLIC_URL:-http://localhost:14003}
+      VITE_SELF_HOSTED: 'true'
+      VITE_BASE_PATH: /novu
+      VITE_PUBLIC_PATH: /novu
+      VITE_LEGACY_DASHBOARD_URL: ''
+    ports:
+      - "14000:4000"
+    networks:
+      - egov-network
+
   # ==================== Notification stack (opt-in) ====================
   # `digit-config-service` + `digit-user-preferences-service` +
   # `novu-bridge` work together to deliver event-driven WhatsApp/SMS via
@@ -1707,6 +1850,8 @@ services:
         condition: service_healthy
       digit-user-preferences-service:
         condition: service_healthy
+      novu-api:
+        condition: service_healthy
       otel-collector:
         condition: service_started
     volumes:
@@ -1751,6 +1896,9 @@ services:
       # Novu API endpoints are populated in iteration 3 once novu-api
       # is in the stack; bridge starts up but won't dispatch until
       # NOVU_BASE_URL + NOVU_API_KEY resolve to a reachable Novu.
+      # In-cluster Novu API. Override NOVU_API_KEY at deploy time
+      # (Ansible bootstrap step creates an API key and writes it back
+      # to the compose .env).
       NOVU_BASE_URL: ${NOVU_BASE_URL:-http://novu-api:3000}
       NOVU_API_KEY: ${NOVU_API_KEY:-changeme}
       OTEL_TRACES_EXPORTER: otlp
@@ -1785,3 +1933,4 @@ volumes:
   promtail_data: null
   mcp_postgres_data: null
   openbao_data: null
+  novu_mongo_data: null
