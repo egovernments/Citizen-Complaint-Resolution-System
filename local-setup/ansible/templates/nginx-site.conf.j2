@@ -19,6 +19,12 @@ server {
 
 {% endif %}
 {% if nginx_features.configurator %}
+  # Redirect /configurator (no slash) → /configurator/ so the SPA loads
+  # whether the user types the trailing slash or not. nginx's auto-slash
+  # redirect doesn't fire for `location` blocks that use `alias`, so we
+  # do it explicitly.
+  location = /configurator { return 302 /configurator/; }
+
 {% if nginx_features.configurator_caching %}
   # Configurator SPA — long-cache the hashed assets/, no-cache index.
   location /configurator/assets/ {
@@ -27,14 +33,14 @@ server {
     try_files $uri =404;
   }
 
-  location /configurator {
+  location /configurator/ {
     alias /var/www/configurator/;
     try_files $uri $uri/ /configurator/index.html;
     add_header Cache-Control "no-cache, must-revalidate" always;
   }
 {% else %}
   # Configurator SPA (no asset-level caching).
-  location /configurator {
+  location /configurator/ {
     alias /var/www/configurator/;
     try_files $uri $uri/ /configurator/index.html;
   }
