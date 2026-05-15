@@ -335,6 +335,57 @@
         regexp: 'api\.egov\.theflywheel\.in'
         replace: "{{ domain }}"
 
+    # Substitute STATE_LEVEL tenant identifiers — the upstream compose
+    # ships with `pg` / `pg.citya` / `mz` defaults from egovernments/CCRS
+    # sample data. Without this rewrite, every DIGIT service comes up
+    # using `pg` for state-tier env vars, which breaks auth on any tenant
+    # whose user rows are encrypted under a different tenant's key — see
+    # the corresponding PR description for the full trace. State-root
+    # gets the inventory `state_root` (e.g. `ke`); the two city-tier
+    # services (egov-enc-service, egov-workflow-v2) get `tenant_id`
+    # (e.g. `ke.nairobi`).
+    - name: Set STATE_LEVEL_TENANT_ID (state-root) in compose
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)STATE_LEVEL_TENANT_ID: pg$'
+        replace: '\1STATE_LEVEL_TENANT_ID: {{ state_root }}'
+
+    - name: Set EGOV_STATE_LEVEL_TENANT_ID (state-root) in compose
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)EGOV_STATE_LEVEL_TENANT_ID: pg$'
+        replace: '\1EGOV_STATE_LEVEL_TENANT_ID: {{ state_root }}'
+
+    - name: Set STATE_LEVEL_TENANT_ID (city tier — enc-service + workflow) in compose
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)STATE_LEVEL_TENANT_ID: pg\.citya$'
+        replace: '\1STATE_LEVEL_TENANT_ID: {{ tenant_id }}'
+
+    - name: Set STATE_LEVEL_TENANT_ID (inbox-service `mz` default) in compose
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)STATE_LEVEL_TENANT_ID: mz$'
+        replace: '\1STATE_LEVEL_TENANT_ID: {{ state_root }}'
+
+    # Same shape of overwrite-on-redeploy bug as the four above, for two
+    # siblings the original fix missed:
+    #   - egov-inbox PARENT_LEVEL_TENANT_ID: mz
+    #   - digit-mcp / jupyter DIGIT_TENANT: pg
+    # Both are tenant-shaped values the verbatim compose `copy:` resets
+    # to upstream defaults on every deploy. Defensive same-pattern fix.
+    - name: Set PARENT_LEVEL_TENANT_ID (egov-inbox) in compose
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)PARENT_LEVEL_TENANT_ID: mz$'
+        replace: '\1PARENT_LEVEL_TENANT_ID: {{ state_root }}'
+
+    - name: Set DIGIT_TENANT (digit-mcp / jupyter) in compose
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)DIGIT_TENANT: pg$'
+        replace: '\1DIGIT_TENANT: {{ state_root }}'
+
     # ==================== Publish digit-mcp image ====================
     # digit-mcp ships from the same registry as every other DIGIT image
     # ({{ docker_registry }}/digit-mcp:latest). Compose `pull` picks it
