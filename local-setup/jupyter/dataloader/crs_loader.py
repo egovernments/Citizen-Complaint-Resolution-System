@@ -1295,6 +1295,155 @@ class CRSLoader:
         self._print_summary("Employees", {'employees': results})
         return results
 
+    def _seed_essential_localizations(self, target_tenant: str, source_tenant: str = "pg"):
+        """Seed all en_IN localization messages for a new tenant.
+
+        Without these messages the DIGIT UI shows raw i18n keys like
+        CORE_COMMON_LOGIN, TENANT_TENANTS_SUBHASHINI, etc.
+
+        Strategy: copy from source tenant API; if it returns < 500 messages
+        (cache/seed issue), fall back to bundled JSON in templates/localisations/.
+        Always ensures TENANT_TENANTS_<TENANT> exists.
+        """
+        import time
+
+        loc_search_url = f"{self.base_url}/localization/messages/v1/_search"
+        loc_upsert_url = f"{self.base_url}/localization/messages/v1/_upsert"
+
+        MIN_EXPECTED_MESSAGES = 500
+        copied = 0
+        skipped = 0
+
+        try:
+            source_messages = []
+            try:
+                resp = requests.post(
+                    loc_search_url,
+                    params={"tenantId": source_tenant, "locale": "en_IN"},
+                    json={"RequestInfo": {"apiId": "Rainmaker"}},
+                    headers={"Content-Type": "application/json"},
+                    timeout=60,
+                )
+                if resp.ok:
+                    source_messages = resp.json().get("messages", [])
+            except Exception:
+                pass
+
+            if len(source_messages) < MIN_EXPECTED_MESSAGES:
+                bundled = self._load_bundled_localizations()
+                if bundled:
+                    print(f"   API returned {len(source_messages)} messages, using {len(bundled)} bundled messages")
+                    source_messages = bundled
+
+            if not source_messages:
+                print("   ⚠️  No localization messages available (API or bundled)")
+                return
+
+            existing_codes = set()
+            try:
+                tr = requests.post(
+                    loc_search_url,
+                    params={"tenantId": target_tenant, "locale": "en_IN"},
+                    json={"RequestInfo": {"apiId": "Rainmaker"}},
+                    headers={"Content-Type": "application/json"},
+                    timeout=60,
+                )
+                if tr.ok:
+                    for m in tr.json().get("messages", []):
+                        existing_codes.add(m.get("code", ""))
+            except Exception:
+                pass
+
+            new_messages = []
+            for msg in source_messages:
+                code = msg.get("code", "")
+                if code in existing_codes:
+                    skipped += 1
+                    continue
+                new_messages.append({
+                    "code": code,
+                    "message": msg.get("message", code),
+                    "module": msg.get("module", "rainmaker-common"),
+                    "locale": "en_IN",
+                })
+
+            for i in range(0, len(new_messages), 500):
+                batch = new_messages[i:i + 500]
+                upsert_payload = {
+                    "RequestInfo": {
+                        "apiId": "Rainmaker",
+                        "authToken": self.auth_token,
+                        "userInfo": self.user_info,
+                    },
+                    "tenantId": target_tenant,
+                    "messages": batch,
+                }
+                r = requests.post(loc_upsert_url, json=upsert_payload,
+                                  headers={"Content-Type": "application/json"},
+                                  timeout=60)
+                if r.ok:
+                    copied += len(batch)
+                else:
+                    print(f"   ⚠️  Batch upsert failed: {r.status_code} {r.text[:200]}")
+                time.sleep(0.5)
+
+        except Exception as e:
+            print(f"   ⚠️  Localization seeding failed: {e}")
+
+        tenant_key = "TENANT_TENANTS_" + target_tenant.upper().replace(".", "_")
+        display_name = target_tenant.replace(".", " ").title()
+        try:
+            upsert_payload = {
+                "RequestInfo": {
+                    "apiId": "Rainmaker",
+                    "authToken": self.auth_token,
+                    "userInfo": self.user_info,
+                },
+                "tenantId": target_tenant,
+                "messages": [{"code": tenant_key, "message": display_name,
+                              "module": "rainmaker-common", "locale": "en_IN"}],
+            }
+            r = requests.post(loc_upsert_url, json=upsert_payload,
+                              headers={"Content-Type": "application/json"},
+                              timeout=REQUEST_TIMEOUT)
+            if r.ok:
+                copied += 1
+        except Exception as e:
+            print(f"   ⚠️  Tenant name localization failed: {e}")
+
+        print(f"   🌐 Localization: {copied} copied, {skipped} skipped for '{target_tenant}'")
+
+    def _load_bundled_localizations(self):
+        """Load localization messages from bundled JSONs in templates/localisations/.
+
+        Falls back to these when the source tenant API doesn't have enough
+        messages (fresh install with minimal DB seed).
+        """
+        templates_dir = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "templates", "localisations"
+        )
+        if not os.path.isdir(templates_dir):
+            return []
+
+        messages = []
+        seen_codes = set()
+        for fname in sorted(os.listdir(templates_dir)):
+            if not fname.endswith(".json"):
+                continue
+            fpath = os.path.join(templates_dir, fname)
+            try:
+                with open(fpath, "r") as f:
+                    data = json.load(f)
+                for msg in data:
+                    code = msg.get("code", "")
+                    if code and code not in seen_codes:
+                        seen_codes.add(code)
+                        messages.append(msg)
+            except Exception as e:
+                print(f"   ⚠️  Failed to load {fname}: {e}")
+
+        return messages
+
     def load_localizations(self, excel_path: str, target_tenant: str = None,
                           language_label: str = None, locale_code: str = None) -> Dict:
         """Phase 5: Load bulk localization messages from Excel

@@ -7,7 +7,16 @@
 // the switch below — adding a new knob means adding it here AND in the
 // inventory.
 var globalConfigs = (function () {
-  var stateTenantId = {{ state_tenant_id | to_json }};
+  // The SPA's stateTenantId defaults to `pg` (the dump's always-seeded
+  // tenant) so ADMIN/eGov@123 logs in on day 1 without any extra step.
+  // The operator-chosen `state_tenant_id` controls where INFRA-side
+  // services + new MDMS writes go, but it doesn't auto-provision an
+  // ADMIN — that requires a separate /v1/tenant/bootstrap call.
+  //
+  // Override per-tenant by setting `ui_state_tenant_id: <code>` in
+  // host_vars/<tenant>.yml — typically once the operator has actually
+  // bootstrapped state_tenant_id and wants the UI to land there.
+  var stateTenantId = {{ ui_state_tenant_id | default('pg') | to_json }};
   var contextPath = {{ context_path | to_json }};
   var gmaps_api_key = {{ gmaps_api_key | to_json }};
   var finEnv = {{ fin_env | to_json }};

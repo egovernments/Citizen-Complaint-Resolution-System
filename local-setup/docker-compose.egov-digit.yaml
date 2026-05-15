@@ -1482,7 +1482,12 @@ services:
     environment:
       MCP_TRANSPORT: http
       MCP_PORT: "3000"
-      CRS_ENVIRONMENT: chakshu-digit
+      # `self-hosted` is the generic env entry — actual URL comes from
+      # CRS_API_URL (kong service in this compose). CRS_ENV_NAME is what
+      # /v1/version and get_environment_info display; keep it tenant-
+      # specific so operators don't see "Chakshu Dev" on their own box.
+      CRS_ENVIRONMENT: self-hosted
+      CRS_ENV_NAME: ${MCP_ENV_NAME:-Self-hosted DIGIT}
       CRS_API_URL: http://kong:8000
       CRS_USERNAME: ${MCP_USERNAME:-ADMIN}
       CRS_PASSWORD: ${MCP_PASSWORD:-eGov@123}

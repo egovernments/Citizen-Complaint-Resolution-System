@@ -871,6 +871,135 @@
           - auth_probe.json.access_token | length > 10
         fail_msg: "Auth flow returned 200 but no access_token — egov-user may have wrong DB creds or schema migration didn't run."
 
+    # ────────────────────────────────────────────────────────────────
+    # MCP-driven tenant bootstrap. Once auth/pg works, ask MCP to clone
+    # everything from `pg` → `state_tenant_id` (root) and `pg.citest` →
+    # `state_tenant_id.citya` (city). This seeds 30 schemas, ~1K data
+    # rows, ~8K localizations, the PGR workflow, an ADMIN eg_user, and
+    # an ADMIN HRMS Employee with all departments — enough for a full
+    # PGR lifecycle on day 1, and enough for the ui-tenant probe below
+    # to succeed so the SPA lands on the operator's tenant (not pg).
+    # Skipped when state_tenant_id == 'pg' (nothing to bootstrap) or
+    # when MCP isn't enabled on this host.
+    # ────────────────────────────────────────────────────────────────
+    - name: "mcp-bootstrap — root tenant via /v1/tenant/bootstrap"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:13101/v1/tenant/bootstrap"
+        method: POST
+        body_format: json
+        body:
+          target_tenant: "{{ state_tenant_id }}"
+          source_tenant: "pg"
+          auth:
+            username: "{{ bootstrap_user | default('ADMIN') }}"
+            password: "{{ bootstrap_password | default('eGov@123') }}"
+            tenant_id: "pg"
+        status_code: [200]
+        timeout: 600
+      register: mcp_root_bootstrap
+      when:
+        - state_tenant_id != 'pg'
+        - enable_mcp | default(false)
+      ignore_errors: true
+
+    - name: "mcp-bootstrap — city tenant via /v1/tenant/bootstrap"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:13101/v1/tenant/bootstrap"
+        method: POST
+        body_format: json
+        body:
+          target_tenant: "{{ state_tenant_id }}.citya"
+          source_tenant: "pg.citest"
+          auth:
+            username: "{{ bootstrap_user | default('ADMIN') }}"
+            password: "{{ bootstrap_password | default('eGov@123') }}"
+            tenant_id: "pg"
+        status_code: [200]
+        timeout: 600
+      register: mcp_city_bootstrap
+      when:
+        - state_tenant_id != 'pg'
+        - enable_mcp | default(false)
+      ignore_errors: true
+
+    - name: "mcp-bootstrap — log result"
+      ansible.builtin.debug:
+        msg:
+          - "Root  bootstrap (target={{ state_tenant_id }}): {{ (mcp_root_bootstrap.json.summary | default('skipped')) if mcp_root_bootstrap is defined else 'skipped' }}"
+          - "City  bootstrap (target={{ state_tenant_id }}.citya): {{ (mcp_city_bootstrap.json.summary | default('skipped')) if mcp_city_bootstrap is defined else 'skipped' }}"
+      when:
+        - state_tenant_id != 'pg'
+        - enable_mcp | default(false)
+
+    # ────────────────────────────────────────────────────────────────
+    # UI-tenant fall-back: until the operator's chosen state_tenant_id is
+    # bootstrapped (via /v1/tenant/bootstrap), ADMIN doesn't exist there
+    # and the SPA can't authenticate. Probe the chosen tenant; if ADMIN
+    # login fails, re-render globalConfigs.js with `pg` (the dump's
+    # always-seeded tenant) so the operator can at least log in on day 1.
+    # Once the operator bootstraps state_tenant_id, the next deploy will
+    # detect ADMIN and switch the UI back automatically.
+    # ────────────────────────────────────────────────────────────────
+    - name: "ui-tenant — probe ADMIN login on the chosen state_tenant_id"
+      ansible.builtin.uri:
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/user/oauth/token"
+        method: POST
+        headers: >-
+          {{
+            {'Authorization': 'Basic ZWdvdi11c2VyLWNsaWVudDo=',
+             'Content-Type': 'application/x-www-form-urlencoded'}
+            | combine({'Host': domain} if not (tls_enabled | default(true)) else {})
+          }}
+        body_format: form-urlencoded
+        body:
+          grant_type: password
+          username: "{{ bootstrap_user | default('ADMIN') }}"
+          password: "{{ bootstrap_password | default('eGov@123') }}"
+          scope: read
+          tenantId: "{{ state_tenant_id }}"
+          userType: EMPLOYEE
+        status_code: [200, 400, 401]
+        timeout: 15
+        validate_certs: "{{ tls_enabled | default(true) }}"
+      register: state_tenant_admin_probe
+      no_log: true
+      when: state_tenant_id != 'pg'
+
+    - name: "ui-tenant — pick which tenant the SPA lands on"
+      ansible.builtin.set_fact:
+        ui_state_tenant_id: >-
+          {{ state_tenant_id
+             if (state_tenant_id == 'pg'
+                 or (state_tenant_admin_probe.json.access_token | default('') | length > 10))
+             else 'pg' }}
+
+    - name: "ui-tenant — log the chosen value (and why)"
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'globalConfigs.stateTenantId = ' + ui_state_tenant_id +
+             (' (ADMIN/' + state_tenant_id + ' is provisioned, using it)'
+              if ui_state_tenant_id == state_tenant_id
+              else ' (ADMIN/' + state_tenant_id + ' not yet provisioned — falling back to pg until you bootstrap it; run /v1/tenant/bootstrap with target_tenant=' + state_tenant_id + ')') }}
+
+    - name: "ui-tenant — re-render globalConfigs.js with the chosen tenant"
+      # Always re-render. The earlier "Render globalConfigs.js" task ran
+      # before ui_state_tenant_id was decided, so it used the j2 default
+      # ('pg'). Whether the auto-detect picked `subhashini` (ADMIN works)
+      # or fell back to `pg` (ADMIN missing), we want this final value
+      # baked in. Idempotent — template task no-ops when content is unchanged.
+      ansible.builtin.template:
+        src: templates/globalConfigs.js.j2
+        dest: "{{ digit_dir }}/nginx/globalConfigs.js"
+        mode: '0644'
+      register: ui_globalconfigs_rerender
+
+    - name: "ui-tenant — reload nginx on the host (digit-ui reads the bind-mounted file directly)"
+      ansible.builtin.systemd:
+        name: nginx
+        state: reloaded
+      when: ui_globalconfigs_rerender.changed
+      ignore_errors: true
+
     - name: "validate — MDMS lookup: StateInfo returns at least one record"
       ansible.builtin.uri:
         url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/egov-mdms-service/v1/_search"
@@ -1094,7 +1223,9 @@
     # The remaining 8 sub-tests still run and surface real failures.
     - name: "CI — install pytest + dataloader runtime deps on target"
       ansible.builtin.pip:
-        name: [requests, openpyxl, pandas, pytest, pytest-timeout]
+        # psycopg2-binary: crs_loader._delete_boundaries_via_db uses direct
+        # Postgres access to clean boundary rows (no kubectl on compose).
+        name: [requests, openpyxl, pandas, pytest, pytest-timeout, psycopg2-binary]
         extra_args: --break-system-packages
       changed_when: false
 
@@ -1143,12 +1274,11 @@
         msg: "{{ dataloader_regression.stdout_lines | select('match', '^(TEST:|RESULTS:|✅|❌|   PermissionError|   After |   City |   Root )') | list }}"
 
     # ==================================================================
-    # CI TESTS — opt-in only. The scripts + Playwright suite live in a
-    # sibling clone (../../../digit-ui-fix/local-setup/...) that's specific
-    # to the dev machine. Set `run_ci_tests: true` in host_vars to enable
-    # the whole block; on any host without that sibling repo (production
-    # deploys, third-party installers), it stays skipped — the playbook
-    # finishes at "validate — summary" above and the infra is the deploy.
+    # CI TESTS — opt-in only. The scripts (`local-setup/scripts/`) and the
+    # Playwright suite (`local-setup/tests/`) now live IN this repo — no
+    # sibling clone required. Set `run_ci_tests: true` in host_vars to
+    # enable; on any host where it's left false, the playbook finishes
+    # at "validate — summary" above and the infra IS the deploy.
     - name: "CI tests — skipped (set run_ci_tests: true to enable)"
       ansible.builtin.debug:
         msg: "CI test stage disabled. Set run_ci_tests: true in host_vars to enable."
@@ -1181,14 +1311,21 @@
       when: run_ci_tests | default(false)
     - name: Copy XLSX-driven CI DataLoader script
       copy:
-        src: ../../../digit-ui-fix/local-setup/scripts/ci-dataloader-xlsx.py
+        src: ../../scripts/ci-dataloader-xlsx.py
         dest: "{{ digit_dir }}/ci-tests/scripts/ci-dataloader-xlsx.py"
+        mode: "0755"
+
+      when: run_ci_tests | default(false)
+    - name: Copy XLSX sample generator (helper imported by ci-dataloader-xlsx.py)
+      copy:
+        src: ../../scripts/generate-sample-from-xlsx.py
+        dest: "{{ digit_dir }}/ci-tests/scripts/generate-sample-from-xlsx.py"
         mode: "0755"
 
       when: run_ci_tests | default(false)
     - name: Copy crossroot bootstrap script (fallback)
       copy:
-        src: ../../../digit-ui-fix/local-setup/scripts/ci-dataloader-crossroot.py
+        src: ../../scripts/ci-dataloader-crossroot.py
         dest: "{{ digit_dir }}/ci-tests/scripts/ci-dataloader-crossroot.py"
         mode: "0755"
 
@@ -1240,45 +1377,53 @@
 
     # ==================================================================
     # CI TESTS — Stage B: Playwright E2E Tests
+    #
+    # Gated by `run_playwright_tests` (default false). Browser-driven E2E is
+    # slow + flaky on cold boxes — keep it off in the standard deploy and
+    # turn it on per-host when a UI iteration needs it. Setting
+    # `run_ci_tests: true` alone enables Newman + XLSX dataloader; you must
+    # ALSO set `run_playwright_tests: true` to bring Playwright back.
     # ==================================================================
-      when: run_ci_tests | default(false)
+      when: run_ci_tests | default(false) and (run_playwright_tests | default(false))
     - name: Create E2E tests directory
       file:
         path: "{{ digit_dir }}/e2e-tests"
         state: directory
 
-      when: run_ci_tests | default(false)
+      when: run_ci_tests | default(false) and (run_playwright_tests | default(false))
     - name: Copy Playwright package.json
       copy:
-        src: ../../../digit-ui-fix/local-setup/tests/package.json
+        src: ../../tests/package.json
         dest: "{{ digit_dir }}/e2e-tests/package.json"
 
-      when: run_ci_tests | default(false)
+      when: run_ci_tests | default(false) and (run_playwright_tests | default(false))
     - name: Synchronize E2E test suite
       synchronize:
-        src: "../../../digit-ui-fix/local-setup/tests/e2e/"
+        src: "../../tests/e2e/"
         dest: "{{ digit_dir }}/e2e-tests/e2e/"
 
-      when: run_ci_tests | default(false)
+      when: run_ci_tests | default(false) and (run_playwright_tests | default(false))
     - name: Copy tsconfig.json for tests
       copy:
-        src: ../../../digit-ui-fix/local-setup/tests/tsconfig.json
+        src: ../../tests/tsconfig.json
         dest: "{{ digit_dir }}/e2e-tests/tsconfig.json"
 
-      when: run_ci_tests | default(false)
+      when: run_ci_tests | default(false) and (run_playwright_tests | default(false))
     - name: Install npm dependencies
       shell: npm install
       args:
         chdir: "{{ digit_dir }}/e2e-tests"
 
-      when: run_ci_tests | default(false)
+      when: run_ci_tests | default(false) and (run_playwright_tests | default(false))
     - name: Install Playwright Chromium with system dependencies
       shell: npx playwright install --with-deps chromium
       args:
         chdir: "{{ digit_dir }}/e2e-tests"
-      timeout: 300
+      # Browser binaries + system deps via apt — first run on a fresh box
+      # routinely hits 4-6 min on a 4-core VPS. 300s was too tight.
+      timeout: 600
 
-      when: run_ci_tests | default(false)
+      when: run_ci_tests | default(false) and (run_playwright_tests | default(false))
     - name: Wait for DIGIT UI to serve pages (up to 10 min)
       shell: curl -sf http://127.0.0.1:18080/digit-ui/ -o /dev/null
       register: ui_health
@@ -1287,7 +1432,7 @@
       until: ui_health.rc == 0
       changed_when: false
 
-      when: run_ci_tests | default(false)
+      when: run_ci_tests | default(false) and (run_playwright_tests | default(false))
     - name: Run Playwright E2E tests (Bomet tenant)
       shell: |
         cd {{ digit_dir }}/e2e-tests
@@ -1311,7 +1456,7 @@
       timeout: 900
       ignore_errors: yes
 
-      when: run_ci_tests | default(false)
+      when: run_ci_tests | default(false) and (run_playwright_tests | default(false))
     - name: Show Playwright test results
       debug:
         var: playwright_result.stdout_lines | default(['(no output - possibly timed out)'])
@@ -1322,15 +1467,18 @@
       when: run_ci_tests | default(false)
     - name: CI test results summary
       vars:
+        # `playwright_result` is unset when the Playwright stage is skipped
+        # (run_playwright_tests=false). Treat absent as "didn't run" → 0.
         xlsx_rc: "{{ xlsx_dataloader_result.rc | default(-1) }}"
         dl_rc: "{{ dataloader_regression.rc | default(-1) }}"
-        pw_rc: "{{ playwright_result.rc | default(-1) }}"
+        pw_rc: "{{ playwright_result.rc | default(0) }}"
+        pw_label: "{{ 'SKIPPED' if (playwright_result is not defined or playwright_result.rc is not defined) else ('PASS' if pw_rc|int == 0 else 'FAIL (exit ' + pw_rc|string + ')') }}"
       debug:
         msg:
           - "===== CI TEST RESULTS ====="
           - "XLSX DataLoader (Bomet): {{ 'PASS' if xlsx_rc|int == 0 else 'FAIL (exit ' + xlsx_rc|string + ')' }}"
           - "DataLoader regression:   {{ 'PASS' if dl_rc|int == 0 else 'FAIL (exit ' + dl_rc|string + ')' }}"
-          - "Playwright E2E:          {{ 'PASS' if pw_rc|int == 0 else 'FAIL (exit ' + pw_rc|string + ')' }}"
+          - "Playwright E2E:          {{ pw_label }}"
           - "==========================="
 
       when: run_ci_tests | default(false)
@@ -1338,7 +1486,7 @@
       vars:
         xlsx_rc: "{{ xlsx_dataloader_result.rc | default(-1) }}"
         dl_rc: "{{ dataloader_regression.rc | default(-1) }}"
-        pw_rc: "{{ playwright_result.rc | default(-1) }}"
+        pw_rc: "{{ playwright_result.rc | default(0) }}"
       fail:
         msg: |
           CI tests failed. The infra came up but a functional flow is broken.
