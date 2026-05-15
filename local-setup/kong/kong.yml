@@ -265,3 +265,30 @@ services:
     paths:
     - /jupyter
     strip_path: false
+- name: egov-otp-service
+  url: http://egov-otp:8089
+  tags:
+  - core
+  routes:
+  - name: egov-otp-route
+    paths:
+    - /otp
+    strip_path: false
+- name: user-otp-service
+  url: http://user-otp:8090
+  tags:
+  - core
+  routes:
+  - name: user-otp-route
+    paths:
+    - /user-otp
+    strip_path: false
+- name: notification-sms-service
+  url: http://egov-notification-sms:8080
+  tags:
+  - core
+  routes:
+  - name: notification-sms-route
+    paths:
+    - /notification-sms
+    strip_path: false
