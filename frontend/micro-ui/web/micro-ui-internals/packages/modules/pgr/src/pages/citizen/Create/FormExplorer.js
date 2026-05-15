@@ -421,6 +421,12 @@ const FormExplorer = () => {
 
   return (
     <Card type="secondary">
+      <style>{`
+        .previous-button.digit-button-secondary {
+          height: 2.5rem !important;
+          min-width: 15rem;
+        }
+      `}</style>
 
       <FormComposerV2
         config={[configs[currentStep]]}

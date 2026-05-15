@@ -146,7 +146,7 @@ const ComplaintDetailsPage = (props) => {
                       text={
                         Array.isArray(complaintDetails.details[flag])
                           ? complaintDetails.details[flag].map((val) => (typeof val === "object" ? t(val?.code) : t(val)))
-                          : t(complaintDetails.details[flag]) || "N/A"
+                          : t((complaintDetails.details[flag] || "").replace(/\./g, "_")) || "N/A"
                       }
                       last={index === arr.length - 1}
                     />
