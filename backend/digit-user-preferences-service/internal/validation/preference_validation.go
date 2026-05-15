@@ -115,11 +115,11 @@ func (v *PreferenceValidator) ValidateNotificationPayload(payload json.RawMessag
 	var errors []digit.Error
 
 	// Validate preferred language if provided
-	validLanguages := map[string]bool{"en_IN": true, "hi_IN": true, "ta_IN": true}
+	validLanguages := map[string]bool{"en_IN": true, "hi_IN": true, "fr_IN": true, "pt_IN": true}
 	if p.PreferredLanguage != "" && !validLanguages[p.PreferredLanguage] {
 		errors = append(errors, digit.Error{
 			Code:    "INVALID_LANGUAGE",
-			Message: fmt.Sprintf("preferredLanguage must be one of: en_IN, hi_IN, ta_IN; got: %s", p.PreferredLanguage),
+			Message: fmt.Sprintf("preferredLanguage must be one of: en_IN, hi_IN, fr_IN, pt_IN; got: %s", p.PreferredLanguage),
 		})
 	}
 
