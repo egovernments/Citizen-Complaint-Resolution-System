@@ -56,6 +56,32 @@
 
 
   tasks:
+    # ==================== Preflight: target OS ====================
+    # The playbook installs Docker + nginx + node + python via apt and
+    # manages docker.service via systemd. Both assume an Ubuntu-family
+    # target. Fail fast on Mac/RHEL/etc with a clear message rather than
+    # halfway through with `apt: command not found` or systemd errors.
+    #
+    # Mac operators: spin up an Ubuntu 24.04 VM (UTM, OrbStack, Multipass,
+    # Lima, or a remote VPS) and point `ansible_host` in your host_vars
+    # at that VM. The Mac itself runs only ansible-playbook + ssh.
+    - name: "preflight — target OS must be Debian-family (Ubuntu)"
+      ansible.builtin.fail:
+        msg: |
+          Target host {{ inventory_hostname }} is {{ ansible_facts['os_family'] }}
+          ({{ ansible_facts['distribution'] | default('?') }} {{ ansible_facts['distribution_version'] | default('?') }}).
+          This playbook only supports Ubuntu/Debian targets — it uses apt,
+          systemd, /etc/docker, /etc/nginx paths throughout.
+
+          If you're on a Mac and want to run DIGIT locally:
+            1. Install an Ubuntu 24.04 VM (UTM, OrbStack, Multipass, Lima).
+            2. SSH-enable it (`apt install openssh-server`).
+            3. Point `ansible_host` in host_vars/<tenant>.yml at the VM.
+            4. Re-run `./deploy.sh <tenant>` from the Mac terminal.
+
+          The Mac itself only needs ansible-playbook + ssh.
+      when: ansible_facts['os_family'] != 'Debian'
+
     # ==================== Docker Installation ====================
     - name: Install Docker prerequisites
       apt:
