@@ -1613,7 +1613,9 @@ services:
   # values; the Ansible playbook generates real per-tenant secrets
   # from OpenBao before bringing the stack up.
   novu-mongo:
-    image: registry.preview.egov.theflywheel.in/mongo:8.0.3
+    # docker.io/library/mongo:8.0.3 — not mirrored to registry.preview
+    # (yet); ghcr.io/novuhq/* below also pulls direct from GHCR.
+    image: mongo:8.0.3
     container_name: novu-mongo
     restart: unless-stopped
     profiles: ["notifications"]
@@ -1741,6 +1743,37 @@ services:
       VITE_LEGACY_DASHBOARD_URL: ''
     ports:
       - "14000:4000"
+    networks:
+      - egov-network
+
+  # Novu Framework "Bridge" endpoint. Novu v2 workflows are Code-First
+  # — the workflow definitions (SMS body templates, conditional steps,
+  # etc.) live in code, not in the Novu DB. At trigger time, Novu's API
+  # calls THIS service to render the step content. Without it every
+  # trigger fails with "Bridge execution failed".
+  #
+  # The workflows are defined in
+  # /backend/novu-bridge-endpoint/workflows.js — one per domain event
+  # (OTP send + 6 complaint lifecycle events).
+  novu-bridge-endpoint:
+    image: registry.preview.egov.theflywheel.in/egovio/novu-bridge-endpoint:latest
+    container_name: novu-bridge-endpoint
+    restart: unless-stopped
+    profiles: ["notifications"]
+    environment:
+      PORT: '3000'
+      # MUST match the env API key Novu uses to sign bridge requests
+      # (set NOVU_SECRET_KEY in compose .env to whatever the per-env
+      # API key Novu generated is, OR leave STRICT_AUTH=false for the
+      # in-cluster case where we trust the network).
+      NOVU_SECRET_KEY: ${NOVU_BRIDGE_SECRET_KEY:-dev-novu-secret-key-change-in-production}
+      STRICT_AUTH: 'false'
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/health >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     networks:
       - egov-network
 
