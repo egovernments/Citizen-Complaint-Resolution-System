@@ -125,6 +125,22 @@ enable_search_stack: false
 # a public mirror) if you're not on the VPC.
 enable_mcp: true
 
+# Source for the digit-mcp image when enable_mcp: true.
+#   false (default): pull `{{ docker_registry }}/digit-mcp:latest` like
+#                    every other DIGIT image. Use this when the docker
+#                    registry is writable from the controller (the VPC
+#                    egov-ci registry) and someone is keeping that tag
+#                    fresh via `ansible-playbook --tags mcp-publish`.
+#   true:            the playbook builds /root/DIGIT-MCP on the
+#                    controller, saves the image to a tarball, scp's it
+#                    to the target, `docker load`s it, and skips
+#                    digit-mcp from `compose pull` so a read-only public
+#                    mirror can't clobber the just-loaded image. Use
+#                    this for public boxes (subhashini, third-party
+#                    installers, etc.) where docker_registry points at
+#                    a mirror you can't push to.
+mcp_image_local_build: false
+
 # Init the nairobi-mdms git submodule on the controller. The submodule
 # lives in a separate repo and isn't auto-fetched on clone — turn this
 # on only if your tenant onboarding uses those JSONs. See
