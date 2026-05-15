@@ -1,0 +1,9 @@
+# Variables shared across every host in this inventory. Anything
+# DIGIT-specific belongs in `group_vars/digit.yml`; anything host-specific
+# in `host_vars/<host>.yml`.
+
+# Where the deploy lays down the stack on each target.
+digit_dir: /opt/digit
+
+# Minimum Docker Compose version we'll accept on the target before deploying.
+docker_compose_version_min: "2.20"

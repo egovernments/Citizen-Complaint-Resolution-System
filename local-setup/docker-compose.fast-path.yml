@@ -1,0 +1,49 @@
+# Opt-in overlay that pre-loads ./db/full-dump.sql into Postgres at first
+# boot. Layered with `-f docker-compose.egov-digit.yaml -f docker-compose.fast-path.yml`.
+#
+# What this gives you:
+#   - Postgres' /docker-entrypoint-initdb.d/ runs full-dump.sql on a fresh
+#     PGDATA → 54 tables + Flyway history pre-loaded → db-migrations and
+#     the seed-* containers become quick no-ops.
+#   - Fresh deploys go from ~5–10 min of seeding to ~1–2 min.
+#
+# When NOT to use this:
+#   - Tenants with live data you care about (Bomet, Nairobi). The base
+#     compose mounts postgres_data at /var/lib/docker-postgresql/data — a
+#     path Postgres ignores — so existing prod state lives in an anonymous
+#     volume tied to the current container. This overlay also corrects the
+#     volume path to the real PGDATA, which forces container recreation;
+#     on the new container PGDATA is empty → initdb fires → the dump (a
+#     pre-Bomet/Nairobi snapshot) loads → city-specific state is gone.
+#   - The dump file is checked in at db/full-dump.sql; if you regenerate
+#     it from a tenant's prod DB, regenerate it cleanly (no PII).
+#
+# Wire-up: set `db_fast_path: true` in inventory/host_vars/<tenant>.yml.
+# Default is false on every existing tenant.
+services:
+  # The dump's Flyway history for url-shortening lives in
+  # egov_url_shortening_schema_version (per-service table). The image's
+  # bundled config defaults to a generic `public` table — fine on a
+  # virgin DB (slow path), fatal here because the dump already created
+  # eg_url_shortener with no matching history → Flyway re-runs the
+  # CREATE → 42P07 "relation already exists". Pointing Flyway at the
+  # dump's actual history table makes it see migrations as applied and
+  # no-op. Override is fast-path-only; Bomet/Nairobi keep the `public`
+  # table they've been using since first boot.
+  egov-url-shortening:
+    environment:
+      SPRING_FLYWAY_TABLE: egov_url_shortening_schema_version
+
+  postgres-db:
+    volumes:
+      # Override the base compose's broken mount point. The base mounts
+      # postgres_data at /var/lib/docker-postgresql/data — a path Postgres
+      # never reads or writes — so the named volume is unused and data
+      # lives in an anonymous volume. Putting the named volume at the
+      # actual PGDATA path makes persistence behave the way the compose
+      # file claims it does.
+      - postgres_data:/var/lib/postgresql/data
+      # Postgres runs every *.sql / *.sh under this dir exactly once,
+      # when PGDATA is empty. Numeric prefix sets ordering (in case we
+      # add more init steps later).
+      - ./db/full-dump.sql:/docker-entrypoint-initdb.d/01-full-dump.sql:ro

@@ -385,7 +385,6 @@ class UnifiedExcelReader:
                     'serviceCode': service_code,
                     'name': sub_type_name,
                     'menuPath': menu_path_value,
-                    'menuPathName': menu_path_value,
                     'active': True
                 }
 
