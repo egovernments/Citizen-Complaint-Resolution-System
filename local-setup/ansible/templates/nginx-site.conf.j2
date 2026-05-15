@@ -141,9 +141,20 @@ server {
 
 {% endif %}
 {% if enable_novu | default(false) %}
-  # Novu dashboard (SPA). The Vite build is hardcoded to `/novu` as
-  # base path (set via VITE_BASE_PATH in docker-compose.egov-digit.yaml),
-  # so no rewriting needed — just proxy through.
+  # Novu dashboard (SPA). The official ghcr.io/novuhq/novu/dashboard
+  # image is built with Vite `base=/`, despite VITE_BASE_PATH=/novu
+  # being set at runtime (only API/WS hostnames are honored at
+  # runtime; the asset paths bake at build time). That means the
+  # dashboard HTML references /assets/, /images/, /manifest.json,
+  # /favicon-*, /auth/ — all UNPREFIXED. Below we proxy `/novu/`
+  # plus those root-level paths.
+  #
+  # ⚠ WORKAROUND. Proper fix: rebuild the dashboard image with
+  # `VITE_BASE_PATH=/novu` at build time so the served HTML uses
+  # `/novu/assets/…` consistently. Then most of the unprefixed
+  # locations below can be removed (only /novu/ and /novu-api/ would
+  # remain). Tracked in the dashboard image build pipeline — not
+  # something we can fix from this repo without forking the image.
   location = /novu { return 302 /novu/; }
   location /novu/ {
     proxy_pass http://127.0.0.1:14000/novu/;
@@ -164,6 +175,74 @@ server {
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_set_header Authorization $http_authorization;
     proxy_http_version 1.1;
+  }
+
+  # Novu websocket — used by the dashboard for live notification
+  # status updates. Proxy upgrades the connection to WS.
+  location /novu-ws/ {
+    proxy_pass http://127.0.0.1:14003/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 24h;
+  }
+
+  # ⚠ WORKAROUND for the upstream Vite base=/ bug. These root-level
+  # paths are referenced by the dashboard HTML/JS and would 404
+  # otherwise. Each block forwards to the dashboard container so the
+  # SPA can boot and navigate without breakage.
+  #
+  # Conflict risk: if another surface on this domain ever serves at
+  # /assets/, /images/, /static/ or /manifest.json, these blocks will
+  # shadow it. Currently no other service does. The configurator at
+  # /configurator/ uses its own /configurator/assets/ prefix; the
+  # digit-ui uses /digit-ui/vendor/ — no collision.
+  location /assets/ {
+    proxy_pass http://127.0.0.1:14000/assets/;
+    proxy_set_header Host $host;
+    proxy_http_version 1.1;
+  }
+  location /static/ {
+    proxy_pass http://127.0.0.1:14000/static/;
+    proxy_set_header Host $host;
+    proxy_http_version 1.1;
+  }
+  location /images/ {
+    proxy_pass http://127.0.0.1:14000/images/;
+    proxy_set_header Host $host;
+    proxy_http_version 1.1;
+  }
+  # React Router internal routes — /auth/sign-in, /auth/sign-up, etc.
+  # These need to serve the dashboard's index.html so client-side
+  # routing takes over. The dashboard's http-server already does
+  # SPA-style fallback for unknown paths.
+  #
+  # IMPORTANT ORDERING: this must be above any service-side `/auth`
+  # route from Kong (e.g. the keycloak-route in kong.yml). Without
+  # this proxy, hard-refreshes at /auth/* fall through to Kong's
+  # /auth → keycloak upstream and 500 with a DNS resolve failure
+  # when keycloak isn't deployed.
+  location /auth/ {
+    proxy_pass http://127.0.0.1:14000;
+    proxy_set_header Host $host;
+    proxy_http_version 1.1;
+  }
+  # Manifest + favicons (referenced unprefixed by the dashboard HTML).
+  location = /manifest.json {
+    proxy_pass http://127.0.0.1:14000/manifest.json;
+    proxy_set_header Host $host;
+  }
+  location = /favicon-gradient.svg {
+    proxy_pass http://127.0.0.1:14000/favicon-gradient.svg;
+    proxy_set_header Host $host;
+  }
+  location = /favicon.ico {
+    proxy_pass http://127.0.0.1:14000/favicon.ico;
+    proxy_set_header Host $host;
   }
 
   # novu-bridge REST endpoints (diagnostics: _validate, _dry-run,
