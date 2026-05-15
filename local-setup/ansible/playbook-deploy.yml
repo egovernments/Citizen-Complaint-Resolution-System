@@ -309,65 +309,26 @@
         regexp: 'api\.egov\.theflywheel\.in'
         replace: "{{ domain }}"
 
-    # ==================== Transfer MCP Image ====================
-    # Two delivery modes for the digit-mcp image:
+    # ==================== Publish digit-mcp image ====================
+    # digit-mcp ships from the same registry as every other DIGIT image
+    # ({{ docker_registry }}/digit-mcp:latest). Compose `pull` picks it
+    # up like any other service — no special transfer step.
     #
-    # A) VPC hosts ({{ docker_registry }} writable, e.g. 10.0.0.4:5000):
-    #    set `mcp_image_local_build: false` (the default). The image is
-    #    expected to be in the registry already; compose pull fetches it
-    #    like any other service. Republish from controller with
-    #    `ansible-playbook ... --tags mcp-publish`.
+    # The push endpoint is the VPC registry (10.0.0.4:5000); pulls can
+    # also go through the public mirror (registry.preview.egov.theflywheel.in)
+    # which is a read-through proxy. To rebuild + republish from
+    # /root/DIGIT-MCP on the controller:
     #
-    # B) Public hosts (registry is read-only public mirror, e.g.
-    #    registry.preview.egov.theflywheel.in): set
-    #    `mcp_image_local_build: true` in host_vars. The controller
-    #    builds /root/DIGIT-MCP locally, ships the image as a tarball to
-    #    the target, loads it, and tags it as the compose-expected name.
-    #    The compose pull task below skips digit-mcp so the local tag
-    #    isn't overwritten by whatever the public mirror has.
-    #
-    # Either mode requires /root/DIGIT-MCP on the controller (the MCP
-    # source tree). Operators without it skip both modes.
+    #   ansible-playbook ... --tags mcp-publish
     - name: Build + push digit-mcp image to VPC registry
       shell: |
         set -e
         cd /root/DIGIT-MCP
-        docker build -t {{ docker_registry }}/digit-mcp:latest .
-        docker push {{ docker_registry }}/digit-mcp:latest
+        docker build -t 10.0.0.4:5000/digit-mcp:latest .
+        docker push 10.0.0.4:5000/digit-mcp:latest
       delegate_to: localhost
       become: false
       tags: ['mcp-publish', 'never']  # opt-in only; not part of default deploy
-
-    # MODE B: controller-build + scp-load. Default off. Flip
-    # `mcp_image_local_build: true` in host_vars for public boxes that
-    # can't push to the docker_registry mirror.
-    - name: "digit-mcp — build image on controller (mode B)"
-      ansible.builtin.shell: |
-        set -e
-        cd /root/DIGIT-MCP
-        docker build -t {{ docker_registry }}/digit-mcp:latest .
-      delegate_to: localhost
-      become: false
-      when: mcp_image_local_build | default(false)
-
-    - name: "digit-mcp — save image to tarball on controller (mode B)"
-      ansible.builtin.shell: |
-        docker save {{ docker_registry }}/digit-mcp:latest -o /tmp/digit-mcp-image.tar
-      delegate_to: localhost
-      become: false
-      when: mcp_image_local_build | default(false)
-
-    - name: "digit-mcp — copy tarball to target (mode B)"
-      ansible.builtin.copy:
-        src: /tmp/digit-mcp-image.tar
-        dest: /tmp/digit-mcp-image.tar
-        mode: '0644'
-      when: mcp_image_local_build | default(false)
-
-    - name: "digit-mcp — load image on target (mode B)"
-      ansible.builtin.shell: |
-        docker load -i /tmp/digit-mcp-image.tar
-      when: mcp_image_local_build | default(false)
 
     # ==================== Pull & Start ====================
     # COMPOSE_PROFILES drives which optional service groups are included.
@@ -403,18 +364,7 @@
         msg: "compose files for {{ inventory_hostname }}: {{ compose_files }}"
 
     - name: Pull all images from VPC registry
-      # In mode B (mcp_image_local_build) the digit-mcp image was just
-      # loaded from a controller-side tarball; a blanket `compose pull`
-      # would replace it with whatever the read-only public mirror has,
-      # reverting our just-built code. Pull every service EXCEPT
-      # digit-mcp in that case.
-      shell: |
-        if [ "{{ mcp_image_local_build | default(false) }}" = "True" ]; then
-          SERVICES=$(COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} config --services | grep -v '^digit-mcp$' | tr '\n' ' ')
-          COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} pull --ignore-pull-failures $SERVICES
-        else
-          COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} pull --ignore-pull-failures
-        fi
+      shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} pull --ignore-pull-failures
       args:
         chdir: "{{ digit_dir }}"
 
