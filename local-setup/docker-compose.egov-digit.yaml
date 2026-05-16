@@ -1949,6 +1949,17 @@ services:
       NOVU_BRIDGE_CONFIG_SEARCH_PATH: /config-service/config/v1/_search
       NOVU_BRIDGE_USER_HOST: http://egov-user:8107
       NOVU_BRIDGE_USER_SEARCH_PATH: /user/_search
+      # MDMS_HOST MUST be set. The bridge's application.properties default
+      # is `mdms.host=${MDMS_HOST:-http://mdms-v2.egov:8080}` — that host
+      # does not resolve on the egov docker network, so the citizen
+      # phone-prefix lookup (formatRecipientPhone -> MDMS
+      # ValidationConfigs.mobileNumberValidation) throws
+      # NB_MDMS_PHONE_PREFIX_UNAVAILABLE and NO notification is ever sent.
+      # Setting only MDMS_SEARCH_PATH (as earlier iterations did) is not
+      # enough. Verified on Bomet 2026-05-16: with MDMS_HOST unset, every
+      # complaint failed here; with it set, prefix resolves (+254) and the
+      # pipeline completes through Twilio.
+      MDMS_HOST: http://egov-mdms-service:8094
       MDMS_SEARCH_PATH: /mdms-v2/v2/_search
       # Novu API endpoints are populated in iteration 3 once novu-api
       # is in the stack; bridge starts up but won't dispatch until
