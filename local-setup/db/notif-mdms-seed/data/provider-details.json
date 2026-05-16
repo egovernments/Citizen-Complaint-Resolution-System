@@ -1,0 +1,17 @@
+[
+  {
+    "schemaCode": "ProviderDetail",
+    "data": {
+      "tenantId": "{{TENANT}}",
+      "providerName": "twilio",
+      "channel": "sms",
+      "credentials": {
+        "accountSid": "{{TWILIO_ACCOUNT_SID}}",
+        "authToken": "{{TWILIO_AUTH_TOKEN}}"
+      },
+      "senderNumber": "{{TWILIO_FROM}}",
+      "isActive": true,
+      "priority": 1
+    }
+  }
+]

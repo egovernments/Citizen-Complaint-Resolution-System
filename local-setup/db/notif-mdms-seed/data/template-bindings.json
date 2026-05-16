@@ -1,0 +1,75 @@
+[
+  {
+    "_comment": "contentSid is intentionally omitted (not empty-string) — the schema's `^HX[a-fA-F0-9]{32}$` pattern rejects empty strings. Set contentSid only when you have a real Twilio Content SID (mandatory for WhatsApp out-of-24h-window delivery).",
+    "schemaCode": "TemplateBinding",
+    "data": {
+      "tenantId": "{{TENANT}}",
+      "eventName": "COMPLAINTS.WORKFLOW.APPLY",
+      "channel": "sms",
+      "locale": "en_IN",
+      "templateId": "complaints-workflow-apply",
+      "paramOrder": ["complaintNo", "status"],
+      "requiredVars": ["complaintNo"]
+    }
+  },
+  {
+    "schemaCode": "TemplateBinding",
+    "data": {
+      "tenantId": "{{TENANT}}",
+      "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+      "channel": "sms",
+      "locale": "en_IN",
+      "templateId": "complaints-workflow-assign",
+      "paramOrder": ["complaintNo", "status", "assigneeName"],
+      "requiredVars": ["complaintNo"]
+    }
+  },
+  {
+    "schemaCode": "TemplateBinding",
+    "data": {
+      "tenantId": "{{TENANT}}",
+      "eventName": "COMPLAINTS.WORKFLOW.RESOLVE",
+      "channel": "sms",
+      "locale": "en_IN",
+      "templateId": "complaints-workflow-resolve",
+      "paramOrder": ["complaintNo", "status", "resolutionDetails"],
+      "requiredVars": ["complaintNo"]
+    }
+  },
+  {
+    "schemaCode": "TemplateBinding",
+    "data": {
+      "tenantId": "{{TENANT}}",
+      "eventName": "COMPLAINTS.WORKFLOW.REJECT",
+      "channel": "sms",
+      "locale": "en_IN",
+      "templateId": "complaints-workflow-reject",
+      "paramOrder": ["complaintNo", "status", "rejectionReason"],
+      "requiredVars": ["complaintNo"]
+    }
+  },
+  {
+    "schemaCode": "TemplateBinding",
+    "data": {
+      "tenantId": "{{TENANT}}",
+      "eventName": "COMPLAINTS.WORKFLOW.REOPEN",
+      "channel": "sms",
+      "locale": "en_IN",
+      "templateId": "complaints-workflow-reopen",
+      "paramOrder": ["complaintNo", "status"],
+      "requiredVars": ["complaintNo"]
+    }
+  },
+  {
+    "schemaCode": "TemplateBinding",
+    "data": {
+      "tenantId": "{{TENANT}}",
+      "eventName": "OTP.SEND",
+      "channel": "sms",
+      "locale": "en_IN",
+      "templateId": "otp-send",
+      "paramOrder": ["otp", "userType"],
+      "requiredVars": ["otp"]
+    }
+  }
+]
