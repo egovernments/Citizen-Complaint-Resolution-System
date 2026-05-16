@@ -31,20 +31,40 @@ The Java `novu-bridge` service consumes Kafka events from
 | `schemas/ProviderDetail.json`  | MDMS-v2 schema, registered at root tenant |
 | `data/template-bindings.json`  | 6 records: 5 complaint-lifecycle events + OTP.SEND |
 | `data/provider-details.json`   | 1 record per provider — Twilio sender + credentials |
-| `seed.sh`                      | Idempotent seeder. Authenticates, registers schemas, creates records via config-service |
+| `seed.sh`                      | **Upsert** seeder. Authenticates, registers schemas, creates-or-updates records via config-service |
 
 ## Wiring at deploy time
 
 The Ansible playbook calls `seed.sh` once per tenant after
 `tenant_bootstrap` succeeds and the operator has populated their
 Twilio creds (`twilio_account_sid`, `twilio_auth_token`, `twilio_from`
-in `host_vars/<tenant>.yml`). The seed is idempotent — re-runs report
-`successful (already exists)` for any record already present.
+in `host_vars/<tenant>.yml`).
 
-`seed.sh` auto-detects whether `$DIGIT_URL` (Kong) routes
-`/config-service` and falls back to `$CONFIG_SERVICE_URL` direct
-(default `http://digit-config-service:8080`) when not. To run inside
-the docker network manually:
+`seed.sh` is a true **upsert**, not create-only. On a re-run,
+config-service rejects a second `_create` for the same x-unique tuple
+with `DUPLICATE_RECORD`; the script then `_search`es for the existing
+record and `_update`s it. This is what lets a redeploy actually apply
+**corrections** to an already-live tenant — a stale row (wrong
+`channel`, missing `contentSid`, placeholder Twilio token) is
+overwritten, not silently kept. The existing row is matched on its
+x-unique **data** tuple (`eventName,channel,locale` for
+TemplateBinding; `providerName,channel` for ProviderDetail), *not* on
+the `uniqueIdentifier` string — a legacy row may carry a stale id
+(e.g. `…​.sms.…`) whose data was later flipped to `whatsapp`.
+
+Per-record output is explicit: `created` / `updated` / `SKIPPED` /
+`FAILED` (no more misleading "already exists — fine").
+
+**Routing caveat (important):** Kong typically routes config-service
+`_create` and `_resolve` but **not** `_search` / `_update`. The upsert
+needs both, so it only works against config-service **directly**
+(`$CONFIG_SERVICE_URL`, default `http://digit-config-service:8080`,
+reachable in-cluster). `seed.sh` probes for a base that can `_search`,
+preferring the direct URL; if only Kong is reachable it runs
+**create-only** and prints a loud `WARNING` that corrections were
+skipped (re-run in-cluster to apply them). The Ansible deploy-time
+invocation runs in-cluster, so the full upsert applies there. To run
+inside the docker network manually:
 
 ```bash
 docker exec -e TENANT=ke.bomet \
