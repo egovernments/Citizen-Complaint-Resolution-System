@@ -66,6 +66,32 @@
     }
   },
   {
+    "schemaCode": "TemplateBinding",
+    "data": {
+      "tenantId": "{{TENANT}}",
+      "eventName": "COMPLAINTS.WORKFLOW.REASSIGN",
+      "channel": "whatsapp",
+      "locale": "en_IN",
+      "templateId": "complaints-workflow-reassign",
+      "contentSid": "HX7dc390ab0a8cd7cd3bde32768278dbd7",
+      "paramOrder": ["serviceName", "complaintNo", "submittedDate", "assigneeName", "assigneeDesignation", "departmentName"],
+      "requiredVars": ["complaintNo"]
+    }
+  },
+  {
+    "schemaCode": "TemplateBinding",
+    "data": {
+      "tenantId": "{{TENANT}}",
+      "eventName": "COMPLAINTS.WORKFLOW.RATE",
+      "channel": "whatsapp",
+      "locale": "en_IN",
+      "templateId": "complaints-workflow-rate",
+      "contentSid": "HXa0ad0ef3f58903809464f1707a9347a8",
+      "paramOrder": ["serviceName", "complaintNo", "submittedDate"],
+      "requiredVars": ["complaintNo"]
+    }
+  },
+  {
     "_comment": "OTP intentionally left on the hardcoded path: no contentSid, channel sms, not wired to Twilio. No twilio/authentication template exists on the account and SMS-OTP needs the #43 bridge fix + an SMS-capable sender. Revisit once those land.",
     "schemaCode": "TemplateBinding",
     "data": {
