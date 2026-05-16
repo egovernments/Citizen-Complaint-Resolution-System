@@ -1,14 +1,15 @@
 [
   {
-    "_comment": "contentSid is intentionally omitted (not empty-string) — the schema's `^HX[a-fA-F0-9]{32}$` pattern rejects empty strings. Set contentSid only when you have a real Twilio Content SID (mandatory for WhatsApp out-of-24h-window delivery).",
+    "_comment": "Lifecycle rows carry real Twilio-approved WhatsApp Content SIDs (eGov account, EN, *_message_new family). paramOrder maps ComplaintsDomainEvent.data keys (complaintNo,status,serviceName,citizenName,departmentName,mobileNumber,submittedDate,assigneeName,assigneeDesignation,comment) onto each template's {{1}},{{2}},... positions verified via the Content API. channel is whatsapp because these templates are WhatsApp-approved and the bridge resolves whatsapp. OTP.SEND intentionally has NO contentSid and stays on the hardcoded OTP path for now.",
     "schemaCode": "TemplateBinding",
     "data": {
       "tenantId": "{{TENANT}}",
       "eventName": "COMPLAINTS.WORKFLOW.APPLY",
-      "channel": "sms",
+      "channel": "whatsapp",
       "locale": "en_IN",
       "templateId": "complaints-workflow-apply",
-      "paramOrder": ["complaintNo", "status"],
+      "contentSid": "HX67fae4a61c4f50db8a11ebac21c50a79",
+      "paramOrder": ["serviceName", "complaintNo", "submittedDate"],
       "requiredVars": ["complaintNo"]
     }
   },
@@ -17,10 +18,11 @@
     "data": {
       "tenantId": "{{TENANT}}",
       "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
-      "channel": "sms",
+      "channel": "whatsapp",
       "locale": "en_IN",
       "templateId": "complaints-workflow-assign",
-      "paramOrder": ["complaintNo", "status", "assigneeName"],
+      "contentSid": "HX9d0ab22fb14080bdfd3d4cb43d9bd6f7",
+      "paramOrder": ["serviceName", "complaintNo", "submittedDate", "assigneeName", "assigneeDesignation", "departmentName"],
       "requiredVars": ["complaintNo"]
     }
   },
@@ -29,10 +31,11 @@
     "data": {
       "tenantId": "{{TENANT}}",
       "eventName": "COMPLAINTS.WORKFLOW.RESOLVE",
-      "channel": "sms",
+      "channel": "whatsapp",
       "locale": "en_IN",
       "templateId": "complaints-workflow-resolve",
-      "paramOrder": ["complaintNo", "status", "resolutionDetails"],
+      "contentSid": "HXe6f34b83cc6e7179c0ede06472dd81fb",
+      "paramOrder": ["serviceName", "complaintNo", "submittedDate", "assigneeName"],
       "requiredVars": ["complaintNo"]
     }
   },
@@ -41,10 +44,11 @@
     "data": {
       "tenantId": "{{TENANT}}",
       "eventName": "COMPLAINTS.WORKFLOW.REJECT",
-      "channel": "sms",
+      "channel": "whatsapp",
       "locale": "en_IN",
       "templateId": "complaints-workflow-reject",
-      "paramOrder": ["complaintNo", "status", "rejectionReason"],
+      "contentSid": "HXea318abc741dd5c09555617a4ecad490",
+      "paramOrder": ["serviceName", "complaintNo", "submittedDate", "comment"],
       "requiredVars": ["complaintNo"]
     }
   },
@@ -53,14 +57,16 @@
     "data": {
       "tenantId": "{{TENANT}}",
       "eventName": "COMPLAINTS.WORKFLOW.REOPEN",
-      "channel": "sms",
+      "channel": "whatsapp",
       "locale": "en_IN",
       "templateId": "complaints-workflow-reopen",
-      "paramOrder": ["complaintNo", "status"],
+      "contentSid": "HXc7f239a0b267bbe208898c32bbd6034a",
+      "paramOrder": ["serviceName", "complaintNo", "submittedDate"],
       "requiredVars": ["complaintNo"]
     }
   },
   {
+    "_comment": "OTP intentionally left on the hardcoded path: no contentSid, channel sms, not wired to Twilio. No twilio/authentication template exists on the account and SMS-OTP needs the #43 bridge fix + an SMS-capable sender. Revisit once those land.",
     "schemaCode": "TemplateBinding",
     "data": {
       "tenantId": "{{TENANT}}",

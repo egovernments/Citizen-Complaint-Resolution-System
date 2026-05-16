@@ -60,19 +60,28 @@ Twilio rejects out-of-24h-window WhatsApp messages with error 63016
 unless the message is sent via a pre-approved **Content Template** (a
 `HX…` SID assigned by Twilio after Meta approval).
 
-For production WhatsApp delivery, the operator must:
+The **five complaint-lifecycle rows ship with real, Meta-approved
+WhatsApp Content SIDs** already registered on the eGov Twilio account
+(EN, `*_message_new` family). No operator action is needed for
+lifecycle WhatsApp — `seed.sh` wires them on deploy.
 
-1. Register a Content Template via Twilio Console → Messaging →
-   Content Templates (category: `authentication` for OTP).
-2. Wait for Meta approval (minutes for the `authentication` category,
-   hours-to-days for `marketing`/`utility`).
-3. Copy the `HX…` SID.
-4. Update the matching row in `data/template-bindings.json`:
-   ```json
-   "contentSid": "HXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-   ```
-5. Re-run `seed.sh` — the row is upserted via the
-   `(tenantId, eventName, channel, locale)` unique key.
+`paramOrder` maps `ComplaintsDomainEvent.data` keys onto each
+template's positional `{{1}},{{2}},…` slots. The mapping was verified
+against the live Twilio Content API per SID (not inferred from names):
+the bridge builds `{ "1": data[paramOrder[0]], … }`, so the order must
+stay aligned with the template body if a SID is ever swapped.
+
+To swap a SID (new template / different locale): register it in
+Twilio Console → Messaging → Content Templates, wait for Meta approval,
+re-confirm its `{{n}}` order via `GET content.twilio.com/v1/Content/<SID>`,
+update both `contentSid` and `paramOrder` in
+`data/template-bindings.json`, and re-run `seed.sh` (upserted via the
+`(tenantId, eventName, channel, locale)` unique key).
+
+**Hindi:** approved `*_hindi_message_new` SIDs also exist on the
+account. They are NOT wired yet — the producer emits only the default
+locale, and the HI templates' `{{n}}` order must be re-verified via the
+Content API before adding `hi_IN` rows. Tracked as a follow-up.
 
 For **SMS** (Twilio numbers configured as SMS-capable), `contentSid`
 stays absent — the bridge renders the body from
@@ -82,10 +91,25 @@ For **WhatsApp sandbox** testing: the recipient must first send
 `join <code>` to the Twilio sandbox number (opens a 24h window).
 After that any freeform message including the workflow body lands.
 
-## OTP.SEND row
+> **Known content nuance:** `data.serviceName` is the PGR
+> `serviceCode`, not its localized display label, so it lands in slot
+> `{{1}}` as a code. Resolving it to a display name needs a
+> localization lookup in the producer — tracked separately, not a
+> wiring bug.
 
-The `OTP.SEND` event is published by the new `otp-publisher` service
-(see `local-setup/scripts/otp-publisher/`) when the SPA citizen-login
-flow calls `/user-otp/v1/_send`. The TemplateBinding row routes it to
-the `otp-send` workflow registered in `novu-bridge-endpoint`. See
-that service's README for the publisher chain.
+## OTP.SEND row — intentionally NOT wired
+
+The `OTP.SEND` row is kept on the **hardcoded OTP path** for now: no
+`contentSid`, `channel: sms`, not routed to Twilio. Reasons:
+
+- No `twilio/authentication` (or any OTP) Content template exists on
+  the account — verified via the Content API. WhatsApp out-of-window
+  OTP is therefore impossible until one is created + Meta-approved.
+- SMS-OTP needs the novu-bridge channel-aware fix (CCRS #43) **and**
+  an SMS-capable sender (the account's owned `+1` number, not the
+  WhatsApp-only sender) before it can be turned on.
+
+Revisit once #43 lands and an SMS sender / authentication template is
+available. The `otp-publisher` service
+(`local-setup/scripts/otp-publisher/`) and the `otp-send` workflow
+remain in place for that future cut-over.
