@@ -33,12 +33,32 @@ The Java `novu-bridge` service consumes Kafka events from
 | `data/provider-details.json`   | 1 record per provider — Twilio sender + credentials |
 | `seed.sh`                      | **Upsert** seeder. Authenticates, registers schemas, creates-or-updates records via config-service |
 
+## Tenant scoping — seed at the tenant the PGR events carry
+
+**Critical:** `novu-bridge` resolves `TemplateBinding` / `ProviderDetail`
+by **exact** `tenantId` (config-service does no hierarchical fallback).
+The tenant on the event is whatever `pgr-services` puts in
+`service.getTenantId()` — i.e. the tenant the complaint was *filed
+under*, not necessarily the city tenant.
+
+On a single-city deployment the citizen UI files complaints under the
+**root/citizen tenant** (e.g. `ke`), not the city tenant (`ke.bomet`).
+Seeding only `ke.bomet` makes every real complaint fail with
+`CONFIG_NOT_RESOLVED` even though the stack is otherwise correct
+(observed on Bomet 2026-05-16). Seed at the tenant your `_create`
+calls actually use — check `pgr-services` logs
+(`The Kafka topic for the tenantId : <X>`) or the event's `tenantId`
+on `complaints.domain.events` and seed `<X>`. Seed both root and city
+if employee-side transitions are filed under a different tenant than
+citizen APPLY.
+
 ## Wiring at deploy time
 
 The Ansible playbook calls `seed.sh` once per tenant after
 `tenant_bootstrap` succeeds and the operator has populated their
 Twilio creds (`twilio_account_sid`, `twilio_auth_token`, `twilio_from`
-in `host_vars/<tenant>.yml`).
+in `host_vars/<tenant>.yml`). Pass the **event tenant** as `TENANT`
+(see "Tenant scoping" above).
 
 `seed.sh` is a true **upsert**, not create-only. On a re-run,
 config-service rejects a second `_create` for the same x-unique tuple
