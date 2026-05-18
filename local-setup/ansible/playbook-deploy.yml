@@ -4,7 +4,11 @@
   # comes from inventory/host_vars/<host>.yml; defaults from group_vars/.
   # Run via: ./deploy.sh <tenant>  (NOT `ansible-playbook` directly).
   hosts: digit
-  become: true
+  # Linux targets: become root for apt/systemd/host-nginx/etc.
+  # macOS thin path (ansible_connection: local): no privileged host
+  # tasks run (all gated off on Darwin), and become would force sudo
+  # prompts + root-owned ~/digit. So become=false on Darwin.
+  become: "{{ ansible_system != 'Darwin' }}"
 
   # Apple-Silicon Macs must pull the amd64 images under Rosetta. omit on
   # Linux -> no env change, zero impact on Bomet/naipepea.
