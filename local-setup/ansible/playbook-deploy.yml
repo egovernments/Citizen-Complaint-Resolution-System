@@ -848,6 +848,34 @@
       changed_when: true
       when: ansible_system == "Darwin"
 
+    # converge#2 above (mac-stack-up down+up) recreated the openbao
+    # container, which comes back SEALED — the earlier unseal ran before
+    # this recreate. Without re-unsealing, the final "OpenBao unsealed"
+    # validation 503s (sealed/standby). Darwin only: on Linux the
+    # post-OpenBao recreate is a plain up -d that doesn't recreate openbao.
+    - name: "OpenBao — wait for API again after converge#2 (Darwin)"
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18200/v1/sys/seal-status
+        status_code: [200]
+      register: bao_seal_status_post
+      retries: 24
+      delay: 5
+      until: bao_seal_status_post.status == 200
+      when: ansible_system == "Darwin"
+
+    - name: "OpenBao — re-unseal after converge#2 if sealed (Darwin)"
+      when:
+        - ansible_system == "Darwin"
+        - bao_seal_status_post.json.sealed | default(true)
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18200/v1/sys/unseal
+        method: POST
+        body_format: json
+        body:
+          key: "{{ bao_unseal_key }}"
+        status_code: [200]
+      no_log: true
+
     - name: "OpenBao — show access info"
       ansible.builtin.debug:
         msg: |
