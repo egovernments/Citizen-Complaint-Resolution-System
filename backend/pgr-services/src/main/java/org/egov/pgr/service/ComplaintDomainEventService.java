@@ -27,11 +27,13 @@ public class ComplaintDomainEventService {
     private static final String ENTITY_TYPE = "COMPLAINT";
     private final Producer producer;
     private final PGRConfiguration config;
+    private final UserService userService;
 
     @Autowired
-    public ComplaintDomainEventService(Producer producer, PGRConfiguration config) {
+    public ComplaintDomainEventService(Producer producer, PGRConfiguration config, UserService userService) {
         this.producer = producer;
         this.config = config;
+        this.userService = userService;
     }
 
     public void publishWorkflowTransitionEvent(ServiceRequest request, String fromState) {
@@ -210,34 +212,22 @@ public class ComplaintDomainEventService {
     }
 
     private String getAssigneeName(ServiceRequest request) {
-//        if (request.getWorkflow() != null && !CollectionUtils.isEmpty(request.getWorkflow().getAssignes())) {
-//            return request.getWorkflow().getAssignes().get(0);
-//        }
-        String role = getRoleFromProcessInstance(request);
-        if (role != null) {
-            return role;
+        org.egov.pgr.web.models.Service service = request.getService();
+        if (service != null && service.getAuditDetails() != null
+                && StringUtils.hasText(service.getAuditDetails().getLastModifiedBy())) {
+            try {
+                String roleName = userService.getFirstRoleNameByUuid(
+                        service.getAuditDetails().getLastModifiedBy(),
+                        service.getTenantId(),
+                        request.getRequestInfo()
+                );
+                if (roleName != null) return roleName;
+            } catch (Exception e) {
+                log.warn("Failed to fetch role for lastModifiedBy uuid={}",
+                        service.getAuditDetails().getLastModifiedBy(), e);
+            }
         }
         return "NA";
-    }
-
-    private String getRoleFromProcessInstance(ServiceRequest request) {
-        if (request.getService() == null || request.getService().getProcessInstance() == null) {
-            return null;
-        }
-        var state = request.getService().getProcessInstance().getState();
-        if (state == null || CollectionUtils.isEmpty(state.getActions())) {
-            return null;
-        }
-        // Pick the first non-COMMENT action's primary role
-        for (var action : state.getActions()) {
-            if ("COMMENT".equalsIgnoreCase(action.getAction())) {
-                continue;
-            }
-            if (!CollectionUtils.isEmpty(action.getRoles())) {
-                return action.getRoles().get(0);
-            }
-        }
-        return null;
     }
 
     private String getAssigneeDesignation(ServiceRequest request) {
