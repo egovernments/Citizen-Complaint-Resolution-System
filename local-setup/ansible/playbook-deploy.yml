@@ -1416,6 +1416,7 @@
     # the "Synchronize config directories" task above — no separate copy
     # step here, just reference the synced paths.
     - name: "Install Newman (Postman CLI runner)"
+      when: run_ci_tests | default(false)   # opt-in CI/extras; was ungated
       ansible.builtin.shell: |
         if ! which newman >/dev/null 2>&1; then
           npm install -g newman
@@ -1424,6 +1425,7 @@
       changed_when: "'added' in newman_install.stdout"
 
     - name: "CI — Postman digit-core-validation (every core service)"
+      when: run_ci_tests | default(false)   # opt-in CI/extras; was ungated
       ansible.builtin.shell: |
         cd {{ digit_dir }}
         newman run postman/digit-core-validation.postman_collection.json \
@@ -1433,6 +1435,7 @@
       changed_when: false
 
     - name: "CI — Postman complaints-demo (full PGR lifecycle on pg.citest)"
+      when: run_ci_tests | default(false)   # opt-in CI/extras; was ungated
       # --delay-request 2000: wait 2s between each request. The PGR
       # lifecycle is async — Create publishes to Kafka and returns 200
       # *before* egov-persister writes the row to eg_pgr_service_v2.
@@ -1470,6 +1473,7 @@
     #     stay active after rollback) — tracked separately.
     # The remaining 8 sub-tests still run and surface real failures.
     - name: "CI — install pytest + dataloader runtime deps on target"
+      when: run_ci_tests | default(false)   # opt-in CI/extras; was ungated
       ansible.builtin.pip:
         # psycopg2-binary: crs_loader._delete_boundaries_via_db uses direct
         # Postgres access to clean boundary rows (no kubectl on compose).
@@ -1478,6 +1482,7 @@
       changed_when: false
 
     - name: "CI — CRSLoader E2E (10-phase Jupyter notebook flow, throwaway tenant)"
+      when: run_ci_tests | default(false)   # opt-in CI/extras; was ungated
       ansible.builtin.shell: |
         cd {{ digit_dir }}/jupyter/dataloader
         DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }} \
@@ -1490,6 +1495,7 @@
       ignore_errors: yes
 
     - name: "CI — show CRSLoader E2E results"
+      when: run_ci_tests | default(false)   # opt-in CI/extras; was ungated
       ansible.builtin.debug:
         msg: "{{ dataloader_e2e.stdout_lines | select('match', '^(\\[[0-9]+/|   PASS|   FAIL)') | list }}"
 
@@ -1507,6 +1513,7 @@
     # breaks the deploy. Re-run with `--start-at-task=` to skip past
     # infra setup if you're iterating on the regression itself.
     - name: "CI — CRSLoader v2 regression suite (#263 fixes)"
+      when: run_ci_tests | default(false)   # opt-in CI/extras; was ungated
       ansible.builtin.shell: |
         cd {{ digit_dir }}/scripts
         DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }} \
@@ -1518,6 +1525,7 @@
       changed_when: false
 
     - name: "CI — show CRSLoader v2 regression results"
+      when: run_ci_tests | default(false)   # opt-in CI/extras; was ungated
       ansible.builtin.debug:
         msg: "{{ dataloader_regression.stdout_lines | select('match', '^(TEST:|RESULTS:|✅|❌|   PermissionError|   After |   City |   Root )') | list }}"
 
