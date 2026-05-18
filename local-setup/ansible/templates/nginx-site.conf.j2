@@ -49,7 +49,7 @@ server {
 {% endif %}
   # Grafana dashboard
   location /grafana/ {
-    proxy_pass http://127.0.0.1:{{ upstream_grafana_port }};
+    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_grafana_port }};
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -65,7 +65,7 @@ server {
   # from root. We sub_filter every layer so the browser routes everything
   # through this /status/ proxy (which strips the prefix back off).
   location /status/ {
-    proxy_pass http://127.0.0.1:{{ upstream_gatus_port }}/;
+    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_gatus_port }}/;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -96,7 +96,7 @@ server {
 {% if nginx_features.api_pgr %}
   # PGR Dashboard API (proxied to MCP server)
   location /api/pgr/ {
-    proxy_pass http://127.0.0.1:{{ upstream_mcp_port }};
+    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_mcp_port }};
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -112,7 +112,7 @@ server {
   # only safe for test deployments. The /v1/* REST shim below is
   # authenticated (Authorization: Bearer <token> or body.auth = …).
   location /mcp {
-    proxy_pass http://127.0.0.1:{{ upstream_mcp_port }};
+    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_mcp_port }};
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -128,7 +128,7 @@ server {
   # configurator + onboarding UI. Authentication is enforced inside the
   # MCP server (bearer token or body.auth credentials).
   location /v1/ {
-    proxy_pass http://127.0.0.1:{{ upstream_mcp_port }};
+    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_mcp_port }};
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -210,7 +210,7 @@ server {
   #     `http://minio:9000/` in response bodies to the public passthrough
   #     above. Accept-Encoding stripped so sub_filter sees uncompressed JSON.
   location /file-store/ {
-    proxy_pass http://127.0.0.1:{{ upstream_minio_port | default(19000) }}/;
+    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_minio_port | default(19000) }}/;
     proxy_set_header Host minio:9000;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -221,7 +221,7 @@ server {
   }
 
   location /filestore/ {
-    proxy_pass http://127.0.0.1:{{ upstream_kong_port }};
+    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_kong_port }};
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -236,7 +236,7 @@ server {
 
   # API calls go to Kong directly.
   location / {
-    proxy_pass http://127.0.0.1:{{ upstream_kong_port }};
+    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_kong_port }};
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -249,7 +249,7 @@ server {
   # Serves both /digit-ui/* (the SPA) and proxies API calls to Kong.
   # Live reloads on file save in /opt/digit-ui-esbuild.
   location / {
-    proxy_pass http://127.0.0.1:{{ upstream_esbuild_port }};
+    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_esbuild_port }};
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
