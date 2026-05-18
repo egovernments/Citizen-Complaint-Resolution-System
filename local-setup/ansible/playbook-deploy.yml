@@ -825,12 +825,28 @@
         mode: '0600'            # tighten — was 0644 from the template; secrets bump to 0600
       no_log: true
 
-    - name: "Recreate services with the new env (no-op if secrets unchanged)"
+    - name: "Recreate services with the new env (Linux/Debian)"
       ansible.builtin.shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d
       args:
         chdir: "{{ digit_dir }}"
       register: post_secrets_recreate
       changed_when: "'Recreated' in post_secrets_recreate.stdout or 'Started' in post_secrets_recreate.stdout"
+      when: ansible_system != "Darwin"
+
+    # OpenBao wrote secrets into .env → compose recreates the JVM
+    # containers, which cold-start under Rosetta and trip the same
+    # depends_on: service_healthy timeout as the initial start. Reuse the
+    # converge helper (down --remove-orphans + up -d loop) so this second
+    # up -d also settles instead of aborting "dependency failed to start".
+    - name: "Recreate services with the new env (macOS/Rosetta — converge loop)"
+      ansible.builtin.command: >-
+        bash {{ playbook_dir }}/files/mac-stack-up.sh
+        "{{ digit_dir }}"
+        "{{ compose_profiles }}"
+        {{ compose_files }}
+      register: post_secrets_recreate_mac
+      changed_when: true
+      when: ansible_system == "Darwin"
 
     - name: "OpenBao — show access info"
       ansible.builtin.debug:
