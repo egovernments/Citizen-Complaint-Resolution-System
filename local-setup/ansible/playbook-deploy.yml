@@ -1293,9 +1293,14 @@
           - "OpenBao:               unsealed + initialized"
           - "===================================="
 
+    # mcp_health is only registered by "Wait for digit-mcp health", which
+    # is gated on enable_mcp. With MCP off (Mac / off-VPC) that task is
+    # skipped, so mcp_health is undefined — gate this status line the same
+    # way (consistent with the other enable_mcp-gated MCP tasks).
     - name: Show MCP health status
       debug:
         msg: "DIGIT-MCP: {{ 'HEALTHY' if mcp_health.rc == 0 else 'UNHEALTHY (non-critical)' }}"
+      when: enable_mcp | default(false)
 
     # ==================== Wait for Loki ====================
     - name: Wait for Loki health (up to 2 min)
