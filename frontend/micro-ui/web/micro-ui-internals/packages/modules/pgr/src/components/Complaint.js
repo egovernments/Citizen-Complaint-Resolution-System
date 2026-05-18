@@ -84,7 +84,7 @@ const Complaint = ({ data, path }) => {
 
         {/* Date */}
         <div style={{ fontSize: "16px", color: "#505A5F", marginBottom: "14px", display: "flex", alignItems: "center", gap: "6px" }}>
-          <span>{formattedDate}</span>
+          <strong>{t(`${LOCALIZATION_KEY.CS_COMMON}_DATE`)}:</strong> {formattedDate}
         </div>
 
         {/* Complaint No */}
