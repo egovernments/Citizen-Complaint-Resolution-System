@@ -310,7 +310,7 @@ services:
       OTEL_LOGS_EXPORTER: none
       # heap-tuned via JAVA_OPTS by patch-jvm-heaps.py for egov-indexer
       JAVA_OPTS: "-Xms192m -Xmx512m"
-      JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar
+      JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
     ports:
     - 18095:8080
     healthcheck:
@@ -376,7 +376,7 @@ services:
       OTEL_METRICS_EXPORTER: otlp
       OTEL_LOGS_EXPORTER: none
       JAVA_OPTS: -Xms256m -Xmx256m
-      JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar
+      JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
     ports:
     - 18097:8080
     healthcheck:
@@ -428,7 +428,7 @@ services:
       EGOV_MDMS_SEARCH_ENDPOINT: /mdms-v2/v1/_search
       EGOV_STATE_LEVEL_TENANT_ID: pg
       STATE_LEVEL_TENANT_ID: pg.citya
-      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar
+      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
     ports:
     - 11234:1234
     healthcheck:
@@ -476,7 +476,7 @@ services:
       OTEL_SERVICE_NAME: mdms-backend
       OTEL_METRICS_EXPORTER: otlp
       OTEL_LOGS_EXPORTER: none
-      JAVA_TOOL_OPTIONS: -Xms512m -Xmx1024m -javaagent:/otel/opentelemetry-javaagent.jar
+      JAVA_TOOL_OPTIONS: -Xms512m -Xmx1024m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
     healthcheck:
       # Check Spring Boot health - Flyway runs before app context starts, so health implies migrations done
       test: ["CMD-SHELL", "wget -qO- http://localhost:8094/mdms-v2/health >/dev/null 2>&1 || exit 1"]
@@ -550,7 +550,7 @@ services:
       OTEL_METRICS_EXPORTER: otlp
       OTEL_LOGS_EXPORTER: none
       MANAGEMENT_HEALTH_DB_ENABLED: 'false'
-      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar
+      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8088/egov-idgen/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -625,7 +625,7 @@ services:
       OTEL_SERVICE_NAME: egov-user
       OTEL_METRICS_EXPORTER: otlp
       OTEL_LOGS_EXPORTER: none
-      JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m -javaagent:/otel/opentelemetry-javaagent.jar
+      JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
       CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: 'true'
       CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE: '123456'
     healthcheck:
@@ -708,7 +708,7 @@ services:
       #   egov.wf.max.limit=100     →  EGOV_WF_MAX_LIMIT
       EGOV_WF_DEFAULT_LIMIT: '200'
       EGOV_WF_MAX_LIMIT: '200'
-      JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m -javaagent:/otel/opentelemetry-javaagent.jar
+      JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8109/egov-workflow-v2/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -832,7 +832,7 @@ services:
       OTEL_LOGS_EXPORTER: none
       OTEL_INSTRUMENTATION_JDBC_ENABLED: 'false'
       MANAGEMENT_HEALTH_DB_ENABLED: 'false'
-      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar
+      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
     ports:
     - 18081:8081
     healthcheck:
@@ -882,7 +882,7 @@ services:
       OTEL_SERVICE_NAME: egov-accesscontrol
       OTEL_METRICS_EXPORTER: otlp
       OTEL_LOGS_EXPORTER: none
-      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar
+      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
     ports:
     - 18090:8090
     healthcheck:
@@ -947,7 +947,7 @@ services:
       OTEL_SERVICE_NAME: egov-persister
       OTEL_METRICS_EXPORTER: otlp
       OTEL_LOGS_EXPORTER: none
-      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar
+      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
       # Kafka consumer concurrency — process more messages in parallel
       SPRING_KAFKA_LISTENER_CONCURRENCY: '3'
     volumes:
@@ -1002,7 +1002,7 @@ services:
       OTEL_SERVICE_NAME: egov-filestore
       OTEL_METRICS_EXPORTER: otlp
       OTEL_LOGS_EXPORTER: none
-      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar
+      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
       # MinIO/S3 storage (local S3-compatible storage for dev)
       ISS3ENABLED: 'true'
       MINIO_URL: http://minio:9000
@@ -1110,7 +1110,7 @@ services:
       OTEL_SERVICE_NAME: egov-hrms
       OTEL_METRICS_EXPORTER: otlp
       OTEL_LOGS_EXPORTER: none
-      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar
+      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
       EGOV_MDMS_HOST: http://egov-mdms-service:8094
       # Trailing slash required — HRMS concatenates host+path without separator
       EGOV_IDGEN_HOST: http://egov-idgen:8088/
@@ -1269,7 +1269,7 @@ services:
       STATE_LEVEL_TENANT_ID: pg
       EGOV_STATE_LEVEL_TENANT_ID: pg
       JAVA_OPTS: '-Xmx384m -Xms384m'
-      JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar
+      JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
       OTEL_TRACES_EXPORTER: otlp
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
