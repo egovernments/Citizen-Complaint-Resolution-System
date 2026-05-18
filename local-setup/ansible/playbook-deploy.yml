@@ -467,10 +467,29 @@
       args:
         chdir: "{{ digit_dir }}"
 
-    - name: Start DIGIT stack
+    - name: Start DIGIT stack (Linux/Debian)
       shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d
       args:
         chdir: "{{ digit_dir }}"
+      when: ansible_system != "Darwin"
+
+    # macOS/Rosetta: JVM services cold-start slower than compose's
+    # depends_on: service_healthy timeouts, so the first `up -d` aborts
+    # ("dependency failed to start") even though the containers it
+    # created keep warming and DO go healthy. A bare retry then hits
+    # leaked network endpoints ("endpoint <svc> already exists"). The
+    # helper converges by clearing only non-running leaked endpoints and
+    # re-issuing `up -d` (preserving accumulated JVM warmth — no `down`).
+    - name: "Start DIGIT stack (macOS/Rosetta — converge loop)"
+      ansible.builtin.command: >-
+        bash {{ playbook_dir }}/files/mac-stack-up.sh
+        "{{ digit_dir }}"
+        "{{ digit_dir | basename }}_egov-network"
+        "{{ compose_profiles }}"
+        {{ compose_files }}
+      register: mac_stack_up
+      changed_when: true
+      when: ansible_system == "Darwin"
 
     # If a tenant just flipped enable_search_stack: true → false, the
     # previously-running search containers (digit-elasticsearch,
