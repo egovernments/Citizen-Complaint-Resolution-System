@@ -648,6 +648,11 @@
       when: digit_ui_mode == "hmr"
 
     # ==================== Wait for MCP Server ====================
+    # Only when MCP is actually deployed. enable_mcp is false on Mac (the
+    # digit-mcp image is VPC-registry-only) and anywhere off the Hetzner
+    # VPC — without this gate the playbook hangs 2 min then fails on a
+    # service it was never asked to run. Consistent with the enable_mcp
+    # gating on the mcp-bootstrap tasks below.
     - name: Wait for digit-mcp health (up to 2 min)
       shell: curl -sf http://127.0.0.1:13101/healthz -o /dev/null
       register: mcp_health
@@ -655,6 +660,7 @@
       delay: 10
       until: mcp_health.rc == 0
       changed_when: false
+      when: enable_mcp | default(false)
 
     # ==================== OpenBao bootstrap ====================
     # Per-tenant secrets backend. Initialized once; subsequent runs
