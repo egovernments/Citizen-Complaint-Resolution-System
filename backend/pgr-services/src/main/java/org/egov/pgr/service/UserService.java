@@ -2,6 +2,7 @@ package org.egov.pgr.service;
 
 
 import org.egov.common.contract.request.RequestInfo;
+import org.egov.common.contract.request.Role;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.util.UserUtils;
 import org.egov.pgr.web.models.*;
@@ -213,6 +214,27 @@ public class UserService {
         Map<String,User> idToUserMap = users.stream().collect(Collectors.toMap(User::getUuid, Function.identity()));
 
         return idToUserMap;
+    }
+
+    /**
+     * Searches for a user by UUID (without userType restriction) and returns the name of their first role.
+     * Used to resolve the modifier's role from auditDetails.lastModifiedBy.
+     */
+    public String getFirstRoleNameByUuid(String uuid, String tenantId, RequestInfo requestInfo) {
+        if (!StringUtils.hasText(uuid) || !StringUtils.hasText(tenantId)) return null;
+
+        UserSearchRequest userSearchRequest = new UserSearchRequest();
+        userSearchRequest.setRequestInfo(requestInfo);
+        userSearchRequest.setUuid(Collections.singletonList(uuid));
+        userSearchRequest.setActive(true);
+        userSearchRequest.setTenantId(userUtils.getStateLevelTenant(tenantId));
+
+        StringBuilder uri = new StringBuilder(config.getUserHost()).append(config.getUserSearchEndpoint());
+        UserDetailResponse response = userUtils.userCall(userSearchRequest, uri);
+
+        if (response == null || CollectionUtils.isEmpty(response.getUser())) return null;
+        List<Role> roles = response.getUser().get(0).getRoles();
+        return CollectionUtils.isEmpty(roles) ? null : roles.get(0).getName();
     }
 
     /**
