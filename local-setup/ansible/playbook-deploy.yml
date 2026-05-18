@@ -1753,7 +1753,13 @@
             Playwright E2E:          exit {{ pw_rc }}
           Re-run with `--start-at-task=...` to skip past the infra setup,
           or check the per-test stdout above for the specific failure.
-      when: xlsx_rc|int != 0 or dl_rc|int != 0 or pw_rc|int != 0
+      # Only judge CI results when CI was actually requested. With
+      # run_ci_tests:false every CI sub-test skips → its *_result var is
+      # undefined → rc defaults to -1 → this would spuriously fail the
+      # play. Gate it like every other task in the CI block.
+      when:
+        - run_ci_tests | default(false)
+        - xlsx_rc|int != 0 or dl_rc|int != 0 or pw_rc|int != 0
 
   handlers:
     - name: Reload nginx
