@@ -4,6 +4,53 @@ All notable changes to this module will be documented in this file.
 # Changelog
 All notable changes to this module will be documented in this file.
 
+## [1.0.45] - 2026-05-19
+
+### Changed
+
+- **SelectImages — removed `FormStep` wrapper (`pages/citizen/Create/Steps/SelectImages.js`)**: Replaced the `<FormStep>` container with a plain centered flex `<div>`, eliminating the built-in Next/Skip navigation buttons from the image upload step so navigation is handled entirely by the parent `FormComposerV2`.
+- **Complaint images upload config — added `withoutLabel` flag (`pages/citizen/Create/steps-config/complaintsUploadimages.js`)**: Set `"withoutLabel": true` on the `SelectImages` field so the upload step renders without a field label, matching the new layout after the `FormStep` removal.
+
+---
+
+## [1.0.44] - 2026-05-18
+
+### Changed
+
+- **Complaint card — added localized "Date:" label with bold formatting (`components/Complaint.js`)**: The date display now renders `<strong>{t("CS_COMMON_DATE")}:</strong> {formattedDate}`, matching the label-first pattern used by the Complaint No row.
+- **Mobile number prefix dropdown — custom SVG arrow, dynamic width (`components/MobileNumberWithPrefix.js`)**: Replaced the plain browser-styled `<select>` with a positioned wrapper `<div>` + `appearance: none` select and an inline SVG chevron icon. Width is calculated dynamically as `calc(${selectedPrefix.length}ch + 40px)` so the control sizes to its content.
+- **WhatsApp tracking prefix dropdown — same custom arrow refactor (`components/TrackOnWhatsApp.js`)**: Applied the identical positioned-wrapper + SVG-chevron pattern to the country-code selector inside the WhatsApp popup.
+- **Boundary selection label — required asterisk indicator (`pages/citizen/Create/FormExplorer.js`, `pages/employee/CreateComplaint/createComplaintForm.js`)**: Added CSS rule `h2.boundary-selection-label::after { content: " *"; color: #d4351c; }` to both the citizen create flow and the employee create complaint form, so boundary-hierarchy headings show a red asterisk without modifying the component markup.
+
+---
+
+## [1.0.43] - 2026-05-15
+
+### Changed
+
+- **Complaint card — removed calendar emoji, bolded complaint number label (`components/Complaint.js`)**: Stripped the `📅` span from the date row and wrapped the "Complaint No:" label text in `<strong>` for improved visual hierarchy.
+- **Citizen Complaint Details — localization key dot-to-underscore sanitisation (`pages/citizen/ComplaintDetails.js`)**: Single-value detail fields now call `t((value || "").replace(/\./g, "_"))` before translation, preventing raw keys like `SOME.KEY` from painting when the catalog entry uses underscores.
+- **Previous button sizing CSS (`pages/citizen/Create/FormExplorer.js`)**: Added scoped `<style>` rule `.previous-button.digit-button-secondary { height: 2.5rem !important; min-width: 15rem; }` to ensure the previous button is consistently sized across browsers.
+- **Complaint images upload config — `subHead` instead of `label` (`pages/citizen/Create/steps-config/complaintsUploadimages.js`)**: Moved the `CS_ADDCOMPLAINT_UPLOAD_PHOTO_TEXT` string from the field-level `label` property to the step-level `subHead` property so it renders as a step subtitle rather than a field label.
+
+---
+
+## [1.0.42] - 2026-05-14
+
+### Changed
+
+- **Module component registration order fix (`src/Module.js`)**: Moved `PGRComplaintDetailsPage` and `PGRResponseCitzen` to an earlier position in `componentsToRegister` (before `PGRResponse`), correcting a registration ordering inconsistency introduced in 1.0.41.
+
+---
+
+## [1.0.41] - 2026-05-14
+
+### Changed
+
+- **Module component registration order (`src/Module.js`)**: Swapped the positions of `SelectAddress` and `SelectImages` in `componentsToRegister` to match the intended registration sequence.
+
+---
+
 ## [1.0.40] - 2026-05-14
 
 ### Fixed
