@@ -21,7 +21,19 @@ const Resolved = ({ action, nextActions,complaintDetails, ComplainMaxIdleTime=36
           );
         }
       });
-    return <CheckPoint isCompleted={isCompleted} label={t(`CS_COMMON_COMPLAINT_RESOLVED`)} customChild={<div>{actions}{customChild}</div>} />;
+    return (
+      <CheckPoint
+        isCompleted={isCompleted}
+        label={t(`CS_COMMON_COMPLAINT_RESOLVED`)}
+        customChild={
+          <div>
+            {actions}
+            {rating ? <StarRated text={t("CS_ADDCOMPLAINT_YOU_RATED")} rating={rating} /> : null}
+            {customChild}
+          </div>
+        }
+      />
+    );
   } else if (action === "RATE") {
     return (
       <CheckPoint

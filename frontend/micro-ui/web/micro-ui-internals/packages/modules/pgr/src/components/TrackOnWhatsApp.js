@@ -145,27 +145,44 @@ const TrackOnWhatsApp = ({ showPopup, onClose, onConfirm, defaultMobileNumber })
               backgroundColor: "#FFFFFF",
             }}
           >
-            <select
-              value={selectedPrefix}
-              onChange={handlePrefixChange}
-              style={{
-                border: "none",
-                borderRight: "1px solid #D6D5D4",
-                padding: "10px 8px",
-                fontSize: "16px",
-                backgroundColor: "#FAFAFA",
-                cursor: "pointer",
-                outline: "none",
-                color: "#0B0C0C",
-                fontWeight: "500",
-                minWidth: "75px",
-                appearance: "auto",
-              }}
-            >
-              {allPrefixes.map((p) => (
-                <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
+            <div style={{
+              position: "relative",
+              display: "inline-flex",
+              alignItems: "center",
+              borderRight: "1px solid #D6D5D4",
+              backgroundColor: "#FAFAFA",
+              alignSelf: "stretch",
+              flexShrink: 0,
+            }}>
+              <select
+                value={selectedPrefix}
+                onChange={handlePrefixChange}
+                style={{
+                  border: "none",
+                  padding: "0 28px 0 12px",
+                  fontSize: "16px",
+                  backgroundColor: "transparent",
+                  cursor: "pointer",
+                  outline: "none",
+                  color: "#333",
+                  fontWeight: "600",
+                  width: `calc(${selectedPrefix.length}ch + 40px)`,
+                  appearance: "none",
+                  WebkitAppearance: "none",
+                  height: "100%",
+                  zIndex: 1,
+                }}
+              >
+                {allPrefixes.map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+              <div style={{ position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", zIndex: 0 }}>
+                <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M1 1L5 5L9 1" stroke="#333" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+            </div>
             <input
               type="text"
               value={mobileNumber}
