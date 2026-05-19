@@ -6,6 +6,7 @@ export const complaintsUploadimages = {
     {
       "type": "component",
       "isMandatory": false,
+      "withoutLabel": true,
       "component": "SelectImages",
       "key": "ComplaintImagesPoint",
       "populators": {
