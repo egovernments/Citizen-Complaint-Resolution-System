@@ -244,6 +244,68 @@ server {
     proxy_read_timeout 120s;
     proxy_buffering off;
   }
+{% elif digit_ui_mode == "container" %}
+  # digit-ui in CONTAINER mode: the digit-ui container serves the SPA on
+  # :{{ upstream_esbuild_port }}. CRITICAL: only /digit-ui/* goes to that
+  # container — ALL API (/user, /egov-*, /pgr-services, ...) MUST go to
+  # Kong. The pre-fix template had NO `container` branch, so this fell
+  # into the HMR `else` and sent /user/oauth/token to
+  # :{{ upstream_esbuild_port }} (no API there) → 504 on every login.
+  location = /digit-ui {
+    return 302 /digit-ui/;
+  }
+  location /digit-ui/ {
+    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_esbuild_port }};
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 120s;
+    proxy_buffering off;
+  }
+  # Per-tenant boot config — overrides whatever was baked into the
+  # container image (else digit-ui renders as the source tenant, e.g. pg).
+  location = /digit-ui/globalConfigs.js {
+    alias {{ digit_dir }}/nginx/globalConfigs.js;
+    default_type application/javascript;
+    add_header Cache-Control "no-cache, must-revalidate" always;
+  }
+
+  # egov-filestore presigned-URL rewrite (same as static mode).
+  location /file-store/ {
+    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_minio_port | default(19000) }}/;
+    proxy_set_header Host minio:9000;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_http_version 1.1;
+    client_max_body_size 25M;
+    proxy_buffering off;
+  }
+  location /filestore/ {
+    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_kong_port }};
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Accept-Encoding "";
+    sub_filter_once off;
+    sub_filter_types application/json;
+    sub_filter 'http://minio:9000/' '{{ "https://" if (tls_enabled | default(true)) else "http://" }}{{ domain }}/file-store/';
+    client_max_body_size 25M;
+    proxy_buffering off;
+  }
+
+  # Everything else (ALL API) → Kong. THE fix for the login 504.
+  location / {
+    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_kong_port }};
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 120s;
+    proxy_buffering off;
+  }
 {% else %}
   # digit-ui in HMR mode: esbuild dev server (tmux session) on :18080.
   # Serves both /digit-ui/* (the SPA) and proxies API calls to Kong.
