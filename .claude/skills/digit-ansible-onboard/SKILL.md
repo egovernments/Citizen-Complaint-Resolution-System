@@ -5,7 +5,7 @@ description: Use when an operator says "deploy DIGIT to a new server", "set up a
 
 # DIGIT Ansible Onboard
 
-End-to-end guided onboarding for a new server (any Ubuntu 24.04 box reachable over SSH). Probes the target, asks the operator ≤ 10 questions, generates an inventory file, runs the playbook, and verifies infra. Designed so an operator who has the repo and SSH access can stand up a full DIGIT stack (services + UI + configurator) without writing YAML by hand.
+End-to-end guided onboarding for a new server — an Ubuntu 24.04 box reachable over SSH, **or macOS (Apple Silicon) locally via the thin Mac-port** (see "macOS target" below). Probes the target, asks the operator ≤ 10 questions, generates an inventory file, runs the playbook, and verifies infra. Designed so an operator who has the repo and SSH access can stand up a full DIGIT stack (services + UI + configurator) without writing YAML by hand.
 
 ## IRON LAW
 
@@ -14,6 +14,8 @@ NEVER GUESS A SECRET. NEVER FILL IN bootstrap_secrets WITHOUT ASKING THE OPERATO
 ```
 
 If a question's answer is non-trivial (a secret, a tenant code, a domain), ASK. The operator-facing UX is a small, ordered list of prompts — not an autopilot.
+
+**IRON LAW exception — db_fast_path-pinned secrets are NOT "secrets to guess".** When `db_fast_path: true`, `elasticsearch_master_password` (`asd@#$@$!132123`), `postgres_password` (`egov123`), and `minio_root_password`/`minio_root_user` (`minioadmin`) are FIXED by the prebuilt dump + compose defaults — the pg/minio volumes initialise with the compose default on the first converge *before OpenBao exists*, and OpenBao's seed is first-write-wins, so any other value makes the post-OpenBao recreate fail with `FATAL: password authentication failed for user "egov"` (cost a 10-iteration validation to pin down). Use these exact values verbatim; don't refuse-to-fill them and don't let the operator pick alternatives unless they regenerated the dump. They're config constants, not chosen secrets.
 
 ## Inputs
 
@@ -60,10 +62,26 @@ Ask **one at a time**, in order. Show the default in parentheses. Don't proceed 
 | 6 | **Country/region for PGR boundary** — e.g. `Kenya / Nairobi County / Bomet County`. | inferred from `state_tenant_id` | `pgr_boundary_country`, `pgr_boundary_region` |
 | 7 | **S3 bucket for assets** (logo, banner). Skip if no bucket yet. | empty | `asset_s3_bucket` |
 | 8 | **Enable opt-in features?** Multi-select from {`mcp`, `configurator`, `search`, `claude_code`, `ci_tests`, `db_fast_path`, `nairobi_mdms`}. | `mcp`, `configurator`, `db_fast_path`, `ci_tests` (the four that make a deploy genuinely *usable* + verified) | `enable_mcp`, `nginx_features.configurator`, `enable_search_stack`, `install_claude_code`, `run_ci_tests`, `db_fast_path`, `requires_nairobi_mdms` |
-| 9 | **OpenBao master password** — used to encrypt the dump's symmetric keys. The CCRS fast-path dump is locked to `asd@#$@$!132123`. Use that unless you regenerated the dump. | `asd@#$@$!132123` | `bootstrap_secrets.elasticsearch_master_password` |
-| 10 | **SSH alias / `user@host`** for ansible to reach the target. | derived from `ssh <alias>` config — verify the alias works | `ansible_host` |
+| 9 | **db_fast_path-pinned secrets.** When `db_fast_path: true` (the default), THREE `bootstrap_secrets` are pinned to the dump/compose defaults — they are NOT free choices and a custom value silently breaks the deploy (see "IRON LAW exception" below). Confirm the operator understands, don't invent. | `elasticsearch_master_password: asd@#$@$!132123`, `postgres_password: egov123`, `minio_root_password: minioadmin` (+ `minio_root_user: minioadmin`) | `bootstrap_secrets.{elasticsearch_master_password,postgres_password,minio_root_password,minio_root_user}` |
+| 10 | **Target reach.** Linux: SSH alias / `user@host` (verify `ssh <alias>` works). **macOS**: not SSH — set `ansible_connection: local` (see "macOS target" below). | Linux: from ssh config · macOS: `localhost` + `ansible_connection: local` | `ansible_host`, `ansible_connection` |
 
 After asking all 10, summarise the answers back and confirm before writing the file.
+
+### macOS target (thin Mac-port)
+
+macOS (Apple Silicon) is a first-class target as of the thin Mac-port (validated end-to-end: `./deploy.sh` → `PLAY RECAP failed=0`, configurator + digit-ui served, employee login works). The old "Mac → spin up an Ubuntu VM" guidance is obsolete. Differences from the Linux/SSH path:
+
+- **Probe, not SSH**: instead of the Step-1 SSH probe, verify locally — Docker Desktop **or OrbStack running with Rosetta enabled**, and **≥ 40 GB free in the Docker VM** (full stack + db_fast_path dump; a 30 GB VM PANICs Postgres with "no space left").
+- **host_vars additions** (the playbook is OS-gated; these only matter on Darwin):
+  - `ansible_host: localhost`, `ansible_connection: local`
+  - `deploy_become: false` (no privileged host tasks run on Darwin; `become:true`+local would force sudo prompts / root-own `~/digit`)
+  - `docker_default_platform: linux/amd64` (Rosetta amd64 pulls)
+  - `digit_ui_mode: container` (the digit-ui container serves the SPA; no host-node esbuild on Mac)
+  - `enable_mcp: false` (MCP image is VPC-only — mandatory off-VPC)
+  - `nginx_features.configurator: true` + build the dist first: from a `digit-configurator` clone on `main`, `npx vite build --base=/configurator/` (NOT `npm run build` — `tsc -b` has blocking type errors) and drop `dist/*` into `{{ digit_dir }}/configurator` (the Mac nginx container bind-mounts it).
+  - `bootstrap_secrets`: the Q9-pinned values (egov123 / minioadmin / asd@#$@$!132123).
+- **Deploy behaviour**: `./deploy.sh <tenant>` is genuinely one-shot and idempotent. Under Rosetta it self-converges (two passes; `mac-stack-up.sh`), so it's slow — **~25–35 min** — but unattended. Stream only at task boundaries.
+- **Endpoints**: served via the Mac `digit-nginx` container at `http://localhost/configurator/` and `/digit-ui/` (port from `nginx_host_port`, default 80).
 
 ### Step 4 — Write `host_vars/<tenant>.yml`
 
@@ -82,7 +100,7 @@ Common substitutions:
 - `enable_mcp: true|false`
 - `ansible_host: <ip-or-alias>` (Q10)
 
-For `bootstrap_secrets.elasticsearch_master_password`: use Q9's value verbatim. Don't echo it back in summaries — show `***` instead.
+For the Q9-pinned `bootstrap_secrets` under `db_fast_path: true`, set all of them verbatim — `elasticsearch_master_password: asd@#$@$!132123`, `postgres_password: egov123`, `minio_root_user: minioadmin`, `minio_root_password: minioadmin`. These are dump/compose constants (see IRON LAW exception); a custom value here is the single most common cause of a deploy that comes up then fails the post-OpenBao recreate. Don't echo them in summaries — show `***`.
 
 ### Step 5 — Deploy
 
@@ -109,7 +127,7 @@ MDMS StateInfo:        non-empty
 OpenBao:               unsealed + initialized
 ```
 
-Anything `FAIL` or `SKIPPED` should be flagged to the operator with the exact failing task name and the host_vars key that probably caused it.
+Anything `FAIL` should be flagged to the operator with the exact failing task name and the host_vars key that probably caused it. `SKIPPED` is only a problem if the operator *enabled* that feature — e.g. `MCP /mcp: SKIPPED (disabled)` is **expected and correct** when `enable_mcp: false` (the norm on Mac / off-VPC), not a failure.
 
 If `run_ci_tests: true` was set in Q8, also report the Newman + regression suite results. Newman should be 16/16 (digit-core-validation + complaints-demo); CRSLoader v2 regression should be 11/11. Anything less is a real regression — point to the corresponding test name.
 
