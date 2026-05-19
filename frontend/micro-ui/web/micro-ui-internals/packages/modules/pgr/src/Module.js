@@ -30,6 +30,26 @@ import MobileNumberWithPrefix from "./components/MobileNumberWithPrefix";
 
 export const PGRReducers = getRootReducer;
 
+// Inject PGR UI overrides into document.head once at module import time, so
+// they apply on the very first paint and survive page refreshes (a JSX <style>
+// element inside the component tree can race with the toast / inbox mount on
+// refresh and miss the first paint).
+if (typeof document !== "undefined" && !document.getElementById("pgr-ui-overrides")) {
+  const style = document.createElement("style");
+  style.id = "pgr-ui-overrides";
+  style.textContent = `
+    .digit-toast-success,
+    .digit-toast-success.animate {
+      bottom: 8rem !important;
+    }
+    .digit-inbox-search-wrapper {
+      max-width: 100%;
+      overflow-x: auto;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 export const PGRModule = ({ stateCode, userType, tenants }) => {
   const { path, url } = useRouteMatch();
   const tenantId = Digit.ULBService.getCurrentTenantId();
@@ -102,16 +122,17 @@ const componentsToRegister = {
   PGRAssigneeComponent: AssigneeComponent,
   PGRActionUploadComponent: ActionUploadComponent,
   PGRSearchInbox,
+  PGRComplaintDetailsPage: ComplaintDetailsPage,
+  PGRResponseCitzen: ResponseCitizen,
   PGRResponse: Response,
-  PGRCreateComplaint: CreateComplaint,
   PGRBreadCrumbs: BreadCrumbs,
   PGRComplaintsList: ComplaintsList,
-  PGRComplaintDetailsPage: ComplaintDetailsPage,
-  PGRSelectRating: SelectRating,
-  PGRResponseCitzen: ResponseCitizen,
+  PGRCreateComplaint: CreateComplaint,
+ 
   CreatePGRFlow: CreatePGRFlow,
-  SelectAddress,
+  PGRSelectRating: SelectRating,
   SelectImages,
+  SelectAddress,
   GeoLocations,
   PGRTrackOnWhatsApp: TrackOnWhatsApp,
   PGRComplaint: Complaint,
