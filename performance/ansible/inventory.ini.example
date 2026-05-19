@@ -1,0 +1,15 @@
+# Copy to inventory.ini and fill in your machine IPs
+# ansible/inventory.ini is gitignored
+
+[dev]
+<DEV_IP> ansible_user=ubuntu ansible_ssh_private_key_file=keys/docker-compose.pem
+
+[prod]
+<PROD_IP> ansible_user=ubuntu ansible_ssh_private_key_file=keys/docker-compose.pem
+
+[targets:children]
+dev
+prod
+
+[all:vars]
+ansible_ssh_common_args='-o StrictHostKeyChecking=no'

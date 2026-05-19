@@ -1,0 +1,67 @@
+# CPU Profile: 2 vCPU total budget
+# Use as: docker compose -f docker-compose.deploy.yaml -f profiles/cpu-2.yml up -d
+services:
+  postgres-db:
+    cpus: 0.40
+  pgbouncer:
+    cpus: 0.05
+  redpanda:
+    cpus: 0.25
+  elasticsearch:
+    cpus: 0.25
+  kong:
+    cpus: 0.15
+  redis:
+    cpus: 0.05
+  keycloak:
+    cpus: 0.10
+  minio:
+    cpus: 0.03
+  pgr-services:
+    cpus: 0.10
+  egov-workflow-v2:
+    cpus: 0.08
+  egov-user:
+    cpus: 0.08
+  egov-persister:
+    cpus: 0.08
+  mdms-backend:
+    cpus: 0.04
+  egov-mdms-service:
+    cpus: 0.01
+  egov-idgen:
+    cpus: 0.03
+  egov-accesscontrol:
+    cpus: 0.03
+  egov-localization:
+    cpus: 0.03
+  boundary-service:
+    cpus: 0.03
+  egov-enc-service:
+    cpus: 0.03
+  egov-indexer:
+    cpus: 0.05
+  inbox:
+    cpus: 0.03
+  egov-filestore:
+    cpus: 0.02
+  egov-hrms:
+    cpus: 0.02
+  token-exchange-svc:
+    cpus: 0.02
+  default-data-handler:
+    cpus: 0.01
+  egov-bndry-mgmnt:
+    cpus: 0.01
+  otel-collector:
+    cpus: 0.03
+  tempo:
+    cpus: 0.02
+  grafana:
+    cpus: 0.02
+  gatus:
+    cpus: 0.01
+  digit-ui:
+    cpus: 0.01
+  jupyter:
+    cpus: 0.01
