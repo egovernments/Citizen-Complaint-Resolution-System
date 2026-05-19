@@ -446,6 +446,12 @@ const CreateComplaintForm = ({
 
   return (
     <React.Fragment>
+      <style>{`
+        h2.boundary-selection-label::after {
+          content: " *";
+          color: #d4351c;
+        }
+      `}</style>
       <FormComposerV2
         onSubmit={onFormSubmit}
         defaultValues={sessionFormData}

@@ -24,10 +24,6 @@ import MobileNumberWithPrefix from "../../../components/MobileNumberWithPrefix";
 const CreateComplaint = () => {
   const { t } = useTranslation();
 
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
-
   // Get current ULB tenant ID
   const tenantId = Digit.ULBService.getCurrentTenantId();
   // Manage form session state using sessionStorage under key "COMPLAINT_CREATE"
@@ -48,6 +44,10 @@ const CreateComplaint = () => {
       enable: true,
     }
   );
+
+  // Scroll-to-top guard is handled globally in public/index.html — it
+  // monkey-patches Element.prototype.scrollIntoView to no-op when the target
+  // is a @egovernments/digit-ui-components Dropdown root (the buggy element).
 
   // Fetch the list of service definitions (e.g., complaint types) for current tenant
   //  const serviceDefs = Digit.Hooks.pgr.useServiceDefs(tenantId, "PGR");

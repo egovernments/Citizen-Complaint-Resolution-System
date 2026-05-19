@@ -4,6 +4,158 @@ All notable changes to this module will be documented in this file.
 # Changelog
 All notable changes to this module will be documented in this file.
 
+## [1.0.45] - 2026-05-19
+
+### Changed
+
+- **SelectImages — removed `FormStep` wrapper (`pages/citizen/Create/Steps/SelectImages.js`)**: Replaced the `<FormStep>` container with a plain centered flex `<div>`, eliminating the built-in Next/Skip navigation buttons from the image upload step so navigation is handled entirely by the parent `FormComposerV2`.
+- **Complaint images upload config — added `withoutLabel` flag (`pages/citizen/Create/steps-config/complaintsUploadimages.js`)**: Set `"withoutLabel": true` on the `SelectImages` field so the upload step renders without a field label, matching the new layout after the `FormStep` removal.
+
+---
+
+## [1.0.44] - 2026-05-18
+
+### Changed
+
+- **Complaint card — added localized "Date:" label with bold formatting (`components/Complaint.js`)**: The date display now renders `<strong>{t("CS_COMMON_DATE")}:</strong> {formattedDate}`, matching the label-first pattern used by the Complaint No row.
+- **Mobile number prefix dropdown — custom SVG arrow, dynamic width (`components/MobileNumberWithPrefix.js`)**: Replaced the plain browser-styled `<select>` with a positioned wrapper `<div>` + `appearance: none` select and an inline SVG chevron icon. Width is calculated dynamically as `calc(${selectedPrefix.length}ch + 40px)` so the control sizes to its content.
+- **WhatsApp tracking prefix dropdown — same custom arrow refactor (`components/TrackOnWhatsApp.js`)**: Applied the identical positioned-wrapper + SVG-chevron pattern to the country-code selector inside the WhatsApp popup.
+- **Boundary selection label — required asterisk indicator (`pages/citizen/Create/FormExplorer.js`, `pages/employee/CreateComplaint/createComplaintForm.js`)**: Added CSS rule `h2.boundary-selection-label::after { content: " *"; color: #d4351c; }` to both the citizen create flow and the employee create complaint form, so boundary-hierarchy headings show a red asterisk without modifying the component markup.
+
+---
+
+## [1.0.43] - 2026-05-15
+
+### Changed
+
+- **Complaint card — removed calendar emoji, bolded complaint number label (`components/Complaint.js`)**: Stripped the `📅` span from the date row and wrapped the "Complaint No:" label text in `<strong>` for improved visual hierarchy.
+- **Citizen Complaint Details — localization key dot-to-underscore sanitisation (`pages/citizen/ComplaintDetails.js`)**: Single-value detail fields now call `t((value || "").replace(/\./g, "_"))` before translation, preventing raw keys like `SOME.KEY` from painting when the catalog entry uses underscores.
+- **Previous button sizing CSS (`pages/citizen/Create/FormExplorer.js`)**: Added scoped `<style>` rule `.previous-button.digit-button-secondary { height: 2.5rem !important; min-width: 15rem; }` to ensure the previous button is consistently sized across browsers.
+- **Complaint images upload config — `subHead` instead of `label` (`pages/citizen/Create/steps-config/complaintsUploadimages.js`)**: Moved the `CS_ADDCOMPLAINT_UPLOAD_PHOTO_TEXT` string from the field-level `label` property to the step-level `subHead` property so it renders as a step subtitle rather than a field label.
+
+---
+
+## [1.0.42] - 2026-05-14
+
+### Changed
+
+- **Module component registration order fix (`src/Module.js`)**: Moved `PGRComplaintDetailsPage` and `PGRResponseCitzen` to an earlier position in `componentsToRegister` (before `PGRResponse`), correcting a registration ordering inconsistency introduced in 1.0.41.
+
+---
+
+## [1.0.41] - 2026-05-14
+
+### Changed
+
+- **Module component registration order (`src/Module.js`)**: Swapped the positions of `SelectAddress` and `SelectImages` in `componentsToRegister` to match the intended registration sequence.
+
+---
+
+## [1.0.40] - 2026-05-14
+
+### Fixed
+
+- **Citizen Complaint Details — Address row double-prefixed in multi-root tenants, rendering raw codes like `ADMIN_ADMIN_SUN04 HARIBBB` (fixed upstream in `digit-ui-libraries/hooks/pgr/useComplaintDetails.js`)**:
+  - Reproducer (sandbox-demo, `HARIBBB` tenant): `/citizen/pgr/complaints/<id>` showed the Address row as two stacked lines `ADMIN_ADMIN_SUN04` / `HARIBBB`, while the equivalent employee page rendered it correctly as `Central Plaza, HARIBBB`.
+  - Root cause was the hard-coded `ADMIN_` prefix in the shared libraries hook ([`DIGIT-Frontend/micro-ui/web/micro-ui-internals/packages/libraries/src/hooks/pgr/useComplaintDetails.js:22`](DIGIT-Frontend/micro-ui/web/micro-ui-internals/packages/libraries/src/hooks/pgr/useComplaintDetails.js#L22)). In multi-root mode the hook composed the address-row locality entry as `` `ADMIN_${service.address.locality.code}` ``, but multi-root tenants like `HARIBBB` store locality codes **already prefixed** (e.g. `ADMIN_SUN04`), so the resulting i18n key was `ADMIN_ADMIN_SUN04` — no catalog entry → raw key painted. The bottom boundary-hierarchy row on the same page works fine because it reads `boundaryHierarchy.LOCALITY` (which is just `ADMIN_SUN04`) and calls `t()` on it directly, hitting the real catalog entry that renders as `Central Plaza`.
+  - Fix: removed the hard-coded `ADMIN_` from the libraries hook so the multi-root branch passes `service.address.locality.code` straight through to the row array — identical pattern to the boundary-hierarchy row that already worked. `Digit.Utils.locale.getLocalityCode(...)` is still used for non-multi-root tenants (behaviour unchanged there).
+  - Effect: any consumer of `Digit.Hooks.pgr.useComplaintDetails` — including this module's citizen `ComplaintDetailsPage` — now receives the un-prefixed locality code in `complaintDetails.details.ES_CREATECOMPLAINT_ADDRESS[1]`. The citizen page's existing `<Row>` map calls `t()` on each address-array element, which now resolves the locality entry to `Central Plaza` instead of painting raw. **The fix lives in `@egovernments/digit-ui-libraries`; this module's source only needs to consume a libraries version that includes it.** No `ES_CREATECOMPLAINT_ADDRESS` override added to `pages/citizen/ComplaintDetails.js`.
+
+- **Citizen Complaint Details — Complaint Type / Sub-Type rendered as raw `SERVICEDEFS_<CODE>` keys instead of human-readable text (`pages/citizen/ComplaintDetails.js`)**:
+  - Reproducer (sandbox-demo, `HARIBBB` tenant): `/citizen/pgr/complaints/<id>` showed rows like `Complaint Type: SERVICEDEFS_INTERNET` / `Complaint Sub-Type: SERVICEDEFS_NOINTERNET`, while the equivalent `/employee/pgr/complaint/details/<id>` rendered them correctly as `Internet` / `No internet`.
+  - Root cause — divergent resolution paths between citizen and employee:
+    - Employee `PGRDetails.js` resolves the readable strings directly from the `ServiceDefs` MDMS master via `getServiceCategoryByCode(serviceCode) → match.category || match.menuPath` and `getServiceNameByCode(serviceCode) → match.name`. Those fields are already human-readable, so the row renders correctly even with no i18n entry.
+    - Citizen `ComplaintDetails.js` relied on `Digit.Hooks.pgr.useComplaintDetails` from `digit-ui-libraries`, which builds the row values as `SERVICEDEFS_${complaintType}` / `SERVICEDEFS_${serviceCode}`. When the deployed localization catalog has no entry for that exact key (common on per-tenant deployments where service codes are tenant-specific), `t()` falls back to returning the raw key — which is what the user saw.
+  - Fix: citizen `ComplaintDetailsPage` now loads the same `RAINMAKER-PGR / ServiceDefs` MDMS master the employee page uses (via `Digit.Hooks.useCustomMDMS` with `schemaCode: "SERVICE_DEFS_MASTER_DATA"`), defines the same `getServiceCategoryByCode` / `getServiceNameByCode` helpers, and — inside the `<StatusTable>` row map — resolves the two affected rows at render time with the **exact same `t(getServiceXByCode(serviceCode, serviceDefs) || "NA")` pattern** the employee `PGRDetails` page uses for its field pairs:
+    - row `CS_ADDCOMPLAINT_COMPLAINT_TYPE` → `t(getServiceCategoryByCode(serviceCode, serviceDefs) || "NA")` (which returns `category || menuPath`)
+    - row `CS_ADDCOMPLAINT_COMPLAINT_SUB_TYPE` → `t(getServiceNameByCode(serviceCode, serviceDefs) || "NA")` (which returns `name`)
+    - The libraries-hook `SERVICEDEFS_<CODE>` value for these two keys is no longer read at all — the `.map((flag) => ...)` callback now branches on the flag and calls the MDMS helpers directly, so the citizen-side row rendering for these two rows is byte-for-byte parallel to the employee `SummaryCard` field pair definition. The early-return loader now also waits on `isMDMSLoading` so the table never paints before MDMS resolves. All other rows (Complaint No, Application Status, Description, Filed Date, Address, boundary hierarchy, attachments, map, workflow) iterate the libraries-hook output unchanged.
+  - Effect: citizen Complaint Type / Sub-Type now render the same readable strings as the employee page on every tenant, without depending on per-service-code i18n entries existing in the deployed catalog. Independent from any `SERVICEDEFS.` vs `SERVICEDEFS_` separator discrepancy in older dist artifacts — the citizen page no longer constructs that key at all for these two rows.
+
+## [1.0.39] - 2026-05-12
+
+### Fixed
+
+- **Citizen Complaint Details — Timeline inconsistent / rating missing on slow connections and non-Chrome browsers (`pages/citizen/ComplaintDetails.js`, `components/TimeLine.js`)**:
+  - Symptom (reproducible on Ubuntu / Firefox / throttled 3G): after submitting a rating the timeline sometimes painted without stars, sometimes without the synthetic "Complaint Filed" step. After "a while" it filled in. Inconsistent between page loads.
+  - Two underlying bugs:
+    1. **Stale-data flash on warm cache.** `ComplaintDetailsPage` and `WorkflowComponent` previously gated their first paint on a fixed 700ms `setTimeout` plus the hook's `isLoading`. With cached data react-query returns `isLoading=false` immediately and runs the refetch in the background. On a slow connection the 700ms timer expired *before* the refetch returned, so stale cached data painted (missing stars / wrong status) and only flipped to fresh data when the network later caught up — visible as a flash and "rating sometimes not showing."
+    2. **Mutating timeline append.** `TimeLine.js` appended a synthetic `COMPLAINT_FILED` checkpoint inside a `useEffect` by calling `timeline.push(...)` directly. Because no state update followed, the appended entry only became visible whenever some *other* trigger caused a re-render — non-deterministic on slow networks and producing the "timeline inconsistent / filed step sometimes missing" symptom.
+  - Fix:
+    - `ComplaintDetailsPage` and `WorkflowComponent` now await the Promise returned by `revalidate()` (which is `queryClient.invalidateQueries(...)` and resolves only after the matched refetches complete) and only flip `hasFreshDetails` / `hasFreshWorkflow` to true after that resolution. The fixed 700ms timer is gone. The loader stays up for exactly as long as the refetch takes, regardless of network speed — slow connections wait longer, fast/cached cases barely show the loader. Defensive fallback to `Promise.resolve()` if `revalidate()` is ever sync.
+    - `TimeLine.js` converts the timeline-append `useEffect` into a pure `useMemo` returning a new array (`augmentedTimeline`). No mutation, deterministic on every render, and re-derives whenever the underlying `timeline` reference changes — eliminating the "depends on a re-render lottery" race.
+  - Effect: rating stars and the full timeline are reliably visible on the first paint after the user navigates back from rating submission, regardless of browser or network speed. No flash of stale state, no "appears after a while" behaviour.
+
+- **Citizen Complaint Details — Stars Missing After Citizen Rates a REJECTED Complaint (`components/TimeLine.js`)**:
+  - Reproducer: employee rejects a complaint → citizen submits a rating from the timeline RATE link → complaint workflow transitions REJECTED → CLOSEDAFTERREJECTION → citizen returns to the detail page. The new "Closed after rejection" checkpoint at the top of the timeline rendered with the user's comment but **no star icons**.
+  - Root cause: `TimeLine.js` had no `case "CLOSEDAFTERREJECTION":` branch — it fell through to the `default` case which only renders a label, never the `<StarRated />` element. The happy-path equivalent (`CLOSEDAFTERRESOLUTION`) does render stars.
+  - Fix: added `case "CLOSEDAFTERREJECTION":` mirroring the existing `CLOSEDAFTERRESOLUTION` branch — renders the standard checkpoint label plus `<StarRated text={t("CS_ADDCOMPLAINT_YOU_RATED")} rating={rating} />` when a rating exists.
+  - Design choice: the `rating` prop on `case "REJECTED":` is intentionally **not** passed (it stays out of the JSX), mirroring how `resolved.js` keeps its `action === "RATE"` branch's `<StarRated />` commented out. Stars belong to the rating checkpoint above (`CLOSEDAFTERREJECTION` / `CLOSEDAFTERRESOLUTION`), not to the parent action checkpoint — passing `rating` to both produced duplicate "You Rated ★★★" rows.
+  - Effect: rating stars now show consistently on `CLOSEDAFTERREJECTION` in the rejection-path flow, symmetric with the existing `CLOSEDAFTERRESOLUTION` behaviour on the happy path. Exactly one "You Rated" row in either flow.
+
+## [1.0.38] - 2026-05-12
+
+### Fixed
+
+- **Employee Create Complaint / Inbox — Page Auto-Scrolls Downward on First Load — Proper Fix (`public/index.html` in host app; `pages/employee/CreateComplaint/index.js`, `pages/employee/PGRInbox.js`)**:
+  - The 1.0.37 fix (`useEffect`-based mount-time neutralization with an 800ms→1500ms timeout) was a misdiagnosis. The buggy `scrollIntoView` fires from inside the `Dropdown` component itself *after* MDMS resolves, so a mount-time window in the parent CreateComplaint / PGRInbox screens was racing the async smooth scroll on first load / hard reload — which is exactly the "happens on hard reload but not on cached nav" symptom users reported.
+  - Real root cause: the `Dropdown` component in `@egovernments/digit-ui-components@0.2.5` runs a mount-time `useEffect(()=>{...},[])` that calls `scrollIntoView({behavior:"smooth",block:"center",inline:"center"})` on *its own root `<div>`* (class `digit-dropdown-employee-select-wrap` / `digit-dropdown-select-wrap`) whenever `getBoundingClientRect()` reports it as off-screen. Tall PGR forms render many Dropdowns below the fold, each one scrolls the page, the last one wins. On cached internal navigation the form mounts before layout has expanded to its tall size, so the off-screen check fails and the bug is silently skipped.
+  - Fix:
+    - Removed the brittle per-screen `useEffect` workaround from `CreateComplaint/index.js` and `PGRInbox.js` (it raced async MDMS and only worked when the MDMS round-trip finished inside the timeout window).
+    - Added a host-app patch to `public/index.html` that wraps `Element.prototype.scrollIntoView`. The wrapper no-ops the call **only** when (a) the target's className matches the Dropdown root regex **and** (b) `location.pathname` matches `/employee/pgr/complaint/create` or `/employee/pgr/inbox`. Every other page and every other `scrollIntoView` call (stepper active-step, OTP focus, validation focus, etc.) passes through unchanged.
+    - Patch was added to all known host-app `index.html` files: `DIGIT-Frontend/micro-ui/web/public/index.html`, `DIGIT-Frontend/micro-ui/web/micro-ui-internals/example/public/index.html`, `Citizen-Complaint-Resolution-System/frontend/micro-ui/web/public/index.html`, `Citizen-Complaint-Resolution-System/frontend/micro-ui/web/micro-ui-internals/example/public/index.html`, `DIGIT-UI-LIBRARIES/react/example/public/index.html`. **Deployments that don't pick up this `index.html` change will still see the bug.**
+
+## [1.0.37] - 2026-05-12
+
+### Fixed
+
+- **Employee Take Action — Workflow Options Overlap Button (`pages/employee/PGRDetails.js`)**:
+  - On the complaint details page, clicking the orange "Take action" button opened the workflow options (`Assign`, `Reject`, etc.) menu so close to the button that the last option overlapped it.
+  - Fix: bumped the `actionButton`'s `menuStyles.bottom` from `40px` to `56px` so the menu floats clear of the button.
+
+- **Toast Position + Inbox Horizontal Slide on Small Screens (`Module.js`)**:
+  - At 1280x720, the bottom-centred toast (`.digit-toast-success`) sat at `bottom: 4.5rem` and overlapped the Submit footer on `/employee/pgr/complaint/create` and the bottom rows on `/employee/pgr/inbox`. Inline `style` props on the `<Toast>` component lose to the upstream CSS animation's `forwards` fill, so a normal React style override couldn't push the toast higher. Additionally the inbox grid on small screens forced the whole page to slide horizontally.
+  - Fix: at module-import time `PGRModule` now injects a `<style id="pgr-ui-overrides">` element into `document.head` with `.digit-toast-success, .digit-toast-success.animate { bottom: 8rem !important; }` and `.digit-inbox-search-wrapper { max-width: 100%; overflow-x: auto; }`. `!important` outranks the animation in the cascade, and the rule lands before any React mount so it survives refreshes.
+
+- **Citizen Complaint Summary — Section Titles Rendered as Plain Text on Deploy (`pages/citizen/ComplaintDetails.js`, `components/TimeLine.js`)**:
+  - "Complaint Details", "Attachments", "Complaint Location", and "Complaint Timeline" subheaders rendered as plain text on the sandbox deploy (typography CSS missing/lost in the deployed bundle), even though they appeared bold locally.
+  - Fix: applied inline heading styles (`fontSize: 24px, fontWeight: 700, lineHeight: 28px, color: #0b0c0c`) directly on each `<CardSubHeader>` so they render correctly without depending on external CSS being present. The timeline-wrapper's existing inline `<style>` block now also forces `font-weight: 700` on checkpoint labels so timeline statuses (e.g. "Complaint resolved") render bold instead of plain.
+
+- **Citizen Complaint Summary — Boundary Row Label Overflows Value Column (`pages/citizen/ComplaintDetails.js`)**:
+  - When a boundary level's locale key was missing (e.g. `EGOV_LOCATION_BOUNDARYTYPE_REGION`), `t()` returned the raw key. The long key overflowed the `<Row>` component's label column and visually overlapped the value (`Southwest ETPMO People's Region`).
+  - Fix: added a `labelForLevel(level)` helper. When `t(key) === key` (no translation), it falls back to a title-cased level name (`REGION` → `Region`, `WARD` → `Ward`) so the label stays short enough to align with the value column. If/when the locale key is added to MDMS later, the translated string takes precedence automatically.
+
+- **Citizen Complaint Details — Stars Missing After Rating Submission (`pages/citizen/ComplaintDetails.js`, `components/TimeLine.js`, `components/timelineInstances/resolved.js`)**:
+  - After submitting a rating, the citizen sometimes saw the timeline render without stars: the read API briefly returned stale data (cached or pre-RATE-commit), the page painted, and stars only appeared after a background revalidate landed. On slow connections / Ubuntu the original single fixed-delay retry could miss the commit entirely.
+  - Fix:
+    - `ComplaintDetailsPage` and `WorkflowComponent` now gate their first render on a `hasFreshDetails` / `hasFreshWorkflow` flag plus a 700ms minimum wait. On mount the page shows `<Loader />` while `revalidate()` runs; only after the gate clears does the page paint — so the freshly-fetched `audit.rating` is in the data on first paint, no flash of stale state.
+    - `TimeLine.js` now passes `rating` to the `Resolved` checkpoint (`index <= 1 ? rating : undefined`) — was previously commented out.
+    - `resolved.js` renders `<StarRated />` in the `RESOLVE` action branch so stars are visible under the RESOLVED checkpoint even before the workflow transitions to `CLOSEDAFTERRESOLUTION`.
+  - Effect: rating stars are reliably visible on the first paint after the user navigates back from rating submission, regardless of network speed or backend commit timing. No session-storage shadow state — single source of truth is the API.
+
+## [1.0.36] - 2026-05-11
+
+### Fixed
+
+- **Citizen Reopen — Attachment Not Visible on Complaint Details (`citizen/ReopenComplaint/AddtionalDetails.js`)**:
+  - When a citizen reopened a complaint with an attached photo, the file was only persisted on the `workflow.verificationDocuments` of the REOPEN `ProcessInstance`. The complaint's "Attachments" section (which iterates `service.documents`) never showed it, and on the employee side only a count surfaced — no preview.
+  - Fix: in `reopenComplaint()`, also append the uploaded docs (already shaped as `{ documentType, fileStoreId, documentUid, additionalDetails }` by the upload step) to `complaintDetails.service.documents`. Existing service documents (e.g. original create-time photos) are preserved via array spread; nothing is removed.
+  - Effect: reopen photos now render alongside the original complaint photos under the "Attachments" section on both citizen and employee detail pages — no timeline-render workaround needed.
+
+- **Employee Timeline — Star Rating Missing on RATE Step (`components/TimeLineWrapper.js`, `pages/employee/PGRDetails.js`)**:
+  - After a citizen submitted a star rating, the RATE step in the employee timeline showed only the action label — the star value itself was never rendered. The citizen-side `TimeLine.js` already handled this for `CLOSEDAFTERRESOLUTION`, but the new `TimelineWrapper` used on the employee `PGRDetails` page had no rating-render path.
+  - Fix:
+    - Added a `rating` prop to `TimelineWrapper` and imported the existing `StarRated` component (`Rating` from `digit-ui-react-components`).
+    - When an instance has `action === "RATE"`, the wrapper now pushes a `<StarRated>` element into that step's `subElements`. The rating value is resolved from `instance.rating` first (some backends expose it on the ProcessInstance) and falls back to the `rating` prop sourced from `service.rating`.
+    - The label uses the new key `CS_COMMON_CITIZEN_RATED` (with a plain-English `"Citizen rated "` fallback when the key isn't yet in the locale bundle) so the employee view doesn't read "You Rated".
+    - `PGRDetails.js` now passes `rating={pgrData?.ServiceWrappers?.[0]?.service?.rating}` to the wrapper.
+
+- **Employee Create Complaint — Page Auto-Scrolls Downward on Mount (`pages/employee/CreateComplaint/index.js`)**:
+  - On short laptop viewports the create-complaint page nudged ~50–100px downward when the form mounted, hiding the page header.
+  - Root cause (as understood at the time): a component inside `@egovernments/digit-ui-components` calls `element.scrollIntoView({ behavior: "smooth", block: "center" })` on mount when its element is outside the visible viewport. On a tall form that element sits below the fold, so the smooth scroll pulls the page downward. A single `window.scrollTo(0, 0)` on mount couldn't compete with the still-animating smooth scroll.
+  - Fix: temporarily neutralize `Element.prototype.scrollIntoView` (replace with a no-op) for the first 800 ms after mount so the library's call becomes a no-op; pin `window.scrollTo(0, 0)` on mount and on the next animation frame; disable browser scroll restoration for the page.
+  - **Note:** this workaround did not survive first-load / hard-reload because the offending Dropdown mount runs *after* MDMS resolves, often outside the 800ms window. Superseded by the proper fix in 1.0.38.
+
 ## [1.0.33] - 2026-05-10
 
 ### Fixed
@@ -16,6 +168,18 @@ All notable changes to this module will be documented in this file.
 - **PGR Inbox — Console flooded with `selectionHandler is not defined or is not a function` (`UICustomizations.js`)**:
   - Upstream `ResultsDataTableWrapper` calls `configModule?.selectionHandler` (and `actionSelectHandler`, `linkColumnHandler`) unconditionally on every table update and `console.error`s when they are missing. PGR doesn't use row selection or row actions, but the warnings still flooded the console on every sort/render.
   - Fix: declared no-op `selectionHandler`, `actionSelectHandler`, `linkColumnHandler` in `UICustomizations.PGRInboxConfig`.
+
+- **Local Dev Proxy — Inbox Search returning HTML instead of JSON (`web/src/setupProxy.js`)**:
+  - PGR employee inbox search was failing locally because `/inbox/v2/_search` was not in `setupProxy.js`'s forwarded-path list. Webpack-dev-server's static handler was returning `index.html` instead of forwarding to the backend, causing JSON parse failures and an empty inbox.
+  - Fix: added `/inbox` to the proxied paths so all `/inbox/*` calls are forwarded to `REACT_APP_PROXY_URL`. Prod was unaffected (gateway handles it directly).
+
+### Changed
+
+- **Employee Action Modal — Upload Component (`ActionUploadComponent.js`)**:
+  - Replaced the bulky `ImageUploadHandler` (camera icon + large dropzone) with a compact custom uploader: a small "+ Add file" dashed button (DIGIT orange) and file-name chips with × remove buttons.
+  - Removed the duplicate "Attachments" label — the FormComposer's outer field label was already rendering it; the inner one is replaced with a one-line helper text ("Add screenshots or documents (max 2MB each)").
+  - Added a `tr(key, fallback)` helper so untranslated keys (`CS_COMMON_ADD_FILE`, `CS_COMMON_UPLOADING`, `CS_COMMON_REMOVE`, etc.) fall back to plain English instead of leaking the raw key into the UI.
+  - Maintains the original `Digit.UploadServices.Filestorage` contract — emits `fileStoreId[]` via `onSelect(config.key, ids)` so the form integration is unchanged. Supports JPG, PNG, and PDF up to 2MB; shows inline error for oversize files and an "Uploading…" state.
 
 ## [1.0.32] - 2026-05-07
 

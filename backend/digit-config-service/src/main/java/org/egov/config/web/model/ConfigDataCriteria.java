@@ -28,7 +28,7 @@ public class ConfigDataCriteria {
     private String schemaCode;
 
     @JsonProperty("criteria")
-    private Map<String, Object> criteria;
+    private Map<String, String> criteria;
 
     @JsonProperty("isActive")
     private Boolean isActive;

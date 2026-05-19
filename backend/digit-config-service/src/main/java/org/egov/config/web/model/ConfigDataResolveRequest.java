@@ -41,6 +41,6 @@ public class ConfigDataResolveRequest {
         private String tenantId;
 
         @JsonProperty("criteria")
-        private Map<String, Object> criteria;
+        private Map<String, String> criteria;
     }
 }

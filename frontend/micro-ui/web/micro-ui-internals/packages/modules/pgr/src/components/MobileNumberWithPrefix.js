@@ -178,29 +178,45 @@ var MobileNumberWithPrefix = function (componentProps) {
           height: "2.5rem",
         }}
       >
-        <select
-          value={selectedPrefix}
-          onChange={handlePrefixChange}
-          disabled={disable}
-          style={{
-            border: "none",
-            borderRight: localError ? "2px solid #d4351c" : "1px solid #464646",
-            padding: "0 8px",
-            fontSize: "16px",
-            backgroundColor: "#EEEEEE",
-            cursor: disable ? "not-allowed" : "pointer",
-            outline: "none",
-            color: "#0B0C0C",
-            fontWeight: "500",
-            minWidth: "75px",
-            height: "100%",
-            appearance: "auto",
-          }}
-        >
-          {allPrefixes.map(function (p) {
-            return <option key={p} value={p}>{p}</option>;
-          })}
-        </select>
+        <div style={{
+          position: "relative",
+          display: "inline-flex",
+          alignItems: "center",
+          borderRight: "1px solid #464646",
+          backgroundColor: "#EEEEEE",
+          height: "100%",
+          flexShrink: 0,
+        }}>
+          <select
+            value={selectedPrefix}
+            onChange={handlePrefixChange}
+            disabled={disable}
+            style={{
+              border: "none",
+              padding: "0 28px 0 12px",
+              fontSize: "16px",
+              backgroundColor: "transparent",
+              cursor: disable ? "not-allowed" : "pointer",
+              outline: "none",
+              color: "#333",
+              fontWeight: "600",
+              width: `calc(${selectedPrefix.length}ch + 40px)`,
+              height: "100%",
+              appearance: "none",
+              WebkitAppearance: "none",
+              zIndex: 1,
+            }}
+          >
+            {allPrefixes.map(function (p) {
+              return <option key={p} value={p}>{p}</option>;
+            })}
+          </select>
+          <div style={{ position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", zIndex: 0 }}>
+            <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M1 1L5 5L9 1" stroke="#333" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+        </div>
         <input
           type="text"
           value={localValue}

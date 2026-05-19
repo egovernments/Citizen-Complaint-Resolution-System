@@ -676,7 +676,13 @@ const PGRDetails = () => {
                     inline: false,
                     type: "custom",
                     renderCustomContent: () => (
-                      <TimelineWrapper isWorkFlowLoading={isWorkflowLoading} workflowData={workflowData} businessId={id} labelPrefix="WF_PGR_" />
+                      <TimelineWrapper
+                        isWorkFlowLoading={isWorkflowLoading}
+                        workflowData={workflowData}
+                        businessId={id}
+                        labelPrefix="WF_PGR_"
+                        rating={pgrData?.ServiceWrappers?.[0]?.service?.rating}
+                      />
                     ),
                   },
                 ],
@@ -699,7 +705,7 @@ const PGRDetails = () => {
               isSearchable
               onClick={function noRefCheck() { }}
               menuStyles={{
-                bottom: "40px",
+                bottom: "56px",
               }}
               isDisabled={getNextActionOptions(workflowData, businessServiceData?.BusinessServices?.[0]).length === 0}
               key="action-button"
