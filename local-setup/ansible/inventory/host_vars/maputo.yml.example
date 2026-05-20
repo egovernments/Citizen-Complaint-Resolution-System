@@ -1,0 +1,87 @@
+# Example host_vars for a macOS thin-port deploy.
+#
+# Copy this to maputo.yml (or any name; the file name becomes the tenant
+# name in `./deploy.sh <tenant>`) and adjust the marked fields. host_vars/
+# is gitignored by canonical convention except this .example and _example.yml.
+#
+# VALIDATED green 2026-05-20 on macOS/OrbStack:
+#   ok=63 changed=14 failed=0 skipped=84
+#   /egov-mdms-service/health  200
+#   /user/oauth/token (ADMIN/pg)  200 + access_token mint
+#   /configurator/  200
+#   /digit-ui/  200
+#   /status/  200
+
+# ── Mac-as-local-target ──
+# These four lines + the Mac defaults baked into group_vars/all.yml
+# (digit_dir → ~/digit, configurator_www_dir → ~/digit/configurator,
+# nginx_host_port → 80) are everything the Mac path needs.
+ansible_host: localhost
+ansible_connection: local
+deploy_become: false                 # no privileged host tasks on Darwin
+docker_default_platform: linux/amd64 # Apple-Silicon pulls amd64 under Rosetta
+domain: localhost
+tls_enabled: false
+
+# ── Tenancy ──
+# Keep state_root: pg for the base validation — db_fast_path ships
+# pg/statea only. New tenants (mz/mz.maputo/etc.) need MCP `tenant_bootstrap`
+# to seed them first; until that lands, leave at pg. With MCP off, a
+# state_root other than pg makes egov-enc-service crash-loop at boot
+# trying to fetch keys for a tenant that doesn't exist.
+state_root: pg
+state_tenant_id: pg
+boot_tenant: pg
+tenant_id: pg.citya
+map_center: { lat: -25.9692, lng: 32.5732 }
+login_tenant_allowlist: [ pg ]
+employee_module_denylist: [ IM ]
+
+# Country UI config — pick or replace these per real city. Defaults below
+# are India (matches pg's seed data).
+pgr_boundary_highest_level: "City"
+pgr_boundary_lowest_level: "Locality"
+boundary_type: "Locality"
+core_mobile_configs:
+  mobilePrefix: "+91"
+  mobileNumberPattern: "^[6-9][0-9]{9}$"
+  mobileNumberLength: 10
+  mobileNumberAllowedStartingCharacters: ["6","7","8","9"]
+  mobileNumberErrorMessage: "CORE_COMMON_MOBILE_ERROR"
+asset_s3_bucket: ""
+footer_logo_url: ""
+footer_bw_logo_url: ""
+
+# ── digit-ui: container serves the SPA on Mac ──
+digit_ui_mode: container
+
+# ── Opt-ins ──
+# enable_mcp: false — ghcr.io/chakshugautam/digit-mcp is linux/arm64 only;
+# Mac forces linux/amd64 for JVMs. Multi-arch MCP image is upstream-fix
+# territory. Flip to true once that's resolved AND nginx_features.mcp too.
+enable_mcp: false
+enable_search_stack: false
+enable_novu: false
+requires_nairobi_mdms: false
+db_fast_path: true                   # required for fresh installs
+run_ci_tests: false
+install_claude_code: false
+
+# ── nginx features ──
+nginx_features:
+  brand_assets: false
+  configurator: true                 # /configurator/ — DIGIT Studio
+  configurator_caching: false
+  status: true                       # /status/ — Gatus health dashboard
+  api_pgr: false
+  mcp: false                         # paired with enable_mcp:false
+
+# ── Secrets (db_fast_path-pinned; LOCAL DEV ONLY — never reuse) ──
+secrets_path: kv/digit/maputo
+bootstrap_secrets:
+  postgres_password: egov123
+  mcp_db_password: egov123
+  minio_root_user: minioadmin
+  minio_root_password: minioadmin
+  elasticsearch_master_password: "asd@#$@$!132123"  # db_fast_path-pinned
+  egov_hrms_default_password: "eGov@123"
