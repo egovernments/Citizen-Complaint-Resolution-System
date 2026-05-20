@@ -52,10 +52,11 @@
       changed_when: stop_digit_ui.stdout == "stopped"
       when: digit_ui_mode == "hmr"
 
-    # Both digit_ui_mode values (hmr and static) need the digit-ui-esbuild
-    # source on disk — HMR runs `node esbuild.dev.js` from it, static
-    # builds via `node esbuild.build.js`. Make sure it's there. Idempotent:
-    # `git` module no-ops when the working tree already matches origin.
+    # `static` and `hmr` modes need the digit-ui-esbuild source on disk —
+    # HMR runs `node esbuild.dev.js` from it, static builds via
+    # `node esbuild.build.js`. `container` mode skips this entirely:
+    # digit-ui ships its dist baked in. Also gated off Darwin: /opt isn't
+    # writable under become:false, and Mac always runs container mode.
     - name: "digit-ui — ensure /opt/digit-ui-esbuild repo is present and current"
       ansible.builtin.git:
         repo: "{{ digit_ui_esbuild_repo | default('https://github.com/theflywheel/digit-ui-esbuild.git') }}"
@@ -67,6 +68,9 @@
         # would otherwise block the next git pull. Force-clean keeps the
         # working tree byte-identical to origin/{branch}.
         force: yes
+      when:
+        - digit_ui_mode in ['static', 'hmr']
+        - ansible_system != 'Darwin'
 
 
   tasks:
