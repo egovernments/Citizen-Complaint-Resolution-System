@@ -32,7 +32,7 @@
 
 A `ValueFirstProviderStrategy` class already exists in the codebase but is incomplete. The main gap is that **Novu has no native ValueFirst provider**, so we need a bridging strategy. Three viable approaches are described below. **Approach A is recommended** for most teams — it is the fastest to production, requires the fewest code changes, and does not require a Novu fork.
 
-> **Manager note addressed:** A dedicated section — [How to Integrate Any New Module with ValueFirst](#how-to-integrate-any-new-module-with-valuefirst) — explains the step-by-step onboarding process for modules like PT, BPA, and Trade License, including scheduler-based patterns for modules that do not use workflow events.
+> **Note:** A dedicated section — [How to Integrate Any New Module with ValueFirst](#how-to-integrate-any-new-module-with-valuefirst) — explains the step-by-step onboarding process for modules like PT, BPA, and Trade License, including scheduler-based patterns for modules that do not use workflow events.
 
 ---
 
