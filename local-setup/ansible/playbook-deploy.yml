@@ -4,16 +4,21 @@
   # comes from inventory/host_vars/<host>.yml; defaults from group_vars/.
   # Run via: ./deploy.sh <tenant>  (NOT `ansible-playbook` directly).
   hosts: digit
-  # Linux targets: become root for apt/systemd/host-nginx/etc.
-  # macOS thin path (ansible_connection: local): no privileged host
-  # tasks run (all gated off on Darwin), and become would force sudo
-  # prompts + root-owned ~/digit. So become=false on Darwin.
-  become: "{{ ansible_system != 'Darwin' }}"
+  # Linux targets: become root for apt/systemd/host-nginx/etc (default).
+  # macOS thin path: set `deploy_become: false` in host_vars — no
+  # privileged host task runs on Darwin (all gated off), and become
+  # would force sudo prompts + root-owned ~/digit. Must be an inventory
+  # var (not a gathered fact): play-level become is evaluated before
+  # fact-gathering, so `ansible_system` is undefined here.
+  become: "{{ deploy_become | default(true) }}"
 
-  # Apple-Silicon Macs must pull the amd64 images under Rosetta. omit on
-  # Linux -> no env change, zero impact on Bomet/naipepea.
+  # Apple-Silicon Macs must pull amd64 images under Rosetta — Mac host_vars
+  # sets `docker_default_platform: linux/amd64`. Undefined on Linux ->
+  # omit -> no env change, zero impact on Bomet/naipepea. Must be an
+  # inventory var, not a gathered fact: play-level environment is
+  # evaluated before fact-gathering (ansible_system undefined here).
   environment:
-    DOCKER_DEFAULT_PLATFORM: "{{ 'linux/amd64' if ansible_system == 'Darwin' else omit }}"
+    DOCKER_DEFAULT_PLATFORM: "{{ docker_default_platform | default(omit) }}"
 
   pre_tasks:
     # digit-ui can be served two ways, both binding port 18080:
