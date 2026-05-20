@@ -1,4 +1,4 @@
-# ValueFirst WhatsApp / SMS Integration — Approach Document
+# ValueFirst & Karix SMS Integration — Approach Document
 
 **Project:** Citizen Complaint Resolution System — `novu-bridge`
 **Date:** 2026-05-20
@@ -12,27 +12,29 @@
 1. [Executive Summary](#executive-summary)
 2. [System Architecture](#system-architecture)
 3. [ValueFirst API Quick Reference](#valuefirst-api-quick-reference)
-4. [Current Implementation Status](#current-implementation-status)
-5. [Recommended Approaches](#recommended-approaches)
-   - [Approach A — ValueFirst Adapter + Novu Generic-SMS (Recommended)](#approach-a--valuefirst-adapter--novu-generic-sms-recommended)
+4. [Karix API Quick Reference](#karix-api-quick-reference)
+5. [Provider Comparison](#provider-comparison)
+6. [Current Implementation Status](#current-implementation-status)
+7. [Recommended Approaches](#recommended-approaches)
+   - [Approach A — novu-bridge Hosted Adapter (Recommended)](#approach-a--novu-bridge-hosted-adapter-recommended)
    - [Approach B — Direct Java Call (Quick Alternative)](#approach-b--direct-java-call-quick-alternative)
    - [Approach C — Native Novu Provider (Long-term)](#approach-c--native-novu-provider-long-term)
-6. [Approach Comparison](#approach-comparison)
-7. [Required Code Changes](#required-code-changes)
-8. [DLT Compliance (India Mandatory)](#dlt-compliance-india-mandatory)
-9. [How to Integrate Any New Module with ValueFirst](#how-to-integrate-any-new-module-with-valuefirst)
-10. [Module-Level Changes Required](#module-level-changes-required)
-11. [Configuration Reference](#configuration-reference)
+8. [Approach Comparison](#approach-comparison)
+9. [Required Code Changes](#required-code-changes)
+10. [DLT Compliance (India Mandatory)](#dlt-compliance-india-mandatory)
+11. [How to Integrate Any New Module](#how-to-integrate-any-new-module)
+12. [Module-Level Changes Required](#module-level-changes-required)
+13. [Configuration Reference](#configuration-reference)
 
 ---
 
 ## Executive Summary
 
-`novu-bridge` currently delivers notifications exclusively over **WhatsApp via Twilio**. This document covers how to add **ValueFirst** as a second provider, supporting both **SMS** and **WhatsApp** channels.
+`novu-bridge` currently delivers notifications exclusively over **WhatsApp via Twilio**. This document covers how to add **ValueFirst** and **Karix** as additional providers, both supporting the **SMS** channel.
 
-A `ValueFirstProviderStrategy` class already exists in the codebase but is incomplete. The main gap is that **Novu has no native ValueFirst provider**, so we need a bridging strategy. Three viable approaches are described below. **Approach A is recommended** for most teams — it is the fastest to production, requires the fewest code changes, and does not require a Novu fork.
+Neither provider has a native Novu integration. The recommended approach (Approach A) hosts a lightweight adapter endpoint for each provider **inside `novu-bridge` itself** — no separate service to deploy. Novu's `generic-sms` integration calls back into `novu-bridge`, which translates the request and forwards it to the respective provider API.
 
-> **Manager note addressed:** A dedicated section — [How to Integrate Any New Module with ValueFirst](#how-to-integrate-any-new-module-with-valuefirst) — explains the step-by-step onboarding process for modules like PT, BPA, and Trade License, including scheduler-based patterns for modules that do not use workflow events.
+> **Manager note addressed:** A dedicated section — [How to Integrate Any New Module](#how-to-integrate-any-new-module) — explains the step-by-step onboarding process for modules like PT, BPA, and Trade License, including scheduler-based patterns for modules that do not use workflow events.
 
 ---
 
@@ -59,7 +61,7 @@ PGR Module
 │    5. Resolve provider (ConfigService)              │
 │    6. Pick strategy (NovuProviderStrategyFactory)   │──► TwilioProviderStrategy
 │    7. Build payload (strategy.buildProviderConfig)  │    ValueFirstProviderStrategy (stub)
-│    8. Trigger Novu (NovuClient)                     │    VonageProviderStrategy
+│    8. Trigger Novu (NovuClient)                     │    KarixProviderStrategy (new)
 │    9. Log result (DispatchLogRepository)            │    GenericProviderStrategy
 └──────────────────────────┬──────────────────────────┘
                            │
@@ -75,6 +77,33 @@ PGR Module
                        End User
 ```
 
+### Target Flow (Approach A — novu-bridge hosted adapter)
+
+```
+Kafka
+  │
+  ▼
+novu-bridge (DispatchPipelineService)
+  │
+  │  POST /v1/events/trigger
+  ▼
+Novu API
+  │
+  ├── generic-sms (valuefirst-sms) ──► POST /novu-bridge/adapter/valuefirst/send
+  │                                         │ (inside novu-bridge)
+  │                                         │  XML + Bearer token
+  │                                         ▼
+  │                                    ValueFirst API
+  │
+  └── generic-sms (karix-sms) ──────► POST /novu-bridge/adapter/karix/send
+                                            │ (inside novu-bridge)
+                                            │  JSON + Basic Auth
+                                            ▼
+                                       Karix API
+```
+
+Novu calls back into `novu-bridge` on a dedicated adapter endpoint per provider. No separate service is deployed.
+
 **Key source files:**
 
 | File | Purpose |
@@ -82,9 +111,14 @@ PGR Module
 | `consumer/DomainEventConsumer.java` | Reads Kafka events; hands off to pipeline |
 | `service/DispatchPipelineService.java` | Orchestrates all 11 dispatch steps |
 | `service/provider/ValueFirstProviderStrategy.java` | Builds ValueFirst payload (exists, incomplete) |
+| `service/provider/KarixProviderStrategy.java` | Builds Karix payload (new) |
 | `service/provider/NovuProviderStrategyFactory.java` | Routes to correct strategy by `providerName` |
 | `service/NovuClient.java` | POSTs to Novu `/v1/events/trigger` |
 | `service/ConfigServiceClient.java` | Fetches `TemplateBinding` and `ProviderDetail` |
+| `web/controller/ValueFirstAdapterController.java` | New: adapter endpoint for ValueFirst |
+| `web/controller/KarixAdapterController.java` | New: adapter endpoint for Karix |
+| `service/sms/ValueFirstSmsClient.java` | New: token caching + XML + HTTP to ValueFirst |
+| `service/sms/KarixSmsClient.java` | New: JSON + Basic Auth HTTP to Karix |
 | `schemas/ProviderDetail.json` | MDMS schema — provider credentials per tenant |
 | `schemas/TemplateBinding.json` | MDMS schema — event-to-template mapping |
 
@@ -94,12 +128,11 @@ PGR Module
 
 ### Authentication
 
-ValueFirst supports two auth methods. **Bearer token is recommended for production.**
+ValueFirst uses two-step auth. A Bearer token must be fetched before every SMS send call.
 
 | Method | How | TTL |
 |--------|-----|-----|
 | Bearer Token | POST to token endpoint with Basic Auth; use returned token | 7 days |
-| Username/Password | Passed as query params in legacy HTTP API | N/A |
 
 **Token endpoint:**
 ```
@@ -153,68 +186,126 @@ Status values: `DELIVERED`, `NOT_DELIVERED`, `QUEUED`, `SENT`, `FAILED`, `REJECT
 
 ---
 
+## Karix API Quick Reference
+
+Karix (part of Tanla Platforms) exposes two API products. The **Power API** is recommended for new integrations.
+
+### Authentication
+
+| API | Method | Details |
+|-----|--------|---------|
+| Power API (`api.karix.io`) | HTTP Basic Auth | `Authorization: Basic base64(authId:authToken)` — static, no expiry |
+| Legacy JSON API (`japi.instaalerts.zone`) | API key in body | `"key": "xxx"` embedded in JSON payload |
+
+The Power API is preferred — static Basic Auth is simpler to manage than ValueFirst's token rotation.
+
+### Send SMS (Power API)
+
+```
+POST https://api.karix.io/message/
+Authorization: Basic <base64(authId:authToken)>
+Content-Type: application/json
+Accept: application/json
+```
+
+**JSON body:**
+```json
+{
+  "channel": "sms",
+  "source": "SENDERID",
+  "destination": ["+919876543210"],
+  "content": {
+    "text": "Your complaint PG-PGR-2026-03-25-043118 has been registered."
+  }
+}
+```
+
+### DLT Compliance Fields (Karix)
+
+DLT fields on the Power API are not explicitly documented per-request — Karix may handle them at the account/template level. **Confirm with Karix support before go-live** whether `dlt_entity_id` and `dlt_template_id` must be passed per request or are configured on the Karix dashboard.
+
+For the legacy JSON API, DLT fields are query string parameters:
+
+| Field | Description |
+|-------|-------------|
+| `dlt_entity_id` | Principal Entity ID from TRAI portal |
+| `dlt_template_id` | Template ID from TRAI portal |
+| `dlt_tm_id` | Telemarketer ID (for DLT chain hashing) |
+
+### Delivery Reports (DLR)
+
+Karix sends DLR callbacks to a registered webhook URL. Format varies by API version — confirm with Karix during onboarding.
+
+---
+
+## Provider Comparison
+
+| | ValueFirst | Karix (Power API) |
+|---|---|---|
+| **Native Novu provider** | No | No |
+| **API format** | XML | JSON |
+| **Auth type** | Two-step Bearer token (7-day TTL) | Static Basic Auth |
+| **Token refresh logic needed** | Yes | No |
+| **DLT fields per-request** | Yes — in XML attributes | Confirm with Karix |
+| **Adapter complexity** | Higher (XML builder + token cache) | Lower (JSON transform only) |
+| **E.164 phone format** | Yes (`+91XXXXXXXXXX`) | Yes (`+91XXXXXXXXXX`) |
+
+---
+
 ## Current Implementation Status
 
 ### What is already done
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| `ValueFirstProviderStrategy.java` | Exists, incomplete | Builds `_passthrough` body; strategy is registered and auto-discovered |
+| `ValueFirstProviderStrategy.java` | Exists, incomplete | Builds `_passthrough` body; strategy registered and auto-discovered |
 | `NovuProviderStrategyFactory.java` | Complete | Routes to ValueFirst when `providerName = "valuefirst"` |
 | `ProviderDetail.json` schema | Complete | Generic `credentials` map supports any key-value set |
 | `NovuClient.triggerWithProviderConfig()` | Complete | Provider-agnostic; delegates to strategy |
 
 ### Gaps that must be closed
 
-| # | Gap | Affected File | Impact |
-|---|-----|---------------|--------|
-| G1 | Novu has no native ValueFirst provider | Novu instance / bootstrap | SMS delivery fails at Novu layer |
-| G2 | `formatWhatsappPhone()` always prepends `whatsapp:` | `DispatchPipelineService.java:L249` | Wrong phone format for SMS channel |
-| G3 | `TemplateBinding.json` `contentSid` pattern is Twilio-only (`^HX...`) | `schemas/TemplateBinding.json` | ValueFirst template IDs rejected |
-| G4 | No Novu bootstrap script for ValueFirst | `config/` | Manual setup required |
-| G5 | No MDMS seed data for ValueFirst | `seed-data/` | Config lookup returns nothing |
-| G6 | `ValueFirstProviderStrategy.buildProviderConfig()` uses wrong passthrough format | `ValueFirstProviderStrategy.java` | Novu ignores unknown passthrough fields |
+| # | Gap | Affected File | Applies to |
+|---|-----|---------------|-----------|
+| G1 | Novu has no native ValueFirst or Karix provider | Novu instance | Both |
+| G2 | `formatWhatsappPhone()` always prepends `whatsapp:` | `DispatchPipelineService.java:L249` | Both |
+| G3 | `TemplateBinding.json` `contentSid` pattern is Twilio-only (`^HX...`) | `schemas/TemplateBinding.json` | Both |
+| G4 | No Novu bootstrap scripts for ValueFirst / Karix | `config/` | Both |
+| G5 | No MDMS seed data for ValueFirst / Karix | `seed-data/` | Both |
+| G6 | `ValueFirstProviderStrategy.buildProviderConfig()` uses wrong passthrough format | `ValueFirstProviderStrategy.java` | ValueFirst |
+| G7 | `KarixProviderStrategy` does not exist | — | Karix |
+| G8 | No adapter endpoints inside `novu-bridge` for either provider | — | Both |
+| G9 | No `ValueFirstSmsClient` or `KarixSmsClient` Java classes | — | Both |
 
 ---
 
 ## Recommended Approaches
 
-Three approaches are recommended. SMPP (high-throughput telecom protocol) is excluded as it only becomes relevant above 500,000 SMS/day and adds significant operational overhead.
-
 ---
 
-### Approach A — ValueFirst Adapter + Novu Generic-SMS (Recommended)
+### Approach A — novu-bridge Hosted Adapter (Recommended)
 
 #### How it works
 
-Deploy a thin adapter service (Node.js or Spring Boot) that sits between Novu and ValueFirst. Novu uses its built-in `generic-sms` integration to call this adapter, which translates the JSON payload into ValueFirst's XML format.
+Each provider gets a dedicated adapter endpoint **inside `novu-bridge`**. Novu's `generic-sms` integration calls these endpoints. No separate service is deployed.
 
 ```
-novu-bridge
-    │  POST /v1/events/trigger  (no change)
-    ▼
-Novu API  (generic-sms integration)
-    │  POST JSON
-    ▼
-ValueFirst Adapter  (translate JSON → XML)
-    │  POST XML + Bearer token
-    ▼
-ValueFirst API
+novu-bridge triggers Novu  →  Novu calls back into novu-bridge  →  novu-bridge calls provider API
 ```
 
 #### Why choose this
 
-- **Fastest to production** (1–2 working days)
-- Minimal changes to `novu-bridge` — most logic stays in the adapter
-- No Novu fork required
-- Token rotation, DLR forwarding, and retry logic are all isolated in the adapter
-- Easy to test and replace independently
+- No separate service to deploy or maintain
+- Adapter code lives in Java alongside the rest of `novu-bridge`
+- Novu's dashboard tracks delivery for both WhatsApp (Twilio) and SMS (ValueFirst / Karix)
+- Adding a third provider later requires only a new client class + controller + Novu integration registration
 
 #### Cons
 
-- Extra network hop (adapter service)
-- Requires deploying and operating the adapter service
-- DLT fields must be passed through from `novu-bridge` to adapter
+- Novu calls back into `novu-bridge` — circular-looking but harmless; they are logically separate operations
+- If Novu is down, SMS delivery is blocked (same as WhatsApp today)
+
+---
 
 #### Code changes in novu-bridge
 
@@ -228,7 +319,6 @@ private String formatPhone(String mobile, String channel, String tenantId, Reque
     String normalized = mobile.trim();
 
     if ("SMS".equalsIgnoreCase(channel)) {
-        // ValueFirst expects E.164: +91XXXXXXXXXX
         if (normalized.startsWith("+")) return normalized;
         MobileValidationConfig cfg = mdmsServiceClient.getMobileValidationConfig(tenantId, requestInfo);
         if (normalized.matches(cfg.getPattern())) return cfg.getPrefix() + normalized;
@@ -248,22 +338,22 @@ Update all callers to pass `context.getChannel()` as the second argument.
 
 **2. Remove Twilio-only contentSid pattern (G3) — `schemas/TemplateBinding.json`**
 
-Remove the `"pattern": "^HX[a-fA-F0-9]{32}$"` constraint from `contentSid`. Replace its description:
+Remove the `"pattern": "^HX[a-fA-F0-9]{32}$"` constraint from `contentSid`:
 
 ```json
 "contentSid": {
   "type": "string",
-  "description": "Provider-specific template identifier. Twilio: HX + 32 hex chars. ValueFirst: any alphanumeric string."
+  "description": "Provider-specific template identifier. Twilio: HX + 32 hex chars. ValueFirst / Karix: any alphanumeric string."
 }
 ```
 
-**3. Add `novuIntegrationId` to schema and model (G6)**
+**3. Add `novuIntegrationId` and `senderNumber` to schema and model (G6)**
 
 Add to `schemas/ProviderDetail.json`:
 ```json
 "novuIntegrationId": {
   "type": "string",
-  "description": "Novu integration ID to use in provider overrides (e.g. 'valuefirst-sms'). Defaults to providerName if absent."
+  "description": "Novu integration identifier for this provider (e.g. 'valuefirst-sms', 'karix-sms'). Defaults to providerName if absent."
 },
 "senderNumber": {
   "type": "string",
@@ -273,10 +363,9 @@ Add to `schemas/ProviderDetail.json`:
 
 Add the same fields to `web/models/ResolvedProvider.java`.
 
-**4. Update `NovuClient.java` to use `novuIntegrationId`**
+**4. Update `NovuClient.java` to use `novuIntegrationId` (G6)**
 
 ```java
-// Use Novu integration ID as the override key
 String novuIntegrationKey = StringUtils.hasText(resolvedProvider.getNovuIntegrationId())
         ? resolvedProvider.getNovuIntegrationId()
         : resolvedProvider.getProviderName().toLowerCase();
@@ -285,159 +374,12 @@ Map<String, Object> providerOverrides = new HashMap<>();
 providerOverrides.put(novuIntegrationKey, providerConfig);
 ```
 
-**5. Register ValueFirst adapter in Novu**
-
-Create `config/bootstrap-novu-valuefirst-sms.sh`:
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-NOVU_BASE_URL=${NOVU_BASE_URL:-http://localhost:3000}
-NOVU_API_KEY=${NOVU_API_KEY:?Set NOVU_API_KEY}
-ADAPTER_URL=${VALUEFIRST_ADAPTER_URL:?Set VALUEFIRST_ADAPTER_URL}
-SENDER_ID=${VF_SENDER_ID:?Set VF_SENDER_ID}
-
-curl -s -X POST "$NOVU_BASE_URL/v1/integrations" \
-  -H "Authorization: ApiKey $NOVU_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"providerId\": \"generic-sms\",
-    \"channel\": \"sms\",
-    \"name\": \"ValueFirst SMS\",
-    \"identifier\": \"valuefirst-sms\",
-    \"active\": true,
-    \"credentials\": {
-      \"baseUrl\": \"$ADAPTER_URL/send\",
-      \"apiKeyRequestHeader\": \"x-adapter-key\",
-      \"apiKey\": \"${ADAPTER_SECRET_KEY:-changeme}\",
-      \"from\": \"$SENDER_ID\"
-    }
-  }" | jq .
-```
-
-**6. ValueFirst Adapter service (`config/valuefirst-adapter/server.js`)**
-
-```js
-const express = require('express');
-const axios   = require('axios');
-const app     = express();
-app.use(express.json());
-
-let token = null, tokenExpiry = null;
-
-async function getToken() {
-  if (token && tokenExpiry && Date.now() < tokenExpiry) return token;
-  const res = await axios.post(
-    'https://api.myvfirst.com/psms/api/messages/token?action=generate', {},
-    { headers: { Authorization: 'Basic ' +
-        Buffer.from(`${process.env.VF_USERNAME}:${process.env.VF_PASSWORD}`).toString('base64') } }
-  );
-  token = res.data.token;
-  tokenExpiry = Date.now() + (6 * 24 + 23) * 3600 * 1000; // refresh before 7-day TTL
-  return token;
-}
-
-function escapeXml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-app.post('/send', async (req, res) => {
-  try {
-    const { to, from, body } = req.body;
-    const t   = await getToken();
-    const mid = `MSG-${Date.now()}`;
-    const dltTemplateId = req.body.templateId  || process.env.VF_DLT_TEMPLATE_ID || '';
-    const entityId      = req.body.entityId    || process.env.VF_ENTITY_ID       || '';
-    const contentType   = req.body.contentType || process.env.VF_DLT_CONTENT_TYPE || '1';
-
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<MESSAGE>
-  <USER USERNAME="${process.env.VF_USERNAME}" PASSWORD="${process.env.VF_PASSWORD}"/>
-  <SMS UDH="0" CODING="1" TEXT="${escapeXml(body)}" PROPERTY="0" ID="${mid}"
-       DLTTEMPLATEID="${dltTemplateId}" DLTCONTENTTYPE="${contentType}" ENTITYID="${entityId}">
-    <ADDRESS FROM="${escapeXml(from || process.env.VF_SENDER_ID)}" TO="${escapeXml(to)}" SEQ="1" TAG="${mid}"/>
-  </SMS>
-</MESSAGE>`;
-
-    await axios.post('https://api.myvfirst.com/psms/servlet/psms.Eservice2', xml,
-      { headers: { 'Content-Type': 'application/xml', Authorization: `Bearer ${t}` } });
-
-    res.json({ msgid: mid, time: new Date().toISOString(), status: 'sent' });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// DLR callback from ValueFirst
-app.get('/dlr', (req, res) => {
-  const { msgid, status, to } = req.query;
-  console.log('DLR received:', { msgid, status, to });
-  // TODO: forward to novu-bridge dispatch log update endpoint
-  res.sendStatus(200);
-});
-
-app.listen(3001, () => console.log('ValueFirst adapter listening on :3001'));
-```
-
-**7. Add MDMS seed data**
-
-Create `seed-data/ProviderDetail-valuefirst.json`:
-```json
-{
-  "tenantId": "pg.citya",
-  "providerName": "valuefirst",
-  "channel": "sms",
-  "novuIntegrationId": "valuefirst-sms",
-  "senderNumber": "YOUR_SENDER_ID",
-  "credentials": {
-    "username": "YOUR_VF_USERNAME",
-    "password": "YOUR_VF_PASSWORD"
-  },
-  "isActive": true,
-  "priority": 1
-}
-```
-
----
-
-### Approach B — Direct Java Call (Quick Alternative)
-
-#### How it works
-
-`novu-bridge` calls ValueFirst's HTTP API directly from Java, bypassing Novu entirely for SMS delivery. Novu is still used for subscriber management and WhatsApp delivery; only the SMS path is handled directly.
-
-```
-novu-bridge
-    │
-    ├──► NovuClient  (WhatsApp — unchanged)
-    │
-    └──► ValueFirstDirectClient  (SMS — new Java class)
-             │  POST XML + Bearer token
-             ▼
-         ValueFirst API
-```
-
-#### Why choose this
-
-- No adapter service to deploy or maintain
-- Full control over retry logic, DLT fields, and DLR handling in Java
-- Best if you want a self-contained Spring Boot service with no external dependencies
-
-#### Cons
-
-- Token rotation and XML construction live in Java — adds complexity to `novu-bridge`
-- DLR handling requires exposing a new endpoint in `novu-bridge`
-- More `novu-bridge` code changes than Approach A
-
-#### Implementation
-
-Add `service/ValueFirstDirectClient.java`:
+**5. ValueFirst SMS client — `service/sms/ValueFirstSmsClient.java` (G9)**
 
 ```java
 @Service
 @Slf4j
-public class ValueFirstDirectClient {
+public class ValueFirstSmsClient {
 
     private final RestTemplate restTemplate;
     private final NovuBridgeConfiguration config;
@@ -445,8 +387,8 @@ public class ValueFirstDirectClient {
     private String cachedToken;
     private Instant tokenExpiry;
 
-    public String sendSms(String to, String from, String text,
-                          String dltTemplateId, String entityId, String contentType) {
+    public String send(String to, String from, String text,
+                       String dltTemplateId, String entityId, String contentType) {
         String token = getBearerToken();
         String messageId = "MSG-" + System.currentTimeMillis();
         String xml = buildXml(to, from, text, messageId, dltTemplateId, entityId, contentType);
@@ -455,14 +397,12 @@ public class ValueFirstDirectClient {
         headers.setContentType(MediaType.APPLICATION_XML);
         headers.setBearerAuth(token);
 
-        restTemplate.exchange(
-            config.getVfApiUrl(), HttpMethod.POST,
-            new HttpEntity<>(xml, headers), String.class);
-
+        restTemplate.exchange(config.getVfApiUrl(), HttpMethod.POST,
+                new HttpEntity<>(xml, headers), String.class);
         return messageId;
     }
 
-    private String getBearerToken() {
+    private synchronized String getBearerToken() {
         if (cachedToken != null && Instant.now().isBefore(tokenExpiry)) return cachedToken;
 
         HttpHeaders headers = new HttpHeaders();
@@ -475,7 +415,7 @@ public class ValueFirstDirectClient {
             new HttpEntity<>(headers), Map.class);
 
         cachedToken = (String) res.getBody().get("token");
-        tokenExpiry = Instant.now().plus(Duration.ofHours(167)); // 6d 23h
+        tokenExpiry = Instant.now().plus(Duration.ofHours(167)); // refresh before 7-day TTL
         return cachedToken;
     }
 
@@ -490,12 +430,12 @@ public class ValueFirstDirectClient {
                 <ADDRESS FROM="%s" TO="%s" SEQ="1" TAG="%s"/>
               </SMS>
             </MESSAGE>""",
-            escapeXml(config.getVfUsername()), escapeXml(config.getVfPassword()),
-            escapeXml(text), id, escapeXml(dltTemplateId), contentType, escapeXml(entityId),
-            escapeXml(from), escapeXml(to), id);
+            esc(config.getVfUsername()), esc(config.getVfPassword()),
+            esc(text), id, esc(dltTemplateId), contentType, esc(entityId),
+            esc(from), esc(to), id);
     }
 
-    private String escapeXml(String s) {
+    private String esc(String s) {
         if (s == null) return "";
         return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
                 .replace("\"","&quot;").replace("'","&apos;");
@@ -503,35 +443,280 @@ public class ValueFirstDirectClient {
 }
 ```
 
+**6. ValueFirst adapter endpoint — `web/controller/ValueFirstAdapterController.java` (G8)**
+
+```java
+@RestController
+@RequestMapping("/novu-bridge/adapter/valuefirst")
+@RequiredArgsConstructor
+@Slf4j
+public class ValueFirstAdapterController {
+
+    private final ValueFirstSmsClient smsClient;
+
+    @PostMapping("/send")
+    public ResponseEntity<Map<String, String>> send(@RequestBody Map<String, Object> body) {
+        String to          = (String) body.get("to");
+        String from        = (String) body.getOrDefault("from", "");
+        String text        = (String) body.get("body");
+        String dltTemplate = (String) body.getOrDefault("templateId", "");
+        String entityId    = (String) body.getOrDefault("entityId", "");
+        String contentType = (String) body.getOrDefault("contentType", "1");
+
+        String msgId = smsClient.send(to, from, text, dltTemplate, entityId, contentType);
+        return ResponseEntity.ok(Map.of("msgid", msgId, "status", "sent"));
+    }
+
+    // DLR callback from ValueFirst
+    @GetMapping("/dlr")
+    public ResponseEntity<Void> dlr(@RequestParam String msgid,
+                                    @RequestParam String status,
+                                    @RequestParam String to) {
+        log.info("ValueFirst DLR: msgid={} status={} to={}", msgid, status, to);
+        // TODO: update nb_dispatch_log
+        return ResponseEntity.ok().build();
+    }
+}
+```
+
+**7. Karix SMS client — `service/sms/KarixSmsClient.java` (G9)**
+
+```java
+@Service
+@Slf4j
+public class KarixSmsClient {
+
+    private final RestTemplate restTemplate;
+    private final NovuBridgeConfiguration config;
+
+    public String send(String to, String from, String text) {
+        String credentials = Base64.getEncoder().encodeToString(
+            (config.getKarixAuthId() + ":" + config.getKarixAuthToken()).getBytes());
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setAccept(List.of(MediaType.APPLICATION_JSON));
+        headers.set("Authorization", "Basic " + credentials);
+
+        Map<String, Object> body = Map.of(
+            "channel", "sms",
+            "source",  from,
+            "destination", List.of(to),
+            "content", Map.of("text", text)
+        );
+
+        String messageId = "KRX-" + System.currentTimeMillis();
+        restTemplate.exchange(config.getKarixApiUrl(), HttpMethod.POST,
+                new HttpEntity<>(body, headers), Map.class);
+        return messageId;
+    }
+}
+```
+
+> **Note on DLT fields for Karix:** Confirm with Karix support whether `dlt_entity_id` and `dlt_template_id` must be sent per-request on the Power API. If yes, add them to the `body` map above and pass them through from the adapter controller — same pattern as ValueFirst.
+
+**8. Karix adapter endpoint — `web/controller/KarixAdapterController.java` (G8)**
+
+```java
+@RestController
+@RequestMapping("/novu-bridge/adapter/karix")
+@RequiredArgsConstructor
+@Slf4j
+public class KarixAdapterController {
+
+    private final KarixSmsClient smsClient;
+
+    @PostMapping("/send")
+    public ResponseEntity<Map<String, String>> send(@RequestBody Map<String, Object> body) {
+        String to   = (String) body.get("to");
+        String from = (String) body.getOrDefault("from", "");
+        String text = (String) body.get("body");
+
+        String msgId = smsClient.send(to, from, text);
+        return ResponseEntity.ok(Map.of("msgid", msgId, "status", "sent"));
+    }
+
+    // DLR webhook from Karix
+    @PostMapping("/dlr")
+    public ResponseEntity<Void> dlr(@RequestBody Map<String, Object> payload) {
+        log.info("Karix DLR: {}", payload);
+        // TODO: update nb_dispatch_log
+        return ResponseEntity.ok().build();
+    }
+}
+```
+
+**9. Register `KarixProviderStrategy` (G7) — `service/provider/KarixProviderStrategy.java`**
+
+```java
+@Component("karix")
+public class KarixProviderStrategy implements NovuProviderStrategy {
+
+    @Override
+    public Map<String, Object> buildProviderConfig(ResolvedProvider provider,
+                                                   ResolvedTemplate template,
+                                                   String formattedPhone) {
+        return Map.of(
+            "to",   formattedPhone,
+            "from", provider.getSenderNumber(),
+            "body", template.getBodyText()
+        );
+    }
+}
+```
+
+Register `karix` in `NovuProviderStrategyFactory`.
+
+**10. Register Novu generic-sms integrations — `config/bootstrap-novu-sms-providers.sh` (G4)**
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+NOVU_BASE_URL=${NOVU_BASE_URL:-http://localhost:3000}
+NOVU_API_KEY=${NOVU_API_KEY:?Set NOVU_API_KEY}
+BRIDGE_URL=${NOVU_BRIDGE_URL:?Set NOVU_BRIDGE_URL}   # e.g. http://novu-bridge:8290
+
+# ValueFirst
+curl -s -X POST "$NOVU_BASE_URL/v1/integrations" \
+  -H "Authorization: ApiKey $NOVU_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"providerId\": \"generic-sms\",
+    \"channel\": \"sms\",
+    \"name\": \"ValueFirst SMS\",
+    \"identifier\": \"valuefirst-sms\",
+    \"active\": true,
+    \"credentials\": {
+      \"baseUrl\": \"$BRIDGE_URL/novu-bridge/adapter/valuefirst/send\",
+      \"apiKeyRequestHeader\": \"x-adapter-key\",
+      \"apiKey\": \"${ADAPTER_SECRET_KEY:-changeme}\"
+    }
+  }" | jq .
+
+# Karix
+curl -s -X POST "$NOVU_BASE_URL/v1/integrations" \
+  -H "Authorization: ApiKey $NOVU_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"providerId\": \"generic-sms\",
+    \"channel\": \"sms\",
+    \"name\": \"Karix SMS\",
+    \"identifier\": \"karix-sms\",
+    \"active\": true,
+    \"credentials\": {
+      \"baseUrl\": \"$BRIDGE_URL/novu-bridge/adapter/karix/send\",
+      \"apiKeyRequestHeader\": \"x-adapter-key\",
+      \"apiKey\": \"${ADAPTER_SECRET_KEY:-changeme}\"
+    }
+  }" | jq .
+```
+
+**11. Add MDMS seed data (G5)**
+
+`seed-data/ProviderDetail-valuefirst.json`:
+```json
+{
+  "tenantId": "pg.citya",
+  "providerName": "valuefirst",
+  "channel": "sms",
+  "novuIntegrationId": "valuefirst-sms",
+  "senderNumber": "YOUR_VF_SENDER_ID",
+  "credentials": {
+    "username": "YOUR_VF_USERNAME",
+    "password": "YOUR_VF_PASSWORD"
+  },
+  "isActive": true,
+  "priority": 1
+}
+```
+
+`seed-data/ProviderDetail-karix.json`:
+```json
+{
+  "tenantId": "pg.citya",
+  "providerName": "karix",
+  "channel": "sms",
+  "novuIntegrationId": "karix-sms",
+  "senderNumber": "YOUR_KARIX_SENDER_ID",
+  "credentials": {
+    "authId": "YOUR_KARIX_AUTH_ID",
+    "authToken": "YOUR_KARIX_AUTH_TOKEN"
+  },
+  "isActive": true,
+  "priority": 2
+}
+```
+
+---
+
+### Approach B — Direct Java Call (Quick Alternative)
+
+#### How it works
+
+`novu-bridge` calls the provider's API directly from Java, bypassing Novu entirely for SMS. Novu is still used for WhatsApp via Twilio.
+
+```
+novu-bridge
+    │
+    ├──► NovuClient          (WhatsApp — Twilio — unchanged)
+    │
+    ├──► ValueFirstSmsClient (SMS — bypasses Novu)
+    │         │  XML + Bearer token
+    │         ▼
+    │    ValueFirst API
+    │
+    └──► KarixSmsClient      (SMS — bypasses Novu)
+              │  JSON + Basic Auth
+              ▼
+         Karix API
+```
+
+#### Why choose this
+
+- No Novu hop for SMS — fewer moving parts
+- Full control over retry logic and DLT fields in Java
+- `ValueFirstSmsClient` and `KarixSmsClient` from Approach A are reused directly
+
+#### Cons
+
+- SMS delivery is not visible in Novu's dashboard
+- DLR handling requires new endpoints in `novu-bridge` (same as Approach A)
+- Two code paths in `DispatchPipelineService` (Novu path vs direct path)
+
+#### Implementation
+
 In `DispatchPipelineService.process()`, add a channel-routing branch before calling `NovuClient`:
 
 ```java
-if ("SMS".equalsIgnoreCase(context.getChannel()) &&
-    "valuefirst".equalsIgnoreCase(resolvedProvider.getProviderName())) {
-    // Bypass Novu for ValueFirst SMS
-    String messageId = valueFirstDirectClient.sendSms(
-        formattedPhone,
-        resolvedProvider.getSenderNumber(),
-        resolvedTemplate.getBodyText(),          // interpolated message body
-        resolvedTemplate.getDltTemplateId(),
-        resolvedTemplate.getDltEntityId(),
-        resolvedTemplate.getDltContentType()
-    );
-    persist(event, context, resolvedTemplate, "SENT", null, null,
-            Map.of("msgid", messageId), 1);
-    return DispatchResult.builder()...novuTriggered(false).build();
+String provider = resolvedProvider.getProviderName();
+
+if ("SMS".equalsIgnoreCase(context.getChannel())) {
+    if ("valuefirst".equalsIgnoreCase(provider)) {
+        String msgId = valueFirstSmsClient.send(
+            formattedPhone,
+            resolvedProvider.getSenderNumber(),
+            resolvedTemplate.getBodyText(),
+            resolvedTemplate.getDltTemplateId(),
+            resolvedTemplate.getDltEntityId(),
+            resolvedTemplate.getDltContentType()
+        );
+        return DispatchResult.builder().novuTriggered(false)
+                .providerMessageId(msgId).build();
+    }
+    if ("karix".equalsIgnoreCase(provider)) {
+        String msgId = karixSmsClient.send(
+            formattedPhone,
+            resolvedProvider.getSenderNumber(),
+            resolvedTemplate.getBodyText()
+        );
+        return DispatchResult.builder().novuTriggered(false)
+                .providerMessageId(msgId).build();
+    }
 }
-// else: existing Novu path
+// else: existing Novu path (WhatsApp / Twilio)
 ```
 
-Add to `application.properties`:
-```properties
-novu.bridge.valuefirst.api.url=https://api.myvfirst.com/psms/servlet/psms.Eservice2
-novu.bridge.valuefirst.token.url=https://api.myvfirst.com/psms/api/messages/token?action=generate
-novu.bridge.valuefirst.username=${VF_USERNAME}
-novu.bridge.valuefirst.password=${VF_PASSWORD}
-novu.bridge.valuefirst.sender.id=${VF_SENDER_ID}
-```
+`ValueFirstSmsClient` and `KarixSmsClient` are the same classes described in Approach A — they can be shared between approaches.
 
 ---
 
@@ -539,110 +724,44 @@ novu.bridge.valuefirst.sender.id=${VF_SENDER_ID}
 
 #### How it works
 
-Fork `novuhq/novu`, implement a `valuefirst` SMS provider under `packages/providers/src/lib/sms/valuefirst/`, and run a custom Novu build. This eliminates the adapter entirely.
+Fork `novuhq/novu`, implement native `valuefirst` and `karix` SMS providers in TypeScript under `packages/providers/src/lib/sms/`, and run a custom Novu build.
 
 #### Why choose this
 
-- Cleanest long-term architecture — no adapter, no bypass
+- Cleanest long-term architecture — no adapter endpoints, no bypass
 - Full DLR support via Novu's native webhook pipeline
-- Can be contributed back to the Novu OSS project
+- Both providers can be contributed back to Novu OSS
 
 #### Cons
 
-- Requires maintaining a Novu fork (high operational overhead)
-- Build and deployment pipeline changes for Novu itself
-- Estimated 1–2 weeks to implement and validate
+- Requires maintaining a Novu fork (ongoing build and deployment overhead)
+- Estimated 1–2 weeks to implement and validate both providers
+- High operational cost until merged upstream
 
 #### When to choose
 
-Choose this **after** Approach A is running in production. Migrate to this once the team has bandwidth and wants to eliminate the adapter.
-
-#### Core implementation (TypeScript — Novu fork)
-
-Create `packages/providers/src/lib/sms/valuefirst/valuefirst.provider.ts` in the Novu fork:
-
-```typescript
-import axios from 'axios';
-import { SmsEventStatusEnum, ISmsOptions, ISmsProvider } from '@novu/stateless';
-
-export class ValueFirstSmsProvider implements ISmsProvider {
-  id = 'valuefirst';
-  channelType = 'SMS' as const;
-
-  private cachedToken: string | null = null;
-  private tokenExpiry: Date | null = null;
-
-  constructor(private config: { username: string; password: string; from: string }) {}
-
-  private async getBearerToken(): Promise<string> {
-    if (this.cachedToken && this.tokenExpiry && new Date() < this.tokenExpiry) {
-      return this.cachedToken;
-    }
-    const res = await axios.post(
-      'https://api.myvfirst.com/psms/api/messages/token?action=generate', {},
-      { headers: { Authorization: 'Basic ' +
-          Buffer.from(`${this.config.username}:${this.config.password}`).toString('base64') } }
-    );
-    this.cachedToken = res.data.token;
-    this.tokenExpiry = new Date(Date.now() + (6 * 24 + 23) * 3600 * 1000);
-    return this.cachedToken!;
-  }
-
-  async sendMessage(options: ISmsOptions) {
-    const token = await this.getBearerToken();
-    const id = `MSG-${Date.now()}`;
-    const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<MESSAGE>
-  <USER USERNAME="${esc(this.config.username)}" PASSWORD="${esc(this.config.password)}"/>
-  <SMS UDH="0" CODING="1" TEXT="${esc(options.content)}" PROPERTY="0" ID="${id}">
-    <ADDRESS FROM="${esc(this.config.from)}" TO="${esc(options.to)}" SEQ="1" TAG="${id}"/>
-  </SMS>
-</MESSAGE>`;
-
-    await axios.post('https://api.myvfirst.com/psms/servlet/psms.Eservice2', xml,
-      { headers: { 'Content-Type': 'application/xml', Authorization: `Bearer ${token}` } });
-
-    return { id, date: new Date().toISOString() };
-  }
-
-  getStatus(status: string): SmsEventStatusEnum {
-    const map: Record<string, SmsEventStatusEnum> = {
-      DELIVERED: SmsEventStatusEnum.DELIVERED,
-      NOT_DELIVERED: SmsEventStatusEnum.FAILED,
-      FAILED: SmsEventStatusEnum.FAILED,
-      QUEUED: SmsEventStatusEnum.QUEUED,
-      SENT: SmsEventStatusEnum.SENT,
-    };
-    return map[status?.toUpperCase()] ?? SmsEventStatusEnum.UNKNOWN;
-  }
-}
-```
-
-Register the provider in `packages/providers/src/lib/sms/index.ts` and add `ValueFirst = 'valuefirst'` to `SmsProviderIdEnum`.
+Choose this **after** Approach A is running in production for both providers. Migrate once the team has bandwidth and wants to eliminate the adapter endpoints from `novu-bridge`.
 
 ---
 
 ## Approach Comparison
 
-| Criterion | Approach A (Adapter + Generic-SMS) | Approach B (Direct Java) | Approach C (Native Novu) |
-|-----------|------------------------------------|--------------------------|--------------------------|
+| Criterion | Approach A (novu-bridge Adapter) | Approach B (Direct Java) | Approach C (Native Novu) |
+|-----------|----------------------------------|--------------------------|--------------------------|
 | **Implementation effort** | Medium | Medium | High |
-| **novu-bridge code changes** | Small | Medium | Minimal |
+| **novu-bridge code changes** | Medium | Medium | Minimal |
 | **Requires Novu fork** | No | No | Yes |
-| **Separate service to deploy** | Yes (adapter) | No | No |
-| **DLR webhook support** | Via adapter | Via new endpoint | Native |
-| **DLT compliance** | In adapter + passthrough | In Java client | In provider |
-| **Token rotation** | Adapter handles | Java handles | Provider handles |
-| **Operational complexity** | Low–Medium | Low | Low (after merge) |
-| **Recommended for** | Most teams | Teams preferring pure Java | Long-term / OSS contribution |
+| **Separate service to deploy** | No | No | No |
+| **Novu dashboard tracking** | Yes | No | Yes |
+| **DLR webhook support** | Via adapter endpoints | Via new novu-bridge endpoints | Native |
+| **Token rotation (ValueFirst)** | In `ValueFirstSmsClient` | In `ValueFirstSmsClient` | In Novu provider |
+| **Recommended for** | Most teams | Teams that don't need Novu dashboard | Long-term / OSS contribution |
 
 ---
 
 ## Required Code Changes
 
-These changes are **required for Approach A** (and mostly apply to B and C as well):
+These changes are required for both Approach A and B:
 
 | File | Change | Gap |
 |------|--------|-----|
@@ -651,28 +770,35 @@ These changes are **required for Approach A** (and mostly apply to B and C as we
 | `schemas/ProviderDetail.json` | Add `novuIntegrationId` and `senderNumber` fields | G6 |
 | `web/models/ResolvedProvider.java` | Add `novuIntegrationId` and `senderNumber` fields | G6 |
 | `service/NovuClient.java` | Use `novuIntegrationId` as the provider override key | G6 |
-| `service/provider/ValueFirstProviderStrategy.java` | Update `buildProviderConfig()` for generic-sms passthrough format | G6 |
-| `config/bootstrap-novu-valuefirst-sms.sh` | New: creates Novu `generic-sms` integration | G4 |
-| `seed-data/ProviderDetail-valuefirst.json` | New: MDMS seed data per tenant | G5 |
-| `application.properties` | Add `NOVU_BRIDGE_CHANNEL=SMS` as env-configurable default | G1 |
+| `service/provider/ValueFirstProviderStrategy.java` | Update `buildProviderConfig()` for generic-sms passthrough | G6 |
+| `service/provider/KarixProviderStrategy.java` | New: Karix strategy class | G7 |
+| `service/provider/NovuProviderStrategyFactory.java` | Register `karix` strategy | G7 |
+| `service/sms/ValueFirstSmsClient.java` | New: token caching, XML builder, HTTP to ValueFirst | G9 |
+| `service/sms/KarixSmsClient.java` | New: JSON builder, Basic Auth, HTTP to Karix | G9 |
+| `web/controller/ValueFirstAdapterController.java` | New (Approach A only): adapter endpoint for ValueFirst | G8 |
+| `web/controller/KarixAdapterController.java` | New (Approach A only): adapter endpoint for Karix | G8 |
+| `config/bootstrap-novu-sms-providers.sh` | New: registers both generic-sms integrations in Novu | G4 |
+| `seed-data/ProviderDetail-valuefirst.json` | New: MDMS seed data for ValueFirst | G5 |
+| `seed-data/ProviderDetail-karix.json` | New: MDMS seed data for Karix | G5 |
+| `application.properties` | Add ValueFirst + Karix config properties | G1 |
 
 ---
 
 ## DLT Compliance (India Mandatory)
 
-TRAI's DLT mandate applies to **all commercial SMS sent in India**. Every message must carry three additional fields.
+TRAI's DLT mandate applies to **all commercial SMS sent in India**, regardless of provider. Every message must carry three fields.
 
 ### Required DLT fields
 
 | Field | Description | Example |
 |-------|-------------|---------|
-| `DLTTEMPLATEID` | TRAI-registered template ID from DLT portal | `1007158620398745312` |
-| `DLTCONTENTTYPE` | `1`=Service Implicit, `2`=Service Explicit, `3`=Transactional, `4`=Promotional | `1` |
-| `ENTITYID` | TRAI Principal Entity ID of the organisation | `1001458620398745312` |
+| `dltTemplateId` | TRAI-registered template ID from DLT portal | `1007158620398745312` |
+| `dltContentType` | `1`=Service Implicit, `2`=Service Explicit, `3`=Transactional, `4`=Promotional | `1` |
+| `dltEntityId` | TRAI Principal Entity ID of the organisation | `1001458620398745312` |
 
 ### How to pass DLT fields through the pipeline
 
-**Recommended:** Store per-template in `TemplateBinding` (config-service / MDMS).
+**Recommended:** Store per-template in `TemplateBinding`.
 
 Add to `schemas/TemplateBinding.json`:
 ```json
@@ -681,111 +807,73 @@ Add to `schemas/TemplateBinding.json`:
 "dltEntityId":    { "type": "string", "description": "TRAI Principal Entity ID" }
 ```
 
-Add the same fields to `ResolvedTemplate.java`. Pass them into `ValueFirstProviderStrategy.buildProviderConfig()` and include them in the XML body or adapter passthrough.
+Add the same fields to `ResolvedTemplate.java`. Pass them into the provider strategy's `buildProviderConfig()` and include them in the XML body (ValueFirst) or request body (Karix, if confirmed per-request).
 
-**Alternative:** Include DLT fields in the domain event `data` map (useful when different templates of the same module have different DLT IDs):
+### Karix DLT note
 
-```json
-"data": {
-  "complaintNo": "PG-PGR-2026-03-25-043118",
-  "dltTemplateId": "1007158620398745312",
-  "dltEntityId": "1001458620398745312"
-}
-```
+The Karix Power API documentation does not explicitly show DLT fields as per-request parameters — they may be configured at the account or template level on the Karix dashboard. **Confirm this with Karix support before go-live.** If per-request fields are required, add them to `KarixSmsClient.send()` and `KarixAdapterController` following the same pattern as ValueFirst.
 
 ---
 
-## How to Integrate Any New Module with ValueFirst
+## How to Integrate Any New Module
 
-This section is a step-by-step reference for onboarding a new DIGIT module (e.g., Property Tax, BPA, Trade License) to send WhatsApp or SMS notifications via ValueFirst through `novu-bridge`.
+This section is a step-by-step reference for onboarding a new DIGIT module (e.g., Property Tax, BPA, Trade License) to send SMS notifications via ValueFirst or Karix through `novu-bridge`. The steps are identical regardless of which SMS provider is used.
 
 ### Overview: How PGR currently works
 
-The existing Complaints (PGR) integration is the reference implementation. Here is the complete flow:
+The existing Complaints (PGR) integration is the reference implementation:
 
 ```
 1. Citizen files a complaint in PGR
-2. PGR module's workflow engine transitions state (e.g., APPLY → PENDINGFORASSIGNMENT)
-3. PGR publishes a domain event to Kafka topic: complaints.domain.events
+2. PGR workflow engine transitions state (e.g., APPLY → PENDINGFORASSIGNMENT)
+3. PGR publishes a domain event to Kafka: complaints.domain.events
 4. novu-bridge DomainEventConsumer picks up the event
 5. DispatchPipelineService runs 9 steps:
-     a. Validates the event envelope (required fields, eventName, module)
-     b. Resolves the recipient's UUID via UserService
+     a. Validates the event envelope
+     b. Resolves the recipient UUID via UserService
      c. Checks notification consent via PreferenceService
-     d. Resolves the message template from ConfigService / MDMS (TemplateBinding)
-     e. Resolves the provider credentials from ConfigService / MDMS (ProviderDetail)
-     f. Picks the right provider strategy (Twilio / ValueFirst / etc.)
-     g. Formats the phone number for the channel (WhatsApp or SMS)
-     h. Triggers Novu → Twilio/ValueFirst
+     d. Resolves the message template from ConfigService (TemplateBinding)
+     e. Resolves the provider credentials from ConfigService (ProviderDetail)
+     f. Picks the right provider strategy (Twilio / ValueFirst / Karix)
+     g. Formats the phone number for the channel
+     h. Triggers Novu → provider
      i. Logs the result to nb_dispatch_log
 ```
 
-The event published by PGR has this structure:
-
-```json
-{
-  "eventId": "uuid",
-  "eventType": "DOMAIN_EVENT",
-  "eventName": "COMPLAINTS.WORKFLOW.APPLY",
-  "module": "PGR",
-  "entityId": "PG-PGR-2026-03-25-043118",
-  "tenantId": "pg.citya",
-  "actor": { "uuid": "...", "type": "CITIZEN" },
-  "workflow": { "action": "APPLY", "fromState": "DRAFT", "toState": "PENDINGFORASSIGNMENT" },
-  "stakeholders": [
-    { "type": "CITIZEN", "userId": "dd1c8776-...", "mobile": "712345679" }
-  ],
-  "context": { "locale": "en_IN" },
-  "data": {
-    "complaintNo": "PG-PGR-2026-03-25-043118",
-    "serviceName": "Pothole",
-    "status": "Submitted"
-  }
-}
-```
-
-### What needs to change for a new module
-
-There are two integration patterns depending on the module type:
+### Integration patterns
 
 | Pattern | When to use | Example modules |
 |---------|-------------|-----------------|
 | **Event-driven** | Module has a workflow engine that emits state transitions | BPA, Trade License, Fire NOC, PGR |
-| **Scheduler-based** | Module needs time-triggered notifications (due dates, reminders) | Property Tax, Water & Sewerage, Birth/Death certificate |
+| **Scheduler-based** | Module needs time-triggered notifications (due dates, reminders) | Property Tax, Water & Sewerage |
 
 ---
 
 ### Pattern 1 — Event-driven Integration (e.g., BPA, Trade License)
 
-These modules already publish workflow transition events. Adding notifications is purely a configuration exercise — **no code changes** in `novu-bridge` are needed.
+No `novu-bridge` code changes are needed for new event-driven modules — integration is purely a configuration exercise.
 
 #### Step 1: Identify notification trigger points
 
-Decide which workflow actions should trigger a notification. Example for BPA (Building Plan Approval):
+Decide which workflow actions should trigger a notification. Example for BPA:
 
 | Event | Trigger | Recipient |
 |-------|---------|-----------|
 | `BPA.WORKFLOW.APPLY` | Applicant submits plan | Citizen |
-| `BPA.WORKFLOW.APPROVE` | Officer approves plan | Citizen |
-| `BPA.WORKFLOW.REJECT` | Officer rejects plan | Citizen |
+| `BPA.WORKFLOW.APPROVE` | Officer approves | Citizen |
+| `BPA.WORKFLOW.REJECT` | Officer rejects | Citizen |
 
 #### Step 2: Confirm the module publishes domain events
 
-Check that the module is already publishing to a Kafka topic with the standard domain event envelope (`eventId`, `eventName`, `module`, `tenantId`, `stakeholders`, `data`). If not, work with the module team to add publishing (see [Step 2a](#step-2a-adding-event-publishing-to-a-module) below).
+Check that the module publishes to a Kafka topic with the standard domain event envelope (`eventId`, `eventName`, `module`, `tenantId`, `stakeholders`, `data`). If not, see [Step 2a](#step-2a-adding-event-publishing-to-a-module).
 
 #### Step 3: Add the Kafka topic to novu-bridge
 
-In `application.properties`:
 ```properties
-# Add BPA topic alongside complaints topic
 novu.bridge.kafka.input.topic=${NOVU_BRIDGE_KAFKA_INPUT_TOPIC:complaints.domain.events,bpa.domain.events}
 ```
 
-Or deploy a separate `novu-bridge` instance with the BPA topic — useful for isolating notification pipelines by domain.
-
 #### Step 4: Register message templates in MDMS (TemplateBinding)
-
-For each notification event, create a `TemplateBinding` record in config-service / MDMS:
 
 ```json
 {
@@ -807,32 +895,11 @@ For each notification event, create a `TemplateBinding` record in config-service
 }
 ```
 
-> **Note:** `contentSid` is the ValueFirst template ID (or Twilio `HX...` for WhatsApp). `paramOrder` must match the `{1}`, `{2}` variable positions in your DLT-registered template.
-
 #### Step 5: Confirm ProviderDetail exists for the tenant
 
-If the tenant already uses ValueFirst for PGR, the same `ProviderDetail` record will be picked up automatically — no additional seed data is needed. If it is a new tenant, add:
-
-```json
-{
-  "schemaCode": "ProviderDetail",
-  "tenantId": "pg.citya",
-  "data": {
-    "tenantId": "pg.citya",
-    "providerName": "valuefirst",
-    "channel": "sms",
-    "novuIntegrationId": "valuefirst-sms",
-    "senderNumber": "YOUR_SENDER_ID",
-    "credentials": { "username": "YOUR_VF_USERNAME", "password": "YOUR_VF_PASSWORD" },
-    "isActive": true,
-    "priority": 1
-  }
-}
-```
+If the tenant already has a ValueFirst or Karix `ProviderDetail` record for the SMS channel, no additional seed data is needed. If it is a new tenant, add the relevant record from the [Configuration Reference](#configuration-reference).
 
 #### Step 6: Register the Novu notification workflow
-
-Run the bootstrap script (or Postman collection) to create a Novu workflow for the new event:
 
 ```bash
 curl -X POST "$NOVU_BASE_URL/v1/notification-templates" \
@@ -844,18 +911,13 @@ curl -X POST "$NOVU_BASE_URL/v1/notification-templates" \
     "triggers": [{ "identifier": "bpa-workflow-apply-sms-en" }],
     "steps": [{ "template": { "type": "sms", "content": "Your BPA application {{1}} is submitted." } }]
   }'
-```
 
-Then activate it:
-```bash
 curl -X PUT "$NOVU_BASE_URL/v1/notification-templates/{id}/status" \
   -H "Authorization: ApiKey $NOVU_API_KEY" \
   -d '{"active": true}'
 ```
 
 #### Step 7: Test end-to-end
-
-Use the `/_test-trigger` endpoint in `novu-bridge` to send a test event without going through Kafka:
 
 ```bash
 curl -X POST http://localhost:8290/novu-bridge/novu-adapter/v1/dispatch/_test-trigger \
@@ -868,38 +930,30 @@ curl -X POST http://localhost:8290/novu-bridge/novu-adapter/v1/dispatch/_test-tr
   }'
 ```
 
-Then test via the full Kafka path with a dry-run endpoint (`send=false`) before going live.
-
 ---
 
 ### Pattern 2 — Scheduler-based Integration (e.g., Property Tax, Water & Sewerage)
 
-Some modules do not have workflow-driven notification triggers. Instead, notifications are time-triggered — for example, sending a tax due date reminder 30 days before the deadline. These require a **scheduler** component that periodically fetches records and publishes domain events.
+Some modules do not have workflow-driven triggers. Notifications are time-triggered — for example, a tax due date reminder 30 days before the deadline.
 
 #### Architecture
 
 ```
 Scheduler (new component or existing module cron job)
     │  Queries PT service for bills due in 30 days
-    │  Formats each record as a domain event
-    │  Publishes to Kafka: pt.domain.events
+    │  Publishes domain events to Kafka: pt.domain.events
     ▼
-novu-bridge  (same pipeline as PGR — no changes needed)
+novu-bridge  (same pipeline — no changes needed)
     │
     ▼
-ValueFirst → Citizen SMS
+ValueFirst / Karix → Citizen SMS
 ```
 
 #### Step 2a: Adding event publishing to a module
 
-This applies to both event-driven modules that do not yet publish events, and scheduler-based modules that need a new scheduler.
-
 **Option A — Add publishing to the existing module service**
 
-In the PT service (or relevant module), add a Kafka producer call at the right trigger point (workflow state change, record save, etc.):
-
 ```java
-// In PropertyTaxService.java (or scheduler)
 ComplaintsDomainEvent event = ComplaintsDomainEvent.builder()
     .eventId(UUID.randomUUID().toString())
     .eventType("DOMAIN_EVENT")
@@ -915,10 +969,8 @@ ComplaintsDomainEvent event = ComplaintsDomainEvent.builder()
             .mobile(assessment.getCitizenMobile())
             .build()
     ))
-    .context(ContextInfo.builder().locale("en_IN").build())
     .data(Map.of(
         "assessmentNumber", assessment.getAssessmentNumber(),
-        "propertyId", assessment.getPropertyId(),
         "dueAmount", assessment.getDueAmount().toString(),
         "dueDate", assessment.getDueDate()
     ))
@@ -927,138 +979,112 @@ ComplaintsDomainEvent event = ComplaintsDomainEvent.builder()
 producer.push(assessment.getTenantId(), "pt.domain.events", event);
 ```
 
-**Option B — Write a standalone scheduler service**
-
-If modifying the module service is not possible, deploy a separate scheduler that:
-1. Calls the PT service API to fetch records needing notification
-2. Constructs domain events
-3. Publishes to `pt.domain.events`
-
-A simple Spring Boot `@Scheduled` job is sufficient for most use cases:
+**Option B — Standalone scheduler service**
 
 ```java
 @Scheduled(cron = "0 0 9 * * *")  // daily at 9 AM
 public void sendPropertyTaxReminders() {
-    List<Assessment> dueAssessments = ptServiceClient.getAssessmentsDueSoon(30); // next 30 days
+    List<Assessment> dueAssessments = ptServiceClient.getAssessmentsDueSoon(30);
     for (Assessment a : dueAssessments) {
         domainEventPublisher.publishPtDueReminder(a);
     }
 }
 ```
 
-> **Important:** Use Kafka (not direct HTTP calls to `novu-bridge`) so that retries, DLQ, and dispatch logging work correctly.
+> Use Kafka (not direct HTTP to `novu-bridge`) so retries, DLQ, and dispatch logging work correctly.
 
 #### Steps 3–7: Same as Pattern 1
-
-Once events are being published to the Kafka topic, follow Steps 3–7 from Pattern 1 above (add topic to novu-bridge, seed MDMS, bootstrap Novu workflow, test).
 
 ---
 
 ### Checklist: Integrating a new module
 
-Use this checklist when onboarding any new module:
-
 **Module side**
 - [ ] Identify which user actions or time triggers should send notifications
-- [ ] Confirm domain events are published to Kafka with the standard envelope format
-- [ ] For scheduler-based: implement or deploy a scheduler that publishes events
-- [ ] Populate the `data` map with all variables referenced in the message template
-- [ ] Ensure `stakeholders` array includes the intended recipient's `userId` and `mobile`
+- [ ] Confirm domain events are published with the standard envelope format
+- [ ] For scheduler-based: implement or deploy a scheduler
+- [ ] Populate `data` map with all variables in the message template
+- [ ] Ensure `stakeholders` includes the recipient's `userId` and `mobile`
 
 **Configuration (MDMS / config-service)**
 - [ ] Register `TemplateBinding` for each `(eventName, channel, locale)` combination
-- [ ] Set `paramOrder` matching the `{1}`, `{2}` variable positions in the DLT template
-- [ ] Set `dltTemplateId`, `dltEntityId`, `dltContentType` (mandatory for SMS in India)
+- [ ] Set `paramOrder` matching `{1}`, `{2}` variable positions in the DLT template
+- [ ] Set `dltTemplateId`, `dltEntityId`, `dltContentType`
 - [ ] Confirm `ProviderDetail` exists for the tenant and channel
 
 **novu-bridge**
-- [ ] Add the new Kafka topic to `novu.bridge.kafka.input.topic` (or deploy a dedicated instance)
+- [ ] Add the new Kafka topic to `novu.bridge.kafka.input.topic`
 - [ ] No Java code changes required for new event-driven modules
 
 **Novu**
-- [ ] Create and activate a Novu notification workflow for each new template
+- [ ] Create and activate a Novu notification workflow per template
 - [ ] Verify workflow identifier matches `templateId` in `TemplateBinding`
 
 **Testing**
 - [ ] Run `/_dry-run` (send=false) to validate template resolution and variable mapping
-- [ ] Run `/_test-trigger` to send a real notification to a test mobile number
-- [ ] Check `nb_dispatch_log` for status and any error codes
+- [ ] Run `/_test-trigger` to send a real SMS to a test number
+- [ ] Check `nb_dispatch_log` for status and error codes
 
 ---
 
 ### Best practices
 
-1. **One Kafka topic per domain** — use `pt.domain.events`, `bpa.domain.events` etc. rather than a single shared topic. This makes filtering, monitoring, and scaling easier.
-2. **Include all template variables in `data`** — missing variables cause the pipeline to fail with `NB_REQUIRED_VARS_MISSING`. Always populate `data` with every key listed in `requiredVars` and `paramOrder`.
-3. **Do not hardcode mobile numbers in the scheduler** — always fetch the citizen's mobile from the user service or the module's own citizen record. Never publish test numbers to production events.
-4. **Idempotency** — use a stable, unique `eventId` (e.g., `<module>-<entityId>-<action>-<timestamp>`). `novu-bridge` uses `eventId` as the idempotency key for `nb_dispatch_log`.
-5. **Test with dry-run first** — always use `send=false` mode to validate the entire pipeline before sending live SMS.
-6. **DLT registration before go-live** — for any new module, ensure all SMS templates are DLT-registered and the `dltTemplateId` is confirmed before sending to real citizens.
+1. **One Kafka topic per domain** — use `pt.domain.events`, `bpa.domain.events` etc. for easier filtering and scaling.
+2. **Include all template variables in `data`** — missing variables cause `NB_REQUIRED_VARS_MISSING` pipeline failure.
+3. **Do not hardcode mobile numbers in schedulers** — always fetch from UserService or the module's citizen record.
+4. **Idempotency** — use a stable `eventId` (e.g., `<module>-<entityId>-<action>-<timestamp>`). `novu-bridge` uses it as the idempotency key for `nb_dispatch_log`.
+5. **Test with dry-run first** — validate the full pipeline before sending live SMS.
+6. **DLT registration before go-live** — register all SMS templates on the TRAI DLT portal before sending to real citizens.
 
 ---
 
 ## Module-Level Changes Required
 
-This section summarises, per module, what changes are needed to enable ValueFirst notifications.
-
 ### PGR (Complaints) — Reference implementation
 
 | Component | Status | Action needed |
 |-----------|--------|---------------|
-| Kafka publishing | Already done | None |
-| `TemplateBinding` MDMS records | Already seeded for `COMPLAINTS.WORKFLOW.APPLY` | Add more events as needed |
-| `ProviderDetail` MDMS record | Seeded for Twilio (WhatsApp) | Add ValueFirst record for SMS channel |
-| novu-bridge | Running | Apply G2–G6 code fixes from [Required Code Changes](#required-code-changes) |
+| Kafka publishing | Done | None |
+| `TemplateBinding` MDMS records | Seeded for `COMPLAINTS.WORKFLOW.APPLY` | Add more events as needed |
+| `ProviderDetail` MDMS record | Seeded for Twilio (WhatsApp) | Add ValueFirst or Karix record for SMS channel |
+| novu-bridge | Running | Apply G2–G9 code fixes |
 | Scheduler | Not needed | N/A |
 
 ### Property Tax (PT)
 
-Property Tax notifications are typically time-triggered (demand notices, payment reminders, penalty alerts) rather than workflow-triggered.
-
 | Component | Status | Action needed |
 |-----------|--------|---------------|
-| Kafka publishing | Not implemented | Add event publishing to PT service **or** deploy standalone scheduler |
-| Scheduler | Not implemented | Write `@Scheduled` job to query bills due in 7 / 15 / 30 days |
-| `TemplateBinding` MDMS records | Not seeded | Create records for `PT.PAYMENT.DUE_REMINDER`, `PT.PAYMENT.RECEIPT` etc. |
-| `ProviderDetail` MDMS record | Not seeded | Add ValueFirst record for each PT tenant |
-| novu-bridge topic config | `complaints.domain.events` only | Add `pt.domain.events` to input topic list |
-| DLT templates | Not registered | Register PT message templates on TRAI DLT portal before go-live |
-
-**Scheduler recommendation for PT:** A daily scheduled job (cron `0 0 9 * * *`) that:
-1. Fetches all active assessments with dues payable in the next 30 days
-2. Excludes assessments where a reminder was already sent in the last 24 hours (use `nb_dispatch_log` for deduplication)
-3. Publishes a `PT.PAYMENT.DUE_REMINDER` domain event per assessment to `pt.domain.events`
+| Kafka publishing | Not implemented | Add event publishing or deploy standalone scheduler |
+| Scheduler | Not implemented | Daily job for bills due in 7 / 15 / 30 days |
+| `TemplateBinding` MDMS records | Not seeded | Create for `PT.PAYMENT.DUE_REMINDER`, `PT.PAYMENT.RECEIPT` |
+| `ProviderDetail` MDMS record | Not seeded | Add ValueFirst or Karix record per tenant |
+| novu-bridge topic config | Complaints only | Add `pt.domain.events` |
+| DLT templates | Not registered | Register on TRAI DLT portal before go-live |
 
 ### Building Plan Approval (BPA)
 
-BPA has a multi-stage workflow (APPLY → FIELDINSPECTION → APPROVE/REJECT). Notifications are workflow-triggered.
-
 | Component | Status | Action needed |
 |-----------|--------|---------------|
-| Kafka publishing | Check with BPA team | Add event publishing at each relevant workflow step |
+| Kafka publishing | Check with BPA team | Add publishing at each relevant workflow step |
 | `TemplateBinding` MDMS records | Not seeded | Create for `BPA.WORKFLOW.APPLY`, `BPA.WORKFLOW.APPROVE`, `BPA.WORKFLOW.REJECT` |
-| `ProviderDetail` MDMS record | Not seeded | Reuse existing ValueFirst record if same tenant |
-| novu-bridge topic config | Not configured | Add `bpa.domain.events` to input topics |
+| `ProviderDetail` MDMS record | Not seeded | Reuse existing record if same tenant |
+| novu-bridge topic config | Not configured | Add `bpa.domain.events` |
 | Scheduler | Not needed | N/A |
 
 ### Trade License (TL)
 
-Trade License notifications are a mix of workflow-triggered (application status) and time-triggered (renewal reminders).
-
 | Component | Status | Action needed |
 |-----------|--------|---------------|
-| Kafka publishing | Check with TL team | Add event publishing for application events; separate scheduler for renewal reminders |
-| Renewal reminder scheduler | Not implemented | Schedule 30/15/7 day reminders before license expiry |
+| Kafka publishing | Check with TL team | Add for application events; separate scheduler for renewals |
+| Renewal reminder scheduler | Not implemented | 30/15/7 day reminders before license expiry |
 | `TemplateBinding` MDMS records | Not seeded | Create for application events and renewal reminders |
 | novu-bridge topic config | Not configured | Add `tl.domain.events` |
 
 ### Water & Sewerage (WS)
 
-Similar to PT — primarily time-triggered for bill due dates and disconnection notices.
-
 | Component | Status | Action needed |
 |-----------|--------|---------------|
-| Kafka publishing | Not implemented | Deploy scheduler to publish payment due events |
+| Kafka publishing | Not implemented | Deploy scheduler for payment due events |
 | `TemplateBinding` MDMS records | Not seeded | Create for `WS.BILL.DUE_REMINDER`, `WS.CONNECTION.DISCONNECTION_NOTICE` |
 | novu-bridge topic config | Not configured | Add `ws.domain.events` |
 | Scheduler | Not implemented | Daily job querying WS bills |
@@ -1073,20 +1099,28 @@ Similar to PT — primarily time-triggered for bill due dates and disconnection 
 # ValueFirst credentials
 VF_USERNAME=your_valuefirst_username
 VF_PASSWORD=your_valuefirst_password
-VF_SENDER_ID=YOUR_SENDER_ID
+VF_SENDER_ID=YOUR_VF_SENDER_ID
 VF_DLT_TEMPLATE_ID=1007158620398745312
 VF_DLT_CONTENT_TYPE=1
 VF_ENTITY_ID=1001458620398745312
 
-# Adapter service (Approach A only)
-VALUEFIRST_ADAPTER_URL=http://valuefirst-adapter.egov:3001
+# Karix credentials (Power API)
+KARIX_AUTH_ID=your_karix_auth_id
+KARIX_AUTH_TOKEN=your_karix_auth_token
+KARIX_SENDER_ID=YOUR_KARIX_SENDER_ID
+KARIX_API_URL=https://api.karix.io/message/
+
+# novu-bridge adapter security
 ADAPTER_SECRET_KEY=strong-random-secret
 
-# novu-bridge channel
+# novu-bridge channel default
 NOVU_BRIDGE_CHANNEL=SMS
 
-# Kafka topics (comma-separated for multiple modules)
+# Kafka topics
 NOVU_BRIDGE_KAFKA_INPUT_TOPIC=complaints.domain.events,pt.domain.events,bpa.domain.events
+
+# Novu bootstrap
+NOVU_BRIDGE_URL=http://novu-bridge:8290
 ```
 
 ### MDMS ProviderDetail — ValueFirst SMS
@@ -1097,7 +1131,7 @@ NOVU_BRIDGE_KAFKA_INPUT_TOPIC=complaints.domain.events,pt.domain.events,bpa.doma
   "providerName": "valuefirst",
   "channel": "sms",
   "novuIntegrationId": "valuefirst-sms",
-  "senderNumber": "YOUR_SENDER_ID",
+  "senderNumber": "YOUR_VF_SENDER_ID",
   "credentials": {
     "username": "YOUR_VF_USERNAME",
     "password": "YOUR_VF_PASSWORD"
@@ -1107,7 +1141,25 @@ NOVU_BRIDGE_KAFKA_INPUT_TOPIC=complaints.domain.events,pt.domain.events,bpa.doma
 }
 ```
 
-### MDMS TemplateBinding — ValueFirst SMS (PGR example)
+### MDMS ProviderDetail — Karix SMS
+
+```json
+{
+  "tenantId": "pg.citya",
+  "providerName": "karix",
+  "channel": "sms",
+  "novuIntegrationId": "karix-sms",
+  "senderNumber": "YOUR_KARIX_SENDER_ID",
+  "credentials": {
+    "authId": "YOUR_KARIX_AUTH_ID",
+    "authToken": "YOUR_KARIX_AUTH_TOKEN"
+  },
+  "isActive": true,
+  "priority": 2
+}
+```
+
+### MDMS TemplateBinding — SMS (PGR example)
 
 ```json
 {
