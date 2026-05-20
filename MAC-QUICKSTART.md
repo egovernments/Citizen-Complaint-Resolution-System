@@ -47,7 +47,9 @@ What this does:
    - Renders `globalConfigs.js` against the auto-detected ADMIN-on-state-tenant.
    - Validates: MDMS lookup, ADMIN OAuth mint, configurator 200, digit-ui 200, Gatus 200.
 
-First run: ~8–15 min on a healthy Mac/OrbStack box (image pull dominates). Subsequent re-runs into a healthy stack: ~30 s (the `mac-stack-up.sh` healthy-skip short-circuit fires).
+First run from a fully-wiped state: **~3 min converge** (`mac-stack-up: CONVERGED on attempt 1/10`) plus a few minutes for image pull on first-ever run. Subsequent re-runs into a healthy stack: ~30 s (the `mac-stack-up.sh` healthy-skip short-circuit fires).
+
+Validated blank-dir-to-working-stack 2026-05-20 on macOS/OrbStack: 35 containers up, 27 healthy, all 4 verify probes 200, total elapsed ~5 min including the ansible orchestration around the converge.
 
 ## Live progress while it runs
 
