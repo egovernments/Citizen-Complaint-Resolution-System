@@ -18,6 +18,22 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# ansible buffers a task's stdout until the task ENDS, so the macOS Rosetta
+# converge (10-40min) looks like a dead hang with zero feedback. Tell the
+# operator the live escape hatches UP FRONT, before ansible swallows output.
+cat >&2 <<'BANNER'
+────────────────────────────────────────────────────────────────────────
+ DIGIT deploy starting. The macOS converge step is long and ansible shows
+ NO output until it finishes. For LIVE progress, in another terminal run:
+
+     tail -f /tmp/mac-stack-up.progress
+     watch -n5 "docker ps --format '{{.Names}}\t{{.Status}}' | grep -E 'healthy|Exited|Restart'"
+
+ 'attempt N/14 … X/Y up-or-healthy' = converging (wait). 'ABORT — LEAKED
+ NETWORK ENDPOINT' = stop, restart the engine, re-run PLAIN (no SKIP_DOWN).
+────────────────────────────────────────────────────────────────────────
+BANNER
+
 # Regenerate inventory/hosts.yml from whatever host_vars exist on disk.
 # Every file (except _example.yml) becomes a host under `digit:`.
 # Group-wide vars are static here — matching hosts.yml.example.

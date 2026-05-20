@@ -842,8 +842,16 @@
       ansible.builtin.command: >-
         bash {{ playbook_dir }}/files/mac-stack-up.sh
         "{{ digit_dir }}"
+        "{{ digit_dir | basename }}_egov-network"
         "{{ compose_profiles }}"
         {{ compose_files }}
+      # SKIP_DOWN: network is already consistent from converge#1 and only
+      # .env changed — a plain retried up -d recreates just the env-changed
+      # (JVM) containers and leaves infra + openbao up. ~halves deploy time
+      # and stops re-sealing openbao (the re-unseal below becomes a no-op
+      # safety net). Do NOT set this for converge#1.
+      environment:
+        MAC_STACK_UP_SKIP_DOWN: "1"
       register: post_secrets_recreate_mac
       changed_when: true
       when: ansible_system == "Darwin"
@@ -1297,11 +1305,12 @@
       register: ui_globalconfigs_rerender
 
     - name: "ui-tenant — reload nginx on the host (digit-ui reads the bind-mounted file directly)"
-      when: ansible_system != "Darwin"
+      when:
+        - ansible_system != "Darwin"
+        - ui_globalconfigs_rerender.changed
       ansible.builtin.systemd:
         name: nginx
         state: reloaded
-      when: ui_globalconfigs_rerender.changed
       ignore_errors: true
 
     - name: "validate — MDMS lookup: StateInfo returns at least one record"
