@@ -204,7 +204,7 @@ ValueFirst API
 
 #### Why choose this
 
-- **Fastest to production** (1–2 working days)
+- **Fastest to production**
 - Minimal changes to `novu-bridge` — most logic stays in the adapter
 - No Novu fork required
 - Token rotation, DLR forwarding, and retry logic are all isolated in the adapter
