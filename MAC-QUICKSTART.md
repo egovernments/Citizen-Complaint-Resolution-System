@@ -63,7 +63,6 @@ Look for `mac-stack-up: CONVERGED on attempt N/10`. If you see `mac-stack-up: AB
 
 ```bash
 curl -sS -o /dev/null -w 'mdms:    %{http_code}\n' http://localhost/egov-mdms-service/health
-curl -sS -o /dev/null -w 'config:  %{http_code}\n' http://localhost/configurator/
 curl -sS -o /dev/null -w 'ui:      %{http_code}\n' http://localhost/digit-ui/
 curl -sS -o /dev/null -w 'status:  %{http_code}\n' http://localhost/status/
 curl -sS http://localhost/user/oauth/token \
@@ -72,12 +71,12 @@ curl -sS http://localhost/user/oauth/token \
   | python3 -c 'import json,sys;print("auth:    "+json.load(sys.stdin).get("access_token","MISSING")[:24]+"...")'
 ```
 
-All five should print 200 / a real token.
+All four should print 200 / a real token. Add `curl … /configurator/` once you've built and dropped in the digit-configurator dist (see the browser section above).
 
 Open in a browser:
 - http://localhost/digit-ui/ — citizen + employee SPA
-- http://localhost/configurator/ — DIGIT Studio (tenant onboarding wizard)
 - http://localhost/status/ — Gatus health dashboard
+- http://localhost/configurator/ — DIGIT Studio (tenant onboarding wizard). **Disabled by default.** Build the dist first (`git clone https://github.com/egovernments/digit-configurator && npm ci && npm run build`, drop output into `~/digit/configurator/`), then flip `nginx_features.configurator: true` and re-run `./deploy.sh maputo`. Vendoring digit-configurator in-tree is tracked in PR #50.
 
 Login: `ADMIN` / `eGov@123` / tenant `pg`.
 

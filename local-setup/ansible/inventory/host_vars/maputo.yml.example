@@ -70,7 +70,7 @@ install_claude_code: false
 # ── nginx features ──
 nginx_features:
   brand_assets: false
-  configurator: true                 # /configurator/ — DIGIT Studio
+  configurator: false                # see PR #50 (configurator-snapshot) — dist must exist in ~/digit/configurator/ before flipping true
   configurator_caching: false
   status: true                       # /status/ — Gatus health dashboard
   api_pgr: false
