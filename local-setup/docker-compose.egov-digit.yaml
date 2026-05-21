@@ -1825,6 +1825,17 @@ services:
       SERVER_SERVLET_CONTEXT_PATH: /config-service
       CONFIG_DEFAULT_OFFSET: '0'
       CONFIG_DEFAULT_LIMIT: '100'
+      # MDMS-v2 reachability — config-service validates every `_create`
+      # against the registered schema. Without these envs it falls back
+      # to application.properties' default (`http://localhost:8083`),
+      # which is the container itself → MDMS_VALIDATION_FAILED with
+      # "I/O error on POST request" on every record-create.
+      MDMS_V2_HOST: http://egov-mdms-service:8094
+      MDMS_V2_SCHEMA_SEARCH_PATH: /mdms-v2/schema/v1/_search
+      # Tenant root used for fallback schema-search when the request
+      # tenant has no schema of its own. Should match the deployment's
+      # state-level tenant (set in host_vars).
+      STATE_LEVEL_TENANT_ID: ${STATE_LEVEL_TENANT_ID:-pg}
       OTEL_TRACES_EXPORTER: otlp
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
@@ -1914,21 +1925,42 @@ services:
       NOVU_BRIDGE_KAFKA_RETRY_TOPIC: novu-bridge.retry
       NOVU_BRIDGE_KAFKA_DLQ_TOPIC: novu-bridge.dlq
       NOVU_BRIDGE_MAX_RETRIES: '3'
-      # Default dispatch channel. SMS works out of the box with any
-      # Twilio SMS-capable sender; WhatsApp requires a pre-approved
-      # Twilio Programmable WhatsApp sender. Override per deploy if
-      # you actually have a WhatsApp sender wired up.
-      NOVU_BRIDGE_CHANNEL: SMS
+      # Channel is compared CASE-SENSITIVELY against the TemplateBinding
+      # `channel` field. Our seed data uses lowercase `sms` / `whatsapp`
+      # — keep this lowercase too. Override per-tenant in host_vars.
+      # (Default whatsapp: live deploys use it; SMS is paused pending A2P.)
+      NOVU_BRIDGE_CHANNEL: ${NOVU_BRIDGE_CHANNEL:-whatsapp}
       NOVU_BRIDGE_DEFAULT_LOCALE: en_IN
-      NOVU_BRIDGE_PREFERENCE_ENABLED: 'true'
+      # NOTE: the preference check calls
+      # `digit-user-preferences-service/user-preference/v1/_check`,
+      # which 404s on the upstream image (the actual path differs and
+      # the controller may not be deployed). Leaving it off lets OTP
+      # and complaint events flow; flip to 'true' once preferences are
+      # wired up for the tenant.
+      NOVU_BRIDGE_PREFERENCE_ENABLED: ${NOVU_BRIDGE_PREFERENCE_ENABLED:-false}
       NOVU_BRIDGE_PREFERENCE_HOST: http://digit-user-preferences-service:8080
       NOVU_BRIDGE_PREFERENCE_CHECK_PATH: /user-preference/v1/_check
       NOVU_BRIDGE_PREFERENCE_CODE: USER_NOTIFICATION_PREFERENCES
       NOVU_BRIDGE_CONFIG_HOST: http://digit-config-service:8080
-      NOVU_BRIDGE_CONFIG_RESOLVE_PATH: /config-service/v1/_resolve
-      NOVU_BRIDGE_CONFIG_SEARCH_PATH: /config-service/v1/_search
+      # Full path = SERVER_SERVLET_CONTEXT_PATH (/config-service) +
+      # controller mapping (/config/v1) + endpoint. The earlier
+      # `/config-service/v1/_resolve` was missing the `/config/`
+      # segment and got Spring's "No static resource v1/_resolve" 500.
+      NOVU_BRIDGE_CONFIG_RESOLVE_PATH: /config-service/config/v1/_resolve
+      NOVU_BRIDGE_CONFIG_SEARCH_PATH: /config-service/config/v1/_search
       NOVU_BRIDGE_USER_HOST: http://egov-user:8107
       NOVU_BRIDGE_USER_SEARCH_PATH: /user/_search
+      # MDMS_HOST MUST be set. The bridge's application.properties default
+      # is `mdms.host=${MDMS_HOST:-http://mdms-v2.egov:8080}` — that host
+      # does not resolve on the egov docker network, so the citizen
+      # phone-prefix lookup (formatRecipientPhone -> MDMS
+      # ValidationConfigs.mobileNumberValidation) throws
+      # NB_MDMS_PHONE_PREFIX_UNAVAILABLE and NO notification is ever sent.
+      # Setting only MDMS_SEARCH_PATH (as earlier iterations did) is not
+      # enough. Verified on Bomet 2026-05-16: with MDMS_HOST unset, every
+      # complaint failed here; with it set, prefix resolves (+254) and the
+      # pipeline completes through Twilio.
+      MDMS_HOST: http://egov-mdms-service:8094
       MDMS_SEARCH_PATH: /mdms-v2/v2/_search
       # Novu API endpoints are populated in iteration 3 once novu-api
       # is in the stack; bridge starts up but won't dispatch until
