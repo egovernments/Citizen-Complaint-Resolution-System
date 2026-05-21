@@ -36,9 +36,16 @@ type Step = 'landing' | 'create-hierarchy' | 'select-hierarchy' | 'template' | '
 export default function Phase2Page() {
   const { completePhase, addUndo, state } = useApp();
   const navigate = useNavigate();
-  // Phase 1 points targetTenant at the newly-created tenant. Fall back to
-  // the session tenant for sessions that skip Phase 1 (e.g. URL-direct).
-  const targetTenant = state.targetTenant || state.tenant;
+  // Boundaries + the hierarchy DEFINITION are state-level in DIGIT: PGR's
+  // citizen location picker reads them at STATE_LEVEL_TENANT_ID (the state
+  // root), not the city. So Phase 2 writes to the session/state-root tenant
+  // (state.tenant — see AppState.tenant: "any operation that has to happen at
+  // the state-root tenant"), even though Phase 1 created a child city tenant
+  // (state.targetTenant) that phases 3-4 use. Using state.targetTenant here put
+  // the hierarchy one level too deep, so PGR got "Hierarchy definition does not
+  // exist" at the state root. Requires the operator to be logged in at the
+  // state root (the onboarding admin), which the runbook already does.
+  const boundaryTenant = state.tenant;
 
   const [step, setStep] = useState<Step>('landing');
   const [loading, setLoading] = useState(false);
@@ -65,12 +72,12 @@ export default function Phase2Page() {
   // Fetch existing hierarchies on mount
   useEffect(() => {
     fetchHierarchies();
-  }, [targetTenant]);
+  }, [boundaryTenant]);
 
   const fetchHierarchies = async () => {
     setLoadingHierarchies(true);
     try {
-      const hierarchies = await boundaryService.getHierarchies(targetTenant);
+      const hierarchies = await boundaryService.getHierarchies(boundaryTenant);
       setExistingHierarchies(hierarchies);
       if (hierarchies.length > 0) {
         setSelectedHierarchy(hierarchies[0]);
@@ -100,7 +107,7 @@ export default function Phase2Page() {
 
     try {
       const newHierarchy = await boundaryService.createHierarchyFromLevels(
-        targetTenant,
+        boundaryTenant,
         hierarchyType,
         validLevels
       );
@@ -217,7 +224,7 @@ export default function Phase2Page() {
     try {
       // Convert Excel rows to Boundary objects
       const boundariesToCreate: Boundary[] = validBoundaries.map(row => ({
-        tenantId: targetTenant,
+        tenantId: boundaryTenant,
         code: row.code,
         name: row.name,
         boundaryType: row.boundaryType,
@@ -249,7 +256,7 @@ export default function Phase2Page() {
       }));
 
       await localizationService.uploadBoundaryLocalizations(
-        targetTenant,
+        boundaryTenant,
         boundaryData,
         selectedHierarchy.hierarchyType,
         'en_IN'
@@ -394,7 +401,7 @@ export default function Phase2Page() {
       {step === 'create-hierarchy' && (
         <DigitCard>
           <SubHeader>Create Boundary Hierarchy</SubHeader>
-          <p className="text-xs sm:text-sm text-muted-foreground mb-4 sm:mb-6">Define the boundary hierarchy for tenant: <span className="text-primary font-medium">{targetTenant.toUpperCase()}</span></p>
+          <p className="text-xs sm:text-sm text-muted-foreground mb-4 sm:mb-6">Define the boundary hierarchy for tenant: <span className="text-primary font-medium">{boundaryTenant.toUpperCase()}</span></p>
 
           <div className="space-y-6">
             <LabelFieldPair>
@@ -472,7 +479,7 @@ export default function Phase2Page() {
           <div className="flex items-center justify-between mb-4 sm:mb-6">
             <div>
               <SubHeader>Select Existing Hierarchy</SubHeader>
-              <p className="text-xs sm:text-sm text-muted-foreground">Available hierarchies for tenant: <span className="text-primary font-medium">{targetTenant.toUpperCase()}</span></p>
+              <p className="text-xs sm:text-sm text-muted-foreground">Available hierarchies for tenant: <span className="text-primary font-medium">{boundaryTenant.toUpperCase()}</span></p>
             </div>
             <Button
               variant="ghost"
@@ -688,7 +695,7 @@ export default function Phase2Page() {
           <Banner
             successful={true}
             message="Boundaries Created Successfully!"
-            info={`Hierarchy: ${selectedHierarchy.hierarchyType} • Tenant: ${targetTenant.toUpperCase()}`}
+            info={`Hierarchy: ${selectedHierarchy.hierarchyType} • Tenant: ${boundaryTenant.toUpperCase()}`}
           />
 
           <div className="mt-6 p-4 bg-muted rounded overflow-x-auto">

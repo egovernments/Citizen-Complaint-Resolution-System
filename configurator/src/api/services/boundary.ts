@@ -355,41 +355,77 @@ export const boundaryService = {
       boundaries.filter((b) => !failedEntities.has(b.code)).map((b) => b.code)
     );
 
-    // Pass 2: relationships top-down, with bounded retry for residual lag.
-    const MAX_PASSES = 6;
-    let created = 0;
+    // Pass 2: drive every relationship top-down once (best effort). No success
+    // accounting here — createBoundaryRelationship returning 200 does NOT mean
+    // the row persisted (boundary-service is Kafka-backed), so trusting the
+    // return value is exactly how relationships got counted as created while
+    // never landing. Accounting is deferred to the verify pass below.
+    const expectedRel = boundaries.filter(
+      (b) => !failedEntities.has(b.code) && b.hierarchyType && b.boundaryType
+    );
+    const hierarchyType = boundaries.find((b) => b.hierarchyType)?.hierarchyType;
     for (const levelBoundaries of byLevel) {
-      let pending = levelBoundaries.filter(
-        (b) => !failedEntities.has(b.code) && b.hierarchyType && b.boundaryType
-      );
-      for (let pass = 0; pass < MAX_PASSES && pending.length > 0; pass++) {
-        if (pass > 0) await new Promise((r) => setTimeout(r, 1500 * pass));
-        const stillPending: Boundary[] = [];
-        for (const b of pending) {
-          try {
-            await this.createBoundaryRelationship(
-              b.tenantId,
-              b.hierarchyType as string,
-              b.code,
-              b.boundaryType as string,
-              b.parent
-            );
-            success.push(b);
-            created++;
-            onProgress?.(created, total);
-          } catch (error) {
-            const msg = error instanceof Error ? error.message : 'Unknown error (relationship)';
-            // PARENT_NOT_FOUND / "...does not exist" = visibility lag — re-queue
-            // and retry rather than drop (#68).
-            if (/does not exist|not found|parent/i.test(msg) && pass < MAX_PASSES - 1) {
-              stillPending.push(b);
-            } else {
-              failed.push({ boundary: b, error: msg });
+      for (const b of levelBoundaries) {
+        if (failedEntities.has(b.code) || !b.hierarchyType || !b.boundaryType) continue;
+        try {
+          await this.createBoundaryRelationship(
+            b.tenantId, b.hierarchyType, b.code, b.boundaryType, b.parent
+          );
+        } catch {
+          // deferred to verify — the next pass re-checks ACTUAL presence
+        }
+      }
+    }
+
+    // Pass 3: VERIFY-DRIVEN completion — the bulletproofing. Re-query the real
+    // relationship tree, find which expected codes are genuinely absent, and
+    // re-drive ONLY those (parents first, so a missing parent is recreated
+    // before its child is retried). Loop until nothing is missing. This catches
+    // both error failures AND the 200-but-never-persisted case that error-retry
+    // can't see, and a missing mid-level node's subtree heals over successive
+    // rounds. This is what heal-boundary-relationships.py did out-of-band;
+    // folding it in closes the race (#68) instead of mopping up after it.
+    const expectedCodes = new Set(expectedRel.map((b) => b.code));
+    let present = new Set<string>();
+    if (hierarchyType && expectedRel.length > 0) {
+      const VERIFY_ROUNDS = 12;
+      for (let round = 0; round < VERIFY_ROUNDS; round++) {
+        present = new Set<string>();
+        try {
+          const tree = await this.searchBoundaries(tenantId, { hierarchyType });
+          for (const b of tree) if (expectedCodes.has(b.code)) present.add(b.code);
+        } catch {
+          // transient search failure — next round re-checks
+        }
+        const missing = expectedRel.filter((b) => !present.has(b.code));
+        onProgress?.(total - missing.length, total);
+        if (missing.length === 0) break;
+        await new Promise((r) => setTimeout(r, 2000 * Math.min(round + 1, 4)));
+        for (const levelBoundaries of this.groupByLevel(missing)) {
+          for (const b of levelBoundaries) {
+            try {
+              await this.createBoundaryRelationship(
+                b.tenantId, b.hierarchyType as string, b.code,
+                b.boundaryType as string, b.parent
+              );
+            } catch {
+              // re-checked next round
             }
           }
         }
-        pending = stillPending;
       }
+    }
+
+    // Finalize from ACTUAL persistence, never from create() return values.
+    for (const b of expectedRel) {
+      if (present.has(b.code)) success.push(b);
+      else
+        failed.push({
+          boundary: b,
+          error:
+            'Relationship still absent after verify retries — boundary-service ' +
+            'persistence/visibility gap (parent may be missing).',
+        });
     }
 
     return { success, failed };
