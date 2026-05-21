@@ -100,7 +100,7 @@ This step configures the Novu environment, creates the Twilio integration, and s
    ```
 
 ### Phase 3: Config Service Setup
-Config Service acts as the registry for notification metadata. Use your platform's domain URL and provide a valid `authToken`.
+Config Service acts as the registry for notification metadata. Use your platform's domain URL and provide a valid `authToken` (**Note**: `authtoken` is not required if you are port-forwarding service and in that case your domain url will be `localhost:<port-number>`).
 
 1. **Register Schemas**: Register the required schemas via MDMS v2. Replace `<your-domain>`, `<auth-token>`, and `<user-info>` with values for your environment.
 
