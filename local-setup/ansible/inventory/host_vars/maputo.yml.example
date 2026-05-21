@@ -39,6 +39,12 @@ employee_module_denylist: [ IM ]
 
 # Country UI config — pick or replace these per real city. Defaults below
 # are India (matches pg's seed data).
+#
+# locale_region (ISO country code) drives the digit-ui phone-input prefix —
+# the widget reads LOCALE_REGION, NOT coreMobileConfigs.mobilePrefix. Default
+# "IN" → +91. Set it per country or the citizen flow shows the wrong prefix.
+# Kenya: "KE" (+254). Mozambique: "MZ" (+258).
+locale_region: "IN"
 pgr_boundary_highest_level: "City"
 pgr_boundary_lowest_level: "Locality"
 boundary_type: "Locality"
