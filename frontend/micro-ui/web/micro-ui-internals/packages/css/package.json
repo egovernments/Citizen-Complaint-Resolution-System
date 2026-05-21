@@ -50,7 +50,8 @@
   "resolutions": {
     "**/minimatch": "7.4.6",
     "**/glob": "7.2.3",
-    "**/chokidar": "3.5.3"
+    "**/chokidar": "3.5.3",
+    "**/node-releases": "2.0.14"
   },
   "files": [
     "dist/index.min.css",
