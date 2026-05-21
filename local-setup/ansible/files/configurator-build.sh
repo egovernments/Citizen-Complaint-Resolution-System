@@ -24,7 +24,14 @@ NV="$(node -v 2>/dev/null | sed 's/^v//')"
 ver_ge(){ [ "$(printf '%s\n%s\n' "$2" "$1" | sort -t. -k1,1n -k2,2n -k3,3n | head -1)" = "$2" ]; }
 ver_ge "$NV" "$NEED_NODE" || { echo "ERROR: node v$NV < $NEED_NODE (digit-configurator + Vite need it)" >&2; exit 1; }
 
-if [ -d "$REPO_DIR/.git" ]; then
+# repo_url "-" = VENDORED: the source is already in the tree (CCRS configurator/);
+# build it in place, no clone/checkout. This is the monorepo path — the digit-
+# configurator upstream is being retired into CCRS. A real URL still clones (kept
+# for transitional/standalone use).
+if [ "$REPO_URL" = "-" ]; then
+  echo "configurator-build: vendored source — building in place at $REPO_DIR" >&2
+  [ -f "$REPO_DIR/package.json" ] || { echo "ERROR: no package.json at vendored $REPO_DIR" >&2; exit 2; }
+elif [ -d "$REPO_DIR/.git" ]; then
   echo "configurator-build: updating $REPO_DIR → $REF" >&2
   git -C "$REPO_DIR" fetch origin --quiet
   git -C "$REPO_DIR" checkout "$REF" --quiet

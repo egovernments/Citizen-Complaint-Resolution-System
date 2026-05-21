@@ -999,18 +999,19 @@
         state: directory
 
     # Config-driven build: when `build_configurator: true`, the deploy builds
-    # the digit-configurator dist itself (clone + npm + vite build) so a new
-    # tenant/country gets the configurator with zero manual steps. The script
-    # prints the dist path on its last line; we capture it into the same
-    # `configurator_build` var the sync task below consumes. Operators who
-    # pre-build elsewhere just set `configurator_build:` directly and leave
-    # `build_configurator` off.
+    # the digit-configurator dist itself (npm + vite build) so a new tenant gets
+    # the configurator with zero manual steps. The source is VENDORED in-tree at
+    # CCRS `configurator/` (the upstream digit-configurator repo is retired into
+    # CCRS) — repo_url "-" tells the script to build in place, no clone. The
+    # script prints the dist path on its last line; captured into the
+    # `configurator_build` var the sync task below consumes. (A real
+    # configurator_repo_url still clones, for transitional/standalone use.)
     - name: "Configurator SPA — build dist (when build_configurator)"
       ansible.builtin.command: >-
         bash {{ playbook_dir }}/files/configurator-build.sh
-        "{{ configurator_repo | default(digit_dir ~ '/src/digit-configurator') }}"
-        "{{ configurator_repo_url | default('https://github.com/ChakshuGautam/digit-configurator.git') }}"
-        "{{ configurator_ref | default('main') }}"
+        "{{ configurator_repo | default(playbook_dir ~ '/../../configurator') }}"
+        "{{ configurator_repo_url | default('-') }}"
+        "{{ configurator_ref | default('') }}"
       register: configurator_build_run
       changed_when: true
       when:
