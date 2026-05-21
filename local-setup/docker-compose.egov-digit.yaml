@@ -1914,7 +1914,11 @@ services:
       NOVU_BRIDGE_KAFKA_RETRY_TOPIC: novu-bridge.retry
       NOVU_BRIDGE_KAFKA_DLQ_TOPIC: novu-bridge.dlq
       NOVU_BRIDGE_MAX_RETRIES: '3'
-      NOVU_BRIDGE_CHANNEL: WHATSAPP
+      # Default dispatch channel. SMS works out of the box with any
+      # Twilio SMS-capable sender; WhatsApp requires a pre-approved
+      # Twilio Programmable WhatsApp sender. Override per deploy if
+      # you actually have a WhatsApp sender wired up.
+      NOVU_BRIDGE_CHANNEL: SMS
       NOVU_BRIDGE_DEFAULT_LOCALE: en_IN
       NOVU_BRIDGE_PREFERENCE_ENABLED: 'true'
       NOVU_BRIDGE_PREFERENCE_HOST: http://digit-user-preferences-service:8080
