@@ -1,0 +1,16 @@
+# digit-ui from-source overlay — opt-in via `build_digit_ui: true`.
+#
+# Mounts the freshly-built esbuild bundle over the digit-ui container's web
+# root, so the deploy serves a from-source UI instead of the baked (pinned,
+# often stale) image. Mirrors the configurator/mcp fold-ins: the playbook
+# clones + `npm run build`s digit-ui-esbuild (files/digit-ui-build.sh) into
+# {{ digit_dir }}/src/digit-ui-esbuild before `up -d`, and adds this overlay
+# to the compose -f stack.
+#
+# The base compose's globalConfigs.js / silent-check-sso.html / default.conf
+# file mounts nest ON TOP of this dir mount (Docker applies the dir mount first,
+# then the deeper file mounts), so runtime per-tenant config still applies.
+services:
+  digit-ui:
+    volumes:
+      - ./src/digit-ui-esbuild/build:/var/web/digit-ui

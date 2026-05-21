@@ -228,6 +228,13 @@
         src: ../docker-compose.fast-path.yml
         dest: "{{ digit_dir }}/docker-compose.fast-path.yml"
 
+    # digit-ui from-source overlay. Mounts the freshly-built esbuild bundle
+    # over the digit-ui container web root. Used only when build_digit_ui: true.
+    - name: Copy digit-ui-from-source overlay (used only when build_digit_ui is true)
+      copy:
+        src: ../docker-compose.digit-ui-build.yml
+        dest: "{{ digit_dir }}/docker-compose.digit-ui-build.yml"
+
     # ==================== OTEL Java Agent (fetched, not in git) ====================
     # The 21 MB OTEL javaagent JAR is downloaded on the controller before the
     # otel/ tree gets rsync'd to the target. Cached locally via the script's
@@ -477,7 +484,8 @@
         compose_files: >-
           {{
             '-f docker-compose.egov-digit.yaml' +
-            (' -f docker-compose.fast-path.yml' if (db_fast_path | default(false)) else '')
+            (' -f docker-compose.fast-path.yml' if (db_fast_path | default(false)) else '') +
+            (' -f docker-compose.digit-ui-build.yml' if (build_digit_ui | default(false)) else '')
           }}
 
     - name: "Show compose file stack"
@@ -505,6 +513,24 @@
       when:
         - enable_mcp | default(false)
         - build_mcp | default(false)
+
+    # ==================== Build digit-ui from source ====================
+    # Mirrors the configurator + mcp fold-ins: when `build_digit_ui: true`,
+    # clone digit-ui-esbuild + `npm run build` here (files/digit-ui-build.sh)
+    # and serve the result by mounting build/ over the digit-ui container web
+    # root (docker-compose.digit-ui-build.yml overlay, added to compose_files
+    # above). Runs BEFORE up -d so the build dir exists for the mount. No
+    # registry/pinned-image dependency. Default off → no Linux behaviour change.
+    - name: "Build digit-ui from source (when build_digit_ui)"
+      ansible.builtin.command: >-
+        bash {{ playbook_dir }}/files/digit-ui-build.sh
+        "{{ digit_dir }}/src/digit-ui-esbuild"
+        "{{ digit_ui_esbuild_repo | default('https://github.com/theflywheel/digit-ui-esbuild.git') }}"
+        "{{ digit_ui_esbuild_branch | default('main') }}"
+      register: digit_ui_build_run
+      changed_when: true
+      when:
+        - build_digit_ui | default(false)
 
     - name: Pull all images from VPC registry
       shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} pull --ignore-pull-failures

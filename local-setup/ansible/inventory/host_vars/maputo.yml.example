@@ -73,6 +73,13 @@ footer_bw_logo_url: ""
 
 # ── digit-ui: container serves the SPA on Mac ──
 digit_ui_mode: container
+# build_digit_ui: true → the deploy clones digit-ui-esbuild + `npm run build`s
+# the SPA itself (files/digit-ui-build.sh) and mounts the bundle over the
+# container web root, instead of the pinned registry image (which can be stale).
+# Mirrors build_configurator / build_mcp. Leave off to use the image as-is.
+# build_digit_ui: true
+# digit_ui_esbuild_repo: https://github.com/theflywheel/digit-ui-esbuild.git
+# digit_ui_esbuild_branch: main
 
 # ── Opt-ins ──
 # MCP (the tenant_bootstrap seeding layer). Two ways to get the image:
