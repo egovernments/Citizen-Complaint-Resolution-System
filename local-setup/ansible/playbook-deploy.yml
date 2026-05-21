@@ -1138,7 +1138,7 @@
         method: POST
         body_format: json
         body:
-          target_tenant: "{{ state_tenant_id }}.citya"
+          target_tenant: "{{ city_tenant | default(state_tenant_id ~ '.citya') }}"
           source_tenant: "pg.citest"
           auth:
             username: "{{ bootstrap_user | default('ADMIN') }}"
@@ -1156,7 +1156,7 @@
       ansible.builtin.debug:
         msg:
           - "Root  bootstrap (target={{ state_tenant_id }}): {{ (mcp_root_bootstrap.json.summary | default('skipped')) if mcp_root_bootstrap is defined else 'skipped' }}"
-          - "City  bootstrap (target={{ state_tenant_id }}.citya): {{ (mcp_city_bootstrap.json.summary | default('skipped')) if mcp_city_bootstrap is defined else 'skipped' }}"
+          - "City  bootstrap (target={{ city_tenant | default(state_tenant_id ~ '.citya') }}): {{ (mcp_city_bootstrap.json.summary | default('skipped')) if mcp_city_bootstrap is defined else 'skipped' }}"
       when:
         - state_tenant_id != 'pg'
         - enable_mcp | default(false)
