@@ -342,13 +342,12 @@ server {
     proxy_read_timeout 120s;
     proxy_buffering off;
   }
-  # Per-tenant boot config — overrides whatever was baked into the
-  # container image (else digit-ui renders as the source tenant, e.g. pg).
-  location = /digit-ui/globalConfigs.js {
-    alias {{ digit_dir }}/nginx/globalConfigs.js;
-    default_type application/javascript;
-    add_header Cache-Control "no-cache, must-revalidate" always;
-  }
+  # Per-tenant boot config (globalConfigs.js) + silent-check-sso.html are served
+  # by the digit-ui CONTAINER from its /host-nginx directory mount (see
+  # digit-ui.conf) and reach here via the /digit-ui/ proxy above. We do NOT
+  # alias a host file at this layer: on OrbStack a single-file bind mount of
+  # globalConfigs.js isn't reliably materialized, and an atomic re-render
+  # changes its inode (breaking a pinned mount) — the dir mount avoids both.
 
   # egov-filestore presigned-URL rewrite (same as static mode).
   location /file-store/ {
