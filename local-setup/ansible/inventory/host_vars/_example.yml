@@ -38,11 +38,21 @@ tls_enabled: true
 
 # ────────── DIGIT tenancy ──────────
 
-# REQUIRED. Three-tier tenant slug:
-#   state_tenant_id  — root tenant the citizen UI binds to
+# REQUIRED. Four-tier tenant slug:
+#   state_root       — top-level country/state tenant. DIGIT services
+#                       use this for STATE_LEVEL_TENANT_ID env vars
+#                       (auth lookup encryption, MDMS state defaults,
+#                       boundary root). One per country; "ke", "pb", "mz".
+#                       NOT the same as state_tenant_id below — see the
+#                       digit-ui notes for why those diverge.
+#   state_tenant_id  — root tenant the citizen UI binds to. Usually the
+#                       city tenant (e.g. ke.nairobi) when the SPA is
+#                       pinned to a single city.
 #   boot_tenant      — tenant the citizen-side citizen-current-tenant
 #                       resolves to (usually same as state_tenant_id)
-#   tenant_id        — used in templates that need a single value
+#   tenant_id        — city/operating tenant used in templates that
+#                       need a single value (e.g. ke.nairobi)
+state_root: ke
 state_tenant_id: ke.mycity
 boot_tenant: ke.mycity
 tenant_id: ke.mycity

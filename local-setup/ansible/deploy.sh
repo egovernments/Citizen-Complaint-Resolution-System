@@ -18,6 +18,37 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Fail fast with an actionable message if ansible isn't on PATH. Otherwise the
+# ansible-playbook call at the end dies with a cryptic "command not found" and
+# the operator has no idea why. Common macOS trap: `pip3 install --user ansible`
+# puts ansible-playbook in the Python user-base bin, which macOS does NOT add
+# to PATH — pip "succeeds" yet the binary is invisible.
+if ! command -v ansible-playbook >/dev/null 2>&1; then
+  echo "ERROR: 'ansible-playbook' not found on PATH." >&2
+  echo "  Install ansible so it is on PATH, then re-run. Options:" >&2
+  echo "    macOS:  brew install ansible" >&2
+  echo "    pipx :  python3 -m pip install --user pipx && python3 -m pipx ensurepath && pipx install --include-deps ansible" >&2
+  echo "    pip  :  pip3 install --user ansible  AND  export PATH=\"\$(python3 -m site --user-base)/bin:\$PATH\"" >&2
+  echo "  Verify: ansible-playbook --version" >&2
+  exit 127
+fi
+
+# ansible buffers a task's stdout until the task ENDS, so the macOS Rosetta
+# converge (10-40min) looks like a dead hang with zero feedback. Tell the
+# operator the live escape hatches UP FRONT, before ansible swallows output.
+cat >&2 <<'BANNER'
+────────────────────────────────────────────────────────────────────────
+ DIGIT deploy starting. The macOS converge step is long and ansible shows
+ NO output until it finishes. For LIVE progress, in another terminal run:
+
+     tail -f /tmp/mac-stack-up.progress
+     watch -n5 "docker ps --format '{{.Names}}\t{{.Status}}' | grep -E 'healthy|Exited|Restart'"
+
+ 'attempt N/14 … X/Y up-or-healthy' = converging (wait). 'ABORT — LEAKED
+ NETWORK ENDPOINT' = stop, restart the engine, re-run PLAIN (no SKIP_DOWN).
+────────────────────────────────────────────────────────────────────────
+BANNER
+
 # Regenerate inventory/hosts.yml from whatever host_vars exist on disk.
 # Every file (except _example.yml) becomes a host under `digit:`.
 # Group-wide vars are static here — matching hosts.yml.example.

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DIGIT MCP Sessions</title>
+  <link rel="stylesheet" href="style.css?v=4">
+</head>
+<body>
+  <header>
+    <div class="header-left">
+      <h1>DIGIT MCP Sessions</h1>
+    </div>
+    <div class="header-right">
+      <label class="auto-refresh">
+        <input type="checkbox" id="auto-refresh" checked>
+        Auto-refresh
+      </label>
+    </div>
+  </header>
+
+  <div id="warning-banner" class="warning-banner hidden">
+    Database not available &mdash; showing cached data
+  </div>
+
+  <div class="stats-bar" id="stats-bar">
+    <div class="stat-card">
+      <span class="stat-value" id="stat-sessions">--</span>
+      <span class="stat-label">Sessions</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value" id="stat-tools">--</span>
+      <span class="stat-label">Tools</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value" id="stat-errors">--</span>
+      <span class="stat-label">Errors</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value" id="stat-checkpoints">--</span>
+      <span class="stat-label">Checkpoints</span>
+    </div>
+  </div>
+
+  <main>
+    <aside id="session-list">
+      <div class="panel-header">Sessions</div>
+      <div id="sessions-container" class="sessions-scroll"></div>
+      <div id="sessions-empty" class="empty-state hidden">No sessions yet</div>
+    </aside>
+
+    <section id="session-detail">
+      <div id="detail-placeholder" class="empty-state">
+        Select a session to view events
+      </div>
+      <div id="detail-content" class="hidden">
+        <div class="detail-header" id="detail-header"></div>
+        <div class="events-scroll" id="events-container"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js?v=4"></script>
+</body>
+</html>

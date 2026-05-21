@@ -20,6 +20,16 @@
 # (Nairobi city, when the citizen UI should pin to a single city).
 state_tenant_id: ""
 
+# Top-level country/state tenant. Used for `STATE_LEVEL_TENANT_ID` env
+# vars on the DIGIT services (auth lookup encryption tenant, MDMS state
+# root, boundary hierarchy root). This is distinct from `state_tenant_id`
+# above, which is the city tenant the citizen SPA pins to. Examples:
+# `ke`, `pb`, `mz`. Required in host_vars; the playbook fails open with
+# the upstream `pg` if unset, which silently breaks login on any tenant
+# with encrypted usernames since the encrypt-for-lookup ends up using
+# `pg`'s key (177813) instead of e.g. `ke`'s (74493). See PR description.
+state_root: ""
+
 # digit-ui serving mode — `hmr` for live-reload dev (host-side esbuild
 # in tmux), `static` for the pre-built bundle served by host nginx.
 # Default is static; flip to hmr only on hosts where you actively want

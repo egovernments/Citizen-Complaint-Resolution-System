@@ -4,7 +4,21 @@
   # comes from inventory/host_vars/<host>.yml; defaults from group_vars/.
   # Run via: ./deploy.sh <tenant>  (NOT `ansible-playbook` directly).
   hosts: digit
-  become: true
+  # Linux targets: become root for apt/systemd/host-nginx/etc (default).
+  # macOS thin path: set `deploy_become: false` in host_vars — no
+  # privileged host task runs on Darwin (all gated off), and become
+  # would force sudo prompts + root-owned ~/digit. Must be an inventory
+  # var (not a gathered fact): play-level become is evaluated before
+  # fact-gathering, so `ansible_system` is undefined here.
+  become: "{{ deploy_become | default(true) }}"
+
+  # Apple-Silicon Macs must pull amd64 images under Rosetta — Mac host_vars
+  # sets `docker_default_platform: linux/amd64`. Undefined on Linux ->
+  # omit -> no env change, zero impact on Bomet/naipepea. Must be an
+  # inventory var, not a gathered fact: play-level environment is
+  # evaluated before fact-gathering (ansible_system undefined here).
+  environment:
+    DOCKER_DEFAULT_PLATFORM: "{{ docker_default_platform | default(omit) }}"
 
   pre_tasks:
     # digit-ui can be served two ways, both binding port 18080:
@@ -38,10 +52,11 @@
       changed_when: stop_digit_ui.stdout == "stopped"
       when: digit_ui_mode == "hmr"
 
-    # Both digit_ui_mode values (hmr and static) need the digit-ui-esbuild
-    # source on disk — HMR runs `node esbuild.dev.js` from it, static
-    # builds via `node esbuild.build.js`. Make sure it's there. Idempotent:
-    # `git` module no-ops when the working tree already matches origin.
+    # `static` and `hmr` modes need the digit-ui-esbuild source on disk —
+    # HMR runs `node esbuild.dev.js` from it, static builds via
+    # `node esbuild.build.js`. `container` mode skips this entirely:
+    # digit-ui ships its dist baked in. Also gated off Darwin: /opt isn't
+    # writable under become:false, and Mac always runs container mode.
     - name: "digit-ui — ensure /opt/digit-ui-esbuild repo is present and current"
       ansible.builtin.git:
         repo: "{{ digit_ui_esbuild_repo | default('https://github.com/theflywheel/digit-ui-esbuild.git') }}"
@@ -53,6 +68,9 @@
         # would otherwise block the next git pull. Force-clean keeps the
         # working tree byte-identical to origin/{branch}.
         force: yes
+      when:
+        - digit_ui_mode in ['static', 'hmr']
+        - ansible_system != 'Darwin'
 
 
   tasks:
@@ -65,102 +83,114 @@
     # Mac operators: spin up an Ubuntu 24.04 VM (UTM, OrbStack, Multipass,
     # Lima, or a remote VPS) and point `ansible_host` in your host_vars
     # at that VM. The Mac itself runs only ansible-playbook + ssh.
-    - name: "preflight — target OS must be Debian-family (Ubuntu)"
+    # Supported targets: Debian-family (Ubuntu) for full host provisioning,
+    # and macOS (Darwin) via the thin Mac path — Docker Desktop/OrbStack
+    # already provides Docker, nginx runs as a container, and the
+    # apt/systemd/host-nginx tasks are skipped (when: ansible_system != 'Darwin').
+    # Anything else (RHEL, Alpine, …) is genuinely unsupported.
+    - name: "preflight — target OS must be Debian-family or macOS"
       ansible.builtin.fail:
         msg: |
           Target host {{ inventory_hostname }} is {{ ansible_facts['os_family'] }}
           ({{ ansible_facts['distribution'] | default('?') }} {{ ansible_facts['distribution_version'] | default('?') }}).
-          This playbook only supports Ubuntu/Debian targets — it uses apt,
-          systemd, /etc/docker, /etc/nginx paths throughout.
+          This playbook supports Ubuntu/Debian (full host provisioning) and
+          macOS (thin Mac path — containerized nginx, Docker Desktop/OrbStack).
 
-          If you're on a Mac and want to run DIGIT locally:
-            1. Install an Ubuntu 24.04 VM (UTM, OrbStack, Multipass, Lima).
-            2. SSH-enable it (`apt install openssh-server`).
-            3. Point `ansible_host` in host_vars/<tenant>.yml at the VM.
-            4. Re-run `./deploy.sh <tenant>` from the Mac terminal.
+          On macOS, in inventory/host_vars/<tenant>.yml set:
+            ansible_connection: local
+            ansible_host: localhost
+          and ensure Docker Desktop or OrbStack is running, then run
+          `./deploy.sh <tenant>` from the Mac terminal.
+      when:
+        - ansible_facts['os_family'] != 'Debian'
+        - ansible_system != 'Darwin'
 
-          The Mac itself only needs ansible-playbook + ssh.
-      when: ansible_facts['os_family'] != 'Debian'
+    # ==================== Docker host install + config ====================
+    # Linux/Debian targets only. On macOS the operator already runs Docker
+    # Desktop / OrbStack, so apt + docker.service + /etc/docker/daemon.json
+    # don't apply — this whole block is skipped on Darwin.
+    - name: "Docker host install + config (Linux/Debian targets only)"
+      when: ansible_system != "Darwin"
+      block:
+      # ==================== Docker Installation ====================
+      - name: Install Docker prerequisites
+        apt:
+          name: [ca-certificates, curl, gnupg]
+          state: present
+          update_cache: yes
 
-    # ==================== Docker Installation ====================
-    - name: Install Docker prerequisites
-      apt:
-        name: [ca-certificates, curl, gnupg]
-        state: present
-        update_cache: yes
+      - name: Add Docker GPG key
+        shell: |
+          install -m 0755 -d /etc/apt/keyrings
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+          chmod a+r /etc/apt/keyrings/docker.asc
+        args:
+          creates: /etc/apt/keyrings/docker.asc
 
-    - name: Add Docker GPG key
-      shell: |
-        install -m 0755 -d /etc/apt/keyrings
-        curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-        chmod a+r /etc/apt/keyrings/docker.asc
-      args:
-        creates: /etc/apt/keyrings/docker.asc
+      - name: Add Docker repository
+        shell: |
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
+        args:
+          creates: /etc/apt/sources.list.d/docker.list
 
-    - name: Add Docker repository
-      shell: |
-        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
-      args:
-        creates: /etc/apt/sources.list.d/docker.list
+      # Ubuntu 24.04 ships `docker.io` + `docker-compose-v2` from the
+      # archive. Both conflict with Docker's upstream packages — they own
+      # the same `/usr/libexec/docker/cli-plugins/docker-compose` file —
+      # so dpkg refuses to install the upstream packages until the archive
+      # ones are removed. Idempotent: no-op if they're not installed.
+      - name: Remove conflicting Ubuntu-archive Docker packages
+        apt:
+          name:
+            - docker.io
+            - docker-doc
+            - docker-compose
+            - docker-compose-v2
+            - podman-docker
+            - containerd
+            - runc
+          state: absent
+          purge: yes
 
-    # Ubuntu 24.04 ships `docker.io` + `docker-compose-v2` from the
-    # archive. Both conflict with Docker's upstream packages — they own
-    # the same `/usr/libexec/docker/cli-plugins/docker-compose` file —
-    # so dpkg refuses to install the upstream packages until the archive
-    # ones are removed. Idempotent: no-op if they're not installed.
-    - name: Remove conflicting Ubuntu-archive Docker packages
-      apt:
-        name:
-          - docker.io
-          - docker-doc
-          - docker-compose
-          - docker-compose-v2
-          - podman-docker
-          - containerd
-          - runc
-        state: absent
-        purge: yes
+      - name: Install Docker Engine
+        apt:
+          name:
+            - docker-ce
+            - docker-ce-cli
+            - containerd.io
+            - docker-buildx-plugin
+            - docker-compose-plugin
+          state: present
+          update_cache: yes
 
-    - name: Install Docker Engine
-      apt:
-        name:
-          - docker-ce
-          - docker-ce-cli
-          - containerd.io
-          - docker-buildx-plugin
-          - docker-compose-plugin
-        state: present
-        update_cache: yes
+      # apt installs docker.service `disabled` on Ubuntu 24.04 — enable +
+      # start it explicitly so subsequent tasks can talk to the daemon.
+      - name: Ensure docker daemon is enabled + running
+        service:
+          name: docker
+          state: started
+          enabled: yes
 
-    # apt installs docker.service `disabled` on Ubuntu 24.04 — enable +
-    # start it explicitly so subsequent tasks can talk to the daemon.
-    - name: Ensure docker daemon is enabled + running
-      service:
-        name: docker
-        state: started
-        enabled: yes
+      # ==================== Docker Configuration ====================
+      # The Hetzner VPC registry at {{ docker_registry }} (egov-ci) hosts every
+      # custom-built DIGIT image (digit-mcp, sb35-rebuilt egov-* services)
+      # over plain HTTP. Without this entry Docker refuses to pull with
+      # `http: server gave HTTP response to HTTPS client`. Restart the
+      # daemon when the file changes so the new config takes effect.
+      - name: Configure Docker insecure-registries for VPC registry
+        copy:
+          dest: /etc/docker/daemon.json
+          content: |
+            {
+              "insecure-registries": ["{{ docker_registry }}"]
+            }
+          mode: '0644'
+        register: daemon_json
 
-    # ==================== Docker Configuration ====================
-    # The Hetzner VPC registry at {{ docker_registry }} (egov-ci) hosts every
-    # custom-built DIGIT image (digit-mcp, sb35-rebuilt egov-* services)
-    # over plain HTTP. Without this entry Docker refuses to pull with
-    # `http: server gave HTTP response to HTTPS client`. Restart the
-    # daemon when the file changes so the new config takes effect.
-    - name: Configure Docker insecure-registries for VPC registry
-      copy:
-        dest: /etc/docker/daemon.json
-        content: |
-          {
-            "insecure-registries": ["{{ docker_registry }}"]
-          }
-        mode: '0644'
-      register: daemon_json
-
-    - name: Restart docker if daemon.json changed
-      service:
-        name: docker
-        state: restarted
-      when: daemon_json.changed
+      - name: Restart docker if daemon.json changed
+        service:
+          name: docker
+          state: restarted
+        when: daemon_json.changed
 
     # check_mode: false forces this to run even under `--check`, so the
     # version-compare task below has a real value to test against.
@@ -197,6 +227,7 @@
       copy:
         src: ../docker-compose.fast-path.yml
         dest: "{{ digit_dir }}/docker-compose.fast-path.yml"
+
 
     # ==================== OTEL Java Agent (fetched, not in git) ====================
     # The 21 MB OTEL javaagent JAR is downloaded on the controller before the
@@ -262,6 +293,19 @@
         src: "../docker/"
         dest: "{{ digit_dir }}/docker/"
 
+    # Resolve the MCP image ref ONCE, before .env is rendered. When the
+    # tenant opts into a local build (`build_mcp: true`) the deploy builds
+    # the image itself (mcp-build task below) and points compose at a
+    # local-only tag (`digit-mcp:local`) — no registry pull. Otherwise it
+    # keeps pulling {{ docker_registry }}/digit-mcp:latest as before. An
+    # operator can still override `mcp_image:` explicitly in host_vars.
+    - name: "Resolve MCP image tag"
+      ansible.builtin.set_fact:
+        mcp_image: >-
+          {{ mcp_image
+             | default('digit-mcp:local' if (build_mcp | default(false))
+                       else (docker_registry ~ '/digit-mcp:latest')) }}
+
     # ==================== Compose .env (per-tenant overrides) ====================
     # Templates Grafana's public root URL (so the JVM dashboard / observability
     # links match the tenant's actual domain). Compose auto-loads .env from the
@@ -304,13 +348,20 @@
               sub_filter '</head>' '<script src="/digit-ui/globalConfigs.js"></script></head>';
             }
 
+            # globalConfigs.js + silent-check-sso.html are served from /host-nginx,
+            # a DIRECTORY mount of the host nginx dir (compose: ./nginx:/host-nginx:ro),
+            # NOT single-file mounts into /var/web/digit-ui: OrbStack doesn't reliably
+            # materialize a single file nested in the tar'd build dir, and an atomic
+            # re-render of globalConfigs.js changes its inode (breaking a pinned file
+            # mount). A directory mount is OrbStack-safe and reflects re-renders live.
             location = /digit-ui/globalConfigs.js {
-              alias /var/web/digit-ui/globalConfigs.js;
+              alias /host-nginx/globalConfigs.js;
               default_type application/javascript;
+              add_header Cache-Control "no-cache, must-revalidate" always;
             }
 
             location = /digit-ui/silent-check-sso.html {
-              alias /var/web/digit-ui/silent-check-sso.html;
+              alias /host-nginx/silent-check-sso.html;
               default_type text/html;
             }
 
@@ -334,6 +385,57 @@
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
         regexp: 'api\.egov\.theflywheel\.in'
         replace: "{{ domain }}"
+
+    # Substitute STATE_LEVEL tenant identifiers — the upstream compose
+    # ships with `pg` / `pg.citya` / `mz` defaults from egovernments/CCRS
+    # sample data. Without this rewrite, every DIGIT service comes up
+    # using `pg` for state-tier env vars, which breaks auth on any tenant
+    # whose user rows are encrypted under a different tenant's key — see
+    # the corresponding PR description for the full trace. State-root
+    # gets the inventory `state_root` (e.g. `ke`); the two city-tier
+    # services (egov-enc-service, egov-workflow-v2) get `tenant_id`
+    # (e.g. `ke.nairobi`).
+    - name: Set STATE_LEVEL_TENANT_ID (state-root) in compose
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)STATE_LEVEL_TENANT_ID: pg$'
+        replace: '\1STATE_LEVEL_TENANT_ID: {{ state_root }}'
+
+    - name: Set EGOV_STATE_LEVEL_TENANT_ID (state-root) in compose
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)EGOV_STATE_LEVEL_TENANT_ID: pg$'
+        replace: '\1EGOV_STATE_LEVEL_TENANT_ID: {{ state_root }}'
+
+    - name: Set STATE_LEVEL_TENANT_ID (city tier — enc-service + workflow) in compose
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)STATE_LEVEL_TENANT_ID: pg\.citya$'
+        replace: '\1STATE_LEVEL_TENANT_ID: {{ tenant_id }}'
+
+    - name: Set STATE_LEVEL_TENANT_ID (inbox-service `mz` default) in compose
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)STATE_LEVEL_TENANT_ID: mz$'
+        replace: '\1STATE_LEVEL_TENANT_ID: {{ state_root }}'
+
+    # Same shape of overwrite-on-redeploy bug as the four above, for two
+    # siblings the original fix missed:
+    #   - egov-inbox PARENT_LEVEL_TENANT_ID: mz
+    #   - digit-mcp / jupyter DIGIT_TENANT: pg
+    # Both are tenant-shaped values the verbatim compose `copy:` resets
+    # to upstream defaults on every deploy. Defensive same-pattern fix.
+    - name: Set PARENT_LEVEL_TENANT_ID (egov-inbox) in compose
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)PARENT_LEVEL_TENANT_ID: mz$'
+        replace: '\1PARENT_LEVEL_TENANT_ID: {{ state_root }}'
+
+    - name: Set DIGIT_TENANT (digit-mcp / jupyter) in compose
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)DIGIT_TENANT: pg$'
+        replace: '\1DIGIT_TENANT: {{ state_root }}'
 
     # ==================== Publish digit-mcp image ====================
     # digit-mcp ships from the same registry as every other DIGIT image
@@ -390,15 +492,99 @@
       ansible.builtin.debug:
         msg: "compose files for {{ inventory_hostname }}: {{ compose_files }}"
 
+    # ==================== Build digit-mcp image locally ====================
+    # Mirrors the configurator fold-in (files/configurator-build.sh): when
+    # `build_mcp: true`, clone DIGIT-MCP + `docker build` the image here and
+    # tag it as MCP_IMAGE (digit-mcp:local). Runs BEFORE pull so the local
+    # image is present; the pull below (--ignore-pull-failures) can't fetch a
+    # local-only tag, so it skips it, and `up -d` uses what we just built —
+    # no GHCR / VPC dependency, no multi-arch CI fix needed. Gated on
+    # enable_mcp too (no point building an image the stack won't run).
+    - name: "Build digit-mcp image locally (when build_mcp)"
+      ansible.builtin.command: >-
+        bash {{ playbook_dir }}/files/mcp-build.sh
+        "{{ mcp_repo | default(playbook_dir ~ '/../../digit-mcp') }}"
+        "{{ mcp_repo_url | default('-') }}"
+        "{{ mcp_ref | default('') }}"
+        "{{ mcp_image }}"
+        "{{ docker_default_platform | default('') }}"
+      register: mcp_build_run
+      changed_when: true
+      when:
+        - enable_mcp | default(false)
+        - build_mcp | default(false)
+
+    # ==================== Build digit-ui from source ====================
+    # Mirrors the configurator + mcp fold-ins: when `build_digit_ui: true`,
+    # clone digit-ui-esbuild + `npm run build` here (files/digit-ui-build.sh).
+    # The bundle is laid into the digit-ui container AFTER up -d via tar (see
+    # the "lay digit-ui build into container" task below) — NOT a bind-mount:
+    # mounting build/ over /var/web/digit-ui makes the nested globalConfigs.js /
+    # silent-check-sso.html file-mounts fail on OrbStack (file-inside-dir-mount),
+    # 404'ing globalConfigs.js. tar over the baked SPA, leaving those two file
+    # mounts intact, sidesteps that. No registry/pinned-image dependency.
+    # Default off → no Linux behaviour change.
+    - name: "Build digit-ui from source (when build_digit_ui)"
+      ansible.builtin.command: >-
+        bash {{ playbook_dir }}/files/digit-ui-build.sh
+        "{{ digit_ui_esbuild_repo_dir | default(playbook_dir ~ '/../../digit-ui-esbuild') }}"
+        "{{ digit_ui_esbuild_repo | default('-') }}"
+        "{{ digit_ui_esbuild_branch | default('') }}"
+      register: digit_ui_build_run
+      changed_when: true
+      when:
+        - build_digit_ui | default(false)
+
     - name: Pull all images from VPC registry
       shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} pull --ignore-pull-failures
       args:
         chdir: "{{ digit_dir }}"
 
-    - name: Start DIGIT stack
+    - name: Start DIGIT stack (Linux/Debian)
       shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d
       args:
         chdir: "{{ digit_dir }}"
+      when: ansible_system != "Darwin"
+
+    # macOS/Rosetta: JVM services cold-start slower than compose's
+    # depends_on: service_healthy timeouts, so the first `up -d` aborts
+    # ("dependency failed to start") even though the containers it
+    # created keep warming and DO go healthy. A bare retry then hits
+    # leaked network endpoints ("endpoint <svc> already exists"). The
+    # helper converges by clearing only non-running leaked endpoints and
+    # re-issuing `up -d` (preserving accumulated JVM warmth — no `down`).
+    - name: "Start DIGIT stack (macOS/Rosetta — converge loop)"
+      ansible.builtin.command: >-
+        bash {{ playbook_dir }}/files/mac-stack-up.sh
+        "{{ digit_dir }}"
+        "{{ digit_dir | basename }}_egov-network"
+        "{{ compose_profiles }}"
+        {{ compose_files }}
+      register: mac_stack_up
+      changed_when: true
+      when: ansible_system == "Darwin"
+
+    # Lay the from-source digit-ui bundle into the running container (tar over
+    # the baked SPA), keeping the globalConfigs.js / silent-check-sso.html file
+    # mounts intact (those are excluded). Done AFTER up -d (docker exec needs a
+    # running container). Re-applied every deploy; ephemeral across a manual
+    # container restart, which is fine — the UI only changes on deploy. We do
+    # NOT bind-mount the whole build dir: on OrbStack a file-mount nested inside
+    # a dir-mount fails, 404'ing globalConfigs.js.
+    - name: "Lay digit-ui from-source build into the container (when build_digit_ui)"
+      ansible.builtin.shell: |
+        set -e
+        for i in $(seq 1 24); do
+          if [ "$(docker inspect -f '{% raw %}{{.State.Running}}{% endraw %}' digit-ui 2>/dev/null)" = "true" ]; then break; fi
+          sleep 5
+        done
+        tar -C "{{ digit_ui_esbuild_repo_dir | default(playbook_dir ~ '/../../digit-ui-esbuild') }}/build" \
+            --exclude=globalConfigs.js --exclude=silent-check-sso.html -cf - . \
+          | docker exec -i digit-ui tar -C /var/web/digit-ui -xf -
+      register: digit_ui_tar
+      changed_when: true
+      when:
+        - build_digit_ui | default(false)
 
     # If a tenant just flipped enable_search_stack: true → false, the
     # previously-running search containers (digit-elasticsearch,
@@ -474,7 +660,9 @@
       ansible.builtin.apt:
         name: nodejs
         state: present
-      when: digit_ui_mode == "static"
+      when:
+        - digit_ui_mode == "static"
+        - ansible_system != "Darwin"
 
     - name: "digit-ui mode=static — npm install if package.json is newer than node_modules"
       ansible.builtin.shell: |
@@ -574,6 +762,11 @@
       when: digit_ui_mode == "hmr"
 
     # ==================== Wait for MCP Server ====================
+    # Only when MCP is actually deployed. enable_mcp is false on Mac (the
+    # digit-mcp image is VPC-registry-only) and anywhere off the Hetzner
+    # VPC — without this gate the playbook hangs 2 min then fails on a
+    # service it was never asked to run. Consistent with the enable_mcp
+    # gating on the mcp-bootstrap tasks below.
     - name: Wait for digit-mcp health (up to 2 min)
       shell: curl -sf http://127.0.0.1:13101/healthz -o /dev/null
       register: mcp_health
@@ -581,6 +774,7 @@
       delay: 10
       until: mcp_health.rc == 0
       changed_when: false
+      when: enable_mcp | default(false)
 
     # ==================== OpenBao bootstrap ====================
     # Per-tenant secrets backend. Initialized once; subsequent runs
@@ -726,12 +920,64 @@
         mode: '0600'            # tighten — was 0644 from the template; secrets bump to 0600
       no_log: true
 
-    - name: "Recreate services with the new env (no-op if secrets unchanged)"
+    - name: "Recreate services with the new env (Linux/Debian)"
       ansible.builtin.shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d
       args:
         chdir: "{{ digit_dir }}"
       register: post_secrets_recreate
       changed_when: "'Recreated' in post_secrets_recreate.stdout or 'Started' in post_secrets_recreate.stdout"
+      when: ansible_system != "Darwin"
+
+    # OpenBao wrote secrets into .env → compose recreates the JVM
+    # containers, which cold-start under Rosetta and trip the same
+    # depends_on: service_healthy timeout as the initial start. Reuse the
+    # converge helper (down --remove-orphans + up -d loop) so this second
+    # up -d also settles instead of aborting "dependency failed to start".
+    - name: "Recreate services with the new env (macOS/Rosetta — converge loop)"
+      ansible.builtin.command: >-
+        bash {{ playbook_dir }}/files/mac-stack-up.sh
+        "{{ digit_dir }}"
+        "{{ digit_dir | basename }}_egov-network"
+        "{{ compose_profiles }}"
+        {{ compose_files }}
+      # SKIP_DOWN: network is already consistent from converge#1 and only
+      # .env changed — a plain retried up -d recreates just the env-changed
+      # (JVM) containers and leaves infra + openbao up. ~halves deploy time
+      # and stops re-sealing openbao (the re-unseal below becomes a no-op
+      # safety net). Do NOT set this for converge#1.
+      environment:
+        MAC_STACK_UP_SKIP_DOWN: "1"
+      register: post_secrets_recreate_mac
+      changed_when: true
+      when: ansible_system == "Darwin"
+
+    # converge#2 above (mac-stack-up down+up) recreated the openbao
+    # container, which comes back SEALED — the earlier unseal ran before
+    # this recreate. Without re-unsealing, the final "OpenBao unsealed"
+    # validation 503s (sealed/standby). Darwin only: on Linux the
+    # post-OpenBao recreate is a plain up -d that doesn't recreate openbao.
+    - name: "OpenBao — wait for API again after converge#2 (Darwin)"
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18200/v1/sys/seal-status
+        status_code: [200]
+      register: bao_seal_status_post
+      retries: 24
+      delay: 5
+      until: bao_seal_status_post.status == 200
+      when: ansible_system == "Darwin"
+
+    - name: "OpenBao — re-unseal after converge#2 if sealed (Darwin)"
+      when:
+        - ansible_system == "Darwin"
+        - bao_seal_status_post.json.sealed | default(true)
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18200/v1/sys/unseal
+        method: POST
+        body_format: json
+        body:
+          key: "{{ bao_unseal_key }}"
+        status_code: [200]
+      no_log: true
 
     - name: "OpenBao — show access info"
       ansible.builtin.debug:
@@ -754,52 +1000,116 @@
     # (with the /digit-ui/ alias for static mode, /mcp / /status / etc.
     # for whichever features the host_vars enables).
     # ============================================================
-    - name: "Configurator SPA — ensure /var/www/configurator dir"
+    - name: "Configurator SPA — ensure configurator web dir"
       ansible.builtin.file:
-        path: /var/www/configurator
+        path: "{{ configurator_www_dir }}"
         state: directory
 
-    # Only fires when the tenant has the configurator location enabled AND
-    # the operator has pointed `configurator_build` at a built dist/ dir
-    # on the controller. The old default ('/var/www/crs-mockup/') was a
-    # path on Chakshu's dev box — other operators don't have it, so the
-    # default behaviour is now to skip entirely.
+    # Config-driven build: when `build_configurator: true`, the deploy builds
+    # the digit-configurator dist itself (npm + vite build) so a new tenant gets
+    # the configurator with zero manual steps. The source is VENDORED in-tree at
+    # CCRS `configurator/` (the upstream digit-configurator repo is retired into
+    # CCRS) — repo_url "-" tells the script to build in place, no clone. The
+    # script prints the dist path on its last line; captured into the
+    # `configurator_build` var the sync task below consumes. (A real
+    # configurator_repo_url still clones, for transitional/standalone use.)
+    - name: "Configurator SPA — build dist (when build_configurator)"
+      ansible.builtin.command: >-
+        bash {{ playbook_dir }}/files/configurator-build.sh
+        "{{ configurator_repo | default(playbook_dir ~ '/../../configurator') }}"
+        "{{ configurator_repo_url | default('-') }}"
+        "{{ configurator_ref | default('') }}"
+      register: configurator_build_run
+      changed_when: true
+      when:
+        - nginx_features.configurator | default(false)
+        - build_configurator | default(false)
+
+    - name: "Configurator SPA — use freshly-built dist path"
+      ansible.builtin.set_fact:
+        configurator_build: "{{ configurator_build_run.stdout_lines | last }}"
+      when:
+        - nginx_features.configurator | default(false)
+        - build_configurator | default(false)
+        - configurator_build_run is defined
+        - configurator_build_run.stdout_lines | default([]) | length > 0
+
+    # Fires when the configurator location is enabled AND `configurator_build`
+    # is set — either from the build step above, or pointed at a pre-built
+    # dist/ by the operator. Skips entirely otherwise (no Chakshu-box default).
     - name: "Configurator SPA — sync build"
       ansible.builtin.synchronize:
         src: "{{ configurator_build }}/"
-        dest: /var/www/configurator/
+        dest: "{{ configurator_www_dir }}/"
       when:
         - nginx_features.configurator | default(false)
         - configurator_build is defined
 
-    - name: "Host nginx — install if missing"
-      ansible.builtin.apt:
-        name: nginx
-        state: present
+    # Host nginx (Linux/Debian) — apt nginx + /etc/nginx site. Skipped on
+    # macOS, where nginx runs as a container instead (next block).
+    - name: "Host nginx — Linux/Debian only"
+      when: ansible_system != "Darwin"
+      block:
+      - name: "Host nginx — install if missing"
+        ansible.builtin.apt:
+          name: nginx
+          state: present
 
-    - name: "Host nginx — render site config from template"
-      ansible.builtin.template:
-        src: templates/nginx-site.conf.j2
-        dest: "/etc/nginx/sites-available/{{ domain }}"
-        mode: '0644'
-      notify: Reload nginx
+      - name: "Host nginx — render site config from template"
+        ansible.builtin.template:
+          src: templates/nginx-site.conf.j2
+          dest: "/etc/nginx/sites-available/{{ domain }}"
+          mode: '0644'
+        notify: Reload nginx
 
-    - name: "Host nginx — enable site"
-      ansible.builtin.file:
-        src: "/etc/nginx/sites-available/{{ domain }}"
-        dest: "/etc/nginx/sites-enabled/{{ domain }}"
-        state: link
-        force: yes   # convert pre-existing regular-file copies (older deploys) into a symlink
-      notify: Reload nginx
+      - name: "Host nginx — enable site"
+        ansible.builtin.file:
+          src: "/etc/nginx/sites-available/{{ domain }}"
+          dest: "/etc/nginx/sites-enabled/{{ domain }}"
+          state: link
+          force: yes   # convert pre-existing regular-file copies (older deploys) into a symlink
+        notify: Reload nginx
 
-    - name: "Host nginx — remove default site"
-      ansible.builtin.file:
-        path: /etc/nginx/sites-enabled/default
-        state: absent
-      notify: Reload nginx
+      - name: "Host nginx — remove default site"
+        ansible.builtin.file:
+          path: /etc/nginx/sites-enabled/default
+          state: absent
+        notify: Reload nginx
 
-    - name: "Host nginx — flush handlers so reload happens before validation"
-      ansible.builtin.meta: flush_handlers
+      - name: "Host nginx — flush handlers so reload happens before validation"
+        ansible.builtin.meta: flush_handlers
+
+    # macOS thin path: run nginx as a container instead of host nginx.
+    # Renders the same template (upstream host -> host.docker.internal so
+    # the container reaches the host-published Kong/UI/etc ports) and
+    # serves the configurator dist + globalConfigs via bind mounts.
+    - name: "Mac nginx — container path"
+      when: ansible_system == "Darwin"
+      block:
+        - name: "Mac nginx — ensure nginx dir"
+          ansible.builtin.file:
+            path: "{{ digit_dir }}/nginx"
+            state: directory
+
+        - name: "Mac nginx — render site config (upstreams -> host.docker.internal)"
+          ansible.builtin.template:
+            src: templates/nginx-site.conf.j2
+            dest: "{{ digit_dir }}/nginx/site.conf"
+            mode: '0644'
+          vars:
+            nginx_upstream_host: host.docker.internal
+
+        - name: "Mac nginx — (re)create the digit-nginx container"
+          ansible.builtin.shell: |
+            docker rm -f digit-nginx >/dev/null 2>&1 || true
+            docker run -d --name digit-nginx --restart unless-stopped \
+              --add-host host.docker.internal:host-gateway \
+              -p {{ nginx_host_port | default(80) }}:80 \
+              -v {{ digit_dir }}/nginx/site.conf:/etc/nginx/conf.d/default.conf:ro \
+              -v {{ configurator_www_dir }}:/var/www/configurator:ro \
+              nginx:1.27-alpine
+          register: mac_nginx
+          changed_when: true
 
     # ============================================================
     # Infrastructure validation — runs before the heavy CI tests
@@ -922,6 +1232,9 @@
         body:
           target_tenant: "{{ state_tenant_id }}"
           source_tenant: "pg"
+          mobile_regex: "{{ core_mobile_configs.mobileNumberPattern | default('^[6-9][0-9]{9}$') }}"
+          mobile_length: "{{ core_mobile_configs.mobileNumberLength | default(10) }}"
+          user_validation: "{{ user_validation | default(omit) }}"
           auth:
             username: "{{ bootstrap_user | default('ADMIN') }}"
             password: "{{ bootstrap_password | default('eGov@123') }}"
@@ -940,8 +1253,11 @@
         method: POST
         body_format: json
         body:
-          target_tenant: "{{ state_tenant_id }}.citya"
+          target_tenant: "{{ city_tenant | default(state_tenant_id ~ '.citya') }}"
           source_tenant: "pg.citest"
+          mobile_regex: "{{ core_mobile_configs.mobileNumberPattern | default('^[6-9][0-9]{9}$') }}"
+          mobile_length: "{{ core_mobile_configs.mobileNumberLength | default(10) }}"
+          user_validation: "{{ user_validation | default(omit) }}"
           auth:
             username: "{{ bootstrap_user | default('ADMIN') }}"
             password: "{{ bootstrap_password | default('eGov@123') }}"
@@ -958,7 +1274,7 @@
       ansible.builtin.debug:
         msg:
           - "Root  bootstrap (target={{ state_tenant_id }}): {{ (mcp_root_bootstrap.json.summary | default('skipped')) if mcp_root_bootstrap is defined else 'skipped' }}"
-          - "City  bootstrap (target={{ state_tenant_id }}.citya): {{ (mcp_city_bootstrap.json.summary | default('skipped')) if mcp_city_bootstrap is defined else 'skipped' }}"
+          - "City  bootstrap (target={{ city_tenant | default(state_tenant_id ~ '.citya') }}): {{ (mcp_city_bootstrap.json.summary | default('skipped')) if mcp_city_bootstrap is defined else 'skipped' }}"
       when:
         - state_tenant_id != 'pg'
         - enable_mcp | default(false)
@@ -1088,12 +1404,19 @@
       when: state_tenant_id != 'pg'
 
     - name: "ui-tenant — pick which tenant the SPA lands on"
+      # An explicit host_vars `ui_state_tenant_id` WINS — this is the documented
+      # per-tenant override (e.g. single-city deploys point the SPA at the city
+      # tenant `mz.maputo`, where the configurator stores boundaries and the
+      # citizen/employee/PGR flows must read). Without an override, auto-pick:
+      # state_tenant_id when its ADMIN is provisioned, else fall back to pg.
       ansible.builtin.set_fact:
         ui_state_tenant_id: >-
-          {{ state_tenant_id
-             if (state_tenant_id == 'pg'
-                 or (state_tenant_admin_probe.json.access_token | default('') | length > 10))
-             else 'pg' }}
+          {{ ui_state_tenant_id
+             if (ui_state_tenant_id is defined and ui_state_tenant_id)
+             else (state_tenant_id
+                   if (state_tenant_id == 'pg'
+                       or (state_tenant_admin_probe.json.access_token | default('') | length > 10))
+                   else 'pg') }}
 
     - name: "ui-tenant — log the chosen value (and why)"
       ansible.builtin.debug:
@@ -1116,10 +1439,12 @@
       register: ui_globalconfigs_rerender
 
     - name: "ui-tenant — reload nginx on the host (digit-ui reads the bind-mounted file directly)"
+      when:
+        - ansible_system != "Darwin"
+        - ui_globalconfigs_rerender.changed
       ansible.builtin.systemd:
         name: nginx
         state: reloaded
-      when: ui_globalconfigs_rerender.changed
       ignore_errors: true
 
     - name: "validate — MDMS lookup: StateInfo returns at least one record"
@@ -1174,9 +1499,14 @@
           - "OpenBao:               unsealed + initialized"
           - "===================================="
 
+    # mcp_health is only registered by "Wait for digit-mcp health", which
+    # is gated on enable_mcp. With MCP off (Mac / off-VPC) that task is
+    # skipped, so mcp_health is undefined — gate this status line the same
+    # way (consistent with the other enable_mcp-gated MCP tasks).
     - name: Show MCP health status
       debug:
         msg: "DIGIT-MCP: {{ 'HEALTHY' if mcp_health.rc == 0 else 'UNHEALTHY (non-critical)' }}"
+      when: enable_mcp | default(false)
 
     # ==================== Wait for Loki ====================
     - name: Wait for Loki health (up to 2 min)
@@ -1211,7 +1541,9 @@
         fi
       register: nodejs_install
       changed_when: "'nodejs is already' not in nodejs_install.stdout"
-      when: install_claude_code | default(false)
+      when:
+        - install_claude_code | default(false)
+        - ansible_system != "Darwin"
 
     - name: Install Claude Code CLI
       shell: npm install -g @anthropic-ai/claude-code
@@ -1290,6 +1622,7 @@
     # the "Synchronize config directories" task above — no separate copy
     # step here, just reference the synced paths.
     - name: "Install Newman (Postman CLI runner)"
+      when: run_ci_tests | default(false)   # opt-in CI/extras; was ungated
       ansible.builtin.shell: |
         if ! which newman >/dev/null 2>&1; then
           npm install -g newman
@@ -1298,6 +1631,7 @@
       changed_when: "'added' in newman_install.stdout"
 
     - name: "CI — Postman digit-core-validation (every core service)"
+      when: run_ci_tests | default(false)   # opt-in CI/extras; was ungated
       ansible.builtin.shell: |
         cd {{ digit_dir }}
         newman run postman/digit-core-validation.postman_collection.json \
@@ -1307,6 +1641,7 @@
       changed_when: false
 
     - name: "CI — Postman complaints-demo (full PGR lifecycle on pg.citest)"
+      when: run_ci_tests | default(false)   # opt-in CI/extras; was ungated
       # --delay-request 2000: wait 2s between each request. The PGR
       # lifecycle is async — Create publishes to Kafka and returns 200
       # *before* egov-persister writes the row to eg_pgr_service_v2.
@@ -1344,6 +1679,7 @@
     #     stay active after rollback) — tracked separately.
     # The remaining 8 sub-tests still run and surface real failures.
     - name: "CI — install pytest + dataloader runtime deps on target"
+      when: run_ci_tests | default(false)   # opt-in CI/extras; was ungated
       ansible.builtin.pip:
         # psycopg2-binary: crs_loader._delete_boundaries_via_db uses direct
         # Postgres access to clean boundary rows (no kubectl on compose).
@@ -1352,6 +1688,7 @@
       changed_when: false
 
     - name: "CI — CRSLoader E2E (10-phase Jupyter notebook flow, throwaway tenant)"
+      when: run_ci_tests | default(false)   # opt-in CI/extras; was ungated
       ansible.builtin.shell: |
         cd {{ digit_dir }}/jupyter/dataloader
         DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }} \
@@ -1364,6 +1701,7 @@
       ignore_errors: yes
 
     - name: "CI — show CRSLoader E2E results"
+      when: run_ci_tests | default(false)   # opt-in CI/extras; was ungated
       ansible.builtin.debug:
         msg: "{{ dataloader_e2e.stdout_lines | select('match', '^(\\[[0-9]+/|   PASS|   FAIL)') | list }}"
 
@@ -1381,6 +1719,7 @@
     # breaks the deploy. Re-run with `--start-at-task=` to skip past
     # infra setup if you're iterating on the regression itself.
     - name: "CI — CRSLoader v2 regression suite (#263 fixes)"
+      when: run_ci_tests | default(false)   # opt-in CI/extras; was ungated
       ansible.builtin.shell: |
         cd {{ digit_dir }}/scripts
         DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }} \
@@ -1392,6 +1731,7 @@
       changed_when: false
 
     - name: "CI — show CRSLoader v2 regression results"
+      when: run_ci_tests | default(false)   # opt-in CI/extras; was ungated
       ansible.builtin.debug:
         msg: "{{ dataloader_regression.stdout_lines | select('match', '^(TEST:|RESULTS:|✅|❌|   PermissionError|   After |   City |   Root )') | list }}"
 
@@ -1413,7 +1753,9 @@
       apt:
         name: [python3, python3-pip]
         state: present
-      when: run_ci_tests | default(false)
+      when:
+        - run_ci_tests | default(false)
+        - ansible_system != "Darwin"
 
     - name: Install Python dependencies for DataLoader
       pip:
@@ -1538,7 +1880,7 @@
 
       when: run_ci_tests | default(false) and (run_playwright_tests | default(false))
     - name: Install Playwright Chromium with system dependencies
-      shell: npx playwright install --with-deps chromium
+      shell: 'npx playwright install{{ " --with-deps" if ansible_system != "Darwin" else "" }} chromium' 
       args:
         chdir: "{{ digit_dir }}/e2e-tests"
       # Browser binaries + system deps via apt — first run on a fresh box
@@ -1617,7 +1959,13 @@
             Playwright E2E:          exit {{ pw_rc }}
           Re-run with `--start-at-task=...` to skip past the infra setup,
           or check the per-test stdout above for the specific failure.
-      when: xlsx_rc|int != 0 or dl_rc|int != 0 or pw_rc|int != 0
+      # Only judge CI results when CI was actually requested. With
+      # run_ci_tests:false every CI sub-test skips → its *_result var is
+      # undefined → rc defaults to -1 → this would spuriously fail the
+      # play. Gate it like every other task in the CI block.
+      when:
+        - run_ci_tests | default(false)
+        - xlsx_rc|int != 0 or dl_rc|int != 0 or pw_rc|int != 0
 
   handlers:
     - name: Reload nginx

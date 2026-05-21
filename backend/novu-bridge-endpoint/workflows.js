@@ -72,6 +72,18 @@ export const complaintsReopen = workflow(
   { name: 'COMPLAINTS WORKFLOW REOPEN', payloadSchema: { type: 'object' } },
 );
 
+export const complaintsReassign = workflow(
+  'complaints-workflow-reassign',
+  complaintStep('sms'),
+  { name: 'COMPLAINTS WORKFLOW REASSIGN', payloadSchema: { type: 'object' } },
+);
+
+export const complaintsRate = workflow(
+  'complaints-workflow-rate',
+  complaintStep('sms'),
+  { name: 'COMPLAINTS WORKFLOW RATE', payloadSchema: { type: 'object' } },
+);
+
 // Legacy id from the upstream bootstrap script — keep it for backwards-
 // compat with whatever may already exist in deployed Novu instances.
 export const complaintsSmsV1 = workflow(
@@ -87,5 +99,7 @@ export const ALL_WORKFLOWS = [
   complaintsResolve,
   complaintsReject,
   complaintsReopen,
+  complaintsReassign,
+  complaintsRate,
   complaintsSmsV1,
 ];

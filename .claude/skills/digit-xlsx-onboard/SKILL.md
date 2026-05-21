@@ -87,6 +87,13 @@ While you're parsing, sample two numbers and surface them:
 - **Boundary type levels** in topological order (e.g. `Município → Distrito Municipal → Bairro → Quarteirão`). If they don't match the existing hierarchy at `<root>` (look at `boundary_hierarchy_search` from step 1), the wizard will auto-create a `<CITY_PORTION>_ADMIN` hierarchy at the city — call this out so the operator knows.
 - **Mobile number sample** from the first employee row. If it doesn't match the state's `common-masters.UserValidation` pattern (Kenya = `^[17][0-9]{8}$`), every employee create will fail. See step 5.
 
+**Pre-clean the recurring partner-dump defects (validated on Feliciano's Maputo dump).** These four are common in real configurator-style dumps, predictable, and safely auto-fixable on the controller copy *before* staging — fixing them here turns a multi-iteration grind into a clean run. Fix on a copy, show the operator a diff, never mutate the operator's originals:
+
+1. **Boundary duplicates + whitespace** (`boundaries.xlsx`): strip leading/trailing whitespace from every `code`/`name`/`parentCode`, then drop exact-duplicate rows by `code` (Feliciano's had 11 dup Bairro under `kamavota` + 81 whitespace cells). After cleaning, assert 0 unresolved `parentCode`. This is deterministic *data hygiene*, distinct from the "don't fix bad data" rule — skipping it produces an inconsistent boundary tree.
+2. **`Designation.department`** is comma-separated in the sheet but the schema wants `string[]` — the wizard splits it; just confirm the cell isn't already a stray JSON-array string.
+3. **`ComplaintType`/`ServiceDefs.keywords`** must serialise as a **String**, not an array (the API rejects a JSON array: `expected type: String, found: JSONArray`). The wizard handles comma-sep → string; confirm the cell is comma-sep text.
+4. **Phase-1 `Logo File Path`** is frequently a path on the partner's *own* machine (e.g. `/Users/feliciano.mazoio/Downloads/logo.png`) — unresolvable anywhere else. Blank that cell; the logo goes through the branding step / UI picker, not this column.
+
 ### Step 3 — Ask the operator ≤ 6 questions
 
 Ask **one at a time**, in order. Show the default in parentheses where one exists.
@@ -150,7 +157,24 @@ ssh <alias> "docker exec digit-redis redis-cli DEL validationRules"
 
 (If the redis container is named differently on this host, `docker ps | grep redis` first.)
 
+### Step 5b — (Conditional) bootstrap a brand-new state root
+
+If `<root>` (the part of the target tenant before the first `.`) is a **country/state that has never been onboarded** — e.g. `mz` for `mz.maputo` when only `pg`/`statea` exist — its MDMS has **zero schemas**, and Phase 3–4 of the wizard will fail every write with `SCHEMA_DEFINITION_NOT_FOUND_ERR` / `INVALID_ROLE`. This MUST run **before** Step 6.
+
+Detect: `mdms_search` for any schema at `<root>` returns empty / the root isn't in `mdms_get_tenants`. Then run the bootstrap (clones schema defs + ~14 essential data records + ADMIN + PGR workflow from a source state, default `pg`):
+
+```bash
+ssh <alias> "curl -sS -X POST http://127.0.0.1:13101/v1/tools/tenant_bootstrap \
+  -H 'Content-Type: application/json' \
+  -d '{\"target_tenant\":\"<root>\",\"source_tenant\":\"pg\",
+       \"auth\":{\"username\":\"ADMIN\",\"password\":\"eGov@123\",\"tenant_id\":\"pg\"}}'"
+```
+
+Re-bootstrap of an already-bootstrapped root is idempotent. For an *existing* state (e.g. `ke.newcity` when `ke` is already seeded) this is skipped — the schemas inherit from the root. (This is the same logic the configurator wizard's Phase-1 runs inline; doing it here makes the dependency explicit instead of a silent Phase-3 failure.)
+
 ### Step 6 — Drive the wizard
+
+**Prefer the `onboard_city` composite when the target MCP exposes it.** `onboard_city` is the canonical composite that wraps Step 5b + the wizard + the Step-2 pre-clean + read-back verification with every validated gotcha baked in (boundary hygiene, Designation/keywords shapes, mobile-regex, new-root bootstrap order). When present, call it instead of hand-driving `city_setup_from_xlsx` — this skill then just supplies inputs and narrates. Fall back to the explicit `city_setup_from_xlsx` call below only on older MCP images that lack the composite.
 
 One POST per call to `city_setup_from_xlsx`. Use the in-container paths from Step 4:
 
@@ -269,7 +293,7 @@ Print this template back to the operator, with placeholders filled, and ✅ / �
 
 ## What this skill deliberately does NOT do
 
-- It doesn't write to MDMS schemas. The wizard assumes schemas already exist on the root tenant; they're seeded by the fast-path dump. If a schema is missing, the operator needs `tenant_bootstrap` first, not this skill.
+- It doesn't *hand-author* MDMS schemas. Schemas come from the fast-path dump (existing roots) or are cloned by Step 5b's `tenant_bootstrap` (brand-new roots). What it won't do is invent a schema that exists in neither — that's an upstream gap, not an onboarding step.
 - It doesn't fix bad data in the source files. If a boundary row references a nonexistent parent, the wizard will fail that row and report it — your job is to surface the failure, not to silently drop it.
 - It doesn't run `digit-ansible-onboard`. If the box has no MCP, that's a separate workflow.
 - It doesn't push secrets or write to `host_vars/`. Tenant onboarding is data, not infrastructure.
