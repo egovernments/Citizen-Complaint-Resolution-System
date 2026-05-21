@@ -571,7 +571,7 @@
           if [ "$(docker inspect -f '{% raw %}{{.State.Running}}{% endraw %}' digit-ui 2>/dev/null)" = "true" ]; then break; fi
           sleep 5
         done
-        tar -C "{{ digit_dir }}/src/digit-ui-esbuild/build" \
+        tar -C "{{ digit_ui_esbuild_repo_dir | default(playbook_dir ~ '/../../digit-ui-esbuild') }}/build" \
             --exclude=globalConfigs.js --exclude=silent-check-sso.html -cf - . \
           | docker exec -i digit-ui tar -C /var/web/digit-ui -xf -
       register: digit_ui_tar
