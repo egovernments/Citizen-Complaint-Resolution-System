@@ -44,13 +44,26 @@ pgr_boundary_lowest_level: "Locality"
 boundary_type: "Locality"
 core_mobile_configs:
   mobilePrefix: "+91"
-  mobileNumberPattern: "^[6-9][0-9]{9}$"
-  mobileNumberLength: 10
-  mobileNumberAllowedStartingCharacters: ["6","7","8","9"]
+  mobileNumberPattern: "^[6-9][0-9]{9}$"   # ← a new country sets these two lines…
+  mobileNumberLength: 10                    # …and the citizen-register mobile rule
+  mobileNumberAllowedStartingCharacters: ["6","7","8","9"]   # is synthesized for it.
   mobileNumberErrorMessage: "CORE_COMMON_MOBILE_ERROR"
 asset_s3_bucket: ""
 footer_logo_url: ""
 footer_bw_logo_url: ""
+
+# Backend user-field validation (egov-user). FULLY CONFIG-DRIVEN: a new
+# country/field is just config here — no MCP/ansible code change. MCP's
+# tenant_bootstrap creates one common-masters.UserValidation record per
+# entry (egov-user ValidationData shape). If omitted, MCP auto-builds a
+# single `mobile` rule from core_mobile_configs above (the common case),
+# so most countries never need this block. Override / extend it only to
+# tune userName/email/name rules per country:
+#
+# user_validation:
+#   - { fieldType: mobile,   pattern: "^8[0-9]{8}$", minLength: 9, maxLength: 9, errorMessage: CORE_COMMON_MOBILE_ERROR }
+#   - { fieldType: userName, pattern: "^[a-zA-Z0-9!@#$%&*_]{2,64}$", minLength: 2, maxLength: 64 }
+#   - { fieldType: name,     pattern: "^[a-zA-Z. ]{1,100}$" }
 
 # ── digit-ui: container serves the SPA on Mac ──
 digit_ui_mode: container

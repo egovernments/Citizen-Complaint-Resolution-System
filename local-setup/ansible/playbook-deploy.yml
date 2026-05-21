@@ -1122,6 +1122,7 @@
           source_tenant: "pg"
           mobile_regex: "{{ core_mobile_configs.mobileNumberPattern | default('^[6-9][0-9]{9}$') }}"
           mobile_length: "{{ core_mobile_configs.mobileNumberLength | default(10) }}"
+          user_validation: "{{ user_validation | default(omit) }}"
           auth:
             username: "{{ bootstrap_user | default('ADMIN') }}"
             password: "{{ bootstrap_password | default('eGov@123') }}"
@@ -1144,6 +1145,7 @@
           source_tenant: "pg.citest"
           mobile_regex: "{{ core_mobile_configs.mobileNumberPattern | default('^[6-9][0-9]{9}$') }}"
           mobile_length: "{{ core_mobile_configs.mobileNumberLength | default(10) }}"
+          user_validation: "{{ user_validation | default(omit) }}"
           auth:
             username: "{{ bootstrap_user | default('ADMIN') }}"
             password: "{{ bootstrap_password | default('eGov@123') }}"
