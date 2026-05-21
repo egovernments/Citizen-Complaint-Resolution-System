@@ -4,6 +4,25 @@ All notable changes to this module will be documented in this file.
 # Changelog
 All notable changes to this module will be documented in this file.
 
+## [1.0.46] - 2026-05-21
+
+### Changed
+
+- **Timeline — Assignee Mobile Numbers Masked to Last 4 Digits (`components/TimeLine.js`, `components/TimeLineWrapper.js`, `components/timelineInstances/pendingAtLme.js`, `services/workflow/Workflow.js`)**:
+  - Assignee mobile numbers were rendered in full on every timeline row that displayed the assignee block (citizen detail, employee detail, LME-pending checkpoints), exposing PII on each detail-page render.
+  - Fix: added a `maskPhoneNumber(phone)` helper that returns `XXXXXX` plus the last 4 digits (e.g. `9876543210` → `XXXXXX3210`); empty / short inputs pass through unchanged. Wired the helper at every render site that prints a number:
+    - `TimeLine.js:31` — citizen-side `<TimelineCaption>` `ES_COMMON_CONTACT_DETAILS` line.
+    - `TimeLineWrapper.js:100` — employee-side assignee sub-element.
+    - `timelineInstances/pendingAtLme.js:15` — `<TelePhone mobile={...}>` call for LME-pending rows.
+  - Helper is also defined in `services/workflow/Workflow.js` alongside `getAssignerDetails` so any future caller consuming the workflow service directly can mask consistently.
+  - Effect: full mobile numbers no longer appear in any timeline UI. The raw number is still present on the `ProcessInstance` payload, so click-to-call and backend-driven contact actions that depend on the real number are unaffected.
+
+### Fixed
+
+- **Citizen Create Complaint — Photo Upload Tenant Resolution on Multi-Root (`pages/citizen/Create/Steps/SelectImages.js`)**:
+  - `SelectImages` no longer pulls `tenantId` from a single source. The new resolution order is: (1) the city code the citizen picked on the preceding Address step (`formData?.SelectAddress?.city?.code`), (2) `Digit.ULBService.getCurrentTenantId()` when `Digit.Utils.getMultiRootTenant()` is true, (3) the `CITIZEN.COMMON.HOME.CITY` session entry, (4) `Digit.ULBService.getCurrentTenantId()`. The resolved id is passed straight to `ImageUploadHandler`.
+  - Effect: complaint photos are uploaded against the tenant the citizen actually selected for the complaint — important on multi-root deployments where the home/session tenant can differ from the picked city, which previously caused photos to land in the wrong tenant's filestore.
+
 ## [1.0.40] - 2026-05-14
 
 ### Fixed

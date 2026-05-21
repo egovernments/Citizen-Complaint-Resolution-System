@@ -73,6 +73,7 @@ export const WorkflowService = {
           method: "POST",
           params: { tenantId: stateCode, businessIds: businessIds, ...params, history },
           auth: true,
+          userService: true,
         });
       },
     getDetailsById: async ({ tenantId, id, moduleCode, role, }) => {
