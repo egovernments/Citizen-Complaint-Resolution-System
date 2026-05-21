@@ -67,11 +67,16 @@ override what's actually different for your tenant.
   Setting `elasticsearch_master_password` to anything else breaks
   decryption on first boot (AEADBadTagException).
 
-- **`enable_mcp: true` only works inside the Hetzner egov VPC.** The
-  digit-mcp image lives at `10.0.0.4:5000` — a public-internet box
-  can't pull it. Compose validates every image before starting any
-  service, so an unreachable MCP image takes the whole stack down.
-  Default `false`; turn on only if you're on the VPC.
+- **`enable_mcp: true` needs an image source.** Two ways: (1) pair it
+  with `build_mcp: true` and the deploy builds the image locally from
+  source (`files/mcp-build.sh` → `digit-mcp:local`) — works anywhere,
+  no registry; this is the path for Mac and off-VPC boxes. Or (2) leave
+  `build_mcp` off to pull `{{ docker_registry }}/digit-mcp:latest` (the
+  VPC registry `10.0.0.4:5000` is reachable only inside the Hetzner egov
+  VPC). Compose validates every image before starting any service, so
+  with neither a local build nor a reachable registry an unresolvable
+  MCP image takes the whole stack down. Default `enable_mcp: false`.
+  Also set `nginx_features.mcp: true` to expose `/mcp` through nginx.
 
 - **`tls_enabled: false` for sandbox / Tailscale boxes.** Skips the
   `listen 443 ssl` block + redirect, switches the validate-* tasks to

@@ -47,8 +47,8 @@ git submodule update --init --recursive local-setup/ansible/nairobi-mdms
 | **This repo** (`Citizen-Complaint-Resolution-System`) | always — `deploy.sh` runs from `ansible/` inside it | required |
 | `digit-ui-esbuild` | auto-cloned on the target from `theflywheel/digit-ui-esbuild` (no controller-side clone needed) | playbook handles it |
 | `digit-ui-fix` (sibling clone next to CCRS) | only when `run_ci_tests: true` — Playwright + XLSX dataloader suite | task block skipped |
-| Built `digit-configurator` (`dist/`) under `configurator_build` | only when `nginx_features.configurator: true` | sync task ignored, nginx still renders without `/configurator/` location |
-| `/root/DIGIT-MCP/` on the controller | only with `--tags=mcp-publish` (rebuilds + pushes the MCP image) | tagged `never`, won't run otherwise |
+| `digit-configurator` | `nginx_features.configurator: true` — with `build_configurator: true` the deploy clones + `vite build`s it from source (`files/configurator-build.sh`); or point `configurator_build:` at a pre-built `dist/` | sync task ignored, nginx renders without `/configurator/` location |
+| `DIGIT-MCP` | `enable_mcp: true` — with `build_mcp: true` the deploy clones + `docker build`s the image locally (`files/mcp-build.sh`, tagged `digit-mcp:local`), no registry pull; else pulls `{{ docker_registry }}/digit-mcp:latest` | MCP not deployed |
 
 In other words: clone CCRS, fill out `inventory/host_vars/<tenant>.yml`,
 seed OpenBao, run `./deploy.sh <tenant>`. Production deploys
@@ -236,20 +236,37 @@ If you find yourself needing to run a specific subset often (e.g. just
 nginx, just config sync), add a `tags:` entry to those tasks in the
 playbook and document it in the table above.
 
-## Special-case: rebuilding `digit-mcp`
+## `digit-mcp` image
 
-`digit-mcp` is built locally from `/root/DIGIT-MCP/` on the controller and
-pushed to `10.0.0.4:5000/digit-mcp:latest`. Tenants pull from there.
-Rebuild + republish is opt-in via the `mcp-publish` tag (otherwise skipped):
+**Default (recommended) — build locally at deploy.** Set in host_vars:
+
+```yaml
+enable_mcp: true
+build_mcp: true
+# mcp_repo_url: https://github.com/ChakshuGautam/DIGIT-MCP.git   # default
+# mcp_ref: main                                                  # default
+nginx_features: { mcp: true }
+```
+
+The deploy clones `DIGIT-MCP` (repo/ref configurable) and `docker build`s the
+image itself (`files/mcp-build.sh`), tags it `digit-mcp:local`, and points
+`MCP_IMAGE` at it. The `pull --ignore-pull-failures` step skips the local-only
+tag and `up -d` runs what was just built — no registry, no multi-arch image
+needed (mirrors `build_configurator` / `files/configurator-build.sh`). This is
+the path for Mac and any box outside the VPC.
+
+> Note: the macOS converge (`mac-stack-up.sh`) preserves already-healthy
+> containers, so on a *re-deploy* where only the MCP image tag changed it
+> won't auto-recreate `digit-mcp`. Fresh deploys create it directly. Force a
+> pickup with `docker compose ... up -d --force-recreate digit-mcp`.
+
+**Legacy — VPC registry push** (Hetzner egov VPC only). Build from
+`/root/DIGIT-MCP/` and push to `10.0.0.4:5000/digit-mcp:latest`; opt-in via the
+`mcp-publish` tag (otherwise skipped). Leave `build_mcp` off to pull it:
 
 ```bash
 ./deploy.sh nairobi --tags mcp-publish    # build + push only
 ./deploy.sh nairobi                        # pull-and-restart on the tenant
-```
-
-To iterate locally without pushing, set `MCP_IMAGE` in `/opt/digit/.env`:
-```
-MCP_IMAGE=digit-mcp:dev
 ```
 
 ## Secrets
