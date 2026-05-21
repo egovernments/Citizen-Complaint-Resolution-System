@@ -40,19 +40,26 @@ employee_module_denylist: [ IM ]
 # Country UI config — pick or replace these per real city. Defaults below
 # are India (matches pg's seed data).
 #
-# locale_region (ISO country code) drives the digit-ui phone-input prefix —
-# the widget reads LOCALE_REGION, NOT coreMobileConfigs.mobilePrefix. Default
-# "IN" → +91. Set it per country or the citizen flow shows the wrong prefix.
-# Kenya: "KE" (+254). Mozambique: "MZ" (+258).
+# locale_region: KEEP "IN". It only sets the i18n locale (digit-ui derives
+# en_<LOCALE_REGION>); en_IN is the locale the bootstrap always seeds, so
+# localization works with zero extra seeding. Do NOT set it to the country's
+# ISO code expecting a phone prefix — that switches the locale to e.g. en_MZ
+# which has no messages → raw keys. The phone prefix is SEPARATE (mobilePrefix
+# below) — the citizen login reads CORE_MOBILE_CONFIGS.mobilePrefix, decoupled
+# from LOCALE_REGION. (Needs build_digit_ui: true — the from-source build has
+# this decoupling; the old pinned image fell back to +91.)
 locale_region: "IN"
 pgr_boundary_highest_level: "City"
 pgr_boundary_lowest_level: "Locality"
 boundary_type: "Locality"
+# A new country sets mobilePrefix + pattern + length + starting digits here.
+# mobilePrefix drives the citizen-flow phone prefix (independent of locale);
+# pattern/length feed the synthesized citizen-register mobile validation rule.
 core_mobile_configs:
-  mobilePrefix: "+91"
-  mobileNumberPattern: "^[6-9][0-9]{9}$"   # ← a new country sets these two lines…
-  mobileNumberLength: 10                    # …and the citizen-register mobile rule
-  mobileNumberAllowedStartingCharacters: ["6","7","8","9"]   # is synthesized for it.
+  mobilePrefix: "+91"                       # ← phone-input prefix (e.g. "+258")
+  mobileNumberPattern: "^[6-9][0-9]{9}$"    # ← validation pattern (e.g. "^8[0-9]{8}$")
+  mobileNumberLength: 10                     # ← digits (e.g. 9)
+  mobileNumberAllowedStartingCharacters: ["6","7","8","9"]
   mobileNumberErrorMessage: "CORE_COMMON_MOBILE_ERROR"
 asset_s3_bucket: ""
 footer_logo_url: ""
