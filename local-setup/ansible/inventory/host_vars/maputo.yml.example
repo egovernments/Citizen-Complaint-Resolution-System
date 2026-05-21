@@ -1,136 +1,99 @@
-# Example host_vars for a macOS thin-port deploy.
+# Maputo mz e2e — MCP-enabled path (multi-tenant demo model).
 #
-# Copy this to maputo.yml (or any name; the file name becomes the tenant
-# name in `./deploy.sh <tenant>`) and adjust the marked fields. host_vars/
-# is gitignored by canonical convention except this .example and _example.yml.
-#
-# VALIDATED green 2026-05-20 on macOS/OrbStack:
-#   ok=63 changed=14 failed=0 skipped=84
-#   /egov-mdms-service/health  200
-#   /user/oauth/token (ADMIN/pg)  200 + access_token mint
-#   /configurator/  200
-#   /digit-ui/  200
-#   /status/  200
+# state_root: pg  → compose STATE_LEVEL_TENANT_ID stays pg, so egov-enc-service
+#                   and the JVM tier boot clean against the dump's pre-seeded pg
+#                   DataSecurity. mz is layered on as an ADDITIONAL tenant.
+# state_tenant_id: mz       → MCP bootstrap ROOT target + the tenant the UI binds to
+# city_tenant: mz.maputo    → MCP bootstrap CITY target (decoupled from .citya)
 
-# ── Mac-as-local-target ──
-# These four lines + the Mac defaults baked into group_vars/all.yml
-# (digit_dir → ~/digit, configurator_www_dir → ~/digit/configurator,
-# nginx_host_port → 80) are everything the Mac path needs.
 ansible_host: localhost
 ansible_connection: local
-deploy_become: false                 # no privileged host tasks on Darwin
-docker_default_platform: linux/amd64 # Apple-Silicon pulls amd64 under Rosetta
+deploy_become: false
+docker_default_platform: linux/amd64
 domain: localhost
 tls_enabled: false
 
-# ── Tenancy ──
-# Keep state_root: pg for the base validation — db_fast_path ships
-# pg/statea only. New tenants (mz/mz.maputo/etc.) need MCP `tenant_bootstrap`
-# to seed them first; until that lands, leave at pg. With MCP off, a
-# state_root other than pg makes egov-enc-service crash-loop at boot
-# trying to fetch keys for a tenant that doesn't exist.
-state_root: pg
-state_tenant_id: pg
-boot_tenant: pg
-tenant_id: pg.citya
+# BOOT-PINS (compose env — services fetch THIS tenant's MDMS at boot, so it
+# must already exist in the dump → keep pg/pg.citya). workflow-v2 + enc-service
+# both read their STATE_LEVEL tenant's MDMS (Workflow, DataSecurity) at startup;
+# pointing them at not-yet-bootstrapped mz/mz.maputo crash-loops them.
+state_root: pg                 # state-tier STATE_LEVEL_TENANT_ID
+tenant_id: pg.citya            # city-tier STATE_LEVEL (workflow + enc-service)
+boot_tenant: pg                # citizen-current-tenant default (CI dataloader only)
+# ONBOARD TARGET + UI BINDING (layered on via MCP, served at request time)
+state_tenant_id: mz            # MCP root target (bootstrap seeds mz + mz.maputo)
+city_tenant: mz.maputo         # MCP city target (decoupled from .citya)
+# UI binds to the CITY tenant: the configurator stores boundaries at the city
+# (targetTenant) and reads them there, and citizen/employee/PGR must read the
+# same tenant. So point digit-ui's stateTenantId at mz.maputo (not the mz state
+# root) — everything (boundaries, citizen login, employee, PGR picker) lines up.
+ui_state_tenant_id: mz.maputo
 map_center: { lat: -25.9692, lng: 32.5732 }
-login_tenant_allowlist: [ pg ]
+login_tenant_allowlist: [ mz, mz.maputo ]
 employee_module_denylist: [ IM ]
 
-# Country UI config — pick or replace these per real city. Defaults below
-# are India (matches pg's seed data).
-#
-# locale_region: KEEP "IN". It only sets the i18n locale (digit-ui derives
-# en_<LOCALE_REGION>); en_IN is the locale the bootstrap always seeds, so
-# localization works with zero extra seeding. Do NOT set it to the country's
-# ISO code expecting a phone prefix — that switches the locale to e.g. en_MZ
-# which has no messages → raw keys. The phone prefix is SEPARATE (mobilePrefix
-# below) — the citizen login reads CORE_MOBILE_CONFIGS.mobilePrefix, decoupled
-# from LOCALE_REGION. (Needs build_digit_ui: true — the from-source build has
-# this decoupling; the old pinned image fell back to +91.)
+# Keep locale_region "IN" → i18n locale stays en_IN, which the bootstrap always
+# seeds (generic English, nothing India-specific) → localization works with zero
+# extra seeding. The phone-input prefix is INDEPENDENT in the current digit-ui:
+# the citizen login reads CORE_MOBILE_CONFIGS.mobilePrefix (below), not
+# LOCALE_REGION. So +258 comes from mobilePrefix while text stays readable.
+# (Requires the from-source build — build_digit_ui: true; the old pinned image
+# lacked this decoupling and fell back to +91.)
 locale_region: "IN"
-pgr_boundary_highest_level: "City"
-pgr_boundary_lowest_level: "Locality"
-boundary_type: "Locality"
-# A new country sets mobilePrefix + pattern + length + starting digits here.
-# mobilePrefix drives the citizen-flow phone prefix (independent of locale);
-# pattern/length feed the synthesized citizen-register mobile validation rule.
+
+pgr_boundary_highest_level: "Município"
+pgr_boundary_lowest_level: "Bairro"
+boundary_type: "Bairro"
 core_mobile_configs:
-  mobilePrefix: "+91"                       # ← phone-input prefix (e.g. "+258")
-  mobileNumberPattern: "^[6-9][0-9]{9}$"    # ← validation pattern (e.g. "^8[0-9]{8}$")
-  mobileNumberLength: 10                     # ← digits (e.g. 9)
-  mobileNumberAllowedStartingCharacters: ["6","7","8","9"]
+  mobilePrefix: "+258"
+  mobileNumberPattern: "^8[0-9]{8}$"
+  mobileNumberLength: 9
+  mobileNumberAllowedStartingCharacters: ["8"]
   mobileNumberErrorMessage: "CORE_COMMON_MOBILE_ERROR"
-asset_s3_bucket: ""
+asset_s3_bucket: "maputo-egov-assets"
 footer_logo_url: ""
 footer_bw_logo_url: ""
 
-# Backend user-field validation (egov-user). FULLY CONFIG-DRIVEN: a new
-# country/field is just config here — no MCP/ansible code change. MCP's
-# tenant_bootstrap creates one common-masters.UserValidation record per
-# entry (egov-user ValidationData shape). If omitted, MCP auto-builds a
-# single `mobile` rule from core_mobile_configs above (the common case),
-# so most countries never need this block. Override / extend it only to
-# tune userName/email/name rules per country:
-#
-# user_validation:
-#   - { fieldType: mobile,   pattern: "^8[0-9]{8}$", minLength: 9, maxLength: 9, errorMessage: CORE_COMMON_MOBILE_ERROR }
-#   - { fieldType: userName, pattern: "^[a-zA-Z0-9!@#$%&*_]{2,64}$", minLength: 2, maxLength: 64 }
-#   - { fieldType: name,     pattern: "^[a-zA-Z. ]{1,100}$" }
-
-# ── digit-ui: container serves the SPA on Mac ──
 digit_ui_mode: container
-# build_digit_ui: true → the deploy clones digit-ui-esbuild + `npm run build`s
-# the SPA itself (files/digit-ui-build.sh) and mounts the bundle over the
-# container web root, instead of the pinned registry image (which can be stale).
-# Mirrors build_configurator / build_mcp. Leave off to use the image as-is.
-# build_digit_ui: true
+# Build digit-ui from source at deploy (files/digit-ui-build.sh: clone +
+# npm run build) and mount the bundle over the container web root, instead of
+# the pinned (stale) registry image. Mirrors build_configurator / build_mcp.
+build_digit_ui: true
 # digit_ui_esbuild_repo: https://github.com/theflywheel/digit-ui-esbuild.git
 # digit_ui_esbuild_branch: main
+# Configurator built FROM SOURCE by the deploy itself (files/configurator-build.sh):
+# clone ChakshuGautam/digit-configurator + vite build --base=/configurator/.
+# Fully self-contained — no pre-built dist dependency. The build task sets
+# `configurator_build` from the script output; the sync task serves it.
+build_configurator: true
 
-# ── Opt-ins ──
-# MCP (the tenant_bootstrap seeding layer). Two ways to get the image:
-#   1. build_mcp: true  → the deploy clones DIGIT-MCP + `docker build`s the
-#      image itself (files/mcp-build.sh), tags it digit-mcp:local, and runs
-#      that — no registry, no multi-arch CI fix. RECOMMENDED on Mac (the
-#      published GHCR image was arm64-only; a local build is the right arch).
-#   2. leave build_mcp off → pull {{ docker_registry }}/digit-mcp:latest.
-# Either way set nginx_features.mcp: true to expose /mcp through nginx.
-# enable_mcp must be true for the stack to run MCP at all.
-enable_mcp: false
-# build_mcp: true
-# mcp_repo_url: https://github.com/ChakshuGautam/DIGIT-MCP.git  # fork+branch until PR #42 merges
-# mcp_ref: main
-# mcp_image: digit-mcp:local        # override the auto local tag if you like
+# MCP enabled — deploy builds the image from the VENDORED source in CCRS
+# (digit-mcp/, build-in-place via mcp-build.sh repo_url "-"), tags digit-mcp:local,
+# runs it. No clone, no fork/branch pin — the source is in-tree (monorepo).
+enable_mcp: true
+build_mcp: true
 enable_search_stack: false
 enable_novu: false
 requires_nairobi_mdms: false
-db_fast_path: true                   # required for fresh installs
+db_fast_path: true
 run_ci_tests: false
 install_claude_code: false
 
-# ── nginx features ──
-# build_configurator: true → the deploy clones digit-configurator + runs
-# vite build itself (zero manual steps; a new country gets the configurator
-# for free). Leave it off and set configurator_build: <path-to-prebuilt-dist>
-# if you build elsewhere. Either way needs nginx_features.configurator: true.
-# build_configurator: true
-# configurator_ref: main
+docker_registry: "ghcr.io/chakshugautam"
 
 nginx_features:
   brand_assets: false
-  configurator: false                # see PR #50 (configurator-snapshot) — dist must exist in ~/digit/configurator/ before flipping true
+  configurator: true           # dist built (task #40)
   configurator_caching: false
-  status: true                       # /status/ — Gatus health dashboard
+  status: true
   api_pgr: false
-  mcp: false                         # paired with enable_mcp:false
+  mcp: true                    # /mcp + /v1/* — MCP HTTP transport + REST shim
 
-# ── Secrets (db_fast_path-pinned; LOCAL DEV ONLY — never reuse) ──
 secrets_path: kv/digit/maputo
 bootstrap_secrets:
   postgres_password: egov123
   mcp_db_password: egov123
   minio_root_user: minioadmin
   minio_root_password: minioadmin
-  elasticsearch_master_password: "asd@#$@$!132123"  # db_fast_path-pinned
+  elasticsearch_master_password: "asd@#$@$!132123"
   egov_hrms_default_password: "eGov@123"

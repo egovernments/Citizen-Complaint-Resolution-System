@@ -1404,12 +1404,19 @@
       when: state_tenant_id != 'pg'
 
     - name: "ui-tenant — pick which tenant the SPA lands on"
+      # An explicit host_vars `ui_state_tenant_id` WINS — this is the documented
+      # per-tenant override (e.g. single-city deploys point the SPA at the city
+      # tenant `mz.maputo`, where the configurator stores boundaries and the
+      # citizen/employee/PGR flows must read). Without an override, auto-pick:
+      # state_tenant_id when its ADMIN is provisioned, else fall back to pg.
       ansible.builtin.set_fact:
         ui_state_tenant_id: >-
-          {{ state_tenant_id
-             if (state_tenant_id == 'pg'
-                 or (state_tenant_admin_probe.json.access_token | default('') | length > 10))
-             else 'pg' }}
+          {{ ui_state_tenant_id
+             if (ui_state_tenant_id is defined and ui_state_tenant_id)
+             else (state_tenant_id
+                   if (state_tenant_id == 'pg'
+                       or (state_tenant_admin_probe.json.access_token | default('') | length > 10))
+                   else 'pg') }}
 
     - name: "ui-tenant — log the chosen value (and why)"
       ansible.builtin.debug:
