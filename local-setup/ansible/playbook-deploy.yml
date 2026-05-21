@@ -292,6 +292,19 @@
         src: "../docker/"
         dest: "{{ digit_dir }}/docker/"
 
+    # Resolve the MCP image ref ONCE, before .env is rendered. When the
+    # tenant opts into a local build (`build_mcp: true`) the deploy builds
+    # the image itself (mcp-build task below) and points compose at a
+    # local-only tag (`digit-mcp:local`) — no registry pull. Otherwise it
+    # keeps pulling {{ docker_registry }}/digit-mcp:latest as before. An
+    # operator can still override `mcp_image:` explicitly in host_vars.
+    - name: "Resolve MCP image tag"
+      ansible.builtin.set_fact:
+        mcp_image: >-
+          {{ mcp_image
+             | default('digit-mcp:local' if (build_mcp | default(false))
+                       else (docker_registry ~ '/digit-mcp:latest')) }}
+
     # ==================== Compose .env (per-tenant overrides) ====================
     # Templates Grafana's public root URL (so the JVM dashboard / observability
     # links match the tenant's actual domain). Compose auto-loads .env from the
@@ -470,6 +483,28 @@
     - name: "Show compose file stack"
       ansible.builtin.debug:
         msg: "compose files for {{ inventory_hostname }}: {{ compose_files }}"
+
+    # ==================== Build digit-mcp image locally ====================
+    # Mirrors the configurator fold-in (files/configurator-build.sh): when
+    # `build_mcp: true`, clone DIGIT-MCP + `docker build` the image here and
+    # tag it as MCP_IMAGE (digit-mcp:local). Runs BEFORE pull so the local
+    # image is present; the pull below (--ignore-pull-failures) can't fetch a
+    # local-only tag, so it skips it, and `up -d` uses what we just built —
+    # no GHCR / VPC dependency, no multi-arch CI fix needed. Gated on
+    # enable_mcp too (no point building an image the stack won't run).
+    - name: "Build digit-mcp image locally (when build_mcp)"
+      ansible.builtin.command: >-
+        bash {{ playbook_dir }}/files/mcp-build.sh
+        "{{ mcp_repo | default(digit_dir ~ '/src/DIGIT-MCP') }}"
+        "{{ mcp_repo_url | default('https://github.com/ChakshuGautam/DIGIT-MCP.git') }}"
+        "{{ mcp_ref | default('main') }}"
+        "{{ mcp_image }}"
+        "{{ docker_default_platform | default('') }}"
+      register: mcp_build_run
+      changed_when: true
+      when:
+        - enable_mcp | default(false)
+        - build_mcp | default(false)
 
     - name: Pull all images from VPC registry
       shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} pull --ignore-pull-failures

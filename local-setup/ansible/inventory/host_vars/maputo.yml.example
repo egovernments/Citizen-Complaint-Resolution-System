@@ -69,10 +69,19 @@ footer_bw_logo_url: ""
 digit_ui_mode: container
 
 # ── Opt-ins ──
-# enable_mcp: false — ghcr.io/chakshugautam/digit-mcp is linux/arm64 only;
-# Mac forces linux/amd64 for JVMs. Multi-arch MCP image is upstream-fix
-# territory. Flip to true once that's resolved AND nginx_features.mcp too.
+# MCP (the tenant_bootstrap seeding layer). Two ways to get the image:
+#   1. build_mcp: true  → the deploy clones DIGIT-MCP + `docker build`s the
+#      image itself (files/mcp-build.sh), tags it digit-mcp:local, and runs
+#      that — no registry, no multi-arch CI fix. RECOMMENDED on Mac (the
+#      published GHCR image was arm64-only; a local build is the right arch).
+#   2. leave build_mcp off → pull {{ docker_registry }}/digit-mcp:latest.
+# Either way set nginx_features.mcp: true to expose /mcp through nginx.
+# enable_mcp must be true for the stack to run MCP at all.
 enable_mcp: false
+# build_mcp: true
+# mcp_repo_url: https://github.com/ChakshuGautam/DIGIT-MCP.git  # fork+branch until PR #42 merges
+# mcp_ref: main
+# mcp_image: digit-mcp:local        # override the auto local tag if you like
 enable_search_stack: false
 enable_novu: false
 requires_nairobi_mdms: false
