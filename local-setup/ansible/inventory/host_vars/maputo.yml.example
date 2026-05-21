@@ -81,6 +81,13 @@ run_ci_tests: false
 install_claude_code: false
 
 # ── nginx features ──
+# build_configurator: true → the deploy clones digit-configurator + runs
+# vite build itself (zero manual steps; a new country gets the configurator
+# for free). Leave it off and set configurator_build: <path-to-prebuilt-dist>
+# if you build elsewhere. Either way needs nginx_features.configurator: true.
+# build_configurator: true
+# configurator_ref: main
+
 nginx_features:
   brand_assets: false
   configurator: false                # see PR #50 (configurator-snapshot) — dist must exist in ~/digit/configurator/ before flipping true

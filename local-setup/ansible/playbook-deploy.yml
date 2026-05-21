@@ -919,11 +919,37 @@
         path: "{{ configurator_www_dir }}"
         state: directory
 
-    # Only fires when the tenant has the configurator location enabled AND
-    # the operator has pointed `configurator_build` at a built dist/ dir
-    # on the controller. The old default ('/var/www/crs-mockup/') was a
-    # path on Chakshu's dev box — other operators don't have it, so the
-    # default behaviour is now to skip entirely.
+    # Config-driven build: when `build_configurator: true`, the deploy builds
+    # the digit-configurator dist itself (clone + npm + vite build) so a new
+    # tenant/country gets the configurator with zero manual steps. The script
+    # prints the dist path on its last line; we capture it into the same
+    # `configurator_build` var the sync task below consumes. Operators who
+    # pre-build elsewhere just set `configurator_build:` directly and leave
+    # `build_configurator` off.
+    - name: "Configurator SPA — build dist (when build_configurator)"
+      ansible.builtin.command: >-
+        bash {{ playbook_dir }}/files/configurator-build.sh
+        "{{ configurator_repo | default(digit_dir ~ '/src/digit-configurator') }}"
+        "{{ configurator_repo_url | default('https://github.com/ChakshuGautam/digit-configurator.git') }}"
+        "{{ configurator_ref | default('main') }}"
+      register: configurator_build_run
+      changed_when: true
+      when:
+        - nginx_features.configurator | default(false)
+        - build_configurator | default(false)
+
+    - name: "Configurator SPA — use freshly-built dist path"
+      ansible.builtin.set_fact:
+        configurator_build: "{{ configurator_build_run.stdout_lines | last }}"
+      when:
+        - nginx_features.configurator | default(false)
+        - build_configurator | default(false)
+        - configurator_build_run is defined
+        - configurator_build_run.stdout_lines | default([]) | length > 0
+
+    # Fires when the configurator location is enabled AND `configurator_build`
+    # is set — either from the build step above, or pointed at a pre-built
+    # dist/ by the operator. Skips entirely otherwise (no Chakshu-box default).
     - name: "Configurator SPA — sync build"
       ansible.builtin.synchronize:
         src: "{{ configurator_build }}/"
