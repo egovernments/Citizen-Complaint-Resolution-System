@@ -1735,6 +1735,42 @@
       ansible.builtin.debug:
         msg: "{{ dataloader_regression.stdout_lines | select('match', '^(TEST:|RESULTS:|✅|❌|   PermissionError|   After |   City |   Root )') | list }}"
 
+    # Onboarding regression suite — live-stack assertions for the tenant
+    # bring-up failures hit during the Maputo (mz.maputo) onboarding on
+    # 2026-05-21 (see local-setup/tests/test_onboarding_regressions.py):
+    #   - ServiceDefs missing at the state root  -> complaint create JSONPATH_ERROR
+    #   - boundary picker empty                  -> hierarchyType != globalConfigs HIERARCHY_TYPE
+    #   - localization raw keys                  -> stale/empty redis 'messages' cache
+    # Read-only against the deployed tenant (the complaint-create smoke is opt-in
+    # via RUN_COMPLAINT_CREATE_SMOKE so it doesn't write a complaint each run).
+    # ignore_errors for now — promote to fatal (drop ignore_errors) once it's
+    # been validated green across cities, not just Maputo.
+    - name: "CI — stage onboarding regression suite"
+      when: run_ci_tests | default(false)
+      ansible.builtin.copy:
+        src: ../tests/test_onboarding_regressions.py
+        dest: "{{ digit_dir }}/test_onboarding_regressions.py"
+      changed_when: false
+
+    - name: "CI — onboarding regression suite (2026-05-21 Maputo bring-up)"
+      when: run_ci_tests | default(false)
+      ansible.builtin.shell: |
+        BASE_URL=http://127.0.0.1:{{ nginx_host_port | default(80) }} \
+        STATE_TENANT={{ state_tenant_id }} \
+        CITY_TENANT={{ city_tenant | default(state_tenant_id ~ '.citya') }} \
+        UI_TENANT={{ ui_state_tenant_id | default(city_tenant | default(state_tenant_id ~ '.citya')) }} \
+        LOCALE={{ locale_default | default('en') }}_{{ locale_region | default('IN') }} \
+        HIERARCHY_TYPE={{ hierarchy_type | default('ADMIN') }} \
+        python3 -m pytest -v {{ digit_dir }}/test_onboarding_regressions.py
+      register: onboarding_regression
+      changed_when: false
+      ignore_errors: yes
+
+    - name: "CI — show onboarding regression results"
+      when: run_ci_tests | default(false)
+      ansible.builtin.debug:
+        msg: "{{ onboarding_regression.stdout_lines | default([]) | select('search', 'PASSED|FAILED|ERROR|passed|failed|assert') | list }}"
+
     # ==================================================================
     # CI TESTS — opt-in only. The scripts (`local-setup/scripts/`) and the
     # Playwright suite (`local-setup/tests/`) now live IN this repo — no
