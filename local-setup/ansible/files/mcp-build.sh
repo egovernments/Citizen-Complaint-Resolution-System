@@ -15,7 +15,13 @@ REPO_DIR="$1"; REPO_URL="$2"; REF="${3:-main}"; TAG="$4"; PLATFORM="${5:-}"
 
 command -v docker >/dev/null 2>&1 || { echo "ERROR: docker not on PATH" >&2; exit 1; }
 
-if [ -d "$REPO_DIR/.git" ]; then
+# repo_url "-" = VENDORED: source already in the tree (CCRS digit-mcp/); docker
+# build it in place, no clone. Monorepo path — DIGIT-MCP upstream retired into
+# CCRS. A real URL still clones (transitional/standalone).
+if [ "$REPO_URL" = "-" ]; then
+  echo "mcp-build: vendored source — building in place at $REPO_DIR" >&2
+  [ -f "$REPO_DIR/Dockerfile" ] || { echo "ERROR: no Dockerfile at vendored $REPO_DIR" >&2; exit 2; }
+elif [ -d "$REPO_DIR/.git" ]; then
   echo "mcp-build: updating $REPO_DIR → $REF" >&2
   git -C "$REPO_DIR" fetch origin --quiet
   git -C "$REPO_DIR" checkout "$REF" --quiet 2>/dev/null || git -C "$REPO_DIR" checkout -q "origin/$REF"

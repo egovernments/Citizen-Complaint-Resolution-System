@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: [self-hosted, linux, arm64, egov-ci]
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - run: npm run build
+
+  integration-test:
+    needs: build-and-test
+    runs-on: [self-hosted, linux, arm64, egov-ci]
+    if: github.ref == 'refs/heads/main'
+    env:
+      CRS_API_URL: ${{ secrets.CRS_API_URL }}
+      CRS_USERNAME: ${{ secrets.CRS_USERNAME }}
+      CRS_PASSWORD: ${{ secrets.CRS_PASSWORD }}
+      CRS_ENVIRONMENT: chakshu-digit
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - run: npm run build
+
+      - name: Run integration tests
+        run: npm run test:full
+
+  openapi-spec-test:
+    needs: build-and-test
+    runs-on: [self-hosted, linux, arm64, egov-ci]
+    if: github.ref == 'refs/heads/main'
+    env:
+      CRS_API_URL: ${{ secrets.CRS_API_URL }}
+      CRS_USERNAME: ${{ secrets.CRS_USERNAME }}
+      CRS_PASSWORD: ${{ secrets.CRS_PASSWORD }}
+      CRS_ENVIRONMENT: chakshu-digit
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - run: npm run build
+
+      - name: Validate OpenAPI spec against live APIs
+        run: npm run test:openapi
+
+  docker:
+    needs: build-and-test
+    runs-on: [self-hosted, linux, arm64, egov-ci]
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=
+            type=raw,value={{date 'YYYYMMDD'}}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

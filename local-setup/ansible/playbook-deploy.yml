@@ -496,9 +496,9 @@
     - name: "Build digit-mcp image locally (when build_mcp)"
       ansible.builtin.command: >-
         bash {{ playbook_dir }}/files/mcp-build.sh
-        "{{ mcp_repo | default(digit_dir ~ '/src/DIGIT-MCP') }}"
-        "{{ mcp_repo_url | default('https://github.com/ChakshuGautam/DIGIT-MCP.git') }}"
-        "{{ mcp_ref | default('main') }}"
+        "{{ mcp_repo | default(playbook_dir ~ '/../../digit-mcp') }}"
+        "{{ mcp_repo_url | default('-') }}"
+        "{{ mcp_ref | default('') }}"
         "{{ mcp_image }}"
         "{{ docker_default_platform | default('') }}"
       register: mcp_build_run
@@ -520,9 +520,9 @@
     - name: "Build digit-ui from source (when build_digit_ui)"
       ansible.builtin.command: >-
         bash {{ playbook_dir }}/files/digit-ui-build.sh
-        "{{ digit_dir }}/src/digit-ui-esbuild"
-        "{{ digit_ui_esbuild_repo | default('https://github.com/theflywheel/digit-ui-esbuild.git') }}"
-        "{{ digit_ui_esbuild_branch | default('main') }}"
+        "{{ digit_ui_esbuild_repo_dir | default(playbook_dir ~ '/../../digit-ui-esbuild') }}"
+        "{{ digit_ui_esbuild_repo | default('-') }}"
+        "{{ digit_ui_esbuild_branch | default('') }}"
       register: digit_ui_build_run
       changed_when: true
       when:

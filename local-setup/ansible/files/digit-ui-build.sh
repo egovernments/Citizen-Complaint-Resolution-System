@@ -20,7 +20,13 @@ if [ "${NODE_MAJOR:-0}" -lt 20 ]; then
   exit 1
 fi
 
-if [ -d "$REPO_DIR/.git" ]; then
+# repo_url "-" = VENDORED: source already in the tree (CCRS digit-ui-esbuild/);
+# build it in place, no clone. Monorepo path — digit-ui-esbuild upstream retired
+# into CCRS. A real URL still clones (transitional/standalone).
+if [ "$REPO_URL" = "-" ]; then
+  echo "digit-ui-build: vendored source — building in place at $REPO_DIR" >&2
+  [ -f "$REPO_DIR/package.json" ] || { echo "ERROR: no package.json at vendored $REPO_DIR" >&2; exit 2; }
+elif [ -d "$REPO_DIR/.git" ]; then
   echo "digit-ui-build: updating $REPO_DIR → $REF" >&2
   git -C "$REPO_DIR" fetch origin --quiet
   git -C "$REPO_DIR" checkout "$REF" --quiet 2>/dev/null || git -C "$REPO_DIR" checkout -q "origin/$REF"

@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Production build
+        run: |
+          start=$(date +%s%N)
+          npm run build
+          end=$(date +%s%N)
+          echo "BUILD_TIME_MS=$(( (end - start) / 1000000 ))" >> $GITHUB_ENV
+
+      - name: Verify build artifacts
+        run: |
+          test -f build/index.html
+          test -f build/index.js
+          test -f build/index.css
+
+      - name: Report build performance
+        run: |
+          echo "### Build Performance" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Build time | **${BUILD_TIME_MS}ms** |" >> $GITHUB_STEP_SUMMARY
+          for f in build/index.js build/index.css; do
+            size=$(du -h "$f" | cut -f1)
+            echo "| \`$(basename $f)\` size | $size |" >> $GITHUB_STEP_SUMMARY
+          done
+          lines=$(find packages -name '*.js' -o -name '*.jsx' -o -name '*.ts' -o -name '*.tsx' | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
+          files=$(find packages -name '*.js' -o -name '*.jsx' -o -name '*.ts' -o -name '*.tsx' | wc -l)
+          echo "| Source files | $files files, ~${lines} lines |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Verify module aliases
+        run: node scripts/check-aliases.js
+
+      - name: Install Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Run smoke tests
+        run: npx playwright test
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: test-results/
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -f docker/Dockerfile -t digit-ui:esbuild .
