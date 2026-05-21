@@ -228,12 +228,6 @@
         src: ../docker-compose.fast-path.yml
         dest: "{{ digit_dir }}/docker-compose.fast-path.yml"
 
-    # digit-ui from-source overlay. Mounts the freshly-built esbuild bundle
-    # over the digit-ui container web root. Used only when build_digit_ui: true.
-    - name: Copy digit-ui-from-source overlay (used only when build_digit_ui is true)
-      copy:
-        src: ../docker-compose.digit-ui-build.yml
-        dest: "{{ digit_dir }}/docker-compose.digit-ui-build.yml"
 
     # ==================== OTEL Java Agent (fetched, not in git) ====================
     # The 21 MB OTEL javaagent JAR is downloaded on the controller before the
@@ -484,8 +478,7 @@
         compose_files: >-
           {{
             '-f docker-compose.egov-digit.yaml' +
-            (' -f docker-compose.fast-path.yml' if (db_fast_path | default(false)) else '') +
-            (' -f docker-compose.digit-ui-build.yml' if (build_digit_ui | default(false)) else '')
+            (' -f docker-compose.fast-path.yml' if (db_fast_path | default(false)) else '')
           }}
 
     - name: "Show compose file stack"
@@ -516,11 +509,14 @@
 
     # ==================== Build digit-ui from source ====================
     # Mirrors the configurator + mcp fold-ins: when `build_digit_ui: true`,
-    # clone digit-ui-esbuild + `npm run build` here (files/digit-ui-build.sh)
-    # and serve the result by mounting build/ over the digit-ui container web
-    # root (docker-compose.digit-ui-build.yml overlay, added to compose_files
-    # above). Runs BEFORE up -d so the build dir exists for the mount. No
-    # registry/pinned-image dependency. Default off → no Linux behaviour change.
+    # clone digit-ui-esbuild + `npm run build` here (files/digit-ui-build.sh).
+    # The bundle is laid into the digit-ui container AFTER up -d via tar (see
+    # the "lay digit-ui build into container" task below) — NOT a bind-mount:
+    # mounting build/ over /var/web/digit-ui makes the nested globalConfigs.js /
+    # silent-check-sso.html file-mounts fail on OrbStack (file-inside-dir-mount),
+    # 404'ing globalConfigs.js. tar over the baked SPA, leaving those two file
+    # mounts intact, sidesteps that. No registry/pinned-image dependency.
+    # Default off → no Linux behaviour change.
     - name: "Build digit-ui from source (when build_digit_ui)"
       ansible.builtin.command: >-
         bash {{ playbook_dir }}/files/digit-ui-build.sh
@@ -560,6 +556,28 @@
       register: mac_stack_up
       changed_when: true
       when: ansible_system == "Darwin"
+
+    # Lay the from-source digit-ui bundle into the running container (tar over
+    # the baked SPA), keeping the globalConfigs.js / silent-check-sso.html file
+    # mounts intact (those are excluded). Done AFTER up -d (docker exec needs a
+    # running container). Re-applied every deploy; ephemeral across a manual
+    # container restart, which is fine — the UI only changes on deploy. We do
+    # NOT bind-mount the whole build dir: on OrbStack a file-mount nested inside
+    # a dir-mount fails, 404'ing globalConfigs.js.
+    - name: "Lay digit-ui from-source build into the container (when build_digit_ui)"
+      ansible.builtin.shell: |
+        set -e
+        for i in $(seq 1 24); do
+          if [ "$(docker inspect -f '{% raw %}{{.State.Running}}{% endraw %}' digit-ui 2>/dev/null)" = "true" ]; then break; fi
+          sleep 5
+        done
+        tar -C "{{ digit_dir }}/src/digit-ui-esbuild/build" \
+            --exclude=globalConfigs.js --exclude=silent-check-sso.html -cf - . \
+          | docker exec -i digit-ui tar -C /var/web/digit-ui -xf -
+      register: digit_ui_tar
+      changed_when: true
+      when:
+        - build_digit_ui | default(false)
 
     # If a tenant just flipped enable_search_stack: true → false, the
     # previously-running search containers (digit-elasticsearch,
