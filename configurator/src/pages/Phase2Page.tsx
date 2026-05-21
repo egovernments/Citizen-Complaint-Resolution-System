@@ -36,16 +36,16 @@ type Step = 'landing' | 'create-hierarchy' | 'select-hierarchy' | 'template' | '
 export default function Phase2Page() {
   const { completePhase, addUndo, state } = useApp();
   const navigate = useNavigate();
-  // Boundaries + the hierarchy DEFINITION are state-level in DIGIT: PGR's
-  // citizen location picker reads them at STATE_LEVEL_TENANT_ID (the state
-  // root), not the city. So Phase 2 writes to the session/state-root tenant
-  // (state.tenant — see AppState.tenant: "any operation that has to happen at
-  // the state-root tenant"), even though Phase 1 created a child city tenant
-  // (state.targetTenant) that phases 3-4 use. Using state.targetTenant here put
-  // the hierarchy one level too deep, so PGR got "Hierarchy definition does not
-  // exist" at the state root. Requires the operator to be logged in at the
-  // state root (the onboarding admin), which the runbook already does.
-  const boundaryTenant = state.tenant;
+  // Phase 2 writes boundaries at the onboarding tenant (the Phase-1 city, e.g.
+  // mz.maputo). The configurator reads boundaries at THIS tenant everywhere —
+  // its reference-data fetches and later phases all query targetTenant — so the
+  // writer MUST match the readers. (An earlier attempt to write these at the
+  // state root to satisfy PGR split the configurator's read/write and 400'd its
+  // reference-data load: "Hierarchy definition does not exist". PGR is instead
+  // pointed at the city via the digit-ui ui_state_tenant_id config, not by
+  // moving where the configurator stores boundaries.) Fall back to the session
+  // tenant if Phase 1 was skipped (URL-direct).
+  const boundaryTenant = state.targetTenant || state.tenant;
 
   const [step, setStep] = useState<Step>('landing');
   const [loading, setLoading] = useState(false);
