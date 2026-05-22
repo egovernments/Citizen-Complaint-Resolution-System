@@ -44,6 +44,14 @@ const ACTION_CONFIGS = [
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
               },
             },
+            {
+              type: "component",
+              isMandatory: false,
+              component: "PGRActionUploadComponent",
+              key: "SelectedDocuments",
+              label: "CS_COMMON_ATTACHMENTS",
+              populators: { name: "SelectedDocuments" },
+            },
           ],
         },
       ],
@@ -53,7 +61,7 @@ const ACTION_CONFIGS = [
     actionType: "REOPEN",
     formConfig: {
       label: {
-        heading: "CS_ACTION_ASSIGN",
+        heading: "CS_ACTION_REOPEN",
         cancel: "CS_COMMON_CANCEL",
         submit: "CS_COMMON_SUBMIT",
       },
@@ -80,6 +88,14 @@ const ACTION_CONFIGS = [
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
               },
             },
+            {
+              type: "component",
+              isMandatory: false,
+              component: "PGRActionUploadComponent",
+              key: "SelectedDocuments",
+              label: "CS_COMMON_ATTACHMENTS",
+              populators: { name: "SelectedDocuments" },
+            },
           ],
         },
       ],
@@ -97,23 +113,6 @@ const ACTION_CONFIGS = [
         {
           body: [
             {
-              isMandatory: false,
-              key: "SelectedReason",
-              type: "dropdown",
-              label: "CS_REJECT_COMPLAINT",
-              disable: false,
-              populators: {
-                name: "SelectedReason",
-                optionsKey: "name",
-                error: "Required",
-                mdmsConfig: {
-                  masterName: "RejectionReasons",
-                  moduleName: "RAINMAKER-PGR",
-                  localePrefix: "CS_REJECTION_",
-                },
-              },
-            },
-            {
               type: "textarea",
               isMandatory: true,
               key: "SelectedComments",
@@ -124,6 +123,14 @@ const ACTION_CONFIGS = [
                 validation: { required: true },
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
               },
+            },
+            {
+              type: "component",
+              isMandatory: false,
+              component: "PGRActionUploadComponent",
+              key: "SelectedDocuments",
+              label: "CS_COMMON_ATTACHMENTS",
+              populators: { name: "SelectedDocuments" },
             },
           ],
         },
@@ -152,6 +159,14 @@ const ACTION_CONFIGS = [
                 validation: { required: true },
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
               },
+            },
+            {
+              type: "component",
+              isMandatory: false,
+              component: "PGRActionUploadComponent",
+              key: "SelectedDocuments",
+              label: "CS_COMMON_ATTACHMENTS",
+              populators: { name: "SelectedDocuments" },
             },
           ],
         },
@@ -188,6 +203,14 @@ const ACTION_CONFIGS = [
                 validation: { required: true },
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
               },
+            },
+            {
+              type: "component",
+              isMandatory: false,
+              component: "PGRActionUploadComponent",
+              key: "SelectedDocuments",
+              label: "CS_COMMON_ATTACHMENTS",
+              populators: { name: "SelectedDocuments" },
             },
           ],
         },
@@ -226,7 +249,8 @@ const PGRDetails = () => {
   function getServiceCategoryByCode(serviceCode, services) {
     if (!serviceCode || !Array.isArray(services)) return null;
     const match = services.find(item => item.serviceCode === serviceCode);
-    return match?.menuPath || null;
+    // Return category if available, fallback to menuPath for backward compatibility
+    return match?.category || match?.menuPath || null;
   }
 
   function getServiceNameByCode(serviceCode, services) {
@@ -306,6 +330,15 @@ const PGRDetails = () => {
       });
       return;
     }
+    const verificationDocuments = Array.isArray(_data?.SelectedDocuments)
+      ? _data.SelectedDocuments.map((fileStoreId) => ({
+          documentType: "PHOTO",
+          fileStoreId,
+          documentUid: "",
+          additionalDetails: {},
+        }))
+      : [];
+
     const updateRequest = {
       service: { ...pgrData?.ServiceWrappers[0].service },
       workflow: {
@@ -313,6 +346,7 @@ const PGRDetails = () => {
         assignes: _data?.SelectedAssignee?.uuid ? [_data?.SelectedAssignee?.uuid] : null,
         hrmsAssignes: _data?.SelectedAssignee?.uuid ? [_data?.SelectedAssignee?.uuid] : null,
         comments: _data?.SelectedComments || "",
+        verificationDocuments,
       },
     };
     handleResponseForUpdateComplaint(updateRequest);
@@ -343,11 +377,42 @@ const PGRDetails = () => {
   };
 
   // Enhance config with roles and department dynamically
-  const getUpdatedConfig = (selectedAction, workflowData, configs, serviceDefs, complaintData) => {
+  const getUpdatedConfig = (selectedAction, workflowData, configs, serviceDefs, complaintData, businessServiceResponse) => {
     const actionConfig = configs.find((config) => config.actionType === selectedAction.action);
     const department = serviceDefs?.find((def) => def.serviceCode === complaintData?.ServiceWrappers[0]?.service?.serviceCode)?.department;
     if (!actionConfig) return null;
-    const roles = selectedAction?.roles || [];
+
+    // Get the next state UUID from the selected action
+    const nextStateUuid = selectedAction?.nextState;
+
+    // Find all roles from the next state's actions by searching in BusinessService states
+    let nextStateRoles = [];
+    if (nextStateUuid && businessServiceResponse?.states) {
+      // Search through business service states to find the state with matching UUID
+      const nextState = businessServiceResponse.states.find(
+        (state) => state?.uuid === nextStateUuid
+      );
+
+      if (nextState?.actions) {
+        // Filter actions that contain PGR_VIEWER role
+        const actionsWithPgrViewer = nextState.actions.filter((action) =>
+          action.roles && Array.isArray(action.roles) && action.roles.includes("PGR_VIEWER")
+        );
+
+        // Collect all unique roles from filtered actions
+        const allRoles = new Set();
+        actionsWithPgrViewer.forEach((action) => {
+          action.roles.forEach((role) => allRoles.add(role));
+        });
+        nextStateRoles = Array.from(allRoles);
+      }
+    }
+
+    // Use next state roles if found, otherwise fall back to current action roles
+    // Filter out PGR_VIEWER role from the final list
+    const roles = (nextStateRoles.length > 0 ? nextStateRoles : (selectedAction?.roles || [])).filter(
+      (role) => role !== "PGR_VIEWER"
+    );
 
     return {
       ...actionConfig.formConfig,
@@ -366,21 +431,39 @@ const PGRDetails = () => {
     };
   };
 
+  // Roles that are purely citizen-facing — never show these as action options on the employee UI
+  const CITIZEN_ONLY_ROLES = ["CITIZEN"];
+
+  // Shared helper: returns true if ALL roles on an action are citizen-only (e.g. RATE, REOPEN, COMMENT)
+  const isCitizenOnlyAction = (action) =>
+    Array.isArray(action.roles) &&
+    action.roles.length > 0 &&
+    action.roles.every((role) => CITIZEN_ONLY_ROLES.includes(role));
+
   // Get list of valid actions for current user and state
   const getNextActionOptions = (workflowData, businessServiceResponse) => {
     const currentState = workflowData?.ProcessInstances?.[0]?.state;
     const matchingState = businessServiceResponse?.states?.find((state) => state.uuid === currentState?.uuid);
     if (!matchingState) return [];
     const userRoles = userInfo?.info?.roles?.map((role) => role.code) || [];
-    return matchingState.actions
-      ? matchingState.actions.filter((action) => action.roles.some((role) => userRoles.includes(role)))
-        .map((action) => ({
-          action: action.action,
-          roles: action.roles,
-          nextState: action.nextState,
-          uuid: action.uuid,
-        }))
-      : [];
+
+    // SUPERUSER gets all available actions without role filtering,
+    // but citizen-only actions (e.g. RATE with roles:["CITIZEN"]) are always excluded on the employee UI
+    const hasSuperUserRole = userRoles.includes("SUPERUSER");
+
+    if (!matchingState.actions) return [];
+
+    // Filter actions based on user roles, or return all employee-relevant ones if SUPERUSER
+    const filteredActions = hasSuperUserRole
+      ? matchingState.actions.filter((action) => !isCitizenOnlyAction(action))
+      : matchingState.actions.filter((action) => action.roles.some((role) => userRoles.includes(role)));
+
+    return filteredActions.map((action) => ({
+      action: action.action,
+      roles: action.roles,
+      nextState: action.nextState,
+      uuid: action.uuid,
+    }));
   };
 
   // Check if action button should be visible based on user roles
@@ -394,7 +477,17 @@ const PGRDetails = () => {
       return false;
     }
 
-    // Get all roles from current state actions
+    // Check if user has SUPERUSER role - SUPERUSER bypasses ALL checks
+    const hasSuperUserRole = userRoles.includes("SUPERUSER");
+
+    if (hasSuperUserRole) {
+      // SUPERUSER sees the button only if there is at least one employee-relevant (non-citizen-only) action.
+      // e.g. on REJECTED/RESOLVED states where every action is CITIZEN-only, hide the button entirely.
+      return currentState.actions.some((action) => !isCitizenOnlyAction(action));
+    }
+
+    // Get all roles from current state actions (employee path — citizen-only actions are naturally
+    // excluded because the employee won't have the CITIZEN role)
     const allActionRoles = [];
     currentState.actions.forEach(action => {
       if (action.roles) {
@@ -413,8 +506,7 @@ const PGRDetails = () => {
       allActionRoles.includes(userRole)
     );
 
-
-    // Show button only if user has BOTH PGR_VIEWER AND other matching roles
+    // For other users: Show button only if user has BOTH PGR_VIEWER AND other matching roles
     return hasViewerRole && hasMatchingRole;
   };
 
@@ -462,11 +554,33 @@ const PGRDetails = () => {
                     label: t("CS_COMPLAINT_FILED_DATE"),
                     value: convertEpochFormateToDate(pgrData?.ServiceWrappers[0].service?.auditDetails?.createdTime) || t("NA"),
                   },
-                  {
-                    inline: true,
-                    label: t("CS_COMPLAINT_DETAILS_AREA"),
-                    value: t(pgrData?.ServiceWrappers[0].service?.address?.locality?.code || "NA"),
-                  },
+                  ...((() => {
+                    const _rawHierarchy = pgrData?.ServiceWrappers[0]?.service?.additionalDetail?.boundaryHierarchy;
+                    const hierarchy = (() => { try { return typeof _rawHierarchy === "string" ? JSON.parse(_rawHierarchy) : _rawHierarchy; } catch (e) { return _rawHierarchy; } })();
+
+                    // Object format: { Zone: "CODE", Locality: "CODE" } — show one row per level
+                    if (hierarchy && typeof hierarchy === "object" && !Array.isArray(hierarchy) && Object.keys(hierarchy).length > 0) {
+                      return Object.entries(hierarchy).map(([level, code]) => ({
+                        inline: true,
+                        label: t(`EGOV_LOCATION_BOUNDARYTYPE_${level.toUpperCase()}`),
+                        value: t(code),
+                      }));
+                    }
+                    // Flat array fallback: show as joined breadcrumb
+                    if (Array.isArray(hierarchy) && hierarchy.length > 0) {
+                      return [{
+                        inline: true,
+                        label: t("CS_COMPLAINT_DETAILS_BOUNDARY_HIERARCHY"),
+                        value: hierarchy.map(code => t(code)).join(" > "),
+                      }];
+                    }
+                    // No hierarchy — fall back to plain area field
+                    return [{
+                      inline: true,
+                      label: t("CS_COMPLAINT_DETAILS_AREA"),
+                      value: t(pgrData?.ServiceWrappers[0].service?.address?.locality?.code || "NA"),
+                    }];
+                  })()),
                   {
                     inline: true,
                     label: t("CS_COMPLAINT_DETAILS_CURRENT_STATUS"),
@@ -474,8 +588,23 @@ const PGRDetails = () => {
                   },
                   {
                     inline: true,
-                    label: t("CS_COMPLAINT_LANDMARK__DETAILS"),
-                    value: pgrData?.ServiceWrappers[0].service?.address?.landmark || "NA",
+                    label: t("ES_CREATECOMPLAINT_ADDRESS"),
+                    value: (() => {
+                      const address = pgrData?.ServiceWrappers[0]?.service?.address;
+                      const tenantId = pgrData?.ServiceWrappers[0]?.service?.tenantId;
+                      const isMultiRoot = Digit.Utils.getMultiRootTenant();
+                      const localityKey = isMultiRoot
+                        ? address?.locality?.code
+                        : address?.locality?.name || address?.locality?.code;
+                      const parts = [
+                        address?.landmark,
+                        localityKey ? t(localityKey) : null,
+                        tenantId ? t(`TENANT_TENANTS_${tenantId?.toUpperCase?.()?.replace(".", "_")}`) : null,
+                        address?.pincode,
+                      ].filter(Boolean);
+                      if (parts.length === 0) return "NA";
+                      return parts.join(", ");
+                    })(),
                   },
                   {
                     inline: true,
@@ -484,21 +613,23 @@ const PGRDetails = () => {
                   },
                 ],
               },
-              ...(pgrData?.ServiceWrappers[0]?.workflow?.verificationDocuments?.length > 0
-                ? [{
-                  cardType: "primary",
-                  fieldPairs: [
-                    {
-                      inline: false,
-                      type: "custom",
-                      renderCustomContent: () => (
-                        <ComplaintPhotos t={t} serviceWrapper={pgrData?.ServiceWrappers[0]} />
-                      ),
-                    },
-                  ],
-                  header: t("CS_COMMON_ATTACHMENTS"),
-                }]
-                : []
+              ...(
+                (pgrData?.ServiceWrappers[0]?.service?.documents?.length > 0 ||
+                  pgrData?.ServiceWrappers[0]?.workflow?.verificationDocuments?.length > 0)
+                  ? [{
+                    cardType: "primary",
+                    fieldPairs: [
+                      {
+                        inline: false,
+                        type: "custom",
+                        renderCustomContent: () => (
+                          <ComplaintPhotos t={t} serviceWrapper={pgrData?.ServiceWrappers[0]} />
+                        ),
+                      },
+                    ],
+                    header: t("CS_COMMON_ATTACHMENTS"),
+                  }]
+                  : []
               ),
               // Conditionally include location section only if coordinates exist
               ...(pgrData?.ServiceWrappers[0]?.service?.address?.geoLocation?.latitude &&
@@ -551,7 +682,7 @@ const PGRDetails = () => {
                 ],
                 header: t("CS_COMPLAINT_DETAILS_COMPLAINT_TIMELINE"),
               },
-            ]}
+            ].filter(Boolean)}
             type="primary"
           />
         ) : (
@@ -601,7 +732,7 @@ const PGRDetails = () => {
           sessionFormData={sessionFormData}
           setSessionFormData={setSessionFormData}
           clearSessionFormData={clearSessionFormData}
-          config={getUpdatedConfig(selectedAction, workflowData, ACTION_CONFIGS, serviceDefs, pgrData)}
+          config={getUpdatedConfig(selectedAction, workflowData, ACTION_CONFIGS, serviceDefs, pgrData, businessServiceData?.BusinessServices?.[0])}
           closeModal={() => setOpenModal(false)}
           onSubmit={handleActionSubmit}
         />

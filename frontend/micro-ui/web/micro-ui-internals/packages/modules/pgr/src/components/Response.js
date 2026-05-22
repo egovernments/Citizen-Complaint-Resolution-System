@@ -50,7 +50,12 @@ const Response = () => {
           label={t(back)}
           icon={"ArrowBack"}
           onClick={() => {
-            const backlink = state?.backlink || `/${window.contextPath}/employee/`;
+            const isFromSandbox = Digit.Utils.getMultiRootTenant();
+            let backlink = state?.backlink || `/${window.contextPath}/employee/`;
+            if (isFromSandbox && !state?.backlink) {
+              const moduleName = window.location.pathname.split("/employee/")?.[1]?.split("/")?.[0];
+              backlink = `/${window.contextPath}/employee?from=sandbox&module=${moduleName}&userType=employee`;
+            }
             history.push(backlink);
           }}
         />

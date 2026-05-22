@@ -4,6 +4,7 @@
     "name": "citizen",
     "gender": null,
     "mobileNumber": "6555555555",
+    "countryCode": "+91",
     "active": true,
     "type": "CITIZEN",
     "roles": [

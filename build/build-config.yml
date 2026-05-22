@@ -45,6 +45,12 @@ config:
         image-name: "digit-user-preferences-service"
       - work-dir: "backend/digit-user-preferences-service/db"
         image-name: "digit-user-preferences-service-db"
+  - name: "builds/Citizen-Complaint-Resolution-System/backend/xstate-chatbot"
+    build:
+      - work-dir: "backend/xstate-chatbot/nodejs"
+        image-name: "xstate-chatbot"
+      - work-dir: "backend/xstate-chatbot/nodejs/db"
+        image-name: "xstate-chatbot-db"
   - name: "builds/Citizen-Complaint-Resolution-System/utilities/default-data-handler"
     build:
       - work-dir: "utilities/default-data-handler"
@@ -55,5 +61,4 @@ config:
       - work-dir: frontend/micro-ui/
         dockerfile: frontend/micro-ui/web/docker/Dockerfile
         image-name: digit-ui
-
 

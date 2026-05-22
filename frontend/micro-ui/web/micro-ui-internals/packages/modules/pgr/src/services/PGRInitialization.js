@@ -24,7 +24,8 @@ const initializePGRModule = async ({ tenantId }) => {
     const userType = user.type;
 
     if (userType === "CITIZEN") {
-      tenantId = Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || tenantId;
+      tenantId = Digit.Utils.getMultiRootTenant()
+    ? Digit.ULBService.getCurrentTenantId() : Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || tenantId;
     }
   } else {
     console.log("No CITIZEN user info found in localStorage.");

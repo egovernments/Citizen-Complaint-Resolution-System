@@ -1,0 +1,75 @@
+[
+  {
+    "tenantId": "{tenantid}",
+    "code": "TemplateBinding",
+    "description": "Binds a workflow event to a Novu template and Twilio content template for WhatsApp dispatch",
+    "definition": {
+      "type": "object",
+      "title": "TemplateBinding",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "eventName",
+        "channel",
+        "templateId",
+        "locale"
+      ],
+      "x-unique": [
+        "eventName",
+        "channel",
+        "locale"
+      ],
+      "properties": {
+        "locale": {
+          "type": "string",
+          "default": "en_IN",
+          "pattern": "^[a-z]{2}_[A-Z]{2}$",
+          "description": "Locale code for provider (e.g., en_IN, hi_IN, en_US)"
+        },
+        "channel": {
+          "type": "string",
+          "description": "Communication channel (whatsapp, sms, email)"
+        },
+        "isActive": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether this template binding is active"
+        },
+        "eventName": {
+          "type": "string",
+          "description": "Event name (e.g., COMPLAINTS.WORKFLOW.REJECT)"
+        },
+        "contentSid": {
+          "type": "string",
+          "description": "Provider-specific content SID (for Twilio)"
+        },
+        "novuApiKey": {
+          "type": "string",
+          "description": "Optional template-specific Novu API key"
+        },
+        "paramOrder": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Order of parameters for template"
+        },
+        "templateId": {
+          "type": "string",
+          "description": "Template identifier in Novu"
+        },
+        "requiredVars": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Required variables for template"
+        }
+      },
+      "x-security": [
+        "novuApiKey"
+      ],
+      "description": "Schema for template bindings per event and channel"
+    },
+    "isActive": true
+  }
+]

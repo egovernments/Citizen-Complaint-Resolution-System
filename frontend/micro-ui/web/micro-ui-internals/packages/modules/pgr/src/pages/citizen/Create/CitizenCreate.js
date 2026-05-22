@@ -9,12 +9,12 @@ import { Loader } from "@egovernments/digit-ui-components";
 // import { transformIndividualCreateData } from "../../utils/createUtils";
 
 const IndividualCreateCitizen = () => {
-  
+
   const tenantId = Digit.ULBService.getCurrentTenantId();
   const { t } = useTranslation();
 
   // Fetch mobile validation config from MDMS
-  const { validationRules, isLoading: isValidationLoading, getMinMaxValues } = Digit.Hooks.pgr.useMobileValidation(tenantId);
+  const { validationRules, allValidationConfigs, isLoading: isValidationLoading, getMinMaxValues } = Digit.Hooks.pgr.useMobileValidation(tenantId);
 
    const reqCreate = {
     url: `/individual/v1/_create`,

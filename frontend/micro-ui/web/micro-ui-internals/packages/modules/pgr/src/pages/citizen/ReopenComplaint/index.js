@@ -9,10 +9,12 @@ import AddtionalDetails from "./AddtionalDetails";
 import Response from "../Response";
 
 const ReopenComplaint = ({ match, history, parentRoute }) => {
-  
+
   const allParams = window.location.pathname.split("/")
   const id = allParams[allParams.length - 1]
-  const tenantId = Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || Digit.ULBService.getCurrentTenantId();
+  const tenantId = Digit.Utils.getMultiRootTenant()
+    ? Digit.ULBService.getCurrentTenantId()
+    : Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || Digit.ULBService.getCurrentTenantId();
 
   const complaintDetails = Digit.Hooks.pgr.useComplaintDetails({ tenantId: tenantId, id: id }).complaintDetails;
   return (

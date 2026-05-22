@@ -3,6 +3,7 @@ package org.egov;
 import java.nio.charset.StandardCharsets;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import org.egov.handler.util.ConfigDataBulkLoader;
 import org.egov.handler.util.LocalizationUtil;
 import org.egov.handler.util.MdmsBulkLoader;
 import org.egov.handler.web.models.User;
@@ -45,6 +46,8 @@ public class StartupSchemaAndMasterDataInitializer{
     private final MdmsBulkLoader mdmsBulkLoader;
 
     private final LocalizationUtil localizationUtil;
+
+    private final ConfigDataBulkLoader configDataBulkLoader;
 
     private final AtomicBoolean hasRun = new AtomicBoolean(false);
 
@@ -102,6 +105,11 @@ public class StartupSchemaAndMasterDataInitializer{
             mdmsBulkLoader.loadAllMdmsData(defaultDataRequest.getTargetTenantId(),
                     defaultDataRequest.getRequestInfo(),
                     serviceConfig.getDefaultMdmsDataPath());
+
+            // Load default config data (always)
+            configDataBulkLoader.loadAllConfigData(defaultDataRequest.getTargetTenantId(),
+                    defaultDataRequest.getRequestInfo(),
+                    serviceConfig.getDefaultConfigDataPath());
 
             // Load default localization (always)
             localizationUtil.upsertLocalizationFromFile(defaultDataRequest,

@@ -16,6 +16,8 @@ import java.util.*;
 
 import static org.egov.pgr.util.PGRConstants.MDMS_MODULE_NAME;
 import static org.egov.pgr.util.PGRConstants.MDMS_SERVICEDEF;
+import static org.egov.pgr.util.PGRConstants.MDMS_COMMON_MASTERS_MODULE_NAME;
+import static org.egov.pgr.util.PGRConstants.MDMS_DEPT_MASTER;
 
 @Component
 public class MDMSUtils {
@@ -60,6 +62,12 @@ public class MDMSUtils {
 
         List<ModuleDetail> moduleDetails = new LinkedList<>();
         moduleDetails.addAll(pgrModuleRequest);
+
+        List<MasterDetail> commonMasterDetails = new ArrayList<>();
+        commonMasterDetails.add(MasterDetail.builder().name(MDMS_DEPT_MASTER).build());
+        ModuleDetail commonModuleDtls = ModuleDetail.builder().masterDetails(commonMasterDetails)
+                .moduleName(MDMS_COMMON_MASTERS_MODULE_NAME).build();
+        moduleDetails.add(commonModuleDtls);
 
         MdmsCriteria mdmsCriteria = MdmsCriteria.builder().moduleDetails(moduleDetails).tenantId(tenantId)
                 .build();

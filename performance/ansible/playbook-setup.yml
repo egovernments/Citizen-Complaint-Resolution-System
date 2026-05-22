@@ -1,0 +1,157 @@
+---
+- name: Setup DIGIT stack on target machines
+  hosts: targets
+  become: true
+  vars:
+    digit_dir: /opt/digit
+
+  tasks:
+    - name: Install Docker prerequisites
+      apt:
+        name: [ca-certificates, curl, gnupg]
+        state: present
+        update_cache: yes
+
+    - name: Add Docker GPG key
+      shell: |
+        install -m 0755 -d /etc/apt/keyrings
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+        chmod a+r /etc/apt/keyrings/docker.asc
+      args:
+        creates: /etc/apt/keyrings/docker.asc
+
+    - name: Add Docker repository
+      shell: |
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
+      args:
+        creates: /etc/apt/sources.list.d/docker.list
+
+    - name: Install Docker Engine
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+        update_cache: yes
+
+    - name: Add ubuntu user to docker group
+      user:
+        name: ubuntu
+        groups: docker
+        append: yes
+
+    - name: Verify Docker Compose version >= 2.20
+      shell: docker compose version --short
+      register: compose_version
+      changed_when: false
+
+    - name: Fail if Docker Compose too old
+      fail:
+        msg: "Docker Compose {{ compose_version.stdout }} is too old. Need >= 2.20"
+      when: compose_version.stdout is version('2.20', '<')
+
+    - name: Create DIGIT directory
+      file:
+        path: "{{ digit_dir }}"
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+
+    - name: Copy Docker Compose file
+      copy:
+        src: ../docker-compose.deploy.yaml
+        dest: "{{ digit_dir }}/docker-compose.deploy.yaml"
+        owner: ubuntu
+
+    - name: Copy all config directories
+      synchronize:
+        src: "../{{ item }}/"
+        dest: "{{ digit_dir }}/{{ item }}/"
+      loop:
+        - kong
+        - otel
+        - keycloak
+        - configs
+        - nginx
+        - db
+        - seeds
+        - gatus
+        - jupyter
+
+    - name: Copy local images tarball
+      copy:
+        src: ../digit-local-images.tar.gz
+        dest: /tmp/digit-local-images.tar.gz
+      when: local_images | default(false) | bool
+
+    - name: Load local images
+      shell: docker load < /tmp/digit-local-images.tar.gz
+      when: local_images | default(false) | bool
+
+    - name: Pull registry images
+      shell: docker compose -f docker-compose.deploy.yaml pull --ignore-pull-failures
+      args:
+        chdir: "{{ digit_dir }}"
+
+    - name: Start DIGIT stack
+      shell: docker compose -f docker-compose.deploy.yaml up -d
+      args:
+        chdir: "{{ digit_dir }}"
+
+    - name: Wait for Kong health (up to 10 min)
+      uri:
+        url: "http://127.0.0.1:18000/user/health"
+        status_code: 200
+      register: health
+      retries: 60
+      delay: 10
+      until: health.status == 200
+
+    - name: Get admin auth token
+      uri:
+        url: "http://127.0.0.1:18000/user/oauth/token"
+        method: POST
+        body_format: form-urlencoded
+        body:
+          username: ADMIN
+          password: "eGov@123"
+          grant_type: password
+          scope: read
+          tenantId: statea.citya
+          userType: EMPLOYEE
+        headers:
+          Authorization: "Basic ZWdvdi11c2VyLWNsaWVudDo="
+        status_code: 200
+      register: admin_auth
+
+    - name: Pre-create 100 citizen users for load testing
+      uri:
+        url: "http://127.0.0.1:18000/user/users/_createnovalidate"
+        method: POST
+        body_format: json
+        body:
+          RequestInfo:
+            apiId: Rainmaker
+            authToken: "{{ admin_auth.json.access_token }}"
+            userInfo: "{{ admin_auth.json.UserRequest }}"
+          user:
+            name: "LoadTestCitizen_{{ item }}"
+            mobileNumber: "9900000{{ '%03d' | format(item) }}"
+            password: "eGov@123"
+            tenantId: statea.citya
+            type: CITIZEN
+            roles:
+              - code: CITIZEN
+                name: Citizen
+                tenantId: statea.citya
+        headers:
+          Content-Type: application/json
+        status_code: [200, 400]
+      loop: "{{ range(1, 101) | list }}"
+      loop_control:
+        label: "citizen {{ item }}"
+      register: citizen_results
+      ignore_errors: true

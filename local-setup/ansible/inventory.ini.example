@@ -1,0 +1,11 @@
+# Ansible inventory for DIGIT deployment
+# Copy this file to inventory.ini and update the target IP address.
+#
+# Usage:
+#   cp inventory.ini.example inventory.ini
+#   # Edit inventory.ini with your target machine IP
+#   ansible-playbook -i inventory.ini playbook-deploy.yml
+
+[targets]
+# Replace with your target machine's IP or hostname
+192.168.1.100 ansible_user=root

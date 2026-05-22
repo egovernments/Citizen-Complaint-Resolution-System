@@ -19,10 +19,22 @@ templates:
     - {{ .Values | toYaml | nindent 8 }}
 
 releases:
-  - name: egov-user-event # Replace with your desired namespace
+  - name: egov-user-event
     installed: true
     <<: *default
-  
-  - name: egov-hrms # Replace with your desired namespace
+
+  - name: egov-hrms
+    installed: true
+    <<: *default
+
+  - name: digit-config-service
+    installed: true
+    <<: *default
+
+  - name: digit-user-preferences-service
+    installed: true
+    <<: *default
+
+  - name: novu-bridge
     installed: true
     <<: *default

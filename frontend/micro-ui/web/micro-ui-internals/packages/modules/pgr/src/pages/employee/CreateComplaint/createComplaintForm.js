@@ -106,14 +106,14 @@ const CreateComplaintForm = ({
     return uniqueItems;
   }
 
-  function getSubTypesByDepartment(baseItem, allItems) {
+  function getSubTypesByMenuPath(baseItem, allItems) {
 
-    if (!baseItem || !baseItem.department || !Array.isArray(allItems)) {
-      console.warn("Invalid baseItem or allItems");
+    if (!baseItem || !baseItem.menuPath || !Array.isArray(allItems)) {
       return [];
     }
 
-    return allItems.filter(item => item.department === baseItem.department).map((item) => ({ ...item, i18nKey: "SERVICEDEFS_" + item.serviceCode.toUpperCase() }));
+    const filtered = allItems.filter(item => item.menuPath === baseItem.menuPath);
+    return filtered.map((item) => ({ ...item, i18nKey: "SERVICEDEFS_" + item.serviceCode.toUpperCase() }));
   }
 
 
@@ -247,29 +247,30 @@ const CreateComplaintForm = ({
       return {
         ...section,
         body: section.body.map(field => {
-          if (
-            field.populators?.name === "ComplainantName" ||
-            field.populators?.name === "ComplainantContactNumber"
-          ) {
+          if (field.populators?.name === "ComplainantName") {
+            return { ...field, disable: disabledFields["ComplainantName"] };
+          }
+          if (field.populators?.name === "ComplainantContactNumber") {
             return {
               ...field,
-              disable: disabledFields[field.populators.name],
+              disable: disabledFields["ComplainantContactNumber"],
+              onCountryCodeChange: (code) => { countryCodeRef.current = code; },
             };
           }
-          if (field.key === "boundaryComponent" && hierarchyData) {
+          if (field.key === "boundaryComponent") {
             return {
               ...field,
               populators: {
                 ...field.populators,
                 levelConfig: {
                   ...field.populators.levelConfig,
-                  lowestLevel: hierarchyData.lowestHierarchy || window?.globalConfigs?.getConfig("PGR_BOUNDARY_LOWEST_LEVEL") || "Ward",
-                  highestLevel: hierarchyData.highestHierarchy || window?.globalConfigs?.getConfig("PGR_BOUNDARY_HIGHEST_LEVEL") || "City",
+                  lowestLevel: hierarchyData?.lowestHierarchy || window?.globalConfigs?.getConfig("PGR_BOUNDARY_LOWEST_LEVEL") || "Ward",
+                  highestLevel: hierarchyData?.highestHierarchy || window?.globalConfigs?.getConfig("PGR_BOUNDARY_HIGHEST_LEVEL") || "City",
                   isSingleSelect: [
-                    hierarchyData.lowestHierarchy || window?.globalConfigs?.getConfig("PGR_BOUNDARY_LOWEST_LEVEL") || "Ward",
-                    hierarchyData.highestHierarchy || window?.globalConfigs?.getConfig("PGR_BOUNDARY_HIGHEST_LEVEL") || "City"]
+                    hierarchyData?.lowestHierarchy || window?.globalConfigs?.getConfig("PGR_BOUNDARY_LOWEST_LEVEL") || "Ward",
+                    hierarchyData?.highestHierarchy || window?.globalConfigs?.getConfig("PGR_BOUNDARY_HIGHEST_LEVEL") || "City"]
                 },
-                hierarchyType: hierarchyData.hierarchy || window?.globalConfigs?.getConfig("HIERARCHY_TYPE") || "ADMIN",
+                hierarchyType: hierarchyData?.hierarchy || window?.globalConfigs?.getConfig("HIERARCHY_TYPE") || "ADMIN",
               },
             };
           }
@@ -291,20 +292,31 @@ const CreateComplaintForm = ({
 
   const prevSubTypeRef = React.useRef([]);
   const prevCityRef = React.useRef(null);
+  const getValuesRef = React.useRef(null);
+  const countryCodeRef = React.useRef("+91");
 
-  const onFormValueChange = (setValue, formData, formState, reset, setError, clearErrors) => {
+  const onFormValueChange = (setValue, formData, formState, reset, setError, clearErrors, trigger, getValues) => {
+    // Capture getValues so onFormSubmit can read unregistered fields like countryCode
+    if (getValues) getValuesRef.current = getValues;
 
     const selectedComplaintType = formData?.SelectComplaintType;
-    const newSubTypes = getSubTypesByDepartment(selectedComplaintType, serviceDefs);
+    const newSubTypes = getSubTypesByMenuPath(selectedComplaintType, serviceDefs);
     // const newCity = formData.SelectCity?.code;
 
     // Compare previous and new subtype list
-    const prevCodes = prevSubTypeRef.current.map(s => s.code).sort().join(",");
-    const newCodes = newSubTypes.map(s => s.code).sort().join(",");
+    const prevCodes = prevSubTypeRef.current.map(s => s.serviceCode).sort().join(",");
+    const newCodes = newSubTypes.map(s => s.serviceCode).sort().join(",");
+
+    let needsSessionUpdate = false;
+    let updatedData = { ...formData };
 
     if (prevCodes !== newCodes) {
       prevSubTypeRef.current = newSubTypes;
       setSubType(newSubTypes);
+
+      setValue("SelectSubComplaintType", null);
+      updatedData.SelectSubComplaintType = null;
+      needsSessionUpdate = true;
     }
 
 
@@ -326,18 +338,24 @@ const CreateComplaintForm = ({
 
     // Only update if complaint user selection has changed
     if (selectedUser !== prevSelectedUser) {
-      const updatedData = { ...formData };
+      needsSessionUpdate = true;
 
       if (selectedUser === "MYSELF") {
         updatedData.ComplainantName = user?.info?.name || "";
         updatedData.ComplainantContactNumber = user?.info?.mobileNumber || "";
+        updatedData.countryCode = user?.info?.countryCode || "+91";
       } else if (selectedUser === "ANOTHER_USER") {
         updatedData.ComplainantName = "";
         updatedData.ComplainantContactNumber = "";
+        updatedData.countryCode = window?.Digit?.Hooks?.pgr?.useMobileValidation?.().validationRules?.prefix || "+91";
       }
 
       setValue("ComplainantName", updatedData.ComplainantName);
       setValue("ComplainantContactNumber", updatedData.ComplainantContactNumber);
+      setValue("countryCode", updatedData.countryCode);
+    }
+
+    if (needsSessionUpdate) {
       setSessionFormData(updatedData);
     }
   };
@@ -355,7 +373,27 @@ const CreateComplaintForm = ({
 
 
   const onFormSubmit = (_data) => {
-    const payload = formPayloadToCreateComplaint(_data, tenantId, user?.info);
+    // Validate boundary selection — ensure all boundary levels are filled
+    const boundaryData = _data?.boundaryComponent;
+    const lowestLevel = hierarchyData?.lowestHierarchy;
+    const highestLevel = hierarchyData?.highestHierarchy;
+    // Count expected levels: at least 1 if any level is configured
+    const levels = [highestLevel, lowestLevel].filter(Boolean);
+    const expectedLevels = new Set(levels).size;
+
+    if (expectedLevels > 0) {
+      if (!boundaryData || !Array.isArray(boundaryData) || boundaryData.length < expectedLevels) {
+        setToast({ show: true, label: t("ES_COMMON_PLEASE_SELECT_ALL_BOUNDARY_LEVELS"), type: "error" });
+        return;
+      }
+    }
+
+    const resolvedCountryCode = countryCodeRef.current || sessionFormData?.countryCode || "+91";
+    const payload = formPayloadToCreateComplaint(
+      { ..._data, countryCode: resolvedCountryCode },
+      tenantId, user?.info,
+      [hierarchyData?.highestHierarchy, hierarchyData?.lowestHierarchy].filter(Boolean)
+    );
     handleResponseForCreateComplaint(payload);
   };
 
@@ -415,6 +453,7 @@ const CreateComplaintForm = ({
         config={updatedConfig?.form}
         className="custom-form"
         onFormValueChange={onFormValueChange}
+        getFormAccessors={({ getValues }) => { getValuesRef.current = getValues; }}
         isDisabled={false}
         label={t("CS_COMMON_SUBMIT")}
       />

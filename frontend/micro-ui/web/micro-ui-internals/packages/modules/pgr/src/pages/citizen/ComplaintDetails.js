@@ -25,7 +25,9 @@ import ComplaintPhotos from "../../components/ComplaintPhotos";
 import ComplaintLocationMap from "../../components/ComplaintLocationMap";
 
 const WorkflowComponent = ({ complaintDetails, id }) => {
-  const tenantId = Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || complaintDetails.service.tenantId;
+  const tenantId = Digit.Utils.getMultiRootTenant()
+    ? Digit.ULBService.getCurrentTenantId()
+    : Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || Digit.ULBService.getCurrentTenantId();
   let workFlowDetails = Digit.Hooks.useWorkflowDetails({ tenantId: tenantId, id, moduleCode: "PGR" });
 
   const { isLoading: isMDMSLoading, data: cct } = Digit.Hooks.useCustomMDMS(
@@ -38,10 +40,23 @@ const WorkflowComponent = ({ complaintDetails, id }) => {
     }
   );
 
-  console.log(`*** LOG ***`, cct);
-
+  // CCSD-1766 Fix: Force revalidation on mount to ensure fresh data after rating submission.
+  // If a rating was just submitted for this complaint, use a longer delay (3 s) so the
+  // backend has time to commit the RATE transaction before the workflow/timeline API refetches.
   useEffect(() => {
+    const ratingSession = Digit.SessionStorage.get("PGR_LAST_RATING");
+    const SESSION_TTL_MS = 2 * 60 * 1000;
+    const isJustRated =
+      ratingSession &&
+      ratingSession.id === id &&
+      Date.now() - ratingSession.timestamp < SESSION_TTL_MS;
+
     workFlowDetails.revalidate();
+    const delay = isJustRated ? 3000 : 1500;
+    const timer = setTimeout(() => {
+      workFlowDetails.revalidate();
+    }, delay);
+    return () => clearTimeout(timer);
   }, []);
 
   return (
@@ -63,8 +78,28 @@ const ComplaintDetailsPage = (props) => {
   let { t } = useTranslation();
   let { id } = useParams();
 
-  let tenantId = Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || Digit.ULBService.getCurrentTenantId(); // ToDo: fetch from state
+  let tenantId = Digit.Utils.getMultiRootTenant()
+    ? Digit.ULBService.getCurrentTenantId()
+    : Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || Digit.ULBService.getCurrentTenantId();
   const { isLoading, error, isError, complaintDetails, revalidate } = Digit.Hooks.pgr.useComplaintDetails({ tenantId, id });
+
+  // CCSD-1766 Fix: Force fresh fetch of complaint data on mount so rating is not stale after submission.
+  // Use a longer delay when navigating back from a fresh rating submission.
+  useEffect(() => {
+    const ratingSession = Digit.SessionStorage.get("PGR_LAST_RATING");
+    const SESSION_TTL_MS = 2 * 60 * 1000;
+    const isJustRated =
+      ratingSession &&
+      ratingSession.id === id &&
+      Date.now() - ratingSession.timestamp < SESSION_TTL_MS;
+
+    revalidate();
+    const delay = isJustRated ? 3000 : 1500;
+    const timer = setTimeout(() => {
+      revalidate();
+    }, delay);
+    return () => clearTimeout(timer);
+  }, []);
 
   if (isLoading) {
     return <Loader />;
@@ -96,28 +131,77 @@ const ComplaintDetailsPage = (props) => {
             <Card>
               <CardSubHeader style={{ marginBottom: "16px" }}>{t("CS_COMPLAINT_DETAILS_COMPLAINT_DETAILS")}</CardSubHeader>
               <StatusTable>
-                {Object.keys(complaintDetails.details).map((flag, index, arr) => (
-                  <Row
-                    key={index}
-                    label={t(flag)}
-                    text={
-                      Array.isArray(complaintDetails.details[flag])
-                        ? complaintDetails.details[flag].map((val) => (typeof val === "object" ? t(val?.code) : t(val)))
-                        : t(complaintDetails.details[flag]) || "N/A"
+                {Object.keys(complaintDetails.details)
+                  .filter((key) => {
+                    const _rawHierarchy1 = complaintDetails?.service?.additionalDetail?.boundaryHierarchy;
+                    const hierarchy = (() => { try { return typeof _rawHierarchy1 === "string" ? JSON.parse(_rawHierarchy1) : _rawHierarchy1; } catch (e) { return _rawHierarchy1; } })();
+
+                    const hasHierarchy = hierarchy && typeof hierarchy === "object" && !Array.isArray(hierarchy) && Object.keys(hierarchy).length > 0;
+                    // Hide locality/area row if hierarchy is already showing it
+                    if (hasHierarchy && (key === "CS_ADDCOMPLAINT_LOCALITY" || key === "CS_COMPLAINT_DETAILS_LOCALITY" || key === "CS_COMPLAINT_DETAILS_AREA")) {
+                      return false;
                     }
-                    last={index === arr.length - 1}
-                  />
-                ))}
+                    return true;
+                  })
+                  .map((flag, index, arr) => (
+                    <Row
+                      key={index}
+                      label={t(flag)}
+                      text={
+                        Array.isArray(complaintDetails.details[flag])
+                          ? complaintDetails.details[flag].map((val) => (typeof val === "object" ? t(val?.code) : t(val)))
+                          : t(complaintDetails.details[flag]) || "N/A"
+                      }
+                      last={index === arr.length - 1}
+                    />
+                  ))}
               </StatusTable>
-              {complaintDetails?.workflow?.verificationDocuments?.length > 0 && (
-                <React.Fragment>
-                  <CardSubHeader>{t("CS_COMMON_ATTACHMENTS")}</CardSubHeader>
-                  <ComplaintPhotos serviceWrapper={complaintDetails} />
-                </React.Fragment>
-              )}
+              {(() => {
+                const _rawHierarchy2 = complaintDetails?.service?.additionalDetail?.boundaryHierarchy;
+                const hierarchy = (() => { try { return typeof _rawHierarchy2 === "string" ? JSON.parse(_rawHierarchy2) : _rawHierarchy2; } catch (e) { return _rawHierarchy2; } })();
+
+                if (!hierarchy) return null;
+                // Object format: { Region: "CODE", Block: "CODE" }
+                if (typeof hierarchy === "object" && !Array.isArray(hierarchy)) {
+                  return (
+                    <StatusTable>
+                      {Object.entries(hierarchy).map(([level, code], idx, arr) => (
+                        <Row
+                          key={level}
+                          label={t(`EGOV_LOCATION_BOUNDARYTYPE_${level.toUpperCase()}`)}
+                          text={t(code)}
+                          last={idx === arr.length - 1}
+                        />
+                      ))}
+                    </StatusTable>
+                  );
+                }
+                // Flat array fallback
+                if (Array.isArray(hierarchy) && hierarchy.length > 0) {
+                  return (
+                    <StatusTable>
+                      <Row
+                        label={t("CS_COMPLAINT_DETAILS_BOUNDARY_HIERARCHY")}
+                        text={hierarchy.map(code => t(code)).join(" > ")}
+                        last={true}
+                      />
+                    </StatusTable>
+                  );
+                }
+                return null;
+              })()}
+              {!!(
+                complaintDetails?.service?.documents?.length ||
+                complaintDetails?.workflow?.verificationDocuments?.length
+              ) && (
+                  <React.Fragment>
+                    <CardSubHeader>{t("CS_COMMON_ATTACHMENTS")}</CardSubHeader>
+                    <ComplaintPhotos serviceWrapper={complaintDetails} />
+                  </React.Fragment>
+                )}
             </Card>
 
-            {geoLocation?.latitude && geoLocation?.longitude && (
+            {!!(geoLocation?.latitude && geoLocation?.longitude) && (
               <Card>
                 <CardSubHeader style={{ marginBottom: "16px" }}>{t("CS_COMPLAINT_LOCATION")}</CardSubHeader>
                 <ComplaintLocationMap

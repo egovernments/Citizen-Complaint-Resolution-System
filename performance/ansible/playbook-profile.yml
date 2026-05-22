@@ -1,0 +1,58 @@
+---
+# Apply CPU profile to DIGIT stack using docker update (no restart required).
+# This applies CPU limits to already-running containers, avoiding JVM startup issues.
+#
+# Usage:
+#   ansible-playbook -i ansible/inventory.ini ansible/playbook-profile.yml -e cpu_profile=cpu-2
+#   ansible-playbook -i ansible/inventory.ini ansible/playbook-profile.yml -e cpu_profile=baseline
+#
+- name: Apply CPU profile to DIGIT stack
+  hosts: targets
+  become: true
+  vars:
+    digit_dir: /opt/digit-ccrs
+    cpu_profile: cpu-4
+
+  tasks:
+    - name: Wait for Kong health before applying profile
+      uri:
+        url: "http://127.0.0.1:18000/user/health"
+        status_code: 200
+      register: health
+      retries: 60
+      delay: 10
+      until: health.status == 200
+
+    - name: Copy apply-cpu-profile script
+      copy:
+        src: "../scripts/apply-cpu-profile.py"
+        dest: "{{ digit_dir }}/apply-cpu-profile.py"
+        owner: ubuntu
+        mode: "0755"
+
+    - name: Copy CPU profile to remote
+      copy:
+        src: "../profiles/{{ cpu_profile }}.yml"
+        dest: "{{ digit_dir }}/cpu-profile.yml"
+        owner: ubuntu
+      when: cpu_profile != 'baseline'
+
+    - name: Apply CPU profile
+      shell: >
+        cd {{ digit_dir }} &&
+        python3 apply-cpu-profile.py {{ 'cpu-profile.yml' if cpu_profile != 'baseline' else '--remove' }}
+      become_user: ubuntu
+      register: profile_result
+
+    - name: Show profile result
+      debug:
+        msg: "{{ profile_result.stdout_lines }}"
+
+    - name: Verify Kong still healthy after profile change
+      uri:
+        url: "http://127.0.0.1:18000/user/health"
+        status_code: 200
+      register: post_health
+      retries: 12
+      delay: 10
+      until: post_health.status == 200

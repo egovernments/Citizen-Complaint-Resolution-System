@@ -1,0 +1,83 @@
+[
+  {
+    "locale": "en_IN",
+    "channel": "WHATSAPP",
+    "eventName": "COMPLAINTS.WORKFLOW.APPLY",
+    "contentSid": "HX350aa0b139780ea87f554276b1f68d6c",
+    "novuApiKey": "fa63c0a2ad5cb892cd0abd2f79f83765",
+    "paramOrder": [
+      "serviceName",
+      "complaintNo",
+      "submittedDate"
+    ],
+    "templateId": "complaints-workflow-apply",
+    "requiredVars": [
+      "complaintNo",
+      "serviceName",
+      "submittedDate"
+    ]
+  },
+  {
+    "locale": "en_IN",
+    "channel": "WHATSAPP",
+    "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+    "contentSid": "HX158f8edc7079e2c2b76d9c8f68e87791",
+    "novuApiKey": "fa63c0a2ad5cb892cd0abd2f79f83765",
+    "paramOrder": [
+      "serviceName",
+      "complaintNo",
+      "submittedDate",
+      "assigneeName",
+      "assigneeDesignation",
+      "departmentName"
+    ],
+    "templateId": "complaints-workflow-assign",
+    "requiredVars": [
+      "complaintNo",
+      "status",
+      "serviceName",
+      "departmentName",
+      "submittedDate"
+    ]
+  },
+  {
+    "locale": "en_IN",
+    "channel": "WHATSAPP",
+    "eventName": "COMPLAINTS.WORKFLOW.RESOLVE",
+    "contentSid": "HX065a203bccd1c6485050624fafcb6890",
+    "novuApiKey": "fa63c0a2ad5cb892cd0abd2f79f83765",
+    "paramOrder": [
+      "serviceName",
+      "complaintNo",
+      "submittedDate",
+      "assigneeName"
+    ],
+    "templateId": "complaints-workflow-resolve",
+    "requiredVars": [
+      "serviceName",
+      "complaintNo",
+      "submittedDate",
+      "assigneeName"
+    ]
+  },
+  {
+    "locale": "en_IN",
+    "channel": "WHATSAPP",
+    "eventName": "COMPLAINTS.WORKFLOW.REJECT",
+    "contentSid": "HX5cf9ba4ee941ea005268bef804094dff",
+    "novuApiKey": "fa63c0a2ad5cb892cd0abd2f79f83765",
+    "paramOrder": [
+      "serviceName",
+      "complaintNo",
+      "submittedDate",
+      "comment"
+    ],
+    "templateId": "complaints-workflow-reject",
+    "requiredVars": [
+      "complaintNo",
+      "serviceName",
+      "submittedDate",
+      "comment"
+    ]
+  }
+]

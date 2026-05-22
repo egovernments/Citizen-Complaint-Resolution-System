@@ -14,6 +14,8 @@ import org.springframework.util.StreamUtils;
 import org.springframework.web.client.RestTemplate;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -33,6 +35,15 @@ public class MdmsBulkLoader {
 
             // Match all files inside the specified path
             Resource[] resources = resolver.getResources(mdmsDataPath);
+
+            // Sort alphabetically by full URI path so that reference dependencies are respected.
+            // Directory names ensure correct order:
+            //   ACCESSCONTROL-ACTIONS-TEST  (actions)
+            //   ACCESSCONTROL-ROLE          (roles)
+            //   ACCESSCONTROL-ROLEACTIONS   (x-ref-validates both of the above)
+            Arrays.sort(resources, Comparator.comparing(r -> {
+                try { return r.getURI().toString(); } catch (Exception e) { return ""; }
+            }));
 
             for (Resource resource : resources) {
                 String fileName = resource.getFilename();

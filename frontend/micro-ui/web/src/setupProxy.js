@@ -9,6 +9,7 @@ module.exports = function (app) {
     "/egov-location",
     "/localization",
     "/egov-workflow-v2",
+    "/inbox",
     "/pgr-services",
     "/filestore",
     "/egov-hrms",
@@ -26,6 +27,9 @@ module.exports = function (app) {
     "/muster-roll",
     "/service-request",
     "/mdms-v2",
+    "/default-data-handler",
+    "/user-preference",
+    "/config-service"
   ].forEach((location) =>
     app.use(location, createProxy)
   );

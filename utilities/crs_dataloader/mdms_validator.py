@@ -117,7 +117,7 @@ class MDMSValidator:
         Convert Excel DataFrame to JSON structure matching MDMS schema
 
         For two-phase templates (NEW FORMAT ONLY):
-        - Tenant Master: Tenant Info, Tenant Branding Deatils
+        - Tenant Master: Tenant Info, Tenant Branding Details
         - Common Master: Department And Designation Mast, Complaint Type Master
         - Localization Master: localization sheet
         """
@@ -127,7 +127,7 @@ class MDMSValidator:
             if sheet_name == 'Tenant Info':
                 return self._parse_tenant_info(df)
             # Tenant Branding sheet
-            elif sheet_name == 'Tenant Branding Deatils':
+            elif sheet_name == 'Tenant Branding Details':
                 return self._parse_tenant_branding(df)
         elif template_type == 'common.masterschemavalidation':
             if sheet_name == 'Department And Desgination Mast':
@@ -189,7 +189,7 @@ class MDMSValidator:
         return records
 
     def _parse_tenant_branding(self, df: pd.DataFrame) -> List[Dict]:
-        """Parse Tenant Branding Deatils sheet"""
+        """Parse Tenant Branding Details sheet"""
         records = []
 
         for _, row in df.iterrows():
@@ -472,7 +472,7 @@ class MDMSValidator:
             # Determine which sheets to read based on template type
             # NEW FORMAT ONLY
             if template_type in ['tenant.masterschemavalidation']:
-                sheet_names = ['Tenant Info', 'Tenant Branding Deatils']
+                sheet_names = ['Tenant Info', 'Tenant Branding Details']
                 print(f"[INFO] Using new template format (Tenant Info + Tenant Branding)")
 
             elif template_type in ['common.masterschemavalidation']:
@@ -589,7 +589,7 @@ class MDMSValidator:
                 tenant_required = ['tenantDisplayName', 'tenantCode', 'tenantType', 'logoFilePath']
                 sheet_schema['required'] = [f for f in tenant_required if f in sheet_fields]
             # Branding sheet - no required fields
-            elif sheet_name == 'Tenant Branding Deatils':
+            elif sheet_name == 'Tenant Branding Details':
                 # Branding sheet has no required fields (all optional)
                 sheet_schema['required'] = []
 
