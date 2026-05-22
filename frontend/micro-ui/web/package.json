@@ -67,7 +67,8 @@
     "**/styled-components": "5.0.0",
     "**/minimatch": "7.4.6",
     "**/glob": "7.2.3",
-    "**/chokidar": "3.5.3"
+    "**/chokidar": "3.5.3",
+    "**/node-releases": "2.0.14"
   },
   "scripts": {
     "start": "react-scripts start",

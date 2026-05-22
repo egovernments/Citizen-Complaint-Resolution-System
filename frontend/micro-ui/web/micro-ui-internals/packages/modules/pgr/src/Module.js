@@ -27,30 +27,29 @@ import CreatePGRFlow from "./pages/citizen/Create/FormExplorer";
 import TrackOnWhatsApp from "./components/TrackOnWhatsApp";
 import Complaint from "./components/Complaint";
 import MobileNumberWithPrefix from "./components/MobileNumberWithPrefix";
+import { WorkflowService as PGRWorkflowService } from "./services/workflow/Workflow";
+import "./utils/pgrUIOverrides";
 
 export const PGRReducers = getRootReducer;
 
-// Inject PGR UI overrides into document.head once at module import time, so
-// they apply on the very first paint and survive page refreshes (a JSX <style>
-// element inside the component tree can race with the toast / inbox mount on
-// refresh and miss the first paint).
-if (typeof document !== "undefined" && !document.getElementById("pgr-ui-overrides")) {
-  const style = document.createElement("style");
-  style.id = "pgr-ui-overrides";
-  style.textContent = `
-    .digit-toast-success,
-    .digit-toast-success.animate {
-      bottom: 8rem !important;
-    }
-    .digit-inbox-search-wrapper {
-      max-width: 100%;
-      overflow-x: auto;
-    }
-  `;
-  document.head.appendChild(style);
-}
+// Override Digit.WorkflowService methods so the resulting Request payloads
+// include userInfo in RequestInfo. Only needed for inbox-v1; v2 doesn't hit
+// these endpoints the same way. The library lazily attaches WorkflowService to
+// window.Digit *after* this module is imported, so applyWorkflowServiceOverride
+// must be invoked from inside the PGRModule component (by which time
+// Digit.WorkflowService is populated). Idempotent — re-running is a no-op.
+const applyWorkflowServiceOverride = () => {
+  if (typeof window === "undefined") return;
+  if (window.globalConfigs?.getConfig("USE_INBOX_V1") !== true) return;
+  const ws = window.Digit && window.Digit.WorkflowService;
+  if (!ws || ws.__pgrPatched) return;
+  ws.init = PGRWorkflowService.init;
+  ws.getByBusinessId = PGRWorkflowService.getByBusinessId;
+  ws.__pgrPatched = true;
+};
 
 export const PGRModule = ({ stateCode, userType, tenants }) => {
+  applyWorkflowServiceOverride();
   const { path, url } = useRouteMatch();
   const tenantId = Digit.ULBService.getCurrentTenantId();
 

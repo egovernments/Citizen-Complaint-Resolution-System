@@ -164,11 +164,11 @@ const Filter = (props) => {
           <div className="heading">
             <div className="filter-label">{t("ES_COMMON_FILTER_BY")}:</div>
             <div className="clearAll" onClick={clearAll}>
-              {t("ES_COMMON_CLEAR_ALL")}
+              {t("ES_CLEAR_ALL")}
             </div>
             {props.type === "desktop" && (
               <span className="clear-search" onClick={clearAll}>
-                {t("ES_COMMON_CLEAR_ALL")}
+                {t("ES_CLEAR_ALL")}
               </span>
             )}
             {props.type === "mobile" && (
