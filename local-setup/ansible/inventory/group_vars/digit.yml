@@ -120,6 +120,13 @@ upstream_minio_port: 19000
 # if they don't need digit-mcp at all).
 docker_registry: 10.0.0.4:5000
 
+# On-target directory for digit-mcp when build_mcp is true. Vendored deploys
+# rsync CCRS digit-mcp/ here; a git mcp_repo_url clones/updates here instead.
+mcp_repo: "{{ digit_dir }}/digit-mcp"
+# "-" = vendored (rsync from controller); set a git URL to clone on the target.
+mcp_repo_url: "-"
+mcp_ref: main
+
 # Where the digit-ui SPA source lives. Auto-cloned onto the target at
 # /opt/digit-ui-esbuild by the playbook. Override in host_vars to point
 # at a fork.

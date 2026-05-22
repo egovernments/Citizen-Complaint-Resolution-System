@@ -386,38 +386,11 @@
         regexp: 'api\.egov\.theflywheel\.in'
         replace: "{{ domain }}"
 
-    # Substitute STATE_LEVEL tenant identifiers — the upstream compose
-    # ships with `pg` / `pg.citya` / `mz` defaults from egovernments/CCRS
-    # sample data. Without this rewrite, every DIGIT service comes up
-    # using `pg` for state-tier env vars, which breaks auth on any tenant
-    # whose user rows are encrypted under a different tenant's key — see
-    # the corresponding PR description for the full trace. State-root
-    # gets the inventory `state_root` (e.g. `ke`); the two city-tier
-    # services (egov-enc-service, egov-workflow-v2) get `tenant_id`
-    # (e.g. `ke.nairobi`).
-    - name: Set STATE_LEVEL_TENANT_ID (state-root) in compose
-      replace:
-        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
-        regexp: '^(\s+)STATE_LEVEL_TENANT_ID: pg$'
-        replace: '\1STATE_LEVEL_TENANT_ID: {{ state_root }}'
-
-    - name: Set EGOV_STATE_LEVEL_TENANT_ID (state-root) in compose
-      replace:
-        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
-        regexp: '^(\s+)EGOV_STATE_LEVEL_TENANT_ID: pg$'
-        replace: '\1EGOV_STATE_LEVEL_TENANT_ID: {{ state_root }}'
-
-    - name: Set STATE_LEVEL_TENANT_ID (city tier — enc-service + workflow) in compose
-      replace:
-        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
-        regexp: '^(\s+)STATE_LEVEL_TENANT_ID: pg\.citya$'
-        replace: '\1STATE_LEVEL_TENANT_ID: {{ tenant_id }}'
-
-    - name: Set STATE_LEVEL_TENANT_ID (inbox-service `mz` default) in compose
-      replace:
-        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
-        regexp: '^(\s+)STATE_LEVEL_TENANT_ID: mz$'
-        replace: '\1STATE_LEVEL_TENANT_ID: {{ state_root }}'
+    # Pre-boot tenant rewrites — only non-STATE_LEVEL vars that DDH,
+    # MCP, and infra containers need before the stack comes up. The
+    # STATE_LEVEL_TENANT_ID rewrites are DEFERRED to after MCP bootstrap
+    # seeds the target tenant's MDMS data (DataSecurity, Workflow, etc.),
+    # so JVM services can boot against the `pg` seed data first.
 
     # Same shape of overwrite-on-redeploy bug as the four above, for two
     # siblings the original fix missed:
@@ -436,6 +409,12 @@
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
         regexp: '^(\s+)DIGIT_TENANT: pg$'
         replace: '\1DIGIT_TENANT: {{ state_root }}'
+
+    - name: Set DEFAULT_TENANT_ID (default-data-handler) in compose
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)DEFAULT_TENANT_ID: pg$'
+        replace: '\1DEFAULT_TENANT_ID: {{ state_root }}'
 
     # ==================== Publish digit-mcp image ====================
     # digit-mcp ships from the same registry as every other DIGIT image
@@ -493,17 +472,45 @@
         msg: "compose files for {{ inventory_hostname }}: {{ compose_files }}"
 
     # ==================== Build digit-mcp image locally ====================
-    # Mirrors the configurator fold-in (files/configurator-build.sh): when
-    # `build_mcp: true`, clone DIGIT-MCP + `docker build` the image here and
-    # tag it as MCP_IMAGE (digit-mcp:local). Runs BEFORE pull so the local
-    # image is present; the pull below (--ignore-pull-failures) can't fetch a
-    # local-only tag, so it skips it, and `up -d` uses what we just built —
-    # no GHCR / VPC dependency, no multi-arch CI fix needed. Gated on
-    # enable_mcp too (no point building an image the stack won't run).
+    # When `build_mcp: true`, clone/rsync DIGIT-MCP on the *target* and
+    # `docker build` there (digit-mcp:local). Controller paths must not be
+    # passed to remote hosts — copy the script + source first. Runs BEFORE
+    # pull so the local-only tag is present; pull skips it, `up -d` uses
+    # the built image. Gated on enable_mcp too.
+    - name: "MCP build — ensure workspace on target"
+      ansible.builtin.file:
+        path: "{{ digit_dir }}/.build"
+        state: directory
+        mode: "0755"
+      when:
+        - enable_mcp | default(false)
+        - build_mcp | default(false)
+
+    - name: "MCP build — copy mcp-build.sh to target"
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/files/mcp-build.sh"
+        dest: "{{ digit_dir }}/.build/mcp-build.sh"
+        mode: "0755"
+      when:
+        - enable_mcp | default(false)
+        - build_mcp | default(false)
+
+    - name: "MCP build — sync vendored digit-mcp source to target"
+      synchronize:
+        src: "{{ playbook_dir }}/../../digit-mcp/"
+        dest: "{{ mcp_repo }}/"
+        delete: false
+        rsync_opts:
+          - "--omit-dir-times"
+      when:
+        - enable_mcp | default(false)
+        - build_mcp | default(false)
+        - (mcp_repo_url | default('-')) == '-'
+
     - name: "Build digit-mcp image locally (when build_mcp)"
       ansible.builtin.command: >-
-        bash {{ playbook_dir }}/files/mcp-build.sh
-        "{{ mcp_repo | default(playbook_dir ~ '/../../digit-mcp') }}"
+        bash {{ digit_dir }}/.build/mcp-build.sh
+        "{{ mcp_repo }}"
         "{{ mcp_repo_url | default('-') }}"
         "{{ mcp_ref | default('') }}"
         "{{ mcp_image }}"
@@ -920,6 +927,22 @@
         mode: '0600'            # tighten — was 0644 from the template; secrets bump to 0600
       no_log: true
 
+    # The first `up -d` started postgres with POSTGRES_PASSWORD=egov123
+    # (the default before OpenBao secrets were available). initdb created
+    # the `egov` role with that password. Now that the real password is
+    # in .env, ALTER the role inside the running database so the second
+    # `up -d` (which passes the new password to services) can connect.
+    # On repeat deploys the named volume already has data, initdb won't
+    # re-run, so this ALTER is the only way the password gets updated.
+    - name: "OpenBao — sync postgres role password with vault secret"
+      ansible.builtin.shell: >-
+        printf "ALTER ROLE egov WITH PASSWORD '%s';\n" "$NEWPW" |
+        docker exec -i docker-postgres psql -U egov -d egov
+      environment:
+        NEWPW: "{{ bao_secrets.json.data.data.postgres_password }}"
+      no_log: true
+      changed_when: true
+
     - name: "Recreate services with the new env (Linux/Debian)"
       ansible.builtin.shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d
       args:
@@ -1215,8 +1238,8 @@
 
     # ────────────────────────────────────────────────────────────────
     # MCP-driven tenant bootstrap. Once auth/pg works, ask MCP to clone
-    # everything from `pg` → `state_tenant_id` (root) and `pg.citest` →
-    # `state_tenant_id.citya` (city). This seeds 30 schemas, ~1K data
+    # everything from `pg` → `state_root` (e.g. `ke`) and `pg.citest` →
+    # `tenant_id` (e.g. `ke.kericho`). This seeds 30 schemas, ~1K data
     # rows, ~8K localizations, the PGR workflow, an ADMIN eg_user, and
     # an ADMIN HRMS Employee with all departments — enough for a full
     # PGR lifecycle on day 1, and enough for the ui-tenant probe below
@@ -1230,7 +1253,7 @@
         method: POST
         body_format: json
         body:
-          target_tenant: "{{ state_tenant_id }}"
+          target_tenant: "{{ state_root }}"
           source_tenant: "pg"
           mobile_regex: "{{ core_mobile_configs.mobileNumberPattern | default('^[6-9][0-9]{9}$') }}"
           mobile_length: "{{ core_mobile_configs.mobileNumberLength | default(10) }}"
@@ -1243,7 +1266,7 @@
         timeout: 600
       register: mcp_root_bootstrap
       when:
-        - state_tenant_id != 'pg'
+        - state_root != 'pg'
         - enable_mcp | default(false)
       ignore_errors: true
 
@@ -1253,7 +1276,7 @@
         method: POST
         body_format: json
         body:
-          target_tenant: "{{ city_tenant | default(state_tenant_id ~ '.citya') }}"
+          target_tenant: "{{ tenant_id }}"
           source_tenant: "pg.citest"
           mobile_regex: "{{ core_mobile_configs.mobileNumberPattern | default('^[6-9][0-9]{9}$') }}"
           mobile_length: "{{ core_mobile_configs.mobileNumberLength | default(10) }}"
@@ -1266,18 +1289,71 @@
         timeout: 600
       register: mcp_city_bootstrap
       when:
-        - state_tenant_id != 'pg'
+        - state_root != 'pg'
         - enable_mcp | default(false)
       ignore_errors: true
 
     - name: "mcp-bootstrap — log result"
       ansible.builtin.debug:
         msg:
-          - "Root  bootstrap (target={{ state_tenant_id }}): {{ (mcp_root_bootstrap.json.summary | default('skipped')) if mcp_root_bootstrap is defined else 'skipped' }}"
-          - "City  bootstrap (target={{ city_tenant | default(state_tenant_id ~ '.citya') }}): {{ (mcp_city_bootstrap.json.summary | default('skipped')) if mcp_city_bootstrap is defined else 'skipped' }}"
+          - "Root  bootstrap (target={{ state_root }}): {{ (mcp_root_bootstrap.json.summary | default('skipped')) if mcp_root_bootstrap is defined else 'skipped' }}"
+          - "City  bootstrap (target={{ tenant_id }}): {{ (mcp_city_bootstrap.json.summary | default('skipped')) if mcp_city_bootstrap is defined else 'skipped' }}"
       when:
-        - state_tenant_id != 'pg'
+        - state_root != 'pg'
         - enable_mcp | default(false)
+
+    # ────────────────────────────────────────────────────────────────
+    # Post-bootstrap STATE_LEVEL_TENANT_ID rewrite. The upstream compose
+    # ships with `pg` / `pg.citya` / `mz` defaults. Services boot against
+    # the `pg` seed data (which exists in full-dump.sql). Once MCP
+    # bootstrap has seeded the target tenant's MDMS data (DataSecurity,
+    # Workflow, etc.), we rewrite STATE_LEVEL_TENANT_ID and restart so
+    # services pick up the real tenant context.
+    # ────────────────────────────────────────────────────────────────
+    - name: "post-bootstrap — set STATE_LEVEL_TENANT_ID (state-root) in compose"
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)STATE_LEVEL_TENANT_ID: pg$'
+        replace: '\1STATE_LEVEL_TENANT_ID: {{ state_root }}'
+      when: state_root != 'pg'
+
+    - name: "post-bootstrap — set EGOV_STATE_LEVEL_TENANT_ID (state-root) in compose"
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)EGOV_STATE_LEVEL_TENANT_ID: pg$'
+        replace: '\1EGOV_STATE_LEVEL_TENANT_ID: {{ state_root }}'
+      when: state_root != 'pg'
+
+    - name: "post-bootstrap — set STATE_LEVEL_TENANT_ID (city tier — enc-service + workflow) in compose"
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)STATE_LEVEL_TENANT_ID: pg\.citya$'
+        replace: '\1STATE_LEVEL_TENANT_ID: {{ tenant_id }}'
+      when: state_root != 'pg'
+
+    - name: "post-bootstrap — set STATE_LEVEL_TENANT_ID (inbox-service `mz` default) in compose"
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)STATE_LEVEL_TENANT_ID: mz$'
+        replace: '\1STATE_LEVEL_TENANT_ID: {{ state_root }}'
+      when: state_root != 'pg'
+
+    - name: "post-bootstrap — restart services to pick up new STATE_LEVEL_TENANT_ID"
+      ansible.builtin.shell: >-
+        docker compose {{ compose_files }}
+        restart egov-user egov-workflow-v2 egov-enc-service pgr-services egov-hrms
+      args:
+        chdir: "{{ digit_dir }}"
+      when: state_root != 'pg'
+
+    - name: "post-bootstrap — wait for egov-user-proxy to be healthy after restart"
+      shell: docker inspect --format '{{ "{{" }}.State.Health.Status{{ "}}" }}' egov-user-proxy
+      register: user_proxy_health_post
+      retries: 30
+      delay: 10
+      until: user_proxy_health_post.stdout == 'healthy'
+      changed_when: false
+      when: state_root != 'pg'
 
     # ────────────────────────────────────────────────────────────────
     # Novu Twilio bootstrap. Runs only when:
