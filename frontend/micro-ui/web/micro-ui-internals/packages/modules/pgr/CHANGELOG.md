@@ -4,6 +4,15 @@ All notable changes to this module will be documented in this file.
 # Changelog
 All notable changes to this module will be documented in this file.
 
+## [1.0.48] - 2026-05-22
+
+### Changed
+
+- **Release workflow trusted publishing update (`.github/workflows/publishAllPackagesRelease.yml`)**:
+  - Updated the npm release workflow to use GitHub OIDC trusted publishing instead of the legacy `NODE_AUTH_TOKEN` secret flow, avoiding OTP prompts during CI publishing.
+  - Kept the Node 14 build path for the existing package toolchain, then switched to Node 24 for `npm publish` so the npm CLI can complete trusted publishing.
+  - Preserved the existing release order and npm tags from `publish.sh`: CSS publishes with `campaign-1.0`, and the CMS module publishes with `cms-1.0`.
+
 ## [1.0.47] - 2026-05-21
 
 ### Fixed
