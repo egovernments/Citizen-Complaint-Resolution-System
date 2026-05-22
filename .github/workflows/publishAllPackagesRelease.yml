@@ -6,15 +6,45 @@ on:
     paths:
       - 'frontend/micro-ui/web/micro-ui-internals/**'
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v2
+      - uses: actions/checkout@v6
+
+      - name: Set up Node.js for build
+        uses: actions/setup-node@v6
         with:
           node-version: 14
+          package-manager-cache: false
+
+      - name: Build packages
+        run: |
+          cd frontend/micro-ui/web/micro-ui-internals/packages/css
+          rm -rf dist
+          yarn
+          yarn prepublish
+
+          cd ../modules/pgr
+          rm -rf dist
+          yarn
+          yarn prepublish
+
+      - name: Set up Node.js for trusted publishing
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
           registry-url: https://registry.npmjs.org/
-      - run: cd frontend/micro-ui/web/micro-ui-internals/ && bash ./publish.sh
-        env:
-          NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
+          package-manager-cache: false
+
+      - name: Publish packages
+        run: |
+          cd frontend/micro-ui/web/micro-ui-internals/packages/css
+          npm publish --access public --tag campaign-1.0 --ignore-scripts
+
+          cd ../modules/pgr
+          npm publish --access public --tag cms-1.0 --ignore-scripts
