@@ -913,6 +913,7 @@ services:
       EGOV_WORKFLOW_HOST: http://egov-workflow-proxy:8109/
       EGOV_BOUNDARY_HOST: http://boundary-service:8081/
       STATE_LEVEL_TENANT_ID: pg
+      DEFAULT_TENANT_ID: pg
       JAVA_OPTS: -Xms128m -Xmx256m
     networks:
       - egov-network
