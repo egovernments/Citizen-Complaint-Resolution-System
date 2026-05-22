@@ -1,9 +1,11 @@
 name: Node.js Publish UI Packages
 
 on:
+  workflow_dispatch:
   push:
     branches: [ 'master', 'dev' ]
     paths:
+      - '.github/workflows/publishAllPackagesRelease.yml'
       - 'frontend/micro-ui/web/micro-ui-internals/**'
 
 permissions:
@@ -43,8 +45,22 @@ jobs:
 
       - name: Publish packages
         run: |
-          cd frontend/micro-ui/web/micro-ui-internals/packages/css
-          npm publish --access public --tag campaign-1.0 --ignore-scripts
+          publish_if_new() {
+            package_dir="$1"
+            tag="$2"
 
-          cd ../modules/pgr
-          npm publish --access public --tag cms-1.0 --ignore-scripts
+            cd "$GITHUB_WORKSPACE/$package_dir"
+
+            package_name="$(node -p "require('./package.json').name")"
+            package_version="$(node -p "require('./package.json').version")"
+
+            if npm view "$package_name@$package_version" version >/dev/null 2>&1; then
+              echo "Skipping $package_name@$package_version because it is already published."
+              return
+            fi
+
+            npm publish --access public --tag "$tag" --ignore-scripts
+          }
+
+          publish_if_new "frontend/micro-ui/web/micro-ui-internals/packages/css" "campaign-1.0"
+          publish_if_new "frontend/micro-ui/web/micro-ui-internals/packages/modules/pgr" "cms-1.0"
