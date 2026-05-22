@@ -28,6 +28,7 @@ import TrackOnWhatsApp from "./components/TrackOnWhatsApp";
 import Complaint from "./components/Complaint";
 import MobileNumberWithPrefix from "./components/MobileNumberWithPrefix";
 import { WorkflowService as PGRWorkflowService } from "./services/workflow/Workflow";
+import "./utils/pgrUIOverrides";
 
 export const PGRReducers = getRootReducer;
 
@@ -46,26 +47,6 @@ const applyWorkflowServiceOverride = () => {
   ws.getByBusinessId = PGRWorkflowService.getByBusinessId;
   ws.__pgrPatched = true;
 };
-
-// Inject PGR UI overrides into document.head once at module import time, so
-// they apply on the very first paint and survive page refreshes (a JSX <style>
-// element inside the component tree can race with the toast / inbox mount on
-// refresh and miss the first paint).
-if (typeof document !== "undefined" && !document.getElementById("pgr-ui-overrides")) {
-  const style = document.createElement("style");
-  style.id = "pgr-ui-overrides";
-  style.textContent = `
-    .digit-toast-success,
-    .digit-toast-success.animate {
-      bottom: 8rem !important;
-    }
-    .digit-inbox-search-wrapper {
-      max-width: 100%;
-      overflow-x: auto;
-    }
-  `;
-  document.head.appendChild(style);
-}
 
 export const PGRModule = ({ stateCode, userType, tenants }) => {
   applyWorkflowServiceOverride();
