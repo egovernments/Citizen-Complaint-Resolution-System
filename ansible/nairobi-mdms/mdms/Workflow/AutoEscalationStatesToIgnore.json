@@ -1,0 +1,35 @@
+[
+  {
+    "tenantId": "ke",
+    "data": {
+      "state": [
+        "INITIATED",
+        "PENDINGAPPROVAL"
+      ],
+      "module": "TL",
+      "businessService": "NewTL"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "state": [
+        "INITIATED",
+        "PENDINGAPPROVAL"
+      ],
+      "module": "TL",
+      "businessService": "NewTL"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "state": [
+        "INITIATED",
+        "PENDINGAPPROVAL"
+      ],
+      "module": "TL",
+      "businessService": "NewTL"
+    }
+  }
+]

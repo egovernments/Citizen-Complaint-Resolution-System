@@ -181,6 +181,9 @@ public class PGRQueryBuilder {
         else if(criteria.getSortBy()== RequestSearchCriteria.SortBy.serviceRequestId)
             builder.append(" ORDER BY ser.serviceRequestId ");
 
+        else if(criteria.getSortBy()== RequestSearchCriteria.SortBy.createdTime)
+            builder.append(" ORDER BY ser.createdtime ");
+
         if(criteria.getSortOrder()== RequestSearchCriteria.SortOrder.ASC)
             builder.append(" ASC ");
         else builder.append(" DESC ");

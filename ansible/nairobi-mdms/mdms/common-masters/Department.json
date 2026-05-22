@@ -1,0 +1,146 @@
+[
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DEPT_01",
+      "name": "WATER AND SEWERAGE",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DEPT_02",
+      "name": "ELECTRICITY",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DEPT_03",
+      "name": "FINANCE AND REVENUE",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DEPT_04",
+      "name": "CUSTOMER SERVICE CENTRE",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DEPT_05",
+      "name": "PUBLIC SERVICE",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DEPT_06",
+      "name": "URBAN DEVELOPMENT AND PLANNING",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DEPT_07",
+      "name": "ENVIRONMENT",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DEPT_08",
+      "name": "LANDS",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DEPT_09",
+      "name": "SECURITY AND COMPLIANCE",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DEPT_10",
+      "name": "BOROUGHS AND SUB COUNTY ADMINISTRATION",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DEPT_11",
+      "name": "ECD AND VOCATIONAL TRAINING",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DEPT_12",
+      "name": "ICT LAB",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DEPT_13",
+      "name": "YOUTH TALENT AND SPORTS",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DEPT_14",
+      "name": "OFFICE OF THE COUNTY ATTORNEY",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DEPT_15",
+      "name": "INNOVATION AND DIGITAL ECONOMY",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DEPT_16",
+      "name": "MOBILITY AND WORKS",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DEPT_17",
+      "name": "DISASTER MANAGEMENT",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DEPT_18",
+      "name": "ADMINISTRATION",
+      "active": true
+    }
+  }
+]

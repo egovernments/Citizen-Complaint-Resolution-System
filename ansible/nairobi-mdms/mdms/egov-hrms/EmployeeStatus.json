@@ -1,0 +1,541 @@
+[
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "DECEASED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "EMPLOYED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "RESIGNED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "RETIRED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "SUSPENDED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "TERMINATED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "TRANSFERRED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "DECEASED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "EMPLOYED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "RESIGNED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "RETIRED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "SUSPENDED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "TERMINATED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "TRANSFERRED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "DECEASED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "EMPLOYED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "RESIGNED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "RETIRED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "SUSPENDED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "TERMINATED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "TRANSFERRED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "DECEASED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "EMPLOYED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "RESIGNED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "RETIRED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "SUSPENDED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "TERMINATED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "TRANSFERRED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "DECEASED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "EMPLOYED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "RESIGNED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "RETIRED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "SUSPENDED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "TERMINATED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "TRANSFERRED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "DECEASED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "EMPLOYED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "RESIGNED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "RETIRED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "SUSPENDED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "TERMINATED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "TRANSFERRED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "DECEASED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "EMPLOYED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "RESIGNED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "RETIRED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "SUSPENDED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "TERMINATED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "TRANSFERRED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "DECEASED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "EMPLOYED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "RESIGNED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "RETIRED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "SUSPENDED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "TERMINATED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "TRANSFERRED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "DECEASED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "EMPLOYED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "RESIGNED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "RETIRED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "SUSPENDED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "TERMINATED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "TRANSFERRED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "DECEASED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "TRANSFERRED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "TERMINATED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "RETIRED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "EMPLOYED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "SUSPENDED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "RESIGNED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "DECEASED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "EMPLOYED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "RESIGNED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "RETIRED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "SUSPENDED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "TERMINATED",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "TRANSFERRED",
+      "active": true
+    }
+  }
+]

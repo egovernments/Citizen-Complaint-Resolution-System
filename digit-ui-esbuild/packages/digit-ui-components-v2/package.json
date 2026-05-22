@@ -1,0 +1,12 @@
+{
+  "name": "@egovernments/digit-ui-components-v2",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Modern Tailwind + shadcn-style component library for digit-ui-esbuild. Strangler-fig replacement for @egovernments/digit-ui-components.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "peerDependencies": {
+    "react": "17.0.2",
+    "react-dom": "17.0.2"
+  }
+}

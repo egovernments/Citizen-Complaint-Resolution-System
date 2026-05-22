@@ -25,9 +25,10 @@ public class PreferenceServiceClient {
         this.config = config;
     }
 
-    public boolean isWhatsAppAllowed(String tenantId, String userId, String mobile) {
-        log.info("Preference check: tenantId={}, userId={}, mobile={}, preferenceEnabled={}",
-                tenantId, userId, mobile, config.getPreferenceEnabled());
+    public boolean isChannelAllowed(String tenantId, String userId, String mobile, String channel) {
+        String channelKey = StringUtils.hasText(channel) ? channel.toUpperCase() : "SMS";
+        log.info("Preference check: tenantId={}, userId={}, mobile={}, channel={}, preferenceEnabled={}",
+                tenantId, userId, mobile, channelKey, config.getPreferenceEnabled());
 
         if (Boolean.FALSE.equals(config.getPreferenceEnabled())) {
             log.info("Preference check disabled, allowing by default");
@@ -76,16 +77,16 @@ public class PreferenceServiceClient {
                 log.warn("Preference check denied: consent block is null. prefPayload={}", prefPayload);
                 return false;
             }
-            Map<String, Object> whatsapp = (Map<String, Object>) consent.get("WHATSAPP");
-            if (whatsapp == null) {
-                log.warn("Preference check denied: WHATSAPP consent not found. consent={}", consent);
+            Map<String, Object> channelConsent = (Map<String, Object>) consent.get(channelKey);
+            if (channelConsent == null) {
+                log.warn("Preference check denied: {} consent not found. consent={}", channelKey, consent);
                 return false;
             }
-            String status = value(whatsapp.get("status"));
-            String scope = value(whatsapp.get("scope"));
-            String scopeTenant = value(whatsapp.get("tenantId"));
+            String status = value(channelConsent.get("status"));
+            String scope = value(channelConsent.get("scope"));
+            String scopeTenant = value(channelConsent.get("tenantId"));
 
-            log.info("Preference WHATSAPP consent: status={}, scope={}, scopeTenant={}", status, scope, scopeTenant);
+            log.info("Preference {} consent: status={}, scope={}, scopeTenant={}", channelKey, status, scope, scopeTenant);
 
             if (!"GRANTED".equalsIgnoreCase(status)) {
                 log.warn("Preference check denied: status is not GRANTED. status={}", status);
@@ -94,10 +95,10 @@ public class PreferenceServiceClient {
 //            if ("TENANT".equalsIgnoreCase(scope)) {
 //                return tenantId.equalsIgnoreCase(scopeTenant);
 //            }
-            log.info("Preference check allowed for userId={}, tenantId={}", userId, tenantId);
+            log.info("Preference check allowed for userId={}, tenantId={}, channel={}", userId, tenantId, channelKey);
             return true;
         } catch (Exception e) {
-            log.warn("Preference check failed. tenantId={} userId={} mobile={}", tenantId, userId, mobile, e);
+            log.warn("Preference check failed. tenantId={} userId={} mobile={} channel={}", tenantId, userId, mobile, channelKey, e);
             return false;
         }
     }

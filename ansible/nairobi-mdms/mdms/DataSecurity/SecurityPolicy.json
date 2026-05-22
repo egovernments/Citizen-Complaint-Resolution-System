@@ -1,0 +1,2955 @@
+[
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "DefaulterReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "user_uuid",
+        "jsonPath": "/user_uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "DescriptionReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "user_uuid",
+        "jsonPath": "/user_uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "EmployeeReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "GROPerformanceReport",
+      "attributes": [
+        {
+          "name": "employee",
+          "jsonPath": "employee",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "user_uuid",
+        "jsonPath": "/user_uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "InboxWnS",
+      "attributes": [
+        {
+          "name": "sample",
+          "jsonPath": "sample",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "applicationNo",
+        "jsonPath": "applicationNo"
+      },
+      "roleBasedDecryptionPolicy": [
+        {
+          "roles": [
+            "WS_CEMP",
+            "WS_DOC_VERIFIER",
+            "WS_FIELD_INSPECTOR",
+            "WS_APPROVER",
+            "WS_CLERK",
+            "SW_CEMP",
+            "SW_DOC_VERIFIER",
+            "SW_FIELD_INSPECTOR",
+            "SW_APPROVER",
+            "SW_CLERK"
+          ],
+          "attributeAccessList": []
+        }
+      ]
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "LMEPerformanceReport",
+      "attributes": [
+        {
+          "name": "employee",
+          "jsonPath": "employee",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "user_uuid",
+        "jsonPath": "/user_uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "ObpsApplicationStatusReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "currentowner",
+          "jsonPath": "currentowner",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "ObpsDailyCollectionReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "Property",
+      "attributes": [
+        {
+          "name": "sample",
+          "jsonPath": "sample",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/owners/0/uuid"
+      },
+      "roleBasedDecryptionPolicy": [
+        {
+          "roles": [
+            "WS_CEMP",
+            "WS_DOC_VERIFIER",
+            "WS_FIELD_INSPECTOR",
+            "WS_APPROVER",
+            "WS_CLERK",
+            "SW_CEMP",
+            "SW_DOC_VERIFIER",
+            "SW_FIELD_INSPECTOR",
+            "SW_APPROVER",
+            "SW_CLERK",
+            "PT_APPROVER",
+            "PT_CEMP",
+            "PT_COLLECTION_EMP",
+            "PT_FIELD_INSPECTOR",
+            "PT_DOC_VERIFIER"
+          ],
+          "attributeAccessList": []
+        },
+        {
+          "roles": [
+            "REINDEXING_ROLE"
+          ],
+          "attributeAccessList": []
+        }
+      ]
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "PropertyDecrypDisabled",
+      "attributes": [
+        {
+          "name": "sample",
+          "jsonPath": "sample",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "propertyId",
+        "jsonPath": "/propertyId"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "PTCollectionReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "user_uuid",
+        "jsonPath": "/user_uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "PTReceiptRegister",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "user_uuid",
+        "jsonPath": "/user_uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "StateLevelTradeLicenseRegistryReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "StateTradeLicenseCancelledRegistryReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "TLApplicationStatusReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "currentowner",
+          "jsonPath": "currentowner",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "TLRegistryReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "TLRenewalPendingReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "mobilenumber",
+          "jsonPath": "mobilenumber",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "TradeLicenseCancelledRegistryReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "TradeLicenseDailyCollectionReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "username",
+          "jsonPath": "username",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "TradeLicenseRegistryReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "User",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "mobileNumber",
+          "jsonPath": "mobileNumber",
+          "patternId": "001",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "emailId",
+          "jsonPath": "emailId",
+          "patternId": "004",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "username",
+          "jsonPath": "username",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "altContactNumber",
+          "jsonPath": "altContactNumber",
+          "patternId": "001",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "alternatemobilenumber",
+          "jsonPath": "alternatemobilenumber",
+          "patternId": "001",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "pan",
+          "jsonPath": "pan",
+          "patternId": "001",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "aadhaarNumber",
+          "jsonPath": "aadhaarNumber",
+          "patternId": "001",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "guardian",
+          "jsonPath": "guardian",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "permanentAddress",
+          "jsonPath": "permanentAddress/address",
+          "patternId": "005",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "correspondenceAddress",
+          "jsonPath": "correspondenceAddress/address",
+          "patternId": "005",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "fatherOrHusbandName",
+          "jsonPath": "fatherOrHusbandName",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "searchUsername",
+          "jsonPath": "userName",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": [
+        {
+          "roles": [
+            "REINDEXING_ROLE"
+          ],
+          "attributeAccessList": []
+        },
+        {
+          "roles": [
+            "WS_CEMP",
+            "WS_DOC_VERIFIER",
+            "WS_FIELD_INSPECTOR",
+            "WS_APPROVER",
+            "WS_CLERK",
+            "SW_CEMP",
+            "SW_DOC_VERIFIER",
+            "SW_FIELD_INSPECTOR",
+            "SW_APPROVER",
+            "SW_CLERK"
+          ],
+          "attributeAccessList": []
+        },
+        {
+          "roles": [
+            "INTERNAL_MICROSERVICE_ROLE"
+          ],
+          "attributeAccessList": [
+            {
+              "attribute": "mobileNumber",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "fatherOrHusbandName",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "correspondenceAddress",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "name",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "emailId",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "permanentAddress",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "username",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "altContactNumber",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "alternatemobilenumber",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "pan",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "aadhaarNumber",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "guardian",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            }
+          ]
+        },
+        {
+          "roles": [
+            "EMPLOYEE",
+            "GRO",
+            "PGR_LME",
+            "DGRO",
+            "CSR",
+            "SUPERUSER",
+            "PGR_VIEWER",
+            "MDMS_ADMIN"
+          ],
+          "attributeAccessList": [
+            {
+              "attribute": "name",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "mobileNumber",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "emailId",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "username",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "correspondenceAddress",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "guardian",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "fatherOrHusbandName",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "UserSelf",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "mobileNumber",
+          "jsonPath": "mobileNumber",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "emailId",
+          "jsonPath": "emailId",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "username",
+          "jsonPath": "username",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "altContactNumber",
+          "jsonPath": "altContactNumber",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "alternatemobilenumber",
+          "jsonPath": "alternatemobilenumber",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "pan",
+          "jsonPath": "pan",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "aadhaarNumber",
+          "jsonPath": "aadhaarNumber",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "guardian",
+          "jsonPath": "guardian",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "permanentAddress",
+          "jsonPath": "permanentAddress/address",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "correspondenceAddress",
+          "jsonPath": "correspondenceAddress/address",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "fatherOrHusbandName",
+          "jsonPath": "fatherOrHusbandName",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "waterOpenSearch",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "WnsCollectionRegisterReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "WnSConnection",
+      "attributes": [
+        {
+          "name": "sample",
+          "jsonPath": "sample",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/connectionHolders/0/uuid"
+      },
+      "roleBasedDecryptionPolicy": [
+        {
+          "roles": [
+            "WS_CEMP",
+            "WS_DOC_VERIFIER",
+            "WS_FIELD_INSPECTOR",
+            "WS_APPROVER",
+            "WS_CLERK",
+            "SW_CEMP",
+            "SW_DOC_VERIFIER",
+            "SW_FIELD_INSPECTOR",
+            "SW_APPROVER",
+            "SW_CLERK"
+          ],
+          "attributeAccessList": []
+        },
+        {
+          "roles": [
+            "REINDEXING_ROLE"
+          ],
+          "attributeAccessList": []
+        }
+      ]
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "WnSConnectionDecrypDisabled",
+      "attributes": [
+        {
+          "name": "sample",
+          "jsonPath": "sample",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/connectionHolders/0/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "WnSConnectionOwner",
+      "attributes": [
+        {
+          "name": "sample",
+          "jsonPath": "sample",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": [
+        {
+          "roles": [
+            "WS_CEMP",
+            "WS_DOC_VERIFIER",
+            "WS_FIELD_INSPECTOR",
+            "WS_APPROVER",
+            "WS_CLERK",
+            "SW_CEMP",
+            "SW_DOC_VERIFIER",
+            "SW_FIELD_INSPECTOR",
+            "SW_APPROVER",
+            "SW_CLERK"
+          ],
+          "attributeAccessList": []
+        },
+        {
+          "roles": [
+            "REINDEXING_ROLE"
+          ],
+          "attributeAccessList": []
+        }
+      ]
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "WnSConnectionOwnerDecrypDisabled",
+      "attributes": [
+        {
+          "name": "sample",
+          "jsonPath": "sample",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "WnSConnectionPlumber",
+      "attributes": [
+        {
+          "name": "sample",
+          "jsonPath": "sample",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "applicationNo",
+        "jsonPath": "/applicationNo"
+      },
+      "roleBasedDecryptionPolicy": [
+        {
+          "roles": [
+            "WS_CEMP",
+            "WS_DOC_VERIFIER",
+            "WS_FIELD_INSPECTOR",
+            "WS_APPROVER",
+            "WS_CLERK",
+            "SW_CEMP",
+            "SW_DOC_VERIFIER",
+            "SW_FIELD_INSPECTOR",
+            "SW_APPROVER",
+            "SW_CLERK"
+          ],
+          "attributeAccessList": []
+        },
+        {
+          "roles": [
+            "REINDEXING_ROLE"
+          ],
+          "attributeAccessList": []
+        }
+      ]
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "WnSConnectionPlumberDecrypDisabled",
+      "attributes": [
+        {
+          "name": "sample",
+          "jsonPath": "sample",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "applicationNo",
+        "jsonPath": "/applicationNo"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "WnsDefaulterReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "model": "WnsReceiptRegisterReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "StateLevelTradeLicenseRegistryReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "WnSConnection",
+      "attributes": [
+        {
+          "name": "sample",
+          "jsonPath": "sample",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/connectionHolders/0/uuid"
+      },
+      "roleBasedDecryptionPolicy": [
+        {
+          "roles": [
+            "WS_CEMP",
+            "WS_DOC_VERIFIER",
+            "WS_FIELD_INSPECTOR",
+            "WS_APPROVER",
+            "WS_CLERK",
+            "SW_CEMP",
+            "SW_DOC_VERIFIER",
+            "SW_FIELD_INSPECTOR",
+            "SW_APPROVER",
+            "SW_CLERK"
+          ],
+          "attributeAccessList": []
+        },
+        {
+          "roles": [
+            "REINDEXING_ROLE"
+          ],
+          "attributeAccessList": []
+        }
+      ]
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "WnsCollectionRegisterReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "TLRegistryReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "WnSConnectionPlumberDecrypDisabled",
+      "attributes": [
+        {
+          "name": "sample",
+          "jsonPath": "sample",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "applicationNo",
+        "jsonPath": "/applicationNo"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "ObpsDailyCollectionReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "TradeLicenseDailyCollectionReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "username",
+          "jsonPath": "username",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "Property",
+      "attributes": [
+        {
+          "name": "sample",
+          "jsonPath": "sample",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/owners/0/uuid"
+      },
+      "roleBasedDecryptionPolicy": [
+        {
+          "roles": [
+            "WS_CEMP",
+            "WS_DOC_VERIFIER",
+            "WS_FIELD_INSPECTOR",
+            "WS_APPROVER",
+            "WS_CLERK",
+            "SW_CEMP",
+            "SW_DOC_VERIFIER",
+            "SW_FIELD_INSPECTOR",
+            "SW_APPROVER",
+            "SW_CLERK",
+            "PT_APPROVER",
+            "PT_CEMP",
+            "PT_COLLECTION_EMP",
+            "PT_FIELD_INSPECTOR",
+            "PT_DOC_VERIFIER"
+          ],
+          "attributeAccessList": []
+        },
+        {
+          "roles": [
+            "REINDEXING_ROLE"
+          ],
+          "attributeAccessList": []
+        }
+      ]
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "WnSConnectionPlumber",
+      "attributes": [
+        {
+          "name": "sample",
+          "jsonPath": "sample",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "applicationNo",
+        "jsonPath": "/applicationNo"
+      },
+      "roleBasedDecryptionPolicy": [
+        {
+          "roles": [
+            "WS_CEMP",
+            "WS_DOC_VERIFIER",
+            "WS_FIELD_INSPECTOR",
+            "WS_APPROVER",
+            "WS_CLERK",
+            "SW_CEMP",
+            "SW_DOC_VERIFIER",
+            "SW_FIELD_INSPECTOR",
+            "SW_APPROVER",
+            "SW_CLERK"
+          ],
+          "attributeAccessList": []
+        },
+        {
+          "roles": [
+            "REINDEXING_ROLE"
+          ],
+          "attributeAccessList": []
+        }
+      ]
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "UserSelf",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "mobileNumber",
+          "jsonPath": "mobileNumber",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "emailId",
+          "jsonPath": "emailId",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "username",
+          "jsonPath": "username",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "altContactNumber",
+          "jsonPath": "altContactNumber",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "alternatemobilenumber",
+          "jsonPath": "alternatemobilenumber",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "pan",
+          "jsonPath": "pan",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "aadhaarNumber",
+          "jsonPath": "aadhaarNumber",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "guardian",
+          "jsonPath": "guardian",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "permanentAddress",
+          "jsonPath": "permanentAddress/address",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "correspondenceAddress",
+          "jsonPath": "correspondenceAddress/address",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "fatherOrHusbandName",
+          "jsonPath": "fatherOrHusbandName",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "EmployeeReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "WnsDefaulterReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "StateTradeLicenseCancelledRegistryReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "TLRenewalPendingReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "mobilenumber",
+          "jsonPath": "mobilenumber",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "waterOpenSearch",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "DefaulterReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "user_uuid",
+        "jsonPath": "/user_uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "WnsReceiptRegisterReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "TradeLicenseCancelledRegistryReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "WnSConnectionOwnerDecrypDisabled",
+      "attributes": [
+        {
+          "name": "sample",
+          "jsonPath": "sample",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "InboxWnS",
+      "attributes": [
+        {
+          "name": "sample",
+          "jsonPath": "sample",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "applicationNo",
+        "jsonPath": "applicationNo"
+      },
+      "roleBasedDecryptionPolicy": [
+        {
+          "roles": [
+            "WS_CEMP",
+            "WS_DOC_VERIFIER",
+            "WS_FIELD_INSPECTOR",
+            "WS_APPROVER",
+            "WS_CLERK",
+            "SW_CEMP",
+            "SW_DOC_VERIFIER",
+            "SW_FIELD_INSPECTOR",
+            "SW_APPROVER",
+            "SW_CLERK"
+          ],
+          "attributeAccessList": []
+        }
+      ]
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "TradeLicenseRegistryReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "PropertyDecrypDisabled",
+      "attributes": [
+        {
+          "name": "sample",
+          "jsonPath": "sample",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "propertyId",
+        "jsonPath": "/propertyId"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "TLApplicationStatusReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "currentowner",
+          "jsonPath": "currentowner",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "PTReceiptRegister",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "user_uuid",
+        "jsonPath": "/user_uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "User",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "mobileNumber",
+          "jsonPath": "mobileNumber",
+          "patternId": "001",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "emailId",
+          "jsonPath": "emailId",
+          "patternId": "004",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "username",
+          "jsonPath": "username",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "altContactNumber",
+          "jsonPath": "altContactNumber",
+          "patternId": "001",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "alternatemobilenumber",
+          "jsonPath": "alternatemobilenumber",
+          "patternId": "001",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "pan",
+          "jsonPath": "pan",
+          "patternId": "001",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "aadhaarNumber",
+          "jsonPath": "aadhaarNumber",
+          "patternId": "001",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "guardian",
+          "jsonPath": "guardian",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "permanentAddress",
+          "jsonPath": "permanentAddress/address",
+          "patternId": "005",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "correspondenceAddress",
+          "jsonPath": "correspondenceAddress/address",
+          "patternId": "005",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "fatherOrHusbandName",
+          "jsonPath": "fatherOrHusbandName",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "searchUsername",
+          "jsonPath": "userName",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": [
+        {
+          "roles": [
+            "REINDEXING_ROLE"
+          ],
+          "attributeAccessList": []
+        },
+        {
+          "roles": [
+            "WS_CEMP",
+            "WS_DOC_VERIFIER",
+            "WS_FIELD_INSPECTOR",
+            "WS_APPROVER",
+            "WS_CLERK",
+            "SW_CEMP",
+            "SW_DOC_VERIFIER",
+            "SW_FIELD_INSPECTOR",
+            "SW_APPROVER",
+            "SW_CLERK"
+          ],
+          "attributeAccessList": []
+        },
+        {
+          "roles": [
+            "INTERNAL_MICROSERVICE_ROLE"
+          ],
+          "attributeAccessList": [
+            {
+              "attribute": "mobileNumber",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "fatherOrHusbandName",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "correspondenceAddress",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "name",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "emailId",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "permanentAddress",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "username",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "altContactNumber",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "alternatemobilenumber",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "pan",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "aadhaarNumber",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "guardian",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "ObpsApplicationStatusReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "currentowner",
+          "jsonPath": "currentowner",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "WnSConnectionOwner",
+      "attributes": [
+        {
+          "name": "sample",
+          "jsonPath": "sample",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": [
+        {
+          "roles": [
+            "WS_CEMP",
+            "WS_DOC_VERIFIER",
+            "WS_FIELD_INSPECTOR",
+            "WS_APPROVER",
+            "WS_CLERK",
+            "SW_CEMP",
+            "SW_DOC_VERIFIER",
+            "SW_FIELD_INSPECTOR",
+            "SW_APPROVER",
+            "SW_CLERK"
+          ],
+          "attributeAccessList": []
+        },
+        {
+          "roles": [
+            "REINDEXING_ROLE"
+          ],
+          "attributeAccessList": []
+        }
+      ]
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "GROPerformanceReport",
+      "attributes": [
+        {
+          "name": "employee",
+          "jsonPath": "employee",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "user_uuid",
+        "jsonPath": "/user_uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "LMEPerformanceReport",
+      "attributes": [
+        {
+          "name": "employee",
+          "jsonPath": "employee",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "user_uuid",
+        "jsonPath": "/user_uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "DescriptionReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "user_uuid",
+        "jsonPath": "/user_uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "PTCollectionReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "user_uuid",
+        "jsonPath": "/user_uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "model": "WnSConnectionDecrypDisabled",
+      "attributes": [
+        {
+          "name": "sample",
+          "jsonPath": "sample",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/connectionHolders/0/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "DefaulterReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "user_uuid",
+        "jsonPath": "/user_uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "DescriptionReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "user_uuid",
+        "jsonPath": "/user_uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "EmployeeReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "GROPerformanceReport",
+      "attributes": [
+        {
+          "name": "employee",
+          "jsonPath": "employee",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "user_uuid",
+        "jsonPath": "/user_uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "InboxWnS",
+      "attributes": [
+        {
+          "name": "sample",
+          "jsonPath": "sample",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "applicationNo",
+        "jsonPath": "applicationNo"
+      },
+      "roleBasedDecryptionPolicy": [
+        {
+          "roles": [
+            "WS_CEMP",
+            "WS_DOC_VERIFIER",
+            "WS_FIELD_INSPECTOR",
+            "WS_APPROVER",
+            "WS_CLERK",
+            "SW_CEMP",
+            "SW_DOC_VERIFIER",
+            "SW_FIELD_INSPECTOR",
+            "SW_APPROVER",
+            "SW_CLERK"
+          ],
+          "attributeAccessList": []
+        }
+      ]
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "LMEPerformanceReport",
+      "attributes": [
+        {
+          "name": "employee",
+          "jsonPath": "employee",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "user_uuid",
+        "jsonPath": "/user_uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "ObpsApplicationStatusReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "currentowner",
+          "jsonPath": "currentowner",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "ObpsDailyCollectionReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "Property",
+      "attributes": [
+        {
+          "name": "sample",
+          "jsonPath": "sample",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/owners/0/uuid"
+      },
+      "roleBasedDecryptionPolicy": [
+        {
+          "roles": [
+            "WS_CEMP",
+            "WS_DOC_VERIFIER",
+            "WS_FIELD_INSPECTOR",
+            "WS_APPROVER",
+            "WS_CLERK",
+            "SW_CEMP",
+            "SW_DOC_VERIFIER",
+            "SW_FIELD_INSPECTOR",
+            "SW_APPROVER",
+            "SW_CLERK",
+            "PT_APPROVER",
+            "PT_CEMP",
+            "PT_COLLECTION_EMP",
+            "PT_FIELD_INSPECTOR",
+            "PT_DOC_VERIFIER"
+          ],
+          "attributeAccessList": []
+        },
+        {
+          "roles": [
+            "REINDEXING_ROLE"
+          ],
+          "attributeAccessList": []
+        }
+      ]
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "PropertyDecrypDisabled",
+      "attributes": [
+        {
+          "name": "sample",
+          "jsonPath": "sample",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "propertyId",
+        "jsonPath": "/propertyId"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "PTCollectionReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "user_uuid",
+        "jsonPath": "/user_uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "PTReceiptRegister",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "user_uuid",
+        "jsonPath": "/user_uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "StateLevelTradeLicenseRegistryReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "StateTradeLicenseCancelledRegistryReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "TLApplicationStatusReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "currentowner",
+          "jsonPath": "currentowner",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "TLRegistryReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "TLRenewalPendingReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "mobilenumber",
+          "jsonPath": "mobilenumber",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "TradeLicenseCancelledRegistryReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "TradeLicenseDailyCollectionReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "username",
+          "jsonPath": "username",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "TradeLicenseRegistryReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "User",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "mobileNumber",
+          "jsonPath": "mobileNumber",
+          "patternId": "001",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "emailId",
+          "jsonPath": "emailId",
+          "patternId": "004",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "username",
+          "jsonPath": "username",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "altContactNumber",
+          "jsonPath": "altContactNumber",
+          "patternId": "001",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "alternatemobilenumber",
+          "jsonPath": "alternatemobilenumber",
+          "patternId": "001",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "pan",
+          "jsonPath": "pan",
+          "patternId": "001",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "aadhaarNumber",
+          "jsonPath": "aadhaarNumber",
+          "patternId": "001",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "guardian",
+          "jsonPath": "guardian",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "permanentAddress",
+          "jsonPath": "permanentAddress/address",
+          "patternId": "005",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "correspondenceAddress",
+          "jsonPath": "correspondenceAddress/address",
+          "patternId": "005",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "fatherOrHusbandName",
+          "jsonPath": "fatherOrHusbandName",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "searchUsername",
+          "jsonPath": "userName",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": [
+        {
+          "roles": [
+            "REINDEXING_ROLE"
+          ],
+          "attributeAccessList": []
+        },
+        {
+          "roles": [
+            "WS_CEMP",
+            "WS_DOC_VERIFIER",
+            "WS_FIELD_INSPECTOR",
+            "WS_APPROVER",
+            "WS_CLERK",
+            "SW_CEMP",
+            "SW_DOC_VERIFIER",
+            "SW_FIELD_INSPECTOR",
+            "SW_APPROVER",
+            "SW_CLERK"
+          ],
+          "attributeAccessList": []
+        },
+        {
+          "roles": [
+            "INTERNAL_MICROSERVICE_ROLE"
+          ],
+          "attributeAccessList": [
+            {
+              "attribute": "mobileNumber",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "fatherOrHusbandName",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "correspondenceAddress",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "name",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "emailId",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "permanentAddress",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "username",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "altContactNumber",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "alternatemobilenumber",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "pan",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "aadhaarNumber",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "guardian",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "UserSelf",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "mobileNumber",
+          "jsonPath": "mobileNumber",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "emailId",
+          "jsonPath": "emailId",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "username",
+          "jsonPath": "username",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "altContactNumber",
+          "jsonPath": "altContactNumber",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "alternatemobilenumber",
+          "jsonPath": "alternatemobilenumber",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "pan",
+          "jsonPath": "pan",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "aadhaarNumber",
+          "jsonPath": "aadhaarNumber",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "guardian",
+          "jsonPath": "guardian",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "permanentAddress",
+          "jsonPath": "permanentAddress/address",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "correspondenceAddress",
+          "jsonPath": "correspondenceAddress/address",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        },
+        {
+          "name": "fatherOrHusbandName",
+          "jsonPath": "fatherOrHusbandName",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "waterOpenSearch",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "WnsCollectionRegisterReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "WnSConnection",
+      "attributes": [
+        {
+          "name": "sample",
+          "jsonPath": "sample",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/connectionHolders/0/uuid"
+      },
+      "roleBasedDecryptionPolicy": [
+        {
+          "roles": [
+            "WS_CEMP",
+            "WS_DOC_VERIFIER",
+            "WS_FIELD_INSPECTOR",
+            "WS_APPROVER",
+            "WS_CLERK",
+            "SW_CEMP",
+            "SW_DOC_VERIFIER",
+            "SW_FIELD_INSPECTOR",
+            "SW_APPROVER",
+            "SW_CLERK"
+          ],
+          "attributeAccessList": []
+        },
+        {
+          "roles": [
+            "REINDEXING_ROLE"
+          ],
+          "attributeAccessList": []
+        }
+      ]
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "WnSConnectionDecrypDisabled",
+      "attributes": [
+        {
+          "name": "sample",
+          "jsonPath": "sample",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/connectionHolders/0/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "WnSConnectionOwner",
+      "attributes": [
+        {
+          "name": "sample",
+          "jsonPath": "sample",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": [
+        {
+          "roles": [
+            "WS_CEMP",
+            "WS_DOC_VERIFIER",
+            "WS_FIELD_INSPECTOR",
+            "WS_APPROVER",
+            "WS_CLERK",
+            "SW_CEMP",
+            "SW_DOC_VERIFIER",
+            "SW_FIELD_INSPECTOR",
+            "SW_APPROVER",
+            "SW_CLERK"
+          ],
+          "attributeAccessList": []
+        },
+        {
+          "roles": [
+            "REINDEXING_ROLE"
+          ],
+          "attributeAccessList": []
+        }
+      ]
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "WnSConnectionOwnerDecrypDisabled",
+      "attributes": [
+        {
+          "name": "sample",
+          "jsonPath": "sample",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "WnSConnectionPlumber",
+      "attributes": [
+        {
+          "name": "sample",
+          "jsonPath": "sample",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "applicationNo",
+        "jsonPath": "/applicationNo"
+      },
+      "roleBasedDecryptionPolicy": [
+        {
+          "roles": [
+            "WS_CEMP",
+            "WS_DOC_VERIFIER",
+            "WS_FIELD_INSPECTOR",
+            "WS_APPROVER",
+            "WS_CLERK",
+            "SW_CEMP",
+            "SW_DOC_VERIFIER",
+            "SW_FIELD_INSPECTOR",
+            "SW_APPROVER",
+            "SW_CLERK"
+          ],
+          "attributeAccessList": []
+        },
+        {
+          "roles": [
+            "REINDEXING_ROLE"
+          ],
+          "attributeAccessList": []
+        }
+      ]
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "WnSConnectionPlumberDecrypDisabled",
+      "attributes": [
+        {
+          "name": "sample",
+          "jsonPath": "sample",
+          "patternId": null,
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "applicationNo",
+        "jsonPath": "/applicationNo"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "WnsDefaulterReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "model": "WnsReceiptRegisterReport",
+      "attributes": [
+        {
+          "name": "name",
+          "jsonPath": "name",
+          "patternId": "002",
+          "defaultVisibility": "PLAIN"
+        }
+      ],
+      "uniqueIdentifier": {
+        "name": "uuid",
+        "jsonPath": "/uuid"
+      },
+      "roleBasedDecryptionPolicy": []
+    }
+  }
+]

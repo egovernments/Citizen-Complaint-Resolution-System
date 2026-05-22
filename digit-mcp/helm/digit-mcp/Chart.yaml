@@ -1,0 +1,5 @@
+apiVersion: v2
+name: digit-mcp
+description: MCP server for DIGIT platform APIs
+version: 0.1.0
+appVersion: "1.0.0"

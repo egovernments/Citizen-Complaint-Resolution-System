@@ -1,5 +1,5 @@
 var globalConfigs = (function () {
-  var stateTenantId = "pg";
+  var stateTenantId = "ke";
   var contextPath = "digit-ui";
   var gmaps_api_key = "";
   var finEnv = "dev";
@@ -14,6 +14,10 @@ var globalConfigs = (function () {
   var mdmsContext = "mdms-v2";
   var hrmsContext = "egov-hrms";
   var invalidEmployeeRoles = ["SYSTEM"];
+  var authProvider = "digit";
+  var pgrBoundaryHighestLevel = "County";
+  var pgrBoundaryLowestLevel = "Ward";
+  var mapCenter = { lat: -1.0, lng: 37.0 };
   var useInboxV1 = true;
 
   // Runtime locale fallback for local setup: force default language unless user explicitly changes it.
@@ -81,8 +85,16 @@ var globalConfigs = (function () {
       return mdmsContext;
     } else if (key === "HRMS_CONTEXT_PATH") {
       return hrmsContext;
+    } else if (key === "AUTH_PROVIDER") {
+      return authProvider;
     } else if (key === "INVALIDROLES") {
       return invalidEmployeeRoles;
+    } else if (key === "PGR_BOUNDARY_HIGHEST_LEVEL") {
+      return pgrBoundaryHighestLevel;
+    } else if (key === "PGR_BOUNDARY_LOWEST_LEVEL") {
+      return pgrBoundaryLowestLevel;
+    } else if (key === "MAP_CENTER") {
+      return mapCenter;
     } else if (key === "USE_INBOX_V1") {
       return useInboxV1;
     }

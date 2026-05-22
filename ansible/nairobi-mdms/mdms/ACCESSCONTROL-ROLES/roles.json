@@ -1,0 +1,1930 @@
+[
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "ANONYMOUS",
+      "name": "Anonymous User",
+      "description": "Anonymous User to be used in case of no auth"
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "AUTO_ESCALATE",
+      "name": "Auto Escalation Employee",
+      "description": "Auto Escalation Employee"
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "CFC",
+      "name": "CFC",
+      "description": "CFC"
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "CITIZEN",
+      "name": "Citizen",
+      "description": "Citizen who can raise complaint"
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "COMMON_EMPLOYEE",
+      "name": "Basic employee roles",
+      "description": "Basic employee roles"
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "CSR",
+      "name": "Complainant",
+      "description": "One who will create complaints"
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "DGRO",
+      "name": "Department GRO",
+      "description": "Department Grievance Routing Officer"
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "EMPLOYEE",
+      "name": "Employee",
+      "description": "Default role for all employees"
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "GRO",
+      "name": "Complaint Assessor",
+      "description": "One who will assess & assign complaints"
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "HRMS_ADMIN",
+      "name": "HRMS Admin",
+      "description": "HRMS Admin"
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "INTERNAL_MICROSERVICE_ROLE",
+      "name": "Internal Microservice Role",
+      "description": "Internal role for plain access"
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "LOC_ADMIN",
+      "name": "Localisation admin",
+      "description": "LOC_ADMIN"
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "MDMS_ADMIN",
+      "name": "MDMS ADMIN",
+      "description": "MDMS User that can create and search schema"
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "PGR_LME",
+      "name": "Complaint Resolver",
+      "description": "One who will resolve complaints"
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "PGR_VIEWER",
+      "name": "PGR Viewer",
+      "description": "PGR Viewer role"
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "QA_AUTOMATION",
+      "name": "QA Automation",
+      "description": "QA Automation"
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "REINDEXING_ROLE",
+      "name": "Reindexing Role",
+      "description": "Role for reindexing for encrypted data access"
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "SUPERUSER",
+      "name": "Super User",
+      "description": "System Administrator. Can change all master data and has access to all the system screens."
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "SUPERVISOR",
+      "name": "Supervisor",
+      "description": "Auto Escalation Supervisor"
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "SYSTEM",
+      "name": "System user",
+      "description": "System user role"
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "TICKET_REPORT_VIEWER",
+      "name": "Report Viewer",
+      "description": "One who will view the reports of tickets"
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "WORKFLOW_ADMIN",
+      "name": "WORKFLOW ADMIN",
+      "description": "WORKFLOW User that can create and search Workflow"
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "ANONYMOUS",
+      "name": "Anonymous User",
+      "description": "Anonymous User to be used in case of no auth"
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "AUTO_ESCALATE",
+      "name": "Auto Escalation Employee",
+      "description": "Auto Escalation Employee"
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "CFC",
+      "name": "CFC",
+      "description": "CFC"
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "CITIZEN",
+      "name": "Citizen",
+      "description": "Citizen who can raise complaint"
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "COMMON_EMPLOYEE",
+      "name": "Basic employee roles",
+      "description": "Basic employee roles"
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "CSR",
+      "name": "Complainant",
+      "description": "One who will create complaints"
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "DGRO",
+      "name": "Department GRO",
+      "description": "Department Grievance Routing Officer"
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "EMPLOYEE",
+      "name": "Employee",
+      "description": "Default role for all employees"
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "GRO",
+      "name": "Complaint Assessor",
+      "description": "One who will assess & assign complaints"
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "HRMS_ADMIN",
+      "name": "HRMS Admin",
+      "description": "HRMS Admin"
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "INTERNAL_MICROSERVICE_ROLE",
+      "name": "Internal Microservice Role",
+      "description": "Internal role for plain access"
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "LOC_ADMIN",
+      "name": "Localisation admin",
+      "description": "LOC_ADMIN"
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "MDMS_ADMIN",
+      "name": "MDMS ADMIN",
+      "description": "MDMS User that can create and search schema"
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "PGR_LME",
+      "name": "Complaint Resolver",
+      "description": "One who will resolve complaints"
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "PGR_VIEWER",
+      "name": "PGR Viewer",
+      "description": "PGR Viewer role"
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "QA_AUTOMATION",
+      "name": "QA Automation",
+      "description": "QA Automation"
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "REINDEXING_ROLE",
+      "name": "Reindexing Role",
+      "description": "Role for reindexing for encrypted data access"
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "SUPERUSER",
+      "name": "Super User",
+      "description": "System Administrator. Can change all master data and has access to all the system screens."
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "SUPERVISOR",
+      "name": "Supervisor",
+      "description": "Auto Escalation Supervisor"
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "SYSTEM",
+      "name": "System user",
+      "description": "System user role"
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "TICKET_REPORT_VIEWER",
+      "name": "Report Viewer",
+      "description": "One who will view the reports of tickets"
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "WORKFLOW_ADMIN",
+      "name": "WORKFLOW ADMIN",
+      "description": "WORKFLOW User that can create and search Workflow"
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "ANONYMOUS",
+      "name": "Anonymous User",
+      "description": "Anonymous User to be used in case of no auth"
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "AUTO_ESCALATE",
+      "name": "Auto Escalation Employee",
+      "description": "Auto Escalation Employee"
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "CFC",
+      "name": "CFC",
+      "description": "CFC"
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "CITIZEN",
+      "name": "Citizen",
+      "description": "Citizen who can raise complaint"
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "COMMON_EMPLOYEE",
+      "name": "Basic employee roles",
+      "description": "Basic employee roles"
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "CSR",
+      "name": "Complainant",
+      "description": "One who will create complaints"
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "DGRO",
+      "name": "Department GRO",
+      "description": "Department Grievance Routing Officer"
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "EMPLOYEE",
+      "name": "Employee",
+      "description": "Default role for all employees"
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "GRO",
+      "name": "Complaint Assessor",
+      "description": "One who will assess & assign complaints"
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "HRMS_ADMIN",
+      "name": "HRMS Admin",
+      "description": "HRMS Admin"
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "INTERNAL_MICROSERVICE_ROLE",
+      "name": "Internal Microservice Role",
+      "description": "Internal role for plain access"
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "LOC_ADMIN",
+      "name": "Localisation admin",
+      "description": "LOC_ADMIN"
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "MDMS_ADMIN",
+      "name": "MDMS ADMIN",
+      "description": "MDMS User that can create and search schema"
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "PGR_LME",
+      "name": "Complaint Resolver",
+      "description": "One who will resolve complaints"
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "PGR_VIEWER",
+      "name": "PGR Viewer",
+      "description": "PGR Viewer role"
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "QA_AUTOMATION",
+      "name": "QA Automation",
+      "description": "QA Automation"
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "REINDEXING_ROLE",
+      "name": "Reindexing Role",
+      "description": "Role for reindexing for encrypted data access"
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "SUPERUSER",
+      "name": "Super User",
+      "description": "System Administrator. Can change all master data and has access to all the system screens."
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "SUPERVISOR",
+      "name": "Supervisor",
+      "description": "Auto Escalation Supervisor"
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "SYSTEM",
+      "name": "System user",
+      "description": "System user role"
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "TICKET_REPORT_VIEWER",
+      "name": "Report Viewer",
+      "description": "One who will view the reports of tickets"
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "WORKFLOW_ADMIN",
+      "name": "WORKFLOW ADMIN",
+      "description": "WORKFLOW User that can create and search Workflow"
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "ANONYMOUS",
+      "name": "Anonymous User",
+      "description": "Anonymous User to be used in case of no auth"
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "AUTO_ESCALATE",
+      "name": "Auto Escalation Employee",
+      "description": "Auto Escalation Employee"
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "CFC",
+      "name": "CFC",
+      "description": "CFC"
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "CITIZEN",
+      "name": "Citizen",
+      "description": "Citizen who can raise complaint"
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "COMMON_EMPLOYEE",
+      "name": "Basic employee roles",
+      "description": "Basic employee roles"
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "CSR",
+      "name": "Complainant",
+      "description": "One who will create complaints"
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "DGRO",
+      "name": "Department GRO",
+      "description": "Department Grievance Routing Officer"
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "EMPLOYEE",
+      "name": "Employee",
+      "description": "Default role for all employees"
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "GRO",
+      "name": "Complaint Assessor",
+      "description": "One who will assess & assign complaints"
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "HRMS_ADMIN",
+      "name": "HRMS Admin",
+      "description": "HRMS Admin"
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "INTERNAL_MICROSERVICE_ROLE",
+      "name": "Internal Microservice Role",
+      "description": "Internal role for plain access"
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "LOC_ADMIN",
+      "name": "Localisation admin",
+      "description": "LOC_ADMIN"
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "MDMS_ADMIN",
+      "name": "MDMS ADMIN",
+      "description": "MDMS User that can create and search schema"
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "PGR_LME",
+      "name": "Complaint Resolver",
+      "description": "One who will resolve complaints"
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "PGR_VIEWER",
+      "name": "PGR Viewer",
+      "description": "PGR Viewer role"
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "QA_AUTOMATION",
+      "name": "QA Automation",
+      "description": "QA Automation"
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "REINDEXING_ROLE",
+      "name": "Reindexing Role",
+      "description": "Role for reindexing for encrypted data access"
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "SUPERUSER",
+      "name": "Super User",
+      "description": "System Administrator. Can change all master data and has access to all the system screens."
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "SUPERVISOR",
+      "name": "Supervisor",
+      "description": "Auto Escalation Supervisor"
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "SYSTEM",
+      "name": "System user",
+      "description": "System user role"
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "TICKET_REPORT_VIEWER",
+      "name": "Report Viewer",
+      "description": "One who will view the reports of tickets"
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "WORKFLOW_ADMIN",
+      "name": "WORKFLOW ADMIN",
+      "description": "WORKFLOW User that can create and search Workflow"
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "ANONYMOUS",
+      "name": "Anonymous User",
+      "description": "Anonymous User to be used in case of no auth"
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "AUTO_ESCALATE",
+      "name": "Auto Escalation Employee",
+      "description": "Auto Escalation Employee"
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "CFC",
+      "name": "CFC",
+      "description": "CFC"
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "CITIZEN",
+      "name": "Citizen",
+      "description": "Citizen who can raise complaint"
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "COMMON_EMPLOYEE",
+      "name": "Basic employee roles",
+      "description": "Basic employee roles"
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "CSR",
+      "name": "Complainant",
+      "description": "One who will create complaints"
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "DGRO",
+      "name": "Department GRO",
+      "description": "Department Grievance Routing Officer"
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "EMPLOYEE",
+      "name": "Employee",
+      "description": "Default role for all employees"
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "GRO",
+      "name": "Complaint Assessor",
+      "description": "One who will assess & assign complaints"
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "HRMS_ADMIN",
+      "name": "HRMS Admin",
+      "description": "HRMS Admin"
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "INTERNAL_MICROSERVICE_ROLE",
+      "name": "Internal Microservice Role",
+      "description": "Internal role for plain access"
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "LOC_ADMIN",
+      "name": "Localisation admin",
+      "description": "LOC_ADMIN"
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "MDMS_ADMIN",
+      "name": "MDMS ADMIN",
+      "description": "MDMS User that can create and search schema"
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "PGR_LME",
+      "name": "Complaint Resolver",
+      "description": "One who will resolve complaints"
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "PGR_VIEWER",
+      "name": "PGR Viewer",
+      "description": "PGR Viewer role"
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "QA_AUTOMATION",
+      "name": "QA Automation",
+      "description": "QA Automation"
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "REINDEXING_ROLE",
+      "name": "Reindexing Role",
+      "description": "Role for reindexing for encrypted data access"
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "SUPERUSER",
+      "name": "Super User",
+      "description": "System Administrator. Can change all master data and has access to all the system screens."
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "SUPERVISOR",
+      "name": "Supervisor",
+      "description": "Auto Escalation Supervisor"
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "SYSTEM",
+      "name": "System user",
+      "description": "System user role"
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "TICKET_REPORT_VIEWER",
+      "name": "Report Viewer",
+      "description": "One who will view the reports of tickets"
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "WORKFLOW_ADMIN",
+      "name": "WORKFLOW ADMIN",
+      "description": "WORKFLOW User that can create and search Workflow"
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "ANONYMOUS",
+      "name": "Anonymous User",
+      "description": "Anonymous User to be used in case of no auth"
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "AUTO_ESCALATE",
+      "name": "Auto Escalation Employee",
+      "description": "Auto Escalation Employee"
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "CFC",
+      "name": "CFC",
+      "description": "CFC"
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "CITIZEN",
+      "name": "Citizen",
+      "description": "Citizen who can raise complaint"
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "COMMON_EMPLOYEE",
+      "name": "Basic employee roles",
+      "description": "Basic employee roles"
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "CSR",
+      "name": "Complainant",
+      "description": "One who will create complaints"
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "DGRO",
+      "name": "Department GRO",
+      "description": "Department Grievance Routing Officer"
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "EMPLOYEE",
+      "name": "Employee",
+      "description": "Default role for all employees"
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "GRO",
+      "name": "Complaint Assessor",
+      "description": "One who will assess & assign complaints"
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "HRMS_ADMIN",
+      "name": "HRMS Admin",
+      "description": "HRMS Admin"
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "INTERNAL_MICROSERVICE_ROLE",
+      "name": "Internal Microservice Role",
+      "description": "Internal role for plain access"
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "LOC_ADMIN",
+      "name": "Localisation admin",
+      "description": "LOC_ADMIN"
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "MDMS_ADMIN",
+      "name": "MDMS ADMIN",
+      "description": "MDMS User that can create and search schema"
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "PGR_LME",
+      "name": "Complaint Resolver",
+      "description": "One who will resolve complaints"
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "PGR_VIEWER",
+      "name": "PGR Viewer",
+      "description": "PGR Viewer role"
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "QA_AUTOMATION",
+      "name": "QA Automation",
+      "description": "QA Automation"
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "REINDEXING_ROLE",
+      "name": "Reindexing Role",
+      "description": "Role for reindexing for encrypted data access"
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "SUPERUSER",
+      "name": "Super User",
+      "description": "System Administrator. Can change all master data and has access to all the system screens."
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "SUPERVISOR",
+      "name": "Supervisor",
+      "description": "Auto Escalation Supervisor"
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "SYSTEM",
+      "name": "System user",
+      "description": "System user role"
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "TICKET_REPORT_VIEWER",
+      "name": "Report Viewer",
+      "description": "One who will view the reports of tickets"
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "WORKFLOW_ADMIN",
+      "name": "WORKFLOW ADMIN",
+      "description": "WORKFLOW User that can create and search Workflow"
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "ANONYMOUS",
+      "name": "Anonymous User",
+      "description": "Anonymous User to be used in case of no auth"
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "AUTO_ESCALATE",
+      "name": "Auto Escalation Employee",
+      "description": "Auto Escalation Employee"
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "CFC",
+      "name": "CFC",
+      "description": "CFC"
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "CITIZEN",
+      "name": "Citizen",
+      "description": "Citizen who can raise complaint"
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "COMMON_EMPLOYEE",
+      "name": "Basic employee roles",
+      "description": "Basic employee roles"
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "CSR",
+      "name": "Complainant",
+      "description": "One who will create complaints"
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "DGRO",
+      "name": "Department GRO",
+      "description": "Department Grievance Routing Officer"
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "EMPLOYEE",
+      "name": "Employee",
+      "description": "Default role for all employees"
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "GRO",
+      "name": "Complaint Assessor",
+      "description": "One who will assess & assign complaints"
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "HRMS_ADMIN",
+      "name": "HRMS Admin",
+      "description": "HRMS Admin"
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "INTERNAL_MICROSERVICE_ROLE",
+      "name": "Internal Microservice Role",
+      "description": "Internal role for plain access"
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "LOC_ADMIN",
+      "name": "Localisation admin",
+      "description": "LOC_ADMIN"
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "MDMS_ADMIN",
+      "name": "MDMS ADMIN",
+      "description": "MDMS User that can create and search schema"
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "PGR_LME",
+      "name": "Complaint Resolver",
+      "description": "One who will resolve complaints"
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "PGR_VIEWER",
+      "name": "PGR Viewer",
+      "description": "PGR Viewer role"
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "QA_AUTOMATION",
+      "name": "QA Automation",
+      "description": "QA Automation"
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "REINDEXING_ROLE",
+      "name": "Reindexing Role",
+      "description": "Role for reindexing for encrypted data access"
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "SUPERUSER",
+      "name": "Super User",
+      "description": "System Administrator. Can change all master data and has access to all the system screens."
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "SUPERVISOR",
+      "name": "Supervisor",
+      "description": "Auto Escalation Supervisor"
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "SYSTEM",
+      "name": "System user",
+      "description": "System user role"
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "TICKET_REPORT_VIEWER",
+      "name": "Report Viewer",
+      "description": "One who will view the reports of tickets"
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "WORKFLOW_ADMIN",
+      "name": "WORKFLOW ADMIN",
+      "description": "WORKFLOW User that can create and search Workflow"
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "ANONYMOUS",
+      "name": "Anonymous User",
+      "description": "Anonymous User to be used in case of no auth"
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "AUTO_ESCALATE",
+      "name": "Auto Escalation Employee",
+      "description": "Auto Escalation Employee"
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "CFC",
+      "name": "CFC",
+      "description": "CFC"
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "CITIZEN",
+      "name": "Citizen",
+      "description": "Citizen who can raise complaint"
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "COMMON_EMPLOYEE",
+      "name": "Basic employee roles",
+      "description": "Basic employee roles"
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "CSR",
+      "name": "Complainant",
+      "description": "One who will create complaints"
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "DGRO",
+      "name": "Department GRO",
+      "description": "Department Grievance Routing Officer"
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "EMPLOYEE",
+      "name": "Employee",
+      "description": "Default role for all employees"
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "GRO",
+      "name": "Complaint Assessor",
+      "description": "One who will assess & assign complaints"
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "HRMS_ADMIN",
+      "name": "HRMS Admin",
+      "description": "HRMS Admin"
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "INTERNAL_MICROSERVICE_ROLE",
+      "name": "Internal Microservice Role",
+      "description": "Internal role for plain access"
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "LOC_ADMIN",
+      "name": "Localisation admin",
+      "description": "LOC_ADMIN"
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "MDMS_ADMIN",
+      "name": "MDMS ADMIN",
+      "description": "MDMS User that can create and search schema"
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "PGR_LME",
+      "name": "Complaint Resolver",
+      "description": "One who will resolve complaints"
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "PGR_VIEWER",
+      "name": "PGR Viewer",
+      "description": "PGR Viewer role"
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "QA_AUTOMATION",
+      "name": "QA Automation",
+      "description": "QA Automation"
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "REINDEXING_ROLE",
+      "name": "Reindexing Role",
+      "description": "Role for reindexing for encrypted data access"
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "SUPERUSER",
+      "name": "Super User",
+      "description": "System Administrator. Can change all master data and has access to all the system screens."
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "SUPERVISOR",
+      "name": "Supervisor",
+      "description": "Auto Escalation Supervisor"
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "SYSTEM",
+      "name": "System user",
+      "description": "System user role"
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "TICKET_REPORT_VIEWER",
+      "name": "Report Viewer",
+      "description": "One who will view the reports of tickets"
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "WORKFLOW_ADMIN",
+      "name": "WORKFLOW ADMIN",
+      "description": "WORKFLOW User that can create and search Workflow"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "ANONYMOUS",
+      "name": "Anonymous User",
+      "description": "Anonymous User to be used in case of no auth"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "AUTO_ESCALATE",
+      "name": "Auto Escalation Employee",
+      "description": "Auto Escalation Employee"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "CFC",
+      "name": "CFC",
+      "description": "CFC"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "CITIZEN",
+      "name": "Citizen",
+      "description": "Citizen who can raise complaint"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "COMMON_EMPLOYEE",
+      "name": "Basic employee roles",
+      "description": "Basic employee roles"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "CSR",
+      "name": "Complainant",
+      "description": "One who will create complaints"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "DGRO",
+      "name": "Department GRO",
+      "description": "Department Grievance Routing Officer"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "EMPLOYEE",
+      "name": "Employee",
+      "description": "Default role for all employees"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "GRO",
+      "name": "Complaint Assessor",
+      "description": "One who will assess & assign complaints"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "HRMS_ADMIN",
+      "name": "HRMS Admin",
+      "description": "HRMS Admin"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "INTERNAL_MICROSERVICE_ROLE",
+      "name": "Internal Microservice Role",
+      "description": "Internal role for plain access"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "LOC_ADMIN",
+      "name": "Localisation admin",
+      "description": "LOC_ADMIN"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "MDMS_ADMIN",
+      "name": "MDMS ADMIN",
+      "description": "MDMS User that can create and search schema"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "PGR_LME",
+      "name": "Complaint Resolver",
+      "description": "One who will resolve complaints"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "PGR_VIEWER",
+      "name": "PGR Viewer",
+      "description": "PGR Viewer role"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "QA_AUTOMATION",
+      "name": "QA Automation",
+      "description": "QA Automation"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "REINDEXING_ROLE",
+      "name": "Reindexing Role",
+      "description": "Role for reindexing for encrypted data access"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "SUPERUSER",
+      "name": "Super User",
+      "description": "System Administrator. Can change all master data and has access to all the system screens."
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "SUPERVISOR",
+      "name": "Supervisor",
+      "description": "Auto Escalation Supervisor"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "SYSTEM",
+      "name": "System user",
+      "description": "System user role"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "TICKET_REPORT_VIEWER",
+      "name": "Report Viewer",
+      "description": "One who will view the reports of tickets"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "WORKFLOW_ADMIN",
+      "name": "WORKFLOW ADMIN",
+      "description": "WORKFLOW User that can create and search Workflow"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "CITIZEN",
+      "name": "Citizen",
+      "description": "Citizen who can raise complaint"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "INTERNAL_MICROSERVICE_ROLE",
+      "name": "Internal Microservice Role",
+      "description": "Internal role for plain access"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "TICKET_REPORT_VIEWER",
+      "name": "Report Viewer",
+      "description": "One who will view the reports of tickets"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "MDMS_ADMIN",
+      "name": "MDMS ADMIN",
+      "description": "MDMS User that can create and search schema"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "REINDEXING_ROLE",
+      "name": "Reindexing Role",
+      "description": "Role for reindexing for encrypted data access"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "CSR",
+      "name": "Complainant",
+      "description": "One who will create complaints"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "HRMS_ADMIN",
+      "name": "HRMS Admin",
+      "description": "HRMS Admin"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "SYSTEM",
+      "name": "System user",
+      "description": "System user role"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "ANONYMOUS",
+      "name": "Anonymous User",
+      "description": "Anonymous User to be used in case of no auth"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "PGR_LME",
+      "name": "Complaint Resolver",
+      "description": "One who will resolve complaints"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "LOC_ADMIN",
+      "name": "Localisation admin",
+      "description": "LOC_ADMIN"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "QA_AUTOMATION",
+      "name": "QA Automation",
+      "description": "QA Automation"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "WORKFLOW_ADMIN",
+      "name": "WORKFLOW ADMIN",
+      "description": "WORKFLOW User that can create and search Workflow"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "COMMON_EMPLOYEE",
+      "name": "Basic employee roles",
+      "description": "Basic employee roles"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "GRO",
+      "name": "Complaint Assessor",
+      "description": "One who will assess & assign complaints"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "DGRO",
+      "name": "Department GRO",
+      "description": "Department Grievance Routing Officer"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "PGR_VIEWER",
+      "name": "PGR Viewer",
+      "description": "PGR Viewer role"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "SUPERVISOR",
+      "name": "Supervisor",
+      "description": "Auto Escalation Supervisor"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "AUTO_ESCALATE",
+      "name": "Auto Escalation Employee",
+      "description": "Auto Escalation Employee"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "CFC",
+      "name": "CFC",
+      "description": "CFC"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "SUPERUSER",
+      "name": "Super User",
+      "description": "System Administrator. Can change all master data and has access to all the system screens."
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "SUPERVISOR",
+      "name": "Auto Escalation Supervisor",
+      "description": "Escalation to particular role"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "EMPLOYEE",
+      "name": "Employee",
+      "description": "Default role for all employees"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "ANONYMOUS",
+      "name": "Anonymous User",
+      "description": "Anonymous User to be used in case of no auth"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "AUTO_ESCALATE",
+      "name": "Auto Escalation Employee",
+      "description": "Auto Escalation Employee"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "CITIZEN",
+      "name": "Citizen",
+      "description": "Citizen who can raise complaint"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "COMMON_EMPLOYEE",
+      "name": "Basic employee roles",
+      "description": "Basic employee roles"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "CSR",
+      "name": "Complainant",
+      "description": "One who will create complaints"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "EMPLOYEE",
+      "name": "Employee",
+      "description": "Default role for all employees"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "GRO",
+      "name": "Complaint Assessor",
+      "description": "One who will assess & assign complaints"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "HRMS_ADMIN",
+      "name": "HRMS Admin",
+      "description": "HRMS Admin"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "INTERNAL_MICROSERVICE_ROLE",
+      "name": "Internal Microservice Role",
+      "description": "Internal role for plain access"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "LOC_ADMIN",
+      "name": "Localisation admin",
+      "description": "LOC_ADMIN"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "MDMS_ADMIN",
+      "name": "MDMS ADMIN",
+      "description": "MDMS User that can create and search schema"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "PGR_LME",
+      "name": "Complaint Resolver",
+      "description": "One who will resolve complaints"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "PGR_VIEWER",
+      "name": "PGR Viewer role",
+      "description": " "
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "QA_AUTOMATION",
+      "name": "QA Automation",
+      "description": "QA Automation"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "REINDEXING_ROLE",
+      "name": "Reindexing Role",
+      "description": "Role for reindexing for encrypted data access"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "SUPERUSER",
+      "name": "Super User",
+      "description": "System Administrator. Can change all master data and has access to all the system screens."
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "SUPERVISOR",
+      "name": "Auto Escalation Supervisor",
+      "description": "Escalation to particular role"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "SYSTEM",
+      "name": "System user",
+      "description": "System user role"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "TICKET_REPORT_VIEWER",
+      "name": "Report Viewer",
+      "description": "One who will view the reports of tickets"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "WORKFLOW_ADMIN",
+      "name": "WORKFLOW ADMIN",
+      "description": "WORKFLOW User that can create and search Workflow"
+    }
+  }
+]

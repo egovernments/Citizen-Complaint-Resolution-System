@@ -7,7 +7,8 @@
   "variable": [
     {
       "key": "baseUrl",
-      "value": "http://localhost"
+      "value": "http://localhost:18000",
+      "description": "Kong gateway URL. Override per env: http://localhost:18000 (local), https://<tenant>.example.com (prod)."
     }
   ],
   "item": [
@@ -19,7 +20,7 @@
           "name": "MDMS health",
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}:18094/mdms-v2/health",
+            "url": "{{baseUrl}}/mdms-v2/health",
             "description": "Verifies the MDMS service is up and responding."
           }
         },
@@ -27,7 +28,7 @@
           "name": "ENC service health",
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}:11234/egov-enc-service/actuator/health",
+            "url": "{{baseUrl}}/egov-enc-service/actuator/health",
             "description": "Checks egov-enc-service actuator health."
           }
         },
@@ -35,7 +36,7 @@
           "name": "IDGEN health",
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}:18088/egov-idgen/health",
+            "url": "{{baseUrl}}/egov-idgen/health",
             "description": "Checks egov-idgen health endpoint."
           }
         },
@@ -43,7 +44,7 @@
           "name": "User health",
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}:18107/user/health",
+            "url": "{{baseUrl}}/user/health",
             "description": "Checks egov-user health endpoint."
           }
         },
@@ -51,7 +52,7 @@
           "name": "Workflow v2 health",
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}:18109/egov-workflow-v2/health",
+            "url": "{{baseUrl}}/egov-workflow-v2/health",
             "description": "Checks egov-workflow-v2 health endpoint."
           }
         },
@@ -59,7 +60,7 @@
           "name": "Localization health",
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}:18096/localization/actuator/health",
+            "url": "{{baseUrl}}/localization/actuator/health",
             "description": "Checks localization service actuator health."
           }
         },
@@ -67,7 +68,7 @@
           "name": "Boundary-service health",
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}:18081/boundary-service/actuator/health",
+            "url": "{{baseUrl}}/boundary-service/actuator/health",
             "description": "Checks boundary-service (v2) actuator health."
           }
         },
@@ -75,7 +76,7 @@
           "name": "Accesscontrol health",
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}:18090/access/health",
+            "url": "{{baseUrl}}/access/health",
             "description": "Checks egov-accesscontrol health endpoint."
           }
         },
@@ -83,7 +84,7 @@
           "name": "Persister health",
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}:18091/common-persist/actuator/health",
+            "url": "{{baseUrl}}/common-persist/actuator/health",
             "description": "Checks egov-persister actuator health."
           }
         }
@@ -107,7 +108,7 @@
               "mode": "raw",
               "raw": "{\n  \"RequestInfo\": { \"apiId\": \"digit\", \"ver\": \"1.0\", \"ts\": 0 },\n  \"MdmsCriteria\": {\n    \"tenantId\": \"pg\",\n    \"moduleDetails\": [\n      { \"moduleName\": \"tenant\", \"masterDetails\": [ { \"name\": \"tenants\" } ] }\n    ]\n  }\n}"
             },
-            "url": "{{baseUrl}}:18094/mdms-v2/v1/_search",
+            "url": "{{baseUrl}}/mdms-v2/v1/_search",
             "description": "Queries tenant master data from MDMS using seeded data (tenantId pg)."
           }
         },
@@ -125,7 +126,7 @@
               "mode": "raw",
               "raw": "{\n  \"RequestInfo\": { \"apiId\": \"Rainmaker\", \"ver\": \".01\", \"ts\": \"\" }\n}"
             },
-            "url": "{{baseUrl}}:18096/localization/messages/v1/_search?locale=en_IN&module=rainmaker-workbench&tenantId=pg",
+            "url": "{{baseUrl}}/localization/messages/v1/_search?locale=en_IN&module=rainmaker-workbench&tenantId=pg",
             "description": "Fetches localization messages (v1). If empty, run the cache-bust request first."
           }
         },
@@ -133,7 +134,7 @@
           "name": "Localization cache-bust",
           "request": {
             "method": "POST",
-            "url": "{{baseUrl}}:18096/localization/messages/cache-bust",
+            "url": "{{baseUrl}}/localization/messages/cache-bust",
             "description": "Clears Redis cache for localization messages."
           }
         },
@@ -151,7 +152,7 @@
               "mode": "raw",
               "raw": "{\n  \"RequestInfo\": { \"apiId\": \"digit\", \"ver\": \"1.0\", \"ts\": 0 }\n}"
             },
-            "url": "{{baseUrl}}:18081/boundary-service/boundary-hierarchy-definition/_search?tenantId=pg",
+            "url": "{{baseUrl}}/boundary-service/boundary-hierarchy-definition/_search?tenantId=pg",
             "description": "Fetches boundary hierarchy definitions from boundary-service v2."
           }
         }

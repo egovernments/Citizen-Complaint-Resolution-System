@@ -1,0 +1,21 @@
+# Variables shared across every host in this inventory. Anything
+# DIGIT-specific belongs in `group_vars/digit.yml`; anything host-specific
+# in `host_vars/<host>.yml`.
+
+# Where the deploy lays down the stack on each target.
+# /opt/digit on Linux (unchanged). On macOS (thin Mac path, ansible_connection
+# local) /opt needs sudo; default to a user-writable path instead. host_vars
+# still overrides this (higher precedence).
+digit_dir: "{{ '/opt/digit' if (ansible_system | default('Linux')) != 'Darwin' else (ansible_env.HOME ~ '/digit') }}"
+
+# Minimum Docker Compose version we'll accept on the target before deploying.
+docker_compose_version_min: "2.20"
+
+# Where the configurator SPA dist is served from. /var/www/configurator on
+# Linux (host nginx). On macOS nginx runs as a container and /var/www needs
+# sudo, so default to a digit_dir-relative path that the container bind-mounts.
+configurator_www_dir: "{{ '/var/www/configurator' if (ansible_system | default('Linux')) != 'Darwin' else (digit_dir ~ '/configurator') }}"
+
+# Host port the macOS nginx container publishes (maps to its :80). Linux is
+# unaffected (host nginx binds 80/443 directly).
+nginx_host_port: 80

@@ -1,0 +1,101 @@
+[
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "slotPercentage": 33,
+      "middleSlabColor": "#EEA73A",
+      "negativeSlabColor": "#F44336",
+      "positiveSlabColor": "#4CAF50"
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "slotPercentage": 33,
+      "middleSlabColor": "#EEA73A",
+      "negativeSlabColor": "#F44336",
+      "positiveSlabColor": "#4CAF50"
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "slotPercentage": 33,
+      "middleSlabColor": "#EEA73A",
+      "negativeSlabColor": "#F44336",
+      "positiveSlabColor": "#4CAF50"
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "slotPercentage": 33,
+      "middleSlabColor": "#EEA73A",
+      "negativeSlabColor": "#F44336",
+      "positiveSlabColor": "#4CAF50"
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "slotPercentage": 33,
+      "middleSlabColor": "#EEA73A",
+      "negativeSlabColor": "#F44336",
+      "positiveSlabColor": "#4CAF50"
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "slotPercentage": 33,
+      "middleSlabColor": "#EEA73A",
+      "negativeSlabColor": "#F44336",
+      "positiveSlabColor": "#4CAF50"
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "slotPercentage": 33,
+      "middleSlabColor": "#EEA73A",
+      "negativeSlabColor": "#F44336",
+      "positiveSlabColor": "#4CAF50"
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "slotPercentage": 33,
+      "middleSlabColor": "#EEA73A",
+      "negativeSlabColor": "#F44336",
+      "positiveSlabColor": "#4CAF50"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "slotPercentage": 33,
+      "middleSlabColor": "#EEA73A",
+      "negativeSlabColor": "#F44336",
+      "positiveSlabColor": "#4CAF50"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "slotPercentage": 33,
+      "middleSlabColor": "#EEA73A",
+      "negativeSlabColor": "#F44336",
+      "positiveSlabColor": "#4CAF50"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "slotPercentage": 33,
+      "middleSlabColor": "#EEA73A",
+      "negativeSlabColor": "#F44336",
+      "positiveSlabColor": "#4CAF50"
+    }
+  }
+]

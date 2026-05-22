@@ -1,0 +1,31 @@
+[
+  {
+    "tenantId": "ke",
+    "data": {
+      "city": {
+        "code": "KE",
+        "name": "Kenya",
+        "districtCode": "KE",
+        "districtName": "Kenya"
+      },
+      "code": "ke",
+      "name": "Kenya",
+      "tenantId": "ke",
+      "description": "State tenant root: ke"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "city": {
+        "code": "KE_NAIROBI",
+        "name": "Nairobi City",
+        "districtName": "Nairobi City"
+      },
+      "code": "ke.nairobi",
+      "name": "Nairobi City",
+      "type": "CITY",
+      "tenantId": "ke.nairobi"
+    }
+  }
+]

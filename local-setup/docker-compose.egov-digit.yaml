@@ -1,0 +1,2007 @@
+# docker-compose.egov-digit.yaml
+# Standalone compose — all images from public registry registry.preview.egov.theflywheel.in
+# Generated from docker-compose.deploy.yaml with registry-prefixed images and build: removed
+#
+# Usage: docker compose -f docker-compose.egov-digit.yaml up -d
+
+services:
+  # ==================== Tracing Infrastructure ====================
+  otel-collector:
+    image: registry.preview.egov.theflywheel.in/otel/opentelemetry-collector-contrib:0.114.0
+    container_name: digit-otel-collector
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./otel/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "14317:4317"
+      - "14318:4318"
+      - "13133:13133"
+    networks:
+      - egov-network
+
+  tempo:
+    image: registry.preview.egov.theflywheel.in/grafana/tempo:2.6.1
+    container_name: digit-tempo
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo/config.yaml"]
+    volumes:
+      - ./otel/tempo-config.yaml:/etc/tempo/config.yaml:ro
+      - tempo_data:/var/tempo
+    ports:
+      - "13200:3200"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3200/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - egov-network
+
+  grafana:
+    image: registry.preview.egov.theflywheel.in/grafana/grafana:11.4.0
+    container_name: digit-grafana
+    restart: unless-stopped
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      # Domain + root URL templated per tenant via /opt/digit/.env
+      # (Ansible writes GF_SERVER_DOMAIN there from inventory `domain`).
+      GF_SERVER_DOMAIN: ${GF_SERVER_DOMAIN:-api.egov.theflywheel.in}
+      GF_SERVER_ROOT_URL: ${GF_SERVER_ROOT_URL:-https://api.egov.theflywheel.in/grafana/}
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+    volumes:
+      - ./otel/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "13000:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      tempo:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+      prometheus:
+        condition: service_started
+    networks:
+      - egov-network
+
+  # Prometheus — scrapes the OTEL collector's /metrics endpoint (which exposes
+  # OTLP-received JVM/runtime metrics in Prometheus format). Single source of
+  # truth for the Grafana JVM dashboard used for right-sizing DIGIT services.
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: digit-prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+    volumes:
+      - ./otel/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "19090:9090"
+    networks:
+      - egov-network
+
+  # ==================== Core Infrastructure ====================
+  # Actual PostgreSQL - services should NOT connect directly to this
+  postgres-db:
+    image: registry.preview.egov.theflywheel.in/postgres:16
+    container_name: docker-postgres
+    environment:
+      POSTGRES_USER: egov
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      POSTGRES_DB: egov
+    command: postgres -c max_connections=200
+    volumes:
+    - postgres_data:/var/lib/docker-postgresql/data
+    ports:
+    - 15432:5432
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U egov
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+    - egov-network
+
+  # PgBouncer - transparent connection pooler, aliased as "postgres"
+  pgbouncer:
+    image: registry.preview.egov.theflywheel.in/edoburu/pgbouncer:latest
+    container_name: digit-pgbouncer
+    environment:
+      DB_HOST: postgres-db
+      DB_PORT: 5432
+      DB_USER: egov
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      DB_NAME: egov
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 500
+      DEFAULT_POOL_SIZE: 60
+      MIN_POOL_SIZE: 10
+      RESERVE_POOL_SIZE: 10
+      AUTH_TYPE: scram-sha-256
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "localhost", "-p", "5432", "-U", "egov"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      egov-network:
+        aliases:
+          - postgres
+
+  redis:
+    image: registry.preview.egov.theflywheel.in/redis:7.2.4
+    container_name: digit-redis
+    ports:
+    - 16379:6379
+    healthcheck:
+      test:
+      - CMD
+      - redis-cli
+      - ping
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+    - egov-network
+
+  # Redpanda - Kafka-compatible streaming (keeping original for now, debugging separately)
+  redpanda:
+    image: registry.preview.egov.theflywheel.in/redpandadata/redpanda:v24.1.1
+    container_name: digit-redpanda
+    command:
+      - redpanda
+      - start
+      - --smp
+      - '1'
+      - --memory
+      - 256M
+      - --overprovisioned
+      - --node-id
+      - '0'
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr
+      - PLAINTEXT://redpanda:9092
+      - --pandaproxy-addr
+      - PLAINTEXT://0.0.0.0:8082
+      - --advertise-pandaproxy-addr
+      - PLAINTEXT://redpanda:8082
+    ports:
+      - 19092:9092
+      - 18082:8082
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      egov-network:
+        aliases:
+          - kafka
+          - kafka-v2.kafka-cluster
+
+  # MinIO - S3-compatible object storage for filestore
+  minio:
+    image: registry.preview.egov.theflywheel.in/minio/minio:RELEASE.2024-01-16T16-07-38Z
+    container_name: digit-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - minio_data:/data
+    ports:
+      - 19000:9000
+      - 19001:9001
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - egov-network
+
+  # MinIO init - creates the bucket
+  minio-init:
+    image: registry.preview.egov.theflywheel.in/minio/mc:RELEASE.2024-01-16T16-06-34Z
+    container_name: digit-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://minio:9000 minioadmin minioadmin;
+      mc mb --ignore-existing myminio/egov-rainmaker;
+      mc anonymous set download myminio/egov-rainmaker;
+      exit 0;
+      "
+    networks:
+      - egov-network
+
+  elasticsearch:
+    image: registry.preview.egov.theflywheel.in/docker.elastic.co/elasticsearch/elasticsearch:8.10.3
+    profiles: ["search"]
+    container_name: digit-elasticsearch
+    environment:
+    - discovery.type=single-node
+    - xpack.security.enabled=false
+    - ES_JAVA_OPTS=-Xms256m -Xmx384m
+    volumes:
+    - es_data:/usr/share/elasticsearch/data
+    ports:
+    - 19200:9200
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - curl -f http://localhost:9200/_cluster/health || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+    - egov-network
+
+  # ===========================================================================
+  # Elasticsearch Indexer - Reads Kafka topics, indexes into Elasticsearch
+  # ===========================================================================
+  egov-indexer:
+    image: registry.preview.egov.theflywheel.in/egovio/egov-indexer:v2.9.2-4a60f20
+    profiles: ["search"]
+    container_name: egov-indexer
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      egov-mdms-service:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    volumes:
+      - ./configs/egov-indexer:/indexer-config:ro
+      - ./otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
+      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_FLYWAY_USER: egov
+      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
+      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
+      SPRING_FLYWAY_ENABLED: 'true'
+      SPRING_FLYWAY_TABLE: egov_indexer_schema
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SERVER_PORT: 8080
+      EGOV_INFRA_INDEXER_HOST: http://elasticsearch:9200/
+      EGOV_INDEXER_YML_REPO_PATH: "file:///indexer-config/pgr-services.yml,file:///indexer-config/pgr-inbox-indexer.yml"
+      EGOV_MDMS_SEARCH_ENDPOINT: mdms-v2/v1/_search
+      EGOV_STATELEVEL_TENANTID: pg
+      # No ES auth needed (xpack.security.enabled=false)
+      EGOV_INDEXER_ES_USERNAME: ""
+      EGOV_INDEXER_ES_PASSWORD: ""
+      SECURITY_BASIC_ENABLED: 'false'
+      MANAGEMENT_SECURITY_ENABLED: 'false'
+      MANAGEMENT_HEALTH_DB_ENABLED: 'false'
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: egov-indexer
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: none
+      # heap-tuned via JAVA_OPTS by patch-jvm-heaps.py for egov-indexer
+      JAVA_OPTS: "-Xms192m -Xmx512m"
+      JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
+    ports:
+    - 18095:8080
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/egov-indexer/actuator/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    networks:
+    - egov-network
+
+  # ===========================================================================
+  # Inbox v2 - Queries Elasticsearch for inbox/search views
+  # ===========================================================================
+  inbox:
+    image: registry.preview.egov.theflywheel.in/egovio/inbox:state-tenant-fix
+    profiles: ["search"]
+    container_name: digit-inbox
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      egov-mdms-service:
+        condition: service_healthy
+      egov-workflow-v2:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    volumes:
+      - ./otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SERVER_PORT: 8080
+      SERVICES_ESINDEXER_HOST: http://elasticsearch:9200/
+      # No ES auth needed (xpack.security.enabled=false)
+      SERVICES_ESINDEXER_USERNAME: ""
+      SERVICES_ESINDEXER_PASSWORD: ""
+      WORKFLOW_HOST: http://egov-workflow-proxy:8109/
+      EGOV_MDMS_HOST: http://egov-mdms-service:8094/
+      EGOV_USER_HOST: http://egov-user-proxy:8107/
+      STATE_LEVEL_TENANT_ID: mz
+      PARENT_LEVEL_TENANT_ID: mz
+      WORKFLOW_PROCESS_SEARCH_PATH: egov-workflow-v2/egov-wf/process/_search
+      WORKFLOW_BUSINESSSERVICE_SEARCH_PATH: egov-workflow-v2/egov-wf/businessservice/_search
+      WORKFLOW_PROCESS_COUNT_PATH: egov-workflow-v2/egov-wf/process/_count
+      WORKFLOW_PROCESS_STATUSCOUNT_PATH: egov-workflow-v2/egov-wf/process/_statuscount
+      EGOV_MDMS_SEARCH_ENDPOINT: mdms-v2/v1/_search
+      SECURITY_BASIC_ENABLED: 'false'
+      MANAGEMENT_SECURITY_ENABLED: 'false'
+      # Accept unknown fields in userInfo (locale, active, permanentCity etc.)
+      SPRING_JACKSON_DESERIALIZATION_FAIL_ON_UNKNOWN_PROPERTIES: 'false'
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: inbox
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: none
+      JAVA_OPTS: -Xms256m -Xmx256m
+      JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
+    ports:
+    - 18097:8080
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/inbox/actuator/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    networks:
+    - egov-network
+
+  egov-enc-service:
+    image: registry.preview.egov.theflywheel.in/egovio/egov-enc-service:v2.9.2-4a60f20
+    container_name: egov-enc-service
+    depends_on:
+      egov-mdms-service:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    volumes:
+      - ./otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
+    environment:
+      # heap-tuned via JAVA_OPTS by patch-jvm-heaps.py for egov-enc-service
+      JAVA_OPTS: "-Xms128m -Xmx384m"
+      SPRING_DATASOURCE_URL: jdbc:otel:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
+      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_FLYWAY_USER: egov
+      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
+      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
+      SPRING_FLYWAY_ENABLED: 'true'
+      SPRING_FLYWAY_TABLE: enc_schema_version
+      SERVER_PORT: 1234
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: egov-enc-service
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: none
+      MASTER_PASSWORD: ${ELASTICSEARCH_MASTER_PASSWORD:-asd@#$@$!132123}
+      MASTER_SALT: qweasdzx
+      MASTER_INITIALVECTOR: qweasdzxqwea
+      MASTER_PASSWORD_PROVIDER: software
+      EGOV_MDMS_HOST: http://egov-mdms-service:8094
+      EGOV_MDMS_SEARCH_ENDPOINT: /mdms-v2/v1/_search
+      EGOV_STATE_LEVEL_TENANT_ID: pg
+      STATE_LEVEL_TENANT_ID: pg.citya
+      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
+    ports:
+    - 11234:1234
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:1234/egov-enc-service/actuator/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+    - egov-network
+
+  # MDMS Backend (actual service)
+  mdms-backend:
+    image: registry.preview.egov.theflywheel.in/egovio/mdms-v2:v2.9.2-4a60f20
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    volumes:
+      - ./otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
+    environment:
+      # heap-tuned via JAVA_OPTS by patch-jvm-heaps.py for mdms-backend
+      JAVA_OPTS: "-Xms256m -Xmx768m"
+      SPRING_DATASOURCE_URL: jdbc:otel:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "20"
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "5"
+      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_FLYWAY_USER: egov
+      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
+      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
+      SPRING_FLYWAY_ENABLED: 'true'
+      SPRING_FLYWAY_TABLE: mdms_schema_version
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SERVER_PORT: 8094
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: mdms-backend
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: none
+      JAVA_TOOL_OPTIONS: -Xms512m -Xmx1024m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
+    healthcheck:
+      # Check Spring Boot health - Flyway runs before app context starts, so health implies migrations done
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8094/mdms-v2/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 45s
+    networks:
+    - egov-network
+
+  # MDMS Proxy - handles path rewriting for backward compatibility
+  # Rewrites /egov-mdms-service/* to /mdms-v2/* for older services
+  egov-mdms-service:
+    image: registry.preview.egov.theflywheel.in/nginx:alpine
+    container_name: egov-mdms-service
+    depends_on:
+      mdms-backend:
+        condition: service_healthy
+    volumes:
+      - ./nginx/mdms-proxy.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+    - 18094:8094
+    healthcheck:
+      # Simplified: just verify API responds (don't require tenant data)
+      test: ["CMD-SHELL", "curl -sf -X POST 'http://localhost:8094/mdms-v2/v1/_search' -H 'Content-Type: application/json' -d '{\"RequestInfo\":{\"apiId\":\"health\"},\"MdmsCriteria\":{\"tenantId\":\"pg\",\"moduleDetails\":[{\"moduleName\":\"tenant\",\"masterDetails\":[{\"name\":\"tenants\"}]}]}}'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+    - egov-network
+
+  egov-idgen:
+    image: registry.preview.egov.theflywheel.in/egovio/egov-idgen:v2.9.2-4a60f20
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      egov-mdms-service:
+        condition: service_healthy
+      db-migrations:
+        condition: service_completed_successfully
+      otel-collector:
+        condition: service_started
+    volumes:
+      - ./otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
+    environment:
+      # heap-tuned via JAVA_OPTS by patch-jvm-heaps.py for egov-idgen
+      JAVA_OPTS: "-Xms128m -Xmx384m"
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "10"
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
+      # Flyway disabled - migrations run by db-migrations container
+      SPRING_FLYWAY_ENABLED: 'false'
+      EGOV_MDMS_HOST: http://egov-mdms-service:8094/
+      MDMS_HOST: http://egov-mdms-service:8094/
+      EGOV_MDMS_SEARCH_ENDPOINT: mdms-v2/v1/_search
+      MDMS_SERVICE_HOST: http://egov-mdms-service:8094/
+      MDMS_SERVICE_SEARCH_URI: mdms-v2/v1/_search
+      AUTOCREATE_NEW_SEQ: 'true'
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SERVER_PORT: 8088
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: egov-idgen
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: none
+      MANAGEMENT_HEALTH_DB_ENABLED: 'false'
+      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8088/egov-idgen/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    networks:
+    - egov-network
+
+  # Unified database migrations for all DIGIT services
+  # Runs all Flyway migrations in one container before services start
+  db-migrations:
+    image: registry.preview.egov.theflywheel.in/tilt-demo-db-migrations:latest
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/egov
+      FLYWAY_USER: egov
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+    networks:
+      - egov-network
+    restart: "no"
+
+  egov-user:
+    image: registry.preview.egov.theflywheel.in/egovio/egov-user:updatenovalidate-fix
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      egov-enc-service:
+        condition: service_healthy
+      db-migrations:
+        condition: service_completed_successfully
+      otel-collector:
+        condition: service_started
+    volumes:
+      - ./otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "10"
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
+      # Flyway disabled - migrations run by db-migrations container
+      FLYWAY_ENABLED: 'false'
+      # Kafka config - use property name expected by egov-user
+      KAFKA_CONFIG_BOOTSTRAP_SERVER_CONFIG: redpanda:9092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SERVER_PORT: 8107
+      EGOV_MDMS_HOST: http://egov-mdms-service:8094
+      EGOV_MDMS_SEARCH_ENDPOINT: /mdms-v2/v1/_search
+      MDMS_HOST: http://egov-mdms-service:8094
+      MDMS_V2_HOST: http://egov-mdms-service:8094
+      EGOV_MDMS_V2_HOST: http://egov-mdms-service:8094
+      MDMS_SEARCH_ENDPOINT: /mdms-v2/v1/_search
+      EGOV_OTP_HOST: http://kong:8000
+      EGOV_USER_HOST: http://localhost:8107
+      EGOV_ENC_HOST: http://egov-enc-service:1234
+      EGOV_IDGEN_HOST: http://egov-idgen:8088
+      EGOV_ACCESSCONTROL_HOST: http://egov-accesscontrol:8090
+      EGOV_STATE_LEVEL_TENANT_ID: pg
+      STATE_LEVEL_TENANT_ID: pg
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: egov-user
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: none
+      JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
+      CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: 'true'
+      CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE: '123456'
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8107/user/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    networks:
+    - egov-network
+
+  # Nginx reverse proxy for egov-user — distributes requests across
+  # scaled instances via Docker DNS round-robin.
+  egov-user-proxy:
+    image: registry.preview.egov.theflywheel.in/nginx:alpine
+    container_name: egov-user-proxy
+    depends_on:
+      egov-user:
+        condition: service_healthy
+    volumes:
+      - ./nginx/user-proxy.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8107/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+    - egov-network
+
+  egov-workflow-v2:
+    image: registry.preview.egov.theflywheel.in/egovio/egov-workflow-v2:jdk21-cds
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      egov-idgen:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    volumes:
+      - ./otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
+    environment:
+      # heap-tuned via JAVA_OPTS by patch-jvm-heaps.py for egov-workflow-v2
+      JAVA_OPTS: "-Xms256m -Xmx768m"
+      SPRING_DATASOURCE_URL: jdbc:otel:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "10"
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
+      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_FLYWAY_USER: egov
+      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
+      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
+      SPRING_FLYWAY_ENABLED: 'true'
+      SPRING_FLYWAY_TABLE: workflow_schema_version
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SERVER_PORT: 8109
+      EGOV_MDMS_HOST: http://egov-mdms-service:8094/
+      EGOV_MDMS_SEARCH_ENDPOINT: mdms-v2/v1/_search
+      EGOV_USER_HOST: http://egov-user-proxy:8107/
+      STATE_LEVEL_TENANT_ID: pg.citya
+      EGOV_STATE_LEVEL_TENANT_ID: pg
+      # Disable schema-per-tenant mode - use public schema for all tenants
+      IS_ENVIRONMENT_CENTRAL_INSTANCE: 'false'
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: egov-workflow-v2
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: none
+      SPRING_THREADS_VIRTUAL_ENABLED: 'true'
+      # Raise default search limit from 10 to 200 — PGR's internal workflow call
+      # doesn't pass a limit, causing WORKFLOW_NOT_FOUND with >10 complaints.
+      # Property names from egov-wf-v2.jar application.properties:
+      #   egov.wf.default.limit=10  →  EGOV_WF_DEFAULT_LIMIT
+      #   egov.wf.max.limit=100     →  EGOV_WF_MAX_LIMIT
+      EGOV_WF_DEFAULT_LIMIT: '200'
+      EGOV_WF_MAX_LIMIT: '200'
+      JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8109/egov-workflow-v2/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    networks:
+    - egov-network
+
+  # Nginx reverse proxy for egov-workflow-v2 — distributes requests across
+  # scaled instances via Docker DNS round-robin. Without this, Java HTTP
+  # keep-alive connections cause all traffic to stick to one instance.
+  egov-workflow-proxy:
+    image: registry.preview.egov.theflywheel.in/nginx:alpine
+    container_name: egov-workflow-proxy
+    depends_on:
+      egov-workflow-v2:
+        condition: service_healthy
+    volumes:
+      - ./nginx/workflow-proxy.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8109/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+    - egov-network
+
+  egov-localization:
+    image: registry.preview.egov.theflywheel.in/egovio/egov-localization:jdk21-cds
+    container_name: egov-localization
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      egov-mdms-service:
+        condition: service_healthy
+      db-migrations:
+        condition: service_completed_successfully
+      otel-collector:
+        condition: service_started
+    volumes:
+      - ./otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:otel:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
+      # Flyway disabled - migrations run by db-migrations container
+      SPRING_FLYWAY_ENABLED: 'false'
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SERVER_PORT: 8096
+      # OTEL export disabled — image has OTEL on classpath, but no agent attached
+      # This avoids the ~200MB heap overhead from the javaagent while keeping OTEL JDBC driver happy
+      OTEL_TRACES_EXPORTER: none
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: none
+      SPRING_THREADS_VIRTUAL_ENABLED: 'true'
+      JAVA_OPTS: -Xms128m -Xmx512m
+    ports:
+    - 18096:8096
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8096/localization/actuator/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    networks:
+    - egov-network
+
+  boundary-service:
+    image: registry.preview.egov.theflywheel.in/egovio/boundary-service:v2.9.2-dual-mode
+    container_name: boundary-service
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      egov-mdms-service:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    volumes:
+      - ./otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
+    environment:
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
+      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_FLYWAY_USER: egov
+      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
+      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
+      SPRING_FLYWAY_ENABLED: 'true'
+      SPRING_FLYWAY_TABLE: boundary_schema_version
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SERVER_PORT: 8081
+      SERVER_SERVLET_CONTEXT_PATH: /boundary-service
+      EGOV_MDMS_HOST: http://egov-mdms-service:8094
+      EGOV_MDMS_SEARCH_ENDPOINT: /mdms-v2/v1/_search
+      EGOV_USER_HOST: http://egov-user-proxy:8107
+      EGOV_IDGEN_HOST: http://egov-idgen:8088
+      EGOV_LOCALIZATION_HOST: http://egov-localization:8096
+      STATE_LEVEL_TENANT_ID: pg
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: boundary-service
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: none
+      OTEL_INSTRUMENTATION_JDBC_ENABLED: 'false'
+      MANAGEMENT_HEALTH_DB_ENABLED: 'false'
+      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
+    ports:
+    - 18081:8081
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/boundary-service/actuator/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    networks:
+    - egov-network
+
+  egov-accesscontrol:
+    image: registry.preview.egov.theflywheel.in/egovio/egov-accesscontrol:v2.9.2-4a60f20
+    container_name: egov-accesscontrol
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      egov-mdms-service:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    volumes:
+      - ./otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
+    environment:
+      # heap-tuned via JAVA_OPTS by patch-jvm-heaps.py for egov-accesscontrol
+      JAVA_OPTS: "-Xms128m -Xmx384m"
+      SPRING_DATASOURCE_URL: jdbc:otel:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
+      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_FLYWAY_USER: egov
+      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
+      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
+      SPRING_FLYWAY_ENABLED: 'true'
+      SPRING_FLYWAY_TABLE: accesscontrol_schema_version
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SERVER_PORT: 8090
+      EGOV_MDMS_HOST: http://egov-mdms-service:8094/
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: egov-accesscontrol
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: none
+      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
+    ports:
+    - 18090:8090
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8090/access/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    networks:
+    - egov-network
+
+  # Default Data Handler - seeds schemas and master data for new tenants
+  default-data-handler:
+    image: registry.preview.egov.theflywheel.in/egovio/default-data-handler:crs_dataseeder-084b7cc
+    container_name: default-data-handler
+    depends_on:
+      mdms-backend:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      KAFKA_CONFIG_BOOTSTRAP_SERVER_CONFIG: redpanda:9092
+      EGOV_MDMS_HOST: http://mdms-backend:8094/
+      EGOV_LOCALIZATION_HOST: http://egov-localization:8096/
+      EGOV_USER_HOST: http://egov-user-proxy:8107/
+      EGOV_HRMS_HOST: http://egov-hrms:8092/
+      EGOV_WORKFLOW_HOST: http://egov-workflow-proxy:8109/
+      EGOV_BOUNDARY_HOST: http://boundary-service:8081/
+      STATE_LEVEL_TENANT_ID: pg
+      JAVA_OPTS: -Xms128m -Xmx256m
+    networks:
+      - egov-network
+
+  egov-persister:
+    image: registry.preview.egov.theflywheel.in/egovio/egov-persister:v2.9.2-4a60f20
+    container_name: egov-persister
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      egov-mdms-service:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    environment:
+      # heap-tuned via JAVA_OPTS by patch-jvm-heaps.py for egov-persister
+      JAVA_OPTS: "-Xms256m -Xmx512m"
+      SPRING_DATASOURCE_URL: jdbc:otel:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "20"
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "5"
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SERVER_PORT: 8091
+      EGOV_PERSIST_YML_REPO_PATH: /persister-config/
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: egov-persister
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: none
+      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
+      # Kafka consumer concurrency — process more messages in parallel
+      SPRING_KAFKA_LISTENER_CONCURRENCY: '3'
+    volumes:
+    - ./configs/egov-persister:/persister-config:ro
+    - ./otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
+    ports:
+    - 18091:8091
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8091/common-persist/actuator/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    networks:
+    - egov-network
+
+  # ===========================================================================
+  # Filestore Service - File upload/download
+  # ===========================================================================
+  egov-filestore:
+    image: registry.preview.egov.theflywheel.in/egovio/egov-filestore:v2.9.2-4a60f20
+    container_name: egov-filestore
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      egov-mdms-service:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    volumes:
+      - ./otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
+    environment:
+      # heap-tuned via JAVA_OPTS by patch-jvm-heaps.py for egov-filestore
+      JAVA_OPTS: "-Xms256m -Xmx1024m"
+      SPRING_DATASOURCE_URL: jdbc:otel:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
+      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_FLYWAY_USER: egov
+      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
+      SPRING_FLYWAY_ENABLED: 'true'
+      SPRING_FLYWAY_TABLE: filestore_schema_version
+      SERVER_PORT: 8083
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: egov-filestore
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: none
+      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
+      # MinIO/S3 storage (local S3-compatible storage for dev)
+      ISS3ENABLED: 'true'
+      MINIO_URL: http://minio:9000
+      AWS_KEY: ${AWS_KEY:-${MINIO_ROOT_USER:-minioadmin}}
+      AWS_SECRETKEY: ${AWS_SECRETKEY:-${MINIO_ROOT_PASSWORD:-minioadmin}}
+      IS_BUCKET_FIXED: 'true'
+      FIXED_BUCKETNAME: egov-rainmaker
+      # From CCRS env.yaml - complete MIME type mapping
+      ALLOWED_FORMATS_MAP: "{jpg:{'image/jpg','image/jpeg'},jpeg:{'image/jpeg','image/jpg'},png:{'image/png'},pdf:{'application/pdf'},odt:{'application/vnd.oasis.opendocument.text'},ods:{'application/vnd.oasis.opendocument.spreadsheet'},docx:{'application/x-tika-msoffice','application/x-tika-ooxml','application/vnd.oasis.opendocument.text','application/msword'},doc:{'application/x-tika-msoffice','application/x-tika-ooxml','application/vnd.oasis.opendocument.text','application/msword'},dxf:{'text/plain','application/dxf','application/octet-stream','image/vnd.dxf','image/vnd.dxf; format=ascii','image/vnd.dxf; format=binary','image/vnd.dxb'},csv:{'text/plain'},txt:{'text/plain'},xlsx:{'application/x-tika-ooxml','application/x-tika-msoffice','application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/zip'},xls:{'application/x-tika-ooxml','application/x-tika-msoffice','application/vnd.ms-excel','multipart/form-data'},zip:{'application/zip','application/octet-stream'},geojson:{'application/json','text/plain','application/geo+json','multipart/form-data'},json:{'application/json','text/plain'}}"
+      EGOV_MDMS_HOST: http://egov-mdms-service:8094
+    ports:
+      - 18084:8083
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8083/filestore/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+    networks:
+      - egov-network
+
+  # ===========================================================================
+  # HRMS Prerequisites Gate - Verifies system user is queryable before HRMS starts
+  # ===========================================================================
+  hrms-prereq-gate:
+    image: registry.preview.egov.theflywheel.in/curlimages/curl:latest
+    container_name: hrms-prereq-gate
+    depends_on:
+      egov-user:
+        condition: service_healthy
+      user-seed:
+        condition: service_completed_successfully
+    command:
+      - sh
+      - -c
+      - |
+        echo 'Waiting for INTERNAL_MICROSERVICE_ROLE user to be queryable via egov-user API...'
+        echo 'HRMS searches for users by roleCodes=INTERNAL_MICROSERVICE_ROLE on startup'
+        i=1
+        while [ $$i -le 30 ]; do
+          RESPONSE=$$(curl -sf http://egov-user:8107/user/v1/_search \
+            -H "Content-Type: application/json" \
+            -d '{"RequestInfo":{"apiId":"check"},"tenantId":"pg","roleCodes":["INTERNAL_MICROSERVICE_ROLE"]}')
+          if echo "$$RESPONSE" | grep -q '"INTERNAL_MICROSERVICE_ROLE"'; then
+            echo "INTERNAL_MICROSERVICE_ROLE user found on attempt $$i! HRMS can start."
+            exit 0
+          fi
+          echo "Attempt $$i: INTERNAL_MICROSERVICE_ROLE user not yet queryable, waiting 3s..."
+          sleep 3
+          i=$$((i + 1))
+        done
+        echo "ERROR: INTERNAL_MICROSERVICE_ROLE user not found after 30 attempts!"
+        exit 1
+    networks:
+      - egov-network
+    restart: "no"
+
+  # ===========================================================================
+  # HRMS Service - Employee management
+  # ===========================================================================
+  egov-hrms:
+    # digit-common-boundary: fixes CCRS#482 (custom password on employee
+    # create) + CCRS#484 (null tenantId on User object breaking MDMS
+    # mobile validation). EGOV_HRMS_DEV_MODE=true must be set so
+    # enrichUser() respects the password supplied in the request instead
+    # of overwriting with the default/auto-generated one.
+    image: registry.preview.egov.theflywheel.in/egovio/egov-hrms:digit-common-boundary-uuidlink
+    container_name: egov-hrms
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      egov-mdms-service:
+        condition: service_healthy
+      egov-idgen:
+        condition: service_healthy
+      egov-user:
+        condition: service_healthy
+      hrms-prereq-gate:
+        condition: service_completed_successfully
+      otel-collector:
+        condition: service_started
+    volumes:
+      - ./otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
+      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_FLYWAY_USER: egov
+      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
+      SPRING_FLYWAY_ENABLED: 'true'
+      SPRING_FLYWAY_TABLE: hrms_schema_version
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_KAFKA_CONSUMER_GROUP_ID: employee-group1
+      SERVER_PORT: 8092
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: egov-hrms
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: none
+      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
+      EGOV_MDMS_HOST: http://egov-mdms-service:8094
+      # Trailing slash required — HRMS concatenates host+path without separator
+      EGOV_IDGEN_HOST: http://egov-idgen:8088/
+      EGOV_USER_HOST: http://egov-user-proxy:8107
+      EGOV_FILESTORE_HOST: http://egov-filestore:8083
+      EGOV_LOCALIZATION_HOST: http://egov-localization:8096
+      EGOV_BOUNDARY_HOST: http://boundary-service:8081
+      STATE_LEVEL_TENANT_ID: pg
+      EGOV_STATELEVEL_TENANT: pg
+      HRMS_SYSTEM_USERNAME: INTERNAL_USER
+      EGOV_HRMS_DEFAULT_PASSWORD: ${EGOV_HRMS_DEFAULT_PASSWORD:-eGov@123}
+      # Enables enrichUser() to honor passwords supplied in the create
+      # request rather than overwriting with the default/auto-generated
+      # one. Required by the CCRS#482 fix in :digit-common-boundary.
+      EGOV_HRMS_DEV_MODE: 'true'
+    ports:
+      - 18092:8092
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8092/egov-hrms/actuator/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 150s
+    networks:
+      - egov-network
+
+  # ===========================================================================
+  # Boundary Management Service - Boundary generation from Excel
+  # ===========================================================================
+  egov-bndry-mgmnt:
+    image: registry.preview.egov.theflywheel.in/egovio/egov-bndry-mgmnt:bndry-mgmnt-3794b8c
+    container_name: egov-bndry-mgmnt
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      egov-mdms-service:
+        condition: service_healthy
+      egov-filestore:
+        condition: service_healthy
+      boundary-service:
+        condition: service_healthy
+    environment:
+      # Node.js service
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: egov
+      DB_USER: egov
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      # Try multiple Kafka env var names
+      KAFKA_BROKER_HOST: redpanda:9092
+      KAFKA_BROKERS: redpanda:9092
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      BOOTSTRAP_SERVERS: redpanda:9092
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      EGOV_MDMS_HOST: http://egov-mdms-service:8094/
+      EGOV_MDMS_V2_HOST: http://egov-mdms-service:8094/
+      EGOV_BOUNDARY_HOST: http://boundary-service:8081/
+      EGOV_FILESTORE_HOST: http://egov-filestore:8083/
+      EGOV_FILESTORE_SERVICE_HOST: http://egov-filestore:8083/
+      EGOV_LOCALIZATION_HOST: http://egov-localization:8096/
+      STATE_LEVEL_TENANT_ID: pg
+      KAFKAJS_NO_PARTITIONER_WARNING: 1
+    ports:
+      - 18086:8080
+    healthcheck:
+      # Service doesn't have a /health endpoint - use TCP check
+      test: ["CMD-SHELL", "node -e \"require('net').connect(8080, 'localhost').on('connect', () => process.exit(0)).on('error', () => process.exit(1))\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - egov-network
+
+  # RE-ENABLED: Required for services to start (schema definitions)
+  user-seed:
+    image: registry.preview.egov.theflywheel.in/curlimages/curl:latest
+    container_name: user-seed-container
+    depends_on:
+      egov-user:
+        condition: service_healthy
+      egov-enc-service:
+        condition: service_healthy
+    volumes:
+      - ./seeds/user-seed.sh:/user-seed.sh:ro
+    entrypoint: ["sh", "/user-seed.sh"]
+    environment:
+      EGOV_USER_HOST: http://egov-user-proxy:8107
+    networks:
+      - egov-network
+    restart: "no"
+
+  # ===========================================================================
+  # PGR Services (Public Grievance Redressal)
+  # ===========================================================================
+  pgr-services:
+    image: registry.preview.egov.theflywheel.in/pgr-services-dev:latest
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      egov-mdms-service:
+        condition: service_healthy
+      egov-idgen:
+        condition: service_healthy
+      egov-user:
+        condition: service_healthy
+      egov-workflow-v2:
+        condition: service_healthy
+      egov-localization:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    volumes:
+      - ./otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "10"
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
+      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_FLYWAY_USER: egov
+      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_FLYWAY_ENABLED: 'true'
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
+      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
+      SPRING_FLYWAY_TABLE: pgr_services_schema
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_KAFKA_CONSUMER_GROUP_ID: egov-pgr-services
+      SERVER_PORT: 8080
+      EGOV_IDGEN_HOST: http://egov-idgen:8088/
+      EGOV_WORKFLOW_HOST: http://egov-workflow-proxy:8109/
+      EGOV_MDMS_HOST: http://egov-mdms-service:8094/
+      EGOV_LOCALIZATION_HOST: http://egov-localization:8096/
+      EGOV_USER_HOST: http://egov-user-proxy:8107/
+      EGOV_LOCATION_HOST: http://boundary-service:8081/
+      EGOV_HRMS_HOST: http://egov-hrms:8092/
+      EGOV_URL_SHORTNER_HOST: http://egov-url-shortening:8080/
+      EGOV_UI_APP_HOST: http://localhost:18080
+      NOTIFICATION_SMS_ENABLED: 'false'
+      NOTIFICATION_EMAIL_ENABLED: 'false'
+      NEW_COMPLAINT_ENABLED: 'true'
+      REASSIGN_COMPLAINT_ENABLED: 'true'
+      REOPEN_COMPLAINT_ENABLED: 'true'
+      COMMENT_BY_EMPLOYEE_NOTIF_ENABLED: 'false'
+      NOTIFICATION_ALLOWED_ON_STATUS: 'open,assigned,rejected,resolved'
+      EGOV_USR_EVENTS_NOTIFICATION_ENABLED: 'true'
+      EGOV_USR_EVENTS_CREATE_TOPIC: persist-user-events-async
+      PGR_STATELEVEL_TENANTID: pg
+      STATE_LEVEL_TENANT_ID: pg
+      EGOV_STATE_LEVEL_TENANT_ID: pg
+      JAVA_OPTS: '-Xmx384m -Xms384m'
+      JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: pgr-services
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: none
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/pgr-services/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    networks:
+      - egov-network
+
+  # ===========================================================================
+  # URL Shortening Service (required by PGR for notification links)
+  # ===========================================================================
+  egov-url-shortening:
+    image: registry.preview.egov.theflywheel.in/egovio/egov-url-shortening:v2.9.2-4a60f20
+    container_name: egov-url-shortening
+    restart: unless-stopped
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: '8080'
+      SERVER_CONTEXTPATH: /egov-url-shortening
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_FLYWAY_URL: jdbc:postgresql://postgres-db:5432/egov
+      SPRING_FLYWAY_USER: egov
+      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      JAVA_OPTS: '-Xmx96m -Xms96m'
+    networks:
+      - egov-network
+
+  # ===========================================================================
+  # DIGIT UI (React Frontend)
+  # Image built by Tilt from CCRS repo, or manually with:
+  # docker build -t digit-ui-dev -f ../Citizen-Complaint-Resolution-System/frontend/micro-ui/web/docker/Dockerfile ../Citizen-Complaint-Resolution-System/frontend/micro-ui
+  # ===========================================================================
+  digit-ui:
+    image: registry.preview.egov.theflywheel.in/digit-ui:pgr-fixes
+    container_name: digit-ui
+    ports:
+      - "18080:80"
+    volumes:
+      # Custom nginx config with sub_filter to inject globalConfigs.js at runtime
+      - ./nginx/digit-ui.conf:/etc/nginx/conf.d/default.conf:ro
+      # globalConfigs.js + silent-check-sso.html are served by digit-ui.conf from
+      # this DIRECTORY mount (not single-file mounts): OrbStack doesn't reliably
+      # materialize a single file nested in the tar'd build dir, and an atomic
+      # re-render changes globalConfigs.js's inode (breaking a pinned file mount).
+      # A directory mount is OrbStack-safe and reflects re-renders live.
+      - ./nginx:/host-nginx:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/digit-ui/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - egov-network
+
+  # ===========================================================================
+  # Kong API Gateway (DB-less mode)
+  # Main entry point: http://localhost:18000/digit-ui/
+  # ===========================================================================
+  kong:
+    image: registry.preview.egov.theflywheel.in/kong:3.6
+    container_name: kong-gateway
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/kong.yml
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+      KONG_ADMIN_GUI_URL: http://localhost:8002
+      KONG_STATUS_LISTEN: 0.0.0.0:8100
+      KONG_MEM_CACHE_SIZE: 64m
+      KONG_NGINX_WORKER_PROCESSES: auto
+      KONG_TRACING_INSTRUMENTATIONS: all
+      KONG_TRACING_SAMPLING_RATE: "1.0"
+      KONG_UNTRUSTED_LUA_SANDBOX_REQUIRES: "cjson, resty.http"
+      KONG_NGINX_PROXY_CLIENT_BODY_BUFFER_SIZE: "10m"
+    volumes:
+      - ./kong/kong.yml:/kong/kong.yml:ro
+    ports:
+      - "18000:8000"   # Proxy (HTTP)
+      - "18443:8443"   # Proxy (HTTPS)
+      - "18001:8001"   # Admin API
+      - "18002:8002"   # Kong Manager GUI
+      - "18100:8100"   # Status endpoint
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      egov-mdms-service:
+        condition: service_healthy
+      egov-user:
+        condition: service_healthy
+    networks:
+      - egov-network
+
+  # ==================== Gatus Health Monitoring ====================
+  gatus:
+    image: registry.preview.egov.theflywheel.in/twinproduction/gatus:latest
+    container_name: digit-gatus
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      egov-mdms-service:
+        condition: service_healthy
+    volumes:
+      - ./gatus/config.yaml:/config/config.yaml:ro
+    ports:
+      - "18889:8080"
+    environment:
+      GATUS_CONFIG_PATH: /config/config.yaml
+    networks:
+      - egov-network
+
+  # ==================== Loki Log Aggregation ====================
+  loki:
+    image: grafana/loki:3.4.2
+    container_name: digit-loki
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/config.yaml"]
+    volumes:
+      - ./otel/loki-config.yaml:/etc/loki/config.yaml:ro
+      - loki_data:/loki
+    ports:
+      - "13100:3100"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3100/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - egov-network
+
+  # Promtail tails every Docker container's stdout/stderr (the JSON-log files
+  # under /var/lib/docker/containers) and ships them to Loki. This is what
+  # makes raw container logs (nginx fronts, Node.js services, MinIO, Kafka,
+  # Postgres, etc.) queryable in Loki — OTLP-emitted Java logs are richer but
+  # only cover the Java services. With Promtail, every container is in Loki.
+  promtail:
+    image: grafana/promtail:3.4.2
+    container_name: digit-promtail
+    restart: unless-stopped
+    command: ["-config.file=/etc/promtail/config.yaml"]
+    volumes:
+      - ./otel/promtail-config.yaml:/etc/promtail/config.yaml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - promtail_data:/tmp
+    depends_on:
+      loki:
+        condition: service_healthy
+    networks:
+      - egov-network
+
+  # ==================== DIGIT MCP Server ====================
+  # The MCP image is built off CCRS and lives in a private VPC registry
+  # (10.0.0.4:5000). Hosts outside the Hetzner egov VPC can't pull it.
+  # Both services are tagged `mcp` so they only start when the operator
+  # explicitly opts in (`COMPOSE_PROFILES=mcp docker compose up`). On a
+  # fresh public-internet box, the default deploy skips them entirely —
+  # nothing tries to pull an image it can't reach.
+  mcp-postgres:
+    image: postgres:16-alpine
+    container_name: digit-mcp-postgres
+    restart: unless-stopped
+    profiles: ["mcp"]
+    environment:
+      POSTGRES_DB: mcp_sessions
+      POSTGRES_USER: mcp
+      POSTGRES_PASSWORD: ${MCP_DB_PASSWORD:-mcp123}
+    volumes:
+      - mcp_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mcp -d mcp_sessions"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - egov-network
+
+  digit-mcp:
+    profiles: ["mcp"]
+    # MCP image source resolved at deploy time. The Ansible playbook
+    # writes MCP_IMAGE={{ docker_registry }}/digit-mcp:latest into the
+    # .env it generates per tenant (so compose picks it up here).
+    # When running compose directly without the playbook, export
+    # MCP_IMAGE yourself — there's no built-in fallback because the
+    # right registry depends on the operator's network.
+    image: ${MCP_IMAGE}
+    container_name: digit-mcp
+    restart: unless-stopped
+    depends_on:
+      mcp-postgres:
+        condition: service_healthy
+      kong:
+        condition: service_healthy
+    environment:
+      MCP_TRANSPORT: http
+      MCP_PORT: "3000"
+      # `self-hosted` is the generic env entry — actual URL comes from
+      # CRS_API_URL (kong service in this compose). CRS_ENV_NAME is what
+      # /v1/version and get_environment_info display; keep it tenant-
+      # specific so operators don't see "Chakshu Dev" on their own box.
+      CRS_ENVIRONMENT: self-hosted
+      CRS_ENV_NAME: ${MCP_ENV_NAME:-Self-hosted DIGIT}
+      CRS_API_URL: http://kong:8000
+      CRS_USERNAME: ${MCP_USERNAME:-ADMIN}
+      CRS_PASSWORD: ${MCP_PASSWORD:-eGov@123}
+      CRS_TENANT_ID: ${MCP_TENANT_ID:-pg}
+      SESSION_DB_HOST: mcp-postgres
+      SESSION_DB_PORT: "5432"
+      SESSION_DB_NAME: mcp_sessions
+      SESSION_DB_USER: mcp
+      SESSION_DB_PASSWORD: ${MCP_DB_PASSWORD:-mcp123}
+    ports:
+      - "13101:3000"
+    healthcheck:
+      # 127.0.0.1, not localhost: Alpine's wget resolves localhost to ::1
+      # (IPv6) per /etc/hosts order; the MCP server binds IPv4-only, so
+      # the probe gets "Connection refused" and the container is marked
+      # unhealthy even though it's serving fine on :3000.
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - egov-network
+
+  # ==================== Jupyter Lab for PGR Configuration ====================
+  jupyter:
+    image: registry.preview.egov.theflywheel.in/tilt-demo-jupyter:latest
+    container_name: digit-jupyter
+    user: root
+    depends_on:
+      egov-mdms-service:
+        condition: service_healthy
+      egov-user:
+        condition: service_healthy
+      kong:
+        condition: service_healthy
+    environment:
+      DIGIT_URL: http://kong:8000
+      DIGIT_DIRECT_MDMS: http://egov-mdms-service:8094
+      DIGIT_DIRECT_USER: http://egov-user:8107
+      DIGIT_DIRECT_PGR: http://pgr-services:8080
+      DIGIT_TENANT: pg
+      JUPYTER_ENABLE_LAB: "yes"
+    command: >
+      jupyter lab
+      --ip=0.0.0.0
+      --port=8888
+      --no-browser
+      --allow-root
+      --ServerApp.token=''
+      --ServerApp.password=''
+      --ServerApp.base_url=/jupyter
+      --ServerApp.allow_origin='*'
+    ports:
+      - "18888:8888"
+    volumes:
+      - ./jupyter/dataloader/templates:/home/jovyan/work/templates
+      - ./jupyter/dataloader:/home/jovyan/work/dataloader
+      - ./jupyter/DataLoader_v2.ipynb:/home/jovyan/work/DataLoader_v2.ipynb
+    networks:
+      - egov-network
+
+  # ==================== OpenBao (secrets backend) ====================
+  # Per-tenant secrets store. File-backed KV v2; the playbook handles
+  # init + auto-unseal on first deploy and stores the unseal keys at
+  # /opt/digit/.openbao/init.json (0600). Subsequent restarts unseal
+  # automatically using those keys.
+  #
+  # CAVEAT: with the unseal keys on the same host, this protects against
+  # plaintext secrets in git + adds an audit trail, but does NOT protect
+  # data-at-rest if the box itself is compromised. A real production model
+  # uses cloud-KMS auto-unseal or operator-held Shamir shares; that's a
+  # follow-up once we have a KMS to point at.
+  #
+  # Access:
+  #   ssh -L 18200:127.0.0.1:18200 egov-{nairobi,bomet}
+  #   open http://localhost:18200/ui     (UI)
+  #   bao login <root-token-from-init.json>
+  openbao:
+    image: openbao/openbao:latest
+    container_name: openbao
+    restart: unless-stopped
+    cap_add:
+      - IPC_LOCK
+    environment:
+      BAO_ADDR: http://127.0.0.1:8200
+      BAO_API_ADDR: http://openbao:8200
+      BAO_LOCAL_CONFIG: |
+        {
+          "storage": { "file": { "path": "/openbao/file" } },
+          "listener": [{ "tcp": { "address": "0.0.0.0:8200", "tls_disable": true } }],
+          "default_lease_ttl": "168h",
+          "max_lease_ttl": "720h",
+          "ui": true
+        }
+    command: ["server"]
+    volumes:
+      - openbao_data:/openbao/file
+    ports:
+      - "127.0.0.1:18200:8200"
+    networks:
+      - egov-network
+    healthcheck:
+      # 200 = unsealed+active, 429 = unsealed+standby, 472 = data-recovery
+      # 473 = perf-standby, 501 = uninitialized, 503 = sealed.
+      # Treat sealed/uninitialized as healthy (the playbook will init/unseal).
+      test: ["CMD", "wget", "-qO-", "--header=X-Vault-Request: true",
+             "http://127.0.0.1:8200/v1/sys/health?standbyok=true&sealedcode=200&uninitcode=200"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+
+  # ==================== Novu (self-hosted) ============================
+  # Five-container Novu community deployment: api + worker + ws +
+  # dashboard + dedicated mongo. Reuses the existing `redis` container
+  # on DB index 2 (Novu defaults to that index for its cache; the rest
+  # of DIGIT uses index 0). Profile-gated like the rest of the
+  # notifications stack — won't start unless
+  # `COMPOSE_PROFILES=notifications`.
+  #
+  # Secrets (jwt, encryption key, novu secret key) default to dev
+  # values; the Ansible playbook generates real per-tenant secrets
+  # from OpenBao before bringing the stack up.
+  novu-mongo:
+    # docker.io/library/mongo:8.0.3 — not mirrored to registry.preview
+    # (yet); ghcr.io/novuhq/* below also pulls direct from GHCR.
+    image: mongo:8.0.3
+    container_name: novu-mongo
+    restart: unless-stopped
+    profiles: ["notifications"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${NOVU_MONGO_USERNAME:-root}
+      MONGO_INITDB_ROOT_PASSWORD: ${NOVU_MONGO_PASSWORD:-secret}
+    volumes:
+      - novu_mongo_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.runCommand({ping:1}).ok' --username $${MONGO_INITDB_ROOT_USERNAME} --password $${MONGO_INITDB_ROOT_PASSWORD} --authenticationDatabase admin | grep -q 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - egov-network
+
+  novu-api:
+    image: ghcr.io/novuhq/novu/api:2.3.0
+    container_name: novu-api
+    restart: unless-stopped
+    profiles: ["notifications"]
+    depends_on:
+      novu-mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: ${NOVU_NODE_ENV:-local}
+      PORT: '3000'
+      API_ROOT_URL: ${NOVU_API_ROOT_URL:-http://localhost:14002}
+      FRONT_BASE_URL: ${NOVU_FRONT_BASE_URL:-http://localhost:14000/novu}
+      MONGO_URL: mongodb://${NOVU_MONGO_USERNAME:-root}:${NOVU_MONGO_PASSWORD:-secret}@novu-mongo:27017/novu-db?authSource=admin
+      MONGO_MIN_POOL_SIZE: '10'
+      MONGO_MAX_POOL_SIZE: '100'
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      REDIS_PASSWORD: ''
+      REDIS_DB_INDEX: '2'
+      JWT_SECRET: ${NOVU_JWT_SECRET:-dev-jwt-secret-change-in-production-please}
+      STORE_ENCRYPTION_KEY: ${NOVU_STORE_ENCRYPTION_KEY:-change-this-key-32-characters!!!}
+      NOVU_SECRET_KEY: ${NOVU_SECRET_KEY:-dev-novu-secret-key-change-in-production}
+      API_CONTEXT_PATH: ''
+      DISABLE_USER_REGISTRATION: 'false'
+      IS_API_IDEMPOTENCY_ENABLED: 'false'
+      IS_API_RATE_LIMITING_ENABLED: 'false'
+      IS_NEW_MESSAGES_API_RESPONSE_ENABLED: 'true'
+      IS_V2_ENABLED: 'true'
+      MONGO_AUTO_CREATE_INDEXES: 'true'
+    ports:
+      - "14002:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/v1/health-check >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - egov-network
+
+  novu-worker:
+    image: ghcr.io/novuhq/novu/worker:2.3.0
+    container_name: novu-worker
+    restart: unless-stopped
+    profiles: ["notifications"]
+    depends_on:
+      novu-mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: ${NOVU_NODE_ENV:-local}
+      MONGO_URL: mongodb://${NOVU_MONGO_USERNAME:-root}:${NOVU_MONGO_PASSWORD:-secret}@novu-mongo:27017/novu-db?authSource=admin
+      MONGO_MAX_POOL_SIZE: '500'
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      REDIS_PASSWORD: ''
+      REDIS_DB_INDEX: '2'
+      STORE_ENCRYPTION_KEY: ${NOVU_STORE_ENCRYPTION_KEY:-change-this-key-32-characters!!!}
+      BROADCAST_QUEUE_CHUNK_SIZE: '100'
+      MULTICAST_QUEUE_CHUNK_SIZE: '100'
+      IS_EMAIL_INLINE_CSS_DISABLED: 'false'
+      IS_USE_MERGED_DIGEST_ID_ENABLED: 'false'
+    networks:
+      - egov-network
+
+  novu-ws:
+    image: ghcr.io/novuhq/novu/ws:2.3.0
+    container_name: novu-ws
+    restart: unless-stopped
+    profiles: ["notifications"]
+    depends_on:
+      novu-mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: ${NOVU_NODE_ENV:-local}
+      PORT: '3002'
+      MONGO_URL: mongodb://${NOVU_MONGO_USERNAME:-root}:${NOVU_MONGO_PASSWORD:-secret}@novu-mongo:27017/novu-db?authSource=admin
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      REDIS_PASSWORD: ''
+      REDIS_DB_INDEX: '2'
+      JWT_SECRET: ${NOVU_JWT_SECRET:-dev-jwt-secret-change-in-production-please}
+    ports:
+      - "14003:3002"
+    networks:
+      - egov-network
+
+  novu-dashboard:
+    image: ghcr.io/novuhq/novu/dashboard:2.3.0
+    container_name: novu-dashboard
+    restart: unless-stopped
+    profiles: ["notifications"]
+    depends_on:
+      novu-api:
+        condition: service_started
+    environment:
+      VITE_API_HOSTNAME: ${NOVU_API_PUBLIC_URL:-http://localhost:14002}
+      VITE_WEBSOCKET_HOSTNAME: ${NOVU_WS_PUBLIC_URL:-http://localhost:14003}
+      VITE_SELF_HOSTED: 'true'
+      VITE_BASE_PATH: /novu
+      VITE_PUBLIC_PATH: /novu
+      VITE_LEGACY_DASHBOARD_URL: ''
+    ports:
+      - "14000:4000"
+    networks:
+      - egov-network
+
+  # Novu Framework "Bridge" endpoint. Novu v2 workflows are Code-First
+  # — the workflow definitions (SMS body templates, conditional steps,
+  # etc.) live in code, not in the Novu DB. At trigger time, Novu's API
+  # calls THIS service to render the step content. Without it every
+  # trigger fails with "Bridge execution failed".
+  #
+  # The workflows are defined in
+  # /backend/novu-bridge-endpoint/workflows.js — one per domain event
+  # (OTP send + 6 complaint lifecycle events).
+  novu-bridge-endpoint:
+    image: registry.preview.egov.theflywheel.in/egovio/novu-bridge-endpoint:latest
+    container_name: novu-bridge-endpoint
+    restart: unless-stopped
+    profiles: ["notifications"]
+    environment:
+      PORT: '3000'
+      # MUST match the env API key Novu uses to sign bridge requests
+      # (set NOVU_SECRET_KEY in compose .env to whatever the per-env
+      # API key Novu generated is, OR leave STRICT_AUTH=false for the
+      # in-cluster case where we trust the network).
+      NOVU_SECRET_KEY: ${NOVU_BRIDGE_SECRET_KEY:-dev-novu-secret-key-change-in-production}
+      STRICT_AUTH: 'false'
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/health >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - egov-network
+
+  # ==================== Notification stack (opt-in) ====================
+  # `digit-config-service` + `digit-user-preferences-service` +
+  # `novu-bridge` work together to deliver event-driven WhatsApp/SMS via
+  # Twilio (through self-hosted Novu, which the operator opts into
+  # separately via the `notifications` profile that brings up
+  # novu-api/worker/ws/dashboard + mongo).
+  #
+  # The pipeline is:
+  #   1. A module (e.g. PGR) publishes a domain event to Kafka
+  #      (topic: complaints.domain.events).
+  #   2. novu-bridge consumes the event, checks the user's notification
+  #      consent via digit-user-preferences-service, resolves the
+  #      template via digit-config-service, and triggers Novu.
+  #   3. Novu's Twilio integration delivers the message to the user.
+  #
+  # All three are profile-gated — they don't start on a default
+  # `docker compose up`. Opt in with `COMPOSE_PROFILES=notifications`.
+  # The Ansible playbook flips this on when `enable_novu: true` in
+  # host_vars.
+  digit-config-service:
+    image: registry.preview.egov.theflywheel.in/egovio/digit-config-service:latest
+    container_name: digit-config-service
+    restart: unless-stopped
+    profiles: ["notifications"]
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    volumes:
+      - ./otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      # application.properties keeps Flyway URL separate from datasource;
+      # both env vars must be set or Flyway falls back to localhost.
+      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_FLYWAY_USER: egov
+      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_FLYWAY_ENABLED: 'true'
+      SPRING_FLYWAY_TABLE: digit_config_service_schema
+      SERVER_PORT: '8080'
+      SERVER_SERVLET_CONTEXT_PATH: /config-service
+      CONFIG_DEFAULT_OFFSET: '0'
+      CONFIG_DEFAULT_LIMIT: '100'
+      # MDMS-v2 reachability — config-service validates every `_create`
+      # against the registered schema. Without these envs it falls back
+      # to application.properties' default (`http://localhost:8083`),
+      # which is the container itself → MDMS_VALIDATION_FAILED with
+      # "I/O error on POST request" on every record-create.
+      MDMS_V2_HOST: http://egov-mdms-service:8094
+      MDMS_V2_SCHEMA_SEARCH_PATH: /mdms-v2/schema/v1/_search
+      # Tenant root used for fallback schema-search when the request
+      # tenant has no schema of its own. Should match the deployment's
+      # state-level tenant (set in host_vars).
+      STATE_LEVEL_TENANT_ID: ${STATE_LEVEL_TENANT_ID:-pg}
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: digit-config-service
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: none
+      JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m -javaagent:/otel/opentelemetry-javaagent.jar
+    healthcheck:
+      # management.endpoints.web.base-path=/ so actuator's /health is at
+      # /config-service/health (context-path) — NOT /config-service/actuator/health.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/config-service/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    networks:
+      - egov-network
+
+  digit-user-preferences-service:
+    image: registry.preview.egov.theflywheel.in/egovio/digit-user-preferences-service:latest
+    container_name: digit-user-preferences-service
+    restart: unless-stopped
+    profiles: ["notifications"]
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: '8080'
+      SERVER_CONTEXT_PATH: /user-preference
+      DB_HOST: postgres
+      DB_PORT: '5432'
+      DB_NAME: egov
+      DB_USER: egov
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      DB_SSL_MODE: disable
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - egov-network
+
+  novu-bridge:
+    image: registry.preview.egov.theflywheel.in/egovio/novu-bridge:latest
+    container_name: novu-bridge
+    restart: unless-stopped
+    profiles: ["notifications"]
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      digit-config-service:
+        condition: service_healthy
+      digit-user-preferences-service:
+        condition: service_healthy
+      novu-api:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    volumes:
+      - ./otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      # application.properties hardcodes spring.flyway.url to localhost
+      # without an env placeholder — relaxed binding to SPRING_FLYWAY_*
+      # is the only way to override.
+      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_FLYWAY_USER: egov
+      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_FLYWAY_ENABLED: 'true'
+      SPRING_FLYWAY_TABLE: novu_bridge_schema
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      # application.properties also reads kafka.config.bootstrap_server_config
+      # (an egov-services-common convention); set both so any path that
+      # reads either picks up the right broker.
+      KAFKA_CONFIG_BOOTSTRAP_SERVER_CONFIG: redpanda:9092
+      SERVER_PORT: '8080'
+      SERVER_SERVLET_CONTEXT_PATH: /novu-bridge
+      # Kafka topics (bridge auto-creates if redpanda's
+      # auto.create.topics.enable=true; otherwise create them upfront).
+      NOVU_BRIDGE_KAFKA_INPUT_TOPIC: complaints.domain.events
+      NOVU_BRIDGE_KAFKA_RETRY_TOPIC: novu-bridge.retry
+      NOVU_BRIDGE_KAFKA_DLQ_TOPIC: novu-bridge.dlq
+      NOVU_BRIDGE_MAX_RETRIES: '3'
+      # Channel is compared CASE-SENSITIVELY against the TemplateBinding
+      # `channel` field. Our seed data uses lowercase `sms` / `whatsapp`
+      # — keep this lowercase too. Override per-tenant in host_vars.
+      # (Default whatsapp: live deploys use it; SMS is paused pending A2P.)
+      NOVU_BRIDGE_CHANNEL: ${NOVU_BRIDGE_CHANNEL:-whatsapp}
+      NOVU_BRIDGE_DEFAULT_LOCALE: en_IN
+      # NOTE: the preference check calls
+      # `digit-user-preferences-service/user-preference/v1/_check`,
+      # which 404s on the upstream image (the actual path differs and
+      # the controller may not be deployed). Leaving it off lets OTP
+      # and complaint events flow; flip to 'true' once preferences are
+      # wired up for the tenant.
+      NOVU_BRIDGE_PREFERENCE_ENABLED: ${NOVU_BRIDGE_PREFERENCE_ENABLED:-false}
+      NOVU_BRIDGE_PREFERENCE_HOST: http://digit-user-preferences-service:8080
+      NOVU_BRIDGE_PREFERENCE_CHECK_PATH: /user-preference/v1/_check
+      NOVU_BRIDGE_PREFERENCE_CODE: USER_NOTIFICATION_PREFERENCES
+      NOVU_BRIDGE_CONFIG_HOST: http://digit-config-service:8080
+      # Full path = SERVER_SERVLET_CONTEXT_PATH (/config-service) +
+      # controller mapping (/config/v1) + endpoint. The earlier
+      # `/config-service/v1/_resolve` was missing the `/config/`
+      # segment and got Spring's "No static resource v1/_resolve" 500.
+      NOVU_BRIDGE_CONFIG_RESOLVE_PATH: /config-service/config/v1/_resolve
+      NOVU_BRIDGE_CONFIG_SEARCH_PATH: /config-service/config/v1/_search
+      NOVU_BRIDGE_USER_HOST: http://egov-user:8107
+      NOVU_BRIDGE_USER_SEARCH_PATH: /user/_search
+      # MDMS_HOST MUST be set. The bridge's application.properties default
+      # is `mdms.host=${MDMS_HOST:-http://mdms-v2.egov:8080}` — that host
+      # does not resolve on the egov docker network, so the citizen
+      # phone-prefix lookup (formatRecipientPhone -> MDMS
+      # ValidationConfigs.mobileNumberValidation) throws
+      # NB_MDMS_PHONE_PREFIX_UNAVAILABLE and NO notification is ever sent.
+      # Setting only MDMS_SEARCH_PATH (as earlier iterations did) is not
+      # enough. Verified on Bomet 2026-05-16: with MDMS_HOST unset, every
+      # complaint failed here; with it set, prefix resolves (+254) and the
+      # pipeline completes through Twilio.
+      MDMS_HOST: http://egov-mdms-service:8094
+      MDMS_SEARCH_PATH: /mdms-v2/v2/_search
+      # Novu API endpoints are populated in iteration 3 once novu-api
+      # is in the stack; bridge starts up but won't dispatch until
+      # NOVU_BASE_URL + NOVU_API_KEY resolve to a reachable Novu.
+      # In-cluster Novu API. Override NOVU_API_KEY at deploy time
+      # (Ansible bootstrap step creates an API key and writes it back
+      # to the compose .env).
+      NOVU_BASE_URL: ${NOVU_BASE_URL:-http://novu-api:3000}
+      NOVU_API_KEY: ${NOVU_API_KEY:-changeme}
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: novu-bridge
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: none
+      JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m -javaagent:/otel/opentelemetry-javaagent.jar
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/novu-bridge/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    networks:
+      - egov-network
+
+networks:
+  egov-network:
+    driver: bridge
+
+volumes:
+  postgres_data: null
+  es_data: null
+  filestore_data: null
+  minio_data: null
+  tempo_data: null
+  grafana_data: null
+  prometheus_data: null
+  loki_data: null
+  promtail_data: null
+  mcp_postgres_data: null
+  openbao_data: null
+  novu_mongo_data: null
