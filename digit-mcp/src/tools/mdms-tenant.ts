@@ -1284,7 +1284,16 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               }
             } catch (error) {
               const msg = error instanceof Error ? error.message : String(error);
-              results.data.failed.push(`${schemaCode}/${record.uniqueIdentifier}: ${msg}`);
+              // Benign on re-runs: MDMS-v2 returns "Duplicate record" when an
+              // x-unique key collides with an existing row whose uid hash
+              // didn't match targetByUid (different serialization, etc.).
+              // Treat all duplicate flavors as skipped — `Duplicate record`
+              // (capital D, two words) is not caught by includes('DUPLICATE').
+              if (/DUPLICATE|duplicate record|already exists|NON[_-]?UNIQUE|unique/i.test(msg)) {
+                results.data.skipped.push(`${schemaCode}/${record.uniqueIdentifier}`);
+              } else {
+                results.data.failed.push(`${schemaCode}/${record.uniqueIdentifier}: ${msg}`);
+              }
             }
           }
         } catch (schemaErr) {
@@ -1732,8 +1741,26 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               if (/DUPLICATE|already exists|DuplicateMessageIdentity|unique/i.test(bm)) {
                 copied += batch.length;
               } else {
-                failed += batch.length;
-                console.error(`[tenant_bootstrap] localization upsert ${locale} batch ${off}: ${bm.slice(0, 200)}`);
+                // Whole-batch 400 from a single poison row would otherwise
+                // mark 499 good rows as failed. Fall back to per-row upsert
+                // so `failed` reflects actual write failures, not blast
+                // radius. Slower (N requests instead of 1) but only when a
+                // batch poisons.
+                console.error(`[tenant_bootstrap] localization upsert ${locale} batch ${off} failed (${bm.slice(0, 200)}); retrying per-row`);
+                for (const m of batch) {
+                  try {
+                    await digitApi.localizationUpsert(target, locale, [m]);
+                    copied++;
+                  } catch (rowErr) {
+                    const rm = rowErr instanceof Error ? rowErr.message : String(rowErr);
+                    if (/DUPLICATE|already exists|DuplicateMessageIdentity|unique/i.test(rm)) {
+                      copied++;
+                    } else {
+                      failed++;
+                      console.error(`[tenant_bootstrap] localization upsert ${locale} row ${m.module}::${m.code}: ${rm.slice(0, 200)}`);
+                    }
+                  }
+                }
               }
             }
           }
