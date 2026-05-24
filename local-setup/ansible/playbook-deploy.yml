@@ -943,6 +943,22 @@
       no_log: true
       changed_when: true
 
+    # Same drift as egov above, on the MCP session-store postgres:
+    # initdb ran with the default mcp123 (no .env yet) and created the
+    # `mcp` role with that password. OpenBao then wrote the real
+    # MCP_DB_PASSWORD into .env; the recreated digit-mcp container will
+    # send the vault value, which the role doesn't accept. ALTER the
+    # role inside digit-mcp-postgres so the next up -d's MCP can connect.
+    - name: "OpenBao — sync mcp-postgres role password with vault secret"
+      ansible.builtin.shell: >-
+        printf "ALTER ROLE mcp WITH PASSWORD '%s';\n" "$NEWPW" |
+        docker exec -i digit-mcp-postgres psql -U mcp -d mcp_sessions
+      environment:
+        NEWPW: "{{ bao_secrets.json.data.data.mcp_db_password }}"
+      no_log: true
+      changed_when: true
+      when: enable_mcp | default(false)
+
     - name: "Recreate services with the new env (Linux/Debian)"
       ansible.builtin.shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d
       args:
@@ -1244,9 +1260,25 @@
     # an ADMIN HRMS Employee with all departments — enough for a full
     # PGR lifecycle on day 1, and enough for the ui-tenant probe below
     # to succeed so the SPA lands on the operator's tenant (not pg).
-    # Skipped when state_tenant_id == 'pg' (nothing to bootstrap) or
-    # when MCP isn't enabled on this host.
+    #
+    # Gating: skipped when state_tenant_id == 'pg' (nothing to bootstrap)
+    # or when MCP isn't actually reachable at runtime. We don't gate on
+    # `enable_mcp` here because operators can run digit-mcp out-of-band
+    # (e.g. an existing container survived a wipe of the egov stack, or
+    # MCP is built locally on a non-VPC box) — what matters is whether
+    # /healthz responds. The reachability probe below ALWAYS runs and
+    # the bootstrap tasks key off its result.
     # ────────────────────────────────────────────────────────────────
+    - name: "mcp-bootstrap — probe reachability"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:13101/healthz"
+        method: GET
+        status_code: [200]
+        timeout: 5
+      register: mcp_reachability
+      failed_when: false
+      changed_when: false
+
     - name: "mcp-bootstrap — root tenant via /v1/tenant/bootstrap"
       ansible.builtin.uri:
         url: "http://127.0.0.1:13101/v1/tenant/bootstrap"
@@ -1267,7 +1299,7 @@
       register: mcp_root_bootstrap
       when:
         - state_root != 'pg'
-        - enable_mcp | default(false)
+        - mcp_reachability.status | default(0) == 200
       ignore_errors: true
 
     - name: "mcp-bootstrap — city tenant via /v1/tenant/bootstrap"
@@ -1290,17 +1322,72 @@
       register: mcp_city_bootstrap
       when:
         - state_root != 'pg'
-        - enable_mcp | default(false)
+        - mcp_reachability.status | default(0) == 200
       ignore_errors: true
 
     - name: "mcp-bootstrap — log result"
       ansible.builtin.debug:
         msg:
+          - "MCP reachable: {{ (mcp_reachability.status | default(0)) == 200 }}"
           - "Root  bootstrap (target={{ state_root }}): {{ (mcp_root_bootstrap.json.summary | default('skipped')) if mcp_root_bootstrap is defined else 'skipped' }}"
           - "City  bootstrap (target={{ tenant_id }}): {{ (mcp_city_bootstrap.json.summary | default('skipped')) if mcp_city_bootstrap is defined else 'skipped' }}"
+      when: state_root != 'pg'
+
+    # MCP returns success=false when any seed step failed (schemas, data,
+    # workflows, or localizations). Surfacing only counts ('data_failed: 4')
+    # leaves operators staring at a passing playbook with no idea *what*
+    # broke. Print the actual failure entries and abort the deploy — this
+    # is the difference between "looks fine, but maputo's missing from the
+    # login dropdown" and "you have an actionable error message".
+    - name: "mcp-bootstrap — print detailed failure entries (root)"
+      ansible.builtin.debug:
+        msg:
+          - "Root bootstrap success: {{ mcp_root_bootstrap.json.success | default('unknown') }}"
+          - "Schema failures: {{ mcp_root_bootstrap.json.results.schemas.failed | default([]) }}"
+          - "Data failures: {{ mcp_root_bootstrap.json.results.data.failed | default([]) }}"
+          - "Workflow failures: {{ mcp_root_bootstrap.json.results.workflow.failed | default([]) }}"
+          - "Localization failures (per-locale counts): {{ mcp_root_bootstrap.json.localizations | default([]) }}"
       when:
         - state_root != 'pg'
-        - enable_mcp | default(false)
+        - mcp_root_bootstrap is defined
+        - (mcp_root_bootstrap.json.success | default(true)) == false
+
+    - name: "mcp-bootstrap — print detailed failure entries (city)"
+      ansible.builtin.debug:
+        msg:
+          - "City bootstrap success: {{ mcp_city_bootstrap.json.success | default('unknown') }}"
+          - "Schema failures: {{ mcp_city_bootstrap.json.results.schemas.failed | default([]) }}"
+          - "Data failures: {{ mcp_city_bootstrap.json.results.data.failed | default([]) }}"
+          - "Workflow failures: {{ mcp_city_bootstrap.json.results.workflow.failed | default([]) }}"
+          - "Localization failures (per-locale counts): {{ mcp_city_bootstrap.json.localizations | default([]) }}"
+      when:
+        - state_root != 'pg'
+        - mcp_city_bootstrap is defined
+        - (mcp_city_bootstrap.json.success | default(true)) == false
+
+    # Bail out if either bootstrap reported failures. `ignore_errors: true`
+    # on the API call only suppresses 4xx/5xx so we can still capture the
+    # body — we still want a hard stop when the API responds 200 but
+    # success=false in the body. Operators can override with
+    # `tolerate_bootstrap_failures: true` if they intentionally want to
+    # ship a partially-seeded tenant for further inspection.
+    - name: "mcp-bootstrap — fail if any seed step reported failures"
+      ansible.builtin.fail:
+        msg: >-
+          MCP bootstrap reported failures.
+          Root success={{ mcp_root_bootstrap.json.success | default('n/a') }},
+          city success={{ mcp_city_bootstrap.json.success | default('n/a') }}.
+          See the detailed-failure-entries debug output above. Re-run with
+          `tolerate_bootstrap_failures: true` to continue past this.
+      when:
+        - state_root != 'pg'
+        - not (tolerate_bootstrap_failures | default(false))
+        - >
+          (mcp_root_bootstrap is defined and
+            (mcp_root_bootstrap.json.success | default(true)) == false)
+          or
+          (mcp_city_bootstrap is defined and
+            (mcp_city_bootstrap.json.success | default(true)) == false)
 
     # ────────────────────────────────────────────────────────────────
     # Post-bootstrap STATE_LEVEL_TENANT_ID rewrite. The upstream compose
@@ -1346,12 +1433,44 @@
         chdir: "{{ digit_dir }}"
       when: state_root != 'pg'
 
-    - name: "post-bootstrap — wait for egov-user-proxy to be healthy after restart"
-      shell: docker inspect --format '{{ "{{" }}.State.Health.Status{{ "}}" }}' egov-user-proxy
-      register: user_proxy_health_post
+    # `docker compose restart egov-user` above does NOT cascade to
+    # egov-user-proxy. The proxy keeps its prior `healthy` state
+    # (cached from the previous healthcheck cycle), so an immediate
+    # `docker inspect` on the proxy returns `healthy` on the first
+    # poll and the wait satisfies before egov-user has finished
+    # restarting. The subsequent ui-tenant probe then fires while
+    # egov-user is mid-boot → Kong → user-proxy → 502.
+    #
+    # Probe the Kong path directly instead — that's the contract the
+    # ui-tenant probe will use. Any non-5xx (200/400/401) means the
+    # whole chain (Kong route → user-proxy → egov-user) is live; we
+    # send intentionally-bad creds so this readiness check doesn't
+    # couple to ADMIN existence on the tenant.
+    - name: "post-bootstrap — wait for egov-user via Kong to be ready after restart"
+      ansible.builtin.uri:
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/user/oauth/token"
+        method: POST
+        headers: >-
+          {{
+            {'Authorization': 'Basic ZWdvdi11c2VyLWNsaWVudDo=',
+             'Content-Type': 'application/x-www-form-urlencoded'}
+            | combine({'Host': domain} if not (tls_enabled | default(true)) else {})
+          }}
+        body_format: form-urlencoded
+        body:
+          grant_type: password
+          username: readiness-probe
+          password: readiness-probe
+          scope: read
+          tenantId: pg
+          userType: EMPLOYEE
+        status_code: [200, 400, 401]
+        timeout: 10
+        validate_certs: "{{ tls_enabled | default(true) }}"
+      register: user_kong_ready_post
       retries: 30
-      delay: 10
-      until: user_proxy_health_post.stdout == 'healthy'
+      delay: 5
+      until: user_kong_ready_post.status in [200, 400, 401]
       changed_when: false
       when: state_root != 'pg'
 

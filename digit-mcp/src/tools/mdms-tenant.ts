@@ -987,31 +987,62 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         pct: 25,
       });
 
-      // Step 2: Create the root tenant record under itself
-      // CRITICAL: tenant.tenants records MUST exist under the tenant's own root,
-      // because services like idgen resolve city codes via v1 MDMS using the tenant prefix as root.
-      // The tenant.tenants schema requires both `code` and `tenantId` on the row
-      // payload — earlier versions omitted `tenantId` here, which made this write
-      // fail "required key [tenantId] not found" and cascaded into city_setup
-      // refusing to run because the root self-record never landed.
-      try {
-        await digitApi.mdmsV2Create(target, 'tenant.tenants', target, {
-          code: target,
+      // Step 2: Create the tenant.tenants self-record.
+      //
+      // The `tenant.tenants` schema definition only lives at the tenant's
+      // ROOT scope (e.g. `mz`) — there is no `tenant.tenants` schema at
+      // `mz.maputo`. A write whose tenantId is the city would return
+      // SCHEMA_DEFINITION_NOT_FOUND_ERR (silently swallowed into
+      // results.data.failed, surfaced to operators only as a missing
+      // dropdown entry in the employee UI later on).
+      //
+      // For root target (no dot): write at root scope, bare-code uid.
+      // For city target (dotted): write at root scope, uid `Tenant.<city>`
+      // — matches the convention used by city_setup elsewhere in this file.
+      // Services like idgen resolve city codes via v1 MDMS using the tenant
+      // prefix as root, so the row must live under root either way.
+      const isCityTarget = target.includes('.');
+      const tenantsScope = isCityTarget ? target.split('.')[0] : target;
+      const tenantsUid = isCityTarget ? `Tenant.${target}` : target;
+      // The tenant.tenants schema requires these top-level keys: code,
+      // name, domainUrl, type, imageId, emailId, OfficeTimings, city,
+      // address, contactNumber — and city requires name, districtName,
+      // districtTenantCode, ulbGrade, code. A payload missing any one
+      // gets rejected with a schema-validation 400 that doesn't match
+      // the DUPLICATE/unique catch pattern below, so the write lands
+      // silently in results.data.failed and the employee login dropdown
+      // ends up with no entry for the new tenant.
+      const tenantsPayload: Record<string, unknown> = {
+        code: target,
+        name: target,
+        type: isCityTarget ? 'CITY' : 'State',
+        domainUrl: 'https://www.digit.org',
+        imageId: null,
+        emailId: `${target}@example.com`,
+        address: `${target} address`,
+        contactNumber: '0000000000',
+        OfficeTimings: { 'Mon - Fri': '9.00 AM - 6.00 PM' },
+        description: isCityTarget ? `City tenant: ${target}` : `State tenant root: ${target}`,
+        tenantId: target,
+        city: {
+          code: target.toUpperCase(),
           name: target,
-          tenantId: target,
-          description: `State tenant root: ${target}`,
-          city: {
-            code: target.toUpperCase(),
-            name: target,
-            districtCode: target.toUpperCase(),
-            districtName: target,
-          },
-        });
-        results.data.copied.push(`tenant.tenants/${target} (root self-record)`);
+          districtCode: tenantsScope.toUpperCase(),
+          districtName: tenantsScope,
+          districtTenantCode: target,
+          ulbGrade: isCityTarget ? 'Municipal Corporation' : 'State',
+        },
+      };
+      if (isCityTarget) {
+        tenantsPayload.parent = tenantsScope;
+      }
+      try {
+        await digitApi.mdmsV2Create(tenantsScope, 'tenant.tenants', tenantsUid, tenantsPayload);
+        results.data.copied.push(`tenant.tenants/${target} (self-record)`);
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         if (msg.includes('DUPLICATE') || msg.includes('already exists') || msg.includes('unique') || msg.includes('NON_UNIQUE')) {
-          results.data.skipped.push(`tenant.tenants/${target} (root self-record)`);
+          results.data.skipped.push(`tenant.tenants/${target} (self-record)`);
         } else {
           results.data.failed.push(`tenant.tenants/${target}: ${msg}`);
         }
@@ -1165,30 +1196,59 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         tgt: string,
       ): Record<string, unknown> {
         const fields = identityFieldsBySchema[schemaCode];
-        if (!fields || fields.length === 0) return data;
         const out: Record<string, unknown> = { ...data };
-        for (const field of fields) {
-          const v = out[field];
-          if (typeof v !== 'string') continue;
-          if (v === src) {
-            out[field] = tgt;
-          } else if (v.startsWith(src + '.')) {
-            // dotted-prefix: keep the suffix, swap the prefix
-            out[field] = tgt + v.substring(src.length);
+        if (fields && fields.length > 0) {
+          for (const field of fields) {
+            const v = out[field];
+            if (typeof v !== 'string') continue;
+            if (v === src) {
+              out[field] = tgt;
+            } else if (v.startsWith(src + '.')) {
+              // dotted-prefix: keep the suffix, swap the prefix
+              out[field] = tgt + v.substring(src.length);
+            }
           }
+        }
+        // Schema-specific deep rewrites for fields that aren't top-level
+        // tenant identifiers. tenant.citymodule's payload carries a
+        // tenants:[{code: <tenant-code>}, …] array — leaving it verbatim
+        // means the employee UI dropdown for the new tenant still lists
+        // the source tenant's cities (the actual root cause of "maputo
+        // doesn't appear in the dropdown after deploy").
+        if (schemaCode === 'tenant.citymodule' && Array.isArray(out.tenants)) {
+          out.tenants = (out.tenants as Array<Record<string, unknown>>).map((entry) => {
+            const code = entry?.code;
+            if (typeof code !== 'string') return entry;
+            if (code === src) return { ...entry, code: tgt };
+            if (code.startsWith(src + '.')) {
+              return { ...entry, code: tgt + code.substring(src.length) };
+            }
+            return entry;
+          });
         }
         return out;
       }
 
-      emitProgress({ phase: 'data:start', message: `Copying essential MDMS data across ${essentialSchemas.length} schemas`, pct: 35 });
+      // For a city-tier target, skip tenant.citymodule from the per-schema
+      // copy pass — it's a root-level master (writes to a city scope land
+      // in a "wrong" partition that reads inherit-from-root anyway, AND
+      // the deep-rewrite would produce nonsensical entries like
+      // mz.maputo.citya). Handled by the post-copy RMW append at root
+      // below, which is the only operation that actually makes the new
+      // city show up in the employee UI dropdown.
+      const schemasForCopy = isCityTarget
+        ? essentialSchemas.filter((s) => s !== 'tenant.citymodule')
+        : essentialSchemas;
 
-      for (let i = 0; i < essentialSchemas.length; i++) {
-        const schemaCode = essentialSchemas[i];
+      emitProgress({ phase: 'data:start', message: `Copying essential MDMS data across ${schemasForCopy.length} schemas`, pct: 35 });
+
+      for (let i = 0; i < schemasForCopy.length; i++) {
+        const schemaCode = schemasForCopy[i];
         emitProgress({
           phase: 'data:schema',
           message: `Copying ${schemaCode}`,
-          data: { schema: schemaCode, index: i + 1, total: essentialSchemas.length },
-          pct: 35 + Math.floor((i / essentialSchemas.length) * 40),
+          data: { schema: schemaCode, index: i + 1, total: schemasForCopy.length },
+          pct: 35 + Math.floor((i / schemasForCopy.length) * 40),
         });
         try {
           // Fetch source records and existing target records for this schema
@@ -1243,6 +1303,65 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         },
         pct: 75,
       });
+
+      // ── Step 3a: register city target in root tenant.citymodule ──
+      // mdms-v2 has no array-append primitive, so read-modify-write each
+      // citymodule row at the root scope and append {code: target} to its
+      // tenants[] (skip if already present — idempotent). Without this
+      // the employee UI module dropdowns stay empty for the new city
+      // even though auth and HRMS Employee provisioning both succeeded.
+      if (isCityTarget) {
+        emitProgress({
+          phase: 'citymodule:start',
+          message: `Registering "${target}" in root tenant.citymodule`,
+          pct: 76,
+        });
+        let appendedTo = 0;
+        let alreadyIn = 0;
+        try {
+          const cityModuleRecords = await digitApi.mdmsV2SearchRaw(
+            tenantsScope,
+            'tenant.citymodule',
+            { limit: 100 },
+          );
+          for (const rec of cityModuleRecords) {
+            const data = rec.data as Record<string, unknown>;
+            const tenants = Array.isArray(data.tenants)
+              ? (data.tenants as Array<Record<string, unknown>>)
+              : [];
+            if (tenants.some((t) => t?.code === target)) {
+              alreadyIn++;
+              continue;
+            }
+            try {
+              await digitApi.mdmsV2UpdateData(rec, {
+                ...data,
+                tenants: [...tenants, { code: target }],
+              });
+              appendedTo++;
+              results.data.copied.push(
+                `tenant.citymodule/${rec.uniqueIdentifier} (appended ${target})`,
+              );
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              results.data.failed.push(
+                `tenant.citymodule/${rec.uniqueIdentifier} (append ${target}): ${msg}`,
+              );
+            }
+          }
+          emitProgress({
+            phase: 'citymodule:done',
+            message: `citymodule: appended "${target}" to ${appendedTo} module(s) (${alreadyIn} already present)`,
+            data: { appended: appendedTo, alreadyIn, scope: tenantsScope },
+          });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(
+            `[tenant_bootstrap] citymodule RMW at root "${tenantsScope}" failed: ${msg}`,
+          );
+          results.data.failed.push(`tenant.citymodule (root ${tenantsScope}): ${msg}`);
+        }
+      }
 
       // ── Step 3b: synthesize common-masters.UserValidation (config-driven) ─
       // Source tenants (pg/statea) ship NO UserValidation. Without a 'mobile'
@@ -1548,9 +1667,16 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           data: { locale, sources: localeSourceTenants },
         });
         try {
-          // Union messages across all candidate source tenants. First code
-          // wins, so the explicit `source` arg always takes precedence.
-          const byCode = new Map<string, { code: string; message: string; module: string }>();
+          // Union messages across all candidate source tenants. First
+          // (module, code) wins, so the explicit `source` arg always
+          // takes precedence. Key includes module because the DB unique
+          // constraint is (tenantid, locale, module, code) — the same
+          // `code` can legitimately exist under multiple modules (e.g.
+          // COMMON_MASTERS_* under rainmaker-common AND rainmaker-workbench).
+          // Keying on code alone silently dropped one of the variants
+          // AND caused the surviving variant to trip the DB constraint
+          // when the dropped one was already present from a prior run.
+          const byKey = new Map<string, { code: string; message: string; module: string }>();
           let perTenantRaw = 0;
           for (const sourceTenant of localeSourceTenants) {
             try {
@@ -1559,20 +1685,19 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               for (const m of msgs) {
                 const rec = m as Record<string, unknown>;
                 const code = rec.code as string;
-                if (!code || byCode.has(code)) continue;
+                if (!code) continue;
                 const message = rec.message as string;
                 if (typeof message !== 'string') continue;
-                byCode.set(code, {
-                  code,
-                  message,
-                  module: (rec.module as string) || 'rainmaker-common',
-                });
+                const module = (rec.module as string) || 'rainmaker-common';
+                const key = `${module}::${code}`;
+                if (byKey.has(key)) continue;
+                byKey.set(key, { code, message, module });
               }
             } catch {
               // Tenant may not have this locale — that's expected. Skip.
             }
           }
-          const messages = Array.from(byCode.values());
+          const messages = Array.from(byKey.values());
 
           if (messages.length === 0) {
             localizationResults.push({ locale, copied: 0, failed: 0 });
@@ -1600,7 +1725,11 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               const bm = batchErr instanceof Error ? batchErr.message : String(batchErr);
               // Duplicates aren't real failures — egov-localization treats
               // these as no-ops on re-runs. Other errors are surfaced.
-              if (/DUPLICATE|already exists|DuplicateMessageIdentity/i.test(bm)) {
+              // Include `unique` because the actual 400 body for a Postgres
+              // unique_message_entry violation does not contain the word
+              // DUPLICATE — only the constraint name does. Matches the
+              // pattern other catch blocks in this file already use.
+              if (/DUPLICATE|already exists|DuplicateMessageIdentity|unique/i.test(bm)) {
                 copied += batch.length;
               } else {
                 failed += batch.length;
@@ -1900,6 +2029,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             workflows_failed: workflowResults.failed.length,
             localizations_copied: localizationsCopied,
             localizations_failed: localizationsFailed,
+            admin_user_provisioned: !!userProvisioned,
             admin_employee_provisioned: adminEmployee.provisioned,
           },
         },
@@ -1923,6 +2053,12 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           localizations_copied: localizationsCopied,
           localizations_failed: localizationsFailed,
           locales_seen: locales.length,
+          // admin_user_provisioned = eg_user row exists on target (Step 4
+          // above). admin_employee_provisioned = eg_hrms_employee row
+          // (Step 7). Operators sometimes mistake the employee flag for
+          // proof of login readiness — it's not; the user flag is what
+          // gates auth.
+          admin_user_provisioned: !!userProvisioned,
           admin_employee_provisioned: adminEmployee.provisioned,
         },
         localizations: localizationResults,

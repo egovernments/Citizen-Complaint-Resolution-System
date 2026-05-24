@@ -382,6 +382,28 @@ class DigitApiClient {
     return (data.mdms || [])[0] as MdmsRecord;
   }
 
+  // MDMS v2 Update with replacement data payload. Used for read-modify-write
+  // flows (e.g. appending a city code into tenant.citymodule.tenants[]).
+  async mdmsV2UpdateData(record: MdmsRecord, newData: Record<string, unknown>): Promise<MdmsRecord> {
+    const data = await this.request<{ mdms?: MdmsRecord[] }>(
+      `${this.endpoint('MDMS_UPDATE')}/${record.schemaCode}`,
+      {
+        RequestInfo: this.buildRequestInfo(),
+        Mdms: {
+          tenantId: record.tenantId,
+          schemaCode: record.schemaCode,
+          uniqueIdentifier: record.uniqueIdentifier,
+          id: record.id,
+          data: newData,
+          auditDetails: record.auditDetails,
+          isActive: record.isActive !== false,
+        },
+      }
+    );
+
+    return (data.mdms || [])[0] as MdmsRecord;
+  }
+
   // MDMS v2 Schema Create
   async mdmsSchemaCreate(
     tenantId: string,

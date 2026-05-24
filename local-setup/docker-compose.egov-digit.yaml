@@ -1500,6 +1500,17 @@ services:
       SESSION_DB_NAME: mcp_sessions
       SESSION_DB_USER: mcp
       SESSION_DB_PASSWORD: ${MCP_DB_PASSWORD:-mcp123}
+      # DIGIT egov-db read-only pool for the dashboard endpoints
+      # (digit-db.ts). Without these, MCP falls back to its in-code
+      # defaults (host=docker-postgres, password=egov123) and emits
+      # `[digit-db] password authentication failed for user "egov"`
+      # on every startup. Route via pgbouncer (`postgres`) — same as
+      # every other egov service in this compose.
+      DIGIT_DB_HOST: postgres
+      DIGIT_DB_PORT: "5432"
+      DIGIT_DB_NAME: egov
+      DIGIT_DB_USER: egov
+      DIGIT_DB_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
     ports:
       - "13101:3000"
     healthcheck:
