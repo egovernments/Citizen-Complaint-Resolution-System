@@ -21,7 +21,8 @@ const envVariables = {
     supportedLocales: process.env.SUPPORTED_LOCALES || 'en_IN',
 
     // Sandbox mode configuration
-    enableSandboxMode: process.env.ENABLE_SANDBOX_MODE === 'true',
+    enableSandboxMode: process.env.ENABLE_SANDBOX_MODE ? process.env.ENABLE_SANDBOX_MODE === 'true' : true,
+    sandboxTenantId: process.env.SANDBOX_TENANT_ID || 'pg', // Default tenant for sandbox before org code
     tenantManagementHost: process.env.TENANT_MANAGEMENT_HOST || 'http://localhost:8081/tenant-management',
     sandboxHost: process.env.SANDBOX_HOST || 'https://sandbox.digit.org',
 
