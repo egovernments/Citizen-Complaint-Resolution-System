@@ -9,44 +9,31 @@ export interface MobileRules {
   prefix?: string;
 }
 
-// HRMS-side hard minimum. Its DTO has a @Pattern that requires exactly 10
-// digits regardless of what MDMS's ValidationConfigs.mobileNumberValidation
-// permits. Clamp the effective rules so the form never accepts 9-digit input
-// that HRMS will reject downstream.
-const HRMS_MIN_LENGTH = 10;
-
-// Kenya default — matches MDMS `ValidationConfigs.mobileNumberValidation`
-// at tenant `ke`, tightened to HRMS's 10-digit floor.
+// Kenya default — used when MDMS `ValidationConfigs.mobileNumberValidation`
+// is missing or unreadable. The canonical naipepea seed is `^[17][0-9]{8}$`
+// with min=max=9, matching the local subscriber number convention.
 const FALLBACK: MobileRules = {
-  pattern: '^0?[17][0-9]{8}$',
-  minLength: HRMS_MIN_LENGTH,
-  maxLength: 10,
+  pattern: '^[17][0-9]{8}$',
+  minLength: 9,
+  maxLength: 9,
   prefix: '+254',
   errorMessage:
-    'Enter a 10-digit Kenyan mobile starting with 07 or 01 (e.g. 0712345678)',
+    'Please enter a valid Kenyan mobile number (9 digits starting with 1 or 7)',
 };
 
 function parseRules(record: Record<string, unknown> | undefined): MobileRules {
   if (!record) return FALLBACK;
   const raw = record.rules as Record<string, unknown> | undefined;
   if (!raw) return FALLBACK;
-  const mdmsMin = typeof raw.minLength === 'number' ? raw.minLength : FALLBACK.minLength;
-  const minLength = Math.max(mdmsMin, HRMS_MIN_LENGTH);
-  const clamped = minLength > mdmsMin;
   return {
     pattern: typeof raw.pattern === 'string' ? raw.pattern : FALLBACK.pattern,
-    minLength,
-    maxLength:
-      typeof raw.maxLength === 'number' ? raw.maxLength : FALLBACK.maxLength,
+    minLength: typeof raw.minLength === 'number' ? raw.minLength : FALLBACK.minLength,
+    maxLength: typeof raw.maxLength === 'number' ? raw.maxLength : FALLBACK.maxLength,
     prefix: typeof raw.prefix === 'string' ? raw.prefix : FALLBACK.prefix,
-    // HRMS rejects 9-digit input even if MDMS allows it, so when the MDMS
-    // rule was looser than HRMS's 10-digit floor we replace the message
-    // rather than mislead operators with MDMS's "9 or 10 digits" phrasing.
-    errorMessage: clamped
-      ? FALLBACK.errorMessage
-      : typeof raw.errorMessage === 'string' && raw.errorMessage
-      ? raw.errorMessage
-      : FALLBACK.errorMessage,
+    errorMessage:
+      typeof raw.errorMessage === 'string' && raw.errorMessage
+        ? raw.errorMessage
+        : FALLBACK.errorMessage,
   };
 }
 
