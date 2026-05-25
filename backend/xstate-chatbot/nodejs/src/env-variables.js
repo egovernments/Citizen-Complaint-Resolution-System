@@ -20,6 +20,11 @@ const envVariables = {
 
     supportedLocales: process.env.SUPPORTED_LOCALES || 'en_IN',
 
+    // Sandbox mode configuration
+    enableSandboxMode: process.env.ENABLE_SANDBOX_MODE === 'true',
+    tenantManagementHost: process.env.TENANT_MANAGEMENT_HOST || 'http://localhost:8081/tenant-management',
+    sandboxHost: process.env.SANDBOX_HOST || 'https://sandbox.digit.org',
+
     googleAPIKey: process.env.GOOGLE_MAPS_API_KEY || 'AIzaSyDjSk-Bw1OuiOE-5K7jsP6KGN2rbcN7iBk',
 
     dateFormat: process.env.DATEFORMAT || 'DD/MM/YYYY',

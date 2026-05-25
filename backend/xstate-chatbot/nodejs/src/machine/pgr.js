@@ -306,13 +306,23 @@ const pgr =  {
                         })
                       },
                       {
+                        // Skip city selection in sandbox mode - go directly to persist complaint
+                        target: '#persistComplaint',
+                        cond: (context, event) => !event.data && context.message ==='1' && config.enableSandboxMode,
+                        actions: assign((context, event) => {
+                          // Set city and locality to organization code (tenant)
+                          context.slots.pgr.city = context.extraInfo.tenantId;
+                          context.slots.pgr.locality = context.extraInfo.tenantId;
+                        })
+                      },
+                      {
                         target: '#city',
-                        cond: (context, event) => !event.data && context.message ==='1' && !config.pgrUseCase.geoSearch
+                        cond: (context, event) => !event.data && context.message ==='1' && !config.pgrUseCase.geoSearch && !config.enableSandboxMode
                         
                       },
                       {
                         target: '#nlpCitySearch',
-                        cond: (context, event) => !event.data && context.message ==='1' && config.pgrUseCase.geoSearch
+                        cond: (context, event) => !event.data && context.message ==='1' && config.pgrUseCase.geoSearch && !config.enableSandboxMode
                       },
                       {
                         target: '#geoLocation',
@@ -325,13 +335,23 @@ const pgr =  {
                     ],
                     onError: [
                       {
+                        // Skip city selection in sandbox mode
+                        target: '#persistComplaint',
+                        cond: (context, event) => config.enableSandboxMode,
+                        actions: assign((context, event) => {
+                          // Set city and locality to organization code (tenant)
+                          context.slots.pgr.city = context.extraInfo.tenantId;
+                          context.slots.pgr.locality = context.extraInfo.tenantId;
+                        })
+                      },
+                      {
                         target: '#city',
-                        cond: (context, event) => !config.pgrUseCase.geoSearch,
+                        cond: (context, event) => !config.pgrUseCase.geoSearch && !config.enableSandboxMode,
 
                       },
                       {
                         target: '#nlpCitySearch',
-                        cond: (context, event) => config.pgrUseCase.geoSearch,
+                        cond: (context, event) => config.pgrUseCase.geoSearch && !config.enableSandboxMode,
                       }
 
                     ],
@@ -394,21 +414,31 @@ const pgr =  {
                       cond: (context, event) => context.message.isValid && context.slots.pgr["locationConfirmed"]  && context.slots.pgr["locality"]
                     },
                     {
+                      // In sandbox mode, skip city/locality selection if location not confirmed
+                      target: '#persistComplaint',
+                      cond: (context, event) => context.message.isValid && config.enableSandboxMode && !context.slots.pgr["locationConfirmed"],
+                      actions: assign((context, event) => {
+                        // Set city and locality to organization code (tenant)
+                        context.slots.pgr.city = context.extraInfo.tenantId;
+                        context.slots.pgr.locality = context.extraInfo.tenantId;
+                      })
+                    },
+                    {
                       target: '#locality',
-                      cond: (context, event) => context.message.isValid && !config.pgrUseCase.geoSearch && context.slots.pgr["locationConfirmed"] 
+                      cond: (context, event) => context.message.isValid && !config.pgrUseCase.geoSearch && context.slots.pgr["locationConfirmed"] && !config.enableSandboxMode
                     },
                     {
                       target: '#nlpLocalitySearch',
-                      cond: (context, event) => context.message.isValid && config.pgrUseCase.geoSearch && context.slots.pgr["locationConfirmed"] 
+                      cond: (context, event) => context.message.isValid && config.pgrUseCase.geoSearch && context.slots.pgr["locationConfirmed"] && !config.enableSandboxMode
                     },
                     {
                       target: '#city',
-                      cond: (context, event) => context.message.isValid && !config.pgrUseCase.geoSearch,
+                      cond: (context, event) => context.message.isValid && !config.pgrUseCase.geoSearch && !config.enableSandboxMode,
 
                     },
                     {
                       target: '#nlpCitySearch',
-                      cond: (context, event) => context.message.isValid && config.pgrUseCase.geoSearch,
+                      cond: (context, event) => context.message.isValid && config.pgrUseCase.geoSearch && !config.enableSandboxMode,
                     },
                     {
                       target: 'process',
@@ -557,7 +587,7 @@ const pgr =  {
                       try {
                         // Add null checking for event structure
                         if (event && event.message && event.message.input) {
-                          return pgrService.getLocality(event.message.input, context.slots.pgr["city"], context.user.locale, context.extraInfo.tenantId);
+                          return pgrService.getLocality(event.message.input, context.slots.pgr["city"], context.user.locale, context.extraInfo.tenantId, context.user);
                         } else {
                           // Handle case where event.message is undefined
                           console.error("Invalid event structure for PGR locality search:", event);

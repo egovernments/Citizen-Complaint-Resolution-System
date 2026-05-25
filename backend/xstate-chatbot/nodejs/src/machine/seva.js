@@ -1,6 +1,8 @@
 const { Machine, assign } = require("xstate");
 const pgr = require("./pgr");
 const userProfileService = require("./service/egov-user-profile");
+const organizationService = require("./service/organization-service");
+const config = require("../env-variables");
 const dialog = require("./util/dialog.js");
 
 const sevaMachine = Machine({
@@ -66,9 +68,116 @@ const sevaMachine = Machine({
                 }
                 context.onboarding.locale = context.user.locale;
               }),
-              always: "#onboardingWelcome",
+              always: [
+                {
+                  target: "#organizationCode",
+                  cond: (context) => config.enableSandboxMode
+                },
+                {
+                  target: "#onboardingWelcome"
+                }
+              ]
             },
           },
+        },
+        organizationCode: {
+          id: "organizationCode",
+          initial: "question",
+          states: {
+            question: {
+              onEntry: assign((context, event) => {
+                let message = dialog.get_message(
+                  messages.onboarding.organizationCode.question,
+                  context.user.locale
+                );
+                dialog.sendMessage(context, message);
+              }),
+              on: {
+                USER_MESSAGE: "process"
+              }
+            },
+            process: {
+              invoke: {
+                id: 'validateOrganizationCode',
+                src: (context, event) => {
+                  const orgCode = event.message.input.trim().toUpperCase();
+                  return organizationService.validateOrganizationCode(orgCode);
+                },
+                onDone: [
+                  {
+                    target: 'checkUserRegistration',
+                    cond: (context, event) => event.data !== null,
+                    actions: assign((context, event) => {
+                      context.onboarding.organizationCode = event.data.code;
+                      context.onboarding.organizationName = event.data.name;
+                      context.extraInfo.tenantId = event.data.code;
+                    })
+                  },
+                  {
+                    target: 'error'
+                  }
+                ],
+                onError: 'error'
+              }
+            },
+            checkUserRegistration: {
+              invoke: {
+                id: 'checkUserRegistration',
+                src: (context, event) => {
+                  return organizationService.checkAndAuthenticateUser(
+                    context.user.mobileNumber, 
+                    context.onboarding.organizationCode
+                  );
+                },
+                onDone: [
+                  {
+                    target: '#onboardingWelcome',
+                    cond: (context, event) => event.data && event.data.exists === true,
+                    actions: assign((context, event) => {
+                      // Store auth token and user info
+                      context.user.authToken = event.data.authToken;
+                      context.user.refreshToken = event.data.refreshToken;
+                      if (event.data.name) {
+                        context.user.name = event.data.name;
+                      }
+                      if (event.data.locale) {
+                        context.user.locale = event.data.locale;
+                      }
+                    })
+                  },
+                  {
+                    target: 'notRegistered'
+                  }
+                ],
+                onError: 'error'
+              }
+            },
+            notRegistered: {
+              onEntry: assign((context, event) => {
+                const registrationUrl = organizationService.getSandboxRegistrationUrl(
+                  context.onboarding.organizationCode
+                );
+                let message = dialog.get_message(
+                  messages.onboarding.organizationCode.notRegistered,
+                  context.user.locale
+                );
+                message = message.replace('{{registrationUrl}}', registrationUrl);
+                message = message.replace('{{organizationName}}', context.onboarding.organizationName);
+                dialog.sendMessage(context, message);
+              }),
+              always: '#endstate'
+            },
+            error: {
+              onEntry: assign((context, event) => {
+                let message = dialog.get_message(
+                  messages.onboarding.organizationCode.invalidCode,
+                  context.user.locale
+                );
+                dialog.sendMessage(context, message, false);
+              }),
+              always: 'question'
+            }
+          }
         },
         onboardingWelcome: {
           id: "onboardingWelcome",
@@ -403,6 +512,23 @@ let messages = {
     onboardingLocale: {
       question:
         "To select the language simply type and send the number of the preferred option  👇\n\n1.   English\n2.   हिन्दी\n3.   ਪੰਜਾਬੀ",
+    },
+    organizationCode: {
+      question: {
+        en_IN: "Please enter your organization code to continue.\n\n👉 The organization code is provided by your organization administrator.",
+        hi_IN: "जारी रखने के लिए कृपया अपना संगठन कोड दर्ज करें।\n\n👉 संगठन कोड आपके संगठन व्यवस्थापक द्वारा प्रदान किया गया है।",
+        pa_IN: "ਜਾਰੀ ਰੱਖਣ ਲਈ ਕਿਰਪਾ ਕਰਕੇ ਆਪਣਾ ਸੰਗਠਨ ਕੋਡ ਦਰਜ ਕਰੋ।\n\n👉 ਸੰਗਠਨ ਕੋਡ ਤੁਹਾਡੇ ਸੰਗਠਨ ਪ੍ਰਸ਼ਾਸਕ ਦੁਆਰਾ ਪ੍ਰਦਾਨ ਕੀਤਾ ਗਿਆ ਹੈ।"
+      },
+      invalidCode: {
+        en_IN: "The organization code you entered is not valid. Please check and enter the correct organization code.",
+        hi_IN: "आपके द्वारा दर्ज किया गया संगठन कोड मान्य नहीं है। कृपया जांचें और सही संगठन कोड दर्ज करें।",
+        pa_IN: "ਤੁਹਾਡੇ ਦੁਆਰਾ ਦਰਜ ਕੀਤਾ ਗਿਆ ਸੰਗਠਨ ਕੋਡ ਵੈਧ ਨਹੀਂ ਹੈ। ਕਿਰਪਾ ਕਰਕੇ ਜਾਂਚ ਕਰੋ ਅਤੇ ਸਹੀ ਸੰਗਠਨ ਕੋਡ ਦਰਜ ਕਰੋ।"
+      },
+      notRegistered: {
+        en_IN: "You are not registered with organization *{{organizationName}}*.\n\n👉 Please register first using the link below:\n{{registrationUrl}}\n\n👉 After registration, send *Hi* to start again.",
+        hi_IN: "आप संगठन *{{organizationName}}* के साथ पंजीकृत नहीं हैं।\n\n👉 कृपया पहले नीचे दिए गए लिंक का उपयोग करके पंजीकरण करें:\n{{registrationUrl}}\n\n👉 पंजीकरण के बाद, फिर से शुरू करने के लिए *Hi* भेजें।",
+        pa_IN: "ਤੁਸੀਂ ਸੰਗਠਨ *{{organizationName}}* ਨਾਲ ਰਜਿਸਟਰਡ ਨਹੀਂ ਹੋ।\n\n👉 ਕਿਰਪਾ ਕਰਕੇ ਪਹਿਲਾਂ ਹੇਠਾਂ ਦਿੱਤੇ ਲਿੰਕ ਦੀ ਵਰਤੋਂ ਕਰਕੇ ਰਜਿਸਟਰ ਕਰੋ:\n{{registrationUrl}}\n\n👉 ਰਜਿਸਟ੍ਰੇਸ਼ਨ ਤੋਂ ਬਾਅਦ, ਦੁਬਾਰਾ ਸ਼ੁਰੂ ਕਰਨ ਲਈ *Hi* ਭੇਜੋ।"
+      }
     },
     onboardingName: {
       question: {
