@@ -19,7 +19,7 @@ class DigitDb {
     const config = connectionString
       ? { connectionString }
       : {
-          host: process.env.DIGIT_DB_HOST || 'docker-postgres',
+          host: process.env.DIGIT_DB_HOST || 'postgres',
           port: parseInt(process.env.DIGIT_DB_PORT || '5432', 10),
           database: process.env.DIGIT_DB_NAME || 'egov',
           user: process.env.DIGIT_DB_USER || 'egov',

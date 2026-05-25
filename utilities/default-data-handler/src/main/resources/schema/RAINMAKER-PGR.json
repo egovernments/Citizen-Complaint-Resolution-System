@@ -14,9 +14,7 @@
         "keywords",
         "department",
         "slaHours",
-        "active",
-        "menuPath",
-        "menuPathName"
+        "active"
       ],
       "x-unique": [
         "serviceCode"
