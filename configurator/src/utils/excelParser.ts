@@ -731,12 +731,16 @@ export function parseEmployeeExcel(workbook: XLSX.WorkBook): {
         code: 'REQUIRED_FIELD',
       });
       return;
-    } else if (!/^\d{10}$/.test(mobileNumber)) {
+    } else if (!/^\d{9,10}$/.test(mobileNumber)) {
+      // Loosened from `^\d{10}$` so 9-digit MDMS-valid Kenyan numbers
+      // (`712345678`) survive parsing. EmployeeBulkImport's tenant-aware
+      // validateRow then enforces the per-tenant rule from MDMS, and
+      // `normalizeMobileForHrms` pads to 10 before HRMS submission.
       errors.push({
         row: index + 2,
         field: 'mobileNumber',
         value: mobileNumber,
-        message: 'Mobile number must be 10 digits',
+        message: 'Mobile number must be 9 or 10 digits',
         code: 'INVALID_FORMAT',
       });
     }
