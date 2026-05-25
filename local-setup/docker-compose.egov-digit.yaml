@@ -894,9 +894,13 @@ services:
     networks:
     - egov-network
 
-  # Default Data Handler - seeds schemas and master data for new tenants
+  # Default Data Handler - seeds schemas and master data for new tenants.
+  # Image ref is wired through .env (DDH_IMAGE) so the deploy can either
+  # build it locally (`build_default_data_handler: true` in host_vars,
+  # tagged `default-data-handler:local`) or pull the registry image.
+  # See the MCP_IMAGE plumbing below for the parallel pattern.
   default-data-handler:
-    image: registry.preview.egov.theflywheel.in/egovio/default-data-handler:crs_dataseeder-084b7cc
+    image: ${DDH_IMAGE}
     container_name: default-data-handler
     depends_on:
       mdms-backend:

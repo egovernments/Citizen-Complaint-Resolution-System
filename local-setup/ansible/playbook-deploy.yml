@@ -306,6 +306,20 @@
              | default('digit-mcp:local' if (build_mcp | default(false))
                        else (docker_registry ~ '/digit-mcp:latest')) }}
 
+    # Same shape as MCP. When `build_default_data_handler: true`, the build
+    # task below produces `default-data-handler:local` from utilities/default-data-handler
+    # using build/maven/Dockerfile. Otherwise we pull the pinned upstream
+    # image (which bakes the OLD strict RAINMAKER-PGR schema requiring
+    # menuPath/menuPathName — see source-file fix dated 2026-05-24).
+    # TODO: republish a fixed image to {{ docker_registry }} so operators
+    # don't need to set the build flag.
+    - name: "Resolve default-data-handler image tag"
+      ansible.builtin.set_fact:
+        ddh_image: >-
+          {{ ddh_image
+             | default('default-data-handler:local' if (build_default_data_handler | default(false))
+                       else 'registry.preview.egov.theflywheel.in/egovio/default-data-handler:crs_dataseeder-084b7cc') }}
+
     # ==================== Compose .env (per-tenant overrides) ====================
     # Templates Grafana's public root URL (so the JVM dashboard / observability
     # links match the tenant's actual domain). Compose auto-loads .env from the
@@ -520,6 +534,31 @@
       when:
         - enable_mcp | default(false)
         - build_mcp | default(false)
+
+    # ==================== Build default-data-handler image locally =========
+    # When `build_default_data_handler: true`, build the image from the
+    # vendored source in this repo (utilities/default-data-handler) using
+    # the shared maven Dockerfile (build/maven/Dockerfile). The image is
+    # tagged `default-data-handler:local`; compose picks it up via DDH_IMAGE.
+    #
+    # Build context is the CCRS repo root so the Dockerfile can reach both
+    # utilities/default-data-handler/{pom.xml,src} and build/maven/start.sh.
+    # Works for `ansible_connection: local` (controller path == target path).
+    # For real remote targets, add a synchronize step that rsyncs both
+    # subdirs to a build-context dir on the target.
+    - name: "Build default-data-handler image locally (when build_default_data_handler)"
+      ansible.builtin.command: >-
+        docker build
+        -t default-data-handler:local
+        --build-arg WORK_DIR=utilities/default-data-handler
+        -f build/maven/Dockerfile
+        .
+      args:
+        chdir: "{{ playbook_dir }}/../.."
+      register: ddh_build_run
+      changed_when: true
+      when:
+        - build_default_data_handler | default(false)
 
     # ==================== Build digit-ui from source ====================
     # Mirrors the configurator + mcp fold-ins: when `build_digit_ui: true`,
