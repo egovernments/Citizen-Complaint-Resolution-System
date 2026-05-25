@@ -1,5 +1,6 @@
 const { assign } = require('xstate');
 const { pgrService } = require('./service/service-loader');
+const configService = require('./service/config-service');
 const dialog = require('./util/dialog');
 const localisationService = require('./util/localisation-service');
 const config = require('../env-variables');
@@ -306,13 +307,8 @@ const pgr =  {
                         })
                       },
                       {
-                        target: '#city',
-                        cond: (context, event) => !event.data && context.message ==='1' && !config.pgrUseCase.geoSearch
-                        
-                      },
-                      {
-                        target: '#nlpCitySearch',
-                        cond: (context, event) => !event.data && context.message ==='1' && config.pgrUseCase.geoSearch
+                        target: '#tenantSelection',
+                        cond: (context, event) => !event.data && context.message === '1'
                       },
                       {
                         target: '#geoLocation',
@@ -323,18 +319,9 @@ const pgr =  {
                         })
                       }
                     ],
-                    onError: [
-                      {
-                        target: '#city',
-                        cond: (context, event) => !config.pgrUseCase.geoSearch,
-
-                      },
-                      {
-                        target: '#nlpCitySearch',
-                        cond: (context, event) => config.pgrUseCase.geoSearch,
-                      }
-
-                    ],
+                    onError: {
+                      target: '#tenantSelection'
+                    },
                   },
                 }
               }
@@ -402,19 +389,111 @@ const pgr =  {
                       cond: (context, event) => context.message.isValid && config.pgrUseCase.geoSearch && context.slots.pgr["locationConfirmed"] 
                     },
                     {
-                      target: '#city',
-                      cond: (context, event) => context.message.isValid && !config.pgrUseCase.geoSearch,
-
-                    },
-                    {
-                      target: '#nlpCitySearch',
-                      cond: (context, event) => context.message.isValid && config.pgrUseCase.geoSearch,
+                      target: '#tenantSelection',
+                      cond: (context) => context.message.isValid
                     },
                     {
                       target: 'process',
                       cond: (context, event) => {return !context.message.isValid;}                    
                     }
                   ]
+                }
+              }
+            },
+            tenantSelection: {
+              id: 'tenantSelection',
+              initial: 'question',
+              states: {
+                question: {
+                  invoke: {
+                    id: 'fetchTenantsByProvider',
+                    src: (context) => configService.fetchTenantsByProvider(
+                      context.extraInfo.whatsAppBusinessNumber,
+                      context.user.authToken,
+                      context.user.userId
+                    ),
+                    onDone: [
+                      {
+                        // Single tenant: auto-select, no prompt needed
+                        cond: (context, event) => event.data && event.data.length === 1,
+                        target: 'route',
+                        actions: assign((context, event) => {
+                          context.slots.pgr.city = event.data[0];
+                          context.extraInfo.tenantId = event.data[0];
+                        })
+                      },
+                      {
+                        // Multiple tenants: send interactive list, stay in question
+                        cond: (context, event) => event.data && event.data.length > 1,
+                        actions: assign((context, event) => {
+                          const tenants = event.data;
+                          context.grammer = tenants.map((t, i) => ({
+                            intention: t,
+                            recognize: [(i + 1).toString(), t]
+                          }));
+                          const interactiveMsg = {
+                            type: 'interactive_list',
+                            body: dialog.get_message(messages.tenantSelection.question, context.user.locale),
+                            button: dialog.get_message(messages.tenantSelection.button, context.user.locale),
+                            items: tenants.map(t => ({ id: t, title: t }))
+                          };
+                          dialog.sendMessage(context, interactiveMsg);
+                        })
+                      },
+                      {
+                        // No tenants configured for this provider: fall back to MDMS city list
+                        target: '#city'
+                      }
+                    ],
+                    onError: {
+                      // Config service unreachable: fall back to MDMS city list
+                      target: '#city'
+                    }
+                  },
+                  on: {
+                    USER_MESSAGE: 'process'
+                  }
+                },
+                process: {
+                  onEntry: assign((context, event) => {
+                    const isText = dialog.validateInputType(event, 'text');
+                    const isButton = dialog.validateInputType(event, 'button');
+                    if (isText || isButton) {
+                      context.intention = dialog.get_intention(context.grammer, event, true);
+                    } else {
+                      context.intention = dialog.INTENTION_UNKOWN;
+                    }
+                  }),
+                  always: [
+                    {
+                      target: 'route',
+                      cond: (context) => context.intention !== dialog.INTENTION_UNKOWN,
+                      actions: assign((context) => {
+                        context.slots.pgr.city = context.intention;
+                        context.extraInfo.tenantId = context.intention;
+                      })
+                    },
+                    {
+                      target: 'error'
+                    }
+                  ]
+                },
+                route: {
+                  always: [
+                    {
+                      target: '#nlpLocalitySearch',
+                      cond: () => config.pgrUseCase.geoSearch
+                    },
+                    {
+                      target: '#locality'
+                    }
+                  ]
+                },
+                error: {
+                  onEntry: assign((context) => {
+                    dialog.sendMessage(context, dialog.get_message(dialog.global_messages.error.retry, context.user.locale), false);
+                  }),
+                  always: 'question'
                 }
               }
             },
@@ -1052,6 +1131,16 @@ let messages = {
         en_IN: 'Provided locality is miss-spelled or not present in our system record.\nPlease enter the details again.',
         hi_IN: 'आपके द्वारा दर्ज किया गया स्थान गलत वर्तनी वाला है या हमारे सिस्टम रिकॉर्ड में मौजूद नहीं है।\nकृपया फिर से विवरण दर्ज करें।'
       }
+    }
+  },
+  tenantSelection: {
+    question: {
+      en_IN: 'Please select your city from the list below 👇',
+      hi_IN: 'नीचे दी गई सूची से अपना शहर चुनें 👇'
+    },
+    button: {
+      en_IN: 'Select City',
+      hi_IN: 'शहर चुनें'
     }
   },
   trackComplaint: {

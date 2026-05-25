@@ -286,6 +286,42 @@ class TwilioWhatsAppProvider {
         return this.sendTwilioRequest(params);
     }
 
+    async sendInteractiveListMessage(to, body, buttonText, items) {
+        const contentApiUrl = 'https://content.twilio.com/v1/Contents';
+        const contentBody = {
+            friendly_name: `provider_tenant_picker_${Date.now()}`,
+            language: 'en',
+            types: {
+                'twilio/list-picker': {
+                    body: body,
+                    button: buttonText,
+                    items: items.map(item => ({ id: item.id, item: item.title }))
+                }
+            }
+        };
+
+        const contentResponse = await fetch(contentApiUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': this.getAuthHeader(),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(contentBody)
+        });
+
+        if (!contentResponse.ok) {
+            const errBody = await contentResponse.text();
+            console.error('Twilio - Content API error:', contentResponse.status, errBody);
+            throw new Error(`Twilio Content API returned ${contentResponse.status}`);
+        }
+
+        const contentData = await contentResponse.json();
+        const contentSid = contentData.sid;
+        console.log('Twilio - Created list-picker content template:', contentSid);
+
+        await this.sendTemplateMessage(to, contentSid, {});
+    }
+
     async sendTemplateMessage(to, contentSid, contentVariables = {}) {
         const params = new URLSearchParams();
         params.append('To', `whatsapp:+91${to}`);
@@ -361,6 +397,14 @@ class TwilioWhatsAppProvider {
                     }
 
                     await this.sendTemplateMessage(userMobile, templateId, contentVariables);
+                }
+                else if (type === 'interactive_list') {
+                    await this.sendInteractiveListMessage(
+                        userMobile,
+                        message.body,
+                        message.button,
+                        message.items
+                    );
                 }
                 else if (type === 'image' || type === 'pdf') {
                     // For media messages, get the file URL

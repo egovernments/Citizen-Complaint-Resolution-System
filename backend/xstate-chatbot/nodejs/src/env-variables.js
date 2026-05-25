@@ -142,6 +142,12 @@ const envVariables = {
         geoSearch: process.env.GEO_SEARCH === 'false' ? false : true
     },
 
+    configService: {
+        host: process.env.CONFIG_SERVICE_HOST || 'http://localhost:8092',
+        tenantId: process.env.CONFIG_SERVICE_TENANT_ID || 'DEFAULT',
+        providerTenantSchemaCode: process.env.CONFIG_SERVICE_PROVIDER_TENANT_SCHEMA_CODE || 'WhatsAppProviderTenantMap',
+    },
+
     billsAndReceiptsUseCase: {
         billSearchLimit: process.env.BILL_SEARCH_LIMIT || 3,
         receiptSearchLimit: process.env.RECEIPT_SEARCH_LIMIT || 3,
