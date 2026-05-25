@@ -297,28 +297,26 @@
     # tenant opts into a local build (`build_mcp: true`) the deploy builds
     # the image itself (mcp-build task below) and points compose at a
     # local-only tag (`digit-mcp:local`) — no registry pull. Otherwise it
-    # keeps pulling {{ docker_registry }}/digit-mcp:latest as before. An
-    # operator can still override `mcp_image:` explicitly in host_vars.
+    # pulls the published public image. An operator can still override
+    # `mcp_image:` explicitly in host_vars.
     - name: "Resolve MCP image tag"
       ansible.builtin.set_fact:
         mcp_image: >-
           {{ mcp_image
              | default('digit-mcp:local' if (build_mcp | default(false))
-                       else (docker_registry ~ '/digit-mcp:latest')) }}
+                       else 'ghcr.io/subhashini-egov/digit-mcp:2.12-draft-20260525-034354') }}
 
     # Same shape as MCP. When `build_default_data_handler: true`, the build
     # task below produces `default-data-handler:local` from utilities/default-data-handler
-    # using build/maven/Dockerfile. Otherwise we pull the pinned upstream
-    # image (which bakes the OLD strict RAINMAKER-PGR schema requiring
-    # menuPath/menuPathName — see source-file fix dated 2026-05-24).
-    # TODO: republish a fixed image to {{ docker_registry }} so operators
-    # don't need to set the build flag.
+    # using build/maven/Dockerfile. Otherwise we pull the published image
+    # carrying the relaxed RAINMAKER-PGR schema (see source-file fix dated
+    # 2026-05-24).
     - name: "Resolve default-data-handler image tag"
       ansible.builtin.set_fact:
         ddh_image: >-
           {{ ddh_image
              | default('default-data-handler:local' if (build_default_data_handler | default(false))
-                       else 'registry.preview.egov.theflywheel.in/egovio/default-data-handler:crs_dataseeder-084b7cc') }}
+                       else 'ghcr.io/subhashini-egov/default-data-handler:2.12-draft-20260525-034354') }}
 
     # ==================== Compose .env (per-tenant overrides) ====================
     # Templates Grafana's public root URL (so the JVM dashboard / observability
