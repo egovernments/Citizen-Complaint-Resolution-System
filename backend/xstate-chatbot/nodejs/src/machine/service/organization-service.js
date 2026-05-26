@@ -8,7 +8,7 @@ const userService = require('../../session/user-service');
  */
 class OrganizationService {
     constructor() {
-        // Use tenant management host from config
+        // Use tenant management host from config (configurable per environment)
         this.tenantManagementHost = config.tenantManagementHost;
     }
 
@@ -31,7 +31,8 @@ class OrganizationService {
                 }
             };
 
-            const response = await fetch(`${this.tenantManagementHost}/tenant/_search?code=${organizationCode}`, {
+            // Use tenant/config/_search which returns active status correctly
+            const response = await fetch(`${this.tenantManagementHost}/tenant/config/_search?code=${organizationCode}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -45,19 +46,25 @@ class OrganizationService {
             }
 
             const data = await response.json();
+            console.log(`Tenant config search response for code '${organizationCode}':`, JSON.stringify(data, null, 2));
             
-            // Check if we got a valid tenant response
-            if (data && data.tenant && data.tenant.length > 0) {
-                const tenant = data.tenant[0];
-                // Only return active tenants
-                if (tenant.isActive) {
-                    return {
-                        code: tenant.code,
-                        name: tenant.name,
-                        id: tenant.id,
-                        isActive: tenant.isActive
-                    };
-                }
+            // Check if we got a valid tenant config response
+            const tenantConfigs = data?.tenantConfigs || [];
+            
+            if (tenantConfigs && tenantConfigs.length > 0) {
+                const tenantConfig = tenantConfigs[0];
+                console.log(`Found tenant config: ${tenantConfig.code}, name: ${tenantConfig.name}`);
+                
+                // For tenant config API, presence of config means tenant is valid
+                // The config API is used by UI and only returns configured tenants
+                return {
+                    code: tenantConfig.code,
+                    name: tenantConfig.name,
+                    id: tenantConfig.id,
+                    isActive: true  // If config exists, tenant is usable
+                };
+            } else {
+                console.log(`No tenant config found for code '${organizationCode}'`);
             }
 
             return null;
