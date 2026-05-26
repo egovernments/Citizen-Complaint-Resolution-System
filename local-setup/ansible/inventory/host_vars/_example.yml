@@ -205,6 +205,16 @@ nginx_features:
   api_pgr: false             # /api/pgr/ — proxied to MCP server
   mcp: true                  # /mcp + /v1/* — MCP HTTP transport + REST shim (requires enable_mcp: true)
 
+# If true, the playbook will NOT render `templates/nginx-site.conf.j2` into
+# /etc/nginx/sites-available/ and will NOT touch /etc/nginx/sites-enabled/.
+# nginx still gets installed (apt task is unconditional) but the operator's
+# hand-managed vhost is left as-is. Use for tenants whose production vhost
+# has hand-crafted routing the template can't (yet) render — e.g. Bomet's
+# /egov-rainmaker/ filestore passthrough, /novu/+/novu-api/ routing, the
+# /digit-ui/ host-alias. Default false so new tenants get the standard
+# templated vhost.
+nginx_preserve_vhost: false
+
 # ────────── OpenBao (per-tenant secrets backend) ──────────
 
 # REQUIRED. Path under the kv/ mount where this tenant's secrets live.

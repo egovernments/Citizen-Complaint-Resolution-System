@@ -137,6 +137,14 @@ The first deploy:
 Subsequent deploys are idempotent — only changed configs / templated
 files trigger restarts.
 
+### Preserve a hand-crafted nginx vhost — `nginx_preserve_vhost: true`
+
+Some production tenants have hand-crafted `/etc/nginx/sites-enabled/<domain>`
+files with routing the templated `nginx-site.conf.j2` doesn't render
+(e.g. Bomet's `/egov-rainmaker/` filestore passthrough, `/novu/`+`/novu-api/`,
+the `/digit-ui/` host-alias). Set `nginx_preserve_vhost: true` in their
+host_vars and the playbook will still install nginx, but will skip
+rendering/symlinking the site file — your hand-managed vhost is left
 ## Per-tenant overrides
 
 Most tenants share the base compose + the templated nginx vhost. Some
