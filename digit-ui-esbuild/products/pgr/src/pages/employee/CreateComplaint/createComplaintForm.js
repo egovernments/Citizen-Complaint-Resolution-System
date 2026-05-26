@@ -274,6 +274,14 @@ const CreateComplaintForm = ({
   // (closes egovernments/CCRS#478 — locality validation).
   const isBoundaryLeaf = (boundary) => {
     if (!boundary) return false;
+    // PGRBoundaryComponent now tags the picked node with `isLeaf`
+    // (true only when boundaryType matches the deepest hierarchy
+    // level). Trust the tag when present — the children-based check
+    // wasn't reliable because BoundaryDropdown.data.find() didn't
+    // preserve `.children` on the picked node, so County-level picks
+    // were silently passing as leaves (egovernments/CCRS#478). Fall
+    // back to the children heuristic for older session-cached values.
+    if (typeof boundary.isLeaf === "boolean") return boundary.isLeaf === true;
     return !Array.isArray(boundary.children) || boundary.children.length === 0;
   };
 
@@ -291,6 +299,22 @@ const CreateComplaintForm = ({
         type: "error",
       });
       return;
+    }
+    // Postal pattern check — Kenya is 5 digits. Optional field; only
+    // enforce format when filled. The config-level `validation.pattern`
+    // on a `type:"number"` field doesn't reliably fire, so do it
+    // explicitly here. Closes egovernments/CCRS#478 — postal validation
+    // message, CSR path.
+    if (_data?.postalCode != null && String(_data.postalCode).trim().length > 0) {
+      const pc = String(_data.postalCode).trim();
+      if (!/^[0-9]{5}$/.test(pc)) {
+        setToast({
+          show: true,
+          label: t("CS_COMPLAINT_POSTALCODE_INVALID_ERROR"),
+          type: "error",
+        });
+        return;
+      }
     }
     const payload = formPayloadToCreateComplaint(_data, tenantId, user?.info);
     handleResponseForCreateComplaint(payload);

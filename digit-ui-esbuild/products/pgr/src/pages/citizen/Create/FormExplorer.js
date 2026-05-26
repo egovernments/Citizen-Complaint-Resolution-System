@@ -234,12 +234,22 @@ const FormExplorer = () => {
       case "SelectedBoundary":
         // Tolerate the legacy SelectAddress shape so any in-flight
         // session data created before this change still validates.
-        // Also require the picked boundary to be a leaf (no children) so
-        // a citizen can't file at the County or Sub-County level — the
-        // PGR routing and SLA both key off the Ward (closes
-        // egovernments/CCRS#478 — locality validation, citizen path).
+        // Also require the picked boundary to be a leaf so a citizen
+        // can't file at the County or Sub-County level — PGR routing
+        // and SLA both key off the Ward (closes egovernments/CCRS#478
+        // — locality validation, citizen path).
+        //
+        // PGRBoundaryComponent now tags the emitted node with `isLeaf`
+        // (true only when boundaryType matches the deepest hierarchy
+        // level). Trust the tag when present — the earlier check
+        // relied on `sb.children` being preserved on the picked node,
+        // but BoundaryDropdown's `data.find()` doesn't reliably keep
+        // the children array, so County-level picks were silently
+        // passing as "leaves". Fall back to the children heuristic
+        // for older session-cached values that predate the tag.
         if (data?.SelectedBoundary?.code) {
           const sb = data.SelectedBoundary;
+          if (typeof sb.isLeaf === "boolean") return sb.isLeaf === true;
           return !Array.isArray(sb.children) || sb.children.length === 0;
         }
         return !!data?.SelectAddress?.city?.code && !!data?.SelectAddress?.locality?.code;
@@ -267,6 +277,37 @@ const FormExplorer = () => {
     // both the form display and the allowlist check below.
     if (merged?.GeoLocationsPoint?.pincode != null && String(merged.GeoLocationsPoint.pincode).length > 0) {
       merged.postalCode = String(merged.GeoLocationsPoint.pincode);
+    }
+
+    // Postal pattern check — Kenya is 5 digits. The field is optional
+    // (the boundary picker already pins to a Ward, and many citizens
+    // don't know the postal code), so only enforce format when filled.
+    // The config has a `validation.pattern` on a `type:"number"` field
+    // which doesn't reliably fire — explicit submit-time guard. Closes
+    // egovernments/CCRS#478 — postal validation message.
+    if (merged?.postalCode != null && String(merged.postalCode).trim().length > 0) {
+      const pc = String(merged.postalCode).trim();
+      if (!/^[0-9]{5}$/.test(pc)) {
+        setToast({ label: t("CS_COMPLAINT_POSTALCODE_INVALID_ERROR"), type: "error" });
+        return;
+      }
+    }
+
+    // Ward-leaf belt-and-suspender at submit time. The per-step
+    // `isFieldValid` check already enforces this when advancing past
+    // the boundary step, but a stale session-cached SelectedBoundary
+    // (from before the cascade was tagged with `isLeaf`) could
+    // otherwise slip through the final submit. Closes
+    // egovernments/CCRS#478 — locality validation, citizen path.
+    if (merged?.SelectedBoundary?.code) {
+      const sb = merged.SelectedBoundary;
+      const looksLikeLeaf = typeof sb.isLeaf === "boolean"
+        ? sb.isLeaf === true
+        : (!Array.isArray(sb.children) || sb.children.length === 0);
+      if (!looksLikeLeaf) {
+        setToast({ label: t("CS_COMPLAINT_BOUNDARY_LEAF_REQUIRED"), type: "error" });
+        return;
+      }
     }
 
     // Get fields mandatory for current step
