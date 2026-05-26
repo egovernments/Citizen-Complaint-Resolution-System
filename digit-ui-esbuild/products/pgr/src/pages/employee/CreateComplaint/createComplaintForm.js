@@ -307,10 +307,17 @@ const CreateComplaintForm = ({
     // message, CSR path.
     if (_data?.postalCode != null && String(_data.postalCode).trim().length > 0) {
       const pc = String(_data.postalCode).trim();
-      if (!/^[0-9]{5}$/.test(pc)) {
+      // Postal-code shape is per-country. Read from globalConfigs
+      // `CORE_POSTAL_CONFIGS` so each tenant can pin their own pattern
+      // (Kenya 5 digits, India 6, UK alnum, US 5/5+4, …). Falls back to
+      // the legacy hard default when the host hasn't configured it.
+      const postalCfg = window?.globalConfigs?.getConfig?.("CORE_POSTAL_CONFIGS") || {};
+      const postalPattern = postalCfg.postalCodePattern || "^[0-9]{5}$";
+      const postalErrorKey = postalCfg.postalCodeErrorMessage || "CS_COMPLAINT_POSTALCODE_INVALID_ERROR";
+      if (!new RegExp(postalPattern).test(pc)) {
         setToast({
           show: true,
-          label: t("CS_COMPLAINT_POSTALCODE_INVALID_ERROR"),
+          label: t(postalErrorKey),
           type: "error",
         });
         return;

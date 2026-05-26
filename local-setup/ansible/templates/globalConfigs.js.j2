@@ -39,6 +39,7 @@ var globalConfigs = (function () {
   var employeeModuleDenylist = {{ employee_module_denylist | to_json }};
   var loginTenantAllowlist = {{ login_tenant_allowlist | to_json }};
   var coreMobileConfigs = {{ core_mobile_configs | to_json }};
+  var corePostalConfigs = {{ core_postal_configs | default({}) | to_json }};
 
   var getConfig = function (key) {
     if (key === "EMPLOYEE_MODULE_DENYLIST") return employeeModuleDenylist;
@@ -91,6 +92,8 @@ var globalConfigs = (function () {
       return boundaryType;
     } else if (key === "CORE_MOBILE_CONFIGS") {
       return coreMobileConfigs;
+    } else if (key === "CORE_POSTAL_CONFIGS") {
+      return corePostalConfigs;
     }
   };
 

@@ -95,6 +95,19 @@ core_mobile_configs:
   mobileNumberAllowedStartingCharacters: ["1", "7"]
   mobileNumberErrorMessage: "CORE_COMMON_MOBILE_ERROR"
 
+# Postal-code validation. The SPA reads this via globalConfigs key
+# `CORE_POSTAL_CONFIGS` for submit-time pattern checks in the citizen +
+# employee PGR create-complaint flows. Empty/absent → the legacy hard
+# default (^[0-9]{5}$ / Kenya) is used as a fallback. Examples:
+#   Kenya:   ^[0-9]{5}$              (5 digits)
+#   India:   ^[0-9]{6}$              (6 digits)
+#   UK:      ^[A-Z]{1,2}[0-9R][0-9A-Z]? ?[0-9][A-Z-[CIKMOV]]{2}$  (alnum)
+#   US:      ^[0-9]{5}(-[0-9]{4})?$  (5 or 5+4)
+core_postal_configs:
+  postalCodePattern: "^[0-9]{5}$"
+  postalCodeLength: 5
+  postalCodeErrorMessage: "CS_COMPLAINT_POSTALCODE_INVALID_ERROR"
+
 # S3 bucket name used by egov-filestore as the asset bucket (sees
 # `asset_s3_bucket` in globalConfigs.js).
 asset_s3_bucket: "mytenant-egov-assets"
