@@ -14,11 +14,17 @@
 
   # Apple-Silicon Macs must pull amd64 images under Rosetta — Mac host_vars
   # sets `docker_default_platform: linux/amd64`. Undefined on Linux ->
-  # omit -> no env change, zero impact on Bomet/naipepea. Must be an
-  # inventory var, not a gathered fact: play-level environment is
-  # evaluated before fact-gathering (ansible_system undefined here).
+  # empty string, which Docker treats as "use host platform" (linux/amd64
+  # on x86_64 boxes) — zero impact on Bomet/naipepea. Must be an inventory
+  # var, not a gathered fact: play-level environment is evaluated before
+  # fact-gathering (ansible_system undefined here).
+  #
+  # NB: must NOT use `default(omit)` here — `omit` works as a module-arg
+  # sentinel but is rendered literally inside an environment dict value
+  # ("__omit_place_holder__..." gets exported as DOCKER_DEFAULT_PLATFORM
+  # and breaks every subsequent `docker build`).
   environment:
-    DOCKER_DEFAULT_PLATFORM: "{{ docker_default_platform | default(omit) }}"
+    DOCKER_DEFAULT_PLATFORM: "{{ docker_default_platform | default('') }}"
 
   pre_tasks:
     # digit-ui can be served two ways, both binding port 18080:
