@@ -2004,6 +2004,42 @@ services:
     networks:
       - egov-network
 
+  # otp-publisher — replaces Kong's mock /user-otp termination with a real
+  # OTP generator: mint a 6-digit OTP -> cache in Redis -> publish OTP.SEND to
+  # kafka complaints.domain.events -> novu-bridge -> Twilio SMS. Part of the
+  # SMS-OTP path; gated behind the notifications profile (off by default).
+  # Node service vendored at utilities/otp-publisher; built locally via
+  # `build_otp_publisher: true` (tag otp-publisher:local) or override with
+  # OTP_PUBLISHER_IMAGE.
+  otp-publisher:
+    image: ${OTP_PUBLISHER_IMAGE:-otp-publisher:local}
+    container_name: otp-publisher
+    restart: unless-stopped
+    profiles: ["notifications"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    environment:
+      PORT: '3030'
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: redpanda:9092
+      EVENT_TOPIC: complaints.domain.events
+      OTP_TTL_SECONDS: ${OTP_TTL_SECONDS:-600}
+      DEFAULT_TENANT_ID: ${DEFAULT_TENANT_ID:-pg}
+      STATIC_OTP: ${OTP_PUBLISHER_STATIC_OTP:-}
+      # Per-tenant recipient for OTP routing; set in host_vars when wiring SMS.
+      OTP_RECIPIENT_USER_ID: ${OTP_RECIPIENT_USER_ID:-}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3030/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks:
+      - egov-network
+
 networks:
   egov-network:
     driver: bridge

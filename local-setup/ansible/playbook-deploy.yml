@@ -558,6 +558,24 @@
       when:
         - build_default_data_handler | default(false)
 
+    # ==================== Build otp-publisher image locally ===============
+    # When `build_otp_publisher: true`, build the vendored Node service at
+    # utilities/otp-publisher (its own Dockerfile, NOT the maven one) and tag
+    # it otp-publisher:local; compose picks it up via OTP_PUBLISHER_IMAGE.
+    # Only needed when the notifications profile (SMS-OTP path) is enabled.
+    - name: "Build otp-publisher image locally (when build_otp_publisher)"
+      ansible.builtin.command: >-
+        docker build
+        -t otp-publisher:local
+        -f utilities/otp-publisher/Dockerfile
+        utilities/otp-publisher
+      args:
+        chdir: "{{ playbook_dir }}/../.."
+      register: otp_publisher_build_run
+      changed_when: true
+      when:
+        - build_otp_publisher | default(false)
+
     # ==================== Build digit-ui from source ====================
     # Mirrors the configurator + mcp fold-ins: when `build_digit_ui: true`,
     # clone digit-ui-esbuild + `npm run build` here (files/digit-ui-build.sh).
