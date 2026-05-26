@@ -8,32 +8,164 @@ const { State, interpret } = require("xstate");
 const dialog = require("../machine/util/dialog.js");
 const uuid = require("uuid");
 const config = require("../env-variables");
+const organizationService = require("../machine/service/organization-service");
+
+// Simple in-memory store for tracking org code requests in sandbox mode
+// Format: { mobileNumber: { timestamp: Date, waitingForOrgCode: boolean } }
+const sandboxOrgCodeTracker = {};
 
 class SessionManager {
   async fromUser(reformattedMessage) {
     let mobileNumber = reformattedMessage.user.mobileNumber;
     let user;
-    try {
-      user = await userService.getUserForMobileNumber(
-        mobileNumber,
-        reformattedMessage.extraInfo.tenantId
-      );
-      reformattedMessage.user = user;
-    } catch (error) {
-      console.error(`Failed to get/create user for ${mobileNumber}:`, error.message);
-      // Send error message to user instead of crashing
-      channelProvider.sendMessageToUser(
-        { mobileNumber: mobileNumber },
-        [`Sorry, there was an error processing your request. Please check your mobile number format (should be 10 digits) and try again. Error: ${error.message}`],
-        reformattedMessage.extraInfo
-      );
-      return; // Exit gracefully instead of crashing
+    let userId;
+    let messageInput = reformattedMessage.message.input?.toLowerCase();
+    
+    // Check if this is a reset/greeting message
+    let isReset = dialog.get_intention(
+      grammer.reset,
+      reformattedMessage,
+      true
+    ) === 'reset';
+    
+    // In sandbox mode, handle org code flow without creating sessions
+    if (config.enableSandboxMode) {
+      const isGreeting = isReset || (messageInput && ['hi', 'hello', 'hey', 'start', 'help', 'seva', 'egov'].includes(messageInput.trim()));
+      
+      // Check if we're waiting for org code from this number
+      const trackerEntry = sandboxOrgCodeTracker[mobileNumber];
+      const isWaitingForOrgCode = trackerEntry && trackerEntry.waitingForOrgCode;
+      
+      // Clean up old entries (older than 30 minutes)
+      if (trackerEntry && (Date.now() - trackerEntry.timestamp) > 30 * 60 * 1000) {
+        delete sandboxOrgCodeTracker[mobileNumber];
+      }
+      
+      if (isGreeting) {
+        // Every greeting starts fresh - always ask for org code
+        // Clear any existing session to ensure fresh start
+        await chatStateRepository.updateState(mobileNumber, false, null);
+        
+        sandboxOrgCodeTracker[mobileNumber] = {
+          timestamp: Date.now(),
+          waitingForOrgCode: true
+        };
+        
+        channelProvider.sendMessageToUser(
+          { mobileNumber: mobileNumber },
+          ["Welcome to the Sandbox WhatsApp Service! 🏛️\n\nPlease enter your organization code to continue."],
+          reformattedMessage.extraInfo
+        );
+        return; // Exit early - no session creation
+      } else if (isWaitingForOrgCode && !isGreeting) {
+        // User is providing org code - validate it
+        const orgCode = reformattedMessage.message.input?.trim();
+        const orgDetails = await organizationService.validateOrganizationCode(orgCode);
+        
+        if (!orgDetails) {
+          // Invalid org code - ask again
+          channelProvider.sendMessageToUser(
+            { mobileNumber: mobileNumber },
+            [`Invalid organization code '${orgCode}'.\n\nPlease enter a valid organization code or type 'Hi' to restart.`],
+            reformattedMessage.extraInfo
+          );
+          return; // Exit early - no session creation
+        }
+        
+        // Valid org code - clear tracker and proceed with user creation
+        delete sandboxOrgCodeTracker[mobileNumber];
+        
+        // Try to get/create user in the organization's tenant
+        try {
+          user = await userService.getUserForMobileNumber(
+            mobileNumber,
+            orgDetails.code
+          );
+          userId = user.userId;
+          reformattedMessage.user = user;
+          reformattedMessage.extraInfo.tenantId = orgDetails.code;
+          reformattedMessage.extraInfo.organizationTenantId = orgDetails.code;
+          reformattedMessage.extraInfo.organizationName = orgDetails.name;
+          // Store org code in context for use throughout the flow
+        } catch (error) {
+          console.error(`Failed to get/create user for ${mobileNumber} in tenant ${orgDetails.code}:`, error.message);
+          
+          // User not registered in this organization - show registration URL
+          const registrationUrl = organizationService.getSandboxRegistrationUrl(orgDetails.code);
+          channelProvider.sendMessageToUser(
+            { mobileNumber: mobileNumber },
+            [`You are not registered with organization '${orgDetails.name}'.\n\nPlease register at:\n${registrationUrl}\n\nOnce registered, type 'Hi' to start again.`],
+            reformattedMessage.extraInfo
+          );
+          return; // Exit early - no session creation
+        }
+      } else if (!isWaitingForOrgCode && !isGreeting) {
+        // Check if user has an existing session with org code
+        let existingState = await chatStateRepository.getActiveStateForUserId(mobileNumber);
+        
+        if (existingState && existingState.context?.extraInfo?.organizationTenantId) {
+          // User has existing session with org code - use it for continued conversation
+          const orgTenantId = existingState.context.extraInfo.organizationTenantId;
+          try {
+            user = await userService.getUserForMobileNumber(
+              mobileNumber,
+              orgTenantId
+            );
+            userId = user.userId;
+            reformattedMessage.user = user;
+            reformattedMessage.extraInfo.tenantId = orgTenantId;
+            reformattedMessage.extraInfo.organizationTenantId = orgTenantId;
+          } catch (error) {
+            console.error(`Failed to get user for ${mobileNumber} in tenant ${orgTenantId}:`, error.message);
+            // Session exists but user not found - ask to restart
+            channelProvider.sendMessageToUser(
+              { mobileNumber: mobileNumber },
+              ["Session expired or user not found. Please type 'Hi' to start again."],
+              reformattedMessage.extraInfo
+            );
+            return;
+          }
+        } else {
+          // No existing session and not a greeting - ask to start with Hi
+          channelProvider.sendMessageToUser(
+            { mobileNumber: mobileNumber },
+            ["Welcome! Please type 'Hi' to start."],
+            reformattedMessage.extraInfo
+          );
+          return;
+        }
+      }
+    } else {
+      // Non-sandbox mode: use rootTenantId from config
+      try {
+        user = await userService.getUserForMobileNumber(
+          mobileNumber,
+          config.rootTenantId
+        );
+        userId = user.userId;
+        reformattedMessage.user = user;
+        reformattedMessage.extraInfo.tenantId = config.rootTenantId;
+      } catch (error) {
+        console.error(`Failed to get/create user for ${mobileNumber}:`, error.message);
+        channelProvider.sendMessageToUser(
+          { mobileNumber: mobileNumber },
+          [`Sorry, there was an error processing your request. Please check your mobile number format (should be 10 digits) and try again. Error: ${error.message}`],
+          reformattedMessage.extraInfo
+        );
+        return;
+      }
     }
-    let userId = user.userId;
-
-    await chatStateRepository.updateSessionId(userId, config.avgSessionTime);
-    let chatState = await chatStateRepository.getActiveStateForUserId(userId);
-    telemetry.log(userId, "from_user", reformattedMessage);
+    
+    // At this point, we have a valid user and userId
+    // Now we can create or update the session
+    
+    // Use mobileNumber as userId for session storage in sandbox mode
+    // This ensures consistency across the flow
+    const sessionUserId = config.enableSandboxMode ? mobileNumber : userId;
+    
+    await chatStateRepository.updateSessionId(sessionUserId, config.avgSessionTime);
+    let chatState = await chatStateRepository.getActiveStateForUserId(sessionUserId);
+    telemetry.log(sessionUserId, "from_user", reformattedMessage);
 
     // handle reset case
     let intention = dialog.get_intention(
@@ -54,7 +186,7 @@ class SessionManager {
       saveState = this.removeUserDataFromState(saveState);
       let sessionId = uuid.v4();
       await chatStateRepository.insertNewState(
-        userId,
+        sessionUserId,
         true,
         JSON.stringify(saveState),
         sessionId,
@@ -162,7 +294,7 @@ let grammer = {
   reset: [
     {
       intention: "reset",
-      recognize: ["Hello", "hello", "Hi", "hi", "egov", "seva", "सेवा"],
+      recognize: ["Hello", "hello", "Hi", "hi", "egov", "seva", "सेवा", "start", "Start", "help", "Help"],
     },
   ],
 };

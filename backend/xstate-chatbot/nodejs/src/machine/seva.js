@@ -124,6 +124,7 @@ const sevaMachine = Machine({
               invoke: {
                 id: 'checkUserRegistration',
                 src: (context, event) => {
+                  // Now we have org code, check if user exists in this tenant
                   return organizationService.checkAndAuthenticateUser(
                     context.user.mobileNumber, 
                     context.onboarding.organizationCode
@@ -131,18 +132,11 @@ const sevaMachine = Machine({
                 },
                 onDone: [
                   {
-                    target: '#onboardingWelcome',
+                    target: 'userFound',
                     cond: (context, event) => event.data && event.data.exists === true,
                     actions: assign((context, event) => {
-                      // Store auth token and user info
-                      context.user.authToken = event.data.authToken;
-                      context.user.refreshToken = event.data.refreshToken;
-                      if (event.data.name) {
-                        context.user.name = event.data.name;
-                      }
-                      if (event.data.locale) {
-                        context.user.locale = event.data.locale;
-                      }
+                      context.onboarding.userExistsInOrg = true;
+                      context.onboarding.userInfo = event.data;
                     })
                   },
                   {
@@ -152,6 +146,20 @@ const sevaMachine = Machine({
                 onError: 'error'
               }
             },
+            userFound: {
+              onEntry: assign((context, event) => {
+                // User exists and is validated - proceed to welcome
+                let message = dialog.get_message(
+                  messages.onboarding.organizationCode.userFound || "Organization verified successfully!",
+                  context.user.locale
+                );
+                dialog.sendMessage(context, message);
+                
+                // Store org tenant for the session
+                context.extraInfo.organizationTenantId = context.onboarding.organizationCode;
+              }),
+              always: '#onboardingWelcome'
+            },
             notRegistered: {
               onEntry: assign((context, event) => {
                 const registrationUrl = organizationService.getSandboxRegistrationUrl(
@@ -160,10 +168,13 @@ const sevaMachine = Machine({
                 let message = dialog.get_message(
                   messages.onboarding.organizationCode.notRegistered,
                   context.user.locale
-                );
+                ) || `You are not registered with {{organizationName}}. Please register first at:\n{{registrationUrl}}`;
                 message = message.replace('{{registrationUrl}}', registrationUrl);
-                message = message.replace('{{organizationName}}', context.onboarding.organizationName);
+                message = message.replace('{{organizationName}}', context.onboarding.organizationName || context.onboarding.organizationCode);
                 dialog.sendMessage(context, message);
+                
+                // Store org code for future attempts
+                context.extraInfo.organizationTenantId = context.onboarding.organizationCode;
               }),
               always: '#endstate'
             },

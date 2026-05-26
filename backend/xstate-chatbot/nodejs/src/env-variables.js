@@ -22,8 +22,7 @@ const envVariables = {
 
     // Sandbox mode configuration
     enableSandboxMode: process.env.ENABLE_SANDBOX_MODE ? process.env.ENABLE_SANDBOX_MODE === 'true' : true,
-    sandboxTenantId: process.env.SANDBOX_TENANT_ID || 'pg', // Default tenant for sandbox before org code
-    tenantManagementHost: process.env.TENANT_MANAGEMENT_HOST || 'http://localhost:8081/tenant-management',
+    tenantManagementHost: process.env.TENANT_MANAGEMENT_HOST || 'https://sandbox-demo.digit.org/tenant-management',
     sandboxHost: process.env.SANDBOX_HOST || 'https://sandbox.digit.org',
 
     googleAPIKey: process.env.GOOGLE_MAPS_API_KEY || 'AIzaSyDjSk-Bw1OuiOE-5K7jsP6KGN2rbcN7iBk',
