@@ -58,6 +58,8 @@ const envVariables = {
         authToken: process.env.TWILIO_AUTH_TOKEN || '',
         whatsappNumber: process.env.TWILIO_WHATSAPP_NUMBER || '',
         baseUrl: process.env.TWILIO_BASE_URL || '',
+        pgrMenuSid:      process.env.TWILIO_PGR_MENU_SID || '',      // Quick-reply: File/Track/Feedback buttons
+        feedbackFlowSid: process.env.TWILIO_FEEDBACK_FLOW_SID || 'HX850fdad53bacc155a995c90f0f40008d',  // WhatsApp Flow: complaint select + rating + good + comments
     },
    
     valueFirstWhatsAppProvider: {
@@ -103,6 +105,7 @@ const envVariables = {
         collectonServicSearchEndpoint: process.env.COLLECTION_SERVICE_SEARCH_ENDPOINT || 'collection-services/payments/$module/_search',
         pgrCreateEndpoint: process.env.PGR_CREATE_ENDPOINT || 'pgr-services/v2/request/_create',
         pgrSearchEndpoint: process.env.PGR_SEARCH_ENDPOINT || 'pgr-services/v2/request/_search',
+        pgrRateEndpoint:   process.env.PGR_RATE_ENDPOINT   || 'pgr-services/v2/request/_update',
         swachCreateEndpoint:process.env.SWACH_CREATE_ENDPOINT || "swach-services/v2/request/_create",
         swachSearchEndpoint:process.env.SWACH_SEARCH_ENDPOINT || "swach-services/v2/request/_search",
         pgrv1CreateEndpoint: process.env.PGR_CREATE_ENDPOINT || 'rainmaker-pgr/v1/requests/_create',

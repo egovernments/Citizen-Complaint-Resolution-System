@@ -556,6 +556,79 @@ class PGRService {
   }
 
 
+  async fetchResolvedComplaints(user) {
+    let requestBody = {
+      RequestInfo: {
+        apiId: 'Rainmaker',
+        authToken: user.authToken,
+        msgId: Date.now() + '|' + (user.locale || 'en_IN'),
+        plainAccessRequest: {}
+      }
+    };
+
+    var url = config.egovServices.egovServicesHost + config.egovServices.pgrSearchEndpoint;
+    url += '?tenantId=' + config.rootTenantId;
+    url += '&mobileNumber=' + user.mobileNumber;
+    url += '&applicationStatus=RESOLVED';
+
+    let options = {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody)
+    };
+
+    let response = await fetch(url, options);
+    if (response.status !== 200) {
+      console.error('fetchResolvedComplaints failed:', response.status);
+      return [];
+    }
+
+    let responseBody = await response.json();
+    let serviceWrappers = responseBody.ServiceWrappers || [];
+
+    // Return raw service objects (needed for the _update call)
+    let limit = config.pgrUseCase.complaintSearchLimit || 3;
+    return serviceWrappers.slice(0, limit).map(sw => sw.service);
+  }
+
+  async submitFeedback(user, serviceObj, rating, additionalDetail, comments) {
+    let requestBody = {
+      service: {
+        ...serviceObj,
+        rating: parseInt(rating),
+        additionalDetail: additionalDetail,  // e.g. "Services,Resolution Time"
+      },
+      workflow: {
+        action: 'RATE',
+        comments: comments || '',
+        verificationDocuments: []
+      },
+      RequestInfo: {
+        apiId: 'Rainmaker',
+        authToken: user.authToken,
+        userInfo: user.userInfo
+      }
+    };
+
+    var url = config.egovServices.egovServicesHost + config.egovServices.pgrRateEndpoint;
+
+    let options = {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody)
+    };
+
+    let response = await fetch(url, options);
+    if (response.status !== 200) {
+      const errorText = await response.text();
+      console.error('submitFeedback failed:', response.status, errorText);
+      throw new Error('Failed to submit feedback: ' + response.status);
+    }
+
+    let responseBody = await response.json();
+    return responseBody;
+  }
+
   async getShortenedURL(finalPath) {
     var url =
       config.egovServices.egovServicesHost +

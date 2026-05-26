@@ -4,6 +4,7 @@ const dialog = require('./util/dialog');
 const localisationService = require('./util/localisation-service');
 const config = require('../env-variables');
 const moment = require("moment-timezone");
+const feedback = require('./feedback');
 let event;
 const pgr =  {
   id: 'pgr',
@@ -19,9 +20,14 @@ const pgr =  {
       states: {
         question: {
           onEntry: assign((context, event) => {
-            const message = dialog.get_message(messages.menu.question, context.user.locale);
-            context.grammer = grammer.menu.choice;
-            dialog.sendMessage(context, message);
+            // Send interactive quick-reply button menu if SID configured, else plain text fallback
+            if (config.twilio && config.twilio.pgrMenuSid) {
+              dialog.sendMessage(context, { type: 'template', output: config.twilio.pgrMenuSid, params: [] });
+            } else {
+              const message = dialog.get_message(messages.menu.question, context.user.locale);
+              context.grammer = grammer.menu.choice;
+              dialog.sendMessage(context, message);
+            }
           }),
           on: {
             USER_MESSAGE: 'process'
@@ -29,7 +35,10 @@ const pgr =  {
         },
         process: {
           onEntry: assign((context, event) => {
-            if (dialog.validateInputType(event, 'text')) {
+            // Handle button tap (interactive) or typed number (text fallback)
+            if (dialog.validateInputType(event, 'button')) {
+              context.intention = event.message.input; // payload = 'fileComplaint' / 'trackComplaint' / 'feedback'
+            } else if (dialog.validateInputType(event, 'text')) {
               context.intention = dialog.get_intention(context.grammer, event, true);
             } else {
               context.intention = dialog.INTENTION_UNKOWN;
@@ -43,6 +52,10 @@ const pgr =  {
             {
               target: '#trackComplaint',
               cond: (context) => context.intention == 'trackComplaint'
+            },
+            {
+              target: '#feedback',
+              cond: (context) => context.intention == 'feedback'
             },
             {
               target: 'error'
@@ -880,6 +893,7 @@ const pgr =  {
         },
       }, // fileComplaint.states
     },  // fileComplaint
+    feedback: feedback,
     trackComplaint: {
       id: 'trackComplaint',
       invoke: {
@@ -926,8 +940,8 @@ const pgr =  {
 let messages = {
   menu: {
     question: {
-      en_IN: 'Please type and send the number for your option 👇\n\n*1.* File a new complaint\n*2.* Track existing complaints\n\n👉 To go back to the main menu, type and send *egov*.',
-      hi_IN: 'कृपया अपने विकल्प के लिए नंबर टाइप करें और भेजें 👇\n\n*1.* नई शिकायत दर्ज करें\n*2.* पुरानी शिकायतों की स्थिति देखें\n\n👉 मुख्य मेनू पर वापस जाने के लिए, टाइप करें और भेजें *egov*।'
+      en_IN: 'Please type and send the number for your option 👇\n\n*1.* File a new complaint\n*2.* Track existing complaints\n*3.* Give Feedback\n\n👉 To go back to the main menu, type and send *egov*.',
+      hi_IN: 'कृपया अपने विकल्प के लिए नंबर टाइप करें और भेजें 👇\n\n*1.* नई शिकायत दर्ज करें\n*2.* पुरानी शिकायतों की स्थिति देखें\n*3.* प्रतिक्रिया दें\n\n👉 मुख्य मेनू पर वापस जाने के लिए, टाइप करें और भेजें *egov*।'
     }
   },
   fileComplaint: {
@@ -1079,8 +1093,9 @@ let messages = {
 let grammer = {
   menu: {
     choice: [
-      { intention: 'fileComplaint', recognize: ['1'] },
-      { intention: 'trackComplaint', recognize: ['2'] }
+      { intention: 'fileComplaint',  recognize: ['1'] },
+      { intention: 'trackComplaint', recognize: ['2'] },
+      { intention: 'feedback',       recognize: ['3'] }
     ]
   },
   confirmation: {
