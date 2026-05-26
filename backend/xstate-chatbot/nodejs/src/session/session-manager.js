@@ -42,10 +42,13 @@ class SessionManager {
       }
       
       if (isGreeting) {
-        // Every greeting starts fresh - always ask for org code
-        // Clear any existing session to ensure fresh start
-        await chatStateRepository.updateState(mobileNumber, false, null);
-        
+        // Every greeting starts fresh - always ask for org code.
+        // If we know the prior user UUID for this mobile, deactivate that session.
+        const priorUserId = trackerEntry && trackerEntry.userId;
+        if (priorUserId) {
+          await chatStateRepository.updateState(priorUserId, false, null);
+        }
+
         sandboxOrgCodeTracker[mobileNumber] = {
           timestamp: Date.now(),
           waitingForOrgCode: true
@@ -72,10 +75,7 @@ class SessionManager {
           return; // Exit early - no session creation
         }
         
-        // Valid org code - clear tracker and proceed with user creation
-        delete sandboxOrgCodeTracker[mobileNumber];
-        
-        // Try to get/create user in the organization's tenant
+        // Valid org code - try to get/create user in the organization's tenant
         try {
           user = await userService.getUserForMobileNumber(
             mobileNumber,
@@ -86,8 +86,19 @@ class SessionManager {
           reformattedMessage.extraInfo.tenantId = orgDetails.code;
           reformattedMessage.extraInfo.organizationTenantId = orgDetails.code;
           reformattedMessage.extraInfo.organizationName = orgDetails.name;
-          // Store org code in context for use throughout the flow
+
+          // Persist mobileNumber -> {orgTenantId, userId} in the tracker so subsequent
+          // messages can resolve the user UUID without re-asking for the org code.
+          sandboxOrgCodeTracker[mobileNumber] = {
+            timestamp: Date.now(),
+            waitingForOrgCode: false,
+            orgTenantId: orgDetails.code,
+            userId: userId
+          };
+          // Now continue to create the session - DON'T RETURN!
         } catch (error) {
+          // Validation succeeded but user create/login failed - clear tracker.
+          delete sandboxOrgCodeTracker[mobileNumber];
           console.error(`Failed to get/create user for ${mobileNumber} in tenant ${orgDetails.code}:`, error.message);
           
           // User not registered in this organization - show registration URL
@@ -100,12 +111,11 @@ class SessionManager {
           return; // Exit early - no session creation
         }
       } else if (!isWaitingForOrgCode && !isGreeting) {
-        // Check if user has an existing session with org code
-        let existingState = await chatStateRepository.getActiveStateForUserId(mobileNumber);
-        
-        if (existingState && existingState.context?.extraInfo?.organizationTenantId) {
-          // User has existing session with org code - use it for continued conversation
-          const orgTenantId = existingState.context.extraInfo.organizationTenantId;
+        // Subsequent message after org code is set: resolve the user via the
+        // tracker (mobileNumber -> {orgTenantId, userId}) so the session is
+        // keyed by user.userId just like the normal flow.
+        if (trackerEntry && trackerEntry.orgTenantId) {
+          const orgTenantId = trackerEntry.orgTenantId;
           try {
             user = await userService.getUserForMobileNumber(
               mobileNumber,
@@ -115,9 +125,11 @@ class SessionManager {
             reformattedMessage.user = user;
             reformattedMessage.extraInfo.tenantId = orgTenantId;
             reformattedMessage.extraInfo.organizationTenantId = orgTenantId;
+            // Refresh tracker so it doesn't expire mid-conversation; keep userId in sync.
+            trackerEntry.timestamp = Date.now();
+            trackerEntry.userId = userId;
           } catch (error) {
             console.error(`Failed to get user for ${mobileNumber} in tenant ${orgTenantId}:`, error.message);
-            // Session exists but user not found - ask to restart
             channelProvider.sendMessageToUser(
               { mobileNumber: mobileNumber },
               ["Session expired or user not found. Please type 'Hi' to start again."],
@@ -126,7 +138,7 @@ class SessionManager {
             return;
           }
         } else {
-          // No existing session and not a greeting - ask to start with Hi
+          // No tracker entry (cold start, restart, or expired) - ask to greet again.
           channelProvider.sendMessageToUser(
             { mobileNumber: mobileNumber },
             ["Welcome! Please type 'Hi' to start."],
@@ -156,12 +168,17 @@ class SessionManager {
       }
     }
     
-    // At this point, we have a valid user and userId
-    // Now we can create or update the session
+    // At this point, we should have a valid user and userId
+    // If not, we can't continue (something went wrong in the flow)
+    if (!user || !userId) {
+      console.error(`Cannot create session: user=${user}, userId=${userId}, mobileNumber=${mobileNumber}`);
+      return;
+    }
     
-    // Use mobileNumber as userId for session storage in sandbox mode
-    // This ensures consistency across the flow
-    const sessionUserId = config.enableSandboxMode ? mobileNumber : userId;
+    // Use user.userId (KeyCloak UUID) as the session storage key in both sandbox
+    // and normal mode. This matches the legacy normal flow and keeps onTransition's
+    // updateState (which keys by state.context.user.userId) in sync with insertNewState.
+    const sessionUserId = userId;
     
     await chatStateRepository.updateSessionId(sessionUserId, config.avgSessionTime);
     let chatState = await chatStateRepository.getActiveStateForUserId(sessionUserId);
