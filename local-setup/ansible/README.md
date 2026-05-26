@@ -145,6 +145,49 @@ files with routing the templated `nginx-site.conf.j2` doesn't render
 the `/digit-ui/` host-alias). Set `nginx_preserve_vhost: true` in their
 host_vars and the playbook will still install nginx, but will skip
 rendering/symlinking the site file — your hand-managed vhost is left
+## Per-tenant overrides
+
+Most tenants share the base compose + the templated nginx vhost. Some
+production tenants need a little more — extra env on a service, a
+hand-crafted nginx vhost the standard template doesn't render. Two
+mechanisms support that without forking the playbook:
+
+### Per-tenant compose overlay — `docker-compose.<tenant>.yml`
+
+If a file named `local-setup/docker-compose.<inventory_hostname>.yml`
+exists on the controller, the playbook copies it to the target alongside
+the base compose and appends `-f docker-compose.<tenant>.yml` to every
+compose invocation (`pull`, `up -d`, `recreate`). Use it for tenant-local
+env overrides without touching the base compose.
+
+Example — `local-setup/docker-compose.bomet.yml` ships:
+
+```yaml
+services:
+  egov-url-shortening:
+    environment:
+      # bomet's restored Flyway state has no V1 record → re-running V1
+      # collides with the existing eg_url_shortener table. Skip Flyway;
+      # the schema is stable on this tenant.
+      SPRING_FLYWAY_ENABLED: "false"
+  inbox:
+    environment:
+      # base compose's inbox defaults to STATE_LEVEL_TENANT_ID=mz; bomet
+      # has no DataSecurity for mz, which crashes the encryption client
+      # on startup. Pin to bomet's real state tenant.
+      STATE_LEVEL_TENANT_ID: "ke"
+```
+
+Convention: file path relative to `local-setup/`. Empty/missing = no-op,
+so deploys on tenants without an overlay are unaffected.
+
+### Preserve a hand-crafted nginx vhost — `nginx_preserve_vhost: true`
+
+Set in host_vars when the tenant's `/etc/nginx/sites-enabled/<domain>`
+has routing the templated `nginx-site.conf.j2` doesn't render (Bomet's
+`/egov-rainmaker/` filestore passthrough, `/novu/`+`/novu-api/`, the
+`/digit-ui/` host-alias). The playbook still installs nginx, but skips
+templating + symlinking the site file — your hand-managed vhost is left
 alone across every redeploy.
 
 Default `false`. New tenants get the standard templated vhost.

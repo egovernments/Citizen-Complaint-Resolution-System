@@ -14,11 +14,17 @@
 
   # Apple-Silicon Macs must pull amd64 images under Rosetta — Mac host_vars
   # sets `docker_default_platform: linux/amd64`. Undefined on Linux ->
-  # omit -> no env change, zero impact on Bomet/naipepea. Must be an
-  # inventory var, not a gathered fact: play-level environment is
-  # evaluated before fact-gathering (ansible_system undefined here).
+  # empty string, which Docker treats as "use host platform" (linux/amd64
+  # on x86_64 boxes) — zero impact on Bomet/naipepea. Must be an inventory
+  # var, not a gathered fact: play-level environment is evaluated before
+  # fact-gathering (ansible_system undefined here).
+  #
+  # NB: must NOT use `default(omit)` here — `omit` works as a module-arg
+  # sentinel but is rendered literally inside an environment dict value
+  # ("__omit_place_holder__..." gets exported as DOCKER_DEFAULT_PLATFORM
+  # and breaks every subsequent `docker build`).
   environment:
-    DOCKER_DEFAULT_PLATFORM: "{{ docker_default_platform | default(omit) }}"
+    DOCKER_DEFAULT_PLATFORM: "{{ docker_default_platform | default('') }}"
 
   pre_tasks:
     # digit-ui can be served two ways, both binding port 18080:
@@ -227,6 +233,27 @@
       copy:
         src: ../docker-compose.fast-path.yml
         dest: "{{ digit_dir }}/docker-compose.fast-path.yml"
+
+    # Per-tenant compose overlay convention. If a file named
+    # local-setup/docker-compose.<inventory_hostname>.yml exists on the
+    # controller, copy it to the target and include it in every compose
+    # invocation below. Use it to ship per-tenant env overrides (Flyway
+    # table quirks, STATE_LEVEL_TENANT_ID adjustments, image tag pins,
+    # extra services, etc.) without touching the base compose file. Bomet
+    # uses this for url-shortening SPRING_FLYWAY_ENABLED:false + inbox
+    # STATE_LEVEL_TENANT_ID:ke overrides.
+    - name: "Per-tenant compose overlay — check for docker-compose.{{ inventory_hostname }}.yml"
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/../docker-compose.{{ inventory_hostname }}.yml"
+      register: per_tenant_overlay
+      delegate_to: localhost
+      become: false
+
+    - name: "Per-tenant compose overlay — copy to target (if present)"
+      copy:
+        src: "../docker-compose.{{ inventory_hostname }}.yml"
+        dest: "{{ digit_dir }}/docker-compose.{{ inventory_hostname }}.yml"
+      when: per_tenant_overlay.stat.exists
 
 
     # ==================== OTEL Java Agent (fetched, not in git) ====================
@@ -471,12 +498,13 @@
     # Tenants opt into the DB fast-path with `db_fast_path: true` in their
     # host_vars. When on, layer the overlay onto every compose invocation
     # below (pull, up, recreate). Default off — never touches live tenants.
-    - name: "Compute compose -f flags (fast-path overlay opt-in)"
+    - name: "Compute compose -f flags (fast-path + per-tenant overlay opt-in)"
       ansible.builtin.set_fact:
         compose_files: >-
           {{
             '-f docker-compose.egov-digit.yaml' +
-            (' -f docker-compose.fast-path.yml' if (db_fast_path | default(false)) else '')
+            (' -f docker-compose.fast-path.yml' if (db_fast_path | default(false)) else '') +
+            (' -f docker-compose.' ~ inventory_hostname ~ '.yml' if per_tenant_overlay.stat.exists else '')
           }}
 
     - name: "Show compose file stack"
