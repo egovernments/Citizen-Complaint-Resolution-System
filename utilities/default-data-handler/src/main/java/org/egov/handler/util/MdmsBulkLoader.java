@@ -6,6 +6,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.handler.config.ServiceConfiguration;
+import org.egov.handler.web.models.MdmsCriteriaReqV2;
+import org.egov.handler.web.models.MdmsCriteriaV2;
+import org.egov.handler.web.models.MdmsResponseV2;
 import org.egov.tracer.model.CustomException;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
@@ -27,6 +30,7 @@ public class MdmsBulkLoader {
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
     private final ServiceConfiguration serviceConfig;
+    private final MdmsV2Util mdmsV2Util;
 
 
     public void loadAllMdmsData(String tenantId, RequestInfo requestInfo, String mdmsDataPath) {
@@ -50,6 +54,31 @@ public class MdmsBulkLoader {
                 if (fileName == null || !fileName.endsWith(".json")) continue;
 
                 String schemaCode = fileName.replace(".json", "");
+
+                // Idempotency guard: skip seeding this schemaCode's bundled data if the
+                // target tenant already has rows for it. Seed bundles are fixed/all-or-
+                // nothing, so any existing row means it was already seeded (e.g. by the
+                // db_fast_path DB dump, or a previous deploy/converge). Without this,
+                // re-seeding duplicates records — and for DataSecurity.SecurityPolicy a
+                // duplicate crashes egov-user's encryption client (Collectors.toMap →
+                // "Duplicate key"), failing compose-up. mdms-v2 does not reject these as
+                // duplicates because the dump-inserted rows bypass its uniqueness check.
+                // Fail-open: if the pre-check errors, fall through and seed as before.
+                try {
+                    MdmsCriteriaV2 existsCriteria = MdmsCriteriaV2.builder()
+                            .tenantId(tenantId).schemaCode(schemaCode).offset(0).limit(1).build();
+                    MdmsCriteriaReqV2 existsReq = MdmsCriteriaReqV2.builder()
+                            .requestInfo(requestInfo).mdmsCriteria(existsCriteria).build();
+                    MdmsResponseV2 existing = mdmsV2Util.searchMdmsData(existsReq);
+                    if (existing != null && existing.getMdms() != null && !existing.getMdms().isEmpty()) {
+                        log.info("MDMS data already present for schemaCode {} in tenant {} — skipping seed (idempotent)",
+                                schemaCode, tenantId);
+                        continue;
+                    }
+                } catch (Exception preCheckEx) {
+                    log.warn("Idempotency pre-check failed for schemaCode {} in tenant {}; proceeding with seed: {}",
+                            schemaCode, tenantId, preCheckEx.getMessage());
+                }
 
                 // Read JSON content
                 String rawJson = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
