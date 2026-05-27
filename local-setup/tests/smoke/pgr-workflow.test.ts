@@ -193,14 +193,19 @@ describe('PGR End-to-End Workflow', () => {
     test('should verify complaint in database', async () => {
       expect(serviceRequestId).toBeDefined();
 
-      const dbRecord = await db.queryOne<{
-        servicerequestid: string;
-        tenantid: string;
-        servicecode: string;
-      }>(
-        'SELECT servicerequestid, tenantid, servicecode FROM eg_pgr_service_v2 WHERE servicerequestid = $1',
-        [serviceRequestId]
-      );
+      // Persister writes asynchronously via Kafka — poll until the record appears
+      let dbRecord = null;
+      for (let attempt = 0; attempt < 30 && !dbRecord; attempt++) {
+        dbRecord = await db.queryOne<{
+          servicerequestid: string;
+          tenantid: string;
+          servicecode: string;
+        }>(
+          'SELECT servicerequestid, tenantid, servicecode FROM eg_pgr_service_v2 WHERE servicerequestid = $1',
+          [serviceRequestId]
+        );
+        if (!dbRecord) await new Promise(r => setTimeout(r, 1000));
+      }
 
       expect(dbRecord).not.toBeNull();
       expect(dbRecord?.servicerequestid).toBe(serviceRequestId);

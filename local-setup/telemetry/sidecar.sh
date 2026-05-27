@@ -11,6 +11,9 @@ MATOMO_URL="https://unified-demo.digit.org/matomo/matomo.php"
 MATOMO_SITE_ID="${MATOMO_SITE_ID:-5}"
 DOCKER_SOCKET="/var/run/docker.sock"
 
+# Record start time before package install so events during apk install are not missed
+START_SINCE=$(date +%s)
+
 # Install curl + jq if missing (alpine base image)
 for cmd in curl jq; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
@@ -120,7 +123,7 @@ FILTER=$(printf '{"label":["com.docker.compose.project=%s"],"type":["container"]
 
 echo "[telemetry] Monitoring container events..."
 
-docker_api "/events?filters=${FILTER}" | while IFS= read -r line; do
+docker_api "/events?since=${START_SINCE}&filters=${FILTER}" | while IFS= read -r line; do
   ACTION=$(echo "$line" | jq -r '.Action // empty' 2>/dev/null)
   SERVICE=$(echo "$line" | jq -r '.Actor.Attributes["com.docker.compose.service"] // empty' 2>/dev/null)
   [ -z "$SERVICE" ] && continue

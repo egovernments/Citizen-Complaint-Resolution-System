@@ -365,6 +365,25 @@ services:
     networks:
       - egov-network
 
+  # Nginx reverse proxy for egov-user — distributes requests across
+  # scaled instances via Docker DNS round-robin.
+  egov-user-proxy:
+    image: registry.preview.egov.theflywheel.in/nginx:alpine
+    container_name: egov-user-proxy
+    depends_on:
+      egov-user:
+        condition: service_healthy
+    volumes:
+      - ./nginx/user-proxy.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8107/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+    - egov-network
+
   egov-otp:
     image: egovio/egov-otp:v2.9.2-4a60f20
     container_name: egov-otp
@@ -530,6 +549,26 @@ services:
           cpus: '0.25'
     networks:
       - egov-network
+
+  # Nginx reverse proxy for egov-workflow-v2 — distributes requests across
+  # scaled instances via Docker DNS round-robin. Without this, Java HTTP
+  # keep-alive connections cause all traffic to stick to one instance.
+  egov-workflow-proxy:
+    image: registry.preview.egov.theflywheel.in/nginx:alpine
+    container_name: egov-workflow-proxy
+    depends_on:
+      egov-workflow-v2:
+        condition: service_healthy
+    volumes:
+      - ./nginx/workflow-proxy.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8109/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+    - egov-network
 
   egov-localization:
     image: egovio/egov-localization:v2.9.2-4a60f20
@@ -1001,7 +1040,8 @@ services:
       KONG_STATUS_LISTEN: 0.0.0.0:8100
       KONG_MEM_CACHE_SIZE: 64m
       KONG_NGINX_WORKER_PROCESSES: 1
-          deploy:
+      KONG_UNTRUSTED_LUA: "on"
+    deploy:
       resources:
         limits:
           memory: 256M
