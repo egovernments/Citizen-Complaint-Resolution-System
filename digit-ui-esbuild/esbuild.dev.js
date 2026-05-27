@@ -342,7 +342,7 @@ async function start() {
     }
 
     // Proxy all non-static requests to Kong or Keycloak, with logging.
-    const kcPrefixes = ["/realms/", "/token-exchange/", "/register", "/check-email"];
+    const kcPrefixes = ["/realms/", "/kc/", "/register", "/check-email"];
     const isKc = kcPrefixes.some((p) => pathname.startsWith(p));
 
     // Everything that isn't a /digit-ui/ asset goes to the backend
