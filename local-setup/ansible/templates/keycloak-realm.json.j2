@@ -49,6 +49,13 @@
     playbook) is the runtime path, but baking it into the realm import
     keeps a fresh re-import idempotent. -#}
 {%- if (keycloak_google_client_id | default('')) | length > 0 -%}
+  {#- The client secret lives in OpenBao (bootstrap_secrets.keycloak_google_client_secret),
+      so prefer bao_secrets if available; fall back to a host_var of the
+      same name for sandbox/test renders without OpenBao. -#}
+  {%- set google_secret = (bao_secrets.json.data.data.keycloak_google_client_secret
+                            if (bao_secrets is defined
+                                and bao_secrets.json is defined)
+                            else (keycloak_google_client_secret | default(''))) -%}
   {%- set idp = {
       'alias': 'google',
       'providerId': 'google',
@@ -57,7 +64,7 @@
       'firstBrokerLoginFlowAlias': 'first broker login',
       'config': {
           'clientId': keycloak_google_client_id,
-          'clientSecret': keycloak_google_client_secret | default(''),
+          'clientSecret': google_secret,
           'syncMode': 'IMPORT'
       }
   } -%}

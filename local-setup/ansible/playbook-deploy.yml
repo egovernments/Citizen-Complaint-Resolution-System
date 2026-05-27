@@ -923,6 +923,39 @@
         mode: '0600'            # tighten — was 0644 from the template; secrets bump to 0600
       no_log: true
 
+    # Keycloak-tier secrets — appended as a separate marked block so the
+    # main TENANT SECRETS block stays untouched on Keycloak-free
+    # tenants. Same OpenBao read; we just pick a different subset of
+    # keys. Default-empty strings on every lookup so that a missing key
+    # in OpenBao (e.g. first deploy before the operator filled them in)
+    # doesn't fail template rendering — it just writes empty values, and
+    # the keycloak containers fail their healthcheck loudly enough that
+    # the operator notices.
+    - name: "OpenBao — write Keycloak secrets into compose .env (when enable_keycloak)"
+      ansible.builtin.blockinfile:
+        path: "{{ digit_dir }}/.env"
+        block: |
+          KC_ADMIN_PASSWORD={{ bao_secrets.json.data.data.keycloak_admin_password | default('') }}
+          KC_DB_PASSWORD={{ bao_secrets.json.data.data.keycloak_db_password | default('') }}
+          TOKEN_EXCHANGE_SYSTEM_PASSWORD={{ bao_secrets.json.data.data.token_exchange_system_password | default('eGov@123') }}
+        marker: "# {mark} KEYCLOAK SECRETS"
+        create: false
+        mode: '0600'
+      no_log: true
+      when: enable_keycloak | default(false)
+
+    - name: "OpenBao — append Google IdP secret into compose .env (when configured)"
+      ansible.builtin.lineinfile:
+        path: "{{ digit_dir }}/.env"
+        regexp: '^KC_GOOGLE_CLIENT_SECRET='
+        line: "KC_GOOGLE_CLIENT_SECRET={{ bao_secrets.json.data.data.keycloak_google_client_secret | default('') }}"
+        create: false
+        mode: '0600'
+      no_log: true
+      when:
+        - enable_keycloak | default(false)
+        - (keycloak_google_client_id | default('')) | length > 0
+
     - name: "Recreate services with the new env (Linux/Debian)"
       ansible.builtin.shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d
       args:
@@ -1407,7 +1440,7 @@
       ansible.builtin.shell: |
         docker exec keycloak /opt/keycloak/bin/kcadm.sh config credentials \
           --server http://127.0.0.1:8180 --realm master \
-          --user admin --password "{{ kc_admin_password }}"
+          --user admin --password "{{ bao_secrets.json.data.data.keycloak_admin_password | default('') }}"
       when: enable_keycloak | default(false)
       no_log: true
       changed_when: false
@@ -1436,7 +1469,7 @@
           -s alias=google \
           -s providerId=google \
           -s 'config.clientId={{ keycloak_google_client_id }}' \
-          -s 'config.clientSecret={{ keycloak_google_client_secret }}' 2>&1 | grep -v "Conflict" || true
+          -s 'config.clientSecret={{ bao_secrets.json.data.data.keycloak_google_client_secret | default('') }}' 2>&1 | grep -v "Conflict" || true
       when:
         - enable_keycloak | default(false)
         - (keycloak_google_client_id | default('')) | length > 0

@@ -167,6 +167,41 @@ twilio_account_sid: ""
 twilio_auth_token: ""
 twilio_whatsapp_from: "whatsapp:+14155238886"   # Twilio Sandbox default
 
+# ────────── Keycloak SSO (opt-in) ──────────
+# Adds 2 containers (keycloak + token-exchange-svc) plus the host
+# nginx /auth/ and /token-exchange/ location blocks. Inert in the
+# rest of the stack — DIGIT keeps booting fine with OTP login. The UI
+# only switches to the Keycloak code path when auth_provider:
+# 'keycloak'; the cutover is intentionally a separate PR.
+#
+# Workflow when enable_keycloak: true:
+#   1. First deploy creates the `keycloak` Postgres DB (via the
+#      first-boot init script), starts the keycloak + token-exchange
+#      containers, and the playbook's keycloak-bootstrap block
+#      imports a per-tenant realm rendered from
+#      local-setup/keycloak/realm-template.json. Realm name =
+#      state_tenant_id.
+#   2. (Optional) set keycloak_google_client_id +
+#      keycloak_google_client_secret to add Google as a federated IdP.
+#   3. Flip auth_provider: 'keycloak' (in a follow-up PR) to switch
+#      the SPA's auth-adapter to OIDC PKCE.
+enable_keycloak: false
+
+# 'keycloak' = SSO via the auth-adapter. '' (default) keeps OTP login.
+# Don't flip this until the realm is imported and the operator has
+# verified a successful test login via /auth/realms/<realm>/account.
+auth_provider: ""
+
+# OIDC public client id in the per-tenant realm. The realm template
+# ships `digit-ui`; only change this if you've forked the template
+# and added a different client.
+keycloak_client_id: "digit-ui"
+
+# Federated Google login (optional). Leave blank to skip Google IdP
+# wiring entirely. When set, the bootstrap will register a Google
+# identity-provider in the realm during deploy.
+keycloak_google_client_id: ""
+
 # Init the nairobi-mdms git submodule on the controller. The submodule
 # lives in a separate repo and isn't auto-fetched on clone — turn this
 # on only if your tenant onboarding uses those JSONs. See
@@ -204,6 +239,7 @@ nginx_features:
   status: true               # /status/ — Gatus health dashboard
   api_pgr: false             # /api/pgr/ — proxied to MCP server
   mcp: true                  # /mcp + /v1/* — MCP HTTP transport + REST shim (requires enable_mcp: true)
+  keycloak: false            # /auth/ + /token-exchange/ — requires enable_keycloak: true
 
 # ────────── OpenBao (per-tenant secrets backend) ──────────
 
@@ -225,3 +261,11 @@ bootstrap_secrets:
   minio_root_password: change-me-strong
   elasticsearch_master_password: "asd@#$@$!132123"  # see comment above
   egov_hrms_default_password: "eGov@123"
+  # Keycloak secrets — only consumed when enable_keycloak: true.
+  # Leave empty on tenants without Keycloak; the playbook only resolves
+  # these via `| mandatory` inside the digit.env.j2 keycloak block,
+  # which is itself gated on enable_keycloak.
+  keycloak_admin_password: ""               # master realm admin login
+  keycloak_db_password: ""                  # Keycloak's Postgres connection
+  keycloak_google_client_secret: ""         # only if keycloak_google_client_id is set
+  token_exchange_system_password: "eGov@123"  # DIGIT system user the exchange impersonates
