@@ -2118,7 +2118,10 @@ services:
   # unavailable, switch to a `build:` block pointing at the overlay
   # repo path.
   token-exchange-svc:
-    image: registry.preview.egov.theflywheel.in/egovio/token-exchange-svc:latest
+    # Published unscoped (not under egovio/) at registry.preview because
+    # it predates the namespace standardisation. Pin to :dev for now;
+    # bump when a versioned tag is published.
+    image: registry.preview.egov.theflywheel.in/token-exchange-svc:dev
     container_name: token-exchange-svc
     restart: unless-stopped
     profiles: ["keycloak"]

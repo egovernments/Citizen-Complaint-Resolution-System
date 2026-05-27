@@ -123,24 +123,41 @@ export class KeycloakAuthAdapter extends AuthAdapter {
     }
     this._tenantId = tenantId || null;
 
+    // OAuth2 password grant against the realm's standard token endpoint.
+    // Routed through Kong's /kc/* path (strip_path: true) so the URL the
+    // browser sends is `/kc/realms/{realm}/protocol/openid-connect/token`,
+    // which arrives at token-exchange-svc as
+    // `/realms/{realm}/protocol/openid-connect/token`. The overlay
+    // intercepts this exact path and adds KC→DIGIT fallback (if KC auth
+    // fails, retries against egov-user and lazy-provisions the KC side).
+    // We deliberately use the standard endpoint rather than a custom BFF
+    // route so the adapter remains compatible with any vanilla Keycloak.
     const tokenExchangeUrl = this._tokenExchangeUrl || window.location.origin;
-    const resp = await fetch(`${tokenExchangeUrl}/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, tenantId }),
-    });
+    const realm = window?.globalConfigs?.getConfig("KEYCLOAK_REALM") || tenantId;
+    const clientId = window?.globalConfigs?.getConfig("KEYCLOAK_CLIENT_ID") || "digit-ui";
+
+    const resp = await fetch(
+      `${tokenExchangeUrl}/realms/${encodeURIComponent(realm)}/protocol/openid-connect/token`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "password",
+          client_id: clientId,
+          username: email,
+          password,
+          scope: "openid",
+        }),
+      }
+    );
 
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({}));
-      throw new Error(err.error || err.message || "Login failed");
+      throw new Error(err.error_description || err.error || err.message || "Login failed");
     }
 
     const tokens = await resp.json();
-
-    // BFF does not return refresh_token — pass null
-    this._setTokens(tokens.access_token, null, tokens.id_token);
-    this._digitUserType = tokens.digit_user_type || null;
-    this._digitRoles = tokens.digit_roles || null;
+    this._setTokens(tokens.access_token, tokens.refresh_token, tokens.id_token);
 
     await this._loadUserFromToken();
     return { token: tokens.access_token, user: this._user };
