@@ -14,6 +14,29 @@ import type { ProbeReport } from '../utils/probe.js';
 import { loadFromXlsx } from '../utils/xlsx-loader.js';
 
 /**
+ * True for error messages that indicate a record already exists (duplicate / unique
+ * key violation). Matters because tenant_bootstrap is idempotent — a re-run of
+ * `mz` over an already-bootstrapped `mz` should count those records as `skipped`,
+ * not `failed`.
+ *
+ * Subtle history: `msg.includes('DUPLICATE')` was the original check at 11 call
+ * sites. mdms-v2 actually emits "Duplicate record" (capital D, two words) for the
+ * tenant.tenants self-record, which slips past case-sensitive .includes — so a
+ * second `./deploy.sh maputo` would surface "tenant.tenants/mz: Duplicate record"
+ * as a real failure even though it was a benign re-run. One call site got fixed
+ * inline with a regex; the others did not. This helper unifies all 11.
+ *
+ * Important non-match: "Unique attribute list cannot be empty" is a SCHEMA
+ * VALIDATION error (the schema's x-unique is missing), NOT a duplicate. The
+ * earlier inline regex's lone `unique` term caught that as a duplicate-skip,
+ * silently swallowing a real schema bug (Workflow.BusinessServiceMasterConfig).
+ * This helper is intentionally precise: only true duplicate signals match.
+ */
+export function isDuplicateError(msg: string): boolean {
+  return /DUPLICATE|duplicate record|already exists|NON[_-]?UNIQUE|unique constraint|unique key|unique index/i.test(msg);
+}
+
+/**
  * Derive a mobile number that satisfies the TARGET tenant's mobile rule.
  *
  * tenant_bootstrap copies an ADMIN from the source country, but that mobile
@@ -181,7 +204,7 @@ async function copyWorkflowDefinitions(
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      if (msg.includes('DUPLICATE') || msg.includes('already exists') || msg.includes('unique')) {
+      if (isDuplicateError(msg)) {
         results.skipped.push(bsCode);
       } else {
         results.failed.push(`${bsCode}: ${msg}`);
@@ -853,7 +876,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         }, null, 2);
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        if (msg.includes('DUPLICATE') || msg.includes('already exists') || msg.includes('unique')) {
+        if (isDuplicateError(msg)) {
           return JSON.stringify({
             success: true,
             message: `Schema "${code}" already exists for tenant "${tenantId}"`,
@@ -957,18 +980,34 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       emitProgress({ phase: 'bootstrap:start', message: `Bootstrapping ${target} from ${source}`, data: { source, target }, pct: 0 });
 
       // Step 1: Copy ALL schemas from source to target
+      //
+      // Some source schemas are missing a non-empty `x-unique` array — typically
+      // legacy schemas seeded outside the mdms-v2 schema-create API (e.g. the
+      // PGR `Workflow.BusinessServiceMasterConfig` shipped in the dump has no
+      // `x-unique`). mdms-v2 rejects writes of these with
+      //   "Unique attribute list cannot be empty"
+      // which is a 400 SCHEMA_VALIDATION error, NOT a duplicate. Surface it as
+      // a skip-with-reason rather than blindly attempting a write that we know
+      // will fail; the operator gets a clean signal in `results.schemas.skipped`
+      // (with the empty-x-unique reason) instead of a noisy `failed` entry that
+      // looks like a bootstrap regression.
       emitProgress({ phase: 'schemas:start', message: 'Copying MDMS schema definitions', pct: 5 });
       const sourceSchemas = await digitApi.mdmsSchemaSearch(source);
       for (const schema of sourceSchemas) {
         const code = schema.code as string;
         const definition = schema.definition as Record<string, unknown>;
         const description = (schema.description as string) || code;
+        const xUnique = (definition as { 'x-unique'?: unknown })['x-unique'];
+        if (!Array.isArray(xUnique) || xUnique.length === 0) {
+          results.schemas.skipped.push(`${code} (source lacks x-unique — mdms-v2 would reject)`);
+          continue;
+        }
         try {
           await digitApi.mdmsSchemaCreate(target, code, description, definition);
           results.schemas.copied.push(code);
         } catch (error) {
           const msg = error instanceof Error ? error.message : String(error);
-          if (msg.includes('DUPLICATE') || msg.includes('already exists') || msg.includes('unique')) {
+          if (isDuplicateError(msg)) {
             results.schemas.skipped.push(code);
           } else {
             results.schemas.failed.push(`${code}: ${msg}`);
@@ -1041,7 +1080,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         results.data.copied.push(`tenant.tenants/${target} (self-record)`);
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        if (msg.includes('DUPLICATE') || msg.includes('already exists') || msg.includes('unique') || msg.includes('NON_UNIQUE')) {
+        if (isDuplicateError(msg)) {
           results.data.skipped.push(`tenant.tenants/${target} (self-record)`);
         } else {
           results.data.failed.push(`tenant.tenants/${target}: ${msg}`);
@@ -1289,7 +1328,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               // didn't match targetByUid (different serialization, etc.).
               // Treat all duplicate flavors as skipped — `Duplicate record`
               // (capital D, two words) is not caught by includes('DUPLICATE').
-              if (/DUPLICATE|duplicate record|already exists|NON[_-]?UNIQUE|unique/i.test(msg)) {
+              if (isDuplicateError(msg)) {
                 results.data.skipped.push(`${schemaCode}/${record.uniqueIdentifier}`);
               } else {
                 results.data.failed.push(`${schemaCode}/${record.uniqueIdentifier}: ${msg}`);
@@ -1426,7 +1465,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             });
         } catch (e) {
           const m = e instanceof Error ? e.message : String(e);
-          if (!/DUPLICATE|already exists|unique/i.test(m)) throw e;
+          if (!isDuplicateError(m)) throw e;
         }
         // mdms-v2 search is HIERARCHICAL — a city query returns the root's rows
         // too. egov-user resolves UserValidation by EXACT tenant, so filter the
@@ -1473,7 +1512,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               (testSchema.description as string) || 'AccessControl actions (bridged from actions-test)',
               testSchema.definition as Record<string, unknown>).catch((e: unknown) => {
                 const m = e instanceof Error ? e.message : String(e);
-                if (!/DUPLICATE|already exists|unique/i.test(m)) throw e;
+                if (!isDuplicateError(m)) throw e;
               });
           }
         }
@@ -1489,7 +1528,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             bridged++;
           } catch (e) {
             const m = e instanceof Error ? e.message : String(e);
-            if (!/DUPLICATE|already exists|unique/i.test(m)) {
+            if (!isDuplicateError(m)) {
               results.data.failed.push(`ACCESSCONTROL-ACTIONS.actions/${r.uniqueIdentifier}: ${m}`);
             }
           }
@@ -1851,7 +1890,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
                 cityDeptCodes.add(code);
               } catch (e) {
                 const msg = e instanceof Error ? e.message : String(e);
-                if (!/DUPLICATE|already exists|unique/i.test(msg)) {
+                if (!isDuplicateError(msg)) {
                   console.error(`[tenant_bootstrap] city Department backfill ${code}: ${msg.slice(0, 200)}`);
                 }
               }
@@ -1873,7 +1912,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
                 cityDesigCodes.add(code);
               } catch (e) {
                 const msg = e instanceof Error ? e.message : String(e);
-                if (!/DUPLICATE|already exists|unique/i.test(msg)) {
+                if (!isDuplicateError(msg)) {
                   console.error(`[tenant_bootstrap] city Designation backfill ${code}: ${msg.slice(0, 200)}`);
                 }
               }
@@ -2239,7 +2278,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        if (msg.includes('DUPLICATE') || msg.includes('already exists') || msg.includes('unique') || msg.includes('NON_UNIQUE')) {
+        if (isDuplicateError(msg)) {
           steps.tenantRecord = 'already_exists';
         } else {
           return JSON.stringify({
@@ -2408,7 +2447,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             await digitApi.boundaryHierarchyCreate(root, 'ADMIN', levels);
           } catch (herr) {
             const msg = herr instanceof Error ? herr.message : String(herr);
-            if (!msg.includes('DUPLICATE') && !msg.includes('already exists') && !msg.includes('unique')) {
+            if (!isDuplicateError(msg)) {
               console.error(`[city_setup] hierarchy create on root "${root}" failed: ${msg}`);
             }
           }
@@ -2418,7 +2457,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             await digitApi.boundaryHierarchyCreate(tenantId, 'ADMIN', levels);
           } catch (herr) {
             const msg = herr instanceof Error ? herr.message : String(herr);
-            if (!msg.includes('DUPLICATE') && !msg.includes('already exists') && !msg.includes('unique')) {
+            if (!isDuplicateError(msg)) {
               console.error(`[city_setup] hierarchy create on city "${tenantId}" failed: ${msg}`);
             }
           }
@@ -2457,7 +2496,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               boundaryResult.entitiesCreated++;
             } catch (berr) {
               const msg = berr instanceof Error ? berr.message : String(berr);
-              if (!msg.includes('DUPLICATE') && !msg.includes('already exists') && !msg.includes('unique')) {
+              if (!isDuplicateError(msg)) {
                 console.error(`[city_setup] boundary entity create "${b.code}" failed: ${msg}`);
               } else {
                 boundaryResult.entitiesCreated++; // count skipped as "exists"
@@ -2477,7 +2516,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               );
             } catch (rerr) {
               const msg = rerr instanceof Error ? rerr.message : String(rerr);
-              if (!msg.includes('DUPLICATE') && !msg.includes('already exists') && !msg.includes('unique')) {
+              if (!isDuplicateError(msg)) {
                 console.error(`[city_setup] boundary relationship "${b.code}" failed: ${msg}`);
               }
             }
@@ -3002,7 +3041,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           hint = `Schema "${schemaCode}" is not registered for the "${stateRoot}" tenant root. ` +
             `FIX: Call tenant_bootstrap with target_tenant="${stateRoot}" to copy all schemas and data from pg. ` +
             `Or call mdms_schema_create with tenant_id="${stateRoot}", code="${schemaCode}", copy_from_tenant="pg".`;
-        } else if (msg.includes('NON_UNIQUE') || msg.includes('DUPLICATE') || msg.includes('already exists')) {
+        } else if (isDuplicateError(msg)) {
           hint = `Record already exists. Use mdms_search to find it.`;
         } else {
           hint = `MDMS create failed. Verify the tenant "${stateRoot}" has all required schemas registered. ` +
