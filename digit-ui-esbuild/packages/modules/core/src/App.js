@@ -9,6 +9,10 @@ import CustomErrorComponent from "./components/CustomErrorComponent";
 import DummyLoaderScreen from "./components/DummyLoader";
 import SignUpV2 from "./pages/employee/SignUp-v2";
 import LoginV2 from "./pages/employee/Login-v2";
+import UnifiedLogin from "./pages/common/Login/index";
+
+const isKeycloakAuth = () =>
+  window?.globalConfigs?.getConfig("AUTH_PROVIDER") === "keycloak";
 
 export const DigitApp = ({ stateCode, modules, appTenants, logoUrl, logoUrlWhite, initData, defaultLanding = "citizen",allowedUserTypes=["citizen","employee"] }) => {
   const history = useHistory();
@@ -120,10 +124,14 @@ export const DigitAppWrapper = ({ stateCode, modules, appTenants, logoUrl, logoU
           <CustomErrorComponent />
         </Route>
         <Route exact path={`/${window?.globalPath}/user/sign-up`}>
-          <SignUpV2 stateCode={stateCode} />
+          {isKeycloakAuth()
+            ? <UnifiedLogin stateCode={stateCode} />
+            : <SignUpV2 stateCode={stateCode} />}
         </Route>
         <Route exact path={`/${window?.globalPath}/user/login`}>
-          <LoginV2 stateCode={stateCode} />
+          {isKeycloakAuth()
+            ? <UnifiedLogin stateCode={stateCode} />
+            : <LoginV2 stateCode={stateCode} />}
         </Route>
         {/* <Route exact path={`/${window?.globalPath}/user/sign-up`}>
           <SignUp stateCode={stateCode} />
@@ -137,7 +145,7 @@ export const DigitAppWrapper = ({ stateCode, modules, appTenants, logoUrl, logoU
         <Route exact path={`/${window?.globalPath}/user/url`}>
           <ViewUrl />
         </Route>
-        {window?.globalPath !== window?.contextPath && (
+        {(window?.globalPath !== window?.contextPath || isKeycloakAuth()) && (
           <Route path={`/${window?.contextPath}`}>
             <DigitApp
               stateCode={stateCode}
@@ -152,7 +160,11 @@ export const DigitAppWrapper = ({ stateCode, modules, appTenants, logoUrl, logoU
           </Route>
         )}
         <Route>
-          <Redirect to={`/${window?.globalPath}/user/sign-up`} />
+          <Redirect to={
+            isKeycloakAuth()
+              ? `/${window?.globalPath}/user/login`
+              : `/${window?.globalPath}/user/sign-up`
+          } />
         </Route>
       </Switch>
     </div>
