@@ -6,6 +6,7 @@ import { initPGRComponents, PGRReducers, } from "@egovernments/digit-ui-module-p
 import { Loader } from "@egovernments/digit-ui-components";
 
 window.contextPath = window?.globalConfigs?.getConfig("CONTEXT_PATH");
+window.globalPath = window.contextPath;
 
 // Lazy load DigitUI
 const DigitUI = React.lazy(() =>

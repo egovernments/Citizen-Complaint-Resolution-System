@@ -2,6 +2,10 @@ import React from "react";
 import PropTypes from "prop-types";
 import { Route, Redirect } from "react-router-dom";
 
+function isKeycloakAuth() {
+  return window?.globalConfigs?.getConfig("AUTH_PROVIDER") === "keycloak";
+}
+
 export const PrivateRoute = ({ component: Component, roles, ...rest }) => {
   return (
     <Route
@@ -14,10 +18,11 @@ export const PrivateRoute = ({ component: Component, roles, ...rest }) => {
         // `/<contextPath>/employee/...` → employee, anything else → citizen.
         const pathParts = (props.location.pathname || "").split("/").filter(Boolean);
         const pathUserType = pathParts[1] === "employee" ? "employee" : "citizen";
-        const loginPath =
-          pathUserType === "employee"
+        const loginPath = isKeycloakAuth()
+          ? `/${window?.contextPath}/user/login`
+          : (pathUserType === "employee"
             ? `/${window?.contextPath}/employee/user/language-selection`
-            : `/${window?.contextPath}/citizen/login`;
+            : `/${window?.contextPath}/citizen/login`);
 
         // No token at all → bounce to the login page that matches the
         // URL the user was trying to reach.

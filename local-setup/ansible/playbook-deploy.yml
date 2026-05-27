@@ -302,16 +302,18 @@
       loop: "{{ digit_config_dirs | dict2items }}"
       vars:
         digit_config_dirs:
-          otel:    ../otel
-          configs: ../configs
-          nginx:   ../nginx
-          kong:    ../kong
-          postman: ../postman
-          db:      ../db
-          seeds:   ../seeds
-          gatus:   ../gatus
-          jupyter: ../jupyter
-          scripts: ../scripts
+          otel:     ../otel
+          configs:  ../configs
+          nginx:    ../nginx
+          kong:     ../kong
+          postman:  ../postman
+          db:       ../db
+          seeds:    ../seeds
+          gatus:    ../gatus
+          jupyter:  ../jupyter
+          scripts:  ../scripts
+          keycloak: ../keycloak
+          keycloak-realms: ../keycloak-realms
 
     # docker/ contains build contexts (db-migrations, pgr-services).
     # Even though we use pre-built images, compose may validate volume mount paths.
@@ -488,6 +490,7 @@
               + (['search']        if enable_search_stack | default(false) else [])
               + (['mcp']           if enable_mcp          | default(false) else [])
               + (['notifications'] if enable_novu         | default(false) else [])
+              + (['keycloak']      if enable_keycloak     | default(false) else [])
             ) | join(',')
           }}
 
@@ -1009,6 +1012,39 @@
         create: false           # .env was already written by the digit.env.j2 template earlier
         mode: '0600'            # tighten — was 0644 from the template; secrets bump to 0600
       no_log: true
+
+    # Keycloak-tier secrets — appended as a separate marked block so the
+    # main TENANT SECRETS block stays untouched on Keycloak-free
+    # tenants. Same OpenBao read; we just pick a different subset of
+    # keys. Default-empty strings on every lookup so a missing key in
+    # OpenBao (e.g. first deploy before the operator filled them in)
+    # doesn't fail template rendering — it just writes empty values, and
+    # the keycloak containers fail their healthcheck loudly enough that
+    # the operator notices.
+    - name: "OpenBao — write Keycloak secrets into compose .env (when enable_keycloak)"
+      ansible.builtin.blockinfile:
+        path: "{{ digit_dir }}/.env"
+        block: |
+          KC_ADMIN_PASSWORD={{ bao_secrets.json.data.data.keycloak_admin_password | default('') }}
+          KC_DB_PASSWORD={{ bao_secrets.json.data.data.keycloak_db_password | default('') }}
+          TOKEN_EXCHANGE_SYSTEM_PASSWORD={{ bao_secrets.json.data.data.token_exchange_system_password | default('eGov@123') }}
+        marker: "# {mark} KEYCLOAK SECRETS"
+        create: false
+        mode: '0600'
+      no_log: true
+      when: enable_keycloak | default(false)
+
+    - name: "OpenBao — append Google IdP secret into compose .env (when configured)"
+      ansible.builtin.lineinfile:
+        path: "{{ digit_dir }}/.env"
+        regexp: '^KC_GOOGLE_CLIENT_SECRET='
+        line: "KC_GOOGLE_CLIENT_SECRET={{ bao_secrets.json.data.data.keycloak_google_client_secret | default('') }}"
+        create: false
+        mode: '0600'
+      no_log: true
+      when:
+        - enable_keycloak | default(false)
+        - (keycloak_google_client_id | default('')) | length > 0
 
     # The first `up -d` started postgres with POSTGRES_PASSWORD=egov123
     # (the default before OpenBao secrets were available). initdb created
@@ -1657,6 +1693,101 @@
       when:
         - enable_novu | default(false)
         - (novu_api_key | default('')) | length == 0
+
+    # ────────────────────────────────────────────────────────────────
+    # Keycloak bootstrap. Once the keycloak container is up (created the
+    # `keycloak` DB via the postgres init script, started, healthy), we
+    # render a per-tenant realm from the template and import it via
+    # kcadm.sh. Idempotent: a re-import is skipped when the realm
+    # already exists. Google IdP wiring is opt-in (keycloak_google_*).
+    #
+    # Why kcadm.sh and not `--import-realm`: the start-dev flag only
+    # imports the static template that ships in the image. Realm names
+    # are tenant-specific (`state_tenant_id`), so we render at deploy
+    # time and import explicitly.
+    #
+    # Pre-req: enable_keycloak: true in host_vars (puts the `keycloak`
+    # profile into COMPOSE_PROFILES so the containers actually start).
+    # ────────────────────────────────────────────────────────────────
+    - name: "keycloak-bootstrap — render per-tenant realm from template"
+      ansible.builtin.template:
+        src: templates/keycloak-realm.json.j2
+        dest: "{{ digit_dir }}/keycloak-realms/{{ state_tenant_id }}-realm.json"
+        mode: '0640'
+      when:
+        - enable_keycloak | default(false)
+        - (state_tenant_id | default('')) | length > 0
+
+    - name: "keycloak-bootstrap — wait for keycloak to bind :8180 (up to 5 min)"
+      ansible.builtin.shell: |
+        timeout 300 bash -c 'until docker exec keycloak curl -fsS http://127.0.0.1:8180/realms/master >/dev/null 2>&1; do sleep 5; done && echo ready'
+      register: kc_wait
+      changed_when: false
+      when: enable_keycloak | default(false)
+
+    - name: "keycloak-bootstrap — kcadm login as master admin"
+      ansible.builtin.shell: |
+        docker exec keycloak /opt/keycloak/bin/kcadm.sh config credentials \
+          --server http://127.0.0.1:8180 --realm master \
+          --user admin --password "{{ bao_secrets.json.data.data.keycloak_admin_password | default('') }}"
+      when: enable_keycloak | default(false)
+      no_log: true
+      changed_when: false
+
+    - name: "keycloak-bootstrap — check if per-tenant realm exists"
+      ansible.builtin.shell: |
+        docker exec keycloak /opt/keycloak/bin/kcadm.sh get "realms/{{ state_tenant_id }}" >/dev/null 2>&1 && echo exists || echo missing
+      register: kc_realm_check
+      changed_when: false
+      when: enable_keycloak | default(false)
+
+    - name: "keycloak-bootstrap — import per-tenant realm (first time only)"
+      ansible.builtin.shell: |
+        docker cp "{{ digit_dir }}/keycloak-realms/{{ state_tenant_id }}-realm.json" keycloak:/tmp/realm.json
+        docker exec keycloak /opt/keycloak/bin/kcadm.sh create realms -f /tmp/realm.json
+      when:
+        - enable_keycloak | default(false)
+        - kc_realm_check is defined
+        - (kc_realm_check.stdout | default('')) == "missing"
+      changed_when: true
+
+    - name: "keycloak-bootstrap — wire Google IdP (when configured)"
+      ansible.builtin.shell: |
+        docker exec keycloak /opt/keycloak/bin/kcadm.sh create identity-provider/instances \
+          -r "{{ state_tenant_id }}" \
+          -s alias=google \
+          -s providerId=google \
+          -s 'config.clientId={{ keycloak_google_client_id }}' \
+          -s 'config.clientSecret={{ bao_secrets.json.data.data.keycloak_google_client_secret | default('') }}' 2>&1 | grep -v "Conflict" || true
+      when:
+        - enable_keycloak | default(false)
+        - (keycloak_google_client_id | default('')) | length > 0
+      no_log: true
+      changed_when: false
+
+    # Keycloak end-to-end validation. Runs AFTER the realm import so the
+    # well-known endpoint actually resolves. Both routes are served by
+    # upstream's Kong (/auth → keycloak, /kc → token-exchange-svc) —
+    # no nginx_features.keycloak gate is needed (Kong is always up).
+    - name: "validate — keycloak per-tenant realm reachable via /auth/"
+      ansible.builtin.uri:
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/auth/realms/{{ state_tenant_id }}/.well-known/openid-configuration"
+        status_code: [200]
+        timeout: 10
+        validate_certs: "{{ tls_enabled | default(true) }}"
+        headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
+      retries: 3
+      delay: 5
+      when: enable_keycloak | default(false)
+
+    - name: "validate — token-exchange-svc healthz reachable via /kc/"
+      ansible.builtin.uri:
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/kc/healthz"
+        status_code: [200]
+        timeout: 10
+        validate_certs: "{{ tls_enabled | default(true) }}"
+        headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
+      when: enable_keycloak | default(false)
 
     # ────────────────────────────────────────────────────────────────
     # UI-tenant fall-back: until the operator's chosen state_tenant_id is

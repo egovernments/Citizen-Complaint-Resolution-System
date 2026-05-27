@@ -1,9 +1,24 @@
 import Urls from "../../atoms/urls";
 import { Request, ServiceRequest } from "../../atoms/Utils/Request";
 import { Storage } from "../../atoms/Utils/Storage";
+import { getAuthAdapter } from "../../auth/index";
 
 export const UserService = {
   authenticate: async (details) => {
+    if (window?.globalConfigs?.getConfig("AUTH_PROVIDER") === "keycloak") {
+      const adapter = getAuthAdapter();
+      const result = await adapter.login({
+        email: details.username,
+        password: details.password,
+        tenantId: details.tenantId,
+      });
+      return {
+        UserRequest: result.user,
+        access_token: result.token,
+        token_type: "bearer",
+      };
+    }
+
     const data = new URLSearchParams();
     Object.entries(details).forEach(([key, value]) => data.append(key, value));
     data.append("scope", "read");
@@ -47,6 +62,11 @@ export const UserService = {
     return Digit.SessionStorage.get("User");
   },
   logout: async () => {
+    if (window?.globalConfigs?.getConfig("AUTH_PROVIDER") === "keycloak") {
+      const adapter = getAuthAdapter();
+      return adapter.logout();
+    }
+
     const userType = UserService.getType();
     // Capture userType BEFORE we clear storage. The redirect URL has
     // to be the explicit `/citizen/login` (not `/citizen`) — landing

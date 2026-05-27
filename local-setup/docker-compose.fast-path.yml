@@ -47,3 +47,7 @@ services:
       # when PGDATA is empty. Numeric prefix sets ordering (in case we
       # add more init steps later).
       - ./db/full-dump.sql:/docker-entrypoint-initdb.d/01-full-dump.sql:ro
+      # The base compose mounts keycloak-init.sql too — fast-path
+      # overrides the entire volumes list, so we have to re-declare it
+      # here. Inert when enable_keycloak is false.
+      - ./db/keycloak-init.sql:/docker-entrypoint-initdb.d/02-keycloak-init.sql:ro

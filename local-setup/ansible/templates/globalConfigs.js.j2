@@ -41,6 +41,20 @@ var globalConfigs = (function () {
   var coreMobileConfigs = {{ core_mobile_configs | to_json }};
   var corePostalConfigs = {{ core_postal_configs | default({}) | to_json }};
 
+  // Keycloak SSO settings. Inert when authProvider !== 'keycloak'
+  // (which is the default). The auth-adapter inside digit-ui reads
+  // these via Digit.Utils.getConfig() when it switches into the
+  // Keycloak code path. Empty keycloak_url defaults to the relative
+  // `/auth` path that Kong proxies to the keycloak container; set
+  // keycloak_url explicitly when KC lives on a separate subdomain.
+  // tokenExchangeUrl defaults to `/kc` (Kong route /kc → token-exchange-svc).
+  var keycloakUrl = {{ (keycloak_url | default('')) | to_json }};
+  if (!keycloakUrl) { keycloakUrl = "/auth"; }
+  var keycloakRealm = {{ ((keycloak_realm | default('')) or (state_tenant_id | default('pg'))) | to_json }};
+  var keycloakClientId = {{ (keycloak_client_id | default('digit-ui')) | to_json }};
+  var tokenExchangeUrl = {{ (token_exchange_url | default('')) | to_json }};
+  if (!tokenExchangeUrl) { tokenExchangeUrl = "/kc"; }
+
   var getConfig = function (key) {
     if (key === "EMPLOYEE_MODULE_DENYLIST") return employeeModuleDenylist;
     if (key === "LOGIN_TENANT_ALLOWLIST") return loginTenantAllowlist;
@@ -94,6 +108,14 @@ var globalConfigs = (function () {
       return coreMobileConfigs;
     } else if (key === "CORE_POSTAL_CONFIGS") {
       return corePostalConfigs;
+    } else if (key === "KEYCLOAK_URL") {
+      return keycloakUrl;
+    } else if (key === "KEYCLOAK_REALM") {
+      return keycloakRealm;
+    } else if (key === "KEYCLOAK_CLIENT_ID") {
+      return keycloakClientId;
+    } else if (key === "TOKEN_EXCHANGE_URL") {
+      return tokenExchangeUrl;
     }
   };
 
