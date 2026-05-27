@@ -894,9 +894,13 @@ services:
     networks:
     - egov-network
 
-  # Default Data Handler - seeds schemas and master data for new tenants
+  # Default Data Handler - seeds schemas and master data for new tenants.
+  # Image ref is wired through .env (DDH_IMAGE) so the deploy can either
+  # build it locally (`build_default_data_handler: true` in host_vars,
+  # tagged `default-data-handler:local`) or pull the registry image.
+  # See the MCP_IMAGE plumbing below for the parallel pattern.
   default-data-handler:
-    image: registry.preview.egov.theflywheel.in/egovio/default-data-handler:crs_dataseeder-084b7cc
+    image: ${DDH_IMAGE}
     container_name: default-data-handler
     depends_on:
       mdms-backend:
@@ -913,6 +917,7 @@ services:
       EGOV_WORKFLOW_HOST: http://egov-workflow-proxy:8109/
       EGOV_BOUNDARY_HOST: http://boundary-service:8081/
       STATE_LEVEL_TENANT_ID: pg
+      DEFAULT_TENANT_ID: pg
       JAVA_OPTS: -Xms128m -Xmx256m
     networks:
       - egov-network
@@ -1499,6 +1504,17 @@ services:
       SESSION_DB_NAME: mcp_sessions
       SESSION_DB_USER: mcp
       SESSION_DB_PASSWORD: ${MCP_DB_PASSWORD:-mcp123}
+      # DIGIT egov-db read-only pool for the dashboard endpoints
+      # (digit-db.ts). Without these, MCP falls back to its in-code
+      # defaults (host=docker-postgres, password=egov123) and emits
+      # `[digit-db] password authentication failed for user "egov"`
+      # on every startup. Route via pgbouncer (`postgres`) — same as
+      # every other egov service in this compose.
+      DIGIT_DB_HOST: postgres
+      DIGIT_DB_PORT: "5432"
+      DIGIT_DB_NAME: egov
+      DIGIT_DB_USER: egov
+      DIGIT_DB_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
     ports:
       - "13101:3000"
     healthcheck:
@@ -2112,6 +2128,39 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+  # otp-publisher — replaces Kong's mock /user-otp termination with a real
+  # OTP generator: mint a 6-digit OTP -> cache in Redis -> publish OTP.SEND to
+  # kafka complaints.domain.events -> novu-bridge -> Twilio SMS. Part of the
+  # SMS-OTP path; gated behind the notifications profile (off by default).
+  # Node service vendored at utilities/otp-publisher; built locally via
+  # `build_otp_publisher: true` (tag otp-publisher:local) or override with
+  # OTP_PUBLISHER_IMAGE.
+  otp-publisher:
+    image: ${OTP_PUBLISHER_IMAGE:-otp-publisher:local}
+    container_name: otp-publisher
+    restart: unless-stopped
+    profiles: ["notifications"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    environment:
+      PORT: '3030'
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: redpanda:9092
+      EVENT_TOPIC: complaints.domain.events
+      OTP_TTL_SECONDS: ${OTP_TTL_SECONDS:-600}
+      DEFAULT_TENANT_ID: ${DEFAULT_TENANT_ID:-pg}
+      STATIC_OTP: ${OTP_PUBLISHER_STATIC_OTP:-}
+      # Per-tenant recipient for OTP routing; set in host_vars when wiring SMS.
+      OTP_RECIPIENT_USER_ID: ${OTP_RECIPIENT_USER_ID:-}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3030/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
     networks:
       - egov-network
 

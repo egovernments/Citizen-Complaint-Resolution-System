@@ -13,7 +13,7 @@
   ],
   "homepage": "/digit-ui",
   "dependencies": {
-    "@egovernments/digit-ui-libraries": "1.9.4",
+    "@egovernments/digit-ui-libraries": "1.9.6",
     "@egovernments/digit-ui-module-core": "1.9.23-cms",
     "@egovernments/digit-ui-module-utilities": "1.0.12",
     "@egovernments/digit-ui-react-components": "1.9.3",
@@ -67,7 +67,8 @@
     "**/styled-components": "5.0.0",
     "**/minimatch": "7.4.6",
     "**/glob": "7.2.3",
-    "**/chokidar": "3.5.3"
+    "**/chokidar": "3.5.3",
+    "**/node-releases": "2.0.14"
   },
   "scripts": {
     "start": "react-scripts start",

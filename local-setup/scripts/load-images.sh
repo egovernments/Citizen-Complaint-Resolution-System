@@ -37,7 +37,7 @@ IMAGES=(
 
   # App Services
   "egovio/pgr-services:multiarch-d448cb7"
-  "egovio/digit-ui:multiarch-d448cb7"
+  "egovio/digit-ui:dev-ff0db90"
 )
 
 echo "=== Pushing ${#IMAGES[@]} images to local registry (localhost:${REG_PORT}) ==="

@@ -39,6 +39,7 @@ var globalConfigs = (function () {
   var employeeModuleDenylist = {{ employee_module_denylist | to_json }};
   var loginTenantAllowlist = {{ login_tenant_allowlist | to_json }};
   var coreMobileConfigs = {{ core_mobile_configs | to_json }};
+  var corePostalConfigs = {{ core_postal_configs | default({}) | to_json }};
 
   // Keycloak SSO settings. Inert when authProvider !== 'keycloak'
   // (which is the default). The auth-adapter inside digit-ui reads
@@ -109,6 +110,8 @@ var globalConfigs = (function () {
       return keycloakClientId;
     } else if (key === "TOKEN_EXCHANGE_URL") {
       return tokenExchangeUrl;
+    } else if (key === "CORE_POSTAL_CONFIGS") {
+      return corePostalConfigs;
     }
   };
 

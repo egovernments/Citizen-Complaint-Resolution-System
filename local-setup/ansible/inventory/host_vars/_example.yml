@@ -95,6 +95,19 @@ core_mobile_configs:
   mobileNumberAllowedStartingCharacters: ["1", "7"]
   mobileNumberErrorMessage: "CORE_COMMON_MOBILE_ERROR"
 
+# Postal-code validation. The SPA reads this via globalConfigs key
+# `CORE_POSTAL_CONFIGS` for submit-time pattern checks in the citizen +
+# employee PGR create-complaint flows. Empty/absent → the legacy hard
+# default (^[0-9]{5}$ / Kenya) is used as a fallback. Examples:
+#   Kenya:   ^[0-9]{5}$              (5 digits)
+#   India:   ^[0-9]{6}$              (6 digits)
+#   UK:      ^[A-Z]{1,2}[0-9R][0-9A-Z]? ?[0-9][A-Z-[CIKMOV]]{2}$  (alnum)
+#   US:      ^[0-9]{5}(-[0-9]{4})?$  (5 or 5+4)
+core_postal_configs:
+  postalCodePattern: "^[0-9]{5}$"
+  postalCodeLength: 5
+  postalCodeErrorMessage: "CS_COMPLAINT_POSTALCODE_INVALID_ERROR"
+
 # S3 bucket name used by egov-filestore as the asset bucket (sees
 # `asset_s3_bucket` in globalConfigs.js).
 asset_s3_bucket: "mytenant-egov-assets"
@@ -240,6 +253,16 @@ nginx_features:
   api_pgr: false             # /api/pgr/ — proxied to MCP server
   mcp: true                  # /mcp + /v1/* — MCP HTTP transport + REST shim (requires enable_mcp: true)
   keycloak: false            # /auth/ + /token-exchange/ — requires enable_keycloak: true
+
+# If true, the playbook will NOT render `templates/nginx-site.conf.j2` into
+# /etc/nginx/sites-available/ and will NOT touch /etc/nginx/sites-enabled/.
+# nginx still gets installed (apt task is unconditional) but the operator's
+# hand-managed vhost is left as-is. Use for tenants whose production vhost
+# has hand-crafted routing the template can't (yet) render — e.g. Bomet's
+# /egov-rainmaker/ filestore passthrough, /novu/+/novu-api/ routing, the
+# /digit-ui/ host-alias. Default false so new tenants get the standard
+# templated vhost.
+nginx_preserve_vhost: false
 
 # ────────── OpenBao (per-tenant secrets backend) ──────────
 

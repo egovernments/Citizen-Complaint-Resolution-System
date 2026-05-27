@@ -197,11 +197,17 @@ export function EmployeeBulkImport() {
         }
       }
       if (row.mobileNumber) {
+        // MDMS is the source of truth — egov-hrms's User.java no longer
+        // carries its own `@Pattern("^[0-9]{10}$")`, validation is delegated
+        // to MDMS via egov-user's MobileNumberValidator. Trust the rule
+        // returned by `mdmsService.getMobileValidation` exactly. Closes the
+        // bulk-import side of the CCRS#484/#540 BLOCKER.
+        const minLen = mobileRules?.minLength ?? 9;
+        const maxLen = mobileRules?.maxLength ?? 9;
+        const msg = mobileRules?.errorMessage ?? 'Please enter a valid Kenyan mobile number (9 digits starting with 1 or 7)';
         const len = row.mobileNumber.length;
-        const effMin = Math.max(mobileRules?.minLength ?? 10, 10);
-        const effMax = mobileRules?.maxLength ?? 10;
-        if (len < effMin || len > effMax || (compiled && !compiled.test(row.mobileNumber))) {
-          errors.push(mobileRules?.errorMessage ?? 'Mobile number must be 10 digits starting with 07 or 01');
+        if (len < minLen || len > maxLen || (compiled && !compiled.test(row.mobileNumber))) {
+          errors.push(msg);
         }
       }
       if (!row.dob || !/^\d{4}-\d{2}-\d{2}$/.test(row.dob)) {

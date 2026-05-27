@@ -1,6 +1,6 @@
 {
   "name": "@egovernments/digit-ui-module-cms",
-  "version": "1.0.32-local",
+  "version": "1.0.48",
   "description": "CMS Module UI for DIGIT Platform",
   "main": "dist/index.js",
   "module": "dist/index.modern.js",
@@ -40,7 +40,8 @@
     "**/minimatch": "7.4.6",
     "minimatch": "7.4.6",
     "**/glob": "7.2.3",
-    "glob": "7.2.3"
+    "glob": "7.2.3",
+    "**/node-releases": "2.0.14"
   },
   "author": "Hariprasad <hariprasad@egovernments.org>",
   "repository": {

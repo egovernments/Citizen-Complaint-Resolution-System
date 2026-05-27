@@ -165,8 +165,15 @@ useEffect(() => {
     setAutoFilledKeys(newAutoFilled);
 
     // The deepest hit (typically Ward) is what SelectedBoundary should
-    // hold — that's the leaf the routing payload uses.
-    onSelect(config.key, path[path.length - 1]);
+    // hold — that's the leaf the routing payload uses. Tag with
+    // `isLeaf` so validators don't have to trust `.children` being
+    // preserved on the picked node (closes egovernments/CCRS#478 —
+    // locality validation was firing only when children happened to
+    // be attached, so County-level selections silently passed).
+    const deepest = path[path.length - 1];
+    const isDeepestLevel =
+      deepest?.boundaryType === boundaryHierarchy[boundaryHierarchy.length - 1];
+    onSelect(config.key, { ...deepest, isLeaf: isDeepestLevel });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wardHintCode, wardHintName, childrenData]);
 
@@ -203,9 +210,12 @@ useEffect(() => {
     setSelectedValues(newSelectedValues);
     setValue(newValue);
     setAutoFilledKeys(newAutoFilled);
-    // always sending the last selected boundary code
-
-    onSelect(config.key, selectedBoundary);
+    // always sending the last selected boundary code, tagged with
+    // `isLeaf` so validators can trust hierarchy depth instead of the
+    // `.children` array (which isn't reliably preserved on the picked
+    // node and let County-level selections pass — egovernments/CCRS#478).
+    const isDeepestLevel = index === boundaryHierarchy.length - 1;
+    onSelect(config.key, { ...selectedBoundary, isLeaf: isDeepestLevel });
 
     // Load child boundaries
     if (selectedBoundary.children && selectedBoundary.children.length > 0) {
