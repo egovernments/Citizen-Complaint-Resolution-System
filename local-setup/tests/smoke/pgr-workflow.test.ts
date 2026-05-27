@@ -47,6 +47,7 @@ describe('PGR End-to-End Workflow', () => {
           { code: 'EMPLOYEE', name: 'Employee', tenantId: tenant.city },
           { code: 'GRO', name: 'Grievance Routing Officer', tenantId: tenant.city },
           { code: 'DGRO', name: 'Department GRO', tenantId: tenant.city },
+          { code: 'CSR', name: 'Customer Service Representative', tenantId: tenant.city },
         ],
       },
     });
@@ -143,6 +144,7 @@ describe('PGR End-to-End Workflow', () => {
                 { code: 'EMPLOYEE', name: 'Employee', tenantId: tenant.city },
                 { code: 'GRO', name: 'Grievance Routing Officer', tenantId: tenant.city },
                 { code: 'DGRO', name: 'Department GRO', tenantId: tenant.city },
+                { code: 'CSR', name: 'Customer Service Representative', tenantId: tenant.city },
               ],
             },
           },

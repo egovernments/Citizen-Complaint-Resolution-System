@@ -340,16 +340,22 @@ describe(`PGR E2E — ${TENANT}`, () => {
   // ── Step 9: Final verification ─────────────────────────────
   describe('Step 9: Final Verification', () => {
     test('should verify final state via API', async () => {
-      const r = await api.post(ports.pgr, `/pgr-services/v2/request/_search?tenantId=${TENANT}&serviceRequestId=${serviceRequestId}`, { RequestInfo: reqInfo(accessToken, userUuid) });
-      expect(r.ok).toBe(true);
-      const parsed = SearchServiceResponseSchema.safeParse(r.data);
-      expect(parsed.success).toBe(true);
-      if (parsed.success) {
-        const c = parsed.data.ServiceWrappers[0].service;
-        console.log(`\n=== FINAL STATE ===\nID: ${c.serviceRequestId}\nTenant: ${c.tenantId}\nType: ${c.serviceCode}\nStatus: ${c.applicationStatus}\n===================\n`);
-        expect(c.applicationStatus).toBe('RESOLVED');
+      // PGR applicationStatus is updated asynchronously via Kafka/persister; poll until RESOLVED
+      let c: any;
+      for (let attempt = 0; attempt < 6; attempt++) {
+        await new Promise(r => setTimeout(r, 2000));
+        const r = await api.post(ports.pgr, `/pgr-services/v2/request/_search?tenantId=${TENANT}&serviceRequestId=${serviceRequestId}`, { RequestInfo: reqInfo(accessToken, userUuid) });
+        expect(r.ok).toBe(true);
+        const parsed = SearchServiceResponseSchema.safeParse(r.data);
+        expect(parsed.success).toBe(true);
+        if (parsed.success) {
+          c = parsed.data.ServiceWrappers[0].service;
+          if (c.applicationStatus === 'RESOLVED') break;
+        }
       }
-    });
+      console.log(`\n=== FINAL STATE ===\nID: ${c.serviceRequestId}\nTenant: ${c.tenantId}\nType: ${c.serviceCode}\nStatus: ${c.applicationStatus}\n===================\n`);
+      expect(c.applicationStatus).toBe('RESOLVED');
+    }, 30000);
 
     test('should verify RESOLVED in database', async () => {
       // Wait for persister
