@@ -264,10 +264,11 @@
     # ==================== Config Directories ====================
     # Each entry is `dest_name -> src_path_relative_to_ansible_dir`.
     # `dest_name` is what ends up under {{ digit_dir }}/ on the target.
-    # All eight live at the repo root since b8629c5f.
-    # `keycloak` was previously synced but no source dir exists in the
-    # repo — keycloak config ships baked into the keycloak image — so
-    # it's dropped from the list.
+    # All live at the repo root since b8629c5f. `keycloak/` holds the
+    # realm-template.json that the Keycloak overlay-design ships; it's
+    # mounted into the keycloak container so the playbook can render
+    # per-tenant realms from it. The dir + file are inert until
+    # enable_keycloak is flipped on.
     - name: Synchronize config directories
       synchronize:
         src: "{{ item.value }}/"
@@ -275,16 +276,17 @@
       loop: "{{ digit_config_dirs | dict2items }}"
       vars:
         digit_config_dirs:
-          otel:    ../otel
-          configs: ../configs
-          nginx:   ../nginx
-          kong:    ../kong
-          postman: ../postman
-          db:      ../db
-          seeds:   ../seeds
-          gatus:   ../gatus
-          jupyter: ../jupyter
-          scripts: ../scripts
+          otel:     ../otel
+          configs:  ../configs
+          nginx:    ../nginx
+          kong:     ../kong
+          postman:  ../postman
+          db:       ../db
+          seeds:    ../seeds
+          gatus:    ../gatus
+          jupyter:  ../jupyter
+          scripts:  ../scripts
+          keycloak: ../keycloak
 
     # docker/ contains build contexts (db-migrations, pgr-services).
     # Even though we use pre-built images, compose may validate volume mount paths.
@@ -470,6 +472,7 @@
               + (['search']        if enable_search_stack | default(false) else [])
               + (['mcp']           if enable_mcp          | default(false) else [])
               + (['notifications'] if enable_novu         | default(false) else [])
+              + (['keycloak']      if enable_keycloak     | default(false) else [])
             ) | join(',')
           }}
 
@@ -1368,6 +1371,106 @@
       when:
         - enable_novu | default(false)
         - (novu_api_key | default('')) | length == 0
+
+    # ────────────────────────────────────────────────────────────────
+    # Keycloak bootstrap. Once the keycloak container is up (created the
+    # `keycloak` DB via the postgres init script, started, healthy), we
+    # render a per-tenant realm from the template and import it via
+    # kcadm.sh. Idempotent: a re-import is skipped when the realm
+    # already exists. Google IdP wiring is opt-in (keycloak_google_*).
+    #
+    # Why kcadm.sh and not `--import-realm`: the start-dev flag only
+    # imports the static template that ships in the image. Realm names
+    # are tenant-specific (`state_tenant_id`), so we render at deploy
+    # time and import explicitly.
+    #
+    # Pre-req: enable_keycloak: true in host_vars (puts the `keycloak`
+    # profile into COMPOSE_PROFILES so the containers actually start).
+    # ────────────────────────────────────────────────────────────────
+    - name: "keycloak-bootstrap — render per-tenant realm from template"
+      ansible.builtin.template:
+        src: templates/keycloak-realm.json.j2
+        dest: "{{ digit_dir }}/keycloak/{{ state_tenant_id }}-realm.json"
+        mode: '0640'
+      when:
+        - enable_keycloak | default(false)
+        - (state_tenant_id | default('')) | length > 0
+
+    - name: "keycloak-bootstrap — wait for keycloak to bind :8180 (up to 5 min)"
+      ansible.builtin.shell: |
+        timeout 300 bash -c 'until docker exec keycloak curl -fsS http://127.0.0.1:8180/realms/master >/dev/null 2>&1; do sleep 5; done && echo ready'
+      register: kc_wait
+      changed_when: false
+      when: enable_keycloak | default(false)
+
+    - name: "keycloak-bootstrap — kcadm login as master admin"
+      ansible.builtin.shell: |
+        docker exec keycloak /opt/keycloak/bin/kcadm.sh config credentials \
+          --server http://127.0.0.1:8180 --realm master \
+          --user admin --password "{{ kc_admin_password }}"
+      when: enable_keycloak | default(false)
+      no_log: true
+      changed_when: false
+
+    - name: "keycloak-bootstrap — check if per-tenant realm exists"
+      ansible.builtin.shell: |
+        docker exec keycloak /opt/keycloak/bin/kcadm.sh get "realms/{{ state_tenant_id }}" >/dev/null 2>&1 && echo exists || echo missing
+      register: kc_realm_check
+      changed_when: false
+      when: enable_keycloak | default(false)
+
+    - name: "keycloak-bootstrap — import per-tenant realm (first time only)"
+      ansible.builtin.shell: |
+        docker cp "{{ digit_dir }}/keycloak/{{ state_tenant_id }}-realm.json" keycloak:/tmp/realm.json
+        docker exec keycloak /opt/keycloak/bin/kcadm.sh create realms -f /tmp/realm.json
+      when:
+        - enable_keycloak | default(false)
+        - kc_realm_check is defined
+        - (kc_realm_check.stdout | default('')) == "missing"
+      changed_when: true
+
+    - name: "keycloak-bootstrap — wire Google IdP (when configured)"
+      ansible.builtin.shell: |
+        docker exec keycloak /opt/keycloak/bin/kcadm.sh create identity-provider/instances \
+          -r "{{ state_tenant_id }}" \
+          -s alias=google \
+          -s providerId=google \
+          -s 'config.clientId={{ keycloak_google_client_id }}' \
+          -s 'config.clientSecret={{ keycloak_google_client_secret }}' 2>&1 | grep -v "Conflict" || true
+      when:
+        - enable_keycloak | default(false)
+        - (keycloak_google_client_id | default('')) | length > 0
+      no_log: true
+      changed_when: false
+
+    # Keycloak end-to-end validation. Runs AFTER the realm import so the
+    # well-known endpoint actually resolves. Both checks require
+    # nginx_features.keycloak: true (the host nginx exposes /auth/ and
+    # /token-exchange/); without that the services are only reachable
+    # inside the egov-network.
+    - name: "validate — keycloak per-tenant realm reachable via /auth/"
+      ansible.builtin.uri:
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/auth/realms/{{ state_tenant_id }}/.well-known/openid-configuration"
+        status_code: [200]
+        timeout: 10
+        validate_certs: "{{ tls_enabled | default(true) }}"
+        headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
+      retries: 3
+      delay: 5
+      when:
+        - enable_keycloak | default(false)
+        - nginx_features.keycloak | default(false)
+
+    - name: "validate — token-exchange-svc healthz reachable via /token-exchange/"
+      ansible.builtin.uri:
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/token-exchange/healthz"
+        status_code: [200]
+        timeout: 10
+        validate_certs: "{{ tls_enabled | default(true) }}"
+        headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
+      when:
+        - enable_keycloak | default(false)
+        - nginx_features.keycloak | default(false)
 
     # ────────────────────────────────────────────────────────────────
     # UI-tenant fall-back: until the operator's chosen state_tenant_id is
