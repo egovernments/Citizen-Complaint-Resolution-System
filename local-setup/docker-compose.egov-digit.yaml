@@ -102,6 +102,11 @@ services:
     command: postgres -c max_connections=200
     volumes:
     - postgres_data:/var/lib/docker-postgresql/data
+    # First-boot init: ensure the `keycloak` DB exists. Idempotent (skipped
+    # if PGDATA is already populated, which is Postgres' init-script
+    # contract). Inert when enable_keycloak: false on the tenant — nothing
+    # else references the DB.
+    - ./db/keycloak-init.sql:/docker-entrypoint-initdb.d/02-keycloak-init.sql:ro
     ports:
     - 15432:5432
     healthcheck:
@@ -1985,6 +1990,108 @@ services:
       timeout: 10s
       retries: 5
       start_period: 120s
+    networks:
+      - egov-network
+
+  # ==================== Keycloak SSO stack (opt-in) ====================
+  # `keycloak` + `token-exchange-svc` add OIDC-based SSO on top of DIGIT
+  # without touching egov-user's OTP flow. Architecture (Option 4 in the
+  # keycloak overlay design doc — no Kong OIDC plugin):
+  #
+  #   Browser → (OIDC PKCE) → Keycloak → access_token (RS256)
+  #   Browser → /token-exchange/exchange (POSTs the access_token)
+  #   token-exchange-svc → validates JWT against Keycloak JWKS
+  #                      → looks up / creates the matching eg_user via
+  #                        egov-user (using DIGIT_SYSTEM_USERNAME)
+  #                      → mints a DIGIT access_token and returns it
+  #   Browser → uses DIGIT access_token for all downstream API calls
+  #
+  # Both services are profile-gated — they don't start on a default
+  # `docker compose up`. Opt in with `COMPOSE_PROFILES=keycloak`. The
+  # Ansible playbook flips this on when `enable_keycloak: true` in
+  # host_vars.
+  #
+  # The base DB for Keycloak (the `keycloak` database) is created at
+  # Postgres first-boot via local-setup/db/keycloak-init.sql. The realm
+  # is rendered per-tenant by the playbook and imported via kcadm.sh
+  # (NOT via the `--import-realm` start flag, which only handles the
+  # static template that ships in the image).
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    container_name: keycloak
+    restart: unless-stopped
+    profiles: ["keycloak"]
+    command: ["start-dev", "--import-realm"]
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: ${POSTGRES_USER:-egov}
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD}
+      KC_HOSTNAME_STRICT: 'false'
+      KC_HOSTNAME_STRICT_HTTPS: 'false'
+      KC_HTTP_ENABLED: 'true'
+      KC_HTTP_PORT: '8180'
+      KC_PROXY_HEADERS: xforwarded
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD}
+    ports:
+      - 18180:8180
+    volumes:
+      # Per-tenant rendered realm goes in here too (written by the
+      # keycloak-bootstrap Ansible block). The shipped template stays
+      # for reference; it's NOT imported automatically because realm
+      # names are tenant-specific.
+      - ./keycloak/realm-template.json:/opt/keycloak/data/import/realm-template.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8180/realms/master >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - egov-network
+
+  # token-exchange-svc — bridges a Keycloak access_token to a DIGIT
+  # access_token (and resolves / provisions the matching eg_user).
+  # Source: /root/DIGIT-keycloak-overlay (Dockerfile, TypeScript).
+  # The image is pre-built and pushed to the preview registry; if you
+  # need to rebuild locally, switch from `image:` to a `build:` block
+  # pointing at the overlay repo path.
+  token-exchange-svc:
+    image: registry.preview.egov.theflywheel.in/egovio/token-exchange-svc:latest
+    container_name: token-exchange-svc
+    restart: unless-stopped
+    profiles: ["keycloak"]
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      egov-user:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    environment:
+      PORT: '3000'
+      KEYCLOAK_ISSUER: http://keycloak:8180/realms/${TOKEN_EXCHANGE_SYSTEM_TENANT}
+      KEYCLOAK_JWKS_URI: http://keycloak:8180/realms/${TOKEN_EXCHANGE_SYSTEM_TENANT}/protocol/openid-connect/certs
+      DIGIT_USER_HOST: http://egov-user:8080
+      DIGIT_SYSTEM_USERNAME: ${TOKEN_EXCHANGE_SYSTEM_USERNAME:-INTERNAL_MICROSERVICE_ROLE}
+      DIGIT_SYSTEM_PASSWORD: ${TOKEN_EXCHANGE_SYSTEM_PASSWORD}
+      DIGIT_SYSTEM_TENANT: ${TOKEN_EXCHANGE_SYSTEM_TENANT}
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      CACHE_PREFIX: keycloak
+      CACHE_TTL_SECONDS: '604800'
+    ports:
+      - 18200:3000
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       - egov-network
 
