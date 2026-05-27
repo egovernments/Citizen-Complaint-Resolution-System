@@ -113,12 +113,21 @@ upstream_minio_port: 19000
 # ──────────────────────────────────────────────────────────────────────
 
 # Where pre-built custom DIGIT images live. The egov-ci box in the
-# Hetzner VPC runs an insecure registry at 10.0.0.4:5000 — the playbook
-# writes this value into /etc/docker/daemon.json as an insecure-registry
-# entry on the target. Operators outside the VPC should override this
-# in host_vars (or set it to an empty string + flip enable_mcp: false
-# if they don't need digit-mcp at all).
+# Hetzner VPC runs an insecure registry at 10.0.0.4:5000. Operators
+# outside the VPC should override this in host_vars (e.g. to a public
+# registry like ghcr.io/<org>) or set it to an empty string + flip
+# enable_mcp: false if they don't need digit-mcp at all.
 docker_registry: 10.0.0.4:5000
+
+# Hosts to add to Docker daemon.json `insecure-registries`. Defaults to
+# the docker_registry above (matches the historical Hetzner-VPC behaviour
+# of writing 10.0.0.4:5000 as insecure). Override to `[]` when using a
+# public TLS registry like ghcr.io — Docker rejects a path-bearing or
+# TLS hostname in `insecure-registries` and refuses to start, taking the
+# whole stack down. Each entry must be `host` or `host:port`, never with
+# a path component.
+insecure_registries:
+  - "{{ docker_registry }}"
 
 # On-target directory for digit-mcp when build_mcp is true. Vendored deploys
 # rsync CCRS digit-mcp/ here; a git mcp_repo_url clones/updates here instead.

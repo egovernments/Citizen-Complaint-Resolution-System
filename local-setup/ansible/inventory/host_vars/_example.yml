@@ -36,6 +36,15 @@ domain: digit.example.com
 # 127.0.0.1 with `Host:` header.
 tls_enabled: true
 
+# Hosts to add to Docker daemon.json `insecure-registries`. Default
+# (in group_vars/digit.yml) = [docker_registry] — preserves the
+# historical Hetzner-VPC behaviour of pulling from 10.0.0.4:5000 over
+# plain HTTP. Override to `[]` when docker_registry is a public TLS
+# registry like ghcr.io — Docker REJECTS path-bearing or TLS hostnames
+# in insecure-registries and refuses to start, taking the stack down.
+# Each entry must be `host` or `host:port`, never with a path.
+# insecure_registries: []
+
 # ────────── DIGIT tenancy ──────────
 
 # REQUIRED. Four-tier tenant slug:

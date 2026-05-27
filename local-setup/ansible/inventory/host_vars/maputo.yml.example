@@ -8,10 +8,19 @@
 
 ansible_host: localhost
 ansible_connection: local
-deploy_become: false
+# Playbook default for deploy_become is `true` — Linux needs root for
+# apt + nginx host tasks. Override to `false` only on Mac/Darwin (where
+# those tasks are gated off and sudo would just prompt unnecessarily).
+# deploy_become: false
 docker_default_platform: linux/amd64
 domain: localhost
 tls_enabled: false
+# When docker_registry below is a PUBLIC TLS registry (ghcr.io, docker.io)
+# this MUST be []. Docker rejects a path-bearing or TLS hostname in
+# insecure-registries and refuses to start, taking the whole stack down.
+# For Hetzner-VPC deploys (docker_registry: 10.0.0.4:5000) omit this line —
+# group_vars/digit.yml defaults to [docker_registry], the historical behaviour.
+insecure_registries: []
 
 # BOOT-PINS (compose env — services fetch THIS tenant's MDMS at boot, so it
 # must already exist in the dump → keep pg/pg.citya). workflow-v2 + enc-service

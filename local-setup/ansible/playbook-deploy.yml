@@ -177,26 +177,26 @@
           enabled: yes
 
       # ==================== Docker Configuration ====================
-      # The Hetzner VPC registry at {{ docker_registry }} (egov-ci) hosts every
-      # custom-built DIGIT image (digit-mcp, sb35-rebuilt egov-* services)
-      # over plain HTTP. Without this entry Docker refuses to pull with
-      # `http: server gave HTTP response to HTTPS client`. Restart the
-      # daemon when the file changes so the new config takes effect.
-      - name: Configure Docker insecure-registries for VPC registry
+      # Insecure registries (plain HTTP + no TLS verification). Defaults in
+      # group_vars/digit.yml to [docker_registry] to preserve the historical
+      # Hetzner-VPC behaviour (10.0.0.4:5000 over plain HTTP). For public
+      # registries (ghcr.io, docker.io) override `insecure_registries: []` in
+      # host_vars — Docker REJECTS path-bearing or TLS hostnames here and
+      # refuses to start, which takes the whole stack down. Skipping the
+      # write entirely when the list is empty leaves daemon.json untouched.
+      - name: Configure Docker insecure-registries
         copy:
           dest: /etc/docker/daemon.json
-          content: |
-            {
-              "insecure-registries": ["{{ docker_registry }}"]
-            }
+          content: "{{ {'insecure-registries': insecure_registries} | to_nice_json }}\n"
           mode: '0644'
         register: daemon_json
+        when: insecure_registries | default([]) | length > 0
 
       - name: Restart docker if daemon.json changed
         service:
           name: docker
           state: restarted
-        when: daemon_json.changed
+        when: daemon_json is defined and daemon_json.changed | default(false)
 
     # check_mode: false forces this to run even under `--check`, so the
     # version-compare task below has a real value to test against.
