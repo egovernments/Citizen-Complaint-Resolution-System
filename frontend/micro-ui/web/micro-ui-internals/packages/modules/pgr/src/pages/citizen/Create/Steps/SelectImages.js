@@ -24,13 +24,13 @@ const SelectImages = ({ t, config, formData, onSelect, onSkip, value = {} }) => 
   };
 
   return (
-    <FormStep config={config} onSelect={handleSubmit} onSkip={onSkip} t={t}>
+    <div style={{ display: "flex", justifyContent: "center", width: "100%" }}>
       <ImageUploadHandler
         tenantId={tenantId}
         uploadedImages={uploadedImages}
         onPhotoChange={handleUpload}
       />
-    </FormStep>
+    </div>
   );
 };
 

@@ -44,7 +44,7 @@ const DesktopInbox = ({
               </Link>
             </span>
             <br />
-            <span className="complain-no-cell-text">{t(`SERVICEDEFS.${row.original["complaintSubType"].toUpperCase()}`)}</span>
+            <span className="complain-no-cell-text">{t(`SERVICEDEFS_${row.original["complaintSubType"].toUpperCase()}`)}</span>
           </div>
         ),
       },

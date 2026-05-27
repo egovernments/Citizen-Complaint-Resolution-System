@@ -40,7 +40,8 @@
     "**/minimatch": "7.4.6",
     "minimatch": "7.4.6",
     "**/glob": "7.2.3",
-    "glob": "7.2.3"
+    "glob": "7.2.3",
+    "**/node-releases": "2.0.14"
   },
   "author": "Hariprasad <hariprasad@egovernments.org>",
   "repository": {
