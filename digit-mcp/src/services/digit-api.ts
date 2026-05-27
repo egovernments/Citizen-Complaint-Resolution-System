@@ -207,7 +207,14 @@ class DigitApiClient {
           const errors: ApiError[] = (data.Errors as ApiError[]) || [
             {
               code: `HTTP_${response.status}`,
-              message: (data.message as string) || `Request failed: ${response.status}`,
+              // Include the raw body when neither Errors[] nor message is
+              // present — some services (notably egov-localization) return
+              // 400s in a different shape that otherwise gets flattened
+              // to "Request failed: 400", losing the actual cause.
+              message:
+                (data.message as string) ||
+                (Object.keys(data).length > 0 ? JSON.stringify(data).slice(0, 300) : '') ||
+                `Request failed: ${response.status}`,
             },
           ];
           throw new ApiClientError(errors, response.status);
@@ -375,6 +382,28 @@ class DigitApiClient {
           data: record.data,
           auditDetails: record.auditDetails,
           isActive,
+        },
+      }
+    );
+
+    return (data.mdms || [])[0] as MdmsRecord;
+  }
+
+  // MDMS v2 Update with replacement data payload. Used for read-modify-write
+  // flows (e.g. appending a city code into tenant.citymodule.tenants[]).
+  async mdmsV2UpdateData(record: MdmsRecord, newData: Record<string, unknown>): Promise<MdmsRecord> {
+    const data = await this.request<{ mdms?: MdmsRecord[] }>(
+      `${this.endpoint('MDMS_UPDATE')}/${record.schemaCode}`,
+      {
+        RequestInfo: this.buildRequestInfo(),
+        Mdms: {
+          tenantId: record.tenantId,
+          schemaCode: record.schemaCode,
+          uniqueIdentifier: record.uniqueIdentifier,
+          id: record.id,
+          data: newData,
+          auditDetails: record.auditDetails,
+          isActive: record.isActive !== false,
         },
       }
     );

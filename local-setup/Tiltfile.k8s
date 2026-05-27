@@ -107,7 +107,7 @@ ENTRYPOINT ["java", "-cp", ".:BOOT-INF/lib/*:BOOT-INF/classes", "org.egov.pgr.PG
 # ==================== DIGIT UI ====================
 if CI_MODE:
     docker_build('digit-ui-dev', context='.',
-        dockerfile_contents='FROM localhost:5000/egovio/digit-ui:multiarch-d448cb7',
+        dockerfile_contents='FROM localhost:5000/egovio/digit-ui:dev-ff0db90',
         only=['.dockerignore'],
     )
 else:

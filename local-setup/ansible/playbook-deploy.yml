@@ -14,11 +14,17 @@
 
   # Apple-Silicon Macs must pull amd64 images under Rosetta — Mac host_vars
   # sets `docker_default_platform: linux/amd64`. Undefined on Linux ->
-  # omit -> no env change, zero impact on Bomet/naipepea. Must be an
-  # inventory var, not a gathered fact: play-level environment is
-  # evaluated before fact-gathering (ansible_system undefined here).
+  # empty string, which Docker treats as "use host platform" (linux/amd64
+  # on x86_64 boxes) — zero impact on Bomet/naipepea. Must be an inventory
+  # var, not a gathered fact: play-level environment is evaluated before
+  # fact-gathering (ansible_system undefined here).
+  #
+  # NB: must NOT use `default(omit)` here — `omit` works as a module-arg
+  # sentinel but is rendered literally inside an environment dict value
+  # ("__omit_place_holder__..." gets exported as DOCKER_DEFAULT_PLATFORM
+  # and breaks every subsequent `docker build`).
   environment:
-    DOCKER_DEFAULT_PLATFORM: "{{ docker_default_platform | default(omit) }}"
+    DOCKER_DEFAULT_PLATFORM: "{{ docker_default_platform | default('') }}"
 
   pre_tasks:
     # digit-ui can be served two ways, both binding port 18080:
@@ -228,6 +234,27 @@
         src: ../docker-compose.fast-path.yml
         dest: "{{ digit_dir }}/docker-compose.fast-path.yml"
 
+    # Per-tenant compose overlay convention. If a file named
+    # local-setup/docker-compose.<inventory_hostname>.yml exists on the
+    # controller, copy it to the target and include it in every compose
+    # invocation below. Use it to ship per-tenant env overrides (Flyway
+    # table quirks, STATE_LEVEL_TENANT_ID adjustments, image tag pins,
+    # extra services, etc.) without touching the base compose file. Bomet
+    # uses this for url-shortening SPRING_FLYWAY_ENABLED:false + inbox
+    # STATE_LEVEL_TENANT_ID:ke overrides.
+    - name: "Per-tenant compose overlay — check for docker-compose.{{ inventory_hostname }}.yml"
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/../docker-compose.{{ inventory_hostname }}.yml"
+      register: per_tenant_overlay
+      delegate_to: localhost
+      become: false
+
+    - name: "Per-tenant compose overlay — copy to target (if present)"
+      copy:
+        src: "../docker-compose.{{ inventory_hostname }}.yml"
+        dest: "{{ digit_dir }}/docker-compose.{{ inventory_hostname }}.yml"
+      when: per_tenant_overlay.stat.exists
+
 
     # ==================== OTEL Java Agent (fetched, not in git) ====================
     # The 21 MB OTEL javaagent JAR is downloaded on the controller before the
@@ -299,14 +326,26 @@
     # tenant opts into a local build (`build_mcp: true`) the deploy builds
     # the image itself (mcp-build task below) and points compose at a
     # local-only tag (`digit-mcp:local`) — no registry pull. Otherwise it
-    # keeps pulling {{ docker_registry }}/digit-mcp:latest as before. An
-    # operator can still override `mcp_image:` explicitly in host_vars.
+    # pulls the published public image. An operator can still override
+    # `mcp_image:` explicitly in host_vars.
     - name: "Resolve MCP image tag"
       ansible.builtin.set_fact:
         mcp_image: >-
           {{ mcp_image
              | default('digit-mcp:local' if (build_mcp | default(false))
-                       else (docker_registry ~ '/digit-mcp:latest')) }}
+                       else 'ghcr.io/subhashini-egov/digit-mcp:2.12-draft-20260525-034354') }}
+
+    # Same shape as MCP. When `build_default_data_handler: true`, the build
+    # task below produces `default-data-handler:local` from utilities/default-data-handler
+    # using build/maven/Dockerfile. Otherwise we pull the published image
+    # carrying the relaxed RAINMAKER-PGR schema (see source-file fix dated
+    # 2026-05-24).
+    - name: "Resolve default-data-handler image tag"
+      ansible.builtin.set_fact:
+        ddh_image: >-
+          {{ ddh_image
+             | default('default-data-handler:local' if (build_default_data_handler | default(false))
+                       else 'ghcr.io/subhashini-egov/default-data-handler:2.12-draft-20260525-034354') }}
 
     # ==================== Compose .env (per-tenant overrides) ====================
     # Templates Grafana's public root URL (so the JVM dashboard / observability
@@ -388,38 +427,11 @@
         regexp: 'api\.egov\.theflywheel\.in'
         replace: "{{ domain }}"
 
-    # Substitute STATE_LEVEL tenant identifiers — the upstream compose
-    # ships with `pg` / `pg.citya` / `mz` defaults from egovernments/CCRS
-    # sample data. Without this rewrite, every DIGIT service comes up
-    # using `pg` for state-tier env vars, which breaks auth on any tenant
-    # whose user rows are encrypted under a different tenant's key — see
-    # the corresponding PR description for the full trace. State-root
-    # gets the inventory `state_root` (e.g. `ke`); the two city-tier
-    # services (egov-enc-service, egov-workflow-v2) get `tenant_id`
-    # (e.g. `ke.nairobi`).
-    - name: Set STATE_LEVEL_TENANT_ID (state-root) in compose
-      replace:
-        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
-        regexp: '^(\s+)STATE_LEVEL_TENANT_ID: pg$'
-        replace: '\1STATE_LEVEL_TENANT_ID: {{ state_root }}'
-
-    - name: Set EGOV_STATE_LEVEL_TENANT_ID (state-root) in compose
-      replace:
-        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
-        regexp: '^(\s+)EGOV_STATE_LEVEL_TENANT_ID: pg$'
-        replace: '\1EGOV_STATE_LEVEL_TENANT_ID: {{ state_root }}'
-
-    - name: Set STATE_LEVEL_TENANT_ID (city tier — enc-service + workflow) in compose
-      replace:
-        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
-        regexp: '^(\s+)STATE_LEVEL_TENANT_ID: pg\.citya$'
-        replace: '\1STATE_LEVEL_TENANT_ID: {{ tenant_id }}'
-
-    - name: Set STATE_LEVEL_TENANT_ID (inbox-service `mz` default) in compose
-      replace:
-        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
-        regexp: '^(\s+)STATE_LEVEL_TENANT_ID: mz$'
-        replace: '\1STATE_LEVEL_TENANT_ID: {{ state_root }}'
+    # Pre-boot tenant rewrites — only non-STATE_LEVEL vars that DDH,
+    # MCP, and infra containers need before the stack comes up. The
+    # STATE_LEVEL_TENANT_ID rewrites are DEFERRED to after MCP bootstrap
+    # seeds the target tenant's MDMS data (DataSecurity, Workflow, etc.),
+    # so JVM services can boot against the `pg` seed data first.
 
     # Same shape of overwrite-on-redeploy bug as the four above, for two
     # siblings the original fix missed:
@@ -438,6 +450,12 @@
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
         regexp: '^(\s+)DIGIT_TENANT: pg$'
         replace: '\1DIGIT_TENANT: {{ state_root }}'
+
+    - name: Set DEFAULT_TENANT_ID (default-data-handler) in compose
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)DEFAULT_TENANT_ID: pg$'
+        replace: '\1DEFAULT_TENANT_ID: {{ state_root }}'
 
     # ==================== Publish digit-mcp image ====================
     # digit-mcp ships from the same registry as every other DIGIT image
@@ -483,12 +501,13 @@
     # Tenants opt into the DB fast-path with `db_fast_path: true` in their
     # host_vars. When on, layer the overlay onto every compose invocation
     # below (pull, up, recreate). Default off — never touches live tenants.
-    - name: "Compute compose -f flags (fast-path overlay opt-in)"
+    - name: "Compute compose -f flags (fast-path + per-tenant overlay opt-in)"
       ansible.builtin.set_fact:
         compose_files: >-
           {{
             '-f docker-compose.egov-digit.yaml' +
-            (' -f docker-compose.fast-path.yml' if (db_fast_path | default(false)) else '')
+            (' -f docker-compose.fast-path.yml' if (db_fast_path | default(false)) else '') +
+            (' -f docker-compose.' ~ inventory_hostname ~ '.yml' if per_tenant_overlay.stat.exists else '')
           }}
 
     - name: "Show compose file stack"
@@ -496,17 +515,45 @@
         msg: "compose files for {{ inventory_hostname }}: {{ compose_files }}"
 
     # ==================== Build digit-mcp image locally ====================
-    # Mirrors the configurator fold-in (files/configurator-build.sh): when
-    # `build_mcp: true`, clone DIGIT-MCP + `docker build` the image here and
-    # tag it as MCP_IMAGE (digit-mcp:local). Runs BEFORE pull so the local
-    # image is present; the pull below (--ignore-pull-failures) can't fetch a
-    # local-only tag, so it skips it, and `up -d` uses what we just built —
-    # no GHCR / VPC dependency, no multi-arch CI fix needed. Gated on
-    # enable_mcp too (no point building an image the stack won't run).
+    # When `build_mcp: true`, clone/rsync DIGIT-MCP on the *target* and
+    # `docker build` there (digit-mcp:local). Controller paths must not be
+    # passed to remote hosts — copy the script + source first. Runs BEFORE
+    # pull so the local-only tag is present; pull skips it, `up -d` uses
+    # the built image. Gated on enable_mcp too.
+    - name: "MCP build — ensure workspace on target"
+      ansible.builtin.file:
+        path: "{{ digit_dir }}/.build"
+        state: directory
+        mode: "0755"
+      when:
+        - enable_mcp | default(false)
+        - build_mcp | default(false)
+
+    - name: "MCP build — copy mcp-build.sh to target"
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/files/mcp-build.sh"
+        dest: "{{ digit_dir }}/.build/mcp-build.sh"
+        mode: "0755"
+      when:
+        - enable_mcp | default(false)
+        - build_mcp | default(false)
+
+    - name: "MCP build — sync vendored digit-mcp source to target"
+      synchronize:
+        src: "{{ playbook_dir }}/../../digit-mcp/"
+        dest: "{{ mcp_repo }}/"
+        delete: false
+        rsync_opts:
+          - "--omit-dir-times"
+      when:
+        - enable_mcp | default(false)
+        - build_mcp | default(false)
+        - (mcp_repo_url | default('-')) == '-'
+
     - name: "Build digit-mcp image locally (when build_mcp)"
       ansible.builtin.command: >-
-        bash {{ playbook_dir }}/files/mcp-build.sh
-        "{{ mcp_repo | default(playbook_dir ~ '/../../digit-mcp') }}"
+        bash {{ digit_dir }}/.build/mcp-build.sh
+        "{{ mcp_repo }}"
         "{{ mcp_repo_url | default('-') }}"
         "{{ mcp_ref | default('') }}"
         "{{ mcp_image }}"
@@ -516,6 +563,49 @@
       when:
         - enable_mcp | default(false)
         - build_mcp | default(false)
+
+    # ==================== Build default-data-handler image locally =========
+    # When `build_default_data_handler: true`, build the image from the
+    # vendored source in this repo (utilities/default-data-handler) using
+    # the shared maven Dockerfile (build/maven/Dockerfile). The image is
+    # tagged `default-data-handler:local`; compose picks it up via DDH_IMAGE.
+    #
+    # Build context is the CCRS repo root so the Dockerfile can reach both
+    # utilities/default-data-handler/{pom.xml,src} and build/maven/start.sh.
+    # Works for `ansible_connection: local` (controller path == target path).
+    # For real remote targets, add a synchronize step that rsyncs both
+    # subdirs to a build-context dir on the target.
+    - name: "Build default-data-handler image locally (when build_default_data_handler)"
+      ansible.builtin.command: >-
+        docker build
+        -t default-data-handler:local
+        --build-arg WORK_DIR=utilities/default-data-handler
+        -f build/maven/Dockerfile
+        .
+      args:
+        chdir: "{{ playbook_dir }}/../.."
+      register: ddh_build_run
+      changed_when: true
+      when:
+        - build_default_data_handler | default(false)
+
+    # ==================== Build otp-publisher image locally ===============
+    # When `build_otp_publisher: true`, build the vendored Node service at
+    # utilities/otp-publisher (its own Dockerfile, NOT the maven one) and tag
+    # it otp-publisher:local; compose picks it up via OTP_PUBLISHER_IMAGE.
+    # Only needed when the notifications profile (SMS-OTP path) is enabled.
+    - name: "Build otp-publisher image locally (when build_otp_publisher)"
+      ansible.builtin.command: >-
+        docker build
+        -t otp-publisher:local
+        -f utilities/otp-publisher/Dockerfile
+        utilities/otp-publisher
+      args:
+        chdir: "{{ playbook_dir }}/../.."
+      register: otp_publisher_build_run
+      changed_when: true
+      when:
+        - build_otp_publisher | default(false)
 
     # ==================== Build digit-ui from source ====================
     # Mirrors the configurator + mcp fold-ins: when `build_digit_ui: true`,
@@ -923,38 +1013,37 @@
         mode: '0600'            # tighten — was 0644 from the template; secrets bump to 0600
       no_log: true
 
-    # Keycloak-tier secrets — appended as a separate marked block so the
-    # main TENANT SECRETS block stays untouched on Keycloak-free
-    # tenants. Same OpenBao read; we just pick a different subset of
-    # keys. Default-empty strings on every lookup so that a missing key
-    # in OpenBao (e.g. first deploy before the operator filled them in)
-    # doesn't fail template rendering — it just writes empty values, and
-    # the keycloak containers fail their healthcheck loudly enough that
-    # the operator notices.
-    - name: "OpenBao — write Keycloak secrets into compose .env (when enable_keycloak)"
-      ansible.builtin.blockinfile:
-        path: "{{ digit_dir }}/.env"
-        block: |
-          KC_ADMIN_PASSWORD={{ bao_secrets.json.data.data.keycloak_admin_password | default('') }}
-          KC_DB_PASSWORD={{ bao_secrets.json.data.data.keycloak_db_password | default('') }}
-          TOKEN_EXCHANGE_SYSTEM_PASSWORD={{ bao_secrets.json.data.data.token_exchange_system_password | default('eGov@123') }}
-        marker: "# {mark} KEYCLOAK SECRETS"
-        create: false
-        mode: '0600'
+    # The first `up -d` started postgres with POSTGRES_PASSWORD=egov123
+    # (the default before OpenBao secrets were available). initdb created
+    # the `egov` role with that password. Now that the real password is
+    # in .env, ALTER the role inside the running database so the second
+    # `up -d` (which passes the new password to services) can connect.
+    # On repeat deploys the named volume already has data, initdb won't
+    # re-run, so this ALTER is the only way the password gets updated.
+    - name: "OpenBao — sync postgres role password with vault secret"
+      ansible.builtin.shell: >-
+        printf "ALTER ROLE egov WITH PASSWORD '%s';\n" "$NEWPW" |
+        docker exec -i docker-postgres psql -U egov -d egov
+      environment:
+        NEWPW: "{{ bao_secrets.json.data.data.postgres_password }}"
       no_log: true
-      when: enable_keycloak | default(false)
+      changed_when: true
 
-    - name: "OpenBao — append Google IdP secret into compose .env (when configured)"
-      ansible.builtin.lineinfile:
-        path: "{{ digit_dir }}/.env"
-        regexp: '^KC_GOOGLE_CLIENT_SECRET='
-        line: "KC_GOOGLE_CLIENT_SECRET={{ bao_secrets.json.data.data.keycloak_google_client_secret | default('') }}"
-        create: false
-        mode: '0600'
+    # Same drift as egov above, on the MCP session-store postgres:
+    # initdb ran with the default mcp123 (no .env yet) and created the
+    # `mcp` role with that password. OpenBao then wrote the real
+    # MCP_DB_PASSWORD into .env; the recreated digit-mcp container will
+    # send the vault value, which the role doesn't accept. ALTER the
+    # role inside digit-mcp-postgres so the next up -d's MCP can connect.
+    - name: "OpenBao — sync mcp-postgres role password with vault secret"
+      ansible.builtin.shell: >-
+        printf "ALTER ROLE mcp WITH PASSWORD '%s';\n" "$NEWPW" |
+        docker exec -i digit-mcp-postgres psql -U mcp -d mcp_sessions
+      environment:
+        NEWPW: "{{ bao_secrets.json.data.data.mcp_db_password }}"
       no_log: true
-      when:
-        - enable_keycloak | default(false)
-        - (keycloak_google_client_id | default('')) | length > 0
+      changed_when: true
+      when: enable_mcp | default(false)
 
     - name: "Recreate services with the new env (Linux/Debian)"
       ansible.builtin.shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d
@@ -1091,12 +1180,21 @@
           name: nginx
           state: present
 
+      # `nginx_preserve_vhost: true` in host_vars makes the next three tasks
+      # (render / enable / remove-default) no-op. Use it for tenants whose
+      # production vhost has hand-crafted routing the template can't (yet)
+      # render — e.g. Bomet's /egov-rainmaker/ filestore passthrough,
+      # /novu/+/novu-api/ routing, and the /digit-ui/ host-alias. The nginx
+      # install task above still runs (idempotent), so the package is
+      # always present; only the site file is left alone.
+
       - name: "Host nginx — render site config from template"
         ansible.builtin.template:
           src: templates/nginx-site.conf.j2
           dest: "/etc/nginx/sites-available/{{ domain }}"
           mode: '0644'
         notify: Reload nginx
+        when: not (nginx_preserve_vhost | default(false))
 
       - name: "Host nginx — enable site"
         ansible.builtin.file:
@@ -1105,12 +1203,14 @@
           state: link
           force: yes   # convert pre-existing regular-file copies (older deploys) into a symlink
         notify: Reload nginx
+        when: not (nginx_preserve_vhost | default(false))
 
       - name: "Host nginx — remove default site"
         ansible.builtin.file:
           path: /etc/nginx/sites-enabled/default
           state: absent
         notify: Reload nginx
+        when: not (nginx_preserve_vhost | default(false))
 
       - name: "Host nginx — flush handlers so reload happens before validation"
         ansible.builtin.meta: flush_handlers
@@ -1251,22 +1351,38 @@
 
     # ────────────────────────────────────────────────────────────────
     # MCP-driven tenant bootstrap. Once auth/pg works, ask MCP to clone
-    # everything from `pg` → `state_tenant_id` (root) and `pg.citest` →
-    # `state_tenant_id.citya` (city). This seeds 30 schemas, ~1K data
+    # everything from `pg` → `state_root` (e.g. `ke`) and `pg.citest` →
+    # `tenant_id` (e.g. `ke.kericho`). This seeds 30 schemas, ~1K data
     # rows, ~8K localizations, the PGR workflow, an ADMIN eg_user, and
     # an ADMIN HRMS Employee with all departments — enough for a full
     # PGR lifecycle on day 1, and enough for the ui-tenant probe below
     # to succeed so the SPA lands on the operator's tenant (not pg).
-    # Skipped when state_tenant_id == 'pg' (nothing to bootstrap) or
-    # when MCP isn't enabled on this host.
+    #
+    # Gating: skipped when state_tenant_id == 'pg' (nothing to bootstrap)
+    # or when MCP isn't actually reachable at runtime. We don't gate on
+    # `enable_mcp` here because operators can run digit-mcp out-of-band
+    # (e.g. an existing container survived a wipe of the egov stack, or
+    # MCP is built locally on a non-VPC box) — what matters is whether
+    # /healthz responds. The reachability probe below ALWAYS runs and
+    # the bootstrap tasks key off its result.
     # ────────────────────────────────────────────────────────────────
+    - name: "mcp-bootstrap — probe reachability"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:13101/healthz"
+        method: GET
+        status_code: [200]
+        timeout: 5
+      register: mcp_reachability
+      failed_when: false
+      changed_when: false
+
     - name: "mcp-bootstrap — root tenant via /v1/tenant/bootstrap"
       ansible.builtin.uri:
         url: "http://127.0.0.1:13101/v1/tenant/bootstrap"
         method: POST
         body_format: json
         body:
-          target_tenant: "{{ state_tenant_id }}"
+          target_tenant: "{{ state_root }}"
           source_tenant: "pg"
           mobile_regex: "{{ core_mobile_configs.mobileNumberPattern | default('^[6-9][0-9]{9}$') }}"
           mobile_length: "{{ core_mobile_configs.mobileNumberLength | default(10) }}"
@@ -1279,8 +1395,8 @@
         timeout: 600
       register: mcp_root_bootstrap
       when:
-        - state_tenant_id != 'pg'
-        - enable_mcp | default(false)
+        - state_root != 'pg'
+        - mcp_reachability.status | default(0) == 200
       ignore_errors: true
 
     - name: "mcp-bootstrap — city tenant via /v1/tenant/bootstrap"
@@ -1289,7 +1405,7 @@
         method: POST
         body_format: json
         body:
-          target_tenant: "{{ city_tenant | default(state_tenant_id ~ '.citya') }}"
+          target_tenant: "{{ tenant_id }}"
           source_tenant: "pg.citest"
           mobile_regex: "{{ core_mobile_configs.mobileNumberPattern | default('^[6-9][0-9]{9}$') }}"
           mobile_length: "{{ core_mobile_configs.mobileNumberLength | default(10) }}"
@@ -1302,18 +1418,158 @@
         timeout: 600
       register: mcp_city_bootstrap
       when:
-        - state_tenant_id != 'pg'
-        - enable_mcp | default(false)
+        - state_root != 'pg'
+        - mcp_reachability.status | default(0) == 200
       ignore_errors: true
 
     - name: "mcp-bootstrap — log result"
       ansible.builtin.debug:
         msg:
-          - "Root  bootstrap (target={{ state_tenant_id }}): {{ (mcp_root_bootstrap.json.summary | default('skipped')) if mcp_root_bootstrap is defined else 'skipped' }}"
-          - "City  bootstrap (target={{ city_tenant | default(state_tenant_id ~ '.citya') }}): {{ (mcp_city_bootstrap.json.summary | default('skipped')) if mcp_city_bootstrap is defined else 'skipped' }}"
+          - "MCP reachable: {{ (mcp_reachability.status | default(0)) == 200 }}"
+          - "Root  bootstrap (target={{ state_root }}): {{ (mcp_root_bootstrap.json.summary | default('skipped')) if mcp_root_bootstrap is defined else 'skipped' }}"
+          - "City  bootstrap (target={{ tenant_id }}): {{ (mcp_city_bootstrap.json.summary | default('skipped')) if mcp_city_bootstrap is defined else 'skipped' }}"
+      when: state_root != 'pg'
+
+    # MCP returns success=false when any seed step failed (schemas, data,
+    # workflows, or localizations). Surfacing only counts ('data_failed: 4')
+    # leaves operators staring at a passing playbook with no idea *what*
+    # broke. Print the actual failure entries and abort the deploy — this
+    # is the difference between "looks fine, but maputo's missing from the
+    # login dropdown" and "you have an actionable error message".
+    - name: "mcp-bootstrap — print detailed failure entries (root)"
+      ansible.builtin.debug:
+        msg:
+          - "Root bootstrap success: {{ mcp_root_bootstrap.json.success | default('unknown') }}"
+          - "Schema failures: {{ mcp_root_bootstrap.json.results.schemas.failed | default([]) }}"
+          - "Data failures: {{ mcp_root_bootstrap.json.results.data.failed | default([]) }}"
+          - "Workflow failures: {{ mcp_root_bootstrap.json.results.workflow.failed | default([]) }}"
+          - "Localization failures (per-locale counts): {{ mcp_root_bootstrap.json.localizations | default([]) }}"
       when:
-        - state_tenant_id != 'pg'
-        - enable_mcp | default(false)
+        - state_root != 'pg'
+        - mcp_root_bootstrap is defined
+        - (mcp_root_bootstrap.json.success | default(true)) == false
+
+    - name: "mcp-bootstrap — print detailed failure entries (city)"
+      ansible.builtin.debug:
+        msg:
+          - "City bootstrap success: {{ mcp_city_bootstrap.json.success | default('unknown') }}"
+          - "Schema failures: {{ mcp_city_bootstrap.json.results.schemas.failed | default([]) }}"
+          - "Data failures: {{ mcp_city_bootstrap.json.results.data.failed | default([]) }}"
+          - "Workflow failures: {{ mcp_city_bootstrap.json.results.workflow.failed | default([]) }}"
+          - "Localization failures (per-locale counts): {{ mcp_city_bootstrap.json.localizations | default([]) }}"
+      when:
+        - state_root != 'pg'
+        - mcp_city_bootstrap is defined
+        - (mcp_city_bootstrap.json.success | default(true)) == false
+
+    # Bail out if either bootstrap reported failures. `ignore_errors: true`
+    # on the API call only suppresses 4xx/5xx so we can still capture the
+    # body — we still want a hard stop when the API responds 200 but
+    # success=false in the body. Operators can override with
+    # `tolerate_bootstrap_failures: true` if they intentionally want to
+    # ship a partially-seeded tenant for further inspection.
+    - name: "mcp-bootstrap — fail if any seed step reported failures"
+      ansible.builtin.fail:
+        msg: >-
+          MCP bootstrap reported failures.
+          Root success={{ mcp_root_bootstrap.json.success | default('n/a') }},
+          city success={{ mcp_city_bootstrap.json.success | default('n/a') }}.
+          See the detailed-failure-entries debug output above. Re-run with
+          `tolerate_bootstrap_failures: true` to continue past this.
+      when:
+        - state_root != 'pg'
+        - not (tolerate_bootstrap_failures | default(false))
+        - >
+          (mcp_root_bootstrap is defined and
+            (mcp_root_bootstrap.json.success | default(true)) == false)
+          or
+          (mcp_city_bootstrap is defined and
+            (mcp_city_bootstrap.json.success | default(true)) == false)
+
+    # ────────────────────────────────────────────────────────────────
+    # Post-bootstrap STATE_LEVEL_TENANT_ID rewrite. The upstream compose
+    # ships with `pg` / `pg.citya` / `mz` defaults. Services boot against
+    # the `pg` seed data (which exists in full-dump.sql). Once MCP
+    # bootstrap has seeded the target tenant's MDMS data (DataSecurity,
+    # Workflow, etc.), we rewrite STATE_LEVEL_TENANT_ID and restart so
+    # services pick up the real tenant context.
+    # ────────────────────────────────────────────────────────────────
+    - name: "post-bootstrap — set STATE_LEVEL_TENANT_ID (state-root) in compose"
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)STATE_LEVEL_TENANT_ID: pg$'
+        replace: '\1STATE_LEVEL_TENANT_ID: {{ state_root }}'
+      when: state_root != 'pg'
+
+    - name: "post-bootstrap — set EGOV_STATE_LEVEL_TENANT_ID (state-root) in compose"
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)EGOV_STATE_LEVEL_TENANT_ID: pg$'
+        replace: '\1EGOV_STATE_LEVEL_TENANT_ID: {{ state_root }}'
+      when: state_root != 'pg'
+
+    - name: "post-bootstrap — set STATE_LEVEL_TENANT_ID (city tier — enc-service + workflow) in compose"
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)STATE_LEVEL_TENANT_ID: pg\.citya$'
+        replace: '\1STATE_LEVEL_TENANT_ID: {{ tenant_id }}'
+      when: state_root != 'pg'
+
+    - name: "post-bootstrap — set STATE_LEVEL_TENANT_ID (inbox-service `mz` default) in compose"
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)STATE_LEVEL_TENANT_ID: mz$'
+        replace: '\1STATE_LEVEL_TENANT_ID: {{ state_root }}'
+      when: state_root != 'pg'
+
+    - name: "post-bootstrap — restart services to pick up new STATE_LEVEL_TENANT_ID"
+      ansible.builtin.shell: >-
+        docker compose {{ compose_files }}
+        restart egov-user egov-workflow-v2 egov-enc-service pgr-services egov-hrms
+      args:
+        chdir: "{{ digit_dir }}"
+      when: state_root != 'pg'
+
+    # `docker compose restart egov-user` above does NOT cascade to
+    # egov-user-proxy. The proxy keeps its prior `healthy` state
+    # (cached from the previous healthcheck cycle), so an immediate
+    # `docker inspect` on the proxy returns `healthy` on the first
+    # poll and the wait satisfies before egov-user has finished
+    # restarting. The subsequent ui-tenant probe then fires while
+    # egov-user is mid-boot → Kong → user-proxy → 502.
+    #
+    # Probe the Kong path directly instead — that's the contract the
+    # ui-tenant probe will use. Any non-5xx (200/400/401) means the
+    # whole chain (Kong route → user-proxy → egov-user) is live; we
+    # send intentionally-bad creds so this readiness check doesn't
+    # couple to ADMIN existence on the tenant.
+    - name: "post-bootstrap — wait for egov-user via Kong to be ready after restart"
+      ansible.builtin.uri:
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/user/oauth/token"
+        method: POST
+        headers: >-
+          {{
+            {'Authorization': 'Basic ZWdvdi11c2VyLWNsaWVudDo=',
+             'Content-Type': 'application/x-www-form-urlencoded'}
+            | combine({'Host': domain} if not (tls_enabled | default(true)) else {})
+          }}
+        body_format: form-urlencoded
+        body:
+          grant_type: password
+          username: readiness-probe
+          password: readiness-probe
+          scope: read
+          tenantId: pg
+          userType: EMPLOYEE
+        status_code: [200, 400, 401]
+        timeout: 10
+        validate_certs: "{{ tls_enabled | default(true) }}"
+      register: user_kong_ready_post
+      retries: 30
+      delay: 5
+      until: user_kong_ready_post.status in [200, 400, 401]
+      changed_when: false
+      when: state_root != 'pg'
 
     # ────────────────────────────────────────────────────────────────
     # Novu Twilio bootstrap. Runs only when:

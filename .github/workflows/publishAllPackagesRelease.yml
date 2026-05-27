@@ -1,20 +1,66 @@
 name: Node.js Publish UI Packages
 
 on:
+  workflow_dispatch:
   push:
     branches: [ 'master', 'dev' ]
     paths:
+      - '.github/workflows/publishAllPackagesRelease.yml'
       - 'frontend/micro-ui/web/micro-ui-internals/**'
+
+permissions:
+  contents: read
+  id-token: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v2
+      - uses: actions/checkout@v6
+
+      - name: Set up Node.js for build
+        uses: actions/setup-node@v6
         with:
           node-version: 14
+          package-manager-cache: false
+
+      - name: Build packages
+        run: |
+          cd frontend/micro-ui/web/micro-ui-internals/packages/css
+          rm -rf dist
+          yarn
+          yarn prepublish
+
+          cd ../modules/pgr
+          rm -rf dist
+          yarn
+          yarn prepublish
+
+      - name: Set up Node.js for trusted publishing
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
           registry-url: https://registry.npmjs.org/
-      - run: cd frontend/micro-ui/web/micro-ui-internals/ && bash ./publish.sh
-        env:
-          NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
+          package-manager-cache: false
+
+      - name: Publish packages
+        run: |
+          publish_if_new() {
+            package_dir="$1"
+            tag="$2"
+
+            cd "$GITHUB_WORKSPACE/$package_dir"
+
+            package_name="$(node -p "require('./package.json').name")"
+            package_version="$(node -p "require('./package.json').version")"
+
+            if npm view "$package_name@$package_version" version >/dev/null 2>&1; then
+              echo "Skipping $package_name@$package_version because it is already published."
+              return
+            fi
+
+            npm publish --access public --tag "$tag" --ignore-scripts
+          }
+
+          publish_if_new "frontend/micro-ui/web/micro-ui-internals/packages/css" "campaign-1.0"
+          publish_if_new "frontend/micro-ui/web/micro-ui-internals/packages/modules/pgr" "cms-1.0"

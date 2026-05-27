@@ -59,6 +59,13 @@ const AddtionalDetails = (props) => {
       complaintDetails.service.additionalDetail = {
         REOPEN_REASON: reopenDetails.reason,
       };
+      // Reopen attachments go to service.documents (not workflow.verificationDocuments),
+      // appended to any existing complaint photos.
+      const newDocs = Array.isArray(reopenDetails?.verificationDocuments) ? reopenDetails.verificationDocuments : [];
+      if (newDocs.length > 0) {
+        const existingDocs = Array.isArray(complaintDetails.service.documents) ? complaintDetails.service.documents : [];
+        complaintDetails.service.documents = [...existingDocs, ...newDocs];
+      }
       updateComplaint({ service: complaintDetails.service, workflow: complaintDetails.workflow });
     }
     return (

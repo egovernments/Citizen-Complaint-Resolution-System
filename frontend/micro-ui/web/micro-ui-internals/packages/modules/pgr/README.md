@@ -1,4 +1,4 @@
-# egovernments/digit-ui-module-cms
+# egovernments/digit-ui-module-health-payments
 
 ## Install
 
@@ -52,21 +52,6 @@ const initDigitUI = () => {
 1. Create Complaint
 2. Search Complaint Inbox.
 3. View/Update Complaint.
-
-## Configuration
-
-### Feature Flags
-
-This module reads runtime flags from the deployment's `globalConfigs.js` via `window.globalConfigs.getConfig("KEY")`. Flags are environment-controlled — set them in the `globalConfigs.js` shipped by the host environment (e.g. `local-setup/nginx/globalConfigs.js` for local, the equivalent asset in `configs/assets/` for deployed environments).
-
-| Key | Default behavior | Effect when set to `true` |
-|-----|------------------|---------------------------|
-| `USE_INBOX_V1` | **V2 inbox** (`PGRSearchInboxV2`, InboxSearchComposer-based) renders when the flag is `false`, missing, or `globalConfigs.js` is absent | Renders the legacy `PGRInboxV1` on the Employee PGR inbox route |
-
-**How it's wired**
-- Declaration: add `var useInboxV1 = true;` inside the `globalConfigs` IIFE and a matching `} else if (key === "USE_INBOX_V1") { return useInboxV1; }` branch in `getConfig`.
-- Consumer: [`src/pages/employee/PGRInbox.js`](src/pages/employee/PGRInbox.js) — reads the flag at render time and mounts either `PGRInboxV1` or `PGRSearchInboxV2`.
-- Only add the entry when you explicitly want V1. Removing the entry (or shipping a `globalConfigs.js` without it) falls back to V2.
 
 
 ### Contributors

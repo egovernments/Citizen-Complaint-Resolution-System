@@ -965,7 +965,7 @@ services:
       - egov-network
 
   digit-ui:
-    image: egovio/digit-ui:develop-d9b2be1
+    image: egovio/digit-ui:dev-ff0db90
     container_name: digit-ui
     restart: on-failure
     ports:
