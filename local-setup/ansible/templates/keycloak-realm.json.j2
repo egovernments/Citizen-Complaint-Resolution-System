@@ -1,0 +1,74 @@
+{#-
+  Per-tenant Keycloak realm. Renders by:
+    1. Loading the canonical template from local-setup/keycloak/realm-template.json
+       (shipped from /root/DIGIT-keycloak-overlay).
+    2. Substituting __REALM_NAME__ with the tenant's state_tenant_id.
+    3. Setting the digit-ui client's rootUrl + redirectUris + webOrigins
+       to point at this tenant's public domain (so OAuth callbacks land
+       on the right host instead of the template's placeholders).
+    4. Injecting a Google identityProvider when keycloak_google_client_id
+       is set in host_vars (skipped otherwise — the template ships an
+       empty identityProviders list).
+
+  All substitution happens through ansible-style Jinja filters (no shell-
+  out, no jq), so the rendered file is just plain JSON with no further
+  processing required by kcadm import.
+-#}
+{%- set tpl_path = playbook_dir + '/../keycloak/realm-template.json' -%}
+{%- set tpl = lookup('file', tpl_path) | from_json -%}
+{%- set _ = tpl.update({'realm': state_tenant_id}) -%}
+
+{%- set scheme = 'https://' if (tls_enabled | default(true)) else 'http://' -%}
+{%- set base = (keycloak_url | default('')) or (scheme + domain) -%}
+
+{#- Patch the digit-ui client in place. The template ships one client
+    (digit-ui); if that ever changes, this loop tolerates extra clients
+    by only mutating the one we know about. -#}
+{%- for client in tpl.clients -%}
+  {%- if client.clientId == (keycloak_client_id | default('digit-ui')) -%}
+    {%- set _ = client.update({'rootUrl': base}) -%}
+    {%- set _ = client.update({'baseUrl': '/digit-ui/'}) -%}
+    {%- set new_redirects = [
+        base + '/*',
+        base + '/digit-ui/*',
+        'http://localhost:*'
+    ] -%}
+    {%- set _ = client.update({'redirectUris': new_redirects}) -%}
+    {%- set new_origins = [
+        base,
+        'http://localhost:3000',
+        'http://localhost:5173'
+    ] -%}
+    {%- set _ = client.update({'webOrigins': new_origins}) -%}
+  {%- endif -%}
+{%- endfor -%}
+
+{#- Google IdP wiring is opt-in. When keycloak_google_client_id is set,
+    inject the standard google providerId entry; otherwise leave the
+    empty list the template ships. kcadm-driven IdP creation (in the
+    playbook) is the runtime path, but baking it into the realm import
+    keeps a fresh re-import idempotent. -#}
+{%- if (keycloak_google_client_id | default('')) | length > 0 -%}
+  {#- The client secret lives in OpenBao (bootstrap_secrets.keycloak_google_client_secret),
+      so prefer bao_secrets if available; fall back to a host_var of the
+      same name for sandbox/test renders without OpenBao. -#}
+  {%- set google_secret = (bao_secrets.json.data.data.keycloak_google_client_secret
+                            if (bao_secrets is defined
+                                and bao_secrets.json is defined)
+                            else (keycloak_google_client_secret | default(''))) -%}
+  {%- set idp = {
+      'alias': 'google',
+      'providerId': 'google',
+      'enabled': true,
+      'trustEmail': true,
+      'firstBrokerLoginFlowAlias': 'first broker login',
+      'config': {
+          'clientId': keycloak_google_client_id,
+          'clientSecret': google_secret,
+          'syncMode': 'IMPORT'
+      }
+  } -%}
+  {%- set _ = tpl.update({'identityProviders': [idp]}) -%}
+{%- endif -%}
+
+{{ tpl | to_nice_json(indent=2) }}
