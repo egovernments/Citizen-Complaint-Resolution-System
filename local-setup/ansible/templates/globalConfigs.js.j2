@@ -40,6 +40,16 @@ var globalConfigs = (function () {
   var loginTenantAllowlist = {{ login_tenant_allowlist | to_json }};
   var coreMobileConfigs = {{ core_mobile_configs | to_json }};
 
+  // Keycloak SSO settings. Inert when authProvider !== 'keycloak'
+  // (which is the default). The auth-adapter inside digit-ui reads
+  // these via Digit.Utils.getConfig() when it switches into the
+  // Keycloak code path. URLs are absolute against the tenant's
+  // public domain — that's the only address browsers can reach.
+  var keycloakUrl = {{ (('https://' if (tls_enabled | default(true)) else 'http://') + domain + '/auth') | to_json }};
+  var keycloakRealm = {{ state_tenant_id | to_json }};
+  var keycloakClientId = {{ keycloak_client_id | default('digit-ui') | to_json }};
+  var tokenExchangeUrl = {{ (('https://' if (tls_enabled | default(true)) else 'http://') + domain + '/token-exchange') | to_json }};
+
   var getConfig = function (key) {
     if (key === "EMPLOYEE_MODULE_DENYLIST") return employeeModuleDenylist;
     if (key === "LOGIN_TENANT_ALLOWLIST") return loginTenantAllowlist;
@@ -91,6 +101,14 @@ var globalConfigs = (function () {
       return boundaryType;
     } else if (key === "CORE_MOBILE_CONFIGS") {
       return coreMobileConfigs;
+    } else if (key === "KEYCLOAK_URL") {
+      return keycloakUrl;
+    } else if (key === "KEYCLOAK_REALM") {
+      return keycloakRealm;
+    } else if (key === "KEYCLOAK_CLIENT_ID") {
+      return keycloakClientId;
+    } else if (key === "TOKEN_EXCHANGE_URL") {
+      return tokenExchangeUrl;
     }
   };
 

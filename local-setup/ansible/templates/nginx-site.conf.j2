@@ -140,6 +140,39 @@ server {
   }
 
 {% endif %}
+{% if nginx_features.keycloak | default(false) %}
+  # Keycloak (host nginx → keycloak container :8180). Requires
+  # `enable_keycloak: true` so the container is actually running;
+  # without that the proxy_pass would 502. SPA uses /auth/realms/<realm>/...
+  # and OIDC discovery at /auth/realms/<realm>/.well-known/openid-configuration.
+  # KC_PROXY_HEADERS=xforwarded on the container side makes it trust the
+  # X-Forwarded-* values we pass here for issuer-URL construction.
+  location /auth/ {
+    proxy_pass http://127.0.0.1:18180/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    # Realm import + admin REST payloads can exceed nginx's default 4k
+    # buffer; bump to fit a 100KB realm without rejecting the response.
+    proxy_buffer_size 16k;
+    proxy_buffers 8 16k;
+  }
+
+  # token-exchange-svc — bridges Keycloak access_token → DIGIT
+  # access_token (for use by the auth-adapter in digit-ui). Authorization
+  # header is forwarded explicitly because the SPA posts the Keycloak
+  # bearer there. healthz is unauthenticated (used by validate task).
+  location /token-exchange/ {
+    proxy_pass http://127.0.0.1:18200/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Authorization $http_authorization;
+  }
+
+{% endif %}
 {% if enable_novu | default(false) %}
   # Novu dashboard (SPA). The official ghcr.io/novuhq/novu/dashboard
   # image is built with Vite `base=/`, despite VITE_BASE_PATH=/novu
