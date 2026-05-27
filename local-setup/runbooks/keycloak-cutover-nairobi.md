@@ -38,21 +38,46 @@ Bomet is untouched — its `host_vars` keeps `enable_keycloak: false`.
    Confirm by checking `git log nairobi --oneline | grep -i keycloak` shows
    both adapter and ansible commits.
 
-2. **Secrets filled in.** Open `inventory/host_vars/nairobi.yml` and replace
-   the `PUT-RANDOM-STRONG-STRING-HERE` placeholders under `bootstrap_secrets`
-   with real values:
+2. **Append the Keycloak block to `inventory/host_vars/nairobi.yml`.** That
+   file is gitignored (per `local-setup/` convention — operator-local secrets
+   never enter git), so the cutover ships only the runbook + `_example.yml`
+   defaults. You merge this YAML into your existing `nairobi.yml`:
 
    ```yaml
+   # Keycloak SSO cutover — activates for naipepea.digit.org. Both flags
+   # must be true together: enable_keycloak brings up the containers,
+   # auth_provider tells the SPA to use the KC adapter. Flip both back
+   # to false to revert (see Rollback section).
+   enable_keycloak: true
+   auth_provider: keycloak
+   keycloak_client_id: digit-ui
+   # Google IdP is optional. Uncomment + paste the OAuth client ID once
+   # bootstrap_secrets.keycloak_google_client_secret is set below.
+   # keycloak_google_client_id: "<google-client-id-here>"
+
+   # Add `keycloak: true` to your existing nginx_features dict — don't
+   # replace the dict, just append this key (preserve brand_assets / mcp /
+   # configurator / etc).
+   nginx_features:
+     # …existing keys stay…
+     keycloak: true             # renders /auth/ + /token-exchange/ blocks
+
+   # New bootstrap_secrets keys — append to your existing block. Replace
+   # PUT-RANDOM-STRONG-STRING-HERE with strong values BEFORE running
+   # ./deploy.sh nairobi. Seeded into OpenBao with cas=0 → only honoured
+   # on first deploy after the flip. Rotation goes through
+   # `bao kv put kv/digit/nairobi <field>=<new>`, not this file.
    bootstrap_secrets:
-     keycloak_admin_password: "<32+ chars, generate with `openssl rand -base64 32`>"
-     keycloak_db_password:    "<32+ chars, generate with `openssl rand -base64 32`>"
-     keycloak_google_client_secret: ""    # leave blank to skip Google IdP
+     # …existing keys stay…
+     keycloak_admin_password: "PUT-RANDOM-STRONG-STRING-HERE"    # `openssl rand -base64 32`
+     keycloak_db_password:    "PUT-RANDOM-STRONG-STRING-HERE"    # `openssl rand -base64 32`
+     keycloak_google_client_secret: ""                           # leave blank to skip Google IdP
      token_exchange_system_password: "eGov@123"
    ```
 
-   These get seeded into OpenBao with `cas=0`, so they're only honoured on the
-   first deploy after the flip. Get them right now — rotation post-cutover is
-   via `bao kv put kv/digit/nairobi <field>=<new>`, not by re-editing this file.
+   The exact same YAML structure is documented in
+   `inventory/host_vars/_example.yml` (which IS tracked) — refer to that
+   for any future tenant that wants to enable Keycloak.
 
 3. **Google IdP wiring (optional).** Skip if `keycloak_google_client_secret`
    is blank. Otherwise:
