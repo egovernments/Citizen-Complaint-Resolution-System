@@ -251,6 +251,18 @@ async function runBoundaryPhase(
   const entityFailures: string[] = [];
   const relFailures: string[] = [];
 
+  // Build the boundary-service payload for a parsed row. When the XLSX has
+  // numeric `latitude` + `longitude` columns we forward them as a GeoJSON
+  // Point; otherwise digit-api supplies its Point[0,0] default so the
+  // entity still creates (operators can edit geometry later).
+  const toBoundaryPayload = (b: BoundaryRow) => {
+    const payload: { code: string; geometry?: Record<string, unknown> } = { code: b.code };
+    if (Number.isFinite(b.longitude) && Number.isFinite(b.latitude)) {
+      payload.geometry = { type: 'Point', coordinates: [b.longitude, b.latitude] };
+    }
+    return payload;
+  };
+
   // ── Phase A: create ALL entities first (every level), batched ──
   // egov-boundary-service /boundary/_create takes an array, so 100-at-a-time
   // keeps round-trips low without blowing past payload limits.
@@ -260,7 +272,7 @@ async function runBoundaryPhase(
     for (let i = 0; i < levelRows.length; i += BATCH) {
       const batch = levelRows.slice(i, i + BATCH);
       try {
-        await digitApi.boundaryCreate(tenantId, batch.map((b) => ({ code: b.code })));
+        await digitApi.boundaryCreate(tenantId, batch.map(toBoundaryPayload));
         entityStats.created += batch.length;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -269,7 +281,7 @@ async function runBoundaryPhase(
           // so we can count exists vs. created cleanly without re-failing.
           for (const b of batch) {
             try {
-              await digitApi.boundaryCreate(tenantId, [{ code: b.code }]);
+              await digitApi.boundaryCreate(tenantId, [toBoundaryPayload(b)]);
               entityStats.created++;
             } catch (innerErr) {
               const innerMsg = innerErr instanceof Error ? innerErr.message : String(innerErr);
