@@ -101,7 +101,7 @@ const pgr =  {
                       cond: (context) => context.intention == dialog.INTENTION_MORE
                     },
                     {
-                      target: '#location',
+                      target: '#imageUpload',
                       cond: (context) => context.intention != dialog.INTENTION_UNKOWN,
                       actions: assign((context, event) => {
                         context.slots.pgr["complaint"]= context.intention;
@@ -306,13 +306,22 @@ const pgr =  {
                         })
                       },
                       {
+                        target: '#persistComplaint',
+                        cond: (context, event) => !event.data && context.message ==='1' && config.enableSandboxMode,
+                        actions: assign((context, event) => {
+                          // In sandbox mode, use tenant ID as city
+                          context.slots.pgr["city"] = context.extraInfo.tenantId;
+                          context.slots.pgr["locality"] = context.extraInfo.tenantId;
+                        })
+                      },
+                      {
                         target: '#city',
-                        cond: (context, event) => !event.data && context.message ==='1' && !config.pgrUseCase.geoSearch
+                        cond: (context, event) => !event.data && context.message ==='1' && !config.pgrUseCase.geoSearch && !config.enableSandboxMode
                         
                       },
                       {
                         target: '#nlpCitySearch',
-                        cond: (context, event) => !event.data && context.message ==='1' && config.pgrUseCase.geoSearch
+                        cond: (context, event) => !event.data && context.message ==='1' && config.pgrUseCase.geoSearch && !config.enableSandboxMode
                       },
                       {
                         target: '#geoLocation',
