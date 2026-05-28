@@ -521,17 +521,22 @@ class PGRService {
     return results[0];
   }
 
-  async fetchOpenComplaints(user) {
+  async fetchOpenComplaints(user, extraInfo) {
     let requestBody = {
       RequestInfo: {
         authToken: user.authToken,
       },
     };
 
+    // Use tenant from extraInfo in sandbox mode, otherwise use root tenant
+    let tenantId = (config.enableSandboxMode && extraInfo && extraInfo.tenantId) 
+      ? extraInfo.tenantId 
+      : config.rootTenantId;
+
     var url =
       config.egovServices.egovServicesHost +
       config.egovServices.pgrSearchEndpoint;
-    url = url + "?tenantId=" + config.rootTenantId;
+    url = url + "?tenantId=" + tenantId;
     url += "&";
     url += "mobileNumber=" + user.mobileNumber;
 
@@ -544,13 +549,15 @@ class PGRService {
       body: JSON.stringify(requestBody),
     };
 
+    console.log("Fetching complaints from URL:", url);
     let response = await fetch(url, options);
     let results;
     if (response.status === 200) {
       let responseBody = await response.json();
       results = await this.preparePGRResult(responseBody, user.locale);
     } else {
-      console.error("Error in fetching the complaints");
+      console.error("Error in fetching the complaints. Status:", response.status);
+      console.error("URL was:", url);
       return [];
     }
 

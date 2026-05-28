@@ -924,7 +924,7 @@ const pgr =  {
       id: 'trackComplaint',
       invoke: {
         id: 'fetchOpenComplaints',
-        src: (context) => pgrService.fetchOpenComplaints(context.user),
+        src: (context) => pgrService.fetchOpenComplaints(context.user, context.extraInfo),
         onDone: [
           {
             target: '#endstate',
