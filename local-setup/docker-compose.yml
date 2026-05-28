@@ -366,6 +366,28 @@ services:
     networks:
       - egov-network
 
+  egov-user-proxy:
+    image: nginx:alpine
+    container_name: egov-user-proxy
+    depends_on:
+      egov-user:
+        condition: service_healthy
+    volumes:
+      - ./nginx/user-proxy.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8107/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+          cpus: '0.1'
+    networks:
+      - egov-network
+
   egov-otp:
     image: egovio/egov-otp:v2.9.2-4a60f20
     container_name: egov-otp
@@ -690,7 +712,7 @@ services:
       OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
     volumes:
-      - ./configs/persister:/persister-config:ro
+      - ./configs/egov-persister:/persister-config:ro
     ports:
       - 18091:8091
     healthcheck:
@@ -1002,6 +1024,7 @@ services:
       KONG_STATUS_LISTEN: 0.0.0.0:8100
       KONG_MEM_CACHE_SIZE: 64m
       KONG_NGINX_WORKER_PROCESSES: 1
+      KONG_UNTRUSTED_LUA_SANDBOX_REQUIRES: "cjson, resty.http"
     deploy:
       resources:
         limits:
@@ -1133,7 +1156,7 @@ services:
     ports:
       - "18888:8888"
     volumes:
-      - ./jupyter/dataloader:/home/jovyan/work
+      - ./jupyter:/home/jovyan/work
     deploy:
       resources:
         limits:
