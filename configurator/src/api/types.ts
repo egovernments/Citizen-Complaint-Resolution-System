@@ -191,6 +191,16 @@ export interface BoundaryLevel {
   active: boolean;
 }
 
+// GeoJSON-shaped geometry the boundary-service accepts. Today that's just
+// Point + Polygon — MultiPolygon is rejected at /boundary/_create even
+// though jsonb storage would hold it, so callers should collapse
+// MultiPolygon to its largest Polygon before sending (see
+// coerceForBoundaryService in utils/boundaryGeoJson.ts).
+export interface BoundaryGeometry {
+  type: 'Point' | 'Polygon';
+  coordinates: number[] | number[][][];
+}
+
 export interface Boundary {
   id?: string;
   tenantId: string;
@@ -201,6 +211,7 @@ export interface Boundary {
   hierarchyType: string;
   latitude?: number;
   longitude?: number;
+  geometry?: BoundaryGeometry;
   children?: Boundary[];
 }
 

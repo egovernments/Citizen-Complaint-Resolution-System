@@ -160,14 +160,27 @@ export const boundaryService = {
   // a direct DB cleanup, before the service's in-memory dedup cache times
   // out). Blanket-swallowing that error made Phase 2 claim success while
   // creating nothing.
-  async createBoundaryEntity(tenantId: string, code: string): Promise<boolean> {
+  async createBoundaryEntity(
+    tenantId: string,
+    code: string,
+    geometry?: { type: 'Point' | 'Polygon'; coordinates: number[] | number[][][] },
+  ): Promise<boolean> {
+    // Default unit-square Polygon placeholder when the operator hasn't
+    // supplied real geometry. Same shape Naipepea / Bomet have shipped for
+    // every boundary to date — kept for compatibility so existing flows
+    // don't change. Pass a real Point / Polygon to get an actual outline
+    // on the citizen map.
+    const PLACEHOLDER = {
+      type: 'Polygon' as const,
+      coordinates: [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]],
+    };
     try {
       await apiClient.post(ENDPOINTS.BOUNDARY_CREATE, {
         RequestInfo: apiClient.buildRequestInfo(),
         Boundary: [{
           tenantId,
           code,
-          geometry: { type: 'Polygon', coordinates: [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]] },
+          geometry: geometry ?? PLACEHOLDER,
         }],
       });
       return true;
@@ -294,8 +307,9 @@ export const boundaryService = {
 
   // Create a single boundary (entity + relationship)
   async createBoundary(boundary: Boundary): Promise<Boundary> {
-    // Step 1: Create the boundary entity
-    await this.createBoundaryEntity(boundary.tenantId, boundary.code);
+    // Step 1: Create the boundary entity (with geometry if attached, else
+    // the unit-square placeholder).
+    await this.createBoundaryEntity(boundary.tenantId, boundary.code, boundary.geometry);
 
     // Step 2: Create the boundary relationship
     if (boundary.hierarchyType && boundary.boundaryType) {
@@ -333,12 +347,14 @@ export const boundaryService = {
     const tenantId = boundaries[0].tenantId;
     const byLevel = this.groupByLevel(boundaries);
 
-    // Pass 1: create ALL entities first (every level).
+    // Pass 1: create ALL entities first (every level). Forward each row's
+    // geometry (from GeoJSON sidecar or lat/long) so the citizen UI gets
+    // real outlines instead of unit-square placeholders.
     const failedEntities = new Set<string>();
     for (const levelBoundaries of byLevel) {
       for (const b of levelBoundaries) {
         try {
-          await this.createBoundaryEntity(b.tenantId, b.code);
+          await this.createBoundaryEntity(b.tenantId, b.code, b.geometry);
         } catch (error) {
           failedEntities.add(b.code);
           failed.push({
