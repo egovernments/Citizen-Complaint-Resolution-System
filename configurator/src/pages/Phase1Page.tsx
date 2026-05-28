@@ -30,7 +30,7 @@ import { mdmsService, localizationService, apiClient, ApiClientError } from '@/a
 import { bootstrapStateRoot, stateNeedsBootstrap, type BootstrapProgress } from '@/api/services/tenantBootstrap';
 import type { TenantExcelRow, Tenant, ValidationResult } from '@/api/types';
 
-type Step = 'landing' | 'upload' | 'preview' | 'branding' | 'complete';
+type Step = 'landing' | 'upload' | 'preview' | 'branding' | 'complete' | 'select-existing';
 
 interface BrandingData {
   bannerUrl?: string;
@@ -109,6 +109,35 @@ export default function Phase1Page() {
 
   // Created tenant
   const [createdTenant, setCreatedTenant] = useState<Tenant | null>(null);
+
+  // Existing-tenant picker — for the common case where the playbook
+  // already created the tenant (state_root: mz + auto-bootstrap) and
+  // running Phase 1 fresh would just hit "Duplicate record". State root
+  // is derived from the login tenant: `mz.maputo` → `mz`, `mz` → `mz`.
+  const stateRoot = state.tenant.includes('.') ? state.tenant.split('.')[0] : state.tenant;
+  const [existingTenants, setExistingTenants] = useState<Tenant[] | null>(null);
+  const [existingTenantsLoading, setExistingTenantsLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setExistingTenantsLoading(true);
+    mdmsService.getTenants(stateRoot)
+      .then((tenants) => { if (!cancelled) setExistingTenants(tenants); })
+      .catch((err) => {
+        if (!cancelled) {
+          console.warn('Failed to list existing tenants:', err);
+          setExistingTenants([]);
+        }
+      })
+      .finally(() => { if (!cancelled) setExistingTenantsLoading(false); });
+    return () => { cancelled = true; };
+  }, [stateRoot]);
+
+  const handleUseExistingTenant = (tenant: Tenant) => {
+    setTargetTenant(tenant.code);
+    completePhase(1);
+    navigate('/phase/2');
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -381,6 +410,29 @@ export default function Phase1Page() {
       {/* Landing */}
       {step === 'landing' && (
         <DigitCard>
+          {/* Existing-tenant banner — surfaces upfront when the tenant is
+              already in MDMS (deploy auto-bootstrap, prior wizard run,
+              second operator joining). Skips the duplicate-record cliff
+              the create-new path would otherwise hit. */}
+          {existingTenants && existingTenants.length > 0 && (
+            <Alert variant="info" className="mb-4 sm:mb-6">
+              <AlertDescription className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <span className="text-xs sm:text-sm">
+                  <strong>{existingTenants.length} existing tenant{existingTenants.length === 1 ? '' : 's'}</strong> already configured under <code className="text-primary">{stateRoot}</code>.
+                  Skip Phase 1 by selecting one.
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-primary text-primary hover:bg-primary/10 shrink-0"
+                  onClick={() => setStep('select-existing')}
+                >
+                  Use existing tenant →
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+
           <Alert variant="info" className="mb-4 sm:mb-6">
             <AlertDescription>
               <strong className="block mb-2 text-sm sm:text-base">What You'll Do:</strong>
@@ -430,12 +482,89 @@ export default function Phase1Page() {
             </div>
           </div>
 
-          <div className="mt-4 sm:mt-6 flex justify-end">
+          <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row justify-end gap-2">
+            {existingTenants && existingTenants.length > 0 && (
+              <Button
+                variant="outline"
+                onClick={() => setStep('select-existing')}
+                className="border-primary text-primary hover:bg-primary/10"
+              >
+                Use existing tenant
+              </Button>
+            )}
             <SubmitBar
               label="Start Setup"
               onSubmit={() => setStep('upload')}
               icon={<ChevronRight className="w-4 h-4" />}
             />
+          </div>
+        </DigitCard>
+      )}
+
+      {/* Use Existing Tenant — picker shown when tenants already exist at the
+          chosen state root (deploy auto-bootstrap, prior wizard runs, etc.) */}
+      {step === 'select-existing' && (
+        <DigitCard>
+          <SubHeader>Use Existing Tenant</SubHeader>
+          <p className="text-xs sm:text-sm text-muted-foreground mb-4 sm:mb-6">
+            These tenants are already configured under <code className="text-primary">{stateRoot}</code> (created via deploy bootstrap, MCP, or a previous wizard run).
+            Pick one to skip tenant creation and jump straight to Phase 2.
+          </p>
+
+          {existingTenantsLoading && (
+            <div className="flex items-center gap-2 text-muted-foreground text-sm py-4">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Loading existing tenants…
+            </div>
+          )}
+
+          {!existingTenantsLoading && (!existingTenants || existingTenants.length === 0) && (
+            <Alert variant="info" className="mb-4">
+              <AlertDescription className="text-xs sm:text-sm">
+                No tenants found under <code className="text-primary">{stateRoot}</code>. Use the Create New flow on the landing page.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {existingTenants && existingTenants.length > 0 && (
+            <div className="overflow-x-auto -mx-4 sm:mx-0 mb-4 sm:mb-6">
+              <div className="px-4 sm:px-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Code</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead className="hidden sm:table-cell">Description</TableHead>
+                      <TableHead className="text-right">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {existingTenants.map((t) => (
+                      <TableRow key={t.code}>
+                        <TableCell><code className="text-primary text-xs">{t.code}</code></TableCell>
+                        <TableCell className="font-medium text-sm">{t.name}</TableCell>
+                        <TableCell className="hidden sm:table-cell text-xs text-muted-foreground truncate max-w-xs">{t.description || '—'}</TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            size="sm"
+                            className="bg-primary hover:bg-primary/90 text-white"
+                            onClick={() => handleUseExistingTenant(t)}
+                          >
+                            Use this <ChevronRight className="w-4 h-4 ml-1" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-between">
+            <Button variant="ghost" size="sm" onClick={() => setStep('landing')} className="text-muted-foreground hover:text-primary">
+              ← Back
+            </Button>
           </div>
         </DigitCard>
       )}

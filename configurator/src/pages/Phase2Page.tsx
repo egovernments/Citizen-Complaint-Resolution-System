@@ -639,48 +639,14 @@ export default function Phase2Page() {
             )}
           </div>
 
-          {/* Optional polygon GeoJSON sidecar — supplies real outlines for
-              the citizen UI's OSM map. Without it boundaries land with a
-              unit-square placeholder (which is what Bomet + Nairobi ship
-              today). Match by `properties.code` (preferred) or normalized
-              `properties.name` (lowercase, strip diacritics + "Distrito
-              Municipal de " prefix). */}
-          <div
-            className="border border-dashed border-primary/20 rounded p-4 mb-4 hover:border-primary/40 transition-colors cursor-pointer"
-            onClick={() => !polygonFile && document.getElementById('boundary-polygon-upload')?.click()}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 text-foreground mb-1">
-                  <MapPin className="w-4 h-4 text-primary" />
-                  <strong className="text-sm font-condensed">Polygon outlines (optional)</strong>
-                </div>
-                {!polygonFile && (
-                  <p className="text-xs text-muted-foreground">
-                    Drop a GeoJSON FeatureCollection to draw real boundary outlines on the citizen map.
-                    Without it, boundaries get a placeholder shape.
-                  </p>
-                )}
-                {polygonFile && polygonSidecar && (
-                  <p className="text-xs text-muted-foreground truncate">
-                    <span className="text-primary font-medium">{polygonFile.name}</span> •
-                    {' '}{polygonSidecar.totalFeatures} features
-                    {' '}({polygonSidecar.matchedByCode} by code, {polygonSidecar.matchedByName} by name)
-                  </p>
-                )}
-                {polygonError && (
-                  <p className="text-xs text-destructive">{polygonError}</p>
-                )}
-              </div>
-              {polygonFile ? (
-                <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handlePolygonClear(); }} className="h-6 w-6 p-0 shrink-0">
-                  <X className="h-4 w-4" />
-                </Button>
-              ) : (
-                <Upload className="w-5 h-5 text-primary shrink-0" />
-              )}
-            </div>
-          </div>
+          {/* Hint about the optional polygon sidecar — the actual picker
+              lives on the verify step (after XLSX parse). Putting it here
+              would be invisible: handleFileUpload immediately transitions
+              to 'verify' the moment a file is dropped. */}
+          <p className="text-xs text-muted-foreground mb-4 flex items-center gap-2">
+            <MapPin className="w-3 h-3 inline" />
+            After upload, you'll be able to attach an optional GeoJSON file for real boundary outlines on the map.
+          </p>
 
           <Alert variant="warning" className="mb-4 sm:mb-6">
             <AlertTriangle className="w-4 h-4" />
@@ -709,23 +675,54 @@ export default function Phase2Page() {
             <Check className="w-4 h-4 sm:w-5 sm:h-5" />
             <span className="text-sm sm:text-base truncate">File: {uploadedFile?.name}</span>
           </div>
-          {polygonFile && polygonSidecar && (() => {
-            // Count how many of the rows we're about to create will pick up
-            // real geometry from the sidecar — operator-visible signal that
-            // the matching actually worked before they click Upload.
-            const matched = validBoundaries.filter(r =>
-              geometryForBoundary(r, polygonSidecar)?.type === 'Polygon'
-            ).length;
-            return (
-              <div className="flex items-center gap-2 text-muted-foreground mb-3 sm:mb-4 text-xs sm:text-sm">
-                <MapPin className="w-4 h-4 text-primary shrink-0" />
-                <span>
-                  Polygons: <span className="text-primary font-medium">{polygonFile.name}</span> —
-                  {' '}<span className="text-primary font-medium">{matched}</span> of {validBoundaries.length} boundaries will get real outlines
-                </span>
+
+          {/* Optional polygon GeoJSON sidecar — real outlines for the
+              citizen UI's OSM map. Without it boundaries land with the
+              unit-square placeholder (same as Bomet/Naipepea today).
+              Match by `properties.code` (preferred) or normalized
+              `properties.name`. Sits on the verify step because the
+              template step transitions away the instant an XLSX drops. */}
+          <div
+            className="border border-dashed border-primary/30 rounded p-4 mb-4 hover:border-primary/60 transition-colors cursor-pointer"
+            onClick={() => !polygonFile && document.getElementById('boundary-polygon-upload')?.click()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 text-foreground mb-1">
+                  <MapPin className="w-4 h-4 text-primary" />
+                  <strong className="text-sm font-condensed">Polygon outlines (optional)</strong>
+                </div>
+                {!polygonFile && !polygonError && (
+                  <p className="text-xs text-muted-foreground">
+                    Drop a GeoJSON FeatureCollection to draw real boundary outlines on the citizen map.
+                    Skip to use the default placeholder shape.
+                  </p>
+                )}
+                {polygonFile && polygonSidecar && (() => {
+                  const matched = validBoundaries.filter(r =>
+                    geometryForBoundary(r, polygonSidecar)?.type === 'Polygon'
+                  ).length;
+                  return (
+                    <p className="text-xs text-muted-foreground">
+                      <span className="text-primary font-medium">{polygonFile.name}</span>
+                      {' '}— <span className="text-primary font-medium">{matched}</span> of {validBoundaries.length} boundaries will get real outlines
+                      {' '}({polygonSidecar.totalFeatures} features in file, {polygonSidecar.matchedByCode} matched by code, {polygonSidecar.matchedByName} by name).
+                    </p>
+                  );
+                })()}
+                {polygonError && (
+                  <p className="text-xs text-destructive">{polygonError}</p>
+                )}
               </div>
-            );
-          })()}
+              {polygonFile ? (
+                <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handlePolygonClear(); }} className="h-6 w-6 p-0 shrink-0">
+                  <X className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Upload className="w-5 h-5 text-primary shrink-0" />
+              )}
+            </div>
+          </div>
 
           <div className="overflow-x-auto -mx-4 sm:mx-0 mb-3 sm:mb-4">
             <div className="px-4 sm:px-0">
