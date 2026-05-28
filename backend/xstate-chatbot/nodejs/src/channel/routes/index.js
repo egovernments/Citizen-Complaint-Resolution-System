@@ -10,23 +10,20 @@ router.post("/message", async (req, res) => {
     console.log("Request URL: " + req.originalUrl);
     console.log('Request Body Object: ' + JSON.stringify(req.body));
     
-    // Get tenant ID from session if in sandbox mode
-    let tenantId = null;
-    if (config.enableSandboxMode) {
-      // Extract mobile number from request to get session
-      let tempMessage = await channelProvider.processMessageFromUser(req);
-      if (tempMessage && tempMessage.user && tempMessage.user.mobileNumber) {
-        const chatStateRepository = require("../../session/repo/chat-state-repo");
-        let sessionUserId = tempMessage.user.mobileNumber;
-        let chatState = await chatStateRepository.getActiveStateForUserId(sessionUserId);
-        if (chatState && chatState.context && chatState.context.extraInfo && chatState.context.extraInfo.tenantId) {
-          tenantId = chatState.context.extraInfo.tenantId;
-        }
+    // Check if this is an image upload in sandbox mode
+    let tenantIdForUpload = null;
+    if (config.enableSandboxMode && req.body && req.body.NumMedia && parseInt(req.body.NumMedia) > 0) {
+      // This is an image upload - try to get tenant from tracker
+      // Extract mobile number from the From field (format: whatsapp:+917061170992)
+      let fromNumber = req.body.From;
+      if (fromNumber && fromNumber.includes(':')) {
+        let mobileNumber = fromNumber.split(':')[1].replace('+91', '');
+        tenantIdForUpload = sessionManager.getTenantForMobileNumber(mobileNumber);
+        console.log(`Image upload detected for ${mobileNumber}, using tenant: ${tenantIdForUpload || 'default'}`);
       }
     }
     
-    // Process message with tenant ID
-    let reformattedMessage = await channelProvider.processMessageFromUser(req, tenantId);
+    let reformattedMessage = await channelProvider.processMessageFromUser(req, tenantIdForUpload);
     if (reformattedMessage != null) sessionManager.fromUser(reformattedMessage);
   } catch (e) {
     console.log(e);

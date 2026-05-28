@@ -416,7 +416,7 @@ class ValueFirstWhatsAppProvider {
           }
     }    
     
-    async processMessageFromUser(req, tenantId = null) {
+    async processMessageFromUser(req, providedTenantId = null) {
         let reformattedMessage = {}
         let requestBody = req.query;
 
@@ -428,6 +428,9 @@ class ValueFirstWhatsAppProvider {
         
         if(requestBody.buttonLabel && requestBody.buttonLabel == '$btnLabel')
             return null;
+        
+        // Use provided tenant ID, or fall back to query parameter, or use default
+        let tenantId = providedTenantId || req.query.tenantId || config.rootTenantId;
         
         reformattedMessage = await this.getTransformedRequest(requestBody, tenantId);
         return reformattedMessage;

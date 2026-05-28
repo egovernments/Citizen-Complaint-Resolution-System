@@ -242,6 +242,14 @@ class SessionManager {
     return state;
   }
 
+  // Method to get tenant ID for a mobile number from tracker (for image uploads)
+  getTenantForMobileNumber(mobileNumber) {
+    if (config.enableSandboxMode && sandboxOrgCodeTracker[mobileNumber]) {
+      return sandboxOrgCodeTracker[mobileNumber].orgTenantId || null;
+    }
+    return null;
+  }
+
   getChatServiceFor(chatStateJson, reformattedMessage) {
     const context = chatStateJson.context;
     context.chatInterface = this;

@@ -247,7 +247,7 @@ class TwilioWhatsAppProvider {
         return reformattedMessage;
     }
 
-    async processMessageFromUser(req, tenantId = null) {
+    async processMessageFromUser(req, providedTenantId = null) {
         let reformattedMessage = {};
         let requestBody = req.body;
 
@@ -261,6 +261,9 @@ class TwilioWhatsAppProvider {
             return null;
         }
 
+        // Use provided tenant ID, or fall back to query parameter, or use default
+        let tenantId = providedTenantId || req.query.tenantId || config.rootTenantId;
+        
         reformattedMessage = await this.getUserMessage(requestBody, tenantId);
         return reformattedMessage;
     }
