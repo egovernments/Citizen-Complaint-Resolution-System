@@ -9,7 +9,24 @@ router.post("/message", async (req, res) => {
   try {
     console.log("Request URL: " + req.originalUrl);
     console.log('Request Body Object: ' + JSON.stringify(req.body));
-    let reformattedMessage = await channelProvider.processMessageFromUser(req);
+    
+    // Get tenant ID from session if in sandbox mode
+    let tenantId = null;
+    if (config.enableSandboxMode) {
+      // Extract mobile number from request to get session
+      let tempMessage = await channelProvider.processMessageFromUser(req);
+      if (tempMessage && tempMessage.user && tempMessage.user.mobileNumber) {
+        const chatStateRepository = require("../../session/repo/chat-state-repo");
+        let sessionUserId = tempMessage.user.mobileNumber;
+        let chatState = await chatStateRepository.getActiveStateForUserId(sessionUserId);
+        if (chatState && chatState.context && chatState.context.extraInfo && chatState.context.extraInfo.tenantId) {
+          tenantId = chatState.context.extraInfo.tenantId;
+        }
+      }
+    }
+    
+    // Process message with tenant ID
+    let reformattedMessage = await channelProvider.processMessageFromUser(req, tenantId);
     if (reformattedMessage != null) sessionManager.fromUser(reformattedMessage);
   } catch (e) {
     console.log(e);

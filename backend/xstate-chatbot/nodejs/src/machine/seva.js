@@ -68,15 +68,7 @@ const sevaMachine = Machine({
                 }
                 context.onboarding.locale = context.user.locale;
               }),
-              always: [
-                {
-                  target: "#organizationCode",
-                  cond: (context) => config.enableSandboxMode
-                },
-                {
-                  target: "#onboardingWelcome"
-                }
-              ]
+              always: "#onboardingWelcome"
             },
           },
         },

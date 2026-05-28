@@ -56,11 +56,11 @@ class PGRService {
       tenantId,
       "RAINMAKER-PGR",
       "ServiceDefs",
-      "$.[?(@.order && @.active == true)]"
+      "$.[?(@.active == true)]"
     );
     let sortedData = complaintTypeMdmsData
       .slice()
-      .sort((a, b) => a.order - b.order);
+      .sort((a, b) => (a.order || 999) - (b.order || 999));
     let complaintTypes = [];
     for (let data of sortedData) {
       if (!complaintTypes.includes(data.serviceCode))
@@ -465,26 +465,28 @@ class PGRService {
     // Handle image upload from slots.image (existing flow)
     if (slots.image) {
       try {
-        let filestoreId = await this.getFileForFileStoreId(slots.image, city);
+        // slots.image already contains the filestore ID from channel upload
         var content = {
           documentType: "PHOTO",
-          filestoreId: filestoreId,
+          filestoreId: slots.image,
         };
         requestBody["workflow"]["verificationDocuments"].push(content);
       } catch (error) {
+        console.error("Error adding image to complaint:", error);
       }
     }
 
     // Handle image upload from extraInfo.fileStoreId (new flow)
     if (extraInfo && extraInfo.fileStoreId) {
       try {
-        let filestoreId = await this.getFileForFileStoreId(extraInfo.fileStoreId, city);
+        // extraInfo.fileStoreId already contains the filestore ID
         var content = {
           documentType: "PHOTO",
-          filestoreId: filestoreId,
+          filestoreId: extraInfo.fileStoreId,
         };
         requestBody["workflow"]["verificationDocuments"].push(content);
       } catch (error) {
+        console.error("Error adding image to complaint:", error);
       }
     }
 

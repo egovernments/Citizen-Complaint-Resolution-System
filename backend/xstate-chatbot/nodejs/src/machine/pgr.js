@@ -78,7 +78,7 @@ const pgr =  {
                       actions: assign((context, event) => {
                         let preamble = dialog.get_message(messages.fileComplaint.complaintType.question.preamble, context.user.locale);
                         let {complaintTypes, messageBundle} = event.data;
-                        let {prompt, grammer} = dialog.constructListPromptAndGrammer(complaintTypes, messageBundle, context.user.locale, true);
+                        let {prompt, grammer} = dialog.constructListPromptAndGrammer(complaintTypes, messageBundle, context.user.locale, false);
                         context.grammer = grammer; // save the grammer in context to be used in next step
                         dialog.sendMessage(context, `${preamble}${prompt}`);
                       }) 
@@ -260,10 +260,20 @@ const pgr =  {
             geoLocationSharingInfo: {
               id: 'geoLocationSharingInfo',
               onEntry: assign( (context, event) => {
-                var message = {
-                  type: 'image',
-                  output: config.pgrUseCase.informationImageFilestoreId
-                };
+                var message;
+                if (config.enableSandboxMode) {
+                  // In sandbox mode, use direct URL for location instructions
+                  message = {
+                    type: 'image',
+                    output: config.pgrUseCase.locationInstructionsUrl || 'https://sandbox-demo.digit.org/location-instructions.png'
+                  };
+                } else {
+                  // In production, use filestore ID
+                  message = {
+                    type: 'image',
+                    output: config.pgrUseCase.informationImageFilestoreId
+                  };
+                }
                 dialog.sendMessage(context, message);
               }),
               always: 'geoLocation'

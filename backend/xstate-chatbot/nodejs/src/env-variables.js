@@ -137,6 +137,7 @@ const envVariables = {
         pgrVersion: process.env.PGR_VERSION || 'v2',
         complaintSearchLimit: process.env.COMPLAINT_SEARCH_LIMIT || 3,
         informationImageFilestoreId: process.env.INFORMATION_IMAGE_FILESTORE_ID ||'5425a590-4105-4036-9769-e916c5176930',
+        locationInstructionsUrl: process.env.LOCATION_INSTRUCTIONS_URL || 'https://i.imgur.com/8qXtYDm.png',
         pgrUpdateTopic: process.env.PGR_UPDATE_TOPIC || 'update-pgr-request',
         geoSearch: process.env.GEO_SEARCH === 'false' ? false : true
     },
