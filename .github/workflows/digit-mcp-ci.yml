@@ -1,0 +1,38 @@
+name: DIGIT-MCP CI
+
+on:
+  push:
+    branches: [develop, main]
+    paths:
+      - 'digit-mcp/**'
+      - '.github/workflows/digit-mcp-ci.yml'
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - 'digit-mcp/**'
+      - '.github/workflows/digit-mcp-ci.yml'
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: digit-mcp
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'digit-mcp/package-lock.json'
+
+      - run: npm ci
+
+      - name: Build (data-provider workspace + tsc)
+        run: npm run build
+
+      - name: Typecheck (no emit) as a separate gate
+        run: npx tsc --noEmit
