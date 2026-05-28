@@ -181,10 +181,73 @@ export interface BoundaryContext {
   levels: string[];
 }
 
+/**
+ * Normalize a string for fuzzy matching of GeoJSON feature names to boundary
+ * codes. The XLSX side typically stores codes as lowercase ascii with
+ * underscores (`kamavota`), while OSM / GIS exports use mixed-case display
+ * names with diacritics and spaces (`KaMavota`, `KaMpfumu`, `Distrito
+ * Municipal de KaMpfumu`). This brings both to a common shape.
+ */
+function normalizeForMatch(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '') // strip diacritics
+    .toLowerCase()
+    .replace(/^distrito municipal de\s+/, '') // OSM-style prefix on Maputo distritos
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+/**
+ * Parse a GeoJSON sidecar file into a `code → geometry` lookup. Each feature
+ * is keyed by `properties.code` (preferred) or normalized `properties.name`
+ * (fallback). Returns the map plus stats so the caller can surface how many
+ * boundaries got matched vs. dropped to the operator.
+ */
+function loadGeoJsonSidecar(geojsonText: string): {
+  byCode: Map<string, Record<string, unknown>>;
+  totalFeatures: number;
+  withCode: number;
+  withName: number;
+  skipped: number;
+} {
+  const byCode = new Map<string, Record<string, unknown>>();
+  let withCode = 0;
+  let withName = 0;
+  let skipped = 0;
+  let parsed: { features?: Array<{ properties?: Record<string, unknown>; geometry?: Record<string, unknown> }> };
+  try {
+    parsed = JSON.parse(geojsonText);
+  } catch (e) {
+    throw new Error(`Could not parse boundary_geojson_file as JSON: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  const features = parsed.features ?? [];
+  for (const f of features) {
+    const props = f.properties ?? {};
+    const geom = f.geometry;
+    if (!geom) { skipped++; continue; }
+    const explicitCode = typeof props.code === 'string' ? props.code.trim() : '';
+    if (explicitCode) {
+      byCode.set(explicitCode, geom);
+      withCode++;
+      continue;
+    }
+    const name = typeof props.name === 'string' ? props.name.trim() : '';
+    if (name) {
+      byCode.set(normalizeForMatch(name), geom);
+      withName++;
+      continue;
+    }
+    skipped++;
+  }
+  return { byCode, totalFeatures: features.length, withCode, withName, skipped };
+}
+
 async function runBoundaryPhase(
   tenantId: string,
   fileRef: string,
   hierarchyTypeOverride?: string,
+  geojsonFileRef?: string,
 ): Promise<PhaseResult & { context?: BoundaryContext }> {
   const buf = await resolveFile(fileRef, tenantId);
 
@@ -251,15 +314,36 @@ async function runBoundaryPhase(
   const entityFailures: string[] = [];
   const relFailures: string[] = [];
 
-  // Build the boundary-service payload for a parsed row. When the XLSX has
-  // numeric `latitude` + `longitude` columns we forward them as a GeoJSON
-  // Point; otherwise digit-api supplies its Point[0,0] default so the
-  // entity still creates (operators can edit geometry later).
+  // Optional GeoJSON sidecar: map of boundary code (or normalized name) →
+  // GeoJSON geometry. Lets operators ship real Polygon / MultiPolygon
+  // outlines without trying to cram them into an XLSX cell. Sidecar wins
+  // over per-row lat/long; lat/long wins over the digit-api Point[0,0]
+  // default.
+  let geojsonByCode: Map<string, Record<string, unknown>> | undefined;
+  let geojsonStats: ReturnType<typeof loadGeoJsonSidecar> | undefined;
+  if (geojsonFileRef) {
+    const geojsonBuf = await resolveFile(geojsonFileRef, tenantId);
+    geojsonStats = loadGeoJsonSidecar(geojsonBuf.toString('utf8'));
+    geojsonByCode = geojsonStats.byCode;
+  }
+  const geometryFor = (b: BoundaryRow): Record<string, unknown> | undefined => {
+    if (geojsonByCode) {
+      const hit = geojsonByCode.get(b.code) ?? geojsonByCode.get(normalizeForMatch(b.name));
+      if (hit) return hit;
+    }
+    if (Number.isFinite(b.longitude) && Number.isFinite(b.latitude)) {
+      return { type: 'Point', coordinates: [b.longitude, b.latitude] };
+    }
+    return undefined;
+  };
+
+  // Build the boundary-service payload for a parsed row. Geometry comes from
+  // (in order): geojson sidecar by code, geojson sidecar by normalized name,
+  // XLSX latitude/longitude, or the digit-api default Point[0,0].
   const toBoundaryPayload = (b: BoundaryRow) => {
     const payload: { code: string; geometry?: Record<string, unknown> } = { code: b.code };
-    if (Number.isFinite(b.longitude) && Number.isFinite(b.latitude)) {
-      payload.geometry = { type: 'Point', coordinates: [b.longitude, b.latitude] };
-    }
+    const g = geometryFor(b);
+    if (g) payload.geometry = g;
     return payload;
   };
 
@@ -391,11 +475,25 @@ async function runBoundaryPhase(
   const failed = entityStats.failed + relStats.failed;
   const created = entityStats.created + relStats.created;
 
+  // Track how many rows actually picked up geometry from the sidecar — useful
+  // operator feedback when feature names don't line up with boundary codes.
+  let geojsonMatchedRows = 0;
+  if (geojsonByCode) {
+    for (const r of rows) {
+      if (geojsonByCode.get(r.code) || geojsonByCode.get(normalizeForMatch(r.name))) {
+        geojsonMatchedRows++;
+      }
+    }
+  }
+
   return {
     status: failed > 0 && created === 0 ? 'failed' : 'completed',
     message: `Hierarchy ${hierarchyAction}: ${hierarchyType}. ` +
       `Entities ${entityStats.created} created, ${entityStats.exists} existed, ${entityStats.failed} failed. ` +
-      `Relationships ${relStats.created} created, ${relStats.exists} existed, ${relStats.failed} failed.`,
+      `Relationships ${relStats.created} created, ${relStats.exists} existed, ${relStats.failed} failed.` +
+      (geojsonStats
+        ? ` Polygon sidecar: ${geojsonMatchedRows}/${rows.length} rows matched (${geojsonStats.totalFeatures} features in file).`
+        : ''),
     hierarchyType,
     hierarchyAction,
     levels: fileLevels,
@@ -403,6 +501,15 @@ async function runBoundaryPhase(
     entity_failures: entityFailures,
     relationship_failures: relFailures,
     context,
+    ...(geojsonStats && {
+      geojson: {
+        features: geojsonStats.totalFeatures,
+        matched_by_code: geojsonStats.withCode,
+        matched_by_name: geojsonStats.withName,
+        rows_with_geometry: geojsonMatchedRows,
+        rows_without_geometry: rows.length - geojsonMatchedRows,
+      },
+    }),
   };
 }
 
@@ -783,6 +890,7 @@ export interface XlsxLoadOptions {
   tenant_id: string;
   tenant_file?: string;
   boundary_file?: string;
+  boundary_geojson_file?: string;
   masters_file?: string;
   employee_file?: string;
 }
@@ -792,7 +900,7 @@ export interface XlsxLoadOptions {
  * Phases execute in dependency order: Tenant → Boundaries → Masters → Employees.
  */
 export async function loadFromXlsx(options: XlsxLoadOptions): Promise<XlsxLoadResult> {
-  const { tenant_id, tenant_file, boundary_file, masters_file, employee_file } = options;
+  const { tenant_id, tenant_file, boundary_file, boundary_geojson_file, masters_file, employee_file } = options;
 
   const result: XlsxLoadResult = {
     success: true,
@@ -819,7 +927,7 @@ export async function loadFromXlsx(options: XlsxLoadOptions): Promise<XlsxLoadRe
   // Phase 2: Boundaries
   if (boundary_file) {
     try {
-      const boundaryResult = await runBoundaryPhase(tenant_id, boundary_file);
+      const boundaryResult = await runBoundaryPhase(tenant_id, boundary_file, undefined, boundary_geojson_file);
       boundaryContext = boundaryResult.context;
       const { context: _bctx, ...serializable } = boundaryResult;
       result.phases.boundaries = serializable;

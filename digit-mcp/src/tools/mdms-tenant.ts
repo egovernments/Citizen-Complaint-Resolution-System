@@ -3600,6 +3600,16 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             'Local path or fileStoreId for Boundary xlsx. ' +
             'Uploaded to filestore and processed via boundary management service.',
         },
+        boundary_geojson_file: {
+          type: 'string',
+          description:
+            'OPTIONAL sidecar: local path or fileStoreId for a GeoJSON FeatureCollection that supplies ' +
+            'real Polygon / MultiPolygon outlines for boundary entities (so the citizen UI can render them ' +
+            'on the OSM map). Each feature is matched to a boundary by `properties.code` (preferred) or by ' +
+            'normalized `properties.name` (fallback: lowercase, strip diacritics, replace non-alphanumerics ' +
+            'with underscore, strip "Distrito Municipal de " prefix). Falls back to per-row lat/long, then ' +
+            'to digit-api Point[0,0] default.',
+        },
         masters_file: {
           type: 'string',
           description:
@@ -3621,6 +3631,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       const tenantId = args.tenant_id as string;
       const tenantFile = args.tenant_file as string | undefined;
       const boundaryFile = args.boundary_file as string | undefined;
+      const boundaryGeojsonFile = args.boundary_geojson_file as string | undefined;
       const mastersFile = args.masters_file as string | undefined;
       const employeeFile = args.employee_file as string | undefined;
 
@@ -3641,11 +3652,20 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         }, null, 2);
       }
 
+      // GeoJSON sidecar only makes sense alongside a boundary file
+      if (boundaryGeojsonFile && !boundaryFile) {
+        return JSON.stringify({
+          success: false,
+          error: 'boundary_geojson_file requires boundary_file (the sidecar only attaches geometry to rows defined in the XLSX).',
+        }, null, 2);
+      }
+
       try {
         const result = await loadFromXlsx({
           tenant_id: tenantId,
           tenant_file: tenantFile,
           boundary_file: boundaryFile,
+          boundary_geojson_file: boundaryGeojsonFile,
           masters_file: mastersFile,
           employee_file: employeeFile,
         });
