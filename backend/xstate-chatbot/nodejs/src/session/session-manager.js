@@ -54,9 +54,14 @@ class SessionManager {
           waitingForOrgCode: true
         };
         
+        const registrationUrl = `${config.sandboxHost || 'https://sandbox-demo.digit.org'}/sandbox-ui/user/login`;
+        const welcomeMessage = "Welcome to the Sandbox WhatsApp Service! 🏛️\n\n" +
+          "Please enter your organization code to continue.\n\n" +
+          `📝 Don't have an organization code? Register here:\n${registrationUrl}`;
+        
         channelProvider.sendMessageToUser(
           { mobileNumber: mobileNumber },
-          ["Welcome to the Sandbox WhatsApp Service! 🏛️\n\nPlease enter your organization code to continue."],
+          [welcomeMessage],
           reformattedMessage.extraInfo
         );
         return; // Exit early - no session creation
@@ -66,10 +71,17 @@ class SessionManager {
         const orgDetails = await organizationService.validateOrganizationCode(orgCode);
         
         if (!orgDetails) {
-          // Invalid org code - ask again
+          // Invalid org code - provide registration link
+          const registrationUrl = `${config.sandboxHost || 'https://sandbox-demo.digit.org'}/sandbox-ui/user/login`;
+          const errorMessage = `Invalid organization code '${orgCode}'.\n\n` +
+            `👉 Please enter a correct organization code\n\n` +
+            `OR\n\n` +
+            `👉 Register your organization here if you haven't done so:\n${registrationUrl}\n\n` +
+            `Type 'Hi' to restart.`;
+          
           channelProvider.sendMessageToUser(
             { mobileNumber: mobileNumber },
-            [`Invalid organization code '${orgCode}'.\n\nPlease enter a valid organization code or type 'Hi' to restart.`],
+            [errorMessage],
             reformattedMessage.extraInfo
           );
           return; // Exit early - no session creation
