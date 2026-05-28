@@ -20,6 +20,7 @@ import org.springframework.util.CollectionUtils;
 import java.util.*;
 
 import static org.egov.pgr.util.PGRConstants.MDMS_DEPARTMENT_SEARCH;
+import static org.egov.pgr.util.PGRConstants.MDMS_DEPARTMENT_NAME_SEARCH;
 import static org.egov.pgr.util.PGRConstants.MDMS_SERVICENAME_SEARCH;
 
 @Slf4j
@@ -237,14 +238,26 @@ public class PGRService {
         String jsonPath = MDMS_DEPARTMENT_SEARCH.replace("{SERVICEDEF}", serviceCode);
 
         try {
-            List<String> department = JsonPath.read(mdmsData, jsonPath);
+            List<String> departmentCodeList = JsonPath.read(mdmsData, jsonPath);
 
-            if (department == null || department.isEmpty()) {
+            if (departmentCodeList == null || departmentCodeList.isEmpty()) {
                 log.warn("No department found in MDMS for service: {}. Defaulting to NA.", serviceCode);
                 return "NA";
             }
 
-            return department.get(0);
+            String departmentCode = departmentCodeList.get(0);
+            String nameJsonPath = MDMS_DEPARTMENT_NAME_SEARCH.replace("{CODE}", departmentCode);
+
+            try {
+                List<String> departmentNameList = JsonPath.read(mdmsData, nameJsonPath);
+                if (departmentNameList != null && !departmentNameList.isEmpty()) {
+                    return departmentNameList.get(0);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to parse MDMS response for department name lookup, code: {}. Falling back to code.", departmentCode, e);
+            }
+
+            return departmentCode;
         } catch (Exception e) {
             log.warn("Failed to parse MDMS response for department lookup, service: {}. Defaulting to NA.", serviceCode, e);
             return "NA";

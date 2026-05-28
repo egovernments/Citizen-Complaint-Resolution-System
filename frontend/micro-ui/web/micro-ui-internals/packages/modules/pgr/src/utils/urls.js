@@ -9,7 +9,6 @@ const Urls = {
   pgr: {
     inboxSearch: `/inbox/v2/_search`,
     search: `/pgr-services/v2/request/_search`,
-    count: `/pgr-services/v2/request/_count`,
     create: `/pgr-services/v2/request/_create`,
     update: `/pgr-services/v2/request/_update`,
   },

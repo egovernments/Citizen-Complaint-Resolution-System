@@ -440,6 +440,7 @@ class UnifiedExcelReader:
                     'serviceCode': service_code,
                     'name': sub_type_name,
                     'menuPath': menu_path_value,
+                    'menuPathName': menu_path_value,
                     'active': True
                 }
 
@@ -627,7 +628,20 @@ class UnifiedExcelReader:
         return employees
 
     def read_localization(self):
-        """Read localization with auto-determination of module and locale based on code pattern"""
+        """Read localization rows from Excel.
+
+        Expected sheet names:
+        - Localization
+        - localization
+
+        Supported columns:
+        - Required: Code
+        - Message source: Translation, Message, or English_Message
+        - Optional: Module, Locale
+
+        If Module/Locale are not provided, fall back to the historical
+        code-pattern defaults so older sheets still work.
+        """
         try:
             df = pd.read_excel(self.excel_file, sheet_name='Localization')
         except:
@@ -643,35 +657,57 @@ class UnifiedExcelReader:
         localizations = []
 
         for _, row in df.iterrows():
-            # Skip rows with missing required fields
-            if pd.notna(row.get('Code')) and pd.notna(row.get('Message')):
-                code = str(row['Code']).strip()
-                message = str(row['Message']).strip()
+            if pd.isna(row.get('Code')):
+                continue
 
-                # Skip if code or message is empty after stripping
-                if not code or not message:
-                    continue
+            code = str(row['Code']).strip()
+            if not code:
+                continue
 
-                # Determine module and locale based on code pattern
-                if code.startswith('SERVICEDEFS_') or code.startswith('SERVICEDEFS.'):
-                    # Service definitions → rainmaker-pgr
-                    module = 'rainmaker-pgr'
-                    locale = 'en_IN'
+            # Determine module and locale based on code pattern
+            if code.startswith('SERVICEDEFS_') or code.startswith('SERVICEDEFS.'):
+                # Service definitions → rainmaker-pgr
+                module = 'rainmaker-pgr'
+                locale = 'en_IN'
+            # Prefer Translation for language uploads; fall back to Message or
+            # English_Message for older localization workbooks.
+            message_value = None
+            for column_name in ('Translation', 'Message', 'English_Message'):
+                cell_value = row.get(column_name)
+                if pd.notna(cell_value) and str(cell_value).strip():
+                    message_value = str(cell_value).strip()
+                    break
+
+            if not message_value:
+                continue
+
+            module_value = row.get('Module')
+            locale_value = row.get('Locale')
+
+            module = str(module_value).strip() if pd.notna(module_value) and str(module_value).strip() else None
+            locale = str(locale_value).strip() if pd.notna(locale_value) and str(locale_value).strip() else None
+
+            # Historical fallback for older sheets that omitted module/locale.
+            if not module or not locale:
+                if code.startswith('SERVICEDFS.'):
+                    fallback_module = 'rainmaker-pgr'
+                    fallback_locale = 'en_IN'
                 elif code.startswith('COMMON_MASTERS_') or code.startswith('TENANT_TENANTS_'):
-                    # Common masters (departments, designations, tenants) → rainmaker-common
-                    module = 'rainmaker-common'
-                    locale = 'en_IN'
+                    fallback_module = 'rainmaker-common'
+                    fallback_locale = 'en_IN'
                 else:
-                    # Default fallback
-                    module = 'rainmaker-common'
-                    locale = 'en_IN'
+                    fallback_module = 'rainmaker-common'
+                    fallback_locale = 'en_IN'
 
-                localizations.append({
-                    'code': code,
-                    'message': message,
-                    'module': module,
-                    'locale': locale
-                })
+                module = module or fallback_module
+                locale = locale or fallback_locale
+
+            localizations.append({
+                'code': code,
+                'message': message_value,
+                'module': module,
+                'locale': locale
+            })
 
         return localizations
 
@@ -1089,6 +1125,13 @@ class APIUploader:
             # Track row-by-row status for Excel update
             row_statuses = []
 
+            # MDMS evaluates access using both the auth token and the tenant
+            # embedded in RequestInfo.userInfo. For cross-root bootstrap flows,
+            # keep userInfo aligned with the tenant being mutated.
+            user_info_copy = self.user_info.copy() if self.user_info else {}
+            if user_info_copy:
+                user_info_copy['tenantId'] = tenant
+
             for i, data_obj in enumerate(data_list, 1):
                 unique_id = (
                     data_obj.get('code') or
@@ -1128,7 +1171,7 @@ class APIUploader:
                     "RequestInfo": {
                         "apiId": "Rainmaker",
                         "authToken": self.auth_token,
-                        "userInfo": self.user_info,
+                        "userInfo": user_info_copy,
                         "msgId": "1695889012604|en_IN",
                         "plainAccessRequest": {}
                     },
@@ -1763,10 +1806,17 @@ class APIUploader:
             print(f"   ⚠️  Could not apply sheet protection: {str(e)}")
 
     def create_localization_messages(self, localization_list: List[Dict], tenant: str, sheet_name: str = 'Localization'):
-        """Upload localization messages via localization service API"""
+        """Upload localization messages via localization service API.
+
+        Each outgoing batch is deduplicated by code before upload, preserving
+        input order and keeping the first occurrence. Duplicate identity errors
+        from the API are treated as already-existing records so the loader can
+        continue with later batches.
+        """
         url = f"{self.localization_url}/messages/v1/_upsert"
 
         results = {
+            'upserted': 0,
             'created': 0,
             'exists': 0,
             'failed': 0,
@@ -1774,8 +1824,142 @@ class APIUploader:
             'failed_records': []
         }
 
+        def _log_batch_context(locale: str, batch: List[Dict]):
+            modules = sorted({msg.get('module', 'unknown') for msg in batch})
+            sample_codes = [msg.get('code', '') for msg in batch[:5]]
+            print(f"      Tenant: {tenant}")
+            print(f"      Locale: {locale}")
+            print(f"      Modules: {', '.join(modules)}")
+            if sample_codes:
+                print(f"      Sample Codes: {', '.join(sample_codes)}")
+
+        def _record_batch_failure(batch: List[Dict], locale: str, batch_num: int, status_code: int, error_message: str):
+            results['failed'] += len(batch)
+            results['errors'].append({
+                'locale': locale,
+                'batch': batch_num,
+                'count': len(batch),
+                'error': error_message
+            })
+
+            for msg in batch:
+                failed_record = msg.copy()
+                failed_record['_STATUS'] = 'FAILED'
+                failed_record['_STATUS_CODE'] = status_code
+                failed_record['_ERROR_MESSAGE'] = error_message
+                results['failed_records'].append(failed_record)
+
+        def _normalize_localizations(messages: List[Dict]) -> List[Dict]:
+            normalized = []
+            for msg in messages:
+                item = msg.copy()
+                item['module'] = item.get('module') or 'rainmaker-common'
+                item['locale'] = item.get('locale') or 'en_IN'
+                normalized.append(item)
+            return normalized
+
+        def _is_duplicate_identity_error(error_text: str) -> bool:
+            return 'core.DUPLICATE_MESSAGE_IDENTITY' in (error_text or '')
+
+        def _dedupe_batch_by_identity(batch: List[Dict], locale: str, batch_num: int, total_batches: int) -> List[Dict]:
+            deduped = []
+            seen_keys = set()
+            skipped = 0
+
+            for msg in batch:
+                code = msg.get('code', '')
+                module = msg.get('module') or 'rainmaker-common'
+                message_locale = msg.get('locale') or locale or 'en_IN'
+                identity = (message_locale, module, code)
+
+                if identity in seen_keys:
+                    skipped += 1
+                    continue
+                seen_keys.add(identity)
+                deduped.append(msg)
+
+            if skipped > 0:
+                print(
+                    f"      Skipped {skipped} duplicate localization identity row(s) in "
+                    f"batch {batch_num}/{total_batches} for locale {locale}"
+                )
+
+            return deduped
+
+        def _upload_batch(locale: str, batch: List[Dict], batch_num: int, total_batches: int) -> bool:
+            batch = _dedupe_batch_by_identity(batch, locale, batch_num, total_batches)
+            if not batch:
+                print(f"      Skipping empty batch {batch_num}/{total_batches} after dedupe")
+                return True
+
+            payload = {
+                "RequestInfo": {
+                    "apiId": "emp",
+                    "ver": "1.0",
+                    "action": "create",
+                    "msgId": f"{int(time.time() * 1000)}",
+                    "authToken": self.auth_token,
+                    "userInfo": self.user_info
+                },
+                "locale": locale,
+                "tenantId": tenant,
+                "messages": batch
+            }
+
+            headers = {'Content-Type': 'application/json'}
+            _log_batch_context(locale, batch)
+
+            try:
+                response = requests.post(url, json=payload, headers=headers, timeout=120)
+                response.raise_for_status()
+
+                print(f"      ✅ Batch {batch_num}/{total_batches}: {len(batch)} messages upserted")
+                results['upserted'] += len(batch)
+                results['created'] += len(batch)
+                return True
+
+            except requests.exceptions.HTTPError as e:
+                status_code = e.response.status_code if hasattr(e, 'response') and e.response is not None else 500
+                error_text = e.response.text if hasattr(e, 'response') and e.response is not None else str(e)
+                error_message = self._extract_error_message(error_text) if error_text else str(e)[:200]
+
+                if status_code == 401:
+                    print(f"\n   ❌ AUTHORIZATION FAILED - Cannot upload localization messages")
+                    print(f"   The endpoint /localization/messages/v1/_upsert requires authentication.")
+                    print(f"   Ask admin to add it to EGOV_OPEN_ENDPOINTS_WHITELIST.")
+                    results['failed'] = len(localization_list)
+                    results['errors'].append({'error': 'Authorization failed (401) - endpoint not in whitelist'})
+                    return False
+
+                if status_code == 400 and _is_duplicate_identity_error(error_text):
+                    print(
+                        f"      ℹ️  Batch {batch_num}/{total_batches}: duplicate localization identities "
+                        f"already exist, skipping"
+                    )
+                    results['exists'] += len(batch)
+                    return True
+
+                print(f"      ❌ Batch {batch_num}/{total_batches} FAILED (HTTP {status_code})")
+                print(f"         ERROR: {error_message}")
+                _record_batch_failure(batch, locale, batch_num, status_code, error_message)
+                return True
+
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+                error_message = str(e)[:200]
+                print(f"      ❌ Batch {batch_num}/{total_batches} FAILED")
+                print(f"         ERROR: {error_message}")
+                _record_batch_failure(batch, locale, batch_num, 0, error_message)
+                return True
+
+            except Exception as e:
+                error_message = str(e)[:200]
+                print(f"      ❌ Batch {batch_num}/{total_batches} ERROR: {error_message}")
+                _record_batch_failure(batch, locale, batch_num, 0, error_message)
+                return True
+
         print(f"\n[UPLOADING] Localization Messages")
         print(f"   Tenant: {tenant}")
+        localization_list = _normalize_localizations(localization_list)
         print(f"   Total Messages: {len(localization_list)}")
         print(f"   API URL: {url}")
         print("="*60)
@@ -1787,6 +1971,9 @@ class APIUploader:
             by_locale[loc['locale']].append(loc)
 
         print(f"\n   Found {len(by_locale)} locales: {', '.join(by_locale.keys())}")
+        for locale, messages in by_locale.items():
+            modules = sorted({msg.get('module', 'unknown') for msg in messages})
+            print(f"   - {locale}: {len(messages)} messages | modules: {', '.join(modules)}")
         print("="*60)
 
         # Upload each locale batch - split into smaller chunks to avoid 413 error
@@ -1801,100 +1988,15 @@ class APIUploader:
                 batch = messages[batch_idx:batch_idx + BATCH_SIZE]
                 batch_num = (batch_idx // BATCH_SIZE) + 1
                 total_batches = (total_messages + BATCH_SIZE - 1) // BATCH_SIZE
-
-                payload = {
-                    "RequestInfo": {
-                        "apiId": "emp",
-                        "ver": "1.0",
-                        "action": "create",
-                        "msgId": f"{int(time.time() * 1000)}",
-                        "authToken": self.auth_token,
-                        "userInfo": self.user_info
-                    },
-                    "locale": locale,
-                    "tenantId": tenant,
-                    "messages": batch
-                }
-
-                headers = {'Content-Type': 'application/json'}
-                status_code = None
-
-                try:
-                    response = self._request_with_retry(url, json=payload, headers=headers, timeout=120)
-                    status_code = response.status_code
-                    response.raise_for_status()
-                    print(f"      ✅ Batch {batch_num}/{total_batches}: {len(batch)} messages uploaded")
-                    results['created'] += len(batch)
-
-                except requests.exceptions.HTTPError as e:
-                    status_code = e.response.status_code if hasattr(e, 'response') and e.response is not None else 500
-                    error_text = e.response.text if hasattr(e, 'response') and e.response is not None else str(e)
-
-                    # Extract clean error message from API response
-                    error_message = self._extract_error_message(error_text) if error_text else str(e)[:200]
-
-                    # Fail fast on auth errors
-                    if status_code == 401:
-                        print(f"\n   ❌ AUTHORIZATION FAILED - Cannot upload localization messages")
-                        print(f"   The endpoint /localization/messages/v1/_upsert requires authentication.")
-                        print(f"   Ask admin to add it to EGOV_OPEN_ENDPOINTS_WHITELIST.")
-                        results['failed'] = total_messages
-                        results['errors'].append({'error': 'Authorization failed (401) - endpoint not in whitelist'})
-                        return results
-
-                    # Check for duplicate/already exists errors
-                    if ('duplicate' in error_text.lower() or
-                        'already exists' in error_text.lower() or
-                        'DUPLICATE_RECORDS' in error_text or
-                        'DuplicateMessageIdentityException' in error_text or
-                        'unique_message_entry' in error_text.lower()):
-                        print(f"      ⚠️ Batch {batch_num}/{total_batches}: {len(batch)} messages already exist")
-                        results['exists'] += len(batch)
-                        # DON'T add to failed_records - already exists is not a failure!
-                    else:
-                        # True failure
-                        print(f"      ❌ Batch {batch_num}/{total_batches} FAILED (HTTP {status_code})")
-                        print(f"         ERROR: {error_message}")
-                        results['failed'] += len(batch)
-                        results['errors'].append({
-                            'locale': locale,
-                            'batch': batch_num,
-                            'count': len(batch),
-                            'error': error_message
-                        })
-
-                        # Store failed messages for Excel export - ONLY TRUE FAILURES
-                        for msg in batch:
-                            failed_record = msg.copy()
-                            failed_record['_STATUS'] = 'FAILED'
-                            failed_record['_STATUS_CODE'] = status_code
-                            failed_record['_ERROR_MESSAGE'] = error_message
-                            results['failed_records'].append(failed_record)
-
-                except Exception as e:
-                    error_message = str(e)[:200]
-                    status_code = 0
-                    print(f"      ❌ Batch {batch_num}/{total_batches} ERROR: {error_message}")
-                    results['failed'] += len(batch)
-                    results['errors'].append({
-                        'locale': locale,
-                        'batch': batch_num,
-                        'count': len(batch),
-                        'error': error_message
-                    })
-
-                    # Store failed messages for Excel export
-                    for msg in batch:
-                        failed_record = msg.copy()
-                        failed_record['_STATUS'] = 'FAILED'
-                        failed_record['_STATUS_CODE'] = status_code
-                        failed_record['_ERROR_MESSAGE'] = error_message
-                        results['failed_records'].append(failed_record)
+                should_continue = _upload_batch(locale, batch, batch_num, total_batches)
+                if not should_continue:
+                    return results
 
             time.sleep(0.2)
 
         # Summary
         print("="*60)
+        print(f"[SUMMARY] Upserted: {results['upserted']}")
         print(f"[SUMMARY] Created: {results['created']}")
         print(f"[SUMMARY] Already Exists: {results['exists']}")
         print(f"[SUMMARY] Failed: {results['failed']}")

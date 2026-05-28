@@ -26,9 +26,15 @@ public class PGRConstants {
 
     public static final String MDMS_MODULE_NAME = "RAINMAKER-PGR";
 
+    public static final String MDMS_COMMON_MASTERS_MODULE_NAME = "common-masters";
+
+    public static final String MDMS_DEPT_MASTER = "Department";
+
     public static final String MDMS_SERVICEDEF_SEARCH = "$.MdmsRes.RAINMAKER-PGR.ServiceDefs[?(@.serviceCode=='{SERVICEDEF}')]";
 
     public static final String MDMS_DEPARTMENT_SEARCH = "$.MdmsRes.RAINMAKER-PGR.ServiceDefs[?(@.serviceCode=='{SERVICEDEF}')].department";
+
+    public static final String MDMS_DEPARTMENT_NAME_SEARCH = "$.MdmsRes.common-masters.Department[?(@.code=='{CODE}')].name";
 
     public static final String MDMS_SERVICENAME_SEARCH = "$.MdmsRes.RAINMAKER-PGR.ServiceDefs[?(@.serviceCode=='{SERVICEDEF}')].name";
 

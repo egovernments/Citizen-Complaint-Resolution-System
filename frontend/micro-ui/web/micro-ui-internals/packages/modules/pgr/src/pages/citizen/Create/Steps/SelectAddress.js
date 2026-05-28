@@ -45,18 +45,10 @@ useEffect(() => {
 
     try {
       const res = await Digit.CustomService.getResponse({
-        url: `/boundary-service/boundary-relationships/_search`,
+        url: `/boundary-service/boundary-relationships/_search?tenantId=${selectedCity.code}&hierarchyType=${hierarchyType}&boundaryType=${boundaryType}&includeChildren=true`,
         useCache: false,
         method: "POST",
         userService: false,
-        body: {
-          BoundaryRelationship: {
-            tenantId: selectedCity.code,
-            hierarchyType: hierarchyType,
-            boundaryType: boundaryType,
-            includeChildren: true,
-          },
-        },
       });
       const boundaries = res?.TenantBoundary[0]?.boundary || [];
 

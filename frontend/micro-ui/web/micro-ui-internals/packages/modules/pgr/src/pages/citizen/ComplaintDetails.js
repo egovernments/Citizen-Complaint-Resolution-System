@@ -59,17 +59,18 @@ const WorkflowComponent = ({ complaintDetails, id }) => {
     return () => clearTimeout(timer);
   }, []);
 
-  if (workFlowDetails.isLoading) return <Loader />;
-  if (workFlowDetails.isError || !workFlowDetails.data) return null;
-
   return (
-    <TimeLine
-      data={workFlowDetails.data}
-      serviceRequestId={id}
-      complaintWorkflow={complaintDetails.workflow}
-      rating={complaintDetails.audit.rating}
-      complaintDetails={complaintDetails}
-    />
+    !workFlowDetails.isLoading && (
+      <TimeLine
+        // isLoading={workFlowDetails.isLoading}
+        data={workFlowDetails.data}
+        serviceRequestId={id}
+        complaintWorkflow={complaintDetails.workflow}
+        rating={complaintDetails.audit.rating}
+        complaintDetails={complaintDetails}
+      // ComplainMaxIdleTime={ComplainMaxIdleTime}
+      />
+    )
   );
 };
 
