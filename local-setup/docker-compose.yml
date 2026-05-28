@@ -554,6 +554,28 @@ services:
     networks:
       - egov-network
 
+  egov-workflow-proxy:
+    image: nginx:alpine
+    container_name: egov-workflow-proxy
+    depends_on:
+      egov-workflow-v2:
+        condition: service_healthy
+    volumes:
+      - ./nginx/workflow-proxy.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8109/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+          cpus: '0.1'
+    networks:
+      - egov-network
+
   egov-localization:
     image: egovio/egov-localization:v2.9.2-4a60f20
     container_name: egov-localization
