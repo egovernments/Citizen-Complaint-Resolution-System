@@ -29,6 +29,7 @@ import { Banner } from '@/components/digit/Banner';
 import { boundaryService, localizationService, ApiClientError } from '@/api';
 import { parseExcelFile, parseBoundaryExcel } from '@/utils/excelParser';
 import { downloadBoundaryTemplate } from '@/utils/templateBuilder';
+import { parseGeoJsonSidecar, geometryForBoundary, type ParsedGeoJsonSidecar } from '@/utils/boundaryGeoJson';
 import type { BoundaryHierarchy, Boundary, BoundaryExcelRow } from '@/api/types';
 
 type Step = 'landing' | 'create-hierarchy' | 'select-hierarchy' | 'template' | 'upload' | 'verify' | 'complete';
@@ -64,6 +65,13 @@ export default function Phase2Page() {
   const [, setParsedLevels] = useState<string[]>([]);
   const [validBoundaries, setValidBoundaries] = useState<BoundaryExcelRow[]>([]);
   const [invalidBoundaries, setInvalidBoundaries] = useState<{ boundary: BoundaryExcelRow; error: string }[]>([]);
+
+  // Optional polygon sidecar: GeoJSON FeatureCollection that supplies real
+  // outlines for the citizen UI's OSM map. Without it every boundary gets
+  // the unit-square placeholder that Bomet + Nairobi ship with today.
+  const [polygonFile, setPolygonFile] = useState<File | null>(null);
+  const [polygonSidecar, setPolygonSidecar] = useState<ParsedGeoJsonSidecar | null>(null);
+  const [polygonError, setPolygonError] = useState<string | null>(null);
 
   // Created boundaries tracking
   const [createdCounts, setCreatedCounts] = useState<Record<string, number>>({});
@@ -172,6 +180,29 @@ export default function Phase2Page() {
     }
   };
 
+  const handlePolygonUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setPolygonError(null);
+    try {
+      const text = await file.text();
+      const parsed = parseGeoJsonSidecar(text);
+      setPolygonFile(file);
+      setPolygonSidecar(parsed);
+    } catch (err) {
+      setPolygonError(err instanceof Error ? err.message : String(err));
+      setPolygonFile(null);
+      setPolygonSidecar(null);
+    }
+  };
+
+  const handlePolygonClear = () => {
+    setPolygonFile(null);
+    setPolygonSidecar(null);
+    setPolygonError(null);
+  };
+
   const validateBoundaries = (boundaries: BoundaryExcelRow[]) => {
     const valid: BoundaryExcelRow[] = [];
     const invalid: { boundary: BoundaryExcelRow; error: string }[] = [];
@@ -222,7 +253,9 @@ export default function Phase2Page() {
     setError(null);
 
     try {
-      // Convert Excel rows to Boundary objects
+      // Convert Excel rows to Boundary objects, attaching real geometry
+      // (polygon sidecar > lat/long > undefined → service defaults to the
+      // unit-square placeholder for unmatched rows).
       const boundariesToCreate: Boundary[] = validBoundaries.map(row => ({
         tenantId: boundaryTenant,
         code: row.code,
@@ -232,6 +265,7 @@ export default function Phase2Page() {
         hierarchyType: selectedHierarchy.hierarchyType,
         latitude: row.latitude,
         longitude: row.longitude,
+        geometry: geometryForBoundary(row, polygonSidecar ?? undefined),
       }));
 
       // Create boundaries
@@ -312,6 +346,17 @@ export default function Phase2Page() {
         type="file"
         accept=".xlsx,.xls"
         onChange={handleFileUpload}
+        className="hidden"
+        disabled={loading}
+      />
+      {/* Hidden picker for the optional polygon GeoJSON sidecar — opens
+          from the "Polygon outlines (optional)" picker rendered on the
+          template & verify steps. */}
+      <input
+        id="boundary-polygon-upload"
+        type="file"
+        accept=".geojson,.json,application/geo+json,application/json"
+        onChange={handlePolygonUpload}
         className="hidden"
         disabled={loading}
       />
@@ -594,6 +639,49 @@ export default function Phase2Page() {
             )}
           </div>
 
+          {/* Optional polygon GeoJSON sidecar — supplies real outlines for
+              the citizen UI's OSM map. Without it boundaries land with a
+              unit-square placeholder (which is what Bomet + Nairobi ship
+              today). Match by `properties.code` (preferred) or normalized
+              `properties.name` (lowercase, strip diacritics + "Distrito
+              Municipal de " prefix). */}
+          <div
+            className="border border-dashed border-primary/20 rounded p-4 mb-4 hover:border-primary/40 transition-colors cursor-pointer"
+            onClick={() => !polygonFile && document.getElementById('boundary-polygon-upload')?.click()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-foreground mb-1">
+                  <MapPin className="w-4 h-4 text-primary" />
+                  <strong className="text-sm font-condensed">Polygon outlines (optional)</strong>
+                </div>
+                {!polygonFile && (
+                  <p className="text-xs text-muted-foreground">
+                    Drop a GeoJSON FeatureCollection to draw real boundary outlines on the citizen map.
+                    Without it, boundaries get a placeholder shape.
+                  </p>
+                )}
+                {polygonFile && polygonSidecar && (
+                  <p className="text-xs text-muted-foreground truncate">
+                    <span className="text-primary font-medium">{polygonFile.name}</span> •
+                    {' '}{polygonSidecar.totalFeatures} features
+                    {' '}({polygonSidecar.matchedByCode} by code, {polygonSidecar.matchedByName} by name)
+                  </p>
+                )}
+                {polygonError && (
+                  <p className="text-xs text-destructive">{polygonError}</p>
+                )}
+              </div>
+              {polygonFile ? (
+                <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handlePolygonClear(); }} className="h-6 w-6 p-0 shrink-0">
+                  <X className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Upload className="w-5 h-5 text-primary shrink-0" />
+              )}
+            </div>
+          </div>
+
           <Alert variant="warning" className="mb-4 sm:mb-6">
             <AlertTriangle className="w-4 h-4" />
             <AlertDescription>
@@ -621,6 +709,23 @@ export default function Phase2Page() {
             <Check className="w-4 h-4 sm:w-5 sm:h-5" />
             <span className="text-sm sm:text-base truncate">File: {uploadedFile?.name}</span>
           </div>
+          {polygonFile && polygonSidecar && (() => {
+            // Count how many of the rows we're about to create will pick up
+            // real geometry from the sidecar — operator-visible signal that
+            // the matching actually worked before they click Upload.
+            const matched = validBoundaries.filter(r =>
+              geometryForBoundary(r, polygonSidecar)?.type === 'Polygon'
+            ).length;
+            return (
+              <div className="flex items-center gap-2 text-muted-foreground mb-3 sm:mb-4 text-xs sm:text-sm">
+                <MapPin className="w-4 h-4 text-primary shrink-0" />
+                <span>
+                  Polygons: <span className="text-primary font-medium">{polygonFile.name}</span> —
+                  {' '}<span className="text-primary font-medium">{matched}</span> of {validBoundaries.length} boundaries will get real outlines
+                </span>
+              </div>
+            );
+          })()}
 
           <div className="overflow-x-auto -mx-4 sm:mx-0 mb-3 sm:mb-4">
             <div className="px-4 sm:px-0">
