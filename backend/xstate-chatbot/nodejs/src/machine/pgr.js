@@ -101,7 +101,7 @@ const pgr =  {
                       cond: (context) => context.intention == dialog.INTENTION_MORE
                     },
                     {
-                      target: '#location',
+                      target: '#imageUpload',
                       cond: (context) => context.intention != dialog.INTENTION_UNKOWN,
                       actions: assign((context, event) => {
                         context.slots.pgr["complaint"]= context.intention;
