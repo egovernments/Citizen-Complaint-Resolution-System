@@ -370,14 +370,15 @@ class TwilioWhatsAppProvider {
                     try {
                         let fileURL;
                         
-                        // In sandbox mode, content is already a direct URL
-                        if (config.enableSandboxMode) {
+                        // Check if content is already a direct URL (for location instructions, etc.)
+                        if (content && (content.startsWith('http://') || content.startsWith('https://'))) {
+                            // This is already a URL, use it directly
                             fileURL = content;
-                            console.log("Twilio - Sandbox mode: Using direct URL:", fileURL);
+                            console.log("Twilio - Using direct URL for image:", fileURL);
                         } else {
-                            // In production mode, it's a filestore ID
+                            // This is a filestore ID, fetch the URL from filestore
                             let fileStoreId = content;
-                            console.log("Twilio - Production mode: Fetching filestore ID:", fileStoreId);
+                            console.log("Twilio - Fetching from filestore ID:", fileStoreId);
                             fileURL = await this.getFileForFileStoreId(fileStoreId);
                         }
                         

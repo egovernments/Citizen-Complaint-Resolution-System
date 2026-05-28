@@ -336,12 +336,13 @@ class ValueFirstWhatsAppProvider {
                 // TODO for non-textual messages
                 let fileURL;
                 
-                // In sandbox mode, message is already a direct URL
-                if (config.enableSandboxMode) {
+                // Check if message is already a direct URL (for location instructions, etc.)
+                if (message && (message.startsWith('http://') || message.startsWith('https://'))) {
+                    // This is already a URL, use it directly
                     fileURL = message;
-                    console.log("ValueFirst - Sandbox mode: Using direct URL:", fileURL);
+                    console.log("ValueFirst - Using direct URL for image:", fileURL);
                 } else {
-                    // In production mode, it's a filestore ID
+                    // This is a filestore ID, fetch the URL from filestore
                     let fileStoreId;
                     if(message)
                         fileStoreId = message;
