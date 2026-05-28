@@ -757,7 +757,7 @@ services:
     - egov-network
 
   boundary-service:
-    image: registry.preview.egov.theflywheel.in/egovio/boundary-service:v2.9.2-delete
+    image: registry.preview.egov.theflywheel.in/egovio/boundary-service:v2.9.2-dual-mode
     container_name: boundary-service
     depends_on:
       pgbouncer:
@@ -1471,6 +1471,7 @@ services:
     container_name: kong-gateway
     environment:
       KONG_DATABASE: "off"
+      KONG_UNTRUSTED_LUA_SANDBOX_REQUIRES: "cjson, resty.http"
       KONG_DECLARATIVE_CONFIG: /kong/kong.yml
       KONG_PROXY_ACCESS_LOG: /dev/stdout
       KONG_ADMIN_ACCESS_LOG: /dev/stdout
