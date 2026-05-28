@@ -1555,10 +1555,33 @@
         replace: '\1STATE_LEVEL_TENANT_ID: {{ state_root }}'
       when: state_root != 'pg'
 
+    # `docker compose restart` with multiple services starts them in
+    # PARALLEL — it does not respect depends_on. So every service named
+    # here gets SIGTERM at the same moment, then they all come back up at
+    # their own pace. egov-hrms has historically been in this list, but
+    # that combination is a sharp edge:
+    #
+    #   1. HRMS comes back faster than egov-user (less seed work to do).
+    #   2. HRMS's @PostConstruct initalizeSystemuser does a synchronous
+    #      `/user/v1/_search` for its INTERNAL_USER on boot.
+    #   3. That search hits egov-user mid-boot, the proxy returns 502,
+    #      HRMS interprets null → CustomException → JVM exits 1.
+    #   4. Kong negative-caches the now-missing egov-hrms host (~1h TTL)
+    #      and serves 503 to every subsequent /egov-hrms request until
+    #      Kong is restarted.
+    #
+    # HRMS does NOT need to be restarted here regardless of state_root:
+    #   - Its INTERNAL_USER lives at `pg` (from db/full-dump.sql) and
+    #     stays there even when state_root: mz. Bootstrapping HRMS at
+    #     mz would just fail to find INTERNAL_USER.
+    #   - With `restart` (not --force-recreate, reverted via #622 due to
+    #     enc-key drift), env vars don't change on restart anyway, so
+    #     restarting HRMS is a no-op for state_root purposes.
+    # Excluded.
     - name: "post-bootstrap — restart services to pick up new STATE_LEVEL_TENANT_ID"
       ansible.builtin.shell: >-
         docker compose {{ compose_files }}
-        restart egov-user egov-workflow-v2 egov-enc-service pgr-services egov-hrms
+        restart egov-user egov-workflow-v2 egov-enc-service pgr-services
       args:
         chdir: "{{ digit_dir }}"
       when: state_root != 'pg'
