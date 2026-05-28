@@ -15,6 +15,7 @@ export const config = {
     location: 18084,
     boundary: 18081,
     kong: 18000,
+    hrms: 18092,
   },
 
   // Database

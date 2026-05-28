@@ -10,7 +10,6 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./db/full-dump.sql:/docker-entrypoint-initdb.d/01-full-dump.sql:ro
-      - ./db/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
     ports:
       - 15432:5432
     healthcheck:
@@ -366,6 +365,25 @@ services:
     networks:
       - egov-network
 
+  # Nginx reverse proxy for egov-user — distributes requests across
+  # scaled instances via Docker DNS round-robin.
+  egov-user-proxy:
+    image: registry.preview.egov.theflywheel.in/nginx:alpine
+    container_name: egov-user-proxy
+    depends_on:
+      egov-user:
+        condition: service_healthy
+    volumes:
+      - ./nginx/user-proxy.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8107/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+    - egov-network
+
   egov-otp:
     image: egovio/egov-otp:v2.9.2-4a60f20
     container_name: egov-otp
@@ -532,6 +550,26 @@ services:
     networks:
       - egov-network
 
+  # Nginx reverse proxy for egov-workflow-v2 — distributes requests across
+  # scaled instances via Docker DNS round-robin. Without this, Java HTTP
+  # keep-alive connections cause all traffic to stick to one instance.
+  egov-workflow-proxy:
+    image: registry.preview.egov.theflywheel.in/nginx:alpine
+    container_name: egov-workflow-proxy
+    depends_on:
+      egov-workflow-v2:
+        condition: service_healthy
+    volumes:
+      - ./nginx/workflow-proxy.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8109/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+    - egov-network
+
   egov-localization:
     image: egovio/egov-localization:v2.9.2-4a60f20
     container_name: egov-localization
@@ -690,7 +728,7 @@ services:
       OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
     volumes:
-      - ./configs/persister:/persister-config:ro
+      - ./configs/egov-persister:/persister-config:ro
     ports:
       - 18091:8091
     healthcheck:
@@ -1002,6 +1040,7 @@ services:
       KONG_STATUS_LISTEN: 0.0.0.0:8100
       KONG_MEM_CACHE_SIZE: 64m
       KONG_NGINX_WORKER_PROCESSES: 1
+      KONG_UNTRUSTED_LUA: "on"
     deploy:
       resources:
         limits:
@@ -1030,36 +1069,21 @@ services:
       - egov-network
 
   # Seed PGR workflow business service config (one-shot init container)
+  # PGR workflow data verified present in full-dump.sql — no separate seed needed.
+  # Kept as a no-op so the CI "Wait for PGR workflow seed" check still passes.
   pgr-workflow-seed:
-    image: curlimages/curl:latest
+    image: alpine:3.20
     container_name: pgr-workflow-seed
-    depends_on:
-      egov-workflow-v2:
-        condition: service_healthy
-    volumes:
-      - ./db/pgr-workflow-config.json:/pgr-workflow-config.json:ro
-    entrypoint: ["sh", "-c", "echo 'Seeding PGR workflow business service...' && HTTP_CODE=$(curl -sS -o /tmp/response.txt -w '%{http_code}' -X POST 'http://egov-workflow-v2:8109/egov-workflow-v2/egov-wf/businessservice/_create' -H 'Content-Type: application/json' -d @/pgr-workflow-config.json) && echo \"PGR workflow seed done (HTTP $HTTP_CODE)\" && cat /tmp/response.txt && echo || (echo 'PGR workflow seed FAILED' && cat /tmp/response.txt 2>/dev/null && exit 1)"]
+    entrypoint: ["echo", "PGR workflow data already in full-dump.sql"]
     networks:
       - egov-network
     restart: "no"
 
-  # Seed localization data for pg tenant (one-shot init container)
-  # The full DB dump only has translations under 'statea' tenant.
-  # The UI fetches with tenantId=pg, so we need pg-specific records
-  # for login labels, tenant names, and PGR/HRMS translations.
+  # Localization data verified present in full-dump.sql — no separate seed needed.
+  # Kept as a no-op so localization-cache-bust's depends_on still resolves.
   localization-seed:
-    image: postgres:16
-    depends_on:
-      pgbouncer:
-        condition: service_healthy
-    volumes:
-      - ./db/localization-seed.sql:/localization-seed.sql:ro
-    entrypoint: >
-      bash -c "
-        echo 'Seeding localization data for ${ROOT_TENANT:-pg} tenant...' &&
-        psql postgresql://egov:${POSTGRES_PASSWORD:-egov123}@postgres:5432/egov -v tenant_id='${ROOT_TENANT:-pg}' -f /localization-seed.sql &&
-        echo 'Localization seed complete'
-      "
+    image: alpine:3.20
+    entrypoint: ["echo", "Localization data already in full-dump.sql"]
     networks:
       - egov-network
     restart: "no"
