@@ -199,6 +199,29 @@ function normalizeForMatch(s: string): string {
 }
 
 /**
+ * boundary-service /boundary/_create only accepts `Point` and `Polygon`
+ * geometries — it 400s on `MultiPolygon` even though jsonb storage doesn't
+ * care. OSM exports (e.g. Maputo bairros) come back as MultiPolygon for
+ * any feature with disconnected islands or stray fragments. To stay in
+ * compatible territory we collapse MultiPolygon to a single Polygon by
+ * picking the ring set with the most coordinates (i.e. the largest
+ * contiguous piece), which is the right call ~always for admin boundaries.
+ */
+function coerceForBoundaryService(geom: Record<string, unknown>): Record<string, unknown> {
+  if (geom?.type !== 'MultiPolygon' || !Array.isArray(geom.coordinates)) return geom;
+  const polys = geom.coordinates as unknown[][][];
+  if (polys.length === 0) return geom;
+  let largestIdx = 0;
+  let largestPoints = 0;
+  for (let i = 0; i < polys.length; i++) {
+    const outer = polys[i]?.[0];
+    const pts = Array.isArray(outer) ? outer.length : 0;
+    if (pts > largestPoints) { largestPoints = pts; largestIdx = i; }
+  }
+  return { type: 'Polygon', coordinates: polys[largestIdx] };
+}
+
+/**
  * Parse a GeoJSON sidecar file into a `code → geometry` lookup. Each feature
  * is keyed by `properties.code` (preferred) or normalized `properties.name`
  * (fallback). Returns the map plus stats so the caller can surface how many
@@ -329,7 +352,7 @@ async function runBoundaryPhase(
   const geometryFor = (b: BoundaryRow): Record<string, unknown> | undefined => {
     if (geojsonByCode) {
       const hit = geojsonByCode.get(b.code) ?? geojsonByCode.get(normalizeForMatch(b.name));
-      if (hit) return hit;
+      if (hit) return coerceForBoundaryService(hit);
     }
     if (Number.isFinite(b.longitude) && Number.isFinite(b.latitude)) {
       return { type: 'Point', coordinates: [b.longitude, b.latitude] };
