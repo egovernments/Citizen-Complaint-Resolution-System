@@ -161,6 +161,80 @@
               "secondLevelVisibility": "PLAIN"
             }
           ]
+        },
+        {
+          "roles": [
+            "EMPLOYEE",
+            "GRO",
+            "PGR_LME",
+            "DGRO",
+            "CSR",
+            "SUPERUSER",
+            "PGR_VIEWER",
+            "MDMS_ADMIN"
+          ],
+          "attributeAccessList": [
+            {
+              "attribute": "name",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "mobileNumber",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "emailId",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "username",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "altContactNumber",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "alternatemobilenumber",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "pan",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "aadhaarNumber",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "guardian",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "fatherOrHusbandName",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "correspondenceAddress",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            },
+            {
+              "attribute": "permanentAddress",
+              "firstLevelVisibility": "PLAIN",
+              "secondLevelVisibility": "PLAIN"
+            }
+          ]
         }
       ]
     },
