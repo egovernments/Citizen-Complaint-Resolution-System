@@ -30,6 +30,7 @@ import {
   KEYCLOAK_REALM,
   KEYCLOAK_CLIENT_ID,
   KC_STORAGE_KEYS,
+  TOKEN_EXCHANGE_URL,
   getOriginBaseUrl,
 } from './config';
 
@@ -41,6 +42,24 @@ export interface KcTokenResponse {
   refresh_expires_in?: number;
   token_type?: string;
   scope?: string;
+}
+
+/**
+ * Decode the payload of a JWT without verifying its signature. The overlay
+ * always re-validates the signature server-side on every call — this is
+ * just for the SPA to extract claims for UI display.
+ */
+export function decodeJwtPayload(jwt: string): Record<string, any> {
+  try {
+    const part = jwt.split('.')[1];
+    if (!part) return {};
+    // base64url → base64
+    const pad = part.length % 4 === 2 ? '==' : part.length % 4 === 3 ? '=' : '';
+    const b64 = (part + pad).replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(atob(b64));
+  } catch {
+    return {};
+  }
 }
 
 // ── localStorage helpers ───────────────────────────────────────────────────
@@ -119,7 +138,7 @@ function generateState(): string {
  *   '/citizen/auth/callback'. We turn it into an absolute redirect_uri
  *   because Keycloak requires that.
  */
-export function buildAuthorizeUrl(redirectPath: string): string {
+export function buildAuthorizeUrl(redirectPath: string, idpHint?: string): string {
   const state = generateState();
   try {
     localStorage.setItem(KC_STORAGE_KEYS.state, state);
@@ -134,7 +153,54 @@ export function buildAuthorizeUrl(redirectPath: string): string {
     scope: 'openid',
     state,
   });
+  // `kc_idp_hint` skips the Keycloak account-chooser screen and routes
+  // straight to the named identity provider (e.g. `google`). The realm
+  // must have the IdP provisioned with that exact alias — see the ansible
+  // `keycloak-bootstrap — wire Google IdP` task.
+  if (idpHint) params.set('kc_idp_hint', idpHint);
   return `${realmBase()}/auth?${params.toString()}`;
+}
+
+/**
+ * OAuth2 Resource Owner Password Credentials grant against the overlay's
+ * `/realms/:realm/protocol/openid-connect/token` endpoint. The overlay
+ * tries the KC realm first; on KC failure it transparently falls back to
+ * DIGIT (egov-user `/user/oauth/token`) and provisions the KC side from
+ * the DIGIT user info. Net result: mobile+OTP citizens authenticate
+ * locally (no redirect) while the SPA still ends up with KC-signed JWTs
+ * for subsequent API calls — exactly what `kc_idp_hint=google` does for
+ * SSO, just without leaving the SPA.
+ */
+export async function passwordGrantViaOverlay(opts: {
+  username: string;
+  password: string;
+  tenantId?: string;
+  userType?: string;
+}): Promise<KcTokenResponse> {
+  const body = new URLSearchParams({
+    grant_type: 'password',
+    client_id: KEYCLOAK_CLIENT_ID,
+    username: opts.username,
+    password: opts.password,
+    scope: 'openid',
+  });
+  // Overlay reads these from the form body (KC ignores them; DIGIT
+  // fallback needs them to call /user/oauth/token correctly).
+  if (opts.tenantId) body.set('tenantId', opts.tenantId);
+  if (opts.userType) body.set('userType', opts.userType);
+
+  const origin = getOriginBaseUrl();
+  const url = `${origin}${TOKEN_EXCHANGE_URL}/realms/${encodeURIComponent(KEYCLOAK_REALM)}/protocol/openid-connect/token`;
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  });
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.error_description || err.error || `password grant failed: ${resp.status}`);
+  }
+  return resp.json();
 }
 
 /**

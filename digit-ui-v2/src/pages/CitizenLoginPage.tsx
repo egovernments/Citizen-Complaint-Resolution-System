@@ -28,7 +28,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { apiClient, getApiBaseUrl, ENDPOINTS, isKeycloakMode } from '@/api';
-import { buildAuthorizeUrl } from '@/api/keycloak';
+import { buildAuthorizeUrl, decodeJwtPayload, passwordGrantViaOverlay, saveKcTokens } from '@/api/keycloak';
 import { useApp } from '@/App';
 
 const STATE_TENANT = (import.meta.env.VITE_CITIZEN_STATE_TENANT as string) || 'ke';
@@ -64,12 +64,16 @@ export default function CitizenLoginPage() {
     }
   }, []);
 
-  function signInWithKeycloak() {
+  function signInWithGoogle() {
     setError(null);
+    // `kc_idp_hint=google` skips the Keycloak account-chooser and
+    // redirects straight to Google's OAuth consent screen. The realm
+    // must have the `google` IdP provisioned (ansible's keycloak-bootstrap
+    // task does this when keycloak_google_client_id is set in host_vars).
     // /citizen is the SPA's basename; the absolute redirect_uri needs the
     // full path so Keycloak's exact-match check passes. buildAuthorizeUrl
     // handles the origin prefix.
-    window.location.assign(buildAuthorizeUrl('/citizen/auth/callback'));
+    window.location.assign(buildAuthorizeUrl('/citizen/auth/callback', 'google'));
   }
 
   async function sendOtp(e: React.FormEvent) {
@@ -108,6 +112,42 @@ export default function CitizenLoginPage() {
     setPending(true);
 
     const attemptAuth = async (): Promise<{ token: string; user: Record<string, unknown> } | null> => {
+      // In KC mode, route the password grant through the overlay's
+      // standard OAuth2 token endpoint. The overlay tries KC first; on
+      // KC failure it falls back to DIGIT's /user/oauth/token (using
+      // tenantId + userType from the body), then provisions the KC user
+      // from the DIGIT result. The SPA gets a KC-signed JWT either way.
+      // Crucially this requires NO redirect — the form posts and we
+      // stay on the page. Direct KC SSO (Google, etc) happens via the
+      // separate "Continue with Google" button.
+      if (kcMode) {
+        try {
+          const tokens = await passwordGrantViaOverlay({
+            username: mobile,
+            password: otp,
+            tenantId: STATE_TENANT,
+            userType: 'CITIZEN',
+          });
+          saveKcTokens(tokens);
+          // Decode the access_token payload for a thin user shape — the
+          // overlay also exposes /userinfo for richer identity, but the
+          // JWT claims are enough to seed app state for the dashboard.
+          const claims = decodeJwtPayload(tokens.access_token);
+          return {
+            token: tokens.access_token,
+            user: {
+              uuid: claims.sub,
+              name: claims.name || `Citizen ${mobile}`,
+              userName: mobile,
+              mobileNumber: mobile,
+              roles: claims.realm_access?.roles?.map((code: string) => ({ code })) ?? [],
+            } as Record<string, unknown>,
+          };
+        } catch {
+          return null;   // overlay returns 401 → fall through to register
+        }
+      }
+
       const body = new URLSearchParams({
         username: mobile,
         password: otp,
@@ -202,11 +242,12 @@ export default function CitizenLoginPage() {
             <div className="space-y-4 mb-4">
               <Button
                 type="button"
+                variant="outline"
                 className="w-full"
-                onClick={signInWithKeycloak}
+                onClick={signInWithGoogle}
                 disabled={pending}
               >
-                Sign in with Keycloak
+                Continue with Google
               </Button>
               <div className="relative">
                 <Separator />
