@@ -77,27 +77,6 @@
       when:
         - digit_ui_mode in ['static', 'hmr']
         - ansible_system != 'Darwin'
-        # Skip when build_digit_ui:true — the vendored copy in /opt/ccrs/digit-ui-esbuild
-        # is the source of truth; the symlink task below points /opt/digit-ui-esbuild
-        # at it so the static-mode build runs against vendored, not theflywheel main.
-        - not (build_digit_ui | default(false))
-
-    # When build_digit_ui:true on a static/hmr host, point /opt/digit-ui-esbuild
-    # at the vendored copy inside this CCRS checkout. Static-mode npm install +
-    # esbuild.build.js then operate on develop's vendored source via the symlink,
-    # producing a build the host nginx (alias /opt/digit-ui-esbuild/build/) serves.
-    # Without this, the clone task above puts theflywheel main on disk and the
-    # vendored build only lands in the (stopped) digit-ui container — silent gap.
-    - name: "digit-ui — symlink /opt/digit-ui-esbuild → vendored copy (when build_digit_ui)"
-      ansible.builtin.file:
-        src: "{{ playbook_dir }}/../../digit-ui-esbuild"
-        dest: /opt/digit-ui-esbuild
-        state: link
-        force: yes
-      when:
-        - digit_ui_mode in ['static', 'hmr']
-        - ansible_system != 'Darwin'
-        - build_digit_ui | default(false)
 
 
   tasks:
@@ -198,26 +177,26 @@
           enabled: yes
 
       # ==================== Docker Configuration ====================
-      # Insecure registries (plain HTTP + no TLS verification). Defaults in
-      # group_vars/digit.yml to [docker_registry] to preserve the historical
-      # Hetzner-VPC behaviour (10.0.0.4:5000 over plain HTTP). For public
-      # registries (ghcr.io, docker.io) override `insecure_registries: []` in
-      # host_vars — Docker REJECTS path-bearing or TLS hostnames here and
-      # refuses to start, which takes the whole stack down. Skipping the
-      # write entirely when the list is empty leaves daemon.json untouched.
-      - name: Configure Docker insecure-registries
+      # The Hetzner VPC registry at {{ docker_registry }} (egov-ci) hosts every
+      # custom-built DIGIT image (digit-mcp, sb35-rebuilt egov-* services)
+      # over plain HTTP. Without this entry Docker refuses to pull with
+      # `http: server gave HTTP response to HTTPS client`. Restart the
+      # daemon when the file changes so the new config takes effect.
+      - name: Configure Docker insecure-registries for VPC registry
         copy:
           dest: /etc/docker/daemon.json
-          content: "{{ {'insecure-registries': insecure_registries} | to_nice_json }}\n"
+          content: |
+            {
+              "insecure-registries": ["{{ docker_registry }}"]
+            }
           mode: '0644'
         register: daemon_json
-        when: insecure_registries | default([]) | length > 0
 
       - name: Restart docker if daemon.json changed
         service:
           name: docker
           state: restarted
-        when: daemon_json is defined and daemon_json.changed | default(false)
+        when: daemon_json.changed
 
     # check_mode: false forces this to run even under `--check`, so the
     # version-compare task below has a real value to test against.
@@ -312,10 +291,11 @@
     # ==================== Config Directories ====================
     # Each entry is `dest_name -> src_path_relative_to_ansible_dir`.
     # `dest_name` is what ends up under {{ digit_dir }}/ on the target.
-    # All eight live at the repo root since b8629c5f.
-    # `keycloak` was previously synced but no source dir exists in the
-    # repo — keycloak config ships baked into the keycloak image — so
-    # it's dropped from the list.
+    # All live at the repo root since b8629c5f. `keycloak/` holds the
+    # realm-template.json that the Keycloak overlay-design ships; it's
+    # mounted into the keycloak container so the playbook can render
+    # per-tenant realms from it. The dir + file are inert until
+    # enable_keycloak is flipped on.
     - name: Synchronize config directories
       synchronize:
         src: "{{ item.value }}/"
@@ -334,7 +314,6 @@
           jupyter:  ../jupyter
           scripts:  ../scripts
           keycloak: ../keycloak
-          keycloak-realms: ../keycloak-realms
 
     # docker/ contains build contexts (db-migrations, pgr-services).
     # Even though we use pre-built images, compose may validate volume mount paths.
@@ -875,6 +854,96 @@
       changed_when: false
       when: digit_ui_mode == "hmr"
 
+    # ============================================================
+    # digit-ui-v2 — Vite + React 19 citizen SPA (new in feat/keycloak-stack).
+    #
+    # Source lives at /opt/digit-ui-v2 on the TARGET (cloned via
+    # ansible.builtin.git so the build environment matches the host's
+    # Node — no controller-side cross-arch surprises). Mirrors the
+    # digit-ui-esbuild pattern (clone-on-target + build-on-target),
+    # NOT the configurator pattern (controller-side build). Rationale:
+    # digit-ui-v2's Vite build pulls native deps (esbuild + lightningcss
+    # platform binaries) that must match the runtime arch; building on
+    # the target avoids the "ran on Mac controller, won't link on
+    # x86_64 server" failure mode.
+    #
+    # Env-var contract (read by Vite at build time via import.meta.env)
+    # is documented in CLAUDE.md / handoff between this PR and the
+    # sister UI PR. Update both ends together.
+    # ============================================================
+    - name: "digit-ui-v2 — ensure /opt/digit-ui-v2 repo present + on chosen branch"
+      ansible.builtin.git:
+        repo: "{{ digit_ui_v2_repo | default('https://github.com/ChakshuGautam/Citizen-Complaint-Resolution-System.git') }}"
+        dest: /opt/digit-ui-v2
+        version: "{{ digit_ui_v2_branch | default('feat/digit-ui-v2-keycloak') }}"
+        update: true
+        force: true
+      when: enable_digit_ui_v2 | default(false)
+
+    - name: "digit-ui-v2 — install Node 20 if missing (Vite build needs it)"
+      ansible.builtin.apt:
+        name: nodejs
+        state: present
+      when:
+        - enable_digit_ui_v2 | default(false)
+        - ansible_system != "Darwin"
+
+    - name: "digit-ui-v2 — npm install if package.json newer than node_modules"
+      ansible.builtin.shell: |
+        cd /opt/digit-ui-v2/digit-ui-v2
+        if [ ! -d node_modules ] \
+           || [ package.json -nt node_modules ] \
+           || [ package-lock.json -nt node_modules ]; then
+          npm install --no-audit --no-fund --prefer-offline
+          echo installed
+        else
+          echo skipped
+        fi
+      register: dui2_install
+      changed_when: dui2_install.stdout == 'installed'
+      when: enable_digit_ui_v2 | default(false)
+
+    - name: "digit-ui-v2 — build (vite) with env contract"
+      ansible.builtin.shell: |
+        cd /opt/digit-ui-v2/digit-ui-v2
+        VITE_AUTH_PROVIDER="{{ auth_provider | default('') }}" \
+        VITE_KEYCLOAK_URL=/auth \
+        VITE_KEYCLOAK_REALM="{{ state_tenant_id }}" \
+        VITE_KEYCLOAK_CLIENT_ID="{{ keycloak_client_id | default('digit-ui') }}" \
+        VITE_TOKEN_EXCHANGE_URL=/token-exchange \
+        VITE_CITIZEN_STATE_TENANT="{{ state_tenant_id }}" \
+        VITE_CITIZEN_TENANT="{{ tenant_id }}" \
+        npm run build
+        test -f dist/index.html
+      args:
+        executable: /bin/bash
+      register: dui2_build
+      changed_when: true
+      when: enable_digit_ui_v2 | default(false)
+
+    - name: "digit-ui-v2 — ensure /var/www/citizen exists"
+      ansible.builtin.file:
+        path: /var/www/citizen
+        state: directory
+        mode: '0755'
+      when: enable_digit_ui_v2 | default(false)
+
+    # rsync on the TARGET (not synchronize from the controller). The
+    # source dist lives on the same box as the destination, so a local
+    # rsync is faster and avoids the ansible.posix.synchronize
+    # cross-host SSH dance. delete=true so a removed asset doesn't
+    # linger; --no-perms/--no-owner because /var/www/citizen is owned
+    # by root:root and we don't want to chown to the npm-build user.
+    - name: "digit-ui-v2 — sync dist/ to /var/www/citizen/"
+      ansible.builtin.command: >-
+        rsync -a --delete
+        --no-perms --no-times --no-owner --no-group
+        /opt/digit-ui-v2/digit-ui-v2/dist/
+        /var/www/citizen/
+      register: dui2_sync
+      changed_when: dui2_sync.rc == 0
+      when: enable_digit_ui_v2 | default(false)
+
     # ==================== Wait for MCP Server ====================
     # Only when MCP is actually deployed. enable_mcp is false on Mac (the
     # digit-mcp image is VPC-registry-only) and anywhere off the Hetzner
@@ -1033,39 +1102,6 @@
         create: false           # .env was already written by the digit.env.j2 template earlier
         mode: '0600'            # tighten — was 0644 from the template; secrets bump to 0600
       no_log: true
-
-    # Keycloak-tier secrets — appended as a separate marked block so the
-    # main TENANT SECRETS block stays untouched on Keycloak-free
-    # tenants. Same OpenBao read; we just pick a different subset of
-    # keys. Default-empty strings on every lookup so a missing key in
-    # OpenBao (e.g. first deploy before the operator filled them in)
-    # doesn't fail template rendering — it just writes empty values, and
-    # the keycloak containers fail their healthcheck loudly enough that
-    # the operator notices.
-    - name: "OpenBao — write Keycloak secrets into compose .env (when enable_keycloak)"
-      ansible.builtin.blockinfile:
-        path: "{{ digit_dir }}/.env"
-        block: |
-          KC_ADMIN_PASSWORD={{ bao_secrets.json.data.data.keycloak_admin_password | default('') }}
-          KC_DB_PASSWORD={{ bao_secrets.json.data.data.keycloak_db_password | default('') }}
-          TOKEN_EXCHANGE_SYSTEM_PASSWORD={{ bao_secrets.json.data.data.token_exchange_system_password | default('eGov@123') }}
-        marker: "# {mark} KEYCLOAK SECRETS"
-        create: false
-        mode: '0600'
-      no_log: true
-      when: enable_keycloak | default(false)
-
-    - name: "OpenBao — append Google IdP secret into compose .env (when configured)"
-      ansible.builtin.lineinfile:
-        path: "{{ digit_dir }}/.env"
-        regexp: '^KC_GOOGLE_CLIENT_SECRET='
-        line: "KC_GOOGLE_CLIENT_SECRET={{ bao_secrets.json.data.data.keycloak_google_client_secret | default('') }}"
-        create: false
-        mode: '0600'
-      no_log: true
-      when:
-        - enable_keycloak | default(false)
-        - (keycloak_google_client_id | default('')) | length > 0
 
     # The first `up -d` started postgres with POSTGRES_PASSWORD=egov123
     # (the default before OpenBao secrets were available). initdb created
@@ -1576,33 +1612,10 @@
         replace: '\1STATE_LEVEL_TENANT_ID: {{ state_root }}'
       when: state_root != 'pg'
 
-    # `docker compose restart` with multiple services starts them in
-    # PARALLEL — it does not respect depends_on. So every service named
-    # here gets SIGTERM at the same moment, then they all come back up at
-    # their own pace. egov-hrms has historically been in this list, but
-    # that combination is a sharp edge:
-    #
-    #   1. HRMS comes back faster than egov-user (less seed work to do).
-    #   2. HRMS's @PostConstruct initalizeSystemuser does a synchronous
-    #      `/user/v1/_search` for its INTERNAL_USER on boot.
-    #   3. That search hits egov-user mid-boot, the proxy returns 502,
-    #      HRMS interprets null → CustomException → JVM exits 1.
-    #   4. Kong negative-caches the now-missing egov-hrms host (~1h TTL)
-    #      and serves 503 to every subsequent /egov-hrms request until
-    #      Kong is restarted.
-    #
-    # HRMS does NOT need to be restarted here regardless of state_root:
-    #   - Its INTERNAL_USER lives at `pg` (from db/full-dump.sql) and
-    #     stays there even when state_root: mz. Bootstrapping HRMS at
-    #     mz would just fail to find INTERNAL_USER.
-    #   - With `restart` (not --force-recreate, reverted via #622 due to
-    #     enc-key drift), env vars don't change on restart anyway, so
-    #     restarting HRMS is a no-op for state_root purposes.
-    # Excluded.
     - name: "post-bootstrap — restart services to pick up new STATE_LEVEL_TENANT_ID"
       ansible.builtin.shell: >-
         docker compose {{ compose_files }}
-        restart egov-user egov-workflow-v2 egov-enc-service pgr-services
+        restart egov-user egov-workflow-v2 egov-enc-service pgr-services egov-hrms
       args:
         chdir: "{{ digit_dir }}"
       when: state_root != 'pg'
@@ -1756,15 +1769,18 @@
     - name: "keycloak-bootstrap — render per-tenant realm from template"
       ansible.builtin.template:
         src: templates/keycloak-realm.json.j2
-        dest: "{{ digit_dir }}/keycloak-realms/{{ state_tenant_id }}-realm.json"
+        dest: "{{ digit_dir }}/keycloak/{{ state_tenant_id }}-realm.json"
         mode: '0640'
       when:
         - enable_keycloak | default(false)
         - (state_tenant_id | default('')) | length > 0
 
     - name: "keycloak-bootstrap — wait for keycloak to bind :8180 (up to 5 min)"
+      # KC 24 image is UBI minimal — no curl/wget. Wait on the docker
+      # healthcheck status (which uses bash /dev/tcp internally) rather
+      # than re-probing from outside.
       ansible.builtin.shell: |
-        timeout 300 bash -c 'until docker exec keycloak curl -fsS http://127.0.0.1:8180/realms/master >/dev/null 2>&1; do sleep 5; done && echo ready'
+        timeout 300 bash -c 'until [ "$(docker inspect -f "{{ '{{' }}.State.Health.Status{{ '}}' }}" keycloak 2>/dev/null)" = "healthy" ]; do sleep 5; done && echo ready'
       register: kc_wait
       changed_when: false
       when: enable_keycloak | default(false)
@@ -1787,7 +1803,7 @@
 
     - name: "keycloak-bootstrap — import per-tenant realm (first time only)"
       ansible.builtin.shell: |
-        docker cp "{{ digit_dir }}/keycloak-realms/{{ state_tenant_id }}-realm.json" keycloak:/tmp/realm.json
+        docker cp "{{ digit_dir }}/keycloak/{{ state_tenant_id }}-realm.json" keycloak:/tmp/realm.json
         docker exec keycloak /opt/keycloak/bin/kcadm.sh create realms -f /tmp/realm.json
       when:
         - enable_keycloak | default(false)
@@ -1809,10 +1825,78 @@
       no_log: true
       changed_when: false
 
+    # ────────────────────────────────────────────────────────────────
+    # Update digit-ui client redirect URIs in-place every deploy.
+    #
+    # The "import per-tenant realm" task above is one-shot — it only
+    # fires when the realm doesn't already exist. On existing realms
+    # (every deploy after the first), changes to the rendered
+    # realm-template.json (e.g. a new /citizen/* redirect from
+    # digit-ui-v2) would never reach Keycloak.
+    #
+    # This task closes that gap by re-applying the digit-ui client
+    # config via kcadm.sh `update` every run. Idempotent: kcadm
+    # accepts the same payload repeatedly without changing state.
+    #
+    # Fetch the client's internal UUID via `get clients?clientId=…`,
+    # then PUT the desired rootUrl + baseUrl + redirectUris + webOrigins.
+    # The URI list is built from {{ domain }} the same way the realm
+    # template does it, so they always agree.
+    # ────────────────────────────────────────────────────────────────
+    - name: "keycloak-bootstrap — fetch digit-ui client UUID"
+      ansible.builtin.shell: |
+        docker exec keycloak /opt/keycloak/bin/kcadm.sh get clients \
+          -r "{{ state_tenant_id }}" \
+          --query "clientId={{ keycloak_client_id | default('digit-ui') }}" \
+          --fields id 2>/dev/null \
+          | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d[0]["id"] if d else "")'
+      register: kc_digit_ui_client_id
+      changed_when: false
+      when: enable_keycloak | default(false)
+
+    - name: "keycloak-bootstrap — update digit-ui client redirect URIs in-place"
+      ansible.builtin.shell: |
+        SCHEME="{{ 'https://' if (tls_enabled | default(true)) else 'http://' }}"
+        BASE="${SCHEME}{{ domain }}"
+        docker exec keycloak /opt/keycloak/bin/kcadm.sh update \
+          "clients/{{ kc_digit_ui_client_id.stdout | trim }}" \
+          -r "{{ state_tenant_id }}" \
+          -s "rootUrl=${BASE}" \
+          -s 'baseUrl=/citizen/' \
+          -s "redirectUris=[\"${BASE}/citizen/*\",\"${BASE}/digit-ui/*\",\"${BASE}/auth/callback*\",\"http://localhost:*\"]" \
+          -s "webOrigins=[\"${BASE}\",\"http://localhost:3000\",\"http://localhost:5173\"]" \
+          -s 'publicClient=true' \
+          -s 'standardFlowEnabled=true' \
+          -s 'directAccessGrantsEnabled=true' \
+          -s 'attributes."pkce.code.challenge.method"=S256'
+      when:
+        - enable_keycloak | default(false)
+        - kc_digit_ui_client_id is defined
+        - (kc_digit_ui_client_id.stdout | default('') | trim) | length > 0
+      changed_when: true
+
+    # KC emits absolute URLs (broker callbacks, well-known issuer, redirect
+    # targets in the broker login response) using realm.attributes.frontendUrl.
+    # Without it KC falls back to KC_HOSTNAME stripped of its path, so the
+    # broker login URL comes out as `/realms/{tenant}/broker/google/login`
+    # — Kong has no route for /realms/* and returns "no Route matched".
+    # Re-asserted every deploy so a fresh realm import or admin edit can't
+    # silently drift it. Idempotent on KC's side.
+    - name: "keycloak-bootstrap — set realm frontendUrl so KC emits /auth-prefixed URLs"
+      ansible.builtin.shell: |
+        SCHEME="{{ 'https://' if (tls_enabled | default(true)) else 'http://' }}"
+        BASE="${SCHEME}{{ domain }}"
+        docker exec keycloak /opt/keycloak/bin/kcadm.sh update \
+          "realms/{{ state_tenant_id }}" \
+          -s "attributes.frontendUrl=${BASE}/auth"
+      when: enable_keycloak | default(false)
+      changed_when: true
+
     # Keycloak end-to-end validation. Runs AFTER the realm import so the
-    # well-known endpoint actually resolves. Both routes are served by
-    # upstream's Kong (/auth → keycloak, /kc → token-exchange-svc) —
-    # no nginx_features.keycloak gate is needed (Kong is always up).
+    # well-known endpoint actually resolves. Both checks require
+    # nginx_features.keycloak: true (the host nginx exposes /auth/ and
+    # /token-exchange/); without that the services are only reachable
+    # inside the egov-network.
     - name: "validate — keycloak per-tenant realm reachable via /auth/"
       ansible.builtin.uri:
         url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/auth/realms/{{ state_tenant_id }}/.well-known/openid-configuration"
@@ -1822,16 +1906,20 @@
         headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
       retries: 3
       delay: 5
-      when: enable_keycloak | default(false)
+      when:
+        - enable_keycloak | default(false)
+        - nginx_features.keycloak | default(false)
 
-    - name: "validate — token-exchange-svc healthz reachable via /kc/"
+    - name: "validate — token-exchange-svc healthz reachable via /token-exchange/"
       ansible.builtin.uri:
-        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/kc/healthz"
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/token-exchange/healthz"
         status_code: [200]
         timeout: 10
         validate_certs: "{{ tls_enabled | default(true) }}"
         headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
-      when: enable_keycloak | default(false)
+      when:
+        - enable_keycloak | default(false)
+        - nginx_features.keycloak | default(false)
 
     # ────────────────────────────────────────────────────────────────
     # UI-tenant fall-back: until the operator's chosen state_tenant_id is
