@@ -854,6 +854,96 @@
       changed_when: false
       when: digit_ui_mode == "hmr"
 
+    # ============================================================
+    # digit-ui-v2 — Vite + React 19 citizen SPA (new in feat/keycloak-stack).
+    #
+    # Source lives at /opt/digit-ui-v2 on the TARGET (cloned via
+    # ansible.builtin.git so the build environment matches the host's
+    # Node — no controller-side cross-arch surprises). Mirrors the
+    # digit-ui-esbuild pattern (clone-on-target + build-on-target),
+    # NOT the configurator pattern (controller-side build). Rationale:
+    # digit-ui-v2's Vite build pulls native deps (esbuild + lightningcss
+    # platform binaries) that must match the runtime arch; building on
+    # the target avoids the "ran on Mac controller, won't link on
+    # x86_64 server" failure mode.
+    #
+    # Env-var contract (read by Vite at build time via import.meta.env)
+    # is documented in CLAUDE.md / handoff between this PR and the
+    # sister UI PR. Update both ends together.
+    # ============================================================
+    - name: "digit-ui-v2 — ensure /opt/digit-ui-v2 repo present + on chosen branch"
+      ansible.builtin.git:
+        repo: "{{ digit_ui_v2_repo }}"
+        dest: /opt/digit-ui-v2
+        version: "{{ digit_ui_v2_branch }}"
+        update: true
+        force: true
+      when: enable_digit_ui_v2 | default(false)
+
+    - name: "digit-ui-v2 — install Node 20 if missing (Vite build needs it)"
+      ansible.builtin.apt:
+        name: nodejs
+        state: present
+      when:
+        - enable_digit_ui_v2 | default(false)
+        - ansible_system != "Darwin"
+
+    - name: "digit-ui-v2 — npm install if package.json newer than node_modules"
+      ansible.builtin.shell: |
+        cd /opt/digit-ui-v2/digit-ui-v2
+        if [ ! -d node_modules ] \
+           || [ package.json -nt node_modules ] \
+           || [ package-lock.json -nt node_modules ]; then
+          npm install --no-audit --no-fund --prefer-offline
+          echo installed
+        else
+          echo skipped
+        fi
+      register: dui2_install
+      changed_when: dui2_install.stdout == 'installed'
+      when: enable_digit_ui_v2 | default(false)
+
+    - name: "digit-ui-v2 — build (vite) with env contract"
+      ansible.builtin.shell: |
+        cd /opt/digit-ui-v2/digit-ui-v2
+        VITE_AUTH_PROVIDER="{{ auth_provider | default('') }}" \
+        VITE_KEYCLOAK_URL=/auth \
+        VITE_KEYCLOAK_REALM="{{ state_tenant_id }}" \
+        VITE_KEYCLOAK_CLIENT_ID="{{ keycloak_client_id | default('digit-ui') }}" \
+        VITE_TOKEN_EXCHANGE_URL=/token-exchange \
+        VITE_CITIZEN_STATE_TENANT="{{ state_tenant_id }}" \
+        VITE_CITIZEN_TENANT="{{ tenant_id }}" \
+        npm run build
+        test -f dist/index.html
+      args:
+        executable: /bin/bash
+      register: dui2_build
+      changed_when: true
+      when: enable_digit_ui_v2 | default(false)
+
+    - name: "digit-ui-v2 — ensure /var/www/citizen exists"
+      ansible.builtin.file:
+        path: /var/www/citizen
+        state: directory
+        mode: '0755'
+      when: enable_digit_ui_v2 | default(false)
+
+    # rsync on the TARGET (not synchronize from the controller). The
+    # source dist lives on the same box as the destination, so a local
+    # rsync is faster and avoids the ansible.posix.synchronize
+    # cross-host SSH dance. delete=true so a removed asset doesn't
+    # linger; --no-perms/--no-owner because /var/www/citizen is owned
+    # by root:root and we don't want to chown to the npm-build user.
+    - name: "digit-ui-v2 — sync dist/ to /var/www/citizen/"
+      ansible.builtin.command: >-
+        rsync -a --delete
+        --no-perms --no-times --no-owner --no-group
+        /opt/digit-ui-v2/digit-ui-v2/dist/
+        /var/www/citizen/
+      register: dui2_sync
+      changed_when: dui2_sync.rc == 0
+      when: enable_digit_ui_v2 | default(false)
+
     # ==================== Wait for MCP Server ====================
     # Only when MCP is actually deployed. enable_mcp is false on Mac (the
     # digit-mcp image is VPC-registry-only) and anywhere off the Hetzner
