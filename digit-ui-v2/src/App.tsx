@@ -24,7 +24,8 @@ import CitizenLayout from './components/layout/CitizenLayout';
 import { ThemeProvider } from './providers/ThemeProvider';
 import { citizenDataProvider, citizenAuthProvider } from './providers/citizenBridge';
 // Toaster removed — citizen UI v1 surfaces errors via inline Alert components.
-import { apiClient, getApiBaseUrl } from './api';
+import { apiClient, getApiBaseUrl, isKeycloakMode, hasKcToken } from './api';
+import { getKcIdToken, clearKcTokens, logoutKc } from './api/keycloak';
 import { identifyUser, clearUser, trackEvent } from './lib/telemetry';
 import './App.css';
 
@@ -141,6 +142,15 @@ function App() {
     localStorage.removeItem(AUTH_STORAGE_KEY);
     apiClient.logout();
     setState({ isAuthenticated: false, user: null, tenant: state.tenant });
+    // KC-aware logout — issue an RP-initiated logout so Keycloak revokes the
+    // server session (otherwise re-clicking "Sign in with Keycloak" SSOs the
+    // user back in without prompting). Browser navigates away, so anything
+    // below this line won't run when KC is active.
+    if (isKeycloakMode() && hasKcToken()) {
+      const idToken = getKcIdToken();
+      clearKcTokens();
+      logoutKc(idToken);
+    }
   };
 
   return (
