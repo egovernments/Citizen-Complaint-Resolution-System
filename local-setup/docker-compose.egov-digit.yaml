@@ -2107,7 +2107,7 @@ services:
     # Published unscoped (not under egovio/) at registry.preview because
     # it predates the namespace standardisation. Pin to :dev for now;
     # bump when a versioned tag is published.
-    image: registry.preview.egov.theflywheel.in/token-exchange-svc:dev
+    image: registry.preview.egov.theflywheel.in/token-exchange-svc:keycloak-deploy
     container_name: token-exchange-svc
     restart: unless-stopped
     profiles: ["keycloak"]
