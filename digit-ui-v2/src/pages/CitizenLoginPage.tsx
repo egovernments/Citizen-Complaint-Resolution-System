@@ -64,16 +64,23 @@ export default function CitizenLoginPage() {
     }
   }, []);
 
-  function signInWithGoogle() {
+  async function signInWithGoogle() {
     setError(null);
-    // `kc_idp_hint=google` skips the Keycloak account-chooser and
-    // redirects straight to Google's OAuth consent screen. The realm
-    // must have the `google` IdP provisioned (ansible's keycloak-bootstrap
-    // task does this when keycloak_google_client_id is set in host_vars).
-    // /citizen is the SPA's basename; the absolute redirect_uri needs the
-    // full path so Keycloak's exact-match check passes. buildAuthorizeUrl
-    // handles the origin prefix.
-    window.location.assign(buildAuthorizeUrl('/citizen/auth/callback', 'google'));
+    setPending(true);
+    try {
+      // `kc_idp_hint=google` skips the Keycloak account-chooser and
+      // redirects straight to Google's OAuth consent screen. The realm
+      // must have the `google` IdP provisioned (ansible's keycloak-bootstrap
+      // task does this when keycloak_google_client_id is set in host_vars).
+      // buildAuthorizeUrl is async because it computes a PKCE
+      // code_challenge (SHA-256 via WebCrypto) — the digit-ui client is
+      // a public client and the realm requires PKCE.
+      const url = await buildAuthorizeUrl('/citizen/auth/callback', 'google');
+      window.location.assign(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not start Google sign-in.');
+      setPending(false);
+    }
   }
 
   async function sendOtp(e: React.FormEvent) {

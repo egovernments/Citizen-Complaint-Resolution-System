@@ -36,6 +36,11 @@ export const KC_STORAGE_KEYS = {
   refresh: 'digit_ui_v2_kc_refresh',
   id: 'digit_ui_v2_kc_id',
   state: 'digit_ui_v2_kc_oauth_state',
+  // PKCE code_verifier — generated before /authorize, sent back with the
+  // /token exchange. KC rejects public clients without it (the realm
+  // sets pkce.code.challenge.method=S256). The verifier lives only as
+  // long as the round-trip and is cleared on callback success or error.
+  pkceVerifier: 'digit_ui_v2_kc_pkce_verifier',
   expiresAt: 'digit_ui_v2_kc_expires_at',
 } as const;
 

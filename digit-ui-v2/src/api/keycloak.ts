@@ -128,6 +128,52 @@ function generateState(): string {
   return Array.from(buf, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+// ── PKCE (RFC 7636) ─────────────────────────────────────────────────────────
+//
+// Keycloak's `digit-ui` client is a public client (no client_secret in the
+// browser), so the realm requires PKCE. Flow:
+//   1. /authorize → send `code_challenge` (S256 hash of a random verifier) +
+//      `code_challenge_method=S256`. Save the verifier in localStorage.
+//   2. KC remembers the challenge against the issued code.
+//   3. /token → send the original `code_verifier`. KC re-hashes it and checks
+//      it matches what it stored. Mismatch → 400.
+// PKCE costs ~100 bytes of localStorage and one extra POST param. There's
+// no reason not to do it on every authorize call.
+
+function base64UrlEncode(bytes: Uint8Array): string {
+  let str = '';
+  for (const b of bytes) str += String.fromCharCode(b);
+  return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function generateCodeVerifier(): string {
+  // 32 random bytes → 43-char base64url — meets the RFC's 43..128 range.
+  const buf = new Uint8Array(32);
+  crypto.getRandomValues(buf);
+  return base64UrlEncode(buf);
+}
+
+async function computeCodeChallenge(verifier: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+  return base64UrlEncode(new Uint8Array(digest));
+}
+
+export function getStoredCodeVerifier(): string | null {
+  try {
+    return localStorage.getItem(KC_STORAGE_KEYS.pkceVerifier);
+  } catch {
+    return null;
+  }
+}
+
+export function clearStoredCodeVerifier(): void {
+  try {
+    localStorage.removeItem(KC_STORAGE_KEYS.pkceVerifier);
+  } catch {
+    /* best-effort */
+  }
+}
+
 // ── Public API ─────────────────────────────────────────────────────────────
 
 /**
@@ -138,13 +184,17 @@ function generateState(): string {
  *   '/citizen/auth/callback'. We turn it into an absolute redirect_uri
  *   because Keycloak requires that.
  */
-export function buildAuthorizeUrl(redirectPath: string, idpHint?: string): string {
+export async function buildAuthorizeUrl(redirectPath: string, idpHint?: string): Promise<string> {
   const state = generateState();
+  const verifier = generateCodeVerifier();
+  const challenge = await computeCodeChallenge(verifier);
   try {
     localStorage.setItem(KC_STORAGE_KEYS.state, state);
+    localStorage.setItem(KC_STORAGE_KEYS.pkceVerifier, verifier);
   } catch {
-    // If localStorage is unavailable the callback will fail state verification
-    // and fall through to the error path — better than silently allowing CSRF.
+    // If localStorage is unavailable the callback will fail state +
+    // PKCE verification and fall through to the error path — better than
+    // silently allowing CSRF or an unhashed-public-client flow.
   }
   const params = new URLSearchParams({
     client_id: KEYCLOAK_CLIENT_ID,
@@ -152,6 +202,8 @@ export function buildAuthorizeUrl(redirectPath: string, idpHint?: string): strin
     response_type: 'code',
     scope: 'openid',
     state,
+    code_challenge: challenge,
+    code_challenge_method: 'S256',
   });
   // `kc_idp_hint` skips the Keycloak account-chooser screen and routes
   // straight to the named identity provider (e.g. `google`). The realm
@@ -217,11 +269,18 @@ export async function exchangeCodeForTokens(
     redirect_uri: absoluteRedirectUri(redirectUri),
     client_id: KEYCLOAK_CLIENT_ID,
   });
+  // PKCE: send back the original verifier we generated at /authorize.
+  // KC re-hashes it server-side and matches against the challenge it
+  // stored against the code — public-client requirement, can't skip.
+  const verifier = getStoredCodeVerifier();
+  if (verifier) body.set('code_verifier', verifier);
+
   const res = await fetch(`${realmBase()}/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: body.toString(),
   });
+  clearStoredCodeVerifier();   // single-use whether the request succeeded or not
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(`Keycloak token exchange failed (${res.status}): ${text.slice(0, 200)}`);
