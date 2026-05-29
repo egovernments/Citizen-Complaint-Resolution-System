@@ -268,7 +268,12 @@ server {
     try_files $uri $uri/ /digit-ui/index.html;
     sub_filter_once on;
     sub_filter_types text/html;
-    sub_filter '</head>' '<script src="/digit-ui/globalConfigs.js"></script></head>';
+    # Inject globalConfigs.js + (optional) tenant theme tokens into <head>. Theme
+    # tokens override --color-primary-1 etc. defined in vendored digit-ui-css /
+    # overrides.css, so the SPA picks up tenant branding without touching the
+    # built CSS. Driven by host_vars `theme_primary_color` (dark) +
+    # `theme_primary_color_2` (light); omit either to keep DIGIT defaults.
+    sub_filter '</head>' '{% if theme_primary_color is defined %}<style>:root{--color-primary-1:{{ theme_primary_color }};{% if theme_primary_color_2 is defined %}--color-primary-2:{{ theme_primary_color_2 }};--color-button-primary-bg-default:{{ theme_primary_color_2 }};--color-button-primary-border:{{ theme_primary_color_2 }};--color-button-secondary-text:{{ theme_primary_color_2 }};--color-button-secondary-border:{{ theme_primary_color_2 }};--color-input-border-focus:{{ theme_primary_color_2 }};--color-link-default:{{ theme_primary_color_2 }};{% endif %}--color-button-primary-bg-hover:{{ theme_primary_color }};--color-link-hover:{{ theme_primary_color }};{% if theme_sidebar_selected_bg is defined %}--color-sidebar-selected-bg:{{ theme_sidebar_selected_bg }};{% endif %}}</style>{% endif %}<script src="/digit-ui/globalConfigs.js"></script></head>';
   }
   # Per-tenant boot config — overrides whatever was baked into the bundle.
   location = /digit-ui/globalConfigs.js {
@@ -312,6 +317,32 @@ server {
     client_max_body_size 25M;
     proxy_buffering off;
   }
+
+{% if nginx_features.minio_egov_rainmaker_alias | default(false) %}
+  # Legacy /egov-rainmaker/ MinIO passthrough. Used when egov-filestore
+  # signs presigned URLs with the public domain (MINIO_URL=https://<domain>)
+  # under the `egov-rainmaker` bucket instead of the internal minio:9000.
+  # Host is preserved so the AWS4 signature ($host) keeps validating.
+  # ^~ prefix beats the Kong catch-all below.
+  location ^~ /egov-rainmaker/ {
+    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_minio_port | default(19000) }};
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_buffering off;
+    proxy_request_buffering off;
+    client_max_body_size 100m;
+    proxy_read_timeout 120s;
+  }
+{% endif %}
+
+{% if nginx_features.root_to_digit_ui | default(false) %}
+  # Bare domain -> citizen app login. Lands users in the digit-ui SPA
+  # instead of Kong's default response. Exact match (=), so the catch-all
+  # below still proxies everything else to Kong.
+  location = / { return 302 /digit-ui/citizen/login; }
+{% endif %}
 
   # API calls go to Kong directly.
   location / {
