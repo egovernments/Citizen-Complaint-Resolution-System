@@ -2086,7 +2086,10 @@ services:
       # names are tenant-specific.
       - ./keycloak/realm-template.json:/opt/keycloak/data/import/realm-template.json:ro
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8180/realms/master >/dev/null 2>&1 || exit 1"]
+      # KC 24 image is UBI minimal — no curl/wget. Use the bash /dev/tcp
+      # trick (KC's start-dev base image has bash + the kc.sh wrapper).
+      # We just check the realm endpoint returns "HTTP/1.1 200" / "HTTP/1.0 200".
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8180 && printf 'GET /realms/master HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && head -1 <&3 | grep -q '200' || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -2119,8 +2122,18 @@ services:
       PORT: '3000'
       KEYCLOAK_ISSUER: http://keycloak:8180/realms/${TOKEN_EXCHANGE_SYSTEM_TENANT}
       KEYCLOAK_JWKS_URI: http://keycloak:8180/realms/${TOKEN_EXCHANGE_SYSTEM_TENANT}/protocol/openid-connect/certs
-      DIGIT_USER_HOST: http://egov-user:8080
-      DIGIT_SYSTEM_USERNAME: ${TOKEN_EXCHANGE_SYSTEM_USERNAME:-INTERNAL_MICROSERVICE_ROLE}
+      # Route through egov-user-proxy on port 8107 (where every other
+      # DIGIT service reaches egov-user from — see kong.yml). The proxy
+      # is on the egov-network too, listens on 8107, and forwards to
+      # the real egov-user container.
+      DIGIT_USER_HOST: http://egov-user-proxy:8107
+      # Defaults to ADMIN (which user-seed.sh always creates on a
+      # fresh DIGIT install). On environments where you have a
+      # dedicated INTERNAL_MICROSERVICE_ROLE seeded, override via
+      # host_vars + ansible env. Note: matching DIGIT_SYSTEM_USER_TYPE
+      # below — ADMIN is EMPLOYEE, INTERNAL_MICROSERVICE_ROLE is SYSTEM.
+      DIGIT_SYSTEM_USERNAME: ${TOKEN_EXCHANGE_SYSTEM_USERNAME:-ADMIN}
+      DIGIT_SYSTEM_USER_TYPE: ${TOKEN_EXCHANGE_SYSTEM_USER_TYPE:-EMPLOYEE}
       # Same first-boot pattern as KEYCLOAK_ADMIN_PASSWORD above —
       # default lets compose up succeed; Ansible re-applies the real
       # value from OpenBao after the secrets-to-.env task runs.
@@ -2131,13 +2144,19 @@ services:
       CACHE_PREFIX: keycloak
       CACHE_TTL_SECONDS: '604800'
     ports:
-      - 18200:3000
+      # Host port 18200 is already taken by OpenBao on the existing
+      # bomet/nairobi deployments — use 18300 instead. The nginx
+      # /token-exchange/ location proxies to this port; if you change
+      # it here, update the ansible nginx template too.
+      - 18300:3000
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/healthz >/dev/null 2>&1 || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
       start_period: 30s
+    networks:
+      - egov-network
   # otp-publisher — replaces Kong's mock /user-otp termination with a real
   # OTP generator: mint a 6-digit OTP -> cache in Redis -> publish OTP.SEND to
   # kafka complaints.domain.events -> novu-bridge -> Twilio SMS. Part of the
