@@ -77,6 +77,27 @@
       when:
         - digit_ui_mode in ['static', 'hmr']
         - ansible_system != 'Darwin'
+        # Skip when build_digit_ui:true — the vendored copy in /opt/ccrs/digit-ui-esbuild
+        # is the source of truth; the symlink task below points /opt/digit-ui-esbuild
+        # at it so the static-mode build runs against vendored, not theflywheel main.
+        - not (build_digit_ui | default(false))
+
+    # When build_digit_ui:true on a static/hmr host, point /opt/digit-ui-esbuild
+    # at the vendored copy inside this CCRS checkout. Static-mode npm install +
+    # esbuild.build.js then operate on develop's vendored source via the symlink,
+    # producing a build the host nginx (alias /opt/digit-ui-esbuild/build/) serves.
+    # Without this, the clone task above puts theflywheel main on disk and the
+    # vendored build only lands in the (stopped) digit-ui container — silent gap.
+    - name: "digit-ui — symlink /opt/digit-ui-esbuild → vendored copy (when build_digit_ui)"
+      ansible.builtin.file:
+        src: "{{ playbook_dir }}/../../digit-ui-esbuild"
+        dest: /opt/digit-ui-esbuild
+        state: link
+        force: yes
+      when:
+        - digit_ui_mode in ['static', 'hmr']
+        - ansible_system != 'Darwin'
+        - build_digit_ui | default(false)
 
 
   tasks:
