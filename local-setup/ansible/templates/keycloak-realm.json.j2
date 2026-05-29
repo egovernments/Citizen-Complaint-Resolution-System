@@ -23,14 +23,22 @@
 
 {#- Patch the digit-ui client in place. The template ships one client
     (digit-ui); if that ever changes, this loop tolerates extra clients
-    by only mutating the one we know about. -#}
+    by only mutating the one we know about.
+
+    redirectUris cover the three SPAs that may live on the same domain:
+      /citizen/*       — digit-ui-v2 (Vite + React 19) at /var/www/citizen/
+      /digit-ui/*      — legacy digit-ui-esbuild bundle
+      /auth/callback*  — explicit callback path some auth-adapters POST to
+    localhost:* keeps `npm run dev`-style local testing of any SPA working.
+    -#}
 {%- for client in tpl.clients -%}
   {%- if client.clientId == (keycloak_client_id | default('digit-ui')) -%}
     {%- set _ = client.update({'rootUrl': base}) -%}
-    {%- set _ = client.update({'baseUrl': '/digit-ui/'}) -%}
+    {%- set _ = client.update({'baseUrl': '/citizen/'}) -%}
     {%- set new_redirects = [
-        base + '/*',
+        base + '/citizen/*',
         base + '/digit-ui/*',
+        base + '/auth/callback*',
         'http://localhost:*'
     ] -%}
     {%- set _ = client.update({'redirectUris': new_redirects}) -%}
