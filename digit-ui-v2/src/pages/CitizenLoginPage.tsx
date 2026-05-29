@@ -19,14 +19,16 @@
  * tenantId for the auth + register calls is the STATE tenant (`ke`), not the
  * city tenant — egov-user keeps citizens at root.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { apiClient, getApiBaseUrl, ENDPOINTS } from '@/api';
+import { Separator } from '@/components/ui/separator';
+import { apiClient, getApiBaseUrl, ENDPOINTS, isKeycloakMode } from '@/api';
+import { buildAuthorizeUrl } from '@/api/keycloak';
 import { useApp } from '@/App';
 
 const STATE_TENANT = (import.meta.env.VITE_CITIZEN_STATE_TENANT as string) || 'ke';
@@ -46,6 +48,29 @@ export default function CitizenLoginPage() {
   const [otp, setOtp] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const kcMode = isKeycloakMode();
+
+  // Surface errors bubbled up from the Keycloak callback page (e.g. the
+  // overlay rejected the JWT or the user denied consent at the KC login
+  // screen). Read once, clear the query param so refresh doesn't replay.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const fromCallback = params.get('error');
+    if (fromCallback) {
+      setError(fromCallback);
+      const url = new URL(window.location.href);
+      url.searchParams.delete('error');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, []);
+
+  function signInWithKeycloak() {
+    setError(null);
+    // /citizen is the SPA's basename; the absolute redirect_uri needs the
+    // full path so Keycloak's exact-match check passes. buildAuthorizeUrl
+    // handles the origin prefix.
+    window.location.assign(buildAuthorizeUrl('/citizen/auth/callback'));
+  }
 
   async function sendOtp(e: React.FormEvent) {
     e.preventDefault();
@@ -173,6 +198,24 @@ export default function CitizenLoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {kcMode && step === 'mobile' && (
+            <div className="space-y-4 mb-4">
+              <Button
+                type="button"
+                className="w-full"
+                onClick={signInWithKeycloak}
+                disabled={pending}
+              >
+                Sign in with Keycloak
+              </Button>
+              <div className="relative">
+                <Separator />
+                <span className="absolute left-1/2 -translate-x-1/2 -top-2.5 bg-card px-2 text-xs text-muted-foreground">
+                  Or continue with mobile
+                </span>
+              </div>
+            </div>
+          )}
           {step === 'mobile' ? (
             <form onSubmit={sendOtp} className="space-y-4">
               <div>

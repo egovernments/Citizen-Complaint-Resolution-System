@@ -13,6 +13,7 @@ import { useState, createContext, useContext, useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { CoreAdminContext } from 'ra-core';
 import CitizenLoginPage from './pages/CitizenLoginPage';
+import CitizenKcCallback from './pages/CitizenKcCallback';
 import CitizenDashboardPage from './pages/CitizenDashboardPage';
 import CitizenComplaintsListPage from './pages/CitizenComplaintsListPage';
 import CitizenComplaintShowPage from './pages/CitizenComplaintShowPage';
@@ -162,6 +163,9 @@ function App() {
             <ThemeProvider>
               <Routes>
                 <Route path="/login" element={<CitizenLoginPage />} />
+                {/* KC callback is intentionally unguarded — the user is
+                   mid-auth at this point and not yet logged in. */}
+                <Route path="/auth/callback" element={<CitizenKcCallback />} />
                 <Route
                   path="/"
                   element={state.isAuthenticated ? <CitizenLayout /> : <Navigate to="/login" replace />}
