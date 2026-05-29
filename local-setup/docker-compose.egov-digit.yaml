@@ -2122,6 +2122,12 @@ services:
       PORT: '3000'
       KEYCLOAK_ISSUER: http://keycloak:8180/realms/${TOKEN_EXCHANGE_SYSTEM_TENANT}
       KEYCLOAK_JWKS_URI: http://keycloak:8180/realms/${TOKEN_EXCHANGE_SYSTEM_TENANT}/protocol/openid-connect/certs
+      # KEYCLOAK_ADMIN_URL: base used by the overlay both for admin REST
+      # (/admin/realms/*) AND for the password-grant token endpoint it
+      # forwards to. Defaults to localhost:8180 which breaks inside the
+      # compose network — pin to the in-network service name.
+      KEYCLOAK_ADMIN_URL: http://keycloak:8180
+      KEYCLOAK_USER_REALM: ${TOKEN_EXCHANGE_SYSTEM_TENANT}
       # Route through egov-user-proxy on port 8107 (where every other
       # DIGIT service reaches egov-user from — see kong.yml). The proxy
       # is on the egov-network too, listens on 8107, and forwards to
