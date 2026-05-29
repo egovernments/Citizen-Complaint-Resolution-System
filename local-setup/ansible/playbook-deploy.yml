@@ -1732,6 +1732,52 @@
       no_log: true
       changed_when: false
 
+    # ────────────────────────────────────────────────────────────────
+    # Update digit-ui client redirect URIs in-place every deploy.
+    #
+    # The "import per-tenant realm" task above is one-shot — it only
+    # fires when the realm doesn't already exist. On existing realms
+    # (every deploy after the first), changes to the rendered
+    # realm-template.json (e.g. a new /citizen/* redirect from
+    # digit-ui-v2) would never reach Keycloak.
+    #
+    # This task closes that gap by re-applying the digit-ui client
+    # config via kcadm.sh `update` every run. Idempotent: kcadm
+    # accepts the same payload repeatedly without changing state.
+    #
+    # Fetch the client's internal UUID via `get clients?clientId=…`,
+    # then PUT the desired rootUrl + baseUrl + redirectUris + webOrigins.
+    # The URI list is built from {{ domain }} the same way the realm
+    # template does it, so they always agree.
+    # ────────────────────────────────────────────────────────────────
+    - name: "keycloak-bootstrap — fetch digit-ui client UUID"
+      ansible.builtin.shell: |
+        docker exec keycloak /opt/keycloak/bin/kcadm.sh get clients \
+          -r "{{ state_tenant_id }}" \
+          --query "clientId={{ keycloak_client_id | default('digit-ui') }}" \
+          --fields id 2>/dev/null \
+          | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d[0]["id"] if d else "")'
+      register: kc_digit_ui_client_id
+      changed_when: false
+      when: enable_keycloak | default(false)
+
+    - name: "keycloak-bootstrap — update digit-ui client redirect URIs in-place"
+      ansible.builtin.shell: |
+        SCHEME="{{ 'https://' if (tls_enabled | default(true)) else 'http://' }}"
+        BASE="${SCHEME}{{ domain }}"
+        docker exec keycloak /opt/keycloak/bin/kcadm.sh update \
+          "clients/{{ kc_digit_ui_client_id.stdout | trim }}" \
+          -r "{{ state_tenant_id }}" \
+          -s "rootUrl=${BASE}" \
+          -s 'baseUrl=/citizen/' \
+          -s "redirectUris=[\"${BASE}/citizen/*\",\"${BASE}/digit-ui/*\",\"${BASE}/auth/callback*\",\"http://localhost:*\"]" \
+          -s "webOrigins=[\"${BASE}\",\"http://localhost:3000\",\"http://localhost:5173\"]"
+      when:
+        - enable_keycloak | default(false)
+        - kc_digit_ui_client_id is defined
+        - (kc_digit_ui_client_id.stdout | default('') | trim) | length > 0
+      changed_when: true
+
     # Keycloak end-to-end validation. Runs AFTER the realm import so the
     # well-known endpoint actually resolves. Both checks require
     # nginx_features.keycloak: true (the host nginx exposes /auth/ and
