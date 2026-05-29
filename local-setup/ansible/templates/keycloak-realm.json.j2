@@ -47,6 +47,16 @@
   {%- if client.clientId == (keycloak_client_id | default('digit-ui')) -%}
     {%- set _ = client.update({'rootUrl': base}) -%}
     {%- set _ = client.update({'baseUrl': '/citizen/'}) -%}
+    {#- Auth flow flags. publicClient + standardFlowEnabled covers the
+        Google/OAuth Authorization Code redirect; directAccessGrantsEnabled
+        is what lets the overlay POST grant_type=password to /token (mobile+
+        OTP citizens auth this way via the overlay's KC+DIGIT fallback).
+        Without it KC returns unauthorized_client. PKCE is required at the
+        realm template level — UI sends code_challenge_method=S256. -#}
+    {%- set _ = client.update({'publicClient': true}) -%}
+    {%- set _ = client.update({'standardFlowEnabled': true}) -%}
+    {%- set _ = client.update({'directAccessGrantsEnabled': true}) -%}
+    {%- set _ = client.setdefault('attributes', {}).update({'pkce.code.challenge.method': 'S256'}) -%}
     {%- set new_redirects = [
         base + '/citizen/*',
         base + '/digit-ui/*',
