@@ -194,6 +194,52 @@ const ACTION_CONFIGS = [
       ],
     },
   },
+  {
+    // ESCALATE was missing from this list, so getUpdatedConfig() returned null
+    // and PGRWorkflowModal short-circuited (`if (!config) return null`) — the
+    // "Escalate" action rendered an empty no-op modal (issue #521). The PGR
+    // BusinessService defines ESCALATE as a valid action at PENDINGFORASSIGNMENT
+    // (GRO/PGR_VIEWER) and PENDINGATLME (GRO/PGR_LME/PGR_VIEWER), so the backend
+    // already accepts the transition; only this front-end config was absent.
+    // Mirrors REASSIGN: pick a forward assignee + mandatory comments. The
+    // assignee role set is injected dynamically by computeAssigneeRoles()/
+    // getUpdatedConfig(), and handleActionSubmit() already maps
+    // SelectedAssignee.uuid -> workflow.assignes/hrmsAssignes.
+    actionType: "ESCALATE",
+    formConfig: {
+      label: {
+        heading: "CS_ACTION_ESCALATE",
+        cancel: "CS_COMMON_CANCEL",
+        submit: "CS_COMMON_SUBMIT",
+      },
+      form: [
+        {
+          body: [
+            {
+              type: "component",
+              isMandatory: false,
+              component: "PGRAssigneeComponent",
+              key: "SelectedAssignee",
+              label: "CS_COMMON_EMPLOYEE_NAME",
+              populators: { name: "SelectedAssignee" },
+            },
+            {
+              type: "textarea",
+              isMandatory: true,
+              key: "SelectedComments",
+              label: "CS_COMMON_EMPLOYEE_COMMENTS",
+              populators: {
+                name: "SelectedComments",
+                maxLength: 1000,
+                validation: { required: true },
+                error: "CORE_COMMON_REQUIRED_ERRMSG",
+              },
+            },
+          ],
+        },
+      ],
+    },
+  },
 ];
 
 const PGRDetails = () => {
