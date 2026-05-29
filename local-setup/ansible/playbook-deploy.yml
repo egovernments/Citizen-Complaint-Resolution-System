@@ -873,9 +873,9 @@
     # ============================================================
     - name: "digit-ui-v2 — ensure /opt/digit-ui-v2 repo present + on chosen branch"
       ansible.builtin.git:
-        repo: "{{ digit_ui_v2_repo }}"
+        repo: "{{ digit_ui_v2_repo | default('https://github.com/ChakshuGautam/Citizen-Complaint-Resolution-System.git') }}"
         dest: /opt/digit-ui-v2
-        version: "{{ digit_ui_v2_branch }}"
+        version: "{{ digit_ui_v2_branch | default('feat/digit-ui-v2-keycloak') }}"
         update: true
         force: true
       when: enable_digit_ui_v2 | default(false)
@@ -1776,8 +1776,11 @@
         - (state_tenant_id | default('')) | length > 0
 
     - name: "keycloak-bootstrap — wait for keycloak to bind :8180 (up to 5 min)"
+      # KC 24 image is UBI minimal — no curl/wget. Wait on the docker
+      # healthcheck status (which uses bash /dev/tcp internally) rather
+      # than re-probing from outside.
       ansible.builtin.shell: |
-        timeout 300 bash -c 'until docker exec keycloak curl -fsS http://127.0.0.1:8180/realms/master >/dev/null 2>&1; do sleep 5; done && echo ready'
+        timeout 300 bash -c 'until [ "$(docker inspect -f "{{ '{{' }}.State.Health.Status{{ '}}' }}" keycloak 2>/dev/null)" = "healthy" ]; do sleep 5; done && echo ready'
       register: kc_wait
       changed_when: false
       when: enable_keycloak | default(false)
