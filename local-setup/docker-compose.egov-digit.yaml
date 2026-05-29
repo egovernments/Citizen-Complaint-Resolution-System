@@ -2072,7 +2072,11 @@ services:
       KC_HTTP_PORT: '8180'
       KC_PROXY_HEADERS: xforwarded
       KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD}
+      # Default-fallback (`admin`) lets the first `docker compose up`
+      # succeed before Ansible has written the OpenBao-sourced strong
+      # password into .env. The Recreate-with-new-env task later in the
+      # playbook then re-applies the real KC_ADMIN_PASSWORD value.
+      KEYCLOAK_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD:-admin}
     ports:
       - 18180:8180
     volumes:
@@ -2097,7 +2101,10 @@ services:
   # need to rebuild locally, switch from `image:` to a `build:` block
   # pointing at the overlay repo path.
   token-exchange-svc:
-    image: registry.preview.egov.theflywheel.in/egovio/token-exchange-svc:latest
+    # Published unscoped (not under egovio/) at registry.preview because
+    # it predates the namespace standardisation. Pin to :dev for now;
+    # bump when a versioned tag is published.
+    image: registry.preview.egov.theflywheel.in/token-exchange-svc:dev
     container_name: token-exchange-svc
     restart: unless-stopped
     profiles: ["keycloak"]
@@ -2114,7 +2121,10 @@ services:
       KEYCLOAK_JWKS_URI: http://keycloak:8180/realms/${TOKEN_EXCHANGE_SYSTEM_TENANT}/protocol/openid-connect/certs
       DIGIT_USER_HOST: http://egov-user:8080
       DIGIT_SYSTEM_USERNAME: ${TOKEN_EXCHANGE_SYSTEM_USERNAME:-INTERNAL_MICROSERVICE_ROLE}
-      DIGIT_SYSTEM_PASSWORD: ${TOKEN_EXCHANGE_SYSTEM_PASSWORD}
+      # Same first-boot pattern as KEYCLOAK_ADMIN_PASSWORD above —
+      # default lets compose up succeed; Ansible re-applies the real
+      # value from OpenBao after the secrets-to-.env task runs.
+      DIGIT_SYSTEM_PASSWORD: ${TOKEN_EXCHANGE_SYSTEM_PASSWORD:-eGov@123}
       DIGIT_SYSTEM_TENANT: ${TOKEN_EXCHANGE_SYSTEM_TENANT}
       REDIS_HOST: redis
       REDIS_PORT: '6379'
