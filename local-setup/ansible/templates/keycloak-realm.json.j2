@@ -21,6 +21,18 @@
 {%- set scheme = 'https://' if (tls_enabled | default(true)) else 'http://' -%}
 {%- set base = scheme + domain -%}
 
+{#- realm.attributes.frontendUrl: KC uses this when emitting absolute
+    URLs (broker callbacks, well-known issuer, OAuth code-exchange
+    redirect targets). Without it KC falls back to KC_HOSTNAME without
+    the path component, so it emits e.g.
+       https://{domain}/realms/ke/broker/google/login
+    instead of
+       https://{domain}/auth/realms/ke/broker/google/login
+    — the unprefixed URL bypasses the nginx /auth/ → kong → keycloak
+    route and 404s at Kong with "no Route matched". Always include the
+    /auth path here. -#}
+{%- set _ = tpl.setdefault('attributes', {}).update({'frontendUrl': base + '/auth'}) -%}
+
 {#- Patch the digit-ui client in place. The template ships one client
     (digit-ui); if that ever changes, this loop tolerates extra clients
     by only mutating the one we know about.

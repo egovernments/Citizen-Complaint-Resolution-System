@@ -1871,6 +1871,23 @@
         - (kc_digit_ui_client_id.stdout | default('') | trim) | length > 0
       changed_when: true
 
+    # KC emits absolute URLs (broker callbacks, well-known issuer, redirect
+    # targets in the broker login response) using realm.attributes.frontendUrl.
+    # Without it KC falls back to KC_HOSTNAME stripped of its path, so the
+    # broker login URL comes out as `/realms/{tenant}/broker/google/login`
+    # — Kong has no route for /realms/* and returns "no Route matched".
+    # Re-asserted every deploy so a fresh realm import or admin edit can't
+    # silently drift it. Idempotent on KC's side.
+    - name: "keycloak-bootstrap — set realm frontendUrl so KC emits /auth-prefixed URLs"
+      ansible.builtin.shell: |
+        SCHEME="{{ 'https://' if (tls_enabled | default(true)) else 'http://' }}"
+        BASE="${SCHEME}{{ domain }}"
+        docker exec keycloak /opt/keycloak/bin/kcadm.sh update \
+          "realms/{{ state_tenant_id }}" \
+          -s "attributes.frontendUrl=${BASE}/auth"
+      when: enable_keycloak | default(false)
+      changed_when: true
+
     # Keycloak end-to-end validation. Runs AFTER the realm import so the
     # well-known endpoint actually resolves. Both checks require
     # nginx_features.keycloak: true (the host nginx exposes /auth/ and
