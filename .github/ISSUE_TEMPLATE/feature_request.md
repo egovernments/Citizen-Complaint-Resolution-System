@@ -1,20 +1,107 @@
 ---
-name: Feature request
-about: Suggest an idea for this project
-title: ''
-labels: enhancement
-assignees: ''
+name: Feature
+about: Track a roadmap feature and its associated work
+title: "[Feature] "
+labels: ["feature"]
+assignees: []
+---
+
+# Summary
+
+Brief description of the feature.
 
 ---
 
-**Is your feature request related to a problem? Please describe.**
-A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
+# Problem Statement
 
-**Describe the solution you'd like**
-A clear and concise description of what you want to happen.
+What problem are we solving?
 
-**Describe alternatives you've considered**
-A clear and concise description of any alternative solutions or features you've considered.
+---
 
-**Additional context**
-Add any other context or screenshots about the feature request here.
+# Desired Outcome
+
+What business, user, or operational outcome are we trying to achieve?
+
+Examples:
+
+- Reduce pilot setup time
+- Improve complaint filing experience
+- Improve international readiness
+- Enable SaaS deployments
+
+---
+
+# Roadmap Alignment
+
+## Release
+
+- [ ] 2.12 - Nosy Build
+- [ ] 2.20 - SaaSSy Phase 1
+- [ ] 2.30 - SaaSSy Phase 2
+- [ ] Backlog
+
+## Goals Supported
+
+- [ ]
+- [ ]
+- [ ]
+
+---
+
+# Scope
+
+## In Scope
+
+- [ ]
+- [ ]
+- [ ]
+
+## Out of Scope
+
+- [ ]
+- [ ]
+- [ ]
+
+---
+
+# Capabilities
+
+- [ ]
+- [ ]
+- [ ]
+
+---
+
+# Success Criteria
+
+- [ ]
+- [ ]
+- [ ]
+
+---
+
+# Dependencies
+
+- [ ]
+- [ ]
+
+---
+
+# Risks / Open Questions
+
+- [ ]
+- [ ]
+
+---
+
+# Child Issues
+
+- [ ]
+- [ ]
+- [ ]
+
+---
+
+# Documentation & References
+
+- 
