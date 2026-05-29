@@ -1157,7 +1157,7 @@ services:
     ports:
       - "18888:8888"
     volumes:
-      - ./jupyter/dataloader:/home/jovyan/work
+      - ./jupyter:/home/jovyan/work
     deploy:
       resources:
         limits:

@@ -210,18 +210,38 @@ class CRSLoader:
                 print(f"❌ Failed to bootstrap root '{root_tenant}'")
                 return False
 
-        # Create tenant record under its own root
+        # Create tenant record under its own root.
+        # Shape mirrors production tenant.tenants so the UI's city dropdown,
+        # branding header, and "office info" screens render. Missing fields
+        # (logoId, OfficeTimings, type) cause the UI to silently drop the
+        # tenant from menus or render blank panels post-login.
         create_url = f"{self.base_url}/mdms-v2/v2/_create/tenant.tenants"
+        city_code = tenant_code.upper().replace(".", "_")
+        district_code = tenant_code.split(".")[-1].upper()
         tenant_data = {
             "code": tenant_code,
             "name": display_name,
             "tenantId": tenant_code,
             "type": "CITY",
+            "logoId": "https://s3.ap-south-1.amazonaws.com/pg-egov-assets/pg.citya/logo.png",
+            "address": f"{display_name} Municipal Corporation",
+            "emailId": f"{tenant_code.split('.')[-1]}@example.org",
+            "domainUrl": "https://www.egovernments.org",
+            "pincode": [],
+            "contactNumber": "0000-0000000",
+            "helpLineNumber": "0000-0000000",
+            "OfficeTimings": {"Mon - Fri": "9.00 AM - 6.00 PM"},
             "city": {
-                "code": tenant_code.upper().replace(".", "_"),
+                "code": city_code,
                 "name": display_name,
-                "districtName": display_name
-            }
+                "ddrName": display_name,
+                "latitude": 0.0,
+                "longitude": 0.0,
+                "ulbGrade": "Municipal Corporation",
+                "districtCode": district_code,
+                "districtName": display_name,
+                "districtTenantCode": tenant_code,
+            },
         }
 
         create_payload = {
@@ -247,6 +267,11 @@ class CRSLoader:
             if not self._ensure_stateinfo_for_tenant(tenant_code, display_name):
                 print(f"❌ Failed to ensure StateInfo for '{tenant_code}'")
                 return False
+
+            # Boundary-management BFF queries MDMS-v2 with the city tenant and
+            # has no state-level fallback. Without this row, Phase 2a template
+            # generation fails with FETCHING_COLUMN_ERROR.
+            self._ensure_boundary_admin_schema_for_tenant(tenant_code)
 
             # Enable modules for the tenant
             for module in enable_modules:
@@ -356,16 +381,32 @@ class CRSLoader:
         import time as _time
         _time.sleep(5)
 
-        # Step 2: Create root self-record (required by idgen for city code resolution)
+        # Step 2: Create root self-record (required by idgen for city code resolution).
+        # type=State is required; UI city-dropdown components filter tenants by type
+        # and silently drop entries without it.
         root_data = {
             "code": target_root,
             "name": target_root.title(),
+            "type": "State",
             "description": f"State tenant root: {target_root}",
+            "logoId": "https://s3.ap-south-1.amazonaws.com/pg-egov-assets/pg.citya/logo.png",
+            "address": f"{target_root.title()} State Office",
+            "emailId": f"{target_root}@example.org",
+            "domainUrl": "https://www.egovernments.org",
+            "pincode": [],
+            "contactNumber": "0000-0000000",
+            "helpLineNumber": "0000-0000000",
+            "OfficeTimings": {"Mon - Fri": "9.00 AM - 6.00 PM"},
             "city": {
                 "code": target_root.upper(),
                 "name": target_root.title(),
+                "ddrName": target_root.title(),
+                "latitude": 0.0,
+                "longitude": 0.0,
+                "ulbGrade": "Municipal Corporation",
                 "districtCode": target_root.upper(),
-                "districtName": target_root.title()
+                "districtName": target_root.title(),
+                "districtTenantCode": target_root,
             }
         }
         result = self.uploader.create_mdms_data(
@@ -393,6 +434,8 @@ class CRSLoader:
             'egov-hrms.EmployeeType',
             'egov-hrms.DeactivationReason',
             'ACCESSCONTROL-ROLES.roles',
+            'ACCESSCONTROL-ACTIONS-TEST.actions-test',
+            'ACCESSCONTROL-ROLEACTIONS.roleactions',
             'RAINMAKER-PGR.ServiceDefs',
             'Workflow.BusinessService',
             'INBOX.InboxQueryConfiguration',
@@ -586,52 +629,165 @@ class CRSLoader:
         print(f"   ❌ Failed to create StateInfo for '{tenant_code}'")
         return False
 
-    def _enable_module_for_tenant(self, tenant_code: str, module_code: str):
-        """Add tenant to citymodule for a specific module (internal)
+    def _ensure_boundary_admin_schema_for_tenant(self, tenant_code: str) -> bool:
+        """Ensure CRS-ADMIN-CONSOLE.adminSchema/CRS_BOUNDARY_DATA exists for the city tenant.
 
-        Note: MDMS v2 API doesn't support updating unique fields or deleting records easily.
-        This function updates the database directly via SQL if the API approach fails.
+        The boundary-management BFF queries MDMS-v2 with the exact city tenant id
+        (no state-level fallback). The row defines the column headers used to
+        generate the boundary template Excel — without it, Phase 2a fails with
+        FETCHING_COLUMN_ERROR.
+
+        Copies both the schema definition and the data row from the first
+        available source tenant (statea / pg / login root).
         """
-        # Search for existing citymodule config
-        search_url = f"{self.base_url}/mdms-v2/v1/_search"
-        search_payload = {
-            "MdmsCriteria": {
-                "tenantId": "pg",
-                "moduleDetails": [{"moduleName": "tenant", "masterDetails": [{"name": "citymodule"}]}]
-            },
-            "RequestInfo": {"apiId": "Rainmaker"}
-        }
+        schema_code = "CRS-ADMIN-CONSOLE.adminSchema"
+        target_uid = "CRS_BOUNDARY_DATA"
 
-        resp = requests.post(search_url, json=search_payload, headers={"Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
-        if not resp.ok:
-            print(f"   ⚠️  Could not fetch citymodule config for {module_code}")
-            return
+        # Already present?
+        existing = self.uploader.search_mdms_data(
+            schema_code=schema_code, tenant=tenant_code, limit=50
+        )
+        if any((r.get("uniqueIdentifier") or r.get("id")) == target_uid for r in existing):
+            print(f"   ✅ Boundary admin schema already present for '{tenant_code}'")
+            return True
 
-        citymodules = resp.json().get("MdmsRes", {}).get("tenant", {}).get("citymodule", [])
+        # Find a source that has it
+        candidate_sources = []
+        for c in (self.tenant_id, "statea", "pg"):
+            if c and c not in candidate_sources:
+                candidate_sources.append(c)
 
-        # Find the module config
-        module_config = None
-        for cm in citymodules:
-            if cm.get("code") == module_code:
-                module_config = cm
+        source_record = None
+        source_tenant = None
+        for src in candidate_sources:
+            try:
+                records = self.uploader.search_mdms_data(
+                    schema_code=schema_code, tenant=src, limit=50
+                )
+            except Exception:
+                continue
+            for r in records:
+                if (r.get("uniqueIdentifier") or r.get("id")) == target_uid:
+                    source_record = r
+                    source_tenant = src
+                    break
+            if source_record:
                 break
 
-        if not module_config:
-            print(f"   ⚠️  Module '{module_code}' not found in citymodule")
-            return
+        if not source_record:
+            print(f"   ⚠️  Boundary admin schema template not found in any of {candidate_sources}; skipping")
+            return False
 
-        # Check if tenant already in module
-        existing_tenants = [t.get("code", "").lower() for t in module_config.get("tenants", [])]
-        if tenant_code.lower() in existing_tenants:
-            print(f"   ✅ {module_code} already enabled")
-            return
-
-        # Try database update via persister (if available)
-        # This uses the internal MDMS database update
+        # Copy schema definition to the city tenant (idempotent — server treats
+        # duplicates as "already exists")
+        schema_search_url = f"{self.base_url}/mdms-v2/schema/v1/_search"
+        schema_create_url = f"{self.base_url}/mdms-v2/schema/v1/_create"
         try:
-            self._update_citymodule_db(module_code, tenant_code, module_config)
+            sresp = requests.post(
+                schema_search_url,
+                json={
+                    "RequestInfo": {"apiId": "Rainmaker", "authToken": self.auth_token, "userInfo": self.user_info},
+                    "SchemaDefCriteria": {"tenantId": source_tenant, "codes": [schema_code], "limit": 5, "offset": 0},
+                },
+                headers={"Content-Type": "application/json"},
+                timeout=REQUEST_TIMEOUT,
+            )
+            if sresp.ok:
+                for schema_def in sresp.json().get("SchemaDefinitions", []):
+                    requests.post(
+                        schema_create_url,
+                        json={
+                            "RequestInfo": {"apiId": "Rainmaker", "authToken": self.auth_token, "userInfo": self.user_info},
+                            "SchemaDefinition": {
+                                "tenantId": tenant_code,
+                                "code": schema_def.get("code", schema_code),
+                                "description": schema_def.get("description", schema_code),
+                                "definition": schema_def.get("definition", {}),
+                            },
+                        },
+                        headers={"Content-Type": "application/json"},
+                        timeout=REQUEST_TIMEOUT,
+                    )
         except Exception as e:
-            print(f"   ⚠️  {module_code}: Add tenant manually to citymodule (MDMS v2 API limitation)")
+            print(f"   ⚠️  Schema-definition copy failed (continuing): {str(e)[:120]}")
+
+        # Wait briefly for Kafka-based schema persistence before creating data
+        time.sleep(3)
+
+        # Copy the data row
+        clean_record = {k: v for k, v in source_record.items() if not k.startswith("_")}
+        result = self.uploader.create_mdms_data(
+            schema_code=schema_code, data_list=[clean_record], tenant=tenant_code
+        )
+        if result.get("created", 0) > 0 or result.get("exists", 0) > 0:
+            print(f"   ✅ Boundary admin schema seeded for '{tenant_code}' from '{source_tenant}'")
+            return True
+
+        print(f"   ⚠️  Could not seed boundary admin schema for '{tenant_code}'")
+        return False
+
+    def _enable_module_for_tenant(self, tenant_code: str, module_code: str):
+        """Enable a module for a tenant by creating/updating tenant.citymodule.
+
+        Strategy: instead of mutating citymodule rows that live under the source
+        tenant (`pg`), create a citymodule row at the **target tenant's root**
+        (e.g. kl) with `tenants: [<root>, <city>]`. This is how production
+        deployments (statea, etpmo) are shaped — each state owns its own
+        citymodule rows. The UI's `_search?tenantId=<state>` query then returns
+        them, so menu items render after login.
+
+        Without this, MDMS returns no citymodule entries for the new tenant and
+        the UI shows zero menu options post-login.
+        """
+        root_tenant = tenant_code.split(".")[0] if "." in tenant_code else tenant_code
+
+        # Is there already a citymodule row for this module at the root?
+        try:
+            existing = self.uploader.search_mdms_data(
+                schema_code='tenant.citymodule', tenant=root_tenant, limit=50
+            )
+        except Exception:
+            existing = []
+
+        for row in existing:
+            if row.get("code") == module_code:
+                tenants = [t.get("code", "").lower() for t in (row.get("tenants") or [])]
+                if tenant_code.lower() in tenants:
+                    print(f"   ✅ {module_code} already enabled for {tenant_code}")
+                else:
+                    # MDMS-v2 has no clean partial-update; existing row exists but
+                    # doesn't include this city. Document the manual step.
+                    print(f"   ⚠️  {module_code} row exists at root '{root_tenant}' but doesn't include '{tenant_code}'.")
+                    print(f"      Add via DB: UPDATE eg_mdms_data SET data=jsonb_set(data,'{{tenants,-1}}','{{\"code\":\"{tenant_code}\"}}'::jsonb,true) WHERE tenantid='{root_tenant}' AND schemacode='tenant.citymodule' AND data->>'code'='{module_code}';")
+                return
+
+        # No existing row — create one at the root, including both root + city.
+        # Order numbers mirror what production sets so the UI's menu sort matches.
+        order_map = {"HRMS": 3, "PGR": 2, "Workbench": 1}
+        tenants_list = [{"code": tenant_code}]
+        if tenant_code != root_tenant:
+            tenants_list.insert(0, {"code": root_tenant})
+
+        new_row = {
+            "code": module_code,
+            "order": order_map.get(module_code, 99),
+            "active": True,
+            "module": module_code,
+            "tenants": tenants_list,
+        }
+
+        try:
+            result = self.uploader.create_mdms_data(
+                schema_code='tenant.citymodule', data_list=[new_row], tenant=root_tenant
+            )
+            if result.get('created', 0) > 0:
+                print(f"   ✅ {module_code} enabled for {tenant_code} (citymodule at root '{root_tenant}')")
+            elif result.get('exists', 0) > 0:
+                print(f"   ✅ {module_code} already enabled")
+            else:
+                print(f"   ⚠️  Could not enable {module_code}: {result}")
+        except Exception as e:
+            print(f"   ⚠️  {module_code}: failed to create citymodule entry: {str(e)[:120]}")
 
     def _update_citymodule_db(self, module_code: str, tenant_code: str, current_config: dict):
         """Update citymodule via database query through boundary-service workaround"""
@@ -1469,7 +1625,16 @@ class CRSLoader:
         print(f"{'='*60}")
         print(f"File: {os.path.basename(excel_path)}")
 
-        tenant = target_tenant or self.tenant_id
+        # Localizations live at the STATE-level tenant in DIGIT — the UI
+        # always queries `tenantId=<state>` for translations (they're shared
+        # across all cities of a state). If the caller passed a city tenant
+        # like "kl.citya", auto-promote to the parent "kl" so the upload
+        # lands where the UI will actually look for it.
+        raw_tenant = target_tenant or self.tenant_id
+        tenant = raw_tenant.split(".")[0] if "." in raw_tenant else raw_tenant
+        if tenant != raw_tenant:
+            print(f"   ℹ️  Uploading to STATE tenant '{tenant}' (not '{raw_tenant}') — the UI queries localizations at the state level.")
+
         reader = UnifiedExcelReader(excel_path)
         results = {'messages': None, 'stateinfo': None}
 
@@ -1499,6 +1664,26 @@ class CRSLoader:
             tenant=tenant,
             sheet_name='Localization'
         )
+
+        # Bust the localization service's Redis cache. The service caches
+        # _search responses under the `messages` / `computedMessages` keys
+        # with an unbounded TTL; without flushing, any client that hit the
+        # API before this upload (UI on boot, prior curl) will keep seeing
+        # the cached empty array until Redis evicts or restarts.
+        # Uses raw RESP over TCP so we don't depend on redis-cli being
+        # installed in the jupyter image.
+        try:
+            import socket
+            with socket.create_connection(("redis", 6379), timeout=3) as sock:
+                sock.sendall(b"*3\r\n$3\r\nDEL\r\n$8\r\nmessages\r\n$16\r\ncomputedMessages\r\n")
+                resp = sock.recv(64)
+            if resp.startswith(b":"):
+                print(f"   🔄 Localization cache flushed ({resp[1:].strip().decode()} keys removed)")
+        except Exception as e:
+            # Redis not reachable from this network — silently skip; user can
+            # bust manually: docker exec digit-redis redis-cli DEL messages computedMessages
+            print(f"   ⚠️  Could not auto-flush localization cache ({str(e)[:60]}). "
+                  f"Run: docker exec digit-redis redis-cli DEL messages computedMessages")
 
         # 3. Optionally update StateInfo with new language
         if language_label and locale_code:

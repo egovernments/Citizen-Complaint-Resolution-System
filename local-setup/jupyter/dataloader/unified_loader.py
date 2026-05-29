@@ -626,53 +626,67 @@ class UnifiedExcelReader:
         return employees
 
     def read_localization(self):
-        """Read localization with auto-determination of module and locale based on code pattern"""
+        """Read localization messages from the workbook.
+
+        Prefers the explicit Module/Locale columns in the sheet (case-insensitive).
+        Falls back to deriving from the code prefix only if those columns are missing
+        or empty for a row. Deduplicates by (code, locale, module) — the same
+        composite key the localization service enforces with unique_message_entry —
+        because batches containing duplicate triples cause Hibernate to roll back
+        the entire transaction, which the upstream loader then misreports as
+        "already exists".
+        """
         try:
             df = pd.read_excel(self.excel_file, sheet_name='Localization')
-        except:
-            # Try lowercase sheet name
+        except Exception:
             try:
                 df = pd.read_excel(self.excel_file, sheet_name='localization')
-            except:
+            except Exception:
                 return []
 
         if len(df) == 0:
             return []
 
-        localizations = []
+        # Build a case-insensitive header map so we accept "Code"/"code", "Module"/"module", etc.
+        col_lookup = {str(c).strip().lower(): c for c in df.columns}
+        code_col = col_lookup.get('code')
+        message_col = col_lookup.get('message')
+        module_col = col_lookup.get('module')
+        locale_col = col_lookup.get('locale')
 
+        def derive_module(code: str) -> str:
+            if code.startswith('SERVICEDFS.'):
+                return 'rainmaker-pgr'
+            return 'rainmaker-common'
+
+        seen = {}
         for _, row in df.iterrows():
-            # Skip rows with missing required fields
-            if pd.notna(row.get('Code')) and pd.notna(row.get('Message')):
-                code = str(row['Code']).strip()
-                message = str(row['Message']).strip()
+            code_val = row.get(code_col) if code_col else None
+            message_val = row.get(message_col) if message_col else None
+            if not (pd.notna(code_val) and pd.notna(message_val)):
+                continue
 
-                # Skip if code or message is empty after stripping
-                if not code or not message:
-                    continue
+            code = str(code_val).strip()
+            message = str(message_val).strip()
+            if not code or not message:
+                continue
 
-                # Determine module and locale based on code pattern
-                if code.startswith('SERVICEDFS.'):
-                    # Service definitions → rainmaker-pgr
-                    module = 'rainmaker-pgr'
-                    locale = 'en_IN'
-                elif code.startswith('COMMON_MASTERS_') or code.startswith('TENANT_TENANTS_'):
-                    # Common masters (departments, designations, tenants) → rainmaker-common
-                    module = 'rainmaker-common'
-                    locale = 'en_IN'
-                else:
-                    # Default fallback
-                    module = 'rainmaker-common'
-                    locale = 'en_IN'
+            module_val = row.get(module_col) if module_col else None
+            module = str(module_val).strip() if pd.notna(module_val) and str(module_val).strip() else derive_module(code)
 
-                localizations.append({
-                    'code': code,
-                    'message': message,
-                    'module': module,
-                    'locale': locale
-                })
+            locale_val = row.get(locale_col) if locale_col else None
+            locale = str(locale_val).strip() if pd.notna(locale_val) and str(locale_val).strip() else 'en_IN'
 
-        return localizations
+            key = (code, locale, module)
+            # last-write-wins on dedup — preserves the most recent translation for the triple
+            seen[key] = {
+                'code': code,
+                'message': message,
+                'module': module,
+                'locale': locale,
+            }
+
+        return list(seen.values())
 
 
 # ============================================================================
@@ -2632,36 +2646,122 @@ class APIUploader:
                     if rel_success:
                         results['relationships_created'] += 1
             else:
-                # Handle column-per-level format
-                print("   Using column-per-level format")
-                for boundary_type in boundary_types:
-                    if boundary_type not in df.columns:
-                        continue
+                # Locate columns. Phase 2a's generated template uses
+                # "<HIERARCHY>_<TYPE>" (e.g. ADMIN_STATE) for the level
+                # columns and a separate CRS_BOUNDARY_CODE column for the
+                # unique code. Older templates use bare "<Type>" columns
+                # that contain the code directly. Match either shape.
+                def _find_col(boundary_type: str) -> str:
+                    candidates = [
+                        boundary_type,
+                        boundary_type.upper(),
+                        boundary_type.lower(),
+                        f"{hierarchy_type}_{boundary_type}",
+                        f"{hierarchy_type}_{boundary_type.upper()}",
+                        f"{hierarchy_type.upper()}_{boundary_type.upper()}",
+                        f"{hierarchy_type.lower()}_{boundary_type.lower()}",
+                    ]
+                    for cand in candidates:
+                        if cand in df.columns:
+                            return cand
+                    return None
 
-                    boundaries_at_level = df[boundary_type].dropna().unique()
+                type_to_col = {bt: _find_col(bt) for bt in boundary_types}
+                code_col = next((c for c in df.columns if c.upper() == 'CRS_BOUNDARY_CODE'), None)
 
-                    for boundary_code in boundaries_at_level:
-                        if pd.isna(boundary_code) or str(boundary_code).strip() == '':
+                if code_col:
+                    # NEW Phase-2a template: row-per-boundary. Each row has the
+                    # parent-path filled across the level columns and the row's
+                    # own code in CRS_BOUNDARY_CODE. The boundary's level is
+                    # the *deepest non-empty* level column.
+                    print(f"   Using row-per-boundary template (code column: {code_col})")
+
+                    # Build a lookup: (level_idx, tuple_of_path_names) -> CRS code,
+                    # for resolving parent codes by path.
+                    path_to_code = {}
+                    parsed = []  # list of (boundary_type, code, parent_path_tuple, row_idx)
+                    for idx, row in df.iterrows():
+                        code = str(row.get(code_col, '')).strip() if pd.notna(row.get(code_col)) else ''
+                        if not code:
                             continue
 
-                        boundary_code = str(boundary_code).strip()
-                        success = self._create_boundary_entity(tenant_id, boundary_code)
+                        # Determine this row's level: deepest non-empty level column
+                        deepest_idx = -1
+                        path_vals = []
+                        for i, bt in enumerate(boundary_types):
+                            col = type_to_col.get(bt)
+                            val = row.get(col) if col else None
+                            if pd.notna(val) and str(val).strip():
+                                deepest_idx = i
+                                path_vals.append(str(val).strip())
+                            else:
+                                path_vals.append(None)
+                        if deepest_idx < 0:
+                            continue
+
+                        boundary_type = boundary_types[deepest_idx]
+                        parent_path = tuple(path_vals[:deepest_idx])  # names of ancestors
+                        own_path = tuple(path_vals[:deepest_idx + 1])
+                        path_to_code[(deepest_idx, own_path)] = code
+                        parsed.append((boundary_type, code, parent_path, deepest_idx))
+
+                    for boundary_type, code, parent_path, level_idx in parsed:
+                        # Create the boundary entity
+                        success = self._create_boundary_entity(tenant_id, code)
                         if success:
                             results['boundaries_created'] += 1
 
-                        parent_type_idx = boundary_types.index(boundary_type) - 1
+                        # Resolve parent code via path lookup
                         parent_code = None
-                        if parent_type_idx >= 0:
-                            parent_type = boundary_types[parent_type_idx]
-                            row = df[df[boundary_type] == boundary_code].iloc[0] if len(df[df[boundary_type] == boundary_code]) > 0 else None
-                            if row is not None and parent_type in df.columns:
-                                parent_code = str(row[parent_type]).strip() if pd.notna(row[parent_type]) else None
+                        if level_idx > 0:
+                            parent_code = path_to_code.get((level_idx - 1, parent_path))
+                            if not parent_code:
+                                print(f"   ⚠️ Parent for '{code}' (path={parent_path}) not found — relationship will have no parent")
 
                         rel_success = self._create_boundary_relationship(
-                            tenant_id, hierarchy_type, boundary_code, boundary_type, parent_code
+                            tenant_id, hierarchy_type, code, boundary_type, parent_code
                         )
                         if rel_success:
                             results['relationships_created'] += 1
+                else:
+                    # OLD column-per-level template: each level column directly
+                    # contains the code for that level's boundaries.
+                    print("   Using column-per-level format (legacy)")
+                    missing = [bt for bt, col in type_to_col.items() if col is None]
+                    if missing:
+                        print(f"   ⚠️ Could not find columns for boundary types: {missing}. Available columns: {list(df.columns)}")
+
+                    for boundary_type in boundary_types:
+                        col = type_to_col.get(boundary_type)
+                        if not col:
+                            continue
+
+                        boundaries_at_level = df[col].dropna().unique()
+
+                        for boundary_code in boundaries_at_level:
+                            if pd.isna(boundary_code) or str(boundary_code).strip() == '':
+                                continue
+
+                            boundary_code = str(boundary_code).strip()
+                            success = self._create_boundary_entity(tenant_id, boundary_code)
+                            if success:
+                                results['boundaries_created'] += 1
+
+                            parent_type_idx = boundary_types.index(boundary_type) - 1
+                            parent_code = None
+                            if parent_type_idx >= 0:
+                                parent_type = boundary_types[parent_type_idx]
+                                parent_col = type_to_col.get(parent_type)
+                                matched = df[df[col] == boundary_code]
+                                if len(matched) > 0 and parent_col is not None:
+                                    row = matched.iloc[0]
+                                    parent_code = str(row[parent_col]).strip() if pd.notna(row[parent_col]) else None
+
+                            rel_success = self._create_boundary_relationship(
+                                tenant_id, hierarchy_type, boundary_code, boundary_type, parent_code
+                            )
+                            if rel_success:
+                                results['relationships_created'] += 1
 
             results['status'] = 'completed'
             print(f"\n✅ Boundary processing completed!")
