@@ -465,7 +465,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
     // hid it because it wasn't bound to state. Mirror the sibling
     // handlers (`setUserNewPassword`, `setUserConfirmPassword`).
     setCurrentPassword(value);
-    if (!validationConfig?.password.test(value)) {
+    if (!validationConfig?.password?.test(value)) {
       setErrors({
         ...errors,
         currentPassword: {
@@ -480,7 +480,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
 
   const setUserNewPassword = (value) => {
     setNewPassword(value);
-    if (!validationConfig?.password.test(value)) {
+    if (!validationConfig?.password?.test(value)) {
       setErrors({
         ...errors,
         newPassword: {
@@ -496,7 +496,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
   const setUserConfirmPassword = (value) => {
     setConfirmPassword(value);
 
-    if (!validationConfig?.password.test(value)) {
+    if (!validationConfig?.password?.test(value)) {
       setErrors({
         ...errors,
         confirmPassword: {
@@ -528,14 +528,14 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
         setName((prev) => prev.trim());
       }
 
-      if (!validationConfig?.name.test(name) || name === "" || name.length > 50 || name.length < 1) {
+      if (!validationConfig?.name?.test(name) || name === "" || name.length > 50 || name.length < 1) {
         throw JSON.stringify({
           type: "error",
           message: t("CORE_COMMON_PROFILE_NAME_INVALID"),
         });
       }
 
-      if (userType === "employee" && !validationConfig?.mobileNumber.test(mobileNumber)) {
+      if (userType === "employee" && !validationConfig?.mobileNumber?.test(mobileNumber)) {
         throw JSON.stringify({
           type: "error",
           message: t("CORE_COMMON_PROFILE_MOBILE_NUMBER_INVALID"),
@@ -572,7 +572,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
           });
         }
 
-        if (!validationConfig?.password.test(trimmedNewPassword) && !validationConfig?.password.test(trimmedConfirmPassword)) {
+        if (!validationConfig?.password?.test(trimmedNewPassword) && !validationConfig?.password?.test(trimmedConfirmPassword)) {
           throw JSON.stringify({
             type: "error",
             message: t("CORE_COMMON_PROFILE_PASSWORD_INVALID"),
