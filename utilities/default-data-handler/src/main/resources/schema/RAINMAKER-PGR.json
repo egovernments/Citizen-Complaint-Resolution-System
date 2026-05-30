@@ -75,5 +75,46 @@
       "x-ref-schema": [],
       "additionalProperties": false
     }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "RAINMAKER-PGR.EscalationConfig",
+    "description": "Per-tenant auto-escalation config consumed by pgr-services EscalationScheduler. `defaultSlaByLevel` is an array of SLA windows in MILLISECONDS, one per escalation depth (level 0 = first scan); `overrides` keys by serviceCode for per-complaint-type SLA arrays; `maxDepth` caps how many times a single complaint can be auto-escalated before stopping. Without this record pgr-services falls back to its 5-day default SLA — see https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/585.",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Generated schema for Root",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "maxDepth",
+        "defaultSlaByLevel"
+      ],
+      "x-unique": [
+        "maxDepth"
+      ],
+      "properties": {
+        "maxDepth": {
+          "type": "number"
+        },
+        "defaultSlaByLevel": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1
+        },
+        "overrides": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
   }
 ]
