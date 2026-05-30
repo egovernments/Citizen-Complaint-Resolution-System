@@ -10,15 +10,19 @@ export interface MobileRules {
 }
 
 // Kenya default — used when MDMS `ValidationConfigs.mobileNumberValidation`
-// is missing or unreadable. The canonical naipepea seed is `^[17][0-9]{8}$`
-// with min=max=9, matching the local subscriber number convention.
+// is missing or unreadable. Accept both the bare 9-digit subscriber number
+// (`712345678`) AND the everyday form prefixed with a trunk `0`
+// (`0712345678`) — Gurjeet's regression on #459/#471/#476 was hitting the
+// strict 9-digit fallback after typing the latter (correct local format).
+// Matches `phoneKE` in `src/admin/validation.ts` so all employee forms
+// share one accept-set.
 const FALLBACK: MobileRules = {
-  pattern: '^[17][0-9]{8}$',
+  pattern: '^0?[17][0-9]{8}$',
   minLength: 9,
-  maxLength: 9,
+  maxLength: 10,
   prefix: '+254',
   errorMessage:
-    'Please enter a valid Kenyan mobile number (9 digits starting with 1 or 7)',
+    'Please enter a valid Kenyan mobile number (9 digits starting with 1 or 7, optional leading 0)',
 };
 
 function parseRules(record: Record<string, unknown> | undefined): MobileRules {
