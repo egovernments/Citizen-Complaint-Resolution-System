@@ -55,7 +55,13 @@ for sp in packages/*/; do
 done
 
 echo "configurator-build: vite build --base=/configurator/" >&2
-npx vite build --base=/configurator/ >&2
+# Cap Node heap explicitly. On low-RAM repro envs (11GB ovh-cloud-dev) the
+# default V8 heap budget plus the running docker stack ran the box out of
+# memory mid-build, leaving the dist half-written and the host_vars
+# `build_configurator: false` workaround in place (PR #644 cycle 4). 8192 MB
+# is well under what a real production node can spare and is plenty for the
+# current configurator bundle (~2.3 MB minified).
+NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=8192}" npx vite build --base=/configurator/ >&2
 
 [ -f dist/index.html ] || { echo "ERROR: dist/index.html missing after build" >&2; exit 3; }
 # Last line = the dist path (captured by the playbook).
