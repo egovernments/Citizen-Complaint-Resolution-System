@@ -647,6 +647,14 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
         const user = Digit.UserService.getUser();
 
         if (user) {
+          // CCRS#556 sub-bug: the photo was previously omitted from
+          // the session-info patch. The backend got the new pic via
+          // the update payload above, but the session-cached user
+          // object stayed stale — which meant the left-menu avatar
+          // (CitizenSideBar's Profile component reads from
+          // Digit.UserService.getUser()) kept showing the old image
+          // until the next full login. Include `photo` here so the
+          // session reflects what the server just persisted.
           Digit.UserService.setUser({
             ...user,
             info: {
@@ -655,6 +663,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
               mobileNumber,
               emailId: email,
               permanentCity: city,
+              ...(profilePic ? { photo: profilePic } : {}),
             },
           });
         }
