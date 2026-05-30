@@ -1,0 +1,57 @@
+[
+  {
+    "tenantId": "{tenantid}",
+    "code": "ValidationConfigs.mobileNumberValidation",
+    "description": "Per-tenant mobile number validation rule consumed by both the citizen UI's useMobileValidation hook (priority 2 above globalConfigs / below the hardcoded India default) and the configurator's useMobileValidator (priority 1 above its in-code FALLBACK). `validationName: defaultMobileValidation` is the lookup key both consumers use. Seeding this avoids leaning on tenant-specific hardcoded fallbacks in code — see feedback_holistic_fixes_no_deployment_specificity.",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Generated schema for Root",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "validationName",
+        "rules"
+      ],
+      "x-unique": [
+        "validationName"
+      ],
+      "properties": {
+        "validationName": {
+          "type": "string"
+        },
+        "rules": {
+          "type": "object",
+          "required": [
+            "pattern"
+          ],
+          "properties": {
+            "pattern": {
+              "type": "string"
+            },
+            "minLength": {
+              "type": "number"
+            },
+            "maxLength": {
+              "type": "number"
+            },
+            "prefix": {
+              "type": "string"
+            },
+            "allowedStartingDigits": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "errorMessage": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  }
+]
