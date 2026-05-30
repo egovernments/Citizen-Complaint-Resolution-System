@@ -16,15 +16,36 @@ export const CreateComplaintConfig = {
               populators: {
                 name: "ComplainantContactNumber",
                 error: "CORE_COMMON_MOBILE_ERROR",
-                // componentInFront: "+91",
-                // prefix:"+91",
+                // Length is tenant-specific (Kenya = 9, India = 10, …).
+                // Source from globalConfigs `CORE_MOBILE_CONFIGS`, same
+                // key the central `useMobileValidation` hook reads
+                // (`mobileNumberLength`), so the field, the form's
+                // submit-time check, and the citizen UI all agree on
+                // one number per deployment. Falls back to the legacy
+                // hardcoded India value when the host hasn't set one.
+                // Getters re-evaluate on every read so a tenant switch
+                // mid-session picks up the new globalConfigs value.
+                get maxLength() {
+                  return (
+                    window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")
+                      ?.mobileNumberLength || 10
+                  );
+                },
                 validation: {
                   required: true,
-                  // minLength: 10,
-                  // maxLength: 10,
-                  // min: 6000000000,
-                  // max: 9999999999
-                }, // 10-digit phone number validation
+                  get minLength() {
+                    return (
+                      window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")
+                        ?.mobileNumberLength || 10
+                    );
+                  },
+                  get maxLength() {
+                    return (
+                      window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")
+                        ?.mobileNumberLength || 10
+                    );
+                  },
+                },
               },
             },
             {
