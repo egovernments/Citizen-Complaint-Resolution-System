@@ -102,7 +102,7 @@ export const localizationService = {
       {
         code: `COMMON_MASTERS_DEPARTMENT_${code}`,
         message: name,
-        module: 'rainmaker-common-masters',
+        module: 'rainmaker-common',
         locale,
       },
     ];
@@ -119,7 +119,7 @@ export const localizationService = {
       {
         code: `COMMON_MASTERS_DESIGNATION_${code}`,
         message: name,
-        module: 'rainmaker-common-masters',
+        module: 'rainmaker-common',
         locale,
       },
     ];
