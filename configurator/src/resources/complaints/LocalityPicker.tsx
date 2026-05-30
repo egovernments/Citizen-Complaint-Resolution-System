@@ -75,19 +75,36 @@ export function LocalityPicker({
     return hierarchies.map((h) => ({ value: h.hierarchyType, label: h.hierarchyType }));
   }, [hierarchies]);
 
+  // Only expose the LEAF boundary type(s) per hierarchy — types that
+  // aren't anyone's `parentBoundaryType` within the same hierarchy.
+  // Gurjeet's #478 retest showed operators filing complaints at
+  // "Nairobi City County" (root), which the PGR backend will route to
+  // no ward and the resolver UI then can't show a sane assignment
+  // surface. The original digit-ui side enforced this with
+  // `isBoundaryLeaf` at submit; mirror that constraint here at the
+  // picker so the operator is structurally prevented from choosing a
+  // non-leaf rather than seeing a late toast.
   const boundaryTypesByHierarchy = useMemo(() => {
     const map = new Map<string, string[]>();
     if (!hierarchies) return map;
     for (const h of hierarchies) {
-      const seen = new Set<string>();
-      const types: string[] = [];
-      for (const lvl of h.boundaryHierarchy ?? []) {
-        if (!lvl || lvl.active === false) continue;
-        if (!lvl.boundaryType || seen.has(lvl.boundaryType)) continue;
-        seen.add(lvl.boundaryType);
-        types.push(lvl.boundaryType);
+      const levels = (h.boundaryHierarchy ?? []).filter(
+        (lvl): lvl is HierarchyLevel => !!lvl && lvl.active !== false && !!lvl.boundaryType,
+      );
+      const parents = new Set<string>();
+      for (const lvl of levels) {
+        if (lvl.parentBoundaryType) parents.add(lvl.parentBoundaryType);
       }
-      map.set(h.hierarchyType, types);
+      const seen = new Set<string>();
+      const leafTypes: string[] = [];
+      for (const lvl of levels) {
+        // Leaf = not the parent of anything else in this hierarchy.
+        if (parents.has(lvl.boundaryType)) continue;
+        if (seen.has(lvl.boundaryType)) continue;
+        seen.add(lvl.boundaryType);
+        leafTypes.push(lvl.boundaryType);
+      }
+      map.set(h.hierarchyType, leafTypes);
     }
     return map;
   }, [hierarchies]);
