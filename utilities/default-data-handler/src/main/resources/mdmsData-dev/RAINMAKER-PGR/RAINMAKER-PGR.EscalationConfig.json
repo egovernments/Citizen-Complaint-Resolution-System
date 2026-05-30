@@ -1,0 +1,11 @@
+[
+  {
+    "maxDepth": 3,
+    "defaultSlaByLevel": [
+      3600000,
+      14400000,
+      86400000
+    ],
+    "overrides": {}
+  }
+]
