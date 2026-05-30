@@ -45,6 +45,17 @@ export const phoneKE = raRegex(
   'Enter a valid Kenyan mobile starting with 7 or 1 (e.g. 712345678)',
 );
 
+/**
+ * Kenya postal code: 5 digits (e.g. `00100` Nairobi GPO). The form is
+ * optional in the complaint create flow, but if the operator types
+ * anything it has to be the right shape — Gurjeet's #478 retest flagged
+ * "random pincode accepted" because there was no validator wired.
+ */
+export const postalCodeKE = raRegex(
+  /^[0-9]{5}$/,
+  'Enter a valid 5-digit postal code (e.g. 00100)',
+);
+
 export const code = raRegex(
   /^[A-Za-z0-9][A-Za-z0-9_.\-/]*$/,
   'Use letters, numbers, underscores, dots, hyphens, or slashes',
