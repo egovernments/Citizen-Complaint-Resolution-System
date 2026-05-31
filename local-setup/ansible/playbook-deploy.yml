@@ -50,6 +50,7 @@
 
     - name: "digit-ui mode=hmr — stop digit-ui container if running"
       ansible.builtin.shell: |
+        set -o pipefail
         if docker ps --filter name=^digit-ui$ --format '{% raw %}{{.Names}}{% endraw %}' | grep -q '^digit-ui$'; then
           docker stop digit-ui
           echo stopped
@@ -139,85 +140,85 @@
     - name: "Docker host install + config (Linux/Debian targets only)"
       when: ansible_system != "Darwin"
       block:
-      # ==================== Docker Installation ====================
-      - name: Install Docker prerequisites
-        apt:
-          name: [ca-certificates, curl, gnupg]
-          state: present
-          update_cache: yes
+        # ==================== Docker Installation ====================
+        - name: Install Docker prerequisites
+          apt:
+            name: [ca-certificates, curl, gnupg]
+            state: present
+            update_cache: yes
 
-      - name: Add Docker GPG key
-        shell: |
-          install -m 0755 -d /etc/apt/keyrings
-          curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-          chmod a+r /etc/apt/keyrings/docker.asc
-        args:
-          creates: /etc/apt/keyrings/docker.asc
+        - name: Add Docker GPG key
+          shell: |
+            install -m 0755 -d /etc/apt/keyrings
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+            chmod a+r /etc/apt/keyrings/docker.asc
+          args:
+            creates: /etc/apt/keyrings/docker.asc
 
-      - name: Add Docker repository
-        shell: |
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
-        args:
-          creates: /etc/apt/sources.list.d/docker.list
+        - name: Add Docker repository
+          shell: |
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
+          args:
+            creates: /etc/apt/sources.list.d/docker.list
 
-      # Ubuntu 24.04 ships `docker.io` + `docker-compose-v2` from the
-      # archive. Both conflict with Docker's upstream packages — they own
-      # the same `/usr/libexec/docker/cli-plugins/docker-compose` file —
-      # so dpkg refuses to install the upstream packages until the archive
-      # ones are removed. Idempotent: no-op if they're not installed.
-      - name: Remove conflicting Ubuntu-archive Docker packages
-        apt:
-          name:
-            - docker.io
-            - docker-doc
-            - docker-compose
-            - docker-compose-v2
-            - podman-docker
-            - containerd
-            - runc
-          state: absent
-          purge: yes
+        # Ubuntu 24.04 ships `docker.io` + `docker-compose-v2` from the
+        # archive. Both conflict with Docker's upstream packages — they own
+        # the same `/usr/libexec/docker/cli-plugins/docker-compose` file —
+        # so dpkg refuses to install the upstream packages until the archive
+        # ones are removed. Idempotent: no-op if they're not installed.
+        - name: Remove conflicting Ubuntu-archive Docker packages
+          apt:
+            name:
+              - docker.io
+              - docker-doc
+              - docker-compose
+              - docker-compose-v2
+              - podman-docker
+              - containerd
+              - runc
+            state: absent
+            purge: yes
 
-      - name: Install Docker Engine
-        apt:
-          name:
-            - docker-ce
-            - docker-ce-cli
-            - containerd.io
-            - docker-buildx-plugin
-            - docker-compose-plugin
-          state: present
-          update_cache: yes
+        - name: Install Docker Engine
+          apt:
+            name:
+              - docker-ce
+              - docker-ce-cli
+              - containerd.io
+              - docker-buildx-plugin
+              - docker-compose-plugin
+            state: present
+            update_cache: yes
 
-      # apt installs docker.service `disabled` on Ubuntu 24.04 — enable +
-      # start it explicitly so subsequent tasks can talk to the daemon.
-      - name: Ensure docker daemon is enabled + running
-        service:
-          name: docker
-          state: started
-          enabled: yes
+        # apt installs docker.service `disabled` on Ubuntu 24.04 — enable +
+        # start it explicitly so subsequent tasks can talk to the daemon.
+        - name: Ensure docker daemon is enabled + running
+          service:
+            name: docker
+            state: started
+            enabled: yes
 
-      # ==================== Docker Configuration ====================
-      # Insecure registries (plain HTTP + no TLS verification). Defaults in
-      # group_vars/digit.yml to [docker_registry] to preserve the historical
-      # Hetzner-VPC behaviour (10.0.0.4:5000 over plain HTTP). For public
-      # registries (ghcr.io, docker.io) override `insecure_registries: []` in
-      # host_vars — Docker REJECTS path-bearing or TLS hostnames here and
-      # refuses to start, which takes the whole stack down. Skipping the
-      # write entirely when the list is empty leaves daemon.json untouched.
-      - name: Configure Docker insecure-registries
-        copy:
-          dest: /etc/docker/daemon.json
-          content: "{{ {'insecure-registries': insecure_registries} | to_nice_json }}\n"
-          mode: '0644'
-        register: daemon_json
-        when: insecure_registries | default([]) | length > 0
+        # ==================== Docker Configuration ====================
+        # Insecure registries (plain HTTP + no TLS verification). Defaults in
+        # group_vars/digit.yml to [docker_registry] to preserve the historical
+        # Hetzner-VPC behaviour (10.0.0.4:5000 over plain HTTP). For public
+        # registries (ghcr.io, docker.io) override `insecure_registries: []` in
+        # host_vars — Docker REJECTS path-bearing or TLS hostnames here and
+        # refuses to start, which takes the whole stack down. Skipping the
+        # write entirely when the list is empty leaves daemon.json untouched.
+        - name: Configure Docker insecure-registries
+          copy:
+            dest: /etc/docker/daemon.json
+            content: "{{ {'insecure-registries': insecure_registries} | to_nice_json }}\n"
+            mode: '0644'
+          register: daemon_json
+          when: insecure_registries | default([]) | length > 0
 
-      - name: Restart docker if daemon.json changed
-        service:
-          name: docker
-          state: restarted
-        when: daemon_json is defined and daemon_json.changed | default(false)
+        - name: Restart docker if daemon.json changed
+          service:
+            name: docker
+            state: restarted
+          when: daemon_json is defined and daemon_json.changed | default(false)
 
     # check_mode: false forces this to run even under `--check`, so the
     # version-compare task below has a real value to test against.
@@ -497,6 +498,7 @@
         docker push 10.0.0.4:5000/digit-mcp:latest
       delegate_to: localhost
       become: false
+      changed_when: true
       tags: ['mcp-publish', 'never']  # opt-in only; not part of default deploy
 
     # ==================== Pull & Start ====================
@@ -653,11 +655,13 @@
       shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} pull --ignore-pull-failures
       args:
         chdir: "{{ digit_dir }}"
+      changed_when: false
 
     - name: Start DIGIT stack (Linux/Debian)
       shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d
       args:
         chdir: "{{ digit_dir }}"
+      changed_when: false
       when: ansible_system != "Darwin"
 
     # macOS/Rosetta: JVM services cold-start slower than compose's
@@ -687,7 +691,7 @@
     # a dir-mount fails, 404'ing globalConfigs.js.
     - name: "Lay digit-ui from-source build into the container (when build_digit_ui)"
       ansible.builtin.shell: |
-        set -e
+        set -eo pipefail
         for i in $(seq 1 24); do
           if [ "$(docker inspect -f '{% raw %}{{.State.Running}}{% endraw %}' digit-ui 2>/dev/null)" = "true" ]; then break; fi
           sleep 5
@@ -707,6 +711,7 @@
     # Sweep them explicitly when search is OFF.
     - name: "Sweep search-stack containers when profile is OFF"
       ansible.builtin.shell: |
+        set -o pipefail
         for c in digit-elasticsearch egov-indexer digit-inbox; do
           if docker ps --filter name=^${c}$ --format '{{ "{{" }}.Names{{ "}}" }}' | grep -q "^${c}$"; then
             docker stop "$c" >/dev/null
@@ -762,6 +767,7 @@
     # --- static mode ---
     - name: "digit-ui mode=static — stop digit-ui container if running (host nginx serves now)"
       ansible.builtin.shell: |
+        set -o pipefail
         if docker ps --filter name=^digit-ui$ --format '{% raw %}{{.Names}}{% endraw %}' | grep -q '^digit-ui$'; then
           docker stop digit-ui
           echo stopped
@@ -801,6 +807,7 @@
 
     - name: "digit-ui mode=static — run esbuild.build.js (idempotent: skips if build/ index newer than sources)"
       ansible.builtin.shell: |
+        set -o pipefail
         cd /opt/digit-ui-esbuild
         # Quick freshness check: if build/index.html is newer than the
         # most-recent source file, skip the rebuild (~5s saved on
@@ -825,6 +832,7 @@
     # --- hmr mode ---
     - name: "digit-ui mode=hmr — stop digit-ui container after compose brought it up"
       ansible.builtin.shell: |
+        set -o pipefail
         if docker ps --filter name=^digit-ui$ --format '{% raw %}{{.Names}}{% endraw %}' | grep -q '^digit-ui$'; then
           docker stop digit-ui
           echo stopped
@@ -835,6 +843,7 @@
 
     - name: "digit-ui mode=hmr — start tmux esbuild session"
       ansible.builtin.shell: |
+        set -o pipefail
         if ! tmux has-session -t esbuild 2>/dev/null; then
           cd /opt/digit-ui-esbuild
           tmux new-session -d -s esbuild \
@@ -1075,9 +1084,10 @@
     # On repeat deploys the named volume already has data, initdb won't
     # re-run, so this ALTER is the only way the password gets updated.
     - name: "OpenBao — sync postgres role password with vault secret"
-      ansible.builtin.shell: >-
-        printf "ALTER ROLE egov WITH PASSWORD '%s';\n" "$NEWPW" |
-        docker exec -i docker-postgres psql -U egov -d egov
+      ansible.builtin.shell: |
+        set -o pipefail
+        printf "ALTER ROLE egov WITH PASSWORD '%s';\n" "$NEWPW" \
+          | docker exec -i docker-postgres psql -U egov -d egov
       environment:
         NEWPW: "{{ bao_secrets.json.data.data.postgres_password }}"
       no_log: true
@@ -1090,9 +1100,10 @@
     # send the vault value, which the role doesn't accept. ALTER the
     # role inside digit-mcp-postgres so the next up -d's MCP can connect.
     - name: "OpenBao — sync mcp-postgres role password with vault secret"
-      ansible.builtin.shell: >-
-        printf "ALTER ROLE mcp WITH PASSWORD '%s';\n" "$NEWPW" |
-        docker exec -i digit-mcp-postgres psql -U mcp -d mcp_sessions
+      ansible.builtin.shell: |
+        set -o pipefail
+        printf "ALTER ROLE mcp WITH PASSWORD '%s';\n" "$NEWPW" \
+          | docker exec -i digit-mcp-postgres psql -U mcp -d mcp_sessions
       environment:
         NEWPW: "{{ bao_secrets.json.data.data.mcp_db_password }}"
       no_log: true
@@ -1171,7 +1182,6 @@
             scp {{ ansible_user }}@{{ ansible_host }}:{{ digit_dir }}/.openbao/init.json ./init-{{ inventory_hostname }}.json
 
           Secrets path for this tenant: {{ secrets_path }}
-      ignore_errors: yes
 
     # ============================================================
     # Host nginx — must be in place + reloaded BEFORE the validation
@@ -1229,10 +1239,10 @@
     - name: "Host nginx — Linux/Debian only"
       when: ansible_system != "Darwin"
       block:
-      - name: "Host nginx — install if missing"
-        ansible.builtin.apt:
-          name: nginx
-          state: present
+        - name: "Host nginx — install if missing"
+          ansible.builtin.apt:
+            name: nginx
+            state: present
 
       # `nginx_preserve_vhost: true` in host_vars makes the next three tasks
       # (render / enable / remove-default) no-op. Use it for tenants whose
@@ -1242,32 +1252,32 @@
       # install task above still runs (idempotent), so the package is
       # always present; only the site file is left alone.
 
-      - name: "Host nginx — render site config from template"
-        ansible.builtin.template:
-          src: templates/nginx-site.conf.j2
-          dest: "/etc/nginx/sites-available/{{ domain }}"
-          mode: '0644'
-        notify: Reload nginx
-        when: not (nginx_preserve_vhost | default(false))
+        - name: "Host nginx — render site config from template"
+          ansible.builtin.template:
+            src: templates/nginx-site.conf.j2
+            dest: "/etc/nginx/sites-available/{{ domain }}"
+            mode: '0644'
+          notify: Reload nginx
+          when: not (nginx_preserve_vhost | default(false))
 
-      - name: "Host nginx — enable site"
-        ansible.builtin.file:
-          src: "/etc/nginx/sites-available/{{ domain }}"
-          dest: "/etc/nginx/sites-enabled/{{ domain }}"
-          state: link
-          force: yes   # convert pre-existing regular-file copies (older deploys) into a symlink
-        notify: Reload nginx
-        when: not (nginx_preserve_vhost | default(false))
+        - name: "Host nginx — enable site"
+          ansible.builtin.file:
+            src: "/etc/nginx/sites-available/{{ domain }}"
+            dest: "/etc/nginx/sites-enabled/{{ domain }}"
+            state: link
+            force: yes   # convert pre-existing regular-file copies (older deploys) into a symlink
+          notify: Reload nginx
+          when: not (nginx_preserve_vhost | default(false))
 
-      - name: "Host nginx — remove default site"
-        ansible.builtin.file:
-          path: /etc/nginx/sites-enabled/default
-          state: absent
-        notify: Reload nginx
-        when: not (nginx_preserve_vhost | default(false))
+        - name: "Host nginx — remove default site"
+          ansible.builtin.file:
+            path: /etc/nginx/sites-enabled/default
+            state: absent
+          notify: Reload nginx
+          when: not (nginx_preserve_vhost | default(false))
 
-      - name: "Host nginx — flush handlers so reload happens before validation"
-        ansible.builtin.meta: flush_handlers
+        - name: "Host nginx — flush handlers so reload happens before validation"
+          ansible.builtin.meta: flush_handlers
 
     # macOS thin path: run nginx as a container instead of host nginx.
     # Renders the same template (upstream host -> host.docker.internal so
@@ -1316,7 +1326,7 @@
         # Bad signals: "Restarting", "Exited" (with non-zero), or
         # "(unhealthy)". One-shot init containers that finished
         # successfully report "Exited (0)" — those are fine too.
-        set -e
+        set -eo pipefail
         bad=$(docker compose -f {{ digit_dir }}/docker-compose.egov-digit.yaml ps \
                 --format '{{ "{{" }}.Name{{ "}}" }} {{ "{{" }}.Status{{ "}}" }}' \
               | grep -E 'Restarting|\(unhealthy\)|Exited \([1-9]' || true)
@@ -1501,7 +1511,7 @@
       when:
         - state_root != 'pg'
         - mcp_root_bootstrap is defined
-        - (mcp_root_bootstrap.json.success | default(true)) == false
+        - not (mcp_root_bootstrap.json.success | default(true))
 
     - name: "mcp-bootstrap — print detailed failure entries (city)"
       ansible.builtin.debug:
@@ -1514,7 +1524,7 @@
       when:
         - state_root != 'pg'
         - mcp_city_bootstrap is defined
-        - (mcp_city_bootstrap.json.success | default(true)) == false
+        - not (mcp_city_bootstrap.json.success | default(true))
 
     # Bail out if either bootstrap reported failures. `ignore_errors: true`
     # on the API call only suppresses 4xx/5xx so we can still capture the
@@ -1535,10 +1545,10 @@
         - not (tolerate_bootstrap_failures | default(false))
         - >
           (mcp_root_bootstrap is defined and
-            (mcp_root_bootstrap.json.success | default(true)) == false)
+            not (mcp_root_bootstrap.json.success | default(true)))
           or
           (mcp_city_bootstrap is defined and
-            (mcp_city_bootstrap.json.success | default(true)) == false)
+            not (mcp_city_bootstrap.json.success | default(true)))
 
     # ────────────────────────────────────────────────────────────────
     # Post-bootstrap STATE_LEVEL_TENANT_ID rewrite. The upstream compose
@@ -1605,6 +1615,7 @@
         restart egov-user egov-workflow-v2 egov-enc-service pgr-services
       args:
         chdir: "{{ digit_dir }}"
+      changed_when: true
       when: state_root != 'pg'
 
     # `docker compose restart egov-user` above does NOT cascade to
@@ -1797,6 +1808,7 @@
 
     - name: "keycloak-bootstrap — wire Google IdP (when configured)"
       ansible.builtin.shell: |
+        set -o pipefail
         docker exec keycloak /opt/keycloak/bin/kcadm.sh create identity-provider/instances \
           -r "{{ state_tenant_id }}" \
           -s alias=google \
@@ -1909,7 +1921,7 @@
       ansible.builtin.systemd:
         name: nginx
         state: reloaded
-      ignore_errors: true
+      failed_when: false
 
     - name: "validate — MDMS lookup: StateInfo returns at least one record"
       ansible.builtin.uri:
@@ -1999,6 +2011,7 @@
 
     - name: Install Node.js 20 LTS (needed for CC and tests)
       shell: |
+        set -o pipefail
         if ! node --version 2>/dev/null | grep -qE "^v2[02]"; then
           curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
           apt-get install -y nodejs
@@ -2043,7 +2056,7 @@
       loop:
         - { src: "/root/.claude/settings.json", dest: "/root/.claude/settings.json" }
         - { src: "/root/.claude/settings.local.json", dest: "/root/.claude/settings.local.json" }
-      ignore_errors: yes
+      failed_when: false
       when: install_claude_code | default(false)
 
     - name: Synchronize Claude Code skills
@@ -2326,6 +2339,7 @@
         INPUT_XLSX={{ digit_dir }}/ci-tests/data/county-data.xlsx \
         python3 ci-dataloader-xlsx.py
       register: xlsx_dataloader_result
+      changed_when: false
       timeout: 600
       ignore_errors: yes
 
@@ -2377,12 +2391,14 @@
       shell: npm install
       args:
         chdir: "{{ digit_dir }}/e2e-tests"
+      changed_when: false
 
       when: run_ci_tests | default(false) and (run_playwright_tests | default(false))
     - name: Install Playwright Chromium with system dependencies
-      shell: 'npx playwright install{{ " --with-deps" if ansible_system != "Darwin" else "" }} chromium' 
+      shell: 'npx playwright install{{ " --with-deps" if ansible_system != "Darwin" else "" }} chromium'
       args:
         chdir: "{{ digit_dir }}/e2e-tests"
+      changed_when: false
       # Browser binaries + system deps via apt — first run on a fresh box
       # routinely hits 4-6 min on a 4-core VPS. 300s was too tight.
       timeout: 600
@@ -2417,6 +2433,7 @@
       args:
         chdir: "{{ digit_dir }}/e2e-tests"
       register: playwright_result
+      changed_when: false
       timeout: 900
       ignore_errors: yes
 

@@ -33,6 +33,49 @@ if ! command -v ansible-playbook >/dev/null 2>&1; then
   exit 127
 fi
 
+# ── Static validation ────────────────────────────────────────────────────────
+# Run ansible-lint + yamllint before touching any server. Catches YAML syntax
+# errors, broken Jinja2, risky shell patterns, and structural mistakes in
+# seconds — far cheaper than waiting for a mid-deploy failure.
+#
+# Both tools are optional: if they're not installed we warn and continue
+# (operators on minimal boxes shouldn't be blocked). Install them with:
+#   pip3 install ansible-lint yamllint
+run_static_validation() {
+  local failed=0
+
+  if command -v ansible-lint >/dev/null 2>&1; then
+    echo "──── ansible-lint ────────────────────────────────────────────────"
+    if ! ansible-lint playbook-deploy.yml; then
+      echo "ERROR: ansible-lint found violations. Fix them before deploying." >&2
+      failed=1
+    fi
+  else
+    echo "WARN: ansible-lint not found — skipping. Install: pip3 install ansible-lint" >&2
+  fi
+
+  if command -v yamllint >/dev/null 2>&1; then
+    echo "──── yamllint ────────────────────────────────────────────────────"
+    if ! yamllint -c .yamllint playbook-deploy.yml inventory/group_vars/ inventory/host_vars/; then
+      echo "ERROR: yamllint found violations. Fix them before deploying." >&2
+      failed=1
+    fi
+  else
+    echo "WARN: yamllint not found — skipping. Install: pip3 install yamllint" >&2
+  fi
+
+  if [[ $failed -ne 0 ]]; then
+    echo ""
+    echo "Static validation failed. Run with SKIP_LINT=1 to bypass (not recommended)." >&2
+    exit 1
+  fi
+  echo "──── Static validation passed ────────────────────────────────────"
+}
+
+if [[ "${SKIP_LINT:-0}" != "1" ]]; then
+  run_static_validation
+fi
+
 # ansible buffers a task's stdout until the task ENDS, so the macOS Rosetta
 # converge (10-40min) looks like a dead hang with zero feedback. Tell the
 # operator the live escape hatches UP FRONT, before ansible swallows output.

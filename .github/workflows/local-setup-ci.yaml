@@ -16,6 +16,35 @@ defaults:
     working-directory: local-setup
 
 jobs:
+  ansible-lint:
+    name: Ansible static validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: local-setup/ansible
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install linters
+        run: pip install ansible-lint yamllint
+
+      - name: ansible-lint
+        run: ansible-lint playbook-deploy.yml
+
+      - name: yamllint — playbook
+        run: yamllint -c .yamllint playbook-deploy.yml
+
+      - name: yamllint — inventory
+        run: yamllint -c .yamllint inventory/group_vars/ inventory/host_vars/
+
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 45
