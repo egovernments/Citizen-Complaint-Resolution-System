@@ -1576,6 +1576,22 @@
         replace: '\1EGOV_STATELEVEL_TENANT: {{ state_root }}'
       when: state_root != 'pg'
 
+    # pgr-services' EscalationScheduler reads
+    # `PGR_STATELEVEL_TENANTID` (no `_` between STATE/LEVEL, no `_ID` —
+    # third spelling variant in this stack) to pick which tenant to
+    # query MDMS RAINMAKER-PGR.EscalationConfig at. Without this
+    # rewrite the scheduler asks MDMS at tenant `pg`, gets no result,
+    # logs "Failed to fetch EscalationConfig from MDMS, using defaults"
+    # and falls back to a 5-day SLA — so auto-escalation effectively
+    # never fires on tenants whose state_root is anything other than
+    # `pg`. Closes the deploy-side half of #585.
+    - name: "post-bootstrap — set PGR_STATELEVEL_TENANTID (pgr-services variant) in compose"
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)PGR_STATELEVEL_TENANTID: pg$'
+        replace: '\1PGR_STATELEVEL_TENANTID: {{ state_root }}'
+      when: state_root != 'pg'
+
     - name: "post-bootstrap — set STATE_LEVEL_TENANT_ID (city tier — enc-service + workflow) in compose"
       replace:
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
