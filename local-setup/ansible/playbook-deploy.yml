@@ -1103,6 +1103,40 @@
         mode: '0600'            # tighten — was 0644 from the template; secrets bump to 0600
       no_log: true
 
+    # Keycloak-tier secrets — appended as a separate marked block so the
+    # main TENANT SECRETS block stays untouched on Keycloak-free tenants.
+    # Default-empty strings so a missing key in OpenBao (e.g. first deploy
+    # before the operator filled them in) doesn't fail template rendering;
+    # the keycloak containers fail their healthcheck loudly enough the
+    # operator notices. Without this block the overlay's KC_ADMIN_PASSWORD
+    # defaults to "admin" in compose, which mismatches KC's actual admin
+    # password and breaks user provisioning silently (caught by
+    # digit-integration-tests/tests/keycloak/kc-ui.spec.ts).
+    - name: "OpenBao — write Keycloak secrets into compose .env (when enable_keycloak)"
+      ansible.builtin.blockinfile:
+        path: "{{ digit_dir }}/.env"
+        block: |
+          KC_ADMIN_PASSWORD={{ bao_secrets.json.data.data.keycloak_admin_password | default('') }}
+          KC_DB_PASSWORD={{ bao_secrets.json.data.data.keycloak_db_password | default('') }}
+          TOKEN_EXCHANGE_SYSTEM_PASSWORD={{ bao_secrets.json.data.data.token_exchange_system_password | default('eGov@123') }}
+        marker: "# {mark} KEYCLOAK SECRETS"
+        create: false
+        mode: '0600'
+      no_log: true
+      when: enable_keycloak | default(false)
+
+    - name: "OpenBao — append Google IdP secret into compose .env (when configured)"
+      ansible.builtin.lineinfile:
+        path: "{{ digit_dir }}/.env"
+        regexp: '^KC_GOOGLE_CLIENT_SECRET='
+        line: "KC_GOOGLE_CLIENT_SECRET={{ bao_secrets.json.data.data.keycloak_google_client_secret | default('') }}"
+        create: false
+        mode: '0600'
+      no_log: true
+      when:
+        - enable_keycloak | default(false)
+        - (keycloak_google_client_id | default('')) | length > 0
+
     # The first `up -d` started postgres with POSTGRES_PASSWORD=egov123
     # (the default before OpenBao secrets were available). initdb created
     # the `egov` role with that password. Now that the real password is
