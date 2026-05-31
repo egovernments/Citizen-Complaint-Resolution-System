@@ -255,6 +255,82 @@ jobs:
         run: |
           bash scripts/health-check.sh http://localhost:18000
 
+      - name: Gatus health dashboard check
+        run: |
+          bash scripts/ci-gatus-check.sh http://localhost:18889
+
+      - name: Localization module check
+        run: |
+          bash scripts/ci-localization-check.sh http://localhost:18000
+
+      - name: nginx smoke test
+        run: |
+          echo "=== nginx / digit-ui Smoke Test ==="
+
+          echo -n "  GET http://localhost:18080/digit-ui/ ... "
+          HTTP=$(curl -sf -o /dev/null -w "%{http_code}" --max-time 10 http://localhost:18080/digit-ui/ 2>/dev/null)
+          if [ "$HTTP" = "200" ]; then
+            echo "OK (200)"
+          else
+            echo "FAIL (HTTP $HTTP, expected 200)"
+            exit 1
+          fi
+
+          echo -n "  GET http://localhost:18080/ ... "
+          HTTP=$(curl -sf -o /dev/null -w "%{http_code}" --max-time 10 http://localhost:18080/ 2>/dev/null || echo "000")
+          FIRST=$(echo "$HTTP" | cut -c1)
+          if [ "$FIRST" != "5" ] && [ "$HTTP" != "000" ]; then
+            echo "OK (HTTP $HTTP, non-5xx)"
+          else
+            echo "FAIL (HTTP $HTTP)"
+            exit 1
+          fi
+
+          echo "=== nginx smoke test passed ==="
+
+      - name: Kong route validation
+        run: |
+          echo "=== Kong Route Validation ==="
+
+          echo -n "  Kong admin API (port 18001) ... "
+          ADMIN=$(curl -sf --max-time 10 http://localhost:18001/ 2>/dev/null)
+          if echo "$ADMIN" | jq -e '.tagline' > /dev/null 2>&1; then
+            echo "OK"
+          else
+            echo "FAIL (admin API not responding or wrong format)"
+            echo "  Response: $(echo "$ADMIN" | head -c 200)"
+            exit 1
+          fi
+
+          echo -n "  Kong route count ... "
+          ROUTE_COUNT=$(curl -sf --max-time 10 http://localhost:18001/routes 2>/dev/null | jq '.data | length' 2>/dev/null)
+          if [ -n "$ROUTE_COUNT" ] && [ "$ROUTE_COUNT" -ge 10 ]; then
+            echo "OK ($ROUTE_COUNT routes configured)"
+          else
+            echo "FAIL (expected >=10 routes, got: $ROUTE_COUNT)"
+            exit 1
+          fi
+
+          echo -n "  Kong proxy — user route ... "
+          HTTP=$(curl -sf -o /dev/null -w "%{http_code}" --max-time 10 http://localhost:18000/user/health 2>/dev/null)
+          if [ "$HTTP" = "200" ]; then
+            echo "OK (200)"
+          else
+            echo "FAIL (HTTP $HTTP, expected 200)"
+            exit 1
+          fi
+
+          echo -n "  Kong proxy — PGR route ... "
+          HTTP=$(curl -sf -o /dev/null -w "%{http_code}" --max-time 10 http://localhost:18000/pgr-services/health 2>/dev/null)
+          if [ "$HTTP" = "200" ]; then
+            echo "OK (200)"
+          else
+            echo "FAIL (HTTP $HTTP, expected 200)"
+            exit 1
+          fi
+
+          echo "=== Kong route validation passed ==="
+
       - name: Wait for PGR functional readiness
         run: |
           echo "Waiting for PGR to handle API requests (not just Spring actuator)..."
