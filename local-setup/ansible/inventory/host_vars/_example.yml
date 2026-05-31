@@ -267,6 +267,15 @@ db_fast_path: true
 # Off by default — production deploys skip CI tests.
 run_ci_tests: false
 
+# Tear down the running stack before re-deploying. Stops + removes all
+# containers and orphaned networks, then re-deploys from scratch.
+# Volumes (Postgres data, Minio objects) are preserved — only containers
+# and compose-managed networks are removed.
+#
+# Use on CI boxes or when you deliberately want a clean redeploy.
+# NEVER enable on a tenant with live data you cannot afford to interrupt.
+force_clean: false
+
 # Install Claude Code CLI + sync controller's ~/.claude config to the
 # target. Hard-codes /root/.claude paths; only safe when the controller
 # is a Linux box running as root.

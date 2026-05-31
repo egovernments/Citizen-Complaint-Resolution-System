@@ -27,6 +27,54 @@
     DOCKER_DEFAULT_PLATFORM: "{{ docker_default_platform | default('') }}"
 
   pre_tasks:
+    # ── Force-clean teardown ───────────────────────────────────────────────
+    # Opt-in via `force_clean: true` in host_vars. Tears down all running
+    # containers and removes orphaned networks before re-deploying, so a
+    # second run starts from a clean slate rather than conflicting with
+    # leftover state (bound ports, stale containers, overlapping networks).
+    #
+    # NOT enabled by default — production tenants must never lose a running
+    # stack without intent. Only flip this on for dev/CI boxes or tenants
+    # where you intentionally want a full redeploy from scratch.
+    #
+    # NOTE: volumes are deliberately preserved (`--remove-orphans` only,
+    # no `-v`). Postgres + Minio data survives the teardown; only containers
+    # and compose-managed networks are removed.
+    - name: "force-clean — check if stack directory exists"
+      ansible.builtin.stat:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+      register: existing_compose
+      when: force_clean | default(false)
+
+    - name: "force-clean — tear down existing DIGIT stack"
+      ansible.builtin.shell: |
+        set -eo pipefail
+        cd "{{ digit_dir }}"
+        docker compose -f docker-compose.egov-digit.yaml down --remove-orphans --timeout 30
+      args:
+        chdir: "{{ digit_dir }}"
+      register: clean_teardown
+      changed_when: true
+      when:
+        - force_clean | default(false)
+        - existing_compose.stat.exists | default(false)
+
+    - name: "force-clean — prune orphaned Docker networks left by previous run"
+      ansible.builtin.shell: |
+        set -o pipefail
+        project="{{ digit_dir | basename }}"
+        orphans=$(docker network ls --filter "name=${project}" --format '{{ "{{" }}.Name{{ "}}" }}' 2>/dev/null || true)
+        if [ -n "$orphans" ]; then
+          echo "$orphans" | xargs docker network rm 2>/dev/null || true
+          echo "pruned: $orphans"
+        fi
+      register: network_prune
+      changed_when: "'pruned:' in network_prune.stdout"
+      failed_when: false
+      when:
+        - force_clean | default(false)
+        - existing_compose.stat.exists | default(false)
+
     # digit-ui can be served two ways, both binding port 18080:
     #   - `static` mode: digit-ui Docker container with a pre-built bundle.
     #   - `hmr` mode:    host-side `node esbuild.dev.js` in tmux session
