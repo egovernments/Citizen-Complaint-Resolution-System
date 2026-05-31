@@ -46,6 +46,7 @@ run_static_validation() {
 
   if command -v ansible-lint >/dev/null 2>&1; then
     echo "──── ansible-lint ────────────────────────────────────────────────"
+    ansible-galaxy collection install -r requirements.yml -p ~/.ansible/collections --quiet 2>/dev/null || true
     if ! ansible-lint playbook-deploy.yml; then
       echo "ERROR: ansible-lint found violations. Fix them before deploying." >&2
       failed=1
