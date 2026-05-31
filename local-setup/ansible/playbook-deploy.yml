@@ -1387,6 +1387,34 @@
         chdir: "{{ digit_dir }}"
       changed_when: false
 
+    # ── Service health through Kong ───────────────────────────────────────
+    # Hit each core service's health endpoint via Kong (port 18000), not
+    # via direct internal ports. This validates the full routing chain
+    # (Kong route registration, strip_path, upstream reachability) — a
+    # service can be alive on its internal port while its Kong route is
+    # broken. Always hits 127.0.0.1:18000 regardless of tls_enabled since
+    # we're probing from the server itself.
+    - name: "validate — core services healthy through Kong"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ upstream_kong_port }}{{ item.path }}"
+        status_code: [200]
+        timeout: 10
+      loop:
+        - {name: MDMS,         path: /mdms-v2/health}
+        - {name: User,         path: /user/health}
+        - {name: ENC Service,  path: /egov-enc-service/actuator/health}
+        - {name: IDGEN,        path: /egov-idgen/health}
+        - {name: Workflow,     path: /egov-workflow-v2/health}
+        - {name: Localization, path: /localization/actuator/health}
+        - {name: Boundary-v2,  path: /boundary-service/actuator/health}
+        - {name: AccessControl, path: /access/health}
+        - {name: Persister,    path: /common-persist/actuator/health}
+        - {name: PGR-Services, path: /pgr-services/health}
+      loop_control:
+        label: "{{ item.name }}"
+      retries: 3
+      delay: 10
+
     # When tls_enabled=false (sandbox), hit the box on plain HTTP and pass
     # `Host: {{ domain }}` so nginx routes to the right server-name block.
     # The hostname itself doesn't have to be DNS-resolvable.

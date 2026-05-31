@@ -15,6 +15,7 @@ skip_list:
   - yaml[truthy]               # yes/no are valid booleans in Ansible
   - yaml[line-length]          # handled by .yamllint with a relaxed 160-char limit
   - yaml[colons]               # intentional alignment in build-context maps
+  - yaml[commas]               # intentional alignment spacing after commas in loop maps
   - yaml[braces]               # inline loop maps use { key: val } style intentionally
   - jinja[spacing]             # cosmetic Jinja2 pipe spacing
 

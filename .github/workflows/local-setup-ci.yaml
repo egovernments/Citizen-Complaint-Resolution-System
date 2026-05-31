@@ -253,7 +253,7 @@ jobs:
 
       - name: Run health checks
         run: |
-          bash scripts/health-check.sh http://localhost
+          bash scripts/health-check.sh http://localhost:18000
 
       - name: Wait for PGR functional readiness
         run: |
