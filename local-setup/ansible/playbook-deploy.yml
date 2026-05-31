@@ -1562,6 +1562,20 @@
         replace: '\1EGOV_STATE_LEVEL_TENANT_ID: {{ state_root }}'
       when: state_root != 'pg'
 
+    # egov-hrms reads `EGOV_STATELEVEL_TENANT` (no underscore between
+    # STATE/LEVEL) — distinct from `EGOV_STATE_LEVEL_TENANT_ID` above —
+    # to know which tenant to look up its INTERNAL_USER system user
+    # at boot. Without this rewrite the hardcoded `pg` survives and
+    # DefaultUserService.initalizeSystemuser throws
+    # "Service returned null while fetching user" → HRMS crash-loops
+    # on tenants whose state_root isn't pg. Manifest of #622.
+    - name: "post-bootstrap — set EGOV_STATELEVEL_TENANT (HRMS variant) in compose"
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)EGOV_STATELEVEL_TENANT: pg$'
+        replace: '\1EGOV_STATELEVEL_TENANT: {{ state_root }}'
+      when: state_root != 'pg'
+
     - name: "post-bootstrap — set STATE_LEVEL_TENANT_ID (city tier — enc-service + workflow) in compose"
       replace:
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
