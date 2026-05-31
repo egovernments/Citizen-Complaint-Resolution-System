@@ -1267,6 +1267,15 @@ services:
       EGOV_HRMS_HOST: http://egov-hrms:8092/
       EGOV_URL_SHORTNER_HOST: http://egov-url-shortening:8080/
       EGOV_UI_APP_HOST: http://localhost:18080
+      # pgr-services' EscalationScheduler resolves the tenant to query
+      # MDMS at from the KEYS of this map (PGRConfiguration#getUiAppHostMap,
+      # consumed by EscalationScheduler#getStateLevelTenantId). Without
+      # this set, getUiAppHostMap() returns empty → getStateLevelTenantId()
+      # returns null → fetchEscalationConfig short-circuits → scheduler
+      # falls back to the 5-day default SLA and auto-escalation silently
+      # never fires. The "pg" placeholder is rewritten per-tenant by the
+      # playbook's post-bootstrap task.
+      EGOV_UI_APP_HOST_MAP: "{pg:'http://localhost:18080'}"
       NOTIFICATION_SMS_ENABLED: 'false'
       NOTIFICATION_EMAIL_ENABLED: 'false'
       NEW_COMPLAINT_ENABLED: 'true'

@@ -1592,6 +1592,21 @@
         replace: '\1PGR_STATELEVEL_TENANTID: {{ state_root }}'
       when: state_root != 'pg'
 
+    # And the matching EGOV_UI_APP_HOST_MAP rewrite. Empirically the
+    # scheduler actually uses the FIRST KEY of this map to resolve the
+    # tenant for its MDMS query (PGRConfiguration#getUiAppHostMap →
+    # EscalationScheduler#getStateLevelTenantId). With the hardcoded
+    # `{pg:…}` placeholder it queries MDMS for pg.RAINMAKER-PGR
+    # .EscalationConfig and gets nothing back. Aligning the key with
+    # state_root lets the scheduler reach the seeded config and
+    # actually use the 1h/4h/24h SLAs we set in MDMS.
+    - name: "post-bootstrap — set EGOV_UI_APP_HOST_MAP (pgr-services tenant key) in compose"
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)EGOV_UI_APP_HOST_MAP: "\{pg:'
+        replace: '\1EGOV_UI_APP_HOST_MAP: "{{ "{" }}{{ state_root }}:'
+      when: state_root != 'pg'
+
     - name: "post-bootstrap — set STATE_LEVEL_TENANT_ID (city tier — enc-service + workflow) in compose"
       replace:
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
