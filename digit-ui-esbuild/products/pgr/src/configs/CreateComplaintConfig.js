@@ -16,33 +16,42 @@ export const CreateComplaintConfig = {
               populators: {
                 name: "ComplainantContactNumber",
                 error: "CORE_COMMON_MOBILE_ERROR",
-                // Length is tenant-specific (Kenya = 9, India = 10, …).
-                // Source from globalConfigs `CORE_MOBILE_CONFIGS`, same
-                // key the central `useMobileValidation` hook reads
-                // (`mobileNumberLength`), so the field, the form's
-                // submit-time check, and the citizen UI all agree on
-                // one number per deployment. Falls back to the legacy
-                // hardcoded India value when the host hasn't set one.
+                // Read order (per @vinothrallapalli-eGov review on
+                // PR #689, canonical UserValidation pattern):
+                //   1. `window.__DIGIT_USER_VALIDATION.mobile` —
+                //      populated by `useMobileValidation` from the
+                //      `common-masters.UserValidation` MDMS master.
+                //   2. `globalConfigs.CORE_MOBILE_CONFIGS` — build-time
+                //      fallback rendered by the playbook for tenants
+                //      that haven't seeded the master OR for the first
+                //      render before the MDMS hook resolves.
+                //   3. Legacy hardcoded India value (10) — last resort.
                 // Getters re-evaluate on every read so a tenant switch
-                // mid-session picks up the new globalConfigs value.
+                // mid-session picks up the latest source.
                 get maxLength() {
                   return (
+                    window?.__DIGIT_USER_VALIDATION?.mobile?.maxLength ||
                     window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")
-                      ?.mobileNumberLength || 10
+                      ?.mobileNumberLength ||
+                    10
                   );
                 },
                 validation: {
                   required: true,
                   get minLength() {
                     return (
+                      window?.__DIGIT_USER_VALIDATION?.mobile?.minLength ||
                       window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")
-                        ?.mobileNumberLength || 10
+                        ?.mobileNumberLength ||
+                      10
                     );
                   },
                   get maxLength() {
                     return (
+                      window?.__DIGIT_USER_VALIDATION?.mobile?.maxLength ||
                       window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")
-                        ?.mobileNumberLength || 10
+                        ?.mobileNumberLength ||
+                      10
                     );
                   },
                 },
