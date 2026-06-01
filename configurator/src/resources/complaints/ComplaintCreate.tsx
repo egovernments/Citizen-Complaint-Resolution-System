@@ -51,7 +51,7 @@ export function ComplaintCreate() {
             help="Cascades from hierarchy → boundary type → locality."
           />
           <DigitFormInput source="address.landmark" label="Landmark" />
-          <DigitFormInput source="address.pincode" label="Pincode" />
+          <DigitFormInput source="address.pincode" label="Pincode" validate={v.postalCodeKE} />
         </div>
       </FieldSection>
 
