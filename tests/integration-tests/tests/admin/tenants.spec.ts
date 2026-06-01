@@ -28,6 +28,9 @@ import { testCode } from '../utils/manage/codes';
 import { cleanupMdms } from '../utils/manage/teardown';
 
 const TENANT_CODE = process.env.TENANT_CODE || 'ke';
+// A real city tenant known to exist in the list. naipepea → ke.nairobi,
+// bomet → ke.bomet. Parameterized so the search test isn't pinned to Nairobi.
+const CITY_TENANT = process.env.CITY_TENANT || 'ke.nairobi';
 const SCHEMA = 'tenant.tenants';
 const LIST_PATH = '/configurator/manage/tenants';
 
@@ -54,7 +57,20 @@ test.afterAll(async () => {
 });
 
 test.describe('manage/tenants', () => {
-  test('1. list renders expected columns and at least one row', async ({ page }) => {
+  test('1. list renders expected columns and at least one row', {
+    annotation: {
+      type: 'description',
+      description: `Asserts the read-only Tenants list page renders the four expected column headers (Code, Name, City, District) and has at least one populated row. Tenants are seeded out-of-band via city-setup, so the UI surface is List + Show only — no Create/Edit/Delete buttons to assert.
+
+Steps:
+1. Navigate to /configurator/manage/tenants.
+2. Assert role=table is visible.
+3. For each header in ['Code','Name','City','District'], assert role=columnheader matches.
+4. Read row count via getByRole('row'); assert > 1 (header + at least one data row).
+
+Catches a regression where TenantList.tsx loses a column or the data provider returns no records at all.`,
+    },
+    tag: ['@area:configurator-manage', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
     await page.goto(LIST_PATH);
 
     const table = page.getByRole('table');
@@ -73,16 +89,31 @@ test.describe('manage/tenants', () => {
     expect(rowCount).toBeGreaterThan(1); // header + >=1 tenant
   });
 
-  test('2. search filter narrows to a known tenant code', async ({ page }) => {
+  test('2. search filter narrows to a known tenant code', {
+    annotation: {
+      type: 'description',
+      description: `End-to-end search-filter test on the tenants list: typing "ke.nairobi" must narrow the grid to a row containing that code; typing a nonsense code must drop the grid to zero data rows. Drives the actual placeholder-matching search input the operator uses.
+
+Steps:
+1. Navigate to /configurator/manage/tenants.
+2. Locate getByPlaceholder(/search/i); assert visible.
+3. Fill "ke.nairobi"; wait for networkidle.
+4. Assert at least one row matching /ke.nairobi/ is visible.
+5. Clear and type "zzz_no_such_tenant_xyz"; wait for networkidle.
+6. Assert getByRole('row').filter({ hasText: 'zzz_no_such_tenant_xyz' }) has count === 0.
+
+Confirms the search input feeds into the data provider's filter and the grid re-renders accordingly.`,
+    },
+    tag: ['@area:configurator-manage', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
     await page.goto(LIST_PATH);
 
     const search = page.getByPlaceholder(/search/i).first();
     await expect(search).toBeVisible();
-    await search.fill('ke.nairobi');
+    await search.fill(CITY_TENANT);
     await page.waitForLoadState('networkidle').catch(() => {});
 
     await expect(
-      page.getByRole('row').filter({ hasText: 'ke.nairobi' }).first(),
+      page.getByRole('row').filter({ hasText: CITY_TENANT }).first(),
     ).toBeVisible();
 
     // A nonsense code should drop us to empty-state (zero data rows).
@@ -93,7 +124,22 @@ test.describe('manage/tenants', () => {
     expect(await rows.count()).toBe(0);
   });
 
-  test('3. show page renders Code / Name / City / District for a known tenant', async ({
+  test('3. show page renders Code / Name / City / District for a known tenant', {
+    annotation: {
+      type: 'description',
+      description: `Asserts the TenantShow page renders the expected LabelFieldPair labels (Code, Name, City, District) and the tenant's actual code value. Picks a tenant with a fleshed-out city.districtName so the District field is non-empty (skips if no such tenant exists on the deployment).
+
+Steps:
+1. mdmsSearch all tenants (limit 200) at the configured TENANT_CODE.
+2. Find the first tenant whose data.city.districtName is a non-empty string.
+3. test.skip with reason if none found.
+4. Navigate to /configurator/manage/tenants/<code>/show.
+5. Assert each of /^Code$/, /^Name$/, /^City$/, /^District$/ labels is visible.
+6. Assert the tenant code itself appears somewhere on the page.
+
+Skips gracefully on deployments missing a fleshed-out tenant — better than failing on environment dependency.`,
+    },
+    tag: ['@area:configurator-manage', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }) => {
     // Pick a tenant that has a fleshed-out `city` block (ke.nakuru is
@@ -121,7 +167,19 @@ test.describe('manage/tenants', () => {
     await expect(page.getByText(code, { exact: false }).first()).toBeVisible();
   });
 
-  test('4. API shape — search returns records with code / name / city', async () => {
+  test('4. API shape — search returns records with code / name / city', {
+    annotation: {
+      type: 'description',
+      description: `API-level shape check: every tenant record returned by mdmsSearch for tenant.tenants must have data.code and data.name as strings. Missing city is tolerable (Show falls back to empty) but missing code/name would crash the grid.
+
+Steps:
+1. mdmsSearch (limit 50) at TENANT_CODE for schema 'tenant.tenants'.
+2. Assert records.length > 0.
+3. For each record, assert typeof data.code === 'string' and typeof data.name === 'string'.
+
+Catches a contract drift where MDMS returns records with missing required fields, which the UI grid cannot survive.`,
+    },
+    tag: ['@area:configurator-manage', '@kind:regression', '@layer:ui', '@persona:admin'] }, async () => {
     const auth = loadAuth();
     const records = await mdmsSearch(auth, TENANT_CODE, SCHEMA, { limit: 50 });
     expect(records.length).toBeGreaterThan(0);
@@ -136,7 +194,21 @@ test.describe('manage/tenants', () => {
     }
   });
 
-  test('5. QUIRK — ke.nairobi city object lacks districtName, list tolerates it', async ({
+  test('5. QUIRK — ke.nairobi city object lacks districtName, list tolerates it', {
+    annotation: {
+      type: 'description',
+      description: `Documents a known seed quirk: the ke.nairobi tenant was seeded with a slimmed-down city object missing districtName. The list grid renders an empty cell rather than crashing. The test asserts the grid survives the missing field — if a future seed fills it in, the test still passes (the UI tolerates both shapes).
+
+Steps:
+1. mdmsSearch for uniqueIdentifier 'ke.nairobi'; test.skip if absent.
+2. Read data.city; capture hasDistrict (boolean).
+3. Navigate to /configurator/manage/tenants; type 'ke.nairobi' in the search.
+4. Wait for networkidle; assert the matching row is visible.
+5. If !hasDistrict, log a warning that the list tolerated the missing field.
+
+If the UI ever starts crashing on the missing field, the row visibility assertion times out — this is the regression signal.`,
+    },
+    tag: ['@area:configurator-manage', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }) => {
     const auth = loadAuth();
@@ -171,7 +243,22 @@ test.describe('manage/tenants', () => {
     }
   });
 
-  test('6. create via API — new tenant row shows up in the UI list', async ({
+  test('6. create via API — new tenant row shows up in the UI list', {
+    annotation: {
+      type: 'description',
+      description: `Stress-tests the data provider: API-creating a tenant via mdmsCreate (no UI affordance for tenant creation today) must result in the freshly-inserted MDMS row appearing in the UI list. Soft-deletes the test record in afterAll because Tenant has no UI delete affordance.
+
+Steps:
+1. Generate a unique tenant code: TENANT_CODE.<test scoped suffix>.
+2. mdmsCreate via the configured tenant.tenants schema with code/name/type/city.
+3. Track the code in createdCodes for afterAll cleanup.
+4. Navigate to the tenants list; type the code into the search input; wait for networkidle.
+5. Assert the row matching the code is visible within 15s.
+6. Assert a row containing 'PW District' is also visible (district column rendered correctly).
+
+Teardown is API-only — no UI delete for tenants. Soft-delete via cleanupMdms with isActive=false.`,
+    },
+    tag: ['@area:configurator-manage', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
     const auth = loadAuth();

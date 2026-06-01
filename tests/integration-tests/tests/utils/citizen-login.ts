@@ -18,8 +18,13 @@ export async function citizenOtpLogin(page: Page, phone: string): Promise<void> 
     timeout: 30_000,
   });
 
-  // Wait for React to render the login form
-  const mobileInput = page.locator('input[name="mobileNumber"]');
+  // The citizen login form has gone through several DOM revisions. Match
+  // any of the known shapes so the helper survives minor UI churn:
+  //   - current digit-ui:  <input id="login-mobile" type="tel">
+  //   - older revisions:   <input name="mobileNumber"> or input[type="tel"]
+  const mobileInput = page.locator(
+    'input#login-mobile, input[name="mobileNumber"], input[type="tel"]',
+  ).first();
   await mobileInput.waitFor({ state: 'visible', timeout: 20_000 });
   await page.waitForTimeout(2000);
 
@@ -28,8 +33,9 @@ export async function citizenOtpLogin(page: Page, phone: string): Promise<void> 
   await mobileInput.type(phone, { delay: 30 });
   await page.waitForTimeout(500);
 
-  // Click Next
-  await page.locator('button:visible').filter({ hasText: /NEXT|Next|CS_COMMONS_NEXT/ }).click();
+  // The submit button label has shifted across digit-ui revisions:
+  // "Continue" (current) vs "NEXT" / "Next" / "CS_COMMONS_NEXT" (older).
+  await page.locator('button:visible').filter({ hasText: /Continue|NEXT|Next|CS_COMMONS_NEXT/ }).click();
   await page.waitForTimeout(5000);
 
   // Enter 6-digit OTP

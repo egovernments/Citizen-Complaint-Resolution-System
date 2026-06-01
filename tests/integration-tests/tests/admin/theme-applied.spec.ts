@@ -1,7 +1,22 @@
 import { test, expect } from '@playwright/test';
 import { BASE_URL } from '../utils/env';
 
-test('MDMS ThemeConfig is fetched and applied as CSS variables', async ({ page }) => {
+test('MDMS ThemeConfig is fetched and applied as CSS variables', {
+  annotation: {
+    type: 'description',
+    description: `End-to-end check that the MDMS ThemeConfig actually reaches the browser as CSS custom properties on :root. The citizen login page is the simplest place to test — it triggers theme fetch on load. Reads --color-primary-main, --color-primary-dark, --color-digitv2-header-sidenav, etc. and asserts they are non-empty AND not the default DIGIT orange (#c84c0e — that would mean the MDMS override never landed).
+
+Steps:
+1. setTimeout 60s; navigate to /digit-ui/citizen/login, wait 8s for theme apply.
+2. evaluate getComputedStyle on :root; grab five CSS custom properties.
+3. Log the captured theme vars.
+4. Assert primaryMain, primaryDark, and headerSidenav are all truthy.
+5. Assert primaryMain and headerSidenav lowercased are NOT '#c84c0e' (default orange must be overridden).
+6. Assert all three colors match /^#[0-9a-f]{6}$/i.
+
+Catches the most common theme regression — MDMS fetch fails or the applyTheme() call is gated wrong, and the default orange leaks through to a Kenya deployment.`,
+  },
+  tag: ['@area:configurator-manage', '@area:theme', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
   test.setTimeout(60_000);
 
   await page.goto(`${BASE_URL}/digit-ui/citizen/login`, { waitUntil: 'domcontentloaded' });

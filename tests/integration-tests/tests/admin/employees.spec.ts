@@ -131,7 +131,24 @@ test.afterAll(async () => {
 });
 
 test.describe('manage/employees', () => {
-  test('1. list renders, search narrows, status filter applies', async ({ page }) => {
+  test('1. list renders, search narrows, status filter applies', {
+    annotation: {
+      type: 'description',
+      description: `Smoke check for /manage/employees: the list renders with the four expected columns (Code, Name, Mobile, Status), search narrows the row count, and the Status filter switches between Active and Inactive without crashing.
+
+Steps:
+1. Navigate to /configurator/manage/employees.
+2. Assert role=table is visible.
+3. For each header in ['Code','Name','Mobile','Status'], assert the matching role=columnheader is visible.
+4. Read initial row count; assert > 1.
+5. Type 'zzz_no_such_employee' in the search input; wait networkidle.
+6. Read filtered count; assert filtered <= initial.
+7. Clear search; wait networkidle.
+8. If Status filter visible, click it, pick Inactive, wait networkidle, assert count >= 0.
+
+Multi-purpose smoke that exercises the major surface in one pass.`,
+    },
+    tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
     await page.goto(LIST_PATH);
 
     const table = page.getByRole('table');
@@ -167,7 +184,25 @@ test.describe('manage/employees', () => {
     }
   });
 
-  test('2. single create — happy path derives code + username, employee lands', async ({
+  test('2. single create — happy path derives code + username, employee lands', {
+    annotation: {
+      type: 'description',
+      description: `End-to-end UI walk for the single-create flow with multiple regression guards baked in: CCRS#404/#419 (DOB required), CCRS#416 (Tenant picker present + defaults to session tenant), CCRS#436 (success toast). Confirms HRMS persists the employee with employeeStatus=EMPLOYED.
+
+Steps:
+1. Generate a unique code + Kenya-valid mobile (07-prefix, 10 digits); track for cleanup.
+2. Navigate to /employees/create.
+3. Pre-assertion CCRS#404/#419: Date of Birth input is visible AND has the required attribute.
+4. Pre-assertion CCRS#416: Tenant field is visible; if input/select assert value contains TENANT_CODE, otherwise assert text contains it.
+5. Fill Name; force Employee Code to the PW value (DigitFormCodeInput auto-derives but we need determinism for cleanup).
+6. Fill Mobile, leave Username blank (exercises auto-derive), fill Email, Date of Birth (1990-05-14), Date of Appointment (2026-01-15).
+7. Click Create; wait for navigation back to LIST_PATH within 45s.
+8. CCRS#436: assert a role=status toast matching /created/i is visible within 5s.
+9. API sanity: POST /egov-hrms/employees/_search with codes=<code>; assert exactly 1 result with employeeStatus='EMPLOYED', isActive !== false, mobileNumber matches.
+
+Cleanup uses the inline softDeleteEmployee helper because HRMS has no DELETE endpoint and effectiveFrom must be Date.now().`,
+    },
+    tag: ['@area:configurator-manage', '@area:hrms', '@kind:happy-path', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
     const code = testCode(testInfo, 'EMP_CREATE');
@@ -246,7 +281,21 @@ test.describe('manage/employees', () => {
     void found;
   });
 
-  test('3. Kenya-invalid mobile 99999 shows inline error', async ({ page }) => {
+  test('3. Kenya-invalid mobile 99999 shows inline error', {
+    annotation: {
+      type: 'description',
+      description: `Edge case: a too-short mobile number ("99999") on the EmployeeCreate form must surface an inline validation error sourced from HRMS's clamped Kenya rule (10-digit Kenyan mobile, prefix 07/01/+254).
+
+Steps:
+1. Navigate to /employees/create.
+2. Fill Name with a placeholder.
+3. Fill Mobile Number with "99999".
+4. Click into Date of Birth to blur Mobile and trigger validation.
+5. Assert text matching /10.?digit Kenyan mobile|10 digits starting|MobileNumber|must be 10/i is visible within 10s.
+
+Loose regex tolerates copy variants that may shift across HRMS releases. Pairs with the happy-path test (#2) — together they bracket valid + invalid mobile inputs.`,
+    },
+    tag: ['@area:configurator-manage', '@area:hrms', '@kind:edge-case', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
     await page.goto(`${LIST_PATH}/create`);
 
     await page.getByLabel(/^Name/i).fill('PW Bad Mobile');
@@ -260,7 +309,24 @@ test.describe('manage/employees', () => {
     await expect(errorText).toBeVisible({ timeout: 10_000 });
   });
 
-  test('4. edit — DOB round-trips as YYYY-MM-DD (not epoch-ms)', async ({
+  test('4. edit — DOB round-trips as YYYY-MM-DD (not epoch-ms)', {
+    annotation: {
+      type: 'description',
+      description: `Catches the epoch-ms regression in the EmployeeEdit form: DOB used to render as "1753920000000" (raw epoch) instead of "1985-07-20" because the form bound directly to the HRMS scalar. Also asserts Code and Username are disabled on edit (they're write-once).
+
+Steps:
+1. Generate a unique code; track for cleanup.
+2. Create via UI: fill Name, Code, Mobile, DOB '1985-07-20'; Click Create.
+3. Search for the code; click matching row; click Edit.
+4. Assert Date of Birth input has value '1985-07-20' (NOT epoch-ms).
+5. Assert Employee Code input is disabled.
+6. Assert Username input is disabled.
+7. Fill Name with 'PW Edited <uniq>'; click Save; wait 1.5s.
+8. POST /egov-hrms/employees/_search via API; assert user.name matches /PW Edited/.
+
+Code and Username are write-once because HRMS doesn't allow mutating either after create.`,
+    },
+    tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
     // Create one via UI then re-enter Edit.
@@ -313,7 +379,24 @@ test.describe('manage/employees', () => {
     expect((emp.user as any)?.name).toMatch(/PW Edited/);
   });
 
-  test('4a. edit — add CITIZEN role round-trips without JsonMappingException (CCRS#439)', async ({
+  test('4a. edit — add CITIZEN role round-trips without JsonMappingException (CCRS#439)', {
+    annotation: {
+      type: 'description',
+      description: `Catches CCRS#439: adding a CITIZEN role to an existing employee through the RolesEditor used to surface a JsonMappingException because the configurator sent the role array in a shape egov-hrms couldn't deserialize. Post-fix the round-trip succeeds and HRMS reflects the new role within 5s.
+
+Steps:
+1. Generate a unique code + Kenya mobile; track for cleanup.
+2. Seed a fresh employee via API with ONLY [EMPLOYEE] role.
+3. Confirm the seed has no CITIZEN role yet (assert preRoles.some code === CITIZEN === false).
+4. Open Edit via list-row click.
+5. Locate the Roles combobox by role + name; click; type "CITIZEN"; click the matching option.
+6. Click Save.
+7. Assert no role=status toast OR body text contains 'JsonMappingException' (count === 0 for both).
+8. expect.poll on HRMS: within 5s, the user.roles array should contain CITIZEN.
+
+Hermetic: doesn't rely on tenant content — seeds and verifies its own employee. Cleanup is via afterAll's softDeleteEmployee; role removal is a known TODO since the helper soft-deactivates the whole employee.`,
+    },
+    tag: ['@area:configurator-manage', '@area:hrms', '@ccrs:439', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
     // Create a fresh employee via API so we own it + know it has only EMPLOYEE
@@ -398,7 +481,24 @@ test.describe('manage/employees', () => {
     // on long-lived employees without nuking the whole record.
   });
 
-  test('5. deactivate — INACTIVE + deactivation reason applied', async ({
+  test('5. deactivate — INACTIVE + deactivation reason applied', {
+    annotation: {
+      type: 'description',
+      description: `End-to-end deactivation flow through the EmployeeEdit form: flip Status to Inactive, the DeactivationReasonSection mounts (sourced from MDMS deactivation-reasons), pick a reason, save. HRMS persists employeeStatus=INACTIVE, isActive=false, and a non-empty deactivationDetails array.
+
+Steps:
+1. Generate a unique code; track for cleanup.
+2. API-seed a fresh employee (faster than UI create).
+3. Navigate to LIST_PATH; search; click row; click Edit.
+4. Click Status select; pick Inactive option.
+5. Wait for Reason for deactivation dropdown to mount within 10s.
+6. Click it; pick first option matching ORDERBYCOMMISSIONER or OTHERS (MDMS-seeded values).
+7. Click Save; wait 2s.
+8. POST /egov-hrms/employees/_search; assert employeeStatus === 'INACTIVE', isActive === false, deactivationDetails is a non-empty array.
+
+The MDMS reason source is asserted indirectly — if the dropdown has no options the click would fail, surfacing the upstream gap.`,
+    },
+    tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
     const code = testCode(testInfo, 'EMP_DEACT');
@@ -475,7 +575,24 @@ test.describe('manage/employees', () => {
     expect((emp.deactivationDetails as unknown[]).length).toBeGreaterThan(0);
   });
 
-  test('6. reset password — collapsed by default, expand rotates token', async ({
+  test('6. reset password — collapsed by default, expand rotates token', {
+    annotation: {
+      type: 'description',
+      description: `Verifies the EmployeeEdit "Reset password" UI affordance: collapsed by default (New password field NOT visible), expanding reveals the form with a "Keep existing" cancel option. Doesn't actually rotate the password — that requires environment-dependent OAuth re-login round-trip.
+
+Steps:
+1. Generate a unique code; track for cleanup.
+2. API-seed a fresh employee.
+3. Navigate to LIST_PATH; search; click row; click Edit.
+4. Locate "Reset password" button; assert visible.
+5. Assert "New password" input is NOT visible (collapsed default).
+6. Click Reset password.
+7. Assert New password input is now visible.
+8. Assert "Keep existing" button is visible (the cancel affordance).
+
+Affirms the safety contract — admins must explicitly opt-in to password rotation; it's never the default.`,
+    },
+    tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
     const code = testCode(testInfo, 'EMP_PWD');
@@ -525,7 +642,26 @@ test.describe('manage/employees', () => {
     await expect(page.getByRole('button', { name: /^Keep existing$/i })).toBeVisible();
   });
 
-  test('7. bulk import — 3 valid + 2 invalid rows, create 3 lands', async ({
+  test('7. bulk import — 3 valid + 2 invalid rows, create 3 lands', {
+    annotation: {
+      type: 'description',
+      description: `Bulk-import end-to-end with mixed validity: 3 well-formed rows + 2 deliberately broken rows (short mobile + bad date; unknown department + unknown role). Confirms the preview marks 2 errors, the Create button shows "3" (not 5), and HRMS lands all 3 valid employees. Optionally exercises the credentials CSV download.
+
+Steps:
+1. Generate 3 valid + 2 invalid codes; track only valid for cleanup.
+2. Navigate to /employees/bulk.
+3. Wait for the Departments label (means reference-counts loaded — closed vocabularies ready).
+4. Build xlsx via buildEmployeeXlsx with 5 rows (3 valid, 2 invalid by design).
+5. setInputFiles with the buffer.
+6. Assert preview shows /2.*error|error.*2/i (order-independent error count).
+7. Assert button matching /Create\\s+3\\s+(employee|row)s?/i is visible.
+8. Click Create; wait for /3\\s*(created|success)/i within 90s.
+9. For each valid code, POST HRMS _search; assert exactly 1 result, isActive !== false.
+10. If "credentials CSV" download button is visible, click it and confirm the download path is non-empty.
+
+The xlsx sheet name is 'Employee' to match excelParser.ts's allow-list (Employee/Employees/EmployeeMaster/HRMS/employee).`,
+    },
+    tag: ['@area:configurator-manage', '@area:hrms', '@kind:edge-case', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
     const validCodes = [1, 2, 3].map((i) => testCodeIndexed(testInfo, 'EMP_BULK_OK', i));

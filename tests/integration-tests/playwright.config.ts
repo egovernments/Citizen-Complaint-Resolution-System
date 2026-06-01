@@ -6,23 +6,32 @@ export default defineConfig({
   // Specs live under tests/<persona>/ (citizen, employee, admin) plus
   // tests/lifecycle/ for cross-persona end-to-end flows. The setup project
   // below writes auth.json before any spec project runs.
-  testDir: '.',
+  // Anchor test discovery to the canonical `tests/` tree at the repo
+  // root. Using testDir: '.' with `tests/**/*.spec.ts` matches files
+  // inside dev worktrees too (`.worktrees/<branch>/tests/...`), which
+  // double-loads @playwright/test and crashes the runner. Pinning
+  // testDir to `tests` scopes discovery to this checkout's specs only.
+  testDir: 'tests',
   testMatch: [
-    'tests/**/*.spec.ts',
-    'tests/fixtures/auth.setup.ts',
+    '**/*.spec.ts',
+    'fixtures/auth.setup.ts',
   ],
   timeout: 120_000,
   expect: { timeout: 15_000 },
   retries: 0,
   // Manage specs mutate tenant state; serial keeps cleanup deterministic.
   workers: 1,
-  reporter: [['list'], ['html', { open: 'never', outputFolder: 'playwright-report' }]],
+  reporter: [
+    ['list'],
+    ['html', { open: 'never', outputFolder: 'playwright-report' }],
+    ['json', { outputFile: 'report.json' }],
+  ],
   use: {
     baseURL: BASE_URL,
     headless: true,
-    screenshot: 'only-on-failure',
-    trace: 'retain-on-failure',
-    video: 'retain-on-failure',
+    screenshot: 'on',
+    trace: 'on',
+    video: 'on',
   },
   projects: [
     {

@@ -42,7 +42,19 @@ test.afterAll(async () => {
 });
 
 test.describe('manage/localization', () => {
-  test('1. tenant parity — both ke and ke.nairobi return the same rainmaker-common en_IN count', async () => {
+  test('1. tenant parity — both ke and ke.nairobi return the same rainmaker-common en_IN count', {
+    annotation: {
+      type: 'description',
+      description: `Tenant-parity guard: localization counts at root tenant (ke) and city tenant (ke.nairobi) for rainmaker-common / en_IN must match within ±2 rows. Probed 2026-04-23 at 4,259 rows on each. Tiny skew is tolerated to absorb seed/inline-edit churn.
+
+Steps:
+1. In parallel, locSearch(TENANT_CODE, 'en_IN', 'rainmaker-common') and locSearch(CITY_TENANT, 'en_IN', 'rainmaker-common').
+2. Assert keRows.length > 100.
+3. Assert |keRows.length - cityRows.length| <= 2.
+
+Catches a regression where city-level localization stops inheriting from root, or where one tenant gets a partial seed.`,
+    },
+    tag: ['@area:configurator-manage', '@area:localization', '@kind:regression', '@layer:ui', '@persona:admin'] }, async () => {
     const auth = loadAuth();
     const [keRows, cityRows] = await Promise.all([
       locSearch(auth, TENANT_CODE, 'en_IN', 'rainmaker-common'),
@@ -53,7 +65,24 @@ test.describe('manage/localization', () => {
     expect(Math.abs(keRows.length - cityRows.length)).toBeLessThanOrEqual(2);
   });
 
-  test('2. upsert + cache-bust round-trip — value lands after bust, not before', async ({}, testInfo) => {
+  test('2. upsert + cache-bust round-trip — value lands after bust, not before', {
+    annotation: {
+      type: 'description',
+      description: `Documents the cache-bust requirement: localization service caches _search responses per (tenant, locale, module). Without /cache-bust, an upsert lands in the database but the next _search returns stale cached data until the TTL expires. This test confirms a full upsert → bust → search round-trip works AND that overwrites also work.
+
+Steps:
+1. Generate a unique code; track for cleanup.
+2. locUpsert with { code, message: 'first-version', module: 'rainmaker-common' } at TENANT_CODE / en_IN.
+3. Assert response array length === 1.
+4. locCacheBust.
+5. locSearch; find the row by code; assert its message === 'first-version'.
+6. locUpsert again with message: 'second-version'.
+7. locCacheBust.
+8. locSearch; assert the updated row's message === 'second-version'.
+
+Doesn't assert pre-bust read because caching is timing-sensitive — only post-bust visibility is the contract.`,
+    },
+    tag: ['@area:configurator-manage', '@area:localization', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({}, testInfo) => {
     const auth = loadAuth();
     const code = testCode(testInfo, 'LOC_RT');
     const locale = 'en_IN';
@@ -87,7 +116,20 @@ test.describe('manage/localization', () => {
     expect(updated?.message).toBe('second-version');
   });
 
-  test('3. _upsert rejects same code on different modules in one batch (DUPLICATE_RECORDS)', async ({}, testInfo) => {
+  test('3. _upsert rejects same code on different modules in one batch (DUPLICATE_RECORDS)', {
+    annotation: {
+      type: 'description',
+      description: `Pins the _upsert batch contract: same code on two different modules in a single batch must hard-fail with HTTP 4xx and Errors[0].code === 'DUPLICATE_RECORDS'. Pre-investigation suggested silent dedup; the actual server behavior is a hard reject. Test guards against future silent acceptance.
+
+Steps:
+1. Generate a unique code; do NOT track for cleanup (the batch fails entirely so nothing persists).
+2. POST /localization/messages/v1/_upsert with two messages: { code, module: 'rainmaker-common' } and { code, module: 'rainmaker-pgr' } in one batch.
+3. Read response.Errors; assert length > 0 (with diagnostic message including the response JSON).
+4. Assert Errors[0].code === 'DUPLICATE_RECORDS'.
+
+If a future release silently accepts duplicates, this test goes red so callers re-check their batch-building logic before relying on the contract.`,
+    },
+    tag: ['@area:configurator-manage', '@area:localization', '@kind:edge-case', '@layer:ui', '@persona:admin'] }, async ({}, testInfo) => {
     const auth = loadAuth();
     const code = testCode(testInfo, 'LOC_DUP');
     const locale = 'en_IN';
@@ -121,7 +163,20 @@ test.describe('manage/localization', () => {
     expect(errs[0].code).toBe('DUPLICATE_RECORDS');
   });
 
-  test('4. list renders with a usable layout and shows data', async ({ page }) => {
+  test('4. list renders with a usable layout and shows data', {
+    annotation: {
+      type: 'description',
+      description: `Smoke check the pivoted comparator UI: the page renders a table, the table has at least 10 rows, and the body text contains all four expected column-header keywords (code, module, English/en_IN, Swahili/sw_KE).
+
+Steps:
+1. Navigate to /configurator/manage/localization; wait for networkidle.
+2. Assert role=table is visible within 30s (cold load is ~7.3s).
+3. Assert getByRole('row') count > 10 (well under the 1760 rows we know live).
+4. For each label regex /code/i, /module/i, /english|en_IN/i, /swahili|sw_KE/i, assert at least one matching text element is visible.
+
+Loose label-match tolerates minor copy tweaks. The 10-row threshold avoids brittleness around virtualization chunk sizes.`,
+    },
+    tag: ['@area:configurator-manage', '@area:localization', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
     await page.goto(LIST_PATH);
     // Cold load is ~7.3s; extend visibility timeout so we don't flake.
     await page.waitForLoadState('networkidle').catch(() => {});
@@ -144,7 +199,27 @@ test.describe('manage/localization', () => {
     }
   });
 
-  test('5. inline edit — UI save round-trips via localizationUpsert + cache-bust', async ({
+  test('5. inline edit — UI save round-trips via localizationUpsert + cache-bust', {
+    annotation: {
+      type: 'description',
+      description: `Confirms inline cell editing on the comparator triggers BOTH the _upsert XHR and the fire-and-forget /cache-bust XHR, and that the new value persists through a fresh _search. Seeds via API for determinism, then drives the click + edit + Enter flow.
+
+Steps:
+1. Generate a unique code; track for cleanup.
+2. locUpsert with 'seeded-english'; locCacheBust.
+3. Navigate to /manage/localization; wait for networkidle.
+4. If a search input exists, type the code; wait networkidle.
+5. test.skip if the seeded row isn't visible (virtualization edge case).
+6. Set up two waitForRequest promises: one for /_upsert POST, one for /cache-bust POST.
+7. Click the cell containing 'seeded-english'; test.skip if not reachable.
+8. Locate the focused input/textarea; test.skip if not focused.
+9. Fill 'edited-english'; press Enter.
+10. Assert both XHR promises resolved truthy (upsert AND cache-bust fired).
+11. locCacheBust then locSearch; assert updated.message === 'edited-english'.
+
+Skips gracefully when UI layout shifts make the click target unreachable — better than failing on cosmetic refactors.`,
+    },
+    tag: ['@area:configurator-manage', '@area:localization', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
     // Seed a PW_ row via the API so the test has something deterministic
@@ -217,7 +292,23 @@ test.describe('manage/localization', () => {
     expect(updated?.message).toBe('edited-english');
   });
 
-  test('6. missing sw_KE translation renders em-dash placeholder', async ({ page }, testInfo) => {
+  test('6. missing sw_KE translation renders em-dash placeholder', {
+    annotation: {
+      type: 'description',
+      description: `UX check: when an en_IN row exists but the sw_KE counterpart doesn't, the pivoted view renders a placeholder character (em-dash, en-dash, or triple-hyphen) instead of an empty cell. Avoids the citizen-confusing "blank Swahili column" effect.
+
+Steps:
+1. Generate a unique code; track for cleanup.
+2. locUpsert english-only at TENANT_CODE / en_IN; locCacheBust. NO sw_KE counterpart.
+3. Navigate to /manage/localization; wait for networkidle.
+4. If a search input exists, type the code; wait networkidle.
+5. test.skip if the row isn't visible.
+6. Read row textContent.
+7. Assert it matches /[—–]|---/ (em-dash, en-dash, or triple-hyphen).
+
+Skips gracefully if virtualization hides the row — UI behavior here is best-effort.`,
+    },
+    tag: ['@area:configurator-manage', '@area:localization', '@kind:edge-case', '@layer:ui', '@persona:admin'] }, async ({ page }, testInfo) => {
     // Seed an en_IN row but NO sw_KE counterpart. The pivoted view should
     // display an em-dash (—) for the missing swahili cell.
     const auth = loadAuth();
@@ -251,7 +342,22 @@ test.describe('manage/localization', () => {
     expect(rowText).toMatch(/[—–]|---/);
   });
 
-  test('7. module filter narrows rows', async ({ page }) => {
+  test('7. module filter narrows rows', {
+    annotation: {
+      type: 'description',
+      description: `Validates the Module filter on the localization comparator: picking a module option must produce at most as many rows as the unfiltered view (could be equal if the tenant only has rows in one module).
+
+Steps:
+1. Navigate to /manage/localization; wait for networkidle.
+2. Locate getByLabel(/^Module/i); test.skip if not visible.
+3. Read initialRows count.
+4. Click the filter; click the first option; wait for networkidle.
+5. Read filteredRows count.
+6. Assert filteredRows <= initialRows.
+
+Tolerates the single-module edge case (filter doesn't narrow anything) — only fails if the count actually grows after filter, which would indicate filter logic is broken.`,
+    },
+    tag: ['@area:configurator-manage', '@area:localization', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
     await page.goto(LIST_PATH);
     await page.waitForLoadState('networkidle').catch(() => {});
 

@@ -14,7 +14,26 @@ import { test, expect } from '@playwright/test';
 import { BASE_URL, FIXED_OTP, generateCitizenPhone } from '../utils/env';
 
 test.describe('Citizen registration (auto-register on unknown number)', () => {
-  test('fresh phone → OTP → name+email → /all-services', async ({ page }) => {
+  test('fresh phone → OTP → name+email → /all-services', {
+    annotation: {
+      type: 'description',
+      description: `Story 1.3 walk: a brand-new phone number going through citizen login should auto-register and land authenticated on /all-services. Drives every form step manually instead of using the citizenOtpLogin helper because this test is specifically about the /register/name screen the helper would skip past.
+
+Steps:
+1. setTimeout 120s; generate a fresh phone.
+2. Navigate to /digit-ui/citizen/login; wait 3s.
+3. Wait for input[name="mobileNumber"]; click + type the phone (30ms delay).
+4. Click visible Next.
+5. OTP screen — wait for input[maxlength="1"] inputs; type each char of FIXED_OTP (123456) with 80ms delay; click Next.
+6. If URL contains /register, fill the name input with "PW Reg <ts>" and click Next/Continue.
+7. If URL contains /select-location, pick the first city option and click Continue/Submit/Next.
+8. Wait 2s; assert final URL is NOT /login and NOT /register.
+9. Assert localStorage 'Citizen.token' is truthy.
+10. Assert body does NOT contain 'Something went wrong'.
+
+Tolerant of post-OTP path differences (some configs go straight to /all-services, others stop at /register/name or /select-location).`,
+    },
+    tag: ['@area:auth', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
     test.setTimeout(120_000);
     const phone = generateCitizenPhone();
 
@@ -24,14 +43,17 @@ test.describe('Citizen registration (auto-register on unknown number)', () => {
     });
     await page.waitForTimeout(3000);
 
-    // Mobile entry
-    const mobileInput = page.locator('input[name="mobileNumber"]');
+    // Mobile entry — match current digit-ui (input#login-mobile, no name)
+    // and older variants.
+    const mobileInput = page.locator(
+      'input#login-mobile, input[name="mobileNumber"], input[type="tel"]',
+    ).first();
     await mobileInput.waitFor({ state: 'visible', timeout: 15_000 });
     await mobileInput.click();
     await mobileInput.type(phone, { delay: 30 });
     await page.waitForTimeout(500);
 
-    await page.locator('button:visible').filter({ hasText: /^Next$/i }).first().click();
+    await page.locator('button:visible').filter({ hasText: /^(Continue|Next)$/i }).first().click();
     await page.waitForTimeout(5000);
 
     // OTP screen — 6 single-char inputs

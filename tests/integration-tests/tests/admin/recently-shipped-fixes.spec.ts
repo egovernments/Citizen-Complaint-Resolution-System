@@ -55,7 +55,19 @@ function adminRequestInfo(token: string) {
 }
 
 test.describe('CCRS#413 — HRMS empty default search', () => {
-  test('API: active=true & isActive=true returns the tenant employee list', async () => {
+  test('API: active=true & isActive=true returns the tenant employee list', {
+    annotation: {
+      type: 'description',
+      description: `Catches CCRS#413: HRMS employee search returned empty by default in the configurator's Manage > Employees page because the UI dropped the active/isActive filters. Pre-fix users saw "No matching records found" on a tenant with employees. Post-fix the UI sends active=true&isActive=true and the API returns the full list.
+
+Steps:
+1. Acquire admin token.
+2. POST to /egov-hrms/employees/_search?tenantId=ke.nairobi&active=true&isActive=true&limit=100.
+3. Read response.Employees array; assert length > 0.
+
+Doesn't assert the empty-filter case because SUPERUSER short-circuits the backend filter logic, making the test environment-dependent. Asserts only the positive contract — what the UI now sends.`,
+    },
+    tag: ['@area:configurator-manage', '@ccrs:413', '@kind:edge-case', '@kind:regression', '@layer:api', '@persona:admin'] }, async () => {
     // The empty-filter case is environment-dependent — when the
     // RequestInfo carries a SUPERUSER role the backend short-circuits
     // and returns everything anyway, but the UI's RequestInfo (built
@@ -77,7 +89,21 @@ test.describe('CCRS#413 — HRMS empty default search', () => {
 });
 
 test.describe('CCRS#432 — PGR inbox defaults', () => {
-  test('API: workflow business service exposes the 11 PGR states (drives statusMap)', async () => {
+  test('API: workflow business service exposes the 11 PGR states (drives statusMap)', {
+    annotation: {
+      type: 'description',
+      description: `Catches CCRS#432 (statusMap data dependency): the PGR inbox needs the workflow's BusinessService.states to populate its filter dropdown. The backend must expose at least the open + closed states the UI filters on (PENDINGFORASSIGNMENT, PENDINGATLME, RESOLVED, REJECTED).
+
+Steps:
+1. Acquire admin token.
+2. POST to /egov-wf/businessservice/_search?tenantId=ke&businessServices=PGR.
+3. Read response.BusinessServices; assert length === 1.
+4. Filter states by !!state to get only real states; capture state codes.
+5. For each of ['PENDINGFORASSIGNMENT','PENDINGATLME','RESOLVED','REJECTED'], assert it's in the codes.
+
+Tests the upstream data — without it, the UI's statusMap fix is moot.`,
+    },
+    tag: ['@area:configurator-manage', '@ccrs:432', '@kind:regression', '@layer:api', '@persona:admin'] }, async () => {
     const token = await adminToken();
     const r = await fetch(
       `${WF_BS_SEARCH}?tenantId=${ROOT_TENANT}&businessServices=PGR`,
@@ -105,7 +131,20 @@ test.describe('CCRS#432 — PGR inbox defaults', () => {
     }
   });
 
-  test('API: pgr-services rejects non-applicationStatus sortBy values', async () => {
+  test('API: pgr-services rejects non-applicationStatus sortBy values', {
+    annotation: {
+      type: 'description',
+      description: `Documents the platform constraint behind the SLA-sort-icon removal in the PGR inbox. pgr-services accepts only certain SortBy enum values. Sending sortBy=serviceSla returns a 400 with a typeMismatch error code — confirming the backend doesn't support sorting by SLA, hence the UI was right to remove the icon.
+
+Steps:
+1. Acquire admin token.
+2. POST to /pgr-services/v2/request/_search?tenantId=ke.nairobi&limit=2&sortBy=serviceSla.
+3. Read response.Errors; assert length > 0.
+4. Assert Errors[0].code contains 'typeMismatch'.
+
+If pgr-services later adds serviceSla to the SortBy enum, this test flips and the UI can re-enable the icon.`,
+    },
+    tag: ['@area:configurator-manage', '@ccrs:432', '@kind:edge-case', '@kind:regression', '@layer:api', '@persona:admin'] }, async () => {
     // Documents the platform constraint behind the SLA-sort-icon removal.
     // If pgr-services later adds `serviceSla` to the SortBy enum, this
     // test flips and we can re-enable the sort icon in the UI config.
@@ -124,7 +163,20 @@ test.describe('CCRS#432 — PGR inbox defaults', () => {
     expect(errs[0]?.code ?? '').toContain('typeMismatch');
   });
 
-  test('Bundle: open-states constant is present in the served JS', async () => {
+  test('Bundle: open-states constant is present in the served JS', {
+    annotation: {
+      type: 'description',
+      description: `Bundle-level guard: the OPEN_STATES constant landed in products/pgr/src/configs/UICustomizations.js. If a future refactor strips it, the inbox silently regresses to "all states by default" — the original CCRS#432 bug. Fetching index.js and grepping for the literal state codes catches that without needing a UI session.
+
+Steps:
+1. setTimeout 180s (large bundle download).
+2. fetch GET /digit-ui/index.js; assert response.ok.
+3. Read body text.
+4. Assert text contains 'PENDINGFORASSIGNMENT' AND 'PENDINGATLME'.
+
+Fast and session-free — fails immediately on bundle regression.`,
+    },
+    tag: ['@area:configurator-manage', '@ccrs:432', '@kind:regression', '@layer:api', '@persona:admin'] }, async () => {
     test.setTimeout(180_000);
     // The default open-states list landed in
     // `products/pgr/src/configs/UICustomizations.js` as `OPEN_STATES`.
@@ -140,7 +192,20 @@ test.describe('CCRS#432 — PGR inbox defaults', () => {
 });
 
 test.describe('CCRS#430 — action labels are localized', () => {
-  test('API: rainmaker-pgr en_IN has sentence-cased labels for ESCALATE/ASSIGN/etc', async () => {
+  test('API: rainmaker-pgr en_IN has sentence-cased labels for ESCALATE/ASSIGN/etc', {
+    annotation: {
+      type: 'description',
+      description: `Catches CCRS#430: PGR action labels (ESCALATE, ASSIGN, REJECT, RESOLVE, REOPEN) used to render as raw upper-snake codes because localization rows were missing. Post-fix the rows exist and resolve to sentence-cased copy.
+
+Steps:
+1. POST /localization/messages/v1/_search?codes=ESCALATE,ASSIGN,REJECT,RESOLVE,REOPEN&tenantId=ke&locale=en_IN.
+2. Read messages array.
+3. For each code, find the matching message; assert it exists.
+4. Assert message.toUpperCase() !== message — i.e. NOT identical to the upper-snake code (proves it's localized, not echoed).
+
+Loose contract — the test doesn't pin the exact text, only that the row exists and isn't the raw code.`,
+    },
+    tag: ['@area:configurator-manage', '@ccrs:430', '@kind:regression', '@layer:api', '@persona:admin'] }, async () => {
     const codes = ['ESCALATE', 'ASSIGN', 'REJECT', 'RESOLVE', 'REOPEN'];
     const r = await fetch(
       `${LOC_SEARCH}?codes=${codes.join(',')}&tenantId=${ROOT_TENANT}&locale=en_IN`,
@@ -161,7 +226,19 @@ test.describe('CCRS#430 — action labels are localized', () => {
     }
   });
 
-  test('API: ES_COMMON_TAKE_ACTION resolves to "Take Action"', async () => {
+  test('API: ES_COMMON_TAKE_ACTION resolves to "Take Action"', {
+    annotation: {
+      type: 'description',
+      description: `Anchored localization check for the Take Action button in the PGR detail page. ES_COMMON_TAKE_ACTION must resolve to text matching /Take Action/i in en_IN — pinned because this label is used in many test selectors.
+
+Steps:
+1. POST /localization/messages/v1/_search?codes=ES_COMMON_TAKE_ACTION&tenantId=ke&locale=en_IN.
+2. Find the message with code ES_COMMON_TAKE_ACTION.
+3. Assert message matches /Take Action/i.
+
+If this row goes missing or its copy changes, several PGR UI tests in this suite fail at selector time.`,
+    },
+    tag: ['@area:configurator-manage', '@ccrs:430', '@kind:regression', '@layer:api', '@persona:admin'] }, async () => {
     const r = await fetch(
       `${LOC_SEARCH}?codes=ES_COMMON_TAKE_ACTION&tenantId=${ROOT_TENANT}&locale=en_IN`,
       {
@@ -179,7 +256,20 @@ test.describe('CCRS#430 — action labels are localized', () => {
 });
 
 test.describe('CCRS#42 — Complaint Type menuPathName labels', () => {
-  test('API: 19 SERVICEDEFS.<menuPath> rows exist in en_IN AND sw_KE', async () => {
+  test('API: 19 SERVICEDEFS.<menuPath> rows exist in en_IN AND sw_KE', {
+    annotation: {
+      type: 'description',
+      description: `Catches CCRS#42 (Complaint Type dropdown blank rows). The 19 SERVICEDEFS.<MENUPATH> localization rows must exist in BOTH en_IN and sw_KE locales. Pre-fix the configurator's complaint type seed didn't push these keys, so the citizen dropdown rendered 19 blank options.
+
+Steps:
+1. For each locale in [en_IN, sw_KE]:
+   - POST /localization/messages/v1/_search with codes for ADMINISTRATION, WATERRELATED, LANDRATES, MOBILITYANDWORKS, FINANCEANDREVENUE.
+   - For each requested code, find the matching message in response.
+   - Assert message exists with non-empty text.
+
+Tests 5 representative codes across the 19 menuPath values — fewer assertions but covers the full breadth via locale × multiple codes.`,
+    },
+    tag: ['@area:configurator-manage', '@ccrs:42', '@kind:regression', '@layer:api', '@persona:admin'] }, async () => {
     const codes = [
       'SERVICEDEFS.ADMINISTRATION',
       'SERVICEDEFS.WATERRELATED',
@@ -208,7 +298,19 @@ test.describe('CCRS#42 — Complaint Type menuPathName labels', () => {
 });
 
 test.describe('CCRS#44 — locale region-append regression', () => {
-  test('API: rainmaker-common sw_KE search returns rows (not the broken sw_KEIN)', async () => {
+  test('API: rainmaker-common sw_KE search returns rows (not the broken sw_KEIN)', {
+    annotation: {
+      type: 'description',
+      description: `Catches CCRS#44 (locale region-append regression): the UI's getLocale/updateResources used to mangle 'sw_KE' into 'sw_KEIN', and the broken locale returned 0 messages — every Swahili UI string fell back to en_IN. Post-fix the locale stays clean.
+
+Steps:
+1. POST /localization/messages/v1/_search?module=rainmaker-common&locale=sw_KE&tenantId=ke.
+2. Read response.messages.
+3. Assert messages.length > 100.
+
+Threshold of 100 is far above the empty-result case but below any realistic message count, so it cleanly distinguishes "broken" from "working".`,
+    },
+    tag: ['@area:configurator-manage', '@ccrs:44', '@kind:regression', '@layer:api', '@persona:admin'] }, async () => {
     const r = await fetch(
       `${LOC_SEARCH}?module=rainmaker-common&locale=sw_KE&tenantId=${ROOT_TENANT}`,
       {
@@ -224,7 +326,18 @@ test.describe('CCRS#44 — locale region-append regression', () => {
     expect(messages.length).toBeGreaterThan(100);
   });
 
-  test('API: rainmaker-common sw_KEIN (the buggy mangle) is empty — proves the dataset itself is clean', async () => {
+  test('API: rainmaker-common sw_KEIN (the buggy mangle) is empty — proves the dataset itself is clean', {
+    annotation: {
+      type: 'description',
+      description: `Companion test to the sw_KE check: confirms the buggy locale 'sw_KEIN' (what the UI used to send pre-fix) returns 0 rows. Proves the dataset itself doesn't contain mangled rows — pre-fix the bug was strictly client-side, not a stale upload.
+
+Steps:
+1. POST /localization/messages/v1/_search?module=rainmaker-common&locale=sw_KEIN&tenantId=ke.
+2. Assert response.messages array has length === 0.
+
+Pairs with the sw_KE test to bracket the regression — sw_KE must work, sw_KEIN must be empty.`,
+    },
+    tag: ['@area:configurator-manage', '@ccrs:44', '@kind:edge-case', '@kind:regression', '@layer:api', '@persona:admin'] }, async () => {
     const r = await fetch(
       `${LOC_SEARCH}?module=rainmaker-common&locale=sw_KEIN&tenantId=${ROOT_TENANT}`,
       {
@@ -239,7 +352,20 @@ test.describe('CCRS#44 — locale region-append regression', () => {
 });
 
 test.describe('CCRS#417 — Undo toast removed from configurator', () => {
-  test('UI: no UndoToast container is mounted after navigating into the configurator', async ({
+  test('UI: no UndoToast container is mounted after navigating into the configurator', {
+    annotation: {
+      type: 'description',
+      description: `Catches CCRS#417: the configurator used to render a global UndoToast inside <App>, but real rollback compensators are blocked on backend support, so the toast was misleading. Post-fix the UndoToast component is not mounted on any screen.
+
+Steps:
+1. Open a fresh browser context with the auth.json storageState.
+2. Navigate to /configurator/manage; wait for domcontentloaded then 1.5s for SPA + toasts to render.
+3. Locate getByText(/Undo available for/i); assert count === 0.
+4. Locate getByRole('button', { name: /^Undo$/ }); assert count === 0.
+
+Defence-in-depth — checks both the toast text and the dedicated Undo button to catch a partial mount.`,
+    },
+    tag: ['@area:configurator-manage', '@ccrs:417', '@kind:regression', '@layer:api', '@persona:admin'] }, async ({
     browser,
   }) => {
     // Use a fresh context and exercise the regular login form so we

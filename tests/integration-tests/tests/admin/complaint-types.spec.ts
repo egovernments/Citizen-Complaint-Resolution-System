@@ -61,7 +61,21 @@ test.afterAll(async () => {
 });
 
 test.describe('manage/complaint-types', () => {
-  test('1. list renders with Service Code / Name / Department / SLA / Status columns', async ({
+  test('1. list renders with Service Code / Name / Department / SLA / Status columns', {
+    annotation: {
+      type: 'description',
+      description: `Smoke check that /manage/complaint-types renders with all five expected column headers (Service Code, Name, Department, SLA, Status) AND that MDMS itself returns at least one record. Catches the case where either the UI list breaks or the underlying RAINMAKER-PGR.ServiceDefs schema is empty.
+
+Steps:
+1. Navigate to /configurator/manage/complaint-types.
+2. Assert role=table is visible.
+3. For each of ['Service Code','Name','Department','SLA','Status'], assert the matching role=columnheader is visible.
+4. Assert getByRole('row') count > 1 (header + data).
+5. mdmsSearch via API (limit 200); assert live.length > 0.
+
+Healthy Nai Pepea tenant has 37 seeded types — the count check is loose (> 1) to tolerate fresh deployments.`,
+    },
+    tag: ['@area:configurator-manage', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }) => {
     await page.goto(LIST_PATH);
@@ -86,7 +100,25 @@ test.describe('manage/complaint-types', () => {
     expect(live.length).toBeGreaterThan(0);
   });
 
-  test('2. create → edit → deactivate round-trip; visible at city tenant', async ({
+  test('2. create → edit → deactivate round-trip; visible at city tenant', {
+    annotation: {
+      type: 'description',
+      description: `Drives the full UI round-trip: create a complaint type at root tenant, verify it inherits to the city tenant via MDMS v2, edit its SLA from 24 to 72 hours through the form, and confirm the change persists. Skips if no active department exists on the tenant (prerequisite for the dept FK).
+
+Steps:
+1. test.skip if !liveDeptCode (beforeAll picks first active dept).
+2. Generate a unique code + name; track for cleanup.
+3. Navigate to /complaint-types/create; fill Name, Service Code, pick Department option, set SLA=24.
+4. Click Create; wait for navigation back to LIST_PATH.
+5. mdmsSearch at CITY_TENANT for [code]; assert at least 1 hit (proves root → city inheritance).
+6. Search for the code in the list; click the row to open detail.
+7. Click Edit; set SLA to 72; click Save.
+8. Assert text 72 is visible.
+9. mdmsSearch at TENANT_CODE for [code]; assert data.slaHours === 72.
+
+Cleanup is API-only — soft-deletes via cleanupMdms in afterAll because there's no UI delete affordance for complaint types.`,
+    },
+    tag: ['@area:configurator-manage', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
     if (!liveDeptCode) test.skip(true, 'No active department seeded on tenant');
@@ -156,7 +188,26 @@ test.describe('manage/complaint-types', () => {
     expect((afterEdit[0].data as Record<string, unknown>).slaHours).toBe(72);
   });
 
-  test('3. bulk import — happy path creates 3 types, each carries SLA + dept', async ({
+  test('3. bulk import — happy path creates 3 types, each carries SLA + dept', {
+    annotation: {
+      type: 'description',
+      description: `Drives the bulk-import flow on /complaint-types/bulk: upload a 3-row xlsx, verify the preview reports "3 valid", click Create, and confirm "3 created" + that all three records persist with the expected SLA (48h) and department.
+
+Steps:
+1. test.skip if !liveDeptCode.
+2. Generate 3 unique codes via testCodeIndexed; track for cleanup.
+3. Navigate to /complaint-types/bulk.
+4. Build xlsx buffer via buildComplaintTypeXlsx with rows containing serviceCode, name, department, slaHours=48, menuPath='Complaint'.
+5. Locate input[type="file"]; test.skip if missing (page may not be implemented on this build).
+6. setInputFiles with the xlsx buffer (mime type set explicitly).
+7. Wait for /3\\s*(valid|rows)/i text within 30s.
+8. Click button matching /Create\\s+\\d+/i.
+9. Wait for /3\\s*(created|success)/i within 60s.
+10. mdmsSearch for the three codes; assert all 3 returned with slaHours=48 and the correct department.
+
+Tolerant of UI variants (e.g. preview text could read "3 valid" or "3 rows") via the regex unions.`,
+    },
+    tag: ['@area:configurator-manage', '@area:pgr', '@kind:happy-path', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
     if (!liveDeptCode) test.skip(true, 'No active department seeded on tenant');
@@ -213,7 +264,22 @@ test.describe('manage/complaint-types', () => {
     }
   });
 
-  test('4. department reference filter narrows the list', async ({ page }) => {
+  test('4. department reference filter narrows the list', {
+    annotation: {
+      type: 'description',
+      description: `Validates the Department filter on the complaint-types list: picking a department option must narrow the rendered rows so each row references that department (either label or code). Skips if the filter isn't implemented on the current build.
+
+Steps:
+1. Navigate to /configurator/manage/complaint-types.
+2. Locate getByLabel(/^Department/i); test.skip if not visible.
+3. Click the filter; capture the first option's text label; click it.
+4. Wait for networkidle.
+5. Read row count; if <=1 return early (filter validly returned 0 rows).
+6. For up to 5 sample rows, read text content and assert it (lowercased) includes the dept label (lowercased).
+
+Loose label-match — works whether the row renders the dept code, dept name, or both.`,
+    },
+    tag: ['@area:configurator-manage', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
     await page.goto(LIST_PATH);
 
     const filter = page.getByLabel(/^Department/i).first();
@@ -243,7 +309,22 @@ test.describe('manage/complaint-types', () => {
     }
   });
 
-  test('5. tenant parity — api create at ke is visible at ke.nairobi', async ({
+  test('5. tenant parity — api create at ke is visible at ke.nairobi', {
+    annotation: {
+      type: 'description',
+      description: `Pure-API check guarding TASKS.md §2.5: complaint types registered at root tenant must surface at city level via MDMS v2 inheritance. Skips the UI entirely so the test catches inheritance regressions even when the form is half-wired.
+
+Steps:
+1. test.skip if !liveDeptCode.
+2. Generate a unique code; track for cleanup.
+3. mdmsCreate at TENANT_CODE (root) with full ServiceDef payload (serviceCode, name, active, keywords, menuPath, slaHours=24, department=liveDeptCode).
+4. In parallel: mdmsSearch at TENANT_CODE for [code] and mdmsSearch at CITY_TENANT for [code].
+5. Assert atRoot.length === 1.
+6. Assert atCity.length === 1 (proves inheritance).
+
+If atRoot=1 but atCity=0, MDMS v2 inheritance is broken for this schema — a serious regression that breaks the whole "register once at root" model.`,
+    },
+    tag: ['@area:configurator-manage', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
   }, testInfo) => {
     if (!liveDeptCode) test.skip(true, 'No active department seeded on tenant');
 

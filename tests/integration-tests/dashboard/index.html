@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DIGIT integration tests — dashboard</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header id="topbar">
+    <h1>DIGIT integration tests</h1>
+    <div id="run-summary" class="muted">loading…</div>
+    <div id="run-switcher" class="run-switcher"></div>
+  </header>
+  <main id="layout">
+    <aside id="filters" aria-label="Filters">
+      <section class="filter-group">
+        <h3>Status</h3>
+        <div id="filter-status" class="filter-options"></div>
+      </section>
+      <section class="filter-group">
+        <h3>Search</h3>
+        <input type="search" id="search" placeholder="title or file…" autocomplete="off">
+      </section>
+      <div id="facet-filters"></div>
+      <section class="filter-actions">
+        <button id="clear-filters" type="button">Clear filters</button>
+      </section>
+    </aside>
+    <section id="content">
+      <div id="result-meta" class="muted"></div>
+      <div id="test-table-wrapper">
+        <table id="test-table">
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>File</th>
+              <th>Tags</th>
+              <th class="numeric">Last 5</th>
+              <th class="numeric">Duration</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+    <aside id="detail" aria-label="Test detail" hidden></aside>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

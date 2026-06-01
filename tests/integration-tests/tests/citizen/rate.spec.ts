@@ -174,7 +174,23 @@ test.describe('Citizen rate-complaint UI', () => {
     console.log(`Seeded ${serviceRequestId} → RESOLVED for ${CITIZEN_PHONE}`);
   });
 
-  test('rate page renders 5 stars + 4 feedback checkboxes + Comments textarea', async ({ page }) => {
+  test('rate page renders 5 stars + 4 feedback checkboxes + Comments textarea', {
+    annotation: {
+      type: 'description',
+      description: `Story 6.1 contract for /citizen/pgr/rate/{srid}: page renders the rating heading, the 5-star row, the four "What was good?" checkboxes (Services / Resolution Time / Quality of Work / Others), and the Comments textarea. Doesn't actually submit — would mutate the resolved complaint to CLOSEDAFTERRESOLUTION.
+
+Steps:
+1. setTimeout 120s; citizenOtpLogin.
+2. Navigate to /digit-ui/citizen/pgr/rate/{seeded SR id} (seeded by beforeAll → API-create + ADMIN ASSIGN + RESOLVE).
+3. Wait 5s; assert body does NOT contain "Something went wrong".
+4. Assert body contains "How would you rate your experience with us?".
+5. Assert body contains "What was good ?" (note spaces around ?).
+6. For each label ['Services','Resolution Time','Quality of Work','Others'], assert body contains it.
+7. Assert the first textarea on the page is visible.
+
+beforeAll is API-only (register citizen, file complaint, assign, resolve) because the UI flow to RESOLVE requires admin role and the test needs a deterministic state to assert against. Teardown is implicit — the leftover RESOLVED complaint is harmless on naipepea.`,
+    },
+    tag: ['@area:pgr', '@kind:regression', '@layer:api', '@persona:citizen'] }, async ({ page }) => {
     test.setTimeout(120_000);
     await citizenOtpLogin(page, CITIZEN_PHONE);
     await page.goto(`${BASE_URL}/digit-ui/citizen/pgr/rate/${serviceRequestId}`, {

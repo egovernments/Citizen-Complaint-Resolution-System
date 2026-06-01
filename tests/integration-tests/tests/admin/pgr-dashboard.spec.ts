@@ -18,7 +18,20 @@ test.describe('PGR Dashboard', () => {
     await loginConfigurator(page);
   });
 
-  test('dashboard page loads with heading', async ({ page }) => {
+  test('dashboard page loads with heading', {
+    annotation: {
+      type: 'description',
+      description: `Smoke check that /manage/pgr-dashboard renders with the expected H1 heading. If the route is misconfigured or the lazy-loaded chunk fails, the page wouldn't have an H1 at all — this catches that wide failure mode.
+
+Steps:
+1. loginConfigurator (beforeEach).
+2. Navigate to /manage/pgr-dashboard, wait for networkidle.
+3. Locate h1; assert visible within 10s.
+4. Assert the heading contains "PGR Dashboard".
+
+First test in a series of seven that walk the dashboard's UI surface.`,
+    },
+    tag: ['@area:configurator-manage', '@area:dashboard', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
     await page.goto(`${CONFIGURATOR_BASE}/manage/pgr-dashboard`, {
       waitUntil: 'networkidle',
       timeout: 30_000,
@@ -29,7 +42,19 @@ test.describe('PGR Dashboard', () => {
     await expect(heading).toContainText('PGR Dashboard');
   });
 
-  test('overview card shows 3 KPI metrics', async ({ page }) => {
+  test('overview card shows 3 KPI metrics', {
+    annotation: {
+      type: 'description',
+      description: `Asserts the dashboard overview card surfaces the three core PGR KPIs: Total Complaints, Closed Complaints, Completion Rate. Catches a regression where a metric gets dropped from the layout (or its label gets renamed without updating the test alongside).
+
+Steps:
+1. loginConfigurator (beforeEach).
+2. Navigate to /manage/pgr-dashboard, wait for networkidle.
+3. For each KPI label in ['Total Complaints', 'Closed Complaints', 'Completion Rate'], assert text=label is visible within 5s.
+
+Pairs with the "KPI values show numbers" test below — together they confirm the labels AND values render.`,
+    },
+    tag: ['@area:configurator-manage', '@area:dashboard', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
     await page.goto(`${CONFIGURATOR_BASE}/manage/pgr-dashboard`, {
       waitUntil: 'networkidle',
       timeout: 30_000,
@@ -46,7 +71,20 @@ test.describe('PGR Dashboard', () => {
     }
   });
 
-  test('all chart canvases render', async ({ page }) => {
+  test('all chart canvases render', {
+    annotation: {
+      type: 'description',
+      description: `Asserts Chart.js renders all 8 expected canvases on the dashboard: Cumulative Closed (line), By Source (line), Complaints Status (stacked bar), By Status (doughnut), By Channel (doughnut), By Department (doughnut), Citizens (line), Top Complaints (horizontal bar). Catches the case where a chart fails to render (data fetch error, Chart.js init throws, etc).
+
+Steps:
+1. loginConfigurator (beforeEach).
+2. Navigate to /manage/pgr-dashboard, wait for networkidle.
+3. Wait for any 'canvas' element within 10s, then 1s for Chart.js animation to settle.
+4. Assert canvas locator has count === 8 within 10s.
+
+If the canvas count drifts, update both the dashboard layout and this test with the new expected count.`,
+    },
+    tag: ['@area:configurator-manage', '@area:dashboard', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
     await page.goto(`${CONFIGURATOR_BASE}/manage/pgr-dashboard`, {
       waitUntil: 'networkidle',
       timeout: 30_000,
@@ -69,7 +107,19 @@ test.describe('PGR Dashboard', () => {
     await expect(canvases).toHaveCount(8, { timeout: 10_000 });
   });
 
-  test('chart section titles are visible', async ({ page }) => {
+  test('chart section titles are visible', {
+    annotation: {
+      type: 'description',
+      description: `Companion to the canvas-count test: each of the 9 expected section titles (DSS Overview + 8 chart titles) must be visible. Catches a regression where a chart canvas renders but its surrounding section/heading gets dropped (or vice versa — title without canvas).
+
+Steps:
+1. loginConfigurator (beforeEach).
+2. Navigate to /manage/pgr-dashboard, wait for networkidle.
+3. For each title in ['DSS Overview','Cumulative Closed Complaints','Complaints by Source','Complaints Status','By Status','By Channel','By Department','Citizens','Top Complaints'], assert text=title is visible within 5s.
+
+Note 9 titles vs 8 canvases — DSS Overview is a section header without its own chart.`,
+    },
+    tag: ['@area:configurator-manage', '@area:dashboard', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
     await page.goto(`${CONFIGURATOR_BASE}/manage/pgr-dashboard`, {
       waitUntil: 'networkidle',
       timeout: 30_000,
@@ -92,7 +142,20 @@ test.describe('PGR Dashboard', () => {
     }
   });
 
-  test('sidebar has PGR Dashboard nav link', async ({ page }) => {
+  test('sidebar has PGR Dashboard nav link', {
+    annotation: {
+      type: 'description',
+      description: `Asserts the sidebar has a button labelled "PGR Dashboard" AND that it carries the active styling (the bg-primary class) when the user is on the dashboard route. Catches a regression where the route-active highlight stops firing — the link still renders but doesn't visually indicate the current page.
+
+Steps:
+1. loginConfigurator (beforeEach).
+2. Navigate to /manage/pgr-dashboard, wait for networkidle.
+3. Locate button:hasText("PGR Dashboard"); assert visible within 5s.
+4. Assert the button has a class matching /bg-primary/ (active styling).
+
+Loose regex on the class lets the design system rename specific Tailwind variants without false-positives.`,
+    },
+    tag: ['@area:configurator-manage', '@area:dashboard', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
     await page.goto(`${CONFIGURATOR_BASE}/manage/pgr-dashboard`, {
       waitUntil: 'networkidle',
       timeout: 30_000,
@@ -106,7 +169,21 @@ test.describe('PGR Dashboard', () => {
     await expect(navLink).toHaveClass(/bg-primary/);
   });
 
-  test('KPI values show numbers', async ({ page }) => {
+  test('KPI values show numbers', {
+    annotation: {
+      type: 'description',
+      description: `Asserts each of the three KPI value tiles renders a number-shaped value (digits, optionally with commas/decimals/percentage symbol). Catches regressions where the value placeholder is "N/A", "—", or empty because the underlying analytics endpoint failed silently.
+
+Steps:
+1. loginConfigurator (beforeEach).
+2. Navigate to /manage/pgr-dashboard, wait for networkidle.
+3. Locate .text-3xl.font-bold elements (the KPI value tiles).
+4. Assert count >= 3.
+5. For each tile, read innerText and assert it matches /[\\d,.]+/ (contains at least one digit/comma/period).
+
+Loose regex tolerates "1,234", "0", "12.5%" — anything that's actually numeric.`,
+    },
+    tag: ['@area:configurator-manage', '@area:dashboard', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
     await page.goto(`${CONFIGURATOR_BASE}/manage/pgr-dashboard`, {
       waitUntil: 'networkidle',
       timeout: 30_000,
@@ -123,7 +200,23 @@ test.describe('PGR Dashboard', () => {
     }
   });
 
-  test('breakdown table with 4 tabs', async ({ page }) => {
+  test('breakdown table with 4 tabs', {
+    annotation: {
+      type: 'description',
+      description: `Asserts the "Status by Tenant" breakdown panel renders with all four tab triggers (Boundary, Department, Complaint Type, Channel), the Boundary tab is selected by default with a visible table, and switching to Department also renders a table inside the active tabpanel.
+
+Steps:
+1. loginConfigurator (beforeEach).
+2. Navigate to /manage/pgr-dashboard, wait for networkidle.
+3. Assert "Status by Tenant" text is visible within 5s.
+4. For each tab in ['Boundary','Department','Complaint Type','Channel'], assert [role="tab"]:has-text(<tab>) is visible.
+5. Assert the first <table> element is visible (the Boundary tab is the default).
+6. Click the Department tab.
+7. Assert a [role="tabpanel"] table is visible within 5s.
+
+Confirms tab-switching actually swaps the rendered table — not just the tab indicator.`,
+    },
+    tag: ['@area:configurator-manage', '@area:dashboard', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
     await page.goto(`${CONFIGURATOR_BASE}/manage/pgr-dashboard`, {
       waitUntil: 'networkidle',
       timeout: 30_000,
