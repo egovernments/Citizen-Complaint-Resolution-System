@@ -320,6 +320,16 @@ const pgr =  {
                         })
                       },
                       {
+                        // In sandbox mode, if location was provided but city not detected, still proceed to locality selection
+                        target: '#locality',
+                        cond: (context, event) => !event.data && context.slots.pgr.geocode && config.enableSandboxMode,
+                        actions: assign((context, event) => {
+                          // Set city to organization code (tenant)
+                          context.slots.pgr.city = context.extraInfo.tenantId;
+                          // Location coordinates are already saved in context.slots.pgr.geocode
+                        })
+                      },
+                      {
                         // In sandbox mode, skip city selection but go to locality selection
                         target: '#locality',
                         cond: (context, event) => !event.data && context.message ==='1' && config.enableSandboxMode,
@@ -340,7 +350,7 @@ const pgr =  {
                       },
                       {
                         target: '#geoLocation',
-                        cond: (context, event) => !event.data && context.message !='1',
+                        cond: (context, event) => !event.data && context.message !='1' && !context.slots.pgr.geocode,
                         actions: assign((context, event) => {
                           let message = dialog.get_message(dialog.global_messages.error.retry, context.user.locale);
                           dialog.sendMessage(context, message,false);
