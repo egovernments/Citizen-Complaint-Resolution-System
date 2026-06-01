@@ -27,7 +27,7 @@ import { Banner } from '@/components/digit/Banner';
 import { parseExcelFile, parseTenantExcel } from '@/utils/excelParser';
 import * as XLSX from 'xlsx';
 import { mdmsService, localizationService, apiClient, ApiClientError } from '@/api';
-import { bootstrapStateRoot, stateNeedsBootstrap, type BootstrapProgress } from '@/api/services/tenantBootstrap';
+import { bootstrapStateRoot, bootstrapLocalization, stateNeedsBootstrap, type BootstrapProgress } from '@/api/services/tenantBootstrap';
 import type { TenantExcelRow, Tenant, ValidationResult } from '@/api/types';
 
 type Step = 'landing' | 'upload' | 'preview' | 'branding' | 'complete' | 'select-existing';
@@ -213,12 +213,28 @@ export default function Phase1Page() {
       // definitely has the tenant.tenants schema, either pre-existing or just
       // registered by bootstrap). This replaces the previous `state.tenant`
       // target — that was a localStorage value, not a deliberate write target.
-      await mdmsService.createTenant(parentState, tenant);
+      try {
+        await mdmsService.createTenant(parentState, tenant);
+      } catch (err) {
+        const msg = err instanceof ApiClientError ? err.firstError : (err instanceof Error ? err.message : '');
+        if (!/duplicate|already exists|unique|NON_UNIQUE/i.test(msg)) throw err;
+      }
 
       // Create localization for tenant name, also at the parent state.
       await localizationService.upsertMessages(parentState, 'en_IN',
         localizationService.buildTenantLocalizations(tenant.code, tenant.name, 'en_IN')
       );
+      await localizationService.cacheBust().catch(e => console.warn('cache-bust failed', e));
+
+      // Copy base localization from the parent state → new city tenant so
+      // the DIGIT-UI doesn't show raw keys for common labels, PGR messages,
+      // and UI strings. Mirrors what MCP bootstrap does. Skipped for bare
+      // state roots (no dot in code) — bootstrapStateRoot already ran Step 6.
+      if (tenant.code.includes('.')) {
+        setBootstrapProgress({ step: 'localization', current: 0, total: 1 });
+        await bootstrapLocalization(parentState, tenant.code);
+        setBootstrapProgress(null);
+      }
 
       setCreatedTenant(tenant);
       // Retarget subsequent phases at the freshly-created child tenant so

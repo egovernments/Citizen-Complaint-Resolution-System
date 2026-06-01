@@ -208,15 +208,15 @@ async function pgrGetList(client: DigitApiClient, config: ResourceConfig, tenant
 async function localizationGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string, filter?: Record<string, unknown>): Promise<RaRecord[]> {
   // Side-by-side pivot of two locales. The list view picks the locales via
   // dropdowns and passes them as `locale` (left column) and `locale2` (right
-  // column). Defaults preserve the previous en_IN-only behavior on the left
-  // and surface sw_KE on the right so Nairobi pilot translators see both
-  // out of the box.
+  // column). localeB is empty until the user explicitly picks a second locale
+  // so the right column starts as all-missing rather than defaulting to a
+  // hardcoded locale that may not exist on the tenant.
   const module = filter?.module ? String(filter.module) : undefined;
   const localeA = filter?.locale ? String(filter.locale) : 'en_IN';
-  const localeB = filter?.locale2 ? String(filter.locale2) : 'sw_KE';
+  const localeB = filter?.locale2 ? String(filter.locale2) : '';
   const [aMsgs, bMsgs] = await Promise.all([
     client.localizationSearch(tenantId, localeA, module),
-    localeA === localeB ? Promise.resolve([] as Record<string, unknown>[]) : client.localizationSearch(tenantId, localeB, module),
+    localeB && localeB !== localeA ? client.localizationSearch(tenantId, localeB, module) : Promise.resolve([] as Record<string, unknown>[]),
   ]);
   // Pivot keyed by `${code}__${module}` so a code that appears under
   // multiple modules doesn't get collapsed (real DIGIT data does this).
@@ -556,6 +556,9 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
           if (key.startsWith('_')) continue;
           data[key] = value;
         }
+        if (config.schema === 'tenant.citymodule' && !Array.isArray(data.tenants)) {
+          data.tenants = [{ code: tenantId }];
+        }
         const uid = String(incoming[config.idField] || data.code || '');
         const record = await client.mdmsCreate(tenantId, config.schema!, uid, data);
         return { data: normalizeMdmsRecord(record, config) };
@@ -766,14 +769,14 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         const code = String(data.code || params.id);
         const mod = String(data.module ?? '');
         const localeA = String(data.locale ?? 'en_IN');
-        const localeB = String(data.locale2 ?? 'sw_KE');
+        const localeB = String(data.locale2 ?? '');
         const writes: Promise<unknown>[] = [];
         if (data.message !== undefined && data.message !== prev.message) {
           writes.push(client.localizationUpsert(tenantId, localeA, [
             { code, message: String(data.message ?? ''), module: mod },
           ]));
         }
-        if (data.message2 !== undefined && data.message2 !== prev.message2) {
+        if (localeB && data.message2 !== undefined && data.message2 !== prev.message2) {
           writes.push(client.localizationUpsert(tenantId, localeB, [
             { code, message: String(data.message2 ?? ''), module: mod },
           ]));
