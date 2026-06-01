@@ -5,28 +5,24 @@ require('url-search-params-polyfill');
 class UserService {
 
   async getUserForMobileNumber(mobileNumber, tenantId) {
-    console.log("getUserForMobileNumber " + mobileNumber);
     try {
       let user = await this.loginOrCreateUser(mobileNumber, tenantId);
       if (!user || !user.userInfo) throw new Error('User info is incomplete');
-      
+
       user.userId = user.userInfo.uuid;
       user.mobileNumber = mobileNumber;
       user.name = user.userInfo.name;
       user.locale = user.userInfo.locale;
       return user;
     } catch (error) {
-      console.error('Error in getUserForMobileNumber:', error.message);
       throw error;
     }
   }
 
   async loginOrCreateUser(mobileNumber, tenantId) {
-    console.log("Passed Mobile Number " + mobileNumber);
     try {
       let user = await this.loginUser(mobileNumber, tenantId);
       if (!user) {
-        console.log(`Initial login failed for ${mobileNumber}, attempting to create user`);
         let createResult = await this.createUser(mobileNumber, tenantId);
         if (!createResult) {
           throw new Error(`Failed to create user for ${mobileNumber}`);
@@ -42,13 +38,18 @@ class UserService {
       user = await this.enrichuserDetails(user);
       return user;
     } catch (error) {
-      console.error('Error in loginOrCreateUser:', error.message);
       throw error;
     }
   }
 
   async enrichuserDetails(user) {
+    // Skip enrichment if no auth token
+    if (!user || !user.authToken) {
+      return user;
+    }
+
     let url = `${config.egovServices.userServiceHost}${config.egovServices.userServiceCitizenDetailsPath}?access_token=${user.authToken}`;
+
     let options = {
       method: 'POST',
       headers: {
@@ -62,22 +63,20 @@ class UserService {
         let body = await response.json();
         user.userInfo.name = body.name;
         user.userInfo.locale = body.locale;
+      } else if (response.status === 401) {
       } else {
-        console.warn(`User enrichment failed with status ${response.status}`);
       }
       return user;
     } catch (error) {
-      console.error('Error in enrichuserDetails:', error.message);
       return user; // Return original user even if enrichment fails
     }
   }
 
   async loginUser(mobileNumber, tenantId) {
-    console.log("Into Login User mobileNumber", mobileNumber, "tenant id", tenantId);
-    
+
     // Sanitize mobile number for login too
     const cleanMobileNumber = this.sanitizeMobileNumber(mobileNumber) || mobileNumber;
-    
+
     let data = new URLSearchParams();
     data.append('grant_type', 'password');
     data.append('scope', 'read');
@@ -100,7 +99,6 @@ class UserService {
 
     try {
       let response = await fetch(url, options);
-      console.log("User Response status", response.status);
 
       if (response.status === 200) {
         let body = await response.json();
@@ -110,11 +108,9 @@ class UserService {
           userInfo: body.UserRequest
         };
       } else {
-        console.warn(`Login failed for ${mobileNumber} with status ${response.status}`);
         return undefined;
       }
     } catch (error) {
-      console.error('Error in loginUser:', error.message);
       return undefined;
     }
   }
@@ -125,7 +121,7 @@ class UserService {
     if (!cleanMobileNumber) {
       throw new Error(`Invalid mobile number format: ${mobileNumber}. Expected 10 digits.`);
     }
-    
+
     let requestBody = {
       RequestInfo: {
         apiId: "Rainmaker",
@@ -164,11 +160,9 @@ class UserService {
       if (response.status === 200) {
         return responseBody;
       } else {
-        console.error(`Create User failed: ${JSON.stringify(responseBody)}`);
-        throw new Error(`User creation failed: ${JSON.stringify(responseBody)}`);
+        throw new Error(`User creation failed with status ${response.status}`);
       }
     } catch (error) {
-      console.error('Error in createUser:', error.message);
       throw error;
     }
   }
@@ -176,10 +170,10 @@ class UserService {
   // Helper method to sanitize mobile number
   sanitizeMobileNumber(mobileNumber) {
     if (!mobileNumber) return null;
-    
+
     // Remove any non-digit characters
     const digitsOnly = mobileNumber.replace(/\D/g, '');
-    
+
     // Handle different formats:
     // 918750975975 (12 digits with country code) -> 8750975975 (10 digits)
     // 8750975975 (10 digits) -> 8750975975 (keep as is)

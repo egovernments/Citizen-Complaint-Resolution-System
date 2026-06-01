@@ -8,11 +8,25 @@ const { State, interpret } = require("xstate");
 const dialog = require("../machine/util/dialog.js");
 const uuid = require("uuid");
 const config = require("../env-variables");
-const organizationService = require("../machine/service/organization-service");
+const emailTenantService = require("../machine/service/email-tenant-service");
 
-// Simple in-memory store for tracking org code requests in sandbox mode
-// Format: { mobileNumber: { timestamp: Date, waitingForOrgCode: boolean } }
+// Simple in-memory store for tracking email validation requests in sandbox mode
+// Format: { mobileNumber: { timestamp: Date, waitingForEmail: boolean } }
 const sandboxOrgCodeTracker = {};
+
+async function getAuthenticatedSandboxUser(mobileNumber, tenantId) {
+  const user = await userService.loginUser(mobileNumber, tenantId);
+  if (!user || !user.userInfo) {
+    throw new Error(`User is not registered in tenant ${tenantId}`);
+  }
+
+  const enrichedUser = await userService.enrichuserDetails(user);
+  enrichedUser.userId = enrichedUser.userInfo.uuid;
+  enrichedUser.mobileNumber = mobileNumber;
+  enrichedUser.name = enrichedUser.userInfo.name;
+  enrichedUser.locale = enrichedUser.userInfo.locale;
+  return enrichedUser;
+}
 
 class SessionManager {
   async fromUser(reformattedMessage) {
@@ -20,29 +34,29 @@ class SessionManager {
     let user;
     let userId;
     let messageInput = reformattedMessage.message.input?.toLowerCase();
-    
+
     // Check if this is a reset/greeting message
     let isReset = dialog.get_intention(
       grammer.reset,
       reformattedMessage,
       true
     ) === 'reset';
-    
-    // In sandbox mode, handle org code flow without creating sessions
+
+    // In sandbox mode, handle email validation flow without creating sessions
     if (config.enableSandboxMode) {
       const isGreeting = isReset || (messageInput && ['hi', 'hello', 'hey', 'start', 'help', 'seva', 'egov'].includes(messageInput.trim()));
-      
-      // Check if we're waiting for org code from this number
+
+      // Check if we're waiting for email from this number
       const trackerEntry = sandboxOrgCodeTracker[mobileNumber];
-      const isWaitingForOrgCode = trackerEntry && trackerEntry.waitingForOrgCode;
-      
+      const isWaitingForEmail = trackerEntry && trackerEntry.waitingForEmail;
+
       // Clean up old entries (older than 30 minutes)
       if (trackerEntry && (Date.now() - trackerEntry.timestamp) > 30 * 60 * 1000) {
         delete sandboxOrgCodeTracker[mobileNumber];
       }
-      
+
       if (isGreeting) {
-        // Every greeting starts fresh - always ask for org code.
+        // Every greeting starts fresh - always ask for email.
         // If we know the prior user UUID for this mobile, deactivate that session.
         const priorUserId = trackerEntry && trackerEntry.userId;
         if (priorUserId) {
@@ -51,34 +65,30 @@ class SessionManager {
 
         sandboxOrgCodeTracker[mobileNumber] = {
           timestamp: Date.now(),
-          waitingForOrgCode: true
+          waitingForEmail: true
         };
-        
-        const registrationUrl = `${config.sandboxHost || 'https://sandbox-demo.digit.org'}/sandbox-ui/user/login`;
-        const welcomeMessage = "Welcome to the Sandbox WhatsApp Service! 🏛️\n\n" +
-          "Please enter your organization code to continue.\n\n" +
-          `📝 Don't have an organization code? Register here:\n${registrationUrl}`;
-        
+
+        const welcomeMessage = "Welcome to Citizen Complaint Service\n\n" +
+          "Enter your registered email address";
+
         channelProvider.sendMessageToUser(
           { mobileNumber: mobileNumber },
           [welcomeMessage],
           reformattedMessage.extraInfo
         );
         return; // Exit early - no session creation
-      } else if (isWaitingForOrgCode && !isGreeting) {
-        // User is providing org code - validate it
-        const orgCode = reformattedMessage.message.input?.trim();
-        const orgDetails = await organizationService.validateOrganizationCode(orgCode);
-        
-        if (!orgDetails) {
-          // Invalid org code - provide registration link
+      } else if (isWaitingForEmail && !isGreeting) {
+        // User is providing email - validate it
+        const email = reformattedMessage.message.input?.trim().toLowerCase();
+        const result = await emailTenantService.findTenantByEmail(email);
+
+        if (!result) {
+          // Invalid email - provide registration link
           const registrationUrl = `${config.sandboxHost || 'https://sandbox-demo.digit.org'}/sandbox-ui/user/login`;
-          const errorMessage = `Invalid organization code '${orgCode}'.\n\n` +
-            `👉 Please enter a correct organization code\n\n` +
-            `OR\n\n` +
-            `👉 Register your organization here if you haven't done so:\n${registrationUrl}\n\n` +
-            `Type 'Hi' to restart.`;
-          
+          const errorMessage = `Email '${email}' not found.\n\n` +
+            `Please enter a registered email address or register at:\n` +
+            `${registrationUrl}`;
+
           channelProvider.sendMessageToUser(
             { mobileNumber: mobileNumber },
             [errorMessage],
@@ -86,10 +96,42 @@ class SessionManager {
           );
           return; // Exit early - no session creation
         }
-        
-        // Valid org code - try to get/create user in the organization's tenant
+
+        // Check if multiple organizations found
+        if (result.multiple) {
+          // Store the email and tenant options for selection
+          sandboxOrgCodeTracker[mobileNumber] = {
+            timestamp: Date.now(),
+            waitingForEmail: false,
+            waitingForOrgSelection: true,
+            email: email,
+            tenantOptions: result.tenants
+          };
+
+          // Create numbered list of organizations
+          let orgListMessage = `Found ${result.tenants.length} organizations for: ${email}\n\n`;
+          orgListMessage += `Select your organization:\n\n`;
+
+          result.tenants.forEach((tenant, index) => {
+            orgListMessage += `${index + 1}. ${tenant.name || tenant.code}\n`;
+          });
+
+          orgListMessage += `\nEnter number (1-${result.tenants.length})`;
+
+          channelProvider.sendMessageToUser(
+            { mobileNumber: mobileNumber },
+            [orgListMessage],
+            reformattedMessage.extraInfo
+          );
+          return; // Exit early - wait for selection
+        }
+
+        // Single organization found - proceed directly
+        const orgDetails = result.tenants[0];
+
+        // Valid email - only allow already registered users in the organization's tenant
         try {
-          user = await userService.getUserForMobileNumber(
+          user = await getAuthenticatedSandboxUser(
             mobileNumber,
             orgDetails.code
           );
@@ -103,27 +145,80 @@ class SessionManager {
           // messages can resolve the user UUID without re-asking for the org code.
           sandboxOrgCodeTracker[mobileNumber] = {
             timestamp: Date.now(),
-            waitingForOrgCode: false,
+            waitingForEmail: false,
             orgTenantId: orgDetails.code,
-            userId: userId
+            userId: userId,
+            orgEmail: email
           };
           // Now continue to create the session - DON'T RETURN!
         } catch (error) {
           // Validation succeeded but user create/login failed - clear tracker.
           delete sandboxOrgCodeTracker[mobileNumber];
-          console.error(`Failed to get/create user for ${mobileNumber} in tenant ${orgDetails.code}:`, error.message);
-          
+
           // User not registered in this organization - show registration URL
-          const registrationUrl = organizationService.getSandboxRegistrationUrl(orgDetails.code);
+          const registrationUrl = emailTenantService.getSandboxRegistrationUrl(email);
           channelProvider.sendMessageToUser(
             { mobileNumber: mobileNumber },
-            [`You are not registered with organization '${orgDetails.name}'.\n\nPlease register at:\n${registrationUrl}\n\nOnce registered, type 'Hi' to start again.`],
+            [`Mobile ${mobileNumber} not registered with ${orgDetails.name}.\n\nComplete registration at:\n${registrationUrl}\n\nUse email: ${email}`],
             reformattedMessage.extraInfo
           );
           return; // Exit early - no session creation
         }
-      } else if (!isWaitingForOrgCode && !isGreeting) {
-        // Subsequent message after org code is set: resolve the user via the
+      } else if (trackerEntry && trackerEntry.waitingForOrgSelection) {
+        // User is selecting from multiple organizations
+        const selection = reformattedMessage.message.input?.trim();
+        const selectionNum = parseInt(selection);
+
+        if (isNaN(selectionNum) || selectionNum < 1 || selectionNum > trackerEntry.tenantOptions.length) {
+          // Invalid selection
+          channelProvider.sendMessageToUser(
+            { mobileNumber: mobileNumber },
+            [`Invalid selection. Enter a number between 1 and ${trackerEntry.tenantOptions.length}`],
+            reformattedMessage.extraInfo
+          );
+          return;
+        }
+
+        // Get selected organization
+        const selectedOrg = trackerEntry.tenantOptions[selectionNum - 1];
+        const email = trackerEntry.email;
+
+        // Only allow already registered users in the selected tenant
+        try {
+          user = await getAuthenticatedSandboxUser(
+            mobileNumber,
+            selectedOrg.code
+          );
+          userId = user.userId;
+          reformattedMessage.user = user;
+          reformattedMessage.extraInfo.tenantId = selectedOrg.code;
+          reformattedMessage.extraInfo.organizationTenantId = selectedOrg.code;
+          reformattedMessage.extraInfo.organizationName = selectedOrg.name;
+
+          // Update tracker with selected org
+          sandboxOrgCodeTracker[mobileNumber] = {
+            timestamp: Date.now(),
+            waitingForEmail: false,
+            waitingForOrgSelection: false,
+            orgTenantId: selectedOrg.code,
+            userId: userId,
+            orgEmail: email
+          };
+          // Continue to create session - DON'T RETURN!
+        } catch (error) {
+          // User not registered in selected organization
+          delete sandboxOrgCodeTracker[mobileNumber];
+
+          const registrationUrl = emailTenantService.getSandboxRegistrationUrl(email);
+          channelProvider.sendMessageToUser(
+            { mobileNumber: mobileNumber },
+            [`Mobile ${mobileNumber} not registered with ${selectedOrg.name}.\n\nComplete registration at:\n${registrationUrl}\n\nUse email: ${email}`],
+            reformattedMessage.extraInfo
+          );
+          return;
+        }
+      } else if (!isWaitingForEmail && !isGreeting) {
+        // Subsequent message after email/org is set: resolve the user via the
         // tracker (mobileNumber -> {orgTenantId, userId}) so the session is
         // keyed by user.userId just like the normal flow.
         if (trackerEntry && trackerEntry.orgTenantId) {
@@ -141,7 +236,6 @@ class SessionManager {
             trackerEntry.timestamp = Date.now();
             trackerEntry.userId = userId;
           } catch (error) {
-            console.error(`Failed to get user for ${mobileNumber} in tenant ${orgTenantId}:`, error.message);
             channelProvider.sendMessageToUser(
               { mobileNumber: mobileNumber },
               ["Session expired or user not found. Please type 'Hi' to start again."],
@@ -170,7 +264,6 @@ class SessionManager {
         reformattedMessage.user = user;
         reformattedMessage.extraInfo.tenantId = config.rootTenantId;
       } catch (error) {
-        console.error(`Failed to get/create user for ${mobileNumber}:`, error.message);
         channelProvider.sendMessageToUser(
           { mobileNumber: mobileNumber },
           [`Sorry, there was an error processing your request. Please check your mobile number format (should be 10 digits) and try again. Error: ${error.message}`],
@@ -179,19 +272,18 @@ class SessionManager {
         return;
       }
     }
-    
+
     // At this point, we should have a valid user and userId
     // If not, we can't continue (something went wrong in the flow)
     if (!user || !userId) {
-      console.error(`Cannot create session: user=${user}, userId=${userId}, mobileNumber=${mobileNumber}`);
       return;
     }
-    
+
     // Use user.userId (KeyCloak UUID) as the session storage key in both sandbox
     // and normal mode. This matches the legacy normal flow and keeps onTransition's
     // updateState (which keys by state.context.user.userId) in sync with insertNewState.
     const sessionUserId = userId;
-    
+
     await chatStateRepository.updateSessionId(sessionUserId, config.avgSessionTime);
     let chatState = await chatStateRepository.getActiveStateForUserId(sessionUserId);
     telemetry.log(sessionUserId, "from_user", reformattedMessage);

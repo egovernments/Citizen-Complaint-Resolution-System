@@ -72,7 +72,9 @@ const pgr =  {
               states: {
                 question: {
                   invoke: {
-                    src: (context) => pgrService.fetchFrequentComplaints(context.extraInfo.tenantId),
+                    src: (context) => {
+                      return pgrService.fetchFrequentComplaints(context.extraInfo.tenantId, context.user);
+                    },
                     id: 'fetchFrequentComplaints',
                     onDone: {
                       actions: assign((context, event) => {
@@ -84,6 +86,8 @@ const pgr =  {
                       }) 
                     },
                     onError: {
+                      actions: (context, event) => {
+                      },
                       target: '#system_error'
                     }
                   },
@@ -265,7 +269,7 @@ const pgr =  {
                   // In sandbox mode, use direct URL for location instructions
                   message = {
                     type: 'image',
-                    output: config.pgrUseCase.locationInstructionsUrl || 'https://sandbox-demo.digit.org/location-instructions.png'
+                    output: config.pgrUseCase.locationInstructionsUrl
                   };
                 } else {
                   // In production, use filestore ID
@@ -316,13 +320,13 @@ const pgr =  {
                         })
                       },
                       {
-                        // Skip city selection in sandbox mode - go directly to persist complaint
-                        target: '#persistComplaint',
+                        // In sandbox mode, skip city selection but go to locality selection
+                        target: '#locality',
                         cond: (context, event) => !event.data && context.message ==='1' && config.enableSandboxMode,
                         actions: assign((context, event) => {
-                          // Set city and locality to organization code (tenant)
+                          // Set city to organization code (tenant)
                           context.slots.pgr.city = context.extraInfo.tenantId;
-                          context.slots.pgr.locality = context.extraInfo.tenantId;
+                          // Don't set locality yet - let user select it
                         })
                       },
                       {
@@ -345,13 +349,13 @@ const pgr =  {
                     ],
                     onError: [
                       {
-                        // Skip city selection in sandbox mode
-                        target: '#persistComplaint',
+                        // In sandbox mode, go to locality selection
+                        target: '#locality',
                         cond: (context, event) => config.enableSandboxMode,
                         actions: assign((context, event) => {
-                          // Set city and locality to organization code (tenant)
+                          // Set city to organization code (tenant)
                           context.slots.pgr.city = context.extraInfo.tenantId;
-                          context.slots.pgr.locality = context.extraInfo.tenantId;
+                          // Don't set locality yet - let user select it
                         })
                       },
                       {
@@ -424,13 +428,13 @@ const pgr =  {
                       cond: (context, event) => context.message.isValid && context.slots.pgr["locationConfirmed"]  && context.slots.pgr["locality"]
                     },
                     {
-                      // In sandbox mode, skip city/locality selection if location not confirmed
-                      target: '#persistComplaint',
+                      // In sandbox mode, go to locality selection if location not confirmed
+                      target: '#locality',
                       cond: (context, event) => context.message.isValid && config.enableSandboxMode && !context.slots.pgr["locationConfirmed"],
                       actions: assign((context, event) => {
-                        // Set city and locality to organization code (tenant)
+                        // Set city to organization code (tenant)
                         context.slots.pgr.city = context.extraInfo.tenantId;
-                        context.slots.pgr.locality = context.extraInfo.tenantId;
+                        // Don't set locality yet - let user select it
                       })
                     },
                     {
@@ -484,7 +488,6 @@ const pgr =  {
                           return Promise.resolve(null);
                         }
                       } catch (error) {
-                        console.error("Error in PGR city search:", error);
                         return Promise.resolve(null);
                       }
                     },
@@ -600,11 +603,9 @@ const pgr =  {
                           return pgrService.getLocality(event.message.input, context.slots.pgr["city"], context.user.locale, context.extraInfo.tenantId, context.user);
                         } else {
                           // Handle case where event.message is undefined
-                          console.error("Invalid event structure for PGR locality search:", event);
                           return Promise.resolve(null);
                         }
                       } catch (error) {
-                        console.error("Error in PGR locality search:", error);
                         return Promise.resolve(null);
                       }
                     },
@@ -753,7 +754,7 @@ const pgr =  {
                 question: {
                   invoke: {
                     id: 'pgrFetchLocalities',
-                    src: (context) => pgrService.fetchLocalitiesAndWebpageLink(context.slots.pgr.city,context.extraInfo.whatsAppBusinessNumber),
+                    src: (context) => pgrService.fetchLocalitiesAndWebpageLink(context.slots.pgr.city, context.extraInfo.whatsAppBusinessNumber, context.user),
                     onDone: {
                       actions: assign((context, event) => {
                         let { localities, messageBundle } = event.data;
@@ -877,14 +878,12 @@ const pgr =  {
                 if (complaintDetails && complaintDetails.complaintNumber) {
                   message = message.replace('{{complaintNumber}}', complaintDetails.complaintNumber);
                 } else {
-                  console.warn('Complaint details or complaint number is missing');
                   message = message.replace('{{complaintNumber}}', 'N/A');
                 }
                 
                 if (complaintDetails && complaintDetails.complaintLink) {
                   message = message.replace('{{complaintLink}}', complaintDetails.complaintLink);
                 } else {
-                  console.warn('Complaint link is missing');
                   message = message.replace('{{complaintLink}}', '#');
                 }
                 
