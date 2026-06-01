@@ -4,8 +4,7 @@ import Toast from "./Toast";
 import UploadImages from "./UploadImages";
 
 export const ImageUploadHandler = (props) => {
-  // const __initImageIds = Digit.SessionStorage.get("PGR_CREATE_IMAGES");
-  // const __initThumbnails = Digit.SessionStorage.get("PGR_CREATE_THUMBNAILS");
+  const { t } = useTranslation();
   const [image, setImage] = useState(null);
   const [uploadedImagesThumbs, setUploadedImagesThumbs] = useState(null);
   const [uploadedImagesIds, setUploadedImagesIds] = useState(props.uploadedImages);
@@ -38,7 +37,7 @@ export const ImageUploadHandler = (props) => {
 
   useEffect(() => {
     if (imageFile && imageFile.size > 2097152) {
-      setError("File is too large");
+      setError(t("CS_FILE_TOO_LARGE") || "File is too large");
     } else {
       setImage(imageFile);
     }
@@ -62,9 +61,22 @@ export const ImageUploadHandler = (props) => {
   }
 
   const uploadImage = useCallback(async () => {
-    const response = await Digit.UploadServices.Filestorage("property-upload", image, props.tenantId);
-    setUploadedImagesIds(addUploadedImageIds(response));
-  }, [addUploadedImageIds, image]);
+    // CCRS#555: filestore rejects unsupported formats (PDFs, SVG, etc.
+    // depending on the tenant's ALLOWED_FORMATS_MAP). The previous code
+    // had no error handling, so the rejection bubbled as an unhandled
+    // promise — no toast, no preview update, leaving the user with no
+    // indication that the upload had failed. Surface it as a Toast.
+    try {
+      const response = await Digit.UploadServices.Filestorage("property-upload", image, props.tenantId);
+      setUploadedImagesIds(addUploadedImageIds(response));
+    } catch (err) {
+      const apiMessage =
+        err?.response?.data?.Errors?.[0]?.message ||
+        err?.response?.data?.message ||
+        err?.message;
+      setError(t("CS_FILE_UPLOAD_FAILED") || apiMessage || "File upload failed");
+    }
+  }, [addUploadedImageIds, image, t]);
 
   function addImageThumbnails(thumbnailsData) {
     var keys = Object.keys(thumbnailsData.data);

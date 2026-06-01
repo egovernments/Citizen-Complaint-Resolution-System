@@ -21,7 +21,8 @@ import type {
   CreateParams,
   RaRecord,
 } from 'ra-core';
-import { apiClient, getApiBaseUrl } from '@/api';
+import { apiClient, getApiBaseUrl, isKeycloakMode, hasKcToken } from '@/api';
+import { getKcIdToken, clearKcTokens, logoutKc } from '@/api/keycloak';
 
 const CITY_TENANT = (import.meta.env.VITE_CITIZEN_TENANT as string) || 'ke.nairobi';
 
@@ -267,7 +268,17 @@ export const citizenAuthProvider: AuthProvider = {
     throw new Error('react-admin login is not used; auth is driven by /citizen/login');
   },
   async logout() {
-    // No-op — App.tsx already handles the logout side effect.
+    // In KC mode with a live KC session, do RP-initiated logout — Keycloak
+    // kills its server-side session, then redirects to /citizen/login. The
+    // browser navigates away so this function never actually returns.
+    if (isKeycloakMode() && hasKcToken()) {
+      const idToken = getKcIdToken();
+      clearKcTokens();
+      logoutKc(idToken);
+      return;
+    }
+    // OTP mode: App.tsx already handles the logout side effect — nothing
+    // to do here.
   },
   async checkAuth() {
     if (!apiClient.isAuthenticated()) throw new Error('Not authenticated');

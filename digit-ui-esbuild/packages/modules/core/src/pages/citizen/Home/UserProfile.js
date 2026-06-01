@@ -465,7 +465,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
     // hid it because it wasn't bound to state. Mirror the sibling
     // handlers (`setUserNewPassword`, `setUserConfirmPassword`).
     setCurrentPassword(value);
-    if (!validationConfig?.password.test(value)) {
+    if (!validationConfig?.password?.test(value)) {
       setErrors({
         ...errors,
         currentPassword: {
@@ -480,7 +480,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
 
   const setUserNewPassword = (value) => {
     setNewPassword(value);
-    if (!validationConfig?.password.test(value)) {
+    if (!validationConfig?.password?.test(value)) {
       setErrors({
         ...errors,
         newPassword: {
@@ -496,7 +496,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
   const setUserConfirmPassword = (value) => {
     setConfirmPassword(value);
 
-    if (!validationConfig?.password.test(value)) {
+    if (!validationConfig?.password?.test(value)) {
       setErrors({
         ...errors,
         confirmPassword: {
@@ -528,14 +528,14 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
         setName((prev) => prev.trim());
       }
 
-      if (!validationConfig?.name.test(name) || name === "" || name.length > 50 || name.length < 1) {
+      if (!validationConfig?.name?.test(name) || name === "" || name.length > 50 || name.length < 1) {
         throw JSON.stringify({
           type: "error",
           message: t("CORE_COMMON_PROFILE_NAME_INVALID"),
         });
       }
 
-      if (userType === "employee" && !validationConfig?.mobileNumber.test(mobileNumber)) {
+      if (userType === "employee" && !validationConfig?.mobileNumber?.test(mobileNumber)) {
         throw JSON.stringify({
           type: "error",
           message: t("CORE_COMMON_PROFILE_MOBILE_NUMBER_INVALID"),
@@ -572,7 +572,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
           });
         }
 
-        if (!validationConfig?.password.test(trimmedNewPassword) && !validationConfig?.password.test(trimmedConfirmPassword)) {
+        if (!validationConfig?.password?.test(trimmedNewPassword) && !validationConfig?.password?.test(trimmedConfirmPassword)) {
           throw JSON.stringify({
             type: "error",
             message: t("CORE_COMMON_PROFILE_PASSWORD_INVALID"),
@@ -647,6 +647,14 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
         const user = Digit.UserService.getUser();
 
         if (user) {
+          // CCRS#556 sub-bug: the photo was previously omitted from
+          // the session-info patch. The backend got the new pic via
+          // the update payload above, but the session-cached user
+          // object stayed stale — which meant the left-menu avatar
+          // (CitizenSideBar's Profile component reads from
+          // Digit.UserService.getUser()) kept showing the old image
+          // until the next full login. Include `photo` here so the
+          // session reflects what the server just persisted.
           Digit.UserService.setUser({
             ...user,
             info: {
@@ -655,6 +663,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
               mobileNumber,
               emailId: email,
               permanentCity: city,
+              ...(profilePic ? { photo: profilePic } : {}),
             },
           });
         }

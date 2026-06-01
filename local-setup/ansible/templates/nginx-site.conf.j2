@@ -47,6 +47,25 @@ server {
 {% endif %}
 
 {% endif %}
+{% if nginx_features.digit_ui_v2 | default(false) %}
+  # digit-ui-v2 — Vite + React 19 citizen SPA. Built from
+  # {{ digit_ui_v2_branch | default('feat/digit-ui-v2-keycloak') }} on the
+  # target ({{ digit_ui_v2_repo | default('digit-ui-v2 repo') }}) and
+  # synced to /var/www/citizen/ by the ansible deploy. Hashed assets get
+  # the long immutable cache; index.html stays no-cache so a redeploy
+  # propagates without operators forcing a hard refresh.
+  location /citizen/assets/ {
+    alias /var/www/citizen/assets/;
+    add_header Cache-Control "public, max-age=31536000, immutable" always;
+    try_files $uri =404;
+  }
+  location /citizen {
+    alias /var/www/citizen/;
+    try_files $uri $uri/ /citizen/index.html;
+    add_header Cache-Control "no-cache, must-revalidate" always;
+  }
+
+{% endif %}
   # Grafana dashboard
   location /grafana/ {
     proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_grafana_port }};

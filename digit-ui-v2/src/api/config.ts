@@ -1,10 +1,86 @@
 // DIGIT Environment Configuration
 
+// ── Keycloak / token-exchange shared env contract ───────────────────────────
+//
+// These are populated at build time on production deploys via Vite env vars
+// (see ansible templates/digit.env.j2). On the dev / preview build they're
+// empty, which keeps everything inert — `isKeycloakMode()` is false and every
+// code path stays identical to the OTP-only behavior.
+//
+// VITE_AUTH_PROVIDER         "keycloak" turns on the KC button + overlay routing
+// VITE_KEYCLOAK_URL          Browser-relative base for the realm (e.g. "/auth")
+// VITE_KEYCLOAK_REALM        Realm name (state tenant — "ke" on bomet/naipepea)
+// VITE_KEYCLOAK_CLIENT_ID    Public client (default "digit-ui")
+// VITE_TOKEN_EXCHANGE_URL    Browser-relative overlay prefix (e.g. "/token-exchange")
+//                            When set + a KC token is present, DIGIT API URLs
+//                            become `${origin}${overlay}/${original-path}`.
+//                            The overlay strips the prefix, validates the JWT,
+//                            and proxies upstream with a system token.
+export const AUTH_PROVIDER = (import.meta.env.VITE_AUTH_PROVIDER as string) || '';
+export const KEYCLOAK_URL = (import.meta.env.VITE_KEYCLOAK_URL as string) || '';
+export const KEYCLOAK_REALM = (import.meta.env.VITE_KEYCLOAK_REALM as string) || '';
+export const KEYCLOAK_CLIENT_ID =
+  (import.meta.env.VITE_KEYCLOAK_CLIENT_ID as string) || 'digit-ui';
+export const TOKEN_EXCHANGE_URL =
+  (import.meta.env.VITE_TOKEN_EXCHANGE_URL as string) || '';
+
+/** True when the build was wired up for Keycloak. Inert (false) by default. */
+export function isKeycloakMode(): boolean {
+  return AUTH_PROVIDER === 'keycloak';
+}
+
+// ── localStorage keys for KC tokens ────────────────────────────────────────
+
+export const KC_STORAGE_KEYS = {
+  access: 'digit_ui_v2_kc_access',
+  refresh: 'digit_ui_v2_kc_refresh',
+  id: 'digit_ui_v2_kc_id',
+  state: 'digit_ui_v2_kc_oauth_state',
+  // PKCE code_verifier — generated before /authorize, sent back with the
+  // /token exchange. KC rejects public clients without it (the realm
+  // sets pkce.code.challenge.method=S256). The verifier lives only as
+  // long as the round-trip and is cleared on callback success or error.
+  pkceVerifier: 'digit_ui_v2_kc_pkce_verifier',
+  expiresAt: 'digit_ui_v2_kc_expires_at',
+} as const;
+
+/** True when a KC access token has been minted + saved (post-callback). */
+export function hasKcToken(): boolean {
+  if (typeof localStorage === 'undefined') return false;
+  try {
+    return !!localStorage.getItem(KC_STORAGE_KEYS.access);
+  } catch {
+    return false;
+  }
+}
+
 /** Auto-detect API base URL from the current origin. Each deployment serves
- *  the configurator and DIGIT APIs from the same domain via nginx. */
+ *  the configurator and DIGIT APIs from the same domain via nginx.
+ *
+ *  In Keycloak mode with a citizen KC token present, all DIGIT API calls are
+ *  transparently routed through `${origin}${TOKEN_EXCHANGE_URL}` so the
+ *  overlay can rewrite RequestInfo (inject system token + real user identity)
+ *  before forwarding upstream. The OTP login endpoints (used before a KC
+ *  token exists) bypass the overlay automatically — `hasKcToken()` is false
+ *  during the OTP flow. */
 export function getApiBaseUrl(): string {
-  if (typeof window !== 'undefined') return window.location.origin;
-  return 'https://localhost';
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://localhost';
+  if (isKeycloakMode() && TOKEN_EXCHANGE_URL && hasKcToken()) {
+    return `${origin}${TOKEN_EXCHANGE_URL}`;
+  }
+  return origin;
+}
+
+/** Explicit overlay-aware base. Kept for callers that want the intent to be
+ *  obvious at the call site (the default `getApiBaseUrl` already does this). */
+export function getApiBaseUrlWithTokenExchange(): string {
+  return getApiBaseUrl();
+}
+
+/** The bare origin, no overlay prefix — for KC endpoints themselves (which
+ *  must hit /auth/realms/... directly, not via the DIGIT overlay). */
+export function getOriginBaseUrl(): string {
+  return typeof window !== 'undefined' ? window.location.origin : 'https://localhost';
 }
 
 // Service endpoints

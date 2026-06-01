@@ -19,14 +19,16 @@
  * tenantId for the auth + register calls is the STATE tenant (`ke`), not the
  * city tenant — egov-user keeps citizens at root.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { apiClient, getApiBaseUrl, ENDPOINTS } from '@/api';
+import { Separator } from '@/components/ui/separator';
+import { apiClient, getApiBaseUrl, ENDPOINTS, isKeycloakMode } from '@/api';
+import { buildAuthorizeUrl, decodeJwtPayload, passwordGrantViaOverlay, saveKcTokens } from '@/api/keycloak';
 import { useApp } from '@/App';
 
 const STATE_TENANT = (import.meta.env.VITE_CITIZEN_STATE_TENANT as string) || 'ke';
@@ -46,6 +48,40 @@ export default function CitizenLoginPage() {
   const [otp, setOtp] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const kcMode = isKeycloakMode();
+
+  // Surface errors bubbled up from the Keycloak callback page (e.g. the
+  // overlay rejected the JWT or the user denied consent at the KC login
+  // screen). Read once, clear the query param so refresh doesn't replay.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const fromCallback = params.get('error');
+    if (fromCallback) {
+      setError(fromCallback);
+      const url = new URL(window.location.href);
+      url.searchParams.delete('error');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, []);
+
+  async function signInWithGoogle() {
+    setError(null);
+    setPending(true);
+    try {
+      // `kc_idp_hint=google` skips the Keycloak account-chooser and
+      // redirects straight to Google's OAuth consent screen. The realm
+      // must have the `google` IdP provisioned (ansible's keycloak-bootstrap
+      // task does this when keycloak_google_client_id is set in host_vars).
+      // buildAuthorizeUrl is async because it computes a PKCE
+      // code_challenge (SHA-256 via WebCrypto) — the digit-ui client is
+      // a public client and the realm requires PKCE.
+      const url = await buildAuthorizeUrl('/citizen/auth/callback', 'google');
+      window.location.assign(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not start Google sign-in.');
+      setPending(false);
+    }
+  }
 
   async function sendOtp(e: React.FormEvent) {
     e.preventDefault();
@@ -83,6 +119,42 @@ export default function CitizenLoginPage() {
     setPending(true);
 
     const attemptAuth = async (): Promise<{ token: string; user: Record<string, unknown> } | null> => {
+      // In KC mode, route the password grant through the overlay's
+      // standard OAuth2 token endpoint. The overlay tries KC first; on
+      // KC failure it falls back to DIGIT's /user/oauth/token (using
+      // tenantId + userType from the body), then provisions the KC user
+      // from the DIGIT result. The SPA gets a KC-signed JWT either way.
+      // Crucially this requires NO redirect — the form posts and we
+      // stay on the page. Direct KC SSO (Google, etc) happens via the
+      // separate "Continue with Google" button.
+      if (kcMode) {
+        try {
+          const tokens = await passwordGrantViaOverlay({
+            username: mobile,
+            password: otp,
+            tenantId: STATE_TENANT,
+            userType: 'CITIZEN',
+          });
+          saveKcTokens(tokens);
+          // Decode the access_token payload for a thin user shape — the
+          // overlay also exposes /userinfo for richer identity, but the
+          // JWT claims are enough to seed app state for the dashboard.
+          const claims = decodeJwtPayload(tokens.access_token);
+          return {
+            token: tokens.access_token,
+            user: {
+              uuid: claims.sub,
+              name: claims.name || `Citizen ${mobile}`,
+              userName: mobile,
+              mobileNumber: mobile,
+              roles: claims.realm_access?.roles?.map((code: string) => ({ code })) ?? [],
+            } as Record<string, unknown>,
+          };
+        } catch {
+          return null;   // overlay returns 401 → fall through to register
+        }
+      }
+
       const body = new URLSearchParams({
         username: mobile,
         password: otp,
@@ -173,6 +245,25 @@ export default function CitizenLoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {kcMode && step === 'mobile' && (
+            <div className="space-y-4 mb-4">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={signInWithGoogle}
+                disabled={pending}
+              >
+                Continue with Google
+              </Button>
+              <div className="relative">
+                <Separator />
+                <span className="absolute left-1/2 -translate-x-1/2 -top-2.5 bg-card px-2 text-xs text-muted-foreground">
+                  Or continue with mobile
+                </span>
+              </div>
+            </div>
+          )}
           {step === 'mobile' ? (
             <form onSubmit={sendOtp} className="space-y-4">
               <div>

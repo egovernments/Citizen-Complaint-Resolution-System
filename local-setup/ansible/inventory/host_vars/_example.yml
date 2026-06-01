@@ -36,15 +36,6 @@ domain: digit.example.com
 # 127.0.0.1 with `Host:` header.
 tls_enabled: true
 
-# Hosts to add to Docker daemon.json `insecure-registries`. Default
-# (in group_vars/digit.yml) = [docker_registry] — preserves the
-# historical Hetzner-VPC behaviour of pulling from 10.0.0.4:5000 over
-# plain HTTP. Override to `[]` when docker_registry is a public TLS
-# registry like ghcr.io — Docker REJECTS path-bearing or TLS hostnames
-# in insecure-registries and refuses to start, taking the stack down.
-# Each entry must be `host` or `host:port`, never with a path.
-# insecure_registries: []
-
 # ────────── DIGIT tenancy ──────────
 
 # REQUIRED. Four-tier tenant slug:
@@ -141,6 +132,26 @@ footer_bw_logo_url: ""
 # Both modes bind port 18080 internally; only one can be active.
 digit_ui_mode: static
 
+# ────────── digit-ui-v2 (Vite + React 19 citizen SPA) ──────────
+#
+# New citizen-facing SPA served at /citizen/ (separate from the
+# legacy /digit-ui/ esbuild bundle). When true, the playbook:
+#   1. Clones {{ digit_ui_v2_repo }}@{{ digit_ui_v2_branch }} to
+#      /opt/digit-ui-v2 on the target.
+#   2. `npm install` + `npm run build` (Vite) with the VITE_* env-var
+#      contract baked into the bundle.
+#   3. Syncs dist/ to /var/www/citizen/.
+# Pair with `nginx_features.digit_ui_v2: true` below so nginx actually
+# serves /citizen/* — turning on the build without the nginx flag would
+# leave the bundle on disk but unreachable.
+enable_digit_ui_v2: false
+
+# Git source for the citizen SPA. Cloned on the TARGET (not the
+# controller) so native Vite binaries (esbuild, lightningcss) match
+# the runtime arch.
+digit_ui_v2_repo: "https://github.com/ChakshuGautam/Citizen-Complaint-Resolution-System.git"
+digit_ui_v2_branch: "feat/digit-ui-v2-keycloak"
+
 # ────────── Optional services (opt-in via flags) ──────────
 
 # Bring up Elasticsearch + egov-indexer + inbox-v2. Heavy (~3GB RAM
@@ -190,13 +201,11 @@ twilio_auth_token: ""
 twilio_whatsapp_from: "whatsapp:+14155238886"   # Twilio Sandbox default
 
 # ────────── Keycloak SSO (opt-in) ──────────
-# Adds 2 containers (keycloak + token-exchange-svc) plus uses upstream's
-# existing Kong routes:
-#   /auth → keycloak:8180     (strip_path:false)
-#   /kc   → token-exchange-svc:3000  (strip_path:true)
-# Inert in the rest of the stack — DIGIT keeps booting fine with OTP
-# login. The UI only switches to the Keycloak code path when
-# auth_provider: 'keycloak'.
+# Adds 2 containers (keycloak + token-exchange-svc) plus the host
+# nginx /auth/ and /token-exchange/ location blocks. Inert in the
+# rest of the stack — DIGIT keeps booting fine with OTP login. The UI
+# only switches to the Keycloak code path when auth_provider:
+# 'keycloak'; the cutover is intentionally a separate PR.
 #
 # Workflow when enable_keycloak: true:
 #   1. First deploy creates the `keycloak` Postgres DB (via the
@@ -206,38 +215,20 @@ twilio_whatsapp_from: "whatsapp:+14155238886"   # Twilio Sandbox default
 #      local-setup/keycloak/realm-template.json. Realm name =
 #      state_tenant_id.
 #   2. (Optional) set keycloak_google_client_id +
-#      keycloak_google_client_secret in bootstrap_secrets to add Google
-#      as a federated IdP.
-#   3. Flip auth_provider: 'keycloak' to switch the SPA's auth-adapter
-#      to OIDC PKCE.
+#      keycloak_google_client_secret to add Google as a federated IdP.
+#   3. Flip auth_provider: 'keycloak' (in a follow-up PR) to switch
+#      the SPA's auth-adapter to OIDC PKCE.
 enable_keycloak: false
 
-# '' (default) keeps OTP login. 'keycloak' activates the SSO path
-# inside the digit-ui auth-adapter. Don't flip this until the realm
-# is imported and the operator has verified a successful test login
-# via /auth/realms/<realm>/account.
+# 'keycloak' = SSO via the auth-adapter. '' (default) keeps OTP login.
+# Don't flip this until the realm is imported and the operator has
+# verified a successful test login via /auth/realms/<realm>/account.
 auth_provider: ""
 
 # OIDC public client id in the per-tenant realm. The realm template
 # ships `digit-ui`; only change this if you've forked the template
 # and added a different client.
 keycloak_client_id: "digit-ui"
-
-# Where the browser reaches Keycloak. Leave blank to use the relative
-# `/auth` path on this deployment's own domain (proxied through Kong).
-# Set to a separate origin like `https://keycloak.example.org` when KC
-# lives on its own subdomain.
-keycloak_url: ""
-
-# Realm name override. Defaults to state_tenant_id at deploy time
-# (see globalConfigs.js.j2). Set explicitly only if your realm doesn't
-# match the tenant slug.
-keycloak_realm: ""
-
-# Where the browser reaches the token-exchange service. Defaults to
-# `/kc` (relative, via Kong's /kc route — strip_path:true). Override
-# only if you've put the exchange on a separate origin.
-token_exchange_url: ""
 
 # Federated Google login (optional). Leave blank to skip Google IdP
 # wiring entirely. When set, the bootstrap will register a Google
@@ -290,6 +281,8 @@ nginx_features:
   status: true               # /status/ — Gatus health dashboard
   api_pgr: false             # /api/pgr/ — proxied to MCP server
   mcp: true                  # /mcp + /v1/* — MCP HTTP transport + REST shim (requires enable_mcp: true)
+  keycloak: false            # /auth/ + /token-exchange/ — requires enable_keycloak: true
+  digit_ui_v2: false         # /citizen/ — Vite + React 19 SPA (requires enable_digit_ui_v2: true)
 
 # If true, the playbook will NOT render `templates/nginx-site.conf.j2` into
 # /etc/nginx/sites-available/ and will NOT touch /etc/nginx/sites-enabled/.
@@ -323,7 +316,8 @@ bootstrap_secrets:
   egov_hrms_default_password: "eGov@123"
   # Keycloak secrets — only consumed when enable_keycloak: true.
   # Leave empty on tenants without Keycloak; the playbook only resolves
-  # these inside the enable_keycloak-gated keycloak-bootstrap block.
+  # these via `| mandatory` inside the digit.env.j2 keycloak block,
+  # which is itself gated on enable_keycloak.
   keycloak_admin_password: ""               # master realm admin login
   keycloak_db_password: ""                  # Keycloak's Postgres connection
   keycloak_google_client_secret: ""         # only if keycloak_google_client_id is set
