@@ -1562,6 +1562,51 @@
         replace: '\1EGOV_STATE_LEVEL_TENANT_ID: {{ state_root }}'
       when: state_root != 'pg'
 
+    # egov-hrms reads `EGOV_STATELEVEL_TENANT` (no underscore between
+    # STATE/LEVEL) — distinct from `EGOV_STATE_LEVEL_TENANT_ID` above —
+    # to know which tenant to look up its INTERNAL_USER system user
+    # at boot. Without this rewrite the hardcoded `pg` survives and
+    # DefaultUserService.initalizeSystemuser throws
+    # "Service returned null while fetching user" → HRMS crash-loops
+    # on tenants whose state_root isn't pg. Manifest of #622.
+    - name: "post-bootstrap — set EGOV_STATELEVEL_TENANT (HRMS variant) in compose"
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)EGOV_STATELEVEL_TENANT: pg$'
+        replace: '\1EGOV_STATELEVEL_TENANT: {{ state_root }}'
+      when: state_root != 'pg'
+
+    # pgr-services' EscalationScheduler reads
+    # `PGR_STATELEVEL_TENANTID` (no `_` between STATE/LEVEL, no `_ID` —
+    # third spelling variant in this stack) to pick which tenant to
+    # query MDMS RAINMAKER-PGR.EscalationConfig at. Without this
+    # rewrite the scheduler asks MDMS at tenant `pg`, gets no result,
+    # logs "Failed to fetch EscalationConfig from MDMS, using defaults"
+    # and falls back to a 5-day SLA — so auto-escalation effectively
+    # never fires on tenants whose state_root is anything other than
+    # `pg`. Closes the deploy-side half of #585.
+    - name: "post-bootstrap — set PGR_STATELEVEL_TENANTID (pgr-services variant) in compose"
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)PGR_STATELEVEL_TENANTID: pg$'
+        replace: '\1PGR_STATELEVEL_TENANTID: {{ state_root }}'
+      when: state_root != 'pg'
+
+    # And the matching EGOV_UI_APP_HOST_MAP rewrite. Empirically the
+    # scheduler actually uses the FIRST KEY of this map to resolve the
+    # tenant for its MDMS query (PGRConfiguration#getUiAppHostMap →
+    # EscalationScheduler#getStateLevelTenantId). With the hardcoded
+    # `{pg:…}` placeholder it queries MDMS for pg.RAINMAKER-PGR
+    # .EscalationConfig and gets nothing back. Aligning the key with
+    # state_root lets the scheduler reach the seeded config and
+    # actually use the 1h/4h/24h SLAs we set in MDMS.
+    - name: "post-bootstrap — set EGOV_UI_APP_HOST_MAP (pgr-services tenant key) in compose"
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)EGOV_UI_APP_HOST_MAP: "\{pg:'
+        replace: '\1EGOV_UI_APP_HOST_MAP: "{{ "{" }}{{ state_root }}:'
+      when: state_root != 'pg'
+
     - name: "post-bootstrap — set STATE_LEVEL_TENANT_ID (city tier — enc-service + workflow) in compose"
       replace:
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
