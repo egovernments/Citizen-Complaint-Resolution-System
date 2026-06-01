@@ -2,8 +2,8 @@ const express = require("express"),
   router = express.Router(),
   config = require("../../env-variables"),
   sessionManager = require("../../session/session-manager"),
-  channelProvider = require("../");
-remindersService = require("../../machine/service/reminders-service");
+  channelProvider = require("../"),
+  remindersService = require("../../machine/service/reminders-service");
 
 router.post("/message", async (req, res) => {
   try {
