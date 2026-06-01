@@ -755,7 +755,7 @@ class PGRService {
     requestBody["RequestInfo"]["authToken"] = authToken;
     requestBody["service"]["tenantId"] = city;
     requestBody["service"]["address"]["city"] = city;
-    requestBody["service"]["address"]["locality"]["code"] = locality;
+    requestBody["service"]["address"]["locality"]["code"] = "ADMIN_" + locality;
 
     // Add localized locality name if available
     if (slots.localityName) {
