@@ -938,6 +938,7 @@ const pgr =  {
                 );
                 complaintMessage = complaintMessage
                   .replace('{{complaintType}}', complaint.complaintType || 'Complaint')
+                  .replace('{{complaintNumber}}', complaint.complaintNumber || 'N/A')
                   .replace('{{filedDate}}', complaint.filedDate || 'N/A')
                   .replace('{{complaintStatus}}', complaint.complaintStatus || 'N/A');
                 message += `\n\n${complaintMessage}`;
@@ -1100,8 +1101,8 @@ let messages = {
         hi_IN: 'यहां आपकी हाल की शिकायतें हैं 👇'
       },
       complaintTemplate: {
-        en_IN: '*{{complaintType}}*\n\nFiled Date: {{filedDate}}\n\nComplaint Status: *{{complaintStatus}}*',
-        hi_IN: '*{{complaintType}}*\n\nदायर तिथि: {{filedDate}}\n\nशिकायत की स्थिति: *{{complaintStatus}}*'
+        en_IN: '*{{complaintType}}*\n\nComplaint No: {{complaintNumber}}\nFiled Date: {{filedDate}}\nStatus: *{{complaintStatus}}*',
+        hi_IN: '*{{complaintType}}*\n\nशिकायत संख्या: {{complaintNumber}}\nदायर तिथि: {{filedDate}}\nस्थिति: *{{complaintStatus}}*'
       },
       closingStatement: {
         en_IN: '\n\n👉 To go back to the main menu, type and send *egov*.',
