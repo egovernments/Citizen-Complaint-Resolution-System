@@ -725,14 +725,13 @@ class PGRService {
         filedDate = moment(filedDate)
           .tz(config.timeZone)
           .format(config.dateFormat);
-        let applicationStatus = localisationService.getMessageBundleForCode(
-          serviceWrapper.service.applicationStatus
-        );
+        // Use raw applicationStatus instead of trying to localize
+        let applicationStatus = serviceWrapper.service.applicationStatus;
         var data = {
           complaintType: dialog.get_message(serviceCode, locale),
           complaintNumber: serviceRequestId,
           filedDate: filedDate,
-          complaintStatus: dialog.get_message(applicationStatus, locale),
+          complaintStatus: applicationStatus,
           complaintLink: complaintURL,
         };
         count++;

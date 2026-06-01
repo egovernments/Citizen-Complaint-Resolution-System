@@ -56,27 +56,39 @@ class SessionManager {
       }
 
       if (isGreeting) {
-        // Every greeting starts fresh - always ask for email.
-        // If we know the prior user UUID for this mobile, deactivate that session.
-        const priorUserId = trackerEntry && trackerEntry.userId;
-        if (priorUserId) {
-          await chatStateRepository.updateState(priorUserId, false, null);
+        // Check if user is already authenticated
+        if (trackerEntry && trackerEntry.userId && trackerEntry.orgTenantId) {
+          // User is already authenticated - treat as regular message to continue the flow
+          // Don't ask for email again, just continue with the existing session
+          user = { userId: trackerEntry.userId };
+          userId = trackerEntry.userId;
+          reformattedMessage.user = user;
+          reformattedMessage.extraInfo.tenantId = trackerEntry.orgTenantId;
+          reformattedMessage.extraInfo.organizationTenantId = trackerEntry.orgTenantId;
+          // Continue to create/resume session - DON'T RETURN!
+        } else {
+          // New user or session expired - ask for email
+          // If we know the prior user UUID for this mobile, deactivate that session.
+          const priorUserId = trackerEntry && trackerEntry.userId;
+          if (priorUserId) {
+            await chatStateRepository.updateState(priorUserId, false, null);
+          }
+
+          sandboxOrgCodeTracker[mobileNumber] = {
+            timestamp: Date.now(),
+            waitingForEmail: true
+          };
+
+          const welcomeMessage = "Welcome to Citizen Complaint Service\n\n" +
+            "Enter your registered email address";
+
+          channelProvider.sendMessageToUser(
+            { mobileNumber: mobileNumber },
+            [welcomeMessage],
+            reformattedMessage.extraInfo
+          );
+          return; // Exit early - no session creation
         }
-
-        sandboxOrgCodeTracker[mobileNumber] = {
-          timestamp: Date.now(),
-          waitingForEmail: true
-        };
-
-        const welcomeMessage = "Welcome to Citizen Complaint Service\n\n" +
-          "Enter your registered email address";
-
-        channelProvider.sendMessageToUser(
-          { mobileNumber: mobileNumber },
-          [welcomeMessage],
-          reformattedMessage.extraInfo
-        );
-        return; // Exit early - no session creation
       } else if (isWaitingForEmail && !isGreeting) {
         // User is providing email - validate it
         const email = reformattedMessage.message.input?.trim().toLowerCase();
@@ -337,8 +349,9 @@ class SessionManager {
   removeUserDataFromState(state) {
     let userId = state.context.user.userId;
     let locale = state.context.user.locale;
+    let mobileNumber = state.context.user.mobileNumber;
     state.context.user = undefined;
-    state.context.user = { locale: locale, userId: userId };
+    state.context.user = { locale: locale, userId: userId, mobileNumber: mobileNumber };
     state.event = {};
     state._event = {};
     if (state.history) state.history.context.user = {};
@@ -358,8 +371,13 @@ class SessionManager {
     const context = chatStateJson.context;
     context.chatInterface = this;
     let locale = context.user.locale;
+    let savedMobileNumber = context.user.mobileNumber; // Preserve the saved mobileNumber
     context.user = reformattedMessage.user;
     context.user.locale = locale;
+    // Ensure mobileNumber is always present
+    if (!context.user.mobileNumber && savedMobileNumber) {
+      context.user.mobileNumber = savedMobileNumber;
+    }
     context.extraInfo = reformattedMessage.extraInfo;
 
     const state = State.create(chatStateJson);
