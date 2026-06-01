@@ -11,19 +11,37 @@ import { LogoutIcon } from "@egovernments/digit-ui-react-components";
 import ImageComponent from "../../ImageComponent";
 
 const Profile = ({ info, stateName, t }) => {
-  const [profilePic, setProfilePic] = React.useState(null);
-  React.useEffect(async () => {
-    const tenant = Digit.ULBService.getCurrentTenantId();
+  // Prefer the session-cached photo so an in-place Edit-Profile save
+  // shows up immediately — UserProfile.js writes the new value into
+  // `Digit.UserService.getUser().info.photo` after a successful
+  // update (CCRS#556 sub-bug pair fix). Fall back to the per-uuid
+  // userSearch lookup only if the session doesn't already carry one
+  // (e.g. on first login).
+  const [profilePic, setProfilePic] = React.useState(
+    info?.photo ? info.photo.split(",").at(0) : null,
+  );
+  React.useEffect(() => {
+    if (info?.photo) {
+      setProfilePic(info.photo.split(",").at(0));
+      return;
+    }
     const uuid = info?.uuid;
-    if (uuid) {
+    if (!uuid) return;
+    let cancelled = false;
+    (async () => {
+      const tenant = Digit.ULBService.getCurrentTenantId();
       const usersResponse = await Digit.UserService.userSearch(tenant, { uuid: [uuid] }, {});
-      if (usersResponse && usersResponse.user && usersResponse?.user?.length) {
+      if (cancelled) return;
+      if (usersResponse?.user?.length) {
         const userDetails = usersResponse.user[0];
         const thumbs = userDetails?.photo?.split(",");
         setProfilePic(thumbs?.at(0));
       }
-    }
-  }, [profilePic !== null]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [info?.uuid, info?.photo]);
 
   const CustomEmployeeTopBar = Digit.ComponentRegistryService?.getComponent("CustomEmployeeTopBar");
 
