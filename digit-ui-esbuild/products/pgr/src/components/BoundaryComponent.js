@@ -286,10 +286,20 @@ useEffect(() => {
 const BoundaryDropdown = ({ label, data, onChange, selected, fieldKey, disabled }) => {
   const { t } = useTranslation();
   const id = `boundary-${(fieldKey || label || "field").toString().toLowerCase().replace(/\s+/g, "-")}`;
-  const options = (data || []).map((node) => ({
-    value: node.code,
-    label: t(node.code) || node.code,
-  }));
+  // Defensive dedup by code. The jurisdiction prune (filterTree above)
+  // is duplicate-safe by construction, but in the field the dropdown
+  // has been observed listing the same ward twice (see
+  // egovernments/CCRS#496 screen recording — upstream data shape under
+  // overlapping HRMS jurisdictions, exact origin still being chased).
+  // Dedup at render keeps the symptom contained regardless of where
+  // the duplicate enters `data`.
+  const options = [];
+  const seen = new Set();
+  for (const node of data || []) {
+    if (seen.has(node.code)) continue;
+    seen.add(node.code);
+    options.push({ value: node.code, label: t(node.code) || node.code });
+  }
   return (
     <V2Field label={t(label)} required htmlFor={id}>
       <V2Select
