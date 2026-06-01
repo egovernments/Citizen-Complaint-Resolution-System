@@ -8,13 +8,32 @@ import {
 } from "@egovernments/digit-ui-libraries";
 
 /**
- * Custom hook to fetch mobile number validation configuration from MDMS
- * Priority:
- * 1. Global configs (window.globalConfigs?.getConfig("CORE_MOBILE_CONFIGS"))
- * 2. MDMS configs (ValidationConfigs.mobileNumberValidation)
- * 3. Default fallback validation (see packages/libraries/src/constants/mobileValidation.js)
+ * Custom hook that returns the mobile-number validation config for the
+ * current tenant.
+ *
+ * Priority (per @vinothrallapalli-eGov review on PR #689):
+ *   1. MDMS — `common-masters.UserValidation` master, entry where
+ *      `fieldType === "mobile"` (and `isActive !== false`). This is the
+ *      single source of truth used across egov-user, egov-hrms, the
+ *      configurator, and digit-ui.
+ *   2. Global configs — `window.globalConfigs.getConfig("CORE_MOBILE_CONFIGS")`.
+ *      Acts as the build-time fallback for tenants that haven't seeded
+ *      a UserValidation row yet AND for synchronous read sites that
+ *      can't wait for the MDMS round-trip (e.g. declarative form
+ *      configs that import this module eagerly).
+ *   3. Library defaults — `@egovernments/digit-ui-libraries` constants
+ *      module. The last-line fallback if neither MDMS nor globalConfigs
+ *      surfaces a rule.
+ *
+ * The hook also writes the resolved rules to `window.__DIGIT_USER_VALIDATION.mobile`
+ * so synchronous consumers (form-config getters that can't be hooks)
+ * can read the same MDMS-sourced value the React tree just resolved.
+ *
  * @param {string} tenantId - The tenant ID
- * @param {string} validationName - The validation name (default: "defaultMobileValidation")
+ * @param {string} validationName - Reserved for future per-field-name
+ *   selection. Today's UserValidation master has one row per
+ *   `fieldType`; this param is kept on the hook signature so callers
+ *   that want a non-default mobile rule later don't have to migrate.
  * @returns {object} - Returns validation rules and loading state
  */
 const useMobileValidation = (tenantId, validationName = "defaultMobileValidation") => {
@@ -26,43 +45,45 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
     body: {
       MdmsCriteria: {
         tenantId: tenantId,
-        "moduleDetails": [
+        moduleDetails: [
           {
-            "moduleName": "ValidationConfigs",
-            "masterDetails": [
+            moduleName: "common-masters",
+            masterDetails: [
               {
-                "name": "mobileNumberValidation"
-              }
-            ]
-          }
-        ]
+                name: "UserValidation",
+              },
+            ],
+          },
+        ],
       },
     },
     config: {
       enabled: !!tenantId,
-      select: (data) => {
-        return data.MdmsRes;
-      },
+      select: (data) => data.MdmsRes,
     },
   };
-  // Fetch project staff details using custom API hook
+
   const { isLoading, data, error } = Digit.Hooks.useCustomAPIHook(reqCriteria);
 
-  /** ---------- Priority 1: Global Config ---------- */
-  const globalConfig = window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS") || {};
-
-
-  // Extract validation rules
-  const mdmsConfig = data?.ValidationConfigs?.mobileNumberValidation?.find(
-    (config) => config.validationName === validationName
+  /** ---------- Priority 1: MDMS common-masters.UserValidation ---------- */
+  // The master is an array of `{ fieldType, isActive, attributes, rules }`
+  // rows. Pick the active mobile-typed row; if multiple rows ever exist
+  // we take the first active one (legacy seed used a single row, future
+  // tenants may add a `default: true` marker — both shapes covered).
+  const userValidationList = data?.["common-masters"]?.UserValidation || [];
+  const mdmsConfig = userValidationList.find(
+    (entry) =>
+      entry?.fieldType === "mobile" &&
+      entry?.isActive !== false,
   );
 
-  // Default fallback validation if MDMS fails. Values come from a single
-  // constants module so they can be overridden centrally.
+  /** ---------- Priority 2: Global Config ---------- */
+  const globalConfig = window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS") || {};
+
+  /** ---------- Priority 3: Library defaults ---------- */
   const defaultValidation = {
-    validationName: "defaultMobileValidation",
     rules: {
-      allowedStartingDigits: DEFAULT_MOBILE_ALLOWED_STARTING_DIGITS,
+      allowedStartingCharacters: DEFAULT_MOBILE_ALLOWED_STARTING_DIGITS,
       prefix: DEFAULT_MOBILE_PREFIX,
       pattern: DEFAULT_MOBILE_PATTERN,
       minLength: DEFAULT_MOBILE_MIN_LENGTH,
@@ -70,46 +91,57 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
       errorMessage: DEFAULT_MOBILE_ERROR_MESSAGE,
       isActive: true,
     },
+    attributes: {},
   };
 
-  /** ---------- Combine configs with priority ---------- */
+  /** ---------- Combined view (MDMS > globalConfigs > defaults) ---------- */
   const validationRules = {
     allowedStartingDigits:
-      globalConfig?.mobileNumberAllowedStartingDigits || mdmsConfig?.rules?.allowedStartingDigits || defaultValidation?.rules?.allowedStartingDigits,
+      mdmsConfig?.rules?.allowedStartingCharacters ||
+      globalConfig?.mobileNumberAllowedStartingCharacters ||
+      defaultValidation.rules.allowedStartingCharacters,
 
     prefix:
+      mdmsConfig?.attributes?.prefix ||
       globalConfig?.mobilePrefix ||
-      mdmsConfig?.rules?.prefix ||
-      defaultValidation?.rules?.prefix,
+      defaultValidation.rules.prefix,
 
     pattern:
-      globalConfig?.mobileNumberPattern ||
       mdmsConfig?.rules?.pattern ||
-      defaultValidation?.rules?.pattern,
+      globalConfig?.mobileNumberPattern ||
+      defaultValidation.rules.pattern,
 
     minLength:
-      globalConfig?.mobileNumberLength ||
       mdmsConfig?.rules?.minLength ||
-      defaultValidation?.rules?.minLength,
+      globalConfig?.mobileNumberLength ||
+      defaultValidation.rules.minLength,
 
     maxLength:
-      globalConfig?.mobileNumberLength ||
       mdmsConfig?.rules?.maxLength ||
-      defaultValidation?.rules?.maxLength,
+      globalConfig?.mobileNumberLength ||
+      defaultValidation.rules.maxLength,
 
     errorMessage:
-      globalConfig?.mobileNumberErrorMessage || mdmsConfig?.rules?.errorMessage || defaultValidation?.rules?.errorMessage,
+      mdmsConfig?.rules?.errorMessage ||
+      globalConfig?.mobileNumberErrorMessage ||
+      defaultValidation.rules.errorMessage,
 
-    isActive: (mdmsConfig && mdmsConfig.rules && mdmsConfig.rules.isActive !== undefined)
-      ? mdmsConfig.rules.isActive
-      : (defaultValidation && defaultValidation.rules && defaultValidation.rules.isActive !== undefined)
-        ? defaultValidation.rules.isActive
-        : true
-
+    isActive:
+      mdmsConfig?.isActive !== undefined
+        ? mdmsConfig.isActive
+        : defaultValidation.rules.isActive,
   };
 
+  // Mirror the resolved rule on `window` so synchronous, hook-less
+  // consumers (e.g. `pgr/src/configs/CreateComplaintConfig.js` getters)
+  // pick up the same MDMS-sourced value the React tree just computed.
+  // Falls back to globalConfigs naturally for any consumer that runs
+  // before the first React render.
+  if (typeof window !== "undefined" && !isLoading && mdmsConfig) {
+    window.__DIGIT_USER_VALIDATION = window.__DIGIT_USER_VALIDATION || {};
+    window.__DIGIT_USER_VALIDATION.mobile = validationRules;
+  }
 
-  // Helper function to get min/max values for number validation
   const getMinMaxValues = () => {
     const { allowedStartingDigits, minLength } = validationRules;
     if (!allowedStartingDigits || allowedStartingDigits.length === 0) {
