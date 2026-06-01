@@ -1,0 +1,37 @@
+# Per-tenant compose overlay for bomet (state tenant `ke`).
+#
+# This file is copied to the target server as
+# /opt/digit/docker-compose.<inventory_hostname>.yml by the per-tenant overlay
+# step in playbook-deploy.yml, then included in every `docker compose` call.
+# Use it for bomet-only env tweaks and image pins that don't belong in the
+# shared docker-compose.egov-digit.yaml.
+services:
+  # Inbox defaults STATE_LEVEL/PARENT_LEVEL to mz; bomet has no DataSecurity at
+  # mz → encryptionPolicyConfiguration crash on boot. Pin both to ke.
+  inbox:
+    environment:
+      STATE_LEVEL_TENANT_ID: "ke"
+      PARENT_LEVEL_TENANT_ID: "ke"
+
+  # bomet's restored Flyway state has no V1 record → re-running V1 collides
+  # with the pre-existing eg_url_shortener table. Skip Flyway entirely.
+  egov-url-shortening:
+    environment:
+      SPRING_FLYWAY_ENABLED: "false"
+
+  # CCRS #622 / Digit-Core #1044: tenant-aware encryption.
+  #
+  # Custom image built on egov-ci (89.167.55.190) by cherry-picking c6f5438
+  # ("add tenant-aware encryption overloads") onto ccc0e13 ("prevent NPE in
+  # _updatenovalidate and profile _update"), then migrating the 6
+  # encryptObject(...) call sites in UserService.java to pass the request's
+  # tenantId. See https://github.com/egovernments/Digit-Core/pull/1044 —
+  # once the upstream `egovio/egov-user` image carries the same fix this
+  # block can be dropped.
+  #
+  # `registry.preview.egov.theflywheel.in` is a read-only TLS proxy
+  # (nginx vhost on the egov dev box) in front of the egov-ci VPC
+  # registry — same blob storage, valid public certificate, pullable
+  # from anywhere without insecure-registries setup.
+  egov-user:
+    image: registry.preview.egov.theflywheel.in/egovio/egov-user:dynamic-tenant-bomet
