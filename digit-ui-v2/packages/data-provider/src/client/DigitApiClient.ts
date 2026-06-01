@@ -4,10 +4,36 @@ import type {
   RequestInfo, UserInfo, MdmsRecord, ApiError,
 } from './types.js';
 
+/**
+ * Optional Keycloak overlay config. When provided AND a KC access token is
+ * present (provided per-request by `kcTokenSource`), the client transparently
+ * prefixes every DIGIT API path with `tokenExchangePath` so the request goes
+ * through the overlay service (which validates the JWT, injects a system
+ * token + the real user's identity into RequestInfo, and forwards upstream).
+ *
+ * The token-exchange overlay flow only applies when BOTH conditions hold —
+ * KC config is wired up AND a KC token is currently in storage. When either
+ * is missing, this client behaves exactly as before (OTP-style password
+ * grant against /user/oauth/token, no path rewriting).
+ */
+export interface KeycloakOverlayConfig {
+  /** Overlay path prefix, e.g. "/token-exchange". Browser-relative. */
+  tokenExchangePath: string;
+  /** Returns current KC access token, or null if no KC session. */
+  kcTokenSource: () => string | null;
+  /** Optional: returns a refreshed access token, or null if refresh failed.
+   *  When provided, a 401 from a DIGIT call triggers exactly one retry. */
+  refreshKcToken?: () => Promise<string | null>;
+  /** Optional: called when refresh fails / persistent 401. Lets the host
+   *  app evict stored tokens + redirect to login. */
+  onAuthFailure?: () => void;
+}
+
 export interface DigitApiClientConfig {
   url: string;
   stateTenantId?: string;
   endpointOverrides?: Record<string, string>;
+  keycloak?: KeycloakOverlayConfig;
 }
 
 export class DigitApiClient {
@@ -16,6 +42,7 @@ export class DigitApiClient {
   private overrides: Record<string, string>;
   private authToken: string | null = null;
   private userInfo: UserInfo | null = null;
+  private kc: KeycloakOverlayConfig | null;
 
   private static readonly RETRY_STATUS_CODES = new Set([429, 503]);
   private static readonly MAX_RETRIES = 3;
@@ -24,6 +51,36 @@ export class DigitApiClient {
     this.baseUrl = config.url;
     this._stateTenantId = config.stateTenantId || '';
     this.overrides = config.endpointOverrides || {};
+    this.kc = config.keycloak ?? null;
+  }
+
+  // ── Keycloak overlay routing ────────────────────────────────────────────
+
+  /** Inject / replace KC overlay config at runtime (e.g. after sign-in). */
+  setKeycloakConfig(kc: KeycloakOverlayConfig | null): void {
+    this.kc = kc;
+  }
+
+  /** True when the KC overlay is wired AND a KC token is currently stored. */
+  private kcActive(): string | null {
+    if (!this.kc) return null;
+    return this.kc.kcTokenSource() || null;
+  }
+
+  /** Compose the final URL for a DIGIT API path. When KC is active, the
+   *  overlay prefix is inserted between baseUrl and the path. */
+  private apiUrl(path: string): string {
+    if (this.kcActive() && this.kc) {
+      return `${this.baseUrl}${this.kc.tokenExchangePath}${path}`;
+    }
+    return `${this.baseUrl}${path}`;
+  }
+
+  /** Authorization header value preferred for the current request. KC bearer
+   *  wins when available — the overlay reads it and supplies its own
+   *  upstream credentials. */
+  private bearerToken(): string | null {
+    return this.kcActive() ?? this.authToken;
   }
 
   // --- Auth ---
@@ -77,19 +134,45 @@ export class DigitApiClient {
   }
 
   async request<T = unknown>(path: string, body: Record<string, unknown>): Promise<T> {
-    const url = `${this.baseUrl}${path}`;
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (this.authToken) headers['Authorization'] = `Bearer ${this.authToken}`;
-
     const jsonBody = JSON.stringify(body);
+
+    // Wrap the actual fetch so we can retry once with a refreshed KC token
+    // on 401 — refresh is opt-in via the keycloak config's refreshKcToken.
+    const doFetch = async (): Promise<Response> => {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const bearer = this.bearerToken();
+      if (bearer) headers['Authorization'] = `Bearer ${bearer}`;
+      return fetch(this.apiUrl(path), { method: 'POST', headers, body: jsonBody });
+    };
+
     let lastResponse: Response | undefined;
+    let kcRefreshAttempted = false;
 
     for (let attempt = 0; attempt < DigitApiClient.MAX_RETRIES; attempt++) {
-      const response = await fetch(url, { method: 'POST', headers, body: jsonBody });
+      let response = await doFetch();
+
+      // KC-specific: a single refresh+retry on 401 when overlay is active.
+      if (response.status === 401 && this.kcActive() && this.kc?.refreshKcToken && !kcRefreshAttempted) {
+        kcRefreshAttempted = true;
+        try {
+          const fresh = await this.kc.refreshKcToken();
+          if (fresh) {
+            response = await doFetch();
+          } else {
+            this.kc.onAuthFailure?.();
+          }
+        } catch {
+          this.kc.onAuthFailure?.();
+        }
+      }
 
       if (!DigitApiClient.RETRY_STATUS_CODES.has(response.status)) {
         const data = await response.json() as Record<string, unknown>;
         if (!response.ok || (data.Errors as ApiError[] | undefined)?.length) {
+          if (response.status === 401 && this.kcActive()) {
+            // Refresh already tried (or wasn't configured). Bail to login.
+            this.kc?.onAuthFailure?.();
+          }
           const errors: ApiError[] = (data.Errors as ApiError[]) || [
             { code: `HTTP_${response.status}`, message: (data.message as string) || `Request failed: ${response.status}` },
           ];
@@ -580,9 +663,10 @@ export class DigitApiClient {
 
   async filestoreGetUrl(tenantId: string, fileStoreIds: string[]): Promise<Record<string, unknown>[]> {
     const params = new URLSearchParams({ tenantId, fileStoreIds: fileStoreIds.join(',') });
-    const url = `${this.baseUrl}${this.endpoint('FILESTORE_URL')}?${params.toString()}`;
+    const url = `${this.apiUrl(this.endpoint('FILESTORE_URL'))}?${params.toString()}`;
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (this.authToken) headers['Authorization'] = `Bearer ${this.authToken}`;
+    const bearer = this.bearerToken();
+    if (bearer) headers['Authorization'] = `Bearer ${bearer}`;
 
     const response = await fetch(url, { method: 'GET', headers });
     const contentType = response.headers.get('content-type') || '';
@@ -596,7 +680,7 @@ export class DigitApiClient {
   }
 
   async filestoreUpload(tenantId: string, module: string, fileName: string, fileContent: Buffer | Uint8Array, contentType?: string): Promise<string> {
-    const url = `${this.baseUrl}${this.endpoint('FILESTORE_UPLOAD')}`;
+    const url = this.apiUrl(this.endpoint('FILESTORE_UPLOAD'));
     const formData = new FormData();
     // Cast to BlobPart — Buffer/Uint8Array are valid at runtime but strict TS typing conflicts with ArrayBufferLike
     const blob = new Blob([fileContent as unknown as BlobPart], { type: contentType || 'application/octet-stream' });
@@ -605,7 +689,8 @@ export class DigitApiClient {
     formData.append('module', module);
 
     const headers: Record<string, string> = {};
-    if (this.authToken) headers['Authorization'] = `Bearer ${this.authToken}`;
+    const bearer = this.bearerToken();
+    if (bearer) headers['Authorization'] = `Bearer ${bearer}`;
 
     const response = await fetch(url, { method: 'POST', headers, body: formData });
     const data = await response.json() as Record<string, unknown>;
@@ -621,9 +706,12 @@ export class DigitApiClient {
   // --- Encryption ---
 
   async encryptData(tenantId: string, values: string[]): Promise<string[]> {
-    const url = `${this.baseUrl}${this.endpoint('ENC_ENCRYPT')}`;
+    const url = this.apiUrl(this.endpoint('ENC_ENCRYPT'));
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const bearer = this.bearerToken();
+    if (bearer) headers['Authorization'] = `Bearer ${bearer}`;
     const response = await fetch(url, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers,
       body: JSON.stringify({ encryptionRequests: values.map((value) => ({ tenantId, type: 'Normal', value })) }),
     });
     if (!response.ok) throw new Error(`Encryption failed: HTTP ${response.status}`);
@@ -632,9 +720,12 @@ export class DigitApiClient {
   }
 
   async decryptData(tenantId: string, encryptedValues: string[]): Promise<string[]> {
-    const url = `${this.baseUrl}${this.endpoint('ENC_DECRYPT')}`;
+    const url = this.apiUrl(this.endpoint('ENC_DECRYPT'));
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const bearer = this.bearerToken();
+    if (bearer) headers['Authorization'] = `Bearer ${bearer}`;
     const response = await fetch(url, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers,
       body: JSON.stringify(encryptedValues),
     });
     if (!response.ok) throw new Error(`Decryption failed: HTTP ${response.status}`);
