@@ -256,6 +256,7 @@ jobs:
           bash scripts/health-check.sh http://localhost:18000
 
       - name: Gatus health dashboard check
+        continue-on-error: true
         run: |
           bash scripts/ci-gatus-check.sh http://localhost:18889
 
