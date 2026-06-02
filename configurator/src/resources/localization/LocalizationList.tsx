@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useListContext } from 'ra-core';
 import { DigitList, DigitDatagrid } from '@/admin';
 import type { DigitColumn } from '@/admin';
@@ -28,6 +29,23 @@ function LocaleSelector() {
   const localeB = String(filterValues.locale2 || fallbackB);
   const update = (key: 'locale' | 'locale2') => (v: string) =>
     setFilters({ ...filterValues, [key]: v }, undefined, true);
+
+  // Once locales are loaded, write the defaults into filter state so the
+  // data provider receives locale/locale2 on the initial fetch instead of
+  // waiting for the user to manually pick a locale.
+  useEffect(() => {
+    if (isLoading || locales.length === 0) return;
+    const needsA = !filterValues.locale;
+    const needsB = !filterValues.locale2;
+    if (needsA || needsB) {
+      setFilters({
+        ...filterValues,
+        ...(needsA ? { locale: fallbackA } : {}),
+        ...(needsB ? { locale2: fallbackB } : {}),
+      }, undefined, true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, fallbackA, fallbackB]);
 
   return (
     <div className="flex items-center gap-3 mb-3 flex-wrap">

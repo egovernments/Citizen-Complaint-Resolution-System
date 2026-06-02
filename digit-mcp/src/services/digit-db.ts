@@ -56,6 +56,13 @@ class DigitDb {
     return result.rows;
   }
 
+  /** Write query (INSERT / UPDATE / DELETE) — returns rowCount, throws on failure. */
+  async execute(sql: string, params: unknown[] = []): Promise<number> {
+    if (!this.pool) throw new Error('DIGIT database not available');
+    const result = await this.pool.query(sql, params);
+    return result.rowCount ?? 0;
+  }
+
   isHealthy(): boolean {
     return this.healthy;
   }

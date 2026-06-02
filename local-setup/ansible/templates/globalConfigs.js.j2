@@ -35,6 +35,7 @@ var globalConfigs = (function () {
   var pgrBoundaryHighestLevel = {{ pgr_boundary_highest_level | to_json }};
   var pgrBoundaryLowestLevel = {{ pgr_boundary_lowest_level | to_json }};
   var boundaryType = {{ boundary_type | to_json }};
+  var hierarchyType = {{ hierarchy_type | default('ADMIN') | to_json }};
   var mapCenter = {{ map_center | to_json }};
   var employeeModuleDenylist = {{ employee_module_denylist | to_json }};
   var loginTenantAllowlist = {{ login_tenant_allowlist | to_json }};
@@ -104,6 +105,8 @@ var globalConfigs = (function () {
       return mapCenter;
     } else if (key === "BOUNDARY_TYPE") {
       return boundaryType;
+    } else if (key === "HIERARCHY_TYPE") {
+      return hierarchyType;
     } else if (key === "CORE_MOBILE_CONFIGS") {
       return coreMobileConfigs;
     } else if (key === "CORE_POSTAL_CONFIGS") {

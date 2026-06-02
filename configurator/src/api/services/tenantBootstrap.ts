@@ -41,10 +41,11 @@ export interface BootstrapResult {
   data: { copied: string[]; skipped: string[]; failed: string[] };
   admin: { created: boolean; tenantId: string } | null;
   workflow: { copied: string[]; failed: string[] };
+  localization: { success: number; failed: number };
 }
 
 export interface BootstrapProgress {
-  step: 'schemas' | 'self-record' | 'data' | 'admin' | 'workflow';
+  step: 'schemas' | 'self-record' | 'data' | 'admin' | 'workflow' | 'localization';
   current: number;
   total: number;
   detail?: string;
@@ -56,6 +57,8 @@ export interface BootstrapProgress {
 // the new tenant (their @PostConstruct init evaluates these).
 const ESSENTIAL_DATA_SCHEMAS = [
   'ACCESSCONTROL-ROLES.roles',
+  'ACCESSCONTROL-ACTIONS-TEST.actions-test',
+  'ACCESSCONTROL-ROLEACTIONS.roleactions',
   'common-masters.IdFormat',
   'common-masters.Department',
   'DataSecurity.DecryptionABAC',
@@ -65,10 +68,10 @@ const ESSENTIAL_DATA_SCHEMAS = [
   'common-masters.Designation',
   'common-masters.StateInfo',
   'common-masters.GenderType',
+  'common-masters.ThemeConfig',
   'egov-hrms.EmployeeStatus',
   'egov-hrms.EmployeeType',
   'egov-hrms.DeactivationReason',
-  'RAINMAKER-PGR.ServiceDefs',
   'Workflow.BusinessService',
   'INBOX.InboxQueryConfiguration',
 ];
@@ -264,6 +267,75 @@ async function workflowCopyPGR(source: string, target: string): Promise<string[]
   return cleaned.map((s) => s.businessService);
 }
 
+// --- Step 6: localization copy ------------------------------------------
+
+// Modules the DIGIT-UI loads at tenant init. Missing entries show as raw keys
+// in the complaint form, common UI labels, and employee screens.
+const BASE_LOCALE_MODULES = [
+  'rainmaker-common',
+  'rainmaker-pgr',
+  'digit-ui',
+  'digit-tenants',
+  'digit-privacy-policy',
+  'rainmaker-common-masters',
+];
+
+export async function bootstrapLocalization(
+  source: string,
+  target: string,
+  locale = 'en_IN'
+): Promise<{ success: number; failed: number }> {
+  let success = 0;
+  let failed = 0;
+  const BATCH = 500;
+
+  for (const module of BASE_LOCALE_MODULES) {
+    try {
+      const qs = new URLSearchParams({ locale, tenantId: source, module });
+      const response = await apiClient.post(
+        `${ENDPOINTS.LOCALIZATION_SEARCH}?${qs.toString()}`,
+        { RequestInfo: apiClient.buildRequestInfo() }
+      );
+      // Trim code/module and deduplicate by (code, module) — source data can
+      // carry trailing-space twins (e.g. "TOTAL_CHALLANS" + "TOTAL_CHALLANS ")
+      // that map to the same DB unique key after trimming. Sending both in one
+      // batch causes the entire batch to fail on unique_message_entry.
+      const seen = new Map<string, { code: string; message: string; module: string; locale: string }>();
+      for (const m of (response.messages || []) as { code: string; message: string; module: string; locale: string }[]) {
+        const code = m.code.trim();
+        const mod = (m.module || '').trim();
+        if (!code || code.startsWith('SERVICEDEFS')) continue;
+        seen.set(`${mod}::${code}`, { ...m, code, module: mod });
+      }
+      const messages = Array.from(seen.values());
+      if (messages.length === 0) continue;
+
+      for (let i = 0; i < messages.length; i += BATCH) {
+        const batch = messages.slice(i, i + BATCH);
+        try {
+          await apiClient.post(ENDPOINTS.LOCALIZATION_UPSERT, {
+            RequestInfo: apiClient.buildRequestInfo({ apiId: 'emp', action: 'create' }),
+            tenantId: target,
+            locale,
+            messages: batch.map((m) => ({
+              code: m.code,
+              message: m.message,
+              module: m.module,
+              locale: m.locale || locale,
+            })),
+          });
+          success += batch.length;
+        } catch {
+          failed += batch.length;
+        }
+      }
+    } catch {
+      failed++;
+    }
+  }
+  return { success, failed };
+}
+
 // --- Top-level orchestration --------------------------------------------
 
 export async function bootstrapStateRoot(
@@ -278,6 +350,7 @@ export async function bootstrapStateRoot(
     data: { copied: [], skipped: [], failed: [] },
     admin: null,
     workflow: { copied: [], failed: [] },
+    localization: { success: 0, failed: 0 },
   };
 
   // Step 1: schemas

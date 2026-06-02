@@ -1,20 +1,14 @@
 import { useMemo } from 'react';
 import { DigitEdit, DigitFormInput, DigitFormSelect, v } from '@/admin';
 import { useGetList } from 'ra-core';
-
-const LOCALE_CHOICES = [
-  { value: 'en_IN', label: 'English (en_IN)' },
-  { value: 'hi_IN', label: 'Hindi (hi_IN)' },
-  { value: 'mr_IN', label: 'Marathi (mr_IN)' },
-  { value: 'kn_IN', label: 'Kannada (kn_IN)' },
-  { value: 'ta_IN', label: 'Tamil (ta_IN)' },
-];
+import { useAvailableLocales } from '@/hooks/useAvailableLocales';
 
 export function LocalizationEdit() {
   const { data } = useGetList('localization', {
     pagination: { page: 1, perPage: 1000 },
     sort: { field: 'module', order: 'ASC' },
   });
+  const { locales } = useAvailableLocales();
 
   const moduleChoices = useMemo(() => {
     if (!data || data.length === 0) {
@@ -23,6 +17,8 @@ export function LocalizationEdit() {
     const unique = [...new Set(data.map((r) => r.module))].filter(Boolean).sort();
     return unique.map((m) => ({ value: m, label: m }));
   }, [data]);
+
+  const localeChoices = locales.map((l) => ({ value: l.value, label: l.label }));
 
   return (
     <DigitEdit title="Edit Localization Message">
@@ -38,7 +34,7 @@ export function LocalizationEdit() {
       <DigitFormSelect
         source="locale"
         label="Locale"
-        choices={LOCALE_CHOICES}
+        choices={localeChoices}
         placeholder="Select locale..."
       />
     </DigitEdit>

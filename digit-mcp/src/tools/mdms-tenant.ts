@@ -1135,8 +1135,12 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         'common-masters.uiHomePage',
         'common-masters.wfSlaConfig',
         'common-masters.CronJobAPIConfig',
+        'common-masters.ThemeConfig',
         // ── PGR ──
-        'RAINMAKER-PGR.ServiceDefs',
+        // ServiceDefs (complaint types) are intentionally excluded: they are
+        // tenant-specific and must be loaded by the operator via Phase 3 of
+        // the configurator. Copying them from the source (pg.citest) would
+        // pollute the target with unrelated demo/test complaint types.
         'RAINMAKER-PGR.UIConstants',
         // ── workflow (definition is copied separately in Step 6 below;
         //    these are the MDMS-side companion configs) ──
@@ -1732,11 +1736,20 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               perTenantRaw += msgs.length;
               for (const m of msgs) {
                 const rec = m as Record<string, unknown>;
-                const code = rec.code as string;
+                if (typeof rec.code !== 'string') continue;
+                const code = rec.code.trim();
                 if (!code) continue;
+                // ServiceDefs localization (SERVICEDEFS.* / SERVICEDEFS_*) is
+                // intentionally excluded — mirrors the MDMS ServiceDefs data
+                // exclusion above. These keys are tenant-specific and must be
+                // seeded by Phase 3 of the configurator. Copying them from
+                // source tenants (e.g. statea has SERVICEDEFS.GARBAGE) causes
+                // a duplicate-constraint 400 when Phase 3 later tries to insert
+                // the same codes, silently blocking the whole upsert batch.
+                if (code.startsWith('SERVICEDEFS')) continue;
                 const message = rec.message as string;
                 if (typeof message !== 'string') continue;
-                const module = (rec.module as string) || 'rainmaker-common';
+                const module = (typeof rec.module === 'string' ? rec.module : 'rainmaker-common').trim();
                 const key = `${module}::${code}`;
                 if (byKey.has(key)) continue;
                 byKey.set(key, { code, message, module });
@@ -1812,6 +1825,39 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
 
       const localizationsCopied = localizationResults.reduce((a, r) => a + r.copied, 0);
       const localizationsFailed = localizationResults.reduce((a, r) => a + r.failed, 0);
+
+      // Push TENANT_TENANTS_<CODE> to both the city tenant and its root so the
+      // city-selection dropdown resolves regardless of whether stateTenantId is
+      // the city ("mz.maputo") or the root ("mz"). No source tenant carries this
+      // key — it is target-specific — so the copy loop never writes it.
+      // Mirrors configurator Phase 1's buildTenantLocalizations call.
+      try {
+        const lastSegment = target.split('.').pop() || target;
+        const displayName = lastSegment.charAt(0).toUpperCase() + lastSegment.slice(1).toLowerCase();
+        const tenantKey = `TENANT_TENANTS_${target.toUpperCase().replace(/\./g, '_')}`;
+        const tenantMsg = { code: tenantKey, message: displayName, module: 'rainmaker-common' };
+        // Push to city tenant (mz.maputo) AND root tenant (mz)
+        const pushTargets = [target];
+        if (target.includes('.')) pushTargets.push(target.split('.')[0]);
+        for (const tid of pushTargets) {
+          for (const locale of locales) {
+            try { await digitApi.localizationUpsert(tid, locale, [tenantMsg]); } catch { /* duplicate on re-run */ }
+          }
+        }
+      } catch {
+        console.warn('[tenant_bootstrap] tenant name localization push failed (non-fatal)');
+      }
+
+      // Bust the localization service's Redis cache so the next _search
+      // re-reads from DB instead of serving the stale empty entry cached
+      // before bootstrap ran. Non-fatal — a miss here is retried on the
+      // next SPA load; don't block bootstrap success on it.
+      try {
+        await digitApi.localizationCacheBust();
+      } catch {
+        console.warn('[tenant_bootstrap] localization cache-bust failed (non-fatal)');
+      }
+
       emitProgress({
         phase: 'localizations:done',
         message: `Localization copy: ${localizationsCopied} messages across ${locales.length} locale(s), ${localizationsFailed} failed`,

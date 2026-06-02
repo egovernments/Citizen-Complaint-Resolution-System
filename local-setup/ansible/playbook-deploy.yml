@@ -185,18 +185,17 @@
       - name: Configure Docker insecure-registries for VPC registry
         copy:
           dest: /etc/docker/daemon.json
-          content: |
-            {
-              "insecure-registries": ["{{ docker_registry }}"]
-            }
+          content: "{{ {'insecure-registries': insecure_registries} | to_nice_json }}\n"
           mode: '0644'
         register: daemon_json
+        vars:
+          insecure_registries: "{{ insecure_registries | default([]) }}"
 
       - name: Restart docker if daemon.json changed
         service:
           name: docker
           state: restarted
-        when: daemon_json.changed
+        when: daemon_json is defined and daemon_json.changed | default(false)
 
     # check_mode: false forces this to run even under `--check`, so the
     # version-compare task below has a real value to test against.
@@ -1690,12 +1689,38 @@
         replace: '\1STATE_LEVEL_TENANT_ID: {{ state_root }}'
       when: state_root != 'pg'
 
-    - name: "post-bootstrap — restart services to pick up new STATE_LEVEL_TENANT_ID"
+    - name: "post-bootstrap — restart services (except egov-hrms) to pick up new STATE_LEVEL_TENANT_ID"
       ansible.builtin.shell: >-
         docker compose {{ compose_files }}
-        restart egov-user egov-workflow-v2 egov-enc-service pgr-services egov-hrms
+        restart egov-user egov-workflow-v2 egov-enc-service pgr-services
       args:
         chdir: "{{ digit_dir }}"
+      when: state_root != 'pg'
+
+    - name: "post-bootstrap — wait for egov-user healthy before restarting egov-hrms"
+      ansible.builtin.shell: >-
+        curl -sf http://127.0.0.1:{{ upstream_kong_port }}/user/health -o /dev/null
+      register: user_ready
+      retries: 18
+      delay: 10
+      until: user_ready.rc == 0
+      changed_when: false
+      when: state_root != 'pg'
+
+    - name: "post-bootstrap — restart egov-hrms after egov-user is healthy"
+      ansible.builtin.shell: >-
+        docker compose {{ compose_files }} restart egov-hrms
+      args:
+        chdir: "{{ digit_dir }}"
+      when: state_root != 'pg'
+
+    - name: "post-bootstrap — wait for egov-hrms to be healthy after restart"
+      ansible.builtin.shell: docker inspect --format '{{ "{{" }}.State.Health.Status{{ "}}" }}' egov-hrms
+      register: hrms_health_post
+      retries: 30
+      delay: 10
+      until: hrms_health_post.stdout == 'healthy'
+      changed_when: false
       when: state_root != 'pg'
 
     # `docker compose restart egov-user` above does NOT cascade to
