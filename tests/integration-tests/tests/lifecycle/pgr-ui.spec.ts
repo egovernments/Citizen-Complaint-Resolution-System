@@ -69,7 +69,19 @@ test.describe.serial('PGR lifecycle — UI only', () => {
 
   // ─── 1. Citizen logs in via UI (OTP flow) ───────────────────────────
 
-  test('1 — citizen logs in via UI with fixed OTP', async ({ page }) => {
+  test('1 — citizen logs in via UI with fixed OTP', {
+    annotation: {
+      type: 'description',
+      description: `Drives the citizen OTP login flow through the actual login form (no API shortcut). Confirms the auto-register-on-first-login behavior works end-to-end: a brand-new phone number can sign in with the mock OTP "123456" and walk straight into the citizen home page with a Citizen.token in localStorage.
+
+Steps:
+1. citizenOtpLogin(page, CITIZEN_PHONE) — UI helper that drives the phone form, OTP form, and language/city pickers.
+2. Read localStorage 'Citizen.token'; assert it's truthy.
+3. Set citizenLoggedIn flag, snap screenshot 01-citizen-logged-in.
+
+First link in a 6-step UI lifecycle. Marked test.slow() at the describe level — UI flow with multiple page hydrations.`,
+    },
+    tag: ['@area:pgr', '@kind:lifecycle', '@layer:ui', '@persona:cross'] }, async ({ page }) => {
     await citizenOtpLogin(page, CITIZEN_PHONE);
 
     const token = await page.evaluate(() => localStorage.getItem('Citizen.token'));
@@ -81,7 +93,28 @@ test.describe.serial('PGR lifecycle — UI only', () => {
 
   // ─── 2. Citizen creates complaint via UI wizard ─────────────────────
 
-  test('2 — citizen creates complaint via UI wizard', async ({ page }) => {
+  test('2 — citizen creates complaint via UI wizard', {
+    annotation: {
+      type: 'description',
+      description: `Drives the full citizen file-complaint wizard through the UI and captures the resulting serviceRequestId both via response interception and a fallback regex on the response page. Heavy spec — exercises type/subtype dropdowns, geolocation skip, address selection (radios for <5 localities, dropdowns for 5+), description, and final submit.
+
+Steps:
+1. test.skip if citizen wasn't logged in.
+2. setTimeout 180s; re-login via UI.
+3. Install a route handler on /pgr-services/v2/request/_create to capture the response body's serviceRequestId.
+4. Navigate to /digit-ui/citizen/pgr/create-complaint and wait 8s for hydration.
+5. Step 0: select complaint type (and subtype if a second dropdown appears) → NEXT.
+6. Step 1: skip geolocation → NEXT.
+7. Step 2: skip location details → NEXT.
+8. Step 3: select address — try city radios first, then locality radios or dropdown depending on count; throw if no locality option appears.
+9. Step 4: fill description textarea with an ISO timestamp; NEXT.
+10. Step 5: click SUBMIT, wait for /pgr/response URL, snap final screenshot.
+11. Pull serviceRequestId from the captured response or fall back to scraping the response page.
+12. Assert serviceRequestId is truthy; set complaintCreated.
+
+Long timeout (180s) because of multiple boundary lookups and DOM settles. Catches a regression where the boundary mismatch leaves locality dropdowns empty (CCRS#477).`,
+    },
+    tag: ['@area:pgr', '@kind:lifecycle', '@layer:ui', '@persona:cross'] }, async ({ page }) => {
     test.skip(!citizenLoggedIn, 'citizen not logged in');
     test.setTimeout(180_000);
 
@@ -262,7 +295,22 @@ test.describe.serial('PGR lifecycle — UI only', () => {
 
   // ─── 3. Admin sees complaint in inbox (UI) ──────────────────────────
 
-  test('3 — admin sees complaint in PGR inbox (UI)', async ({ page }) => {
+  test('3 — admin sees complaint in PGR inbox (UI)', {
+    annotation: {
+      type: 'description',
+      description: `Logs in as the city-level admin (tenant ke.nairobi) and confirms the PGR inbox page renders. Whether the freshly-created complaint is actually visible is logged but not asserted — boundary filters can legitimately hide it from the configured admin's scope, so the assertion stays at "the inbox page itself rendered".
+
+Steps:
+1. test.skip if !complaintCreated.
+2. loginViaApi as CITY_ADMIN_USER on tenant ke.nairobi.
+3. Navigate to /digit-ui/employee/pgr/inbox and wait 15s for hydration.
+4. Snap screenshot 03-pgr-inbox.
+5. Assert the "Inbox" breadcrumb is visible (page rendered).
+6. Log whether bodyText.includes(serviceRequestId) — informational only.
+
+Doesn't assert the complaint appears in the inbox because legitimate boundary scoping can hide it; the test focuses on the inbox UI rendering at all.`,
+    },
+    tag: ['@area:pgr', '@kind:lifecycle', '@layer:ui', '@persona:cross'] }, async ({ page }) => {
     test.skip(!complaintCreated, 'complaint not created');
 
     await loginViaApi(page, {
@@ -293,7 +341,24 @@ test.describe.serial('PGR lifecycle — UI only', () => {
 
   // ─── 4. Admin assigns complaint via UI ──────────────────────────────
 
-  test('4 — admin assigns complaint via UI', async ({ page }) => {
+  test('4 — admin assigns complaint via UI', {
+    annotation: {
+      type: 'description',
+      description: `Drives the Take Action → Assign flow on the complaint detail page entirely through the UI: open the complaint, click Take Action, pick Assign from the dropdown menu, fill the comments textarea in the modal, submit, then verify status flipped to PENDINGATLME via API (read-only verification).
+
+Steps:
+1. test.skip if !complaintCreated; setTimeout 120s.
+2. loginViaApi as the city admin and navigate to /pgr/complaint-details/{srid}.
+3. Assert the complaint ID appears in the body (correct page loaded).
+4. Click the "Take Action" button.
+5. Click the "Assign" header dropdown option.
+6. Wait for the modal, fill its first textarea with "Assigned via E2E UI test".
+7. Click SUBMIT inside the modal.
+8. fetchComplaintStatus(srid) and assert applicationStatus === 'PENDINGATLME'.
+
+Status verification is API-only because there's no good DOM signal that the assign succeeded — but every preceding interaction is UI-driven.`,
+    },
+    tag: ['@area:pgr', '@kind:lifecycle', '@layer:ui', '@persona:cross'] }, async ({ page }) => {
     test.skip(!complaintCreated, 'complaint not created');
     test.setTimeout(120_000);
 
@@ -361,7 +426,23 @@ test.describe.serial('PGR lifecycle — UI only', () => {
 
   // ─── 5. Admin resolves complaint via UI ─────────────────────────────
 
-  test('5 — admin resolves complaint via UI', async ({ page }) => {
+  test('5 — admin resolves complaint via UI', {
+    annotation: {
+      type: 'description',
+      description: `Sibling of step 4 — drives Take Action → Resolve through the UI and confirms the complaint flips to RESOLVED. The post-condition for the lifecycle (citizen-side step 6 then asserts visibility on the citizen complaints page).
+
+Steps:
+1. test.skip if !complaintCreated; setTimeout 120s.
+2. loginViaApi as city admin; navigate to complaint detail page.
+3. Click "Take Action".
+4. Click the "Resolve" header dropdown option.
+5. Fill modal's first textarea with "Resolved via E2E UI test".
+6. Click SUBMIT.
+7. fetchComplaintStatus(srid) and assert applicationStatus === 'RESOLVED'.
+
+API-only verification of status follows the same pattern as step 4 — UI flow is exercised in full.`,
+    },
+    tag: ['@area:pgr', '@kind:lifecycle', '@layer:ui', '@persona:cross'] }, async ({ page }) => {
     test.skip(!complaintCreated, 'complaint not created');
     test.setTimeout(120_000);
 
@@ -425,7 +506,21 @@ test.describe.serial('PGR lifecycle — UI only', () => {
 
   // ─── 6. Citizen sees resolved complaint on complaints page (UI) ─────
 
-  test('6 — citizen sees resolved complaint on complaints page (UI)', async ({ page }) => {
+  test('6 — citizen sees resolved complaint on complaints page (UI)', {
+    annotation: {
+      type: 'description',
+      description: `Final step: re-login as the citizen (different browser context, fresh cookies/localStorage) and confirm the resolved complaint appears on the citizen's My Complaints page. Tries a "Resolved/Closed/All" tab fallback if the default view doesn't list the complaint, then asserts visibility.
+
+Steps:
+1. test.skip if !complaintCreated; setTimeout 60s.
+2. citizenOtpLogin(page, CITIZEN_PHONE).
+3. Navigate to /digit-ui/citizen/pgr/complaints.
+4. If body text doesn't contain serviceRequestId, click the first tab matching /resolved|closed|all/i and re-snap.
+5. Assert final body text contains serviceRequestId.
+
+Closes the citizen → admin → citizen loop. If this fails, the citizen can't see what an admin did to their complaint, which is the most user-visible failure mode.`,
+    },
+    tag: ['@area:pgr', '@kind:lifecycle', '@layer:ui', '@persona:cross'] }, async ({ page }) => {
     test.skip(!complaintCreated, 'complaint not created');
     test.setTimeout(60_000);
 

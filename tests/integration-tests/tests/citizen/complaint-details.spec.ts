@@ -2,7 +2,22 @@ import { test, expect } from '@playwright/test';
 import { citizenOtpLogin } from '../utils/citizen-login';
 import { BASE_URL } from '../utils/env';
 
-test('complaint details page loads without crashing for any service code', async ({ page }) => {
+test('complaint details page loads without crashing for any service code', {
+  annotation: {
+    type: 'description',
+    description: `Robustness check for the citizen complaint detail page. Picks an arbitrary existing complaint via a search-from-the-browser API call (so the test isn't tied to a specific seeded ID), navigates to its detail page, and asserts both that the Complaint Summary renders and that no "Cannot read properties of undefined" JS errors fire.
+
+Steps:
+1. setTimeout 120s; attach a pageerror listener to capture uncaught JS errors.
+2. citizenOtpLogin with a fixed phone (711111111).
+3. From the page context, call PGR _search via the in-page Digit token to grab any existing serviceRequestId; skip if zero results.
+4. Navigate to /digit-ui/citizen/pgr/complaints/{id}, wait 12s for hydration.
+5. Assert "Complaint Summary" heading is visible and the complaint ID appears in the body.
+6. Filter pageErrors for "Cannot read properties of undefined" matches and assert length === 0.
+
+Skips gracefully if no complaints exist at all — useful for fresh deployments. Catches the class of regressions where a service code has missing fields and the detail page deref-crashes.`,
+  },
+  tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
   test.setTimeout(120_000);
 
   // Track JS errors

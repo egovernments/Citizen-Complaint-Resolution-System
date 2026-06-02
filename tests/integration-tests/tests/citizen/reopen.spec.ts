@@ -169,7 +169,22 @@ test.describe('Citizen reopen-complaint UI', () => {
     console.log(`Seeded ${serviceRequestId} → RESOLVED for ${CITIZEN_PHONE}`);
   });
 
-  test('reopen step 0 renders title + 4 reason radios + Next button', async ({ page }) => {
+  test('reopen step 0 renders title + 4 reason radios + Next button', {
+    annotation: {
+      type: 'description',
+      description: `Story 7.1 contract for /citizen/pgr/reopen/{srid} step 0: the page renders the heading "Choose Reason to Re-open the Complaint", the four radio reasons, and a Next control. Subsequent steps (Upload / Additional / Response) aren't walked here because they're inferred in the doc and brittle without an explicit fixture.
+
+Steps:
+1. setTimeout 120s; citizenOtpLogin.
+2. Navigate to /digit-ui/citizen/pgr/reopen/{seeded SR id} (seeded by beforeAll → register + create + ASSIGN + RESOLVE).
+3. Wait 5s; assert body does NOT contain "Something went wrong".
+4. Assert body matches /Choose Reason to Re-open the Complaint/.
+5. For each reason ['No work was done','Only partial work was done','Employee did not turn up','No permanent solution'], assert body contains it.
+6. Assert body matches /Next/i (Next is sometimes a styled element, not always a semantic button).
+
+beforeAll is API-only because the reopen UI requires the complaint to be in RESOLVED state and the citizen needs to own it.`,
+    },
+    tag: ['@area:pgr', '@kind:regression', '@layer:api', '@persona:citizen'] }, async ({ page }) => {
     test.setTimeout(120_000);
     await citizenOtpLogin(page, CITIZEN_PHONE);
     await page.goto(`${BASE_URL}/digit-ui/citizen/pgr/reopen/${serviceRequestId}`, {

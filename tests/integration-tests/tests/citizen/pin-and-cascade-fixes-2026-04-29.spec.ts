@@ -23,7 +23,29 @@ const PHONE = generateCitizenPhone();
 test.describe('06-citizen-pin-and-cascade — PR #74 regression', () => {
   test.slow();
 
-  test('pin step + locality cascade no longer trap the citizen', async ({ page }) => {
+  test('pin step + locality cascade no longer trap the citizen', {
+    annotation: {
+      type: 'description',
+      description: `Catches the two pre-fix traps in the citizen wizard. CCRS#469: picking a pin would leak its reverse-geocoded pincode onto formData.postalCode, and stale validation would re-fire on step advance ("Pincode not serviceable"). CCRS#477: the cascade rendered every level immediately, so a citizen could pick a Ward without picking County → Sub-County. Post-fix the cascade gates each level and the pincode toast is gone.
+
+Steps:
+1. test.slow(); setTimeout 180s.
+2. Attach pageerror listener (only catches uncaught throws — bundle has noisy console.error from PropTypes etc).
+3. citizenOtpLogin; assert Citizen.token persisted.
+4. Navigate to /pgr/create-complaint, wait 6s for hydration.
+5. Step 0: open type dropdown → pick first item; if a subtype dropdown appears, pick its first item too. NEXT.
+6. Step 1: don't touch the map. NEXT.
+7. Step 2: don't edit postal code. NEXT.
+8. Assert no "pincode not serviceable" toast appeared during steps 1–2.
+9. Step 3 cascade: assert exactly 1 dropdown initially (County).
+10. Pick County; assert dropdown count becomes 2 (Sub-County appeared).
+11. Pick Sub-County; assert count becomes 3 (Ward appeared).
+12. Pick Ward (a leaf).
+13. Assert pageErrors === [].
+
+Long-running with explicit DOM count assertions to lock in the cascade gating contract — pre-fix it was always 3, post-fix it grows 1 → 2 → 3.`,
+    },
+    tag: ['@area:pgr', '@ccrs:74', '@kind:regression', '@layer:ui', '@persona:citizen', '@pr:74'] }, async ({ page }) => {
     test.setTimeout(180_000);
 
     // We watch for *uncaught* JS errors only. The bundle produces a long

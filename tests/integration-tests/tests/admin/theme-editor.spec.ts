@@ -19,7 +19,20 @@ import { BASE_URL, ROOT_TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
 
 const THEME_RECORD_ID = 'kenya-green';
 
-test('API smoke — ThemeConfig record exists on the expected tenant', async () => {
+test('API smoke — ThemeConfig record exists on the expected tenant', {
+  annotation: {
+    type: 'description',
+    description: `Pre-flight for the theme editor specs: the kenya-green ThemeConfig record must exist on root tenant 'ke' and carry a colors tree. If this fails, the editor specs below have nothing to load and would fail with a less useful "page didn't render" error.
+
+Steps:
+1. getDigitToken(ROOT_TENANT, ADMIN_USER, ADMIN_PASS).
+2. POST /mdms-v2/v2/_search with schemaCode 'common-masters.ThemeConfig' and uniqueIdentifiers ['kenya-green'].
+3. Assert response.mdms.length === 1.
+4. Assert response.mdms[0].data.colors is truthy.
+
+Smoke-tier test — keeps the failure mode clear when the seed has been wiped.`,
+  },
+  tag: ['@area:configurator-manage', '@area:theme', '@kind:smoke', '@layer:ui', '@persona:admin'] }, async () => {
   const t = await getDigitToken({ tenant: ROOT_TENANT, username: ADMIN_USER, password: ADMIN_PASS });
   const resp = await fetch(`${BASE_URL}/mdms-v2/v2/_search`, {
     method: 'POST',
@@ -40,7 +53,19 @@ test('API smoke — ThemeConfig record exists on the expected tenant', async () 
   expect(body.mdms?.[0].data?.colors, 'record should carry a colors tree').toBeTruthy();
 });
 
-test('edit page renders the flagship editor (tabs + preview)', async ({ page }) => {
+test('edit page renders the flagship editor (tabs + preview)', {
+  annotation: {
+    type: 'description',
+    description: `Catches regression on PR #4 (flagship theme editor). The /manage/theme-config/<id>/edit URL must render the dedicated editor — tabs (Primary/Link, Text, Grey, Charts) plus a live preview. If the customEditor escape hatch on SchemaDescriptor regresses, the fallback would be the generic MdmsResourceEdit form (no tabs, no preview), which this test would catch.
+
+Steps:
+1. setTimeout 90s; navigate to /configurator/manage/theme-config/kenya-green/edit (45s timeout).
+2. For each tab name in ['Primary / Link', 'Text', 'Grey', 'Charts'], assert the matching role=tab is visible (within 30s).
+3. Assert at least one element with [data-token] (the live preview marker) is visible within 10s.
+
+Uses the auth.setup.ts storageState — admin token already in localStorage.`,
+  },
+  tag: ['@area:configurator-manage', '@area:theme', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
   test.setTimeout(90_000);
 
   // storageState from auth.setup already has the session in localStorage;
@@ -62,7 +87,24 @@ test('edit page renders the flagship editor (tabs + preview)', async ({ page }) 
   await expect(preview, 'live preview should render').toBeVisible({ timeout: 10_000 });
 });
 
-test('editing primary.main updates the preview live', async ({ page }) => {
+test('editing primary.main updates the preview live', {
+  annotation: {
+    type: 'description',
+    description: `Round-trip test for the editor's live preview: changing the primary.main color in the form must mutate the matching preview element's computed backgroundColor on the next render. Uses #FF1493 (hot pink) so it can't collide with any kenya-green default. Reverts before exiting so the test is idempotent and never leaves MDMS dirty.
+
+Steps:
+1. setTimeout 90s; navigate to the edit URL.
+2. Click the "Primary / Link" tab.
+3. Locate the Primary/main row, find its <input type="text"> (the form-bound hex input); wait for visibility.
+4. Capture the originalHex (default '#006B3F' fallback).
+5. Fill TEST_HEX = '#FF1493' and blur.
+6. Locate the preview button [data-token~="colors.primary.main"] filtered by text "Primary"; assert visible.
+7. Use expect.poll on getComputedStyle(button).backgroundColor; assert it becomes 'rgb(255, 20, 147)' within 5s.
+8. Fill the input back to originalHex and blur.
+
+Doesn't actually click Save — the revert keeps MDMS clean even if a stray click hits the save button.`,
+  },
+  tag: ['@area:configurator-manage', '@area:theme', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
   test.setTimeout(90_000);
 
   await page.goto(`/configurator/manage/theme-config/${THEME_RECORD_ID}/edit`, {

@@ -17,7 +17,20 @@ import { citizenOtpLogin } from '../utils/citizen-login';
 import { BASE_URL, generateCitizenPhone } from '../utils/env';
 
 test.describe('citizen PGR regression — shipped fixes', () => {
-  test('#421 — landing ServicesSection top padding matches side padding', async ({ page }) => {
+  test('#421 — landing ServicesSection top padding matches side padding', {
+    annotation: {
+      type: 'description',
+      description: `Catches CCRS#421: the landing page's ServicesSection top padding got pushed off — the override CSS in /digit-ui/vendor/overrides.css fixes it back to 15px on all four sides. Test reads computed style and asserts top/left/right are all '15px'. If overrides.css stops being served or is loaded before digit-ui-css.css, this test catches the load-order break.
+
+Steps:
+1. citizenOtpLogin as a fresh citizen.
+2. Locate .HomePageWrapper .ServicesSection; assert visible within 20s.
+3. evaluate getComputedStyle and capture paddingTop / paddingLeft / paddingRight.
+4. Assert all three === '15px'.
+
+Catches both regressions — override removed AND override clobbered by load-order.`,
+    },
+    tag: ['@area:pgr', '@ccrs:421', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
     // The CSS override lives in /digit-ui/vendor/overrides.css and is
     // loaded by public/index.html after the vendor digit-ui-css bundle.
     // If either the file stops being served or the <link> is reordered
@@ -41,7 +54,21 @@ test.describe('citizen PGR regression — shipped fixes', () => {
     expect(padding.right).toBe('15px');
   });
 
-  test('#422 — navigating into Create New Complaint lands at top of page', async ({ page }) => {
+  test('#422 — navigating into Create New Complaint lands at top of page', {
+    annotation: {
+      type: 'description',
+      description: `Catches CCRS#422: clicking "File a Complaint" used to leave the citizen mid-page-scrolled because a leaked history.listen handler fired before mount. The test scrolls home down 600px, clicks the link, and asserts scrollY === 0 on the destination page.
+
+Steps:
+1. citizenOtpLogin as a fresh citizen.
+2. window.scrollTo(0, 600); read scrollY before; assert > 100 (home was actually scrolled).
+3. Locate the first link/role=link matching /File a Complaint/i; click it (within 10s).
+4. Wait for URL matching /pgr|complaint/i within 15s; wait for domcontentloaded; settle 500ms.
+5. Read scrollY after; assert === 0.
+
+Verified 2026-04-30: entry is now a plain anchor (no longer a CardBasedOptions / .digit-card); the looser locator handles both old and new layouts.`,
+    },
+    tag: ['@area:pgr', '@ccrs:422', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
     await citizenOtpLogin(page, generateCitizenPhone());
 
     // Scroll the home page down so we can observe the reset on navigation.
@@ -68,8 +95,20 @@ test.describe('citizen PGR regression — shipped fixes', () => {
   });
 
   test.fixme(
-    '#441 — submit rating without "What was good?" boxes does not crash',
-    async ({ page }) => {
+    '#441 — submit rating without "What was good?" boxes does not crash', {
+      annotation: {
+        type: 'description',
+        description: `TODO: needs a complaint in RESOLVED state belonging to a citizen we control before this can be exercised end-to-end. Either chain off pgr-lifecycle-ui.spec.ts (which already resolves one) or bootstrap via the PGR API before the browser step. Until then, the code-level guard is verified offline with grep on build/index.js for an isArray check around CS_FEEDBACK_WHAT_WAS_GOOD.
+
+Steps (target):
+1. Seed a RESOLVED complaint owned by the test citizen.
+2. citizenOtpLogin and navigate to /pgr/rate/{srid}.
+3. Submit the rating without checking any "What was good?" feedback boxes.
+4. Assert the page does NOT crash and either advances to the next step or shows a recoverable error.
+
+Marked test.fixme — runs only when manually un-fixed and the seed step is wired in.`,
+      },
+      tag: ['@area:pgr', '@ccrs:441', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
       // TODO: needs a complaint in RESOLVED state belonging to a citizen
       // we control. Either chain off pgr-lifecycle-ui.spec.ts (which
       // already resolves one) or bootstrap via the PGR API before the

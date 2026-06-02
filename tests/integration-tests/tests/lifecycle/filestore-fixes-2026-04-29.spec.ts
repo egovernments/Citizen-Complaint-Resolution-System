@@ -14,7 +14,21 @@ function tinyJpegBuffer(): Buffer {
 }
 
 test.describe('05-filestore (#474)', () => {
-  test('REPRO: tiny synthetic JPEG triggers EG_FILESTORE_INPUT_ERROR (pre-fix)', async () => {
+  test('REPRO: tiny synthetic JPEG triggers EG_FILESTORE_INPUT_ERROR (pre-fix)', {
+    annotation: {
+      type: 'description',
+      description: `Deterministic reproduction of CCRS#474 — the filestore service used to throw EG_FILESTORE_INPUT_ERROR when the uploaded JPEG was tiny enough that the thumbnail generator failed. The test sends a 517-byte synthetic JPEG (built from a fixed hex literal so it's reproducible) and switches assertion direction based on whether the bug is fixed: pre-fix expects the error code, post-fix expects a fileStoreId. Either outcome is recorded in test annotations so reports show the current state.
+
+Steps:
+1. Log in as the test employee.
+2. Build a 517-byte synthetic JPEG buffer from the hardcoded hex.
+3. uploadFile(auth, 'ke.nairobi', 'tiny.jpg', buf, 'image/jpeg', 'PGR').
+4. If response.body.Errors is present, assert Errors[0].code === 'EG_FILESTORE_INPUT_ERROR' and annotate "pre-fix: bug confirmed".
+5. Otherwise assert response.body.files[0].fileStoreId is truthy and annotate "post-fix: upload succeeds".
+
+Self-flipping by design: the same spec lives across the fix landing without needing to be rewritten.`,
+    },
+    tag: ['@area:pgr', '@ccrs:474', '@kind:lifecycle', '@layer:ui', '@persona:cross'] }, async () => {
     const auth = await loginEmployee();
     const r = await uploadFile(auth, 'ke.nairobi', 'tiny.jpg', tinyJpegBuffer(), 'image/jpeg', 'PGR');
     // After the fix, this assertion will flip — the same payload should
@@ -28,7 +42,20 @@ test.describe('05-filestore (#474)', () => {
     }
   });
 
-  test('Larger valid JPEG should succeed regardless of fix state (control)', async () => {
+  test('Larger valid JPEG should succeed regardless of fix state (control)', {
+    annotation: {
+      type: 'description',
+      description: `Control case for CCRS#474 — confirms the filestore service handles a "normal" upload regardless of whether the tiny-JPEG fix has landed. Uses a 1×1 PNG (PNG has no thumbnail-shape issue) so any failure here means filestore itself is broken, not the bug under investigation.
+
+Steps:
+1. Log in as the test employee.
+2. Build a 1×1 PNG buffer from the embedded base64 constant.
+3. uploadFile(auth, 'ke.nairobi', 'one.png', png, 'image/png', 'PGR').
+4. Assert response.body.files[0].fileStoreId is truthy.
+
+Pairs with the REPRO test to discriminate "filestore is down" from "tiny-image bug is back".`,
+    },
+    tag: ['@area:pgr', '@ccrs:474', '@kind:lifecycle', '@layer:ui', '@persona:cross'] }, async () => {
     // Synthesize a larger valid JPEG by repeating a real image's body.
     // We reuse the tiny one but pad with valid JPEG-internal sequences;
     // simpler: a 1x1 PNG as a control since PNG has no thumbnail issue.

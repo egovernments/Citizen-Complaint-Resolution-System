@@ -16,6 +16,7 @@ import {
   BASE_URL, TENANT, ROOT_TENANT,
   ADMIN_USER, ADMIN_PASS, FIXED_OTP,
   DEFAULT_PASSWORD,
+  GRO_USER, GRO_PASS, EMPLOYEE_USER, EMPLOYEE_PASS,
   SERVICE_CODE, LOCALITY_CODE,
   generateCitizenPhone,
 } from '../utils/env';
@@ -103,11 +104,31 @@ async function registerCitizen(phone: string): Promise<{ token: string; userInfo
 test.describe.serial('PGR lifecycle — API only', () => {
   let adminToken: string;
   let adminUserInfo: Record<string, unknown>;
+  // PGR workflow gates actions by role: ASSIGN needs GRO, RESOLVE needs PGR_LME.
+  // ADMIN/SUPERUSER is authorized for neither, so each transition is driven by
+  // the persona the deployment actually requires.
+  let groToken: string;
+  let groUserInfo: Record<string, unknown>;
+  let lmeToken: string;
+  let lmeUserInfo: Record<string, unknown>;
   let citizenToken: string;
   let citizenUserInfo: Record<string, unknown>;
   let serviceRequestId: string;
 
-  test('1 — acquire admin and citizen tokens', async () => {
+  test('1 — acquire admin and citizen tokens', {
+    annotation: {
+      type: 'description',
+      description: `Token-acquisition step of the API-only PGR lifecycle. Logs the configured ADMIN user in (root tenant) and registers a brand-new citizen via the OTP/registration helper using a freshly-generated phone — so the lifecycle has both ends of the request/resolve flow.
+
+Steps:
+1. Call getDigitToken with ROOT_TENANT, ADMIN_USER, ADMIN_PASS; assert the response contains an access_token.
+2. Stash adminToken + adminUserInfo for later steps.
+3. Call registerCitizen(CITIZEN_PHONE) which sends OTP, then either logs in or creates the citizen + retries login.
+4. Assert the citizen response has a token; stash citizenToken + citizenUserInfo.
+
+First link in a serial chain — every later step skips if this fails.`,
+    },
+    tag: ['@area:pgr', '@kind:lifecycle', '@layer:api', '@persona:cross'] }, async () => {
     const adminResp = await getDigitToken({
       tenant: ROOT_TENANT,
       username: ADMIN_USER,
@@ -117,6 +138,17 @@ test.describe.serial('PGR lifecycle — API only', () => {
     adminToken = adminResp.access_token;
     adminUserInfo = adminResp.UserRequest as Record<string, unknown>;
 
+    // GRO performs ASSIGN; PGR_LME performs RESOLVE.
+    const groResp = await getDigitToken({ tenant: ROOT_TENANT, username: GRO_USER, password: GRO_PASS });
+    expect(groResp.access_token, `GRO user ${GRO_USER} must log in`).toBeTruthy();
+    groToken = groResp.access_token;
+    groUserInfo = groResp.UserRequest as Record<string, unknown>;
+
+    const lmeResp = await getDigitToken({ tenant: ROOT_TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
+    expect(lmeResp.access_token, `LME user ${EMPLOYEE_USER} must log in`).toBeTruthy();
+    lmeToken = lmeResp.access_token;
+    lmeUserInfo = lmeResp.UserRequest as Record<string, unknown>;
+
     const citizenResp = await registerCitizen(CITIZEN_PHONE);
     expect(citizenResp.token).toBeTruthy();
     citizenToken = citizenResp.token;
@@ -124,7 +156,21 @@ test.describe.serial('PGR lifecycle — API only', () => {
     console.log(`Admin and citizen (${CITIZEN_PHONE}) tokens acquired`);
   });
 
-  test('2 — citizen creates complaint', async () => {
+  test('2 — citizen creates complaint', {
+    annotation: {
+      type: 'description',
+      description: `Drives the citizen-create leg of the PGR lifecycle directly through pgr-services. Constructs a service object with the seeded SERVICE_CODE + LOCALITY_CODE (must include a non-null geoLocation — the persister NPEs without it), POSTs APPLY, and asserts the new complaint lands in PENDINGFORASSIGNMENT.
+
+Steps:
+1. POST /pgr-services/v2/request/_create with citizen token, full service object (tenantId, serviceCode, description with timestamp, source=web, address, citizen).
+2. Workflow body: { action: 'APPLY', verificationDocuments: [] }.
+3. Assert the HTTP response is ok.
+4. Stash data.ServiceWrappers[0].service.serviceRequestId.
+5. Assert applicationStatus === 'PENDINGFORASSIGNMENT'.
+
+geoLocation is intentionally set to {0,0} — non-null is the contract; the actual coordinates don't matter for this lifecycle.`,
+    },
+    tag: ['@area:pgr', '@kind:lifecycle', '@layer:api', '@persona:cross'] }, async () => {
     const resp = await fetch(`${BASE_URL}/pgr-services/v2/request/_create`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${citizenToken}`, 'Content-Type': 'application/json' },
@@ -153,45 +199,83 @@ test.describe.serial('PGR lifecycle — API only', () => {
     console.log(`Complaint created: ${serviceRequestId} → PENDINGFORASSIGNMENT`);
   });
 
-  test('3 — admin assigns complaint', async () => {
-    const fullService = await fetchComplaint(adminToken, adminUserInfo, serviceRequestId);
+  test('3 — admin assigns complaint', {
+    annotation: {
+      type: 'description',
+      description: `Drives the assignment transition. PGR _update requires the FULL service object back (id, source, address — not just the SR ID), so the test re-fetches the complaint first, then POSTs the same payload with the ASSIGN workflow action.
+
+Steps:
+1. fetchComplaint() — search PGR by serviceRequestId and pull data.ServiceWrappers[0].service.
+2. POST /pgr-services/v2/request/_update?tenantId=ke.nairobi with admin token.
+3. Body: full service object + workflow { action: 'ASSIGN', comments: 'Assigned by API E2E test' }.
+4. Assert response is ok and applicationStatus === 'PENDINGATLME'.
+
+Catches a regression where _update silently rejects payloads missing source/id (returns INVALID_SOURCE).`,
+    },
+    tag: ['@area:pgr', '@kind:lifecycle', '@layer:api', '@persona:cross'] }, async () => {
+    const fullService = await fetchComplaint(groToken, groUserInfo, serviceRequestId);
 
     const resp = await fetch(`${BASE_URL}/pgr-services/v2/request/_update?tenantId=${TENANT}`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${groToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        RequestInfo: { apiId: 'Rainmaker', authToken: adminToken, userInfo: adminUserInfo },
+        RequestInfo: { apiId: 'Rainmaker', authToken: groToken, userInfo: groUserInfo },
         service: fullService,
-        workflow: { action: 'ASSIGN', comments: 'Assigned by API E2E test' },
+        // GRO assigns the complaint to the PGR_LME who will resolve it.
+        workflow: { action: 'ASSIGN', assignes: [lmeUserInfo.uuid], comments: 'Assigned by API E2E test' },
       }),
     });
 
-    expect(resp.ok).toBe(true);
+    expect(resp.ok, `ASSIGN as ${GRO_USER} (GRO) should be authorized`).toBe(true);
     const data: any = await resp.json();
     expect(data.ServiceWrappers[0].service.applicationStatus).toBe('PENDINGATLME');
     console.log(`${serviceRequestId} → PENDINGATLME`);
   });
 
-  test('4 — admin resolves complaint', async () => {
-    const fullService = await fetchComplaint(adminToken, adminUserInfo, serviceRequestId);
+  test('4 — admin resolves complaint', {
+    annotation: {
+      type: 'description',
+      description: `Drives the resolve transition from PENDINGATLME → RESOLVED. Same shape as the assign step: re-fetch the full service object, then POST _update with action: RESOLVE.
+
+Steps:
+1. fetchComplaint() to pull the full service object as it currently sits in PGR.
+2. POST /pgr-services/v2/request/_update?tenantId=ke.nairobi with admin token.
+3. Body: full service object + workflow { action: 'RESOLVE', comments: 'Resolved by API E2E test' }.
+4. Assert response is ok and applicationStatus === 'RESOLVED'.
+
+This is the second-to-last step in the lifecycle; the citizen-verify step that follows confirms the citizen-side search reflects the same state.`,
+    },
+    tag: ['@area:pgr', '@kind:lifecycle', '@layer:api', '@persona:cross'] }, async () => {
+    const fullService = await fetchComplaint(lmeToken, lmeUserInfo, serviceRequestId);
 
     const resp = await fetch(`${BASE_URL}/pgr-services/v2/request/_update?tenantId=${TENANT}`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${lmeToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        RequestInfo: { apiId: 'Rainmaker', authToken: adminToken, userInfo: adminUserInfo },
+        RequestInfo: { apiId: 'Rainmaker', authToken: lmeToken, userInfo: lmeUserInfo },
         service: fullService,
         workflow: { action: 'RESOLVE', comments: 'Resolved by API E2E test' },
       }),
     });
 
-    expect(resp.ok).toBe(true);
+    expect(resp.ok, `RESOLVE as ${EMPLOYEE_USER} (PGR_LME) should be authorized`).toBe(true);
     const data: any = await resp.json();
     expect(data.ServiceWrappers[0].service.applicationStatus).toBe('RESOLVED');
     console.log(`${serviceRequestId} → RESOLVED`);
   });
 
-  test('5 — citizen verifies complaint is resolved', async () => {
+  test('5 — citizen verifies complaint is resolved', {
+    annotation: {
+      type: 'description',
+      description: `Closes the loop: from the citizen's token, the complaint must show as RESOLVED. Catches role-based filtering bugs where the admin sees one state but the citizen-scoped search returns a different (or empty) result.
+
+Steps:
+1. fetchComplaint() using the citizen token + userInfo.
+2. Assert service.applicationStatus === 'RESOLVED'.
+
+If the citizen sees PENDINGATLME or 0 results, role-scoped search is broken — the citizen would never know their complaint was handled.`,
+    },
+    tag: ['@area:pgr', '@kind:lifecycle', '@layer:api', '@persona:cross'] }, async () => {
     const service = await fetchComplaint(citizenToken, citizenUserInfo, serviceRequestId);
     expect(service.applicationStatus).toBe('RESOLVED');
     console.log(`Citizen confirms ${serviceRequestId} is RESOLVED`);

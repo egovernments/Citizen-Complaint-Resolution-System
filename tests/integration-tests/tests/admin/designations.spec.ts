@@ -83,7 +83,22 @@ test.afterAll(async () => {
 });
 
 test.describe('manage/designations', () => {
-  test('1. create with multi-department persists as a string[]', async ({
+  test('1. create with multi-department persists as a string[]', {
+    annotation: {
+      type: 'description',
+      description: `Catches the pre-PR-5 regression: when only one department was selected on a Designation, data.department was collapsed to a bare string instead of a single-element array. This test creates a designation via UI with TWO departments and asserts MDMS stores it as exactly ["DEPT_A","DEPT_B"].
+
+Steps:
+1. Generate a unique code; track for cleanup.
+2. Navigate to /designations/create; fill Name + Code + Description.
+3. pickDepartmentChips([DEPT_A, DEPT_B]) — opens combobox, types each code, clicks each option.
+4. Click Create; wait for navigation back to LIST_PATH.
+5. mdmsSearch for [code]; assert exactly 1 record.
+6. Read data.department; assert Array.isArray, length === 2, contains DEPT_A and DEPT_B.
+
+Three departments seeded in beforeAll (DEPT_A/B/C) keep this test independent of tenant content.`,
+    },
+    tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
     const code = testCode(testInfo, 'DESIG_MULTI');
@@ -118,7 +133,23 @@ test.describe('manage/designations', () => {
     expect((dept as string[]).length).toBe(2);
   });
 
-  test('2. edit round-trip preserves array shape (add then remove)', async ({
+  test('2. edit round-trip preserves array shape (add then remove)', {
+    annotation: {
+      type: 'description',
+      description: `Two-step edit round-trip on the department-array shape. Seeds with [A,B], adds C via UI, asserts [A,B,C], removes C via UI, asserts back to [A,B]. Confirms the array shape survives both add and remove flows through the dataProvider.
+
+Steps:
+1. Generate a unique code; track for cleanup.
+2. Seed via mdmsCreate with department: [DEPT_A, DEPT_B].
+3. Navigate to LIST_PATH; search; click row.
+4. Click Edit; pickDepartmentChips([DEPT_C]); click Save.
+5. mdmsSearch; assert dept is array, length === 3, contains all of A/B/C.
+6. Click Edit again; removeDepartmentChip(DEPT_C); click Save.
+7. mdmsSearch; assert dept is array, length === 2, contains A and B.
+
+Pairs with create test #1 — together they cover all three mutation paths (create, add-on-edit, remove-on-edit).`,
+    },
+    tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
     const code = testCode(testInfo, 'DESIG_EDIT');
@@ -167,7 +198,22 @@ test.describe('manage/designations', () => {
     expect(dept).toEqual(expect.arrayContaining([DEPT_A, DEPT_B]));
   });
 
-  test('3. legacy single-string department is coerced to array on save', async ({
+  test('3. legacy single-string department is coerced to array on save', {
+    annotation: {
+      type: 'description',
+      description: `Handles legacy data: a record with department as a bare string (pre-PR-5 shape) must coerce to a single-element array when the form loads, AND saving without changes must persist the array shape. Critical for migrating in-place data without manual cleanup.
+
+Steps:
+1. Generate a unique code; track for cleanup.
+2. Seed via mdmsCreate with department: DEPT_A (bare string, NOT array).
+3. Navigate to LIST_PATH; search; click row; click Edit.
+4. Assert exactly one chip rendering DEPT_A is visible (legacy string coerced into a one-chip array on form load).
+5. Click Save (no changes).
+6. mdmsSearch; assert dept is now Array.isArray and equals [DEPT_A].
+
+The bare-string seed is required for this test — if the schema later rejects bare strings server-side, this test can't run without bypass and should be migrated.`,
+    },
+    tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
     const code = testCode(testInfo, 'DESIG_LEGACY');
@@ -207,7 +253,24 @@ test.describe('manage/designations', () => {
     expect(dept).toEqual([DEPT_A]);
   });
 
-  test('4. department filter narrows list to designations referencing that code', async ({
+  test('4. department filter narrows list to designations referencing that code', {
+    annotation: {
+      type: 'description',
+      description: `Validates the Department filter on the Designations list: picking DEPT_A must show only designations whose department array contains DEPT_A. Seeds two designations (one matching, one not) so the assertion is precise rather than environment-dependent.
+
+Steps:
+1. Generate two unique codes (codeA matching DEPT_A, codeOther matching DEPT_C); track for cleanup.
+2. mdmsCreate both designations with the appropriate department arrays.
+3. Navigate to LIST_PATH.
+4. Locate Department filter; test.skip if absent.
+5. Click filter, click DEPT_A option (fall back to typeahead if click fails).
+6. Wait networkidle; type 'PW_' in the search to scope to seeded rows.
+7. Assert codeA row is visible.
+8. Assert codeOther row count === 0.
+
+Filter-by-array logic — confirms the dataProvider sends the right query for chip values.`,
+    },
+    tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
     // Seed two designations so we know there's exactly one matching DEPT_A
@@ -252,7 +315,23 @@ test.describe('manage/designations', () => {
     await expect(page.getByRole('row').filter({ hasText: codeOther })).toHaveCount(0);
   });
 
-  test('5. deactivation guard counts dependent records', async ({
+  test('5. deactivation guard counts dependent records', {
+    annotation: {
+      type: 'description',
+      description: `Confirms the DesignationEdit deactivation guard surfaces a banner mentioning dependent records (employees currently holding the designation). Doesn't pin a specific count — fresh tenants legitimately have 0 dependents — only that the banner shows up.
+
+Steps:
+1. Generate a unique code; track for cleanup.
+2. Seed via mdmsCreate.
+3. Navigate to LIST_PATH; search; click row; click Edit.
+4. Uncheck Active.
+5. Assert text /employee|depend|currently holding/i is visible within 10s.
+6. Click Cancel — don't actually persist deactivation.
+7. mdmsSearch; assert isActive !== false (record stayed active).
+
+Cancel path is the contract: clicking Cancel must NOT silently persist the deactivation that was visible on the form.`,
+    },
+    tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
     // Seed a designation referenced by no employees — the guard banner
@@ -287,7 +366,20 @@ test.describe('manage/designations', () => {
     expect(records[0].isActive).not.toBe(false);
   });
 
-  test('5a. department chip input dropdown loads options from mdms', async ({
+  test('5a. department chip input dropdown loads options from mdms', {
+    annotation: {
+      type: 'description',
+      description: `Confirms the department chip combobox actually fetches options from MDMS (common-masters.Department). Opening the combobox and typing a known department code (DEPT_A) must produce at least one matching option in the dropdown.
+
+Steps:
+1. Navigate to /designations/create.
+2. Locate getByLabel(/^Departments?/i); click to open the combobox.
+3. Fill DEPT_A.
+4. Assert getByRole('option', name: regex DEPT_A) is visible within 10s.
+
+If options never appear, the data provider for the typeahead is broken — even a perfect form layout would be unusable.`,
+    },
+    tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }) => {
     await page.goto(`${LIST_PATH}/create`);
@@ -304,7 +396,21 @@ test.describe('manage/designations', () => {
     ).toBeVisible({ timeout: 10_000 });
   });
 
-  test('5b. show page renders department chips for a multi-dept designation', async ({
+  test('5b. show page renders department chips for a multi-dept designation', {
+    annotation: {
+      type: 'description',
+      description: `Asserts the Designation Show page renders both department codes when the underlying record has a multi-department array. Catches a regression where the show layout collapses to displaying only the first department.
+
+Steps:
+1. Generate a unique code; track for cleanup.
+2. mdmsCreate with department: [DEPT_A, DEPT_B].
+3. Navigate to /designations/<code>/show.
+4. Assert text containing DEPT_A is visible.
+5. Assert text containing DEPT_B is visible.
+
+Loose exact:false match tolerates surrounding chip styling. Pairs with the multi-create test (#1) — together they cover both write and read paths for the array.`,
+    },
+    tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
     const code = testCode(testInfo, 'DESIG_SHOW');
@@ -325,7 +431,23 @@ test.describe('manage/designations', () => {
     await expect(page.getByText(DEPT_B, { exact: false }).first()).toBeVisible();
   });
 
-  test('5c. API soft-delete (isActive=false) removes row from active list', async ({
+  test('5c. API soft-delete (isActive=false) removes row from active list', {
+    annotation: {
+      type: 'description',
+      description: `Confirms the dataProvider.mdmsGetList filters out isActive=false records so that an API soft-delete causes the row to disappear from the default list view in the UI. Tests the full pipeline: API soft-delete → list re-fetch → UI excludes the row.
+
+Steps:
+1. Generate a unique code; track for cleanup.
+2. mdmsCreate (active: true).
+3. mdmsSearch for the record; assert truthy.
+4. mdmsUpdate(auth, pre, false) (soft-delete via isActive=false).
+5. Assert returned record has isActive === false.
+6. Navigate to LIST_PATH; type the code in search; wait networkidle.
+7. Assert the row count for that code is 0 in the UI.
+
+If the soft-delete persists but the UI still shows the row, the dataProvider's isActive filter is broken.`,
+    },
+    tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
     const code = testCode(testInfo, 'DESIG_SOFTDEL');
@@ -357,7 +479,21 @@ test.describe('manage/designations', () => {
     expect(await rows.count()).toBe(0);
   });
 
-  test('5d. HRMS probe returns assignments.designation for guard counter', async () => {
+  test('5d. HRMS probe returns assignments.designation for guard counter', {
+    annotation: {
+      type: 'description',
+      description: `Schema-stability check for the HRMS field that the DesignationEdit guard reads. The guard calls /employees with filter[assignments.designation]=...; this test asserts HRMS returns assignments[].designation as string|null|undefined (anything else would be a regression breaking the guard's counter).
+
+Steps:
+1. employeeSearch(TENANT_CODE, { limit: 5 }); assert response is an array.
+2. If the array has at least one employee, capture its assignments.
+3. Assert assignments is an array.
+4. If assignments is non-empty, read the first assignment's designation.
+5. Assert d === null OR d === undefined OR typeof d === 'string'.
+
+Loose check — allows the field to be missing on legacy assignments, but rejects anything other than the expected scalar shape.`,
+    },
+    tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async () => {
     // The DeactivationGuard for a designation (implemented in
     // DesignationEdit) calls employees?filter[assignments.designation]=...
     // Verify HRMS returns the `assignments.designation` field that the
@@ -383,7 +519,24 @@ test.describe('manage/designations', () => {
     }
   });
 
-  test('6. bulk import accepts comma-list department values as array', async ({
+  test('6. bulk import accepts comma-list department values as array', {
+    annotation: {
+      type: 'description',
+      description: `Bulk-import contract: the xlsx accepts a single 'department' column whose value is a comma-separated list (e.g. "DEPT_A, DEPT_B"). After import, MDMS stores it as an actual array, not as the literal string. Confirms the bulk parser splits on commas and trims.
+
+Steps:
+1. Generate a unique code; track for cleanup.
+2. Build xlsx via buildDesignationXlsx with one row carrying department: "DEPT_A, DEPT_B".
+3. Navigate to /designations/bulk; setInputFiles.
+4. Wait for /1\\s*(valid|row)/i within 30s.
+5. Click button matching /Create\\s+\\d+\\s+(designation|row)s?/i.
+6. Wait for /1\\s*(created|success)/i within 60s.
+7. mdmsSearch; assert exactly 1 record.
+8. Read data.department; assert Array.isArray and contains DEPT_A and DEPT_B.
+
+Critical for tenant onboarding workflows that use comma-list xlsx as their canonical seed format.`,
+    },
+    tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
     const code = testCode(testInfo, 'DESIG_BULK');
