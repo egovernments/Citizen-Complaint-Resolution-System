@@ -1736,7 +1736,8 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               perTenantRaw += msgs.length;
               for (const m of msgs) {
                 const rec = m as Record<string, unknown>;
-                const code = (rec.code as string).trim();
+                if (typeof rec.code !== 'string') continue;
+                const code = rec.code.trim();
                 if (!code) continue;
                 // ServiceDefs localization (SERVICEDEFS.* / SERVICEDEFS_*) is
                 // intentionally excluded — mirrors the MDMS ServiceDefs data
@@ -1748,7 +1749,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
                 if (code.startsWith('SERVICEDEFS')) continue;
                 const message = rec.message as string;
                 if (typeof message !== 'string') continue;
-                const module = ((rec.module as string) || 'rainmaker-common').trim();
+                const module = (typeof rec.module === 'string' ? rec.module : 'rainmaker-common').trim();
                 const key = `${module}::${code}`;
                 if (byKey.has(key)) continue;
                 byKey.set(key, { code, message, module });

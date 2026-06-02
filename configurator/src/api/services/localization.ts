@@ -226,9 +226,9 @@ export const localizationService = {
   ): LocalizationMessage[] {
     const messages: LocalizationMessage[] = [];
     const module = 'rainmaker-common';
+    const seen = new Set<string>();
     for (const level of levels) {
       const msg = level.boundaryType;
-      const seen = new Set<string>();
       const push = (code: string) => {
         if (seen.has(code)) return;
         seen.add(code);

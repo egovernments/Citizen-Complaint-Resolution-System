@@ -303,7 +303,7 @@ export default function Phase2Page() {
         selectedHierarchy.hierarchyType,
         selectedHierarchy.boundaryHierarchy,
         'en_IN'
-      );
+      ).catch(e => console.warn('hierarchy-level localization failed (non-fatal)', e));
 
       await localizationService.cacheBust().catch(e => console.warn('cache-bust failed', e));
 
@@ -314,14 +314,19 @@ export default function Phase2Page() {
       // fix_boundary_paths via the MCP tool manually.
       try {
         const { token } = apiClient.getAuth();
-        await fetch(`${window.location.origin}/v1/tools/fix_boundary_paths`, {
+        const ac = new AbortController();
+        const timer = setTimeout(() => ac.abort(), 10_000);
+        const res = await fetch(`${window.location.origin}/v1/tools/fix_boundary_paths`, {
           method: 'POST',
+          signal: ac.signal,
           headers: {
             'Content-Type': 'application/json',
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({ tenant_id: boundaryTenant }),
         });
+        clearTimeout(timer);
+        if (!res.ok) console.warn(`[Phase 2] boundary path fix returned ${res.status}`);
       } catch (e) {
         console.warn('[Phase 2] boundary path fix skipped (MCP not reachable):', e);
       }

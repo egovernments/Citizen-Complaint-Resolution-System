@@ -188,7 +188,8 @@
           content: "{{ {'insecure-registries': insecure_registries} | to_nice_json }}\n"
           mode: '0644'
         register: daemon_json
-        when: insecure_registries | default([]) | length > 0
+        vars:
+          insecure_registries: "{{ insecure_registries | default([]) }}"
 
       - name: Restart docker if daemon.json changed
         service:
@@ -1711,6 +1712,15 @@
         docker compose {{ compose_files }} restart egov-hrms
       args:
         chdir: "{{ digit_dir }}"
+      when: state_root != 'pg'
+
+    - name: "post-bootstrap — wait for egov-hrms to be healthy after restart"
+      ansible.builtin.shell: docker inspect --format '{{ "{{" }}.State.Health.Status{{ "}}" }}' egov-hrms
+      register: hrms_health_post
+      retries: 30
+      delay: 10
+      until: hrms_health_post.stdout == 'healthy'
+      changed_when: false
       when: state_root != 'pg'
 
     # `docker compose restart egov-user` above does NOT cascade to

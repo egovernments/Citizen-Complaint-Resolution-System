@@ -234,6 +234,7 @@ export default function Phase1Page() {
         setBootstrapProgress({ step: 'localization', current: 0, total: 1 });
         await bootstrapLocalization(parentState, tenant.code);
         setBootstrapProgress(null);
+        await localizationService.cacheBust().catch(e => console.warn('cache-bust failed', e));
       }
 
       setCreatedTenant(tenant);
