@@ -33,16 +33,16 @@ public class ServiceRequestValidator {
 
     private ServiceRequestRepository serviceRequestRepository;
 
-    @Autowired
     private ObjectMapper objectMapper;
 
     @Autowired
     public ServiceRequestValidator(PGRConfiguration config, PGRRepository repository, HRMSUtil hrmsUtil,
-                                   ServiceRequestRepository serviceRequestRepository) {
+                                   ServiceRequestRepository serviceRequestRepository, ObjectMapper objectMapper) {
         this.config = config;
         this.repository = repository;
         this.hrmsUtil = hrmsUtil;
         this.serviceRequestRepository = serviceRequestRepository;
+        this.objectMapper = objectMapper;
     }
 
 
