@@ -1918,6 +1918,21 @@
       no_log: true
       changed_when: false
 
+    # admin-cli ships with fullScopeAllowed=false, which strips realm roles
+    # out of JWTs minted via the password grant against the master realm.
+    # The platform-admin overlay route (DIGIT-keycloak-overlay) needs those
+    # roles to gate scoped admins (bootstrap:<tenantId>) — without this
+    # flip, every scoped JWT carries an empty realm_access.roles and the
+    # overlay 403s every call. Idempotent: kcadm update is a no-op if the
+    # flag is already true.
+    - name: "keycloak-bootstrap — enable fullScopeAllowed on master/admin-cli for platform-admin JWTs"
+      ansible.builtin.shell: |
+        set -e
+        CLI_ID=$(docker exec keycloak /opt/keycloak/bin/kcadm.sh get clients -r master -q clientId=admin-cli --fields id --format csv --noquotes | tail -1)
+        docker exec keycloak /opt/keycloak/bin/kcadm.sh update "clients/$CLI_ID" -r master -s 'fullScopeAllowed=true'
+      when: enable_keycloak | default(false)
+      changed_when: false
+
     # ────────────────────────────────────────────────────────────────
     # Update digit-ui client redirect URIs in-place every deploy.
     #
