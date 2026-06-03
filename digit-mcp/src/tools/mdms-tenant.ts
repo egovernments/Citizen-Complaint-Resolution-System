@@ -55,13 +55,18 @@ export function deriveValidMobile(regex: string, length: number, preferred?: str
   const matches = (s?: string): s is string => !!s && (!re || re.test(s));
   if (matches(preferred)) return preferred;
   const n = length && length > 0 ? length : 10;
-  // Lead digit: a literal (`^8`) or the first member of a class (`^[6-9]`).
-  const body = (regex || '').replace(/^\^/, '');
-  const lead = body.match(/^\[([0-9])/) || body.match(/^([0-9])/);
-  const first = lead ? lead[1] : '9';
-  for (const d of ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']) {
-    const cand = first + d.repeat(Math.max(0, n - 1));
-    if (cand.length === n && matches(cand)) return cand;
+  // Try every lead digit x fill digit at length n (and n+1 / n-1, since
+  // patterns like ^0?[17][0-9]{8}$ accept 9 OR 10 digits). Looping the lead
+  // digit instead of parsing it handles optional prefixes like `0?` and
+  // character classes uniformly.
+  for (const len of [n, n + 1, n - 1]) {
+    if (len <= 0) continue;
+    for (const f of '0123456789') {
+      for (const d of '0123456789') {
+        const cand = f + d.repeat(len - 1);
+        if (cand.length === len && matches(cand)) return cand;
+      }
+    }
   }
   return preferred || '9'.repeat(n);
 }
@@ -967,6 +972,28 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
 
       const target = args.target_tenant as string;
       const source = (args.source_tenant as string) || 'pg';
+      if (!args.mobile_regex) {
+        // When no explicit regex is passed (e.g. the bootstrap wizard, which
+        // only sends target_tenant + source_tenant), inherit the SOURCE
+        // tenant's own mobile rule from common-masters.UserValidation so the
+        // derived ADMIN mobile validates against the same egov-user rule the
+        // target inherits (e.g. Kenya ^0?[17][0-9]{8}$) instead of a hardcoded
+        // India default. Tenant-specific values stay in MDMS, not in code.
+        try {
+          const uv = await digitApi.mdmsV2SearchRaw(source, 'common-masters.UserValidation', { limit: 50 });
+          const mob = (uv || []).find(
+            (r: any) => (r && r.data && r.data.fieldType === 'mobile') || (r && r.uniqueIdentifier === 'mobile'),
+          );
+          if (mob && mob.data && mob.data.rules && mob.data.rules.pattern) {
+            (args as any).mobile_regex = mob.data.rules.pattern;
+            if (!args.mobile_length && mob.data.rules.minLength) {
+              (args as any).mobile_length = mob.data.rules.minLength;
+            }
+          }
+        } catch (e) {
+          /* no UserValidation at source -> fall through to the generic default */
+        }
+      }
       const mobileRegex = (args.mobile_regex as string) || '^[6-9][0-9]{9}$';
 
       const results: {
