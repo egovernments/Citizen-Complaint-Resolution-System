@@ -66,6 +66,31 @@ server {
   }
 
 {% endif %}
+{% if nginx_features.integration_tests | default(false) %}
+  # digit-integration-tests dashboards — vanilla catalog SPA at
+  # /integration-tests/ and the react-admin rebuild at /integration-tests-v2/.
+  # Built from the vendored tests/integration-tests/ source and synced to
+  # /var/www/integration-tests{,-v2}/ by the deploy. Behind basic-auth
+  # (/etc/nginx/.htpasswd-tests, created by the playbook). catalog.json + runs/
+  # are produced out-of-band by a test runner (make publish), not the deploy.
+  location = /integration-tests    { return 301 /integration-tests/; }
+  location = /integration-tests-v2 { return 301 /integration-tests-v2/; }
+  location /integration-tests/ {
+    alias /var/www/integration-tests/;
+    auth_basic "DIGIT integration tests";
+    auth_basic_user_file /etc/nginx/.htpasswd-tests;
+    add_header Cache-Control "no-cache, must-revalidate" always;
+    try_files $uri $uri/ $uri/index.html =404;
+  }
+  location /integration-tests-v2/ {
+    alias /var/www/integration-tests-v2/;
+    auth_basic "DIGIT integration tests";
+    auth_basic_user_file /etc/nginx/.htpasswd-tests;
+    add_header Cache-Control "no-cache, must-revalidate" always;
+    try_files $uri $uri/ /integration-tests-v2/index.html =404;
+  }
+
+{% endif %}
   # Grafana dashboard
   location /grafana/ {
     proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_grafana_port }};

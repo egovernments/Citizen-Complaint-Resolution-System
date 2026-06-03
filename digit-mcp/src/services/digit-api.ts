@@ -661,6 +661,16 @@ class DigitApiClient {
     return data.messages || [];
   }
 
+  // Localization cache bust — drop egov-localization's Redis cache so the next
+  // _search re-reads from DB. Required after any write (upsert/delete) to prevent
+  // stale empty results from being served to the digit-ui.
+  async localizationCacheBust(): Promise<void> {
+    await this.request<Record<string, unknown>>(
+      this.endpoint('LOCALIZATION_CACHE_BUST'),
+      { RequestInfo: this.buildRequestInfo() }
+    );
+  }
+
   // PGR complaint search — criteria as query params (Spring @ModelAttribute)
   async pgrSearch(
     tenantId: string,

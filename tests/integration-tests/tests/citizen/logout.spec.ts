@@ -2,7 +2,22 @@ import { test, expect } from '@playwright/test';
 import { citizenOtpLogin } from '../utils/citizen-login';
 import { BASE_URL, generateCitizenPhone } from '../utils/env';
 
-test('citizen logout redirects to login page', async ({ page }) => {
+test('citizen logout redirects to login page', {
+  annotation: {
+    type: 'description',
+    description: `Story 9.1 contract: a citizen who clicks Logout in the sidebar, then confirms via the "Yes, Logout" dialog, must land on /citizen/login — not on /all-services or any other authenticated surface. Catches a regression where the dialog closes without firing the actual logout, or the post-logout redirect points to the wrong place.
+
+Steps:
+1. setTimeout 90s; OTP-login as a fresh citizen.
+2. Wait 3s; locate the Logout sidebar item; assert it is visible.
+3. Click Logout and wait 1s for the confirmation dialog.
+4. Locate button:has-text("Yes, Logout"); wait for visibility, click.
+5. Wait 5s for the redirect to settle.
+6. Assert page.url() contains '/citizen/login' and does NOT contain '/all-services'.
+
+Tighter selector ("Yes, Logout") than the previous union of "Yes / Logout / CS_COMMON_LOGOUT" — relies on the 2026-04-29 walk's verified dialog copy.`,
+  },
+  tag: ['@area:auth', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
   test.setTimeout(90_000);
   const phone = generateCitizenPhone();
   await citizenOtpLogin(page, phone);

@@ -97,7 +97,18 @@ test.describe('Onboarding target tenant (PR #26)', () => {
     });
   });
 
-  test('dept is scoped to child tenant, does not leak to root', async () => {
+  test('dept is scoped to child tenant, does not leak to root', {
+    annotation: {
+      type: 'description',
+      description: `Catches PR #26 regression: before the fix, Phases 2–4 wrote everything at the session tenant (root), fattening the parent and leaving the freshly-created child empty. Post-fix Phase 3 sends MDMS creates with tenantId=<targetTenant>. This API-level test seeds a child tenant + a Department at that child in beforeAll, then asserts the dept exists at the child AND does NOT leak into the root.
+
+Steps:
+1. mdmsCountAtTenant(token, CHILD_TENANT, 'common-masters.Department', DEPT_CODE); assert === 1.
+2. mdmsCountAtTenant(token, ROOT_TENANT, 'common-masters.Department', DEPT_CODE); assert === 0.
+
+MDMS v2 is strict on tenantId — if the dept created with tenantId=child shows up under root, something escalated and the strict-tenant invariant is broken.`,
+    },
+    tag: ['@area:configurator-manage', '@area:onboarding', '@ccrs:26', '@kind:regression', '@layer:api', '@persona:admin', '@pr:26'] }, async () => {
     const childCount = await mdmsCountAtTenant(token, CHILD_TENANT, 'common-masters.Department', DEPT_CODE);
     expect(childCount, 'dept should exist at child tenant').toBe(1);
 
@@ -105,7 +116,21 @@ test.describe('Onboarding target tenant (PR #26)', () => {
     expect(rootCount, 'dept must not leak into root tenant — MDMS v2 is strict on tenantId').toBe(0);
   });
 
-  test('targetTenant persists in localStorage and survives reload', async ({ page }) => {
+  test('targetTenant persists in localStorage and survives reload', {
+    annotation: {
+      type: 'description',
+      description: `Asserts the targetTenant persistence contract from PR #26. Phase 1 calls setTargetTenant(<child>); the value must be stored in localStorage's crs-auth-state alongside (and distinct from) the session tenant, and survive a full page reload so Phase 4 can read it on mount.
+
+Steps:
+1. setTimeout 90s; navigate to /configurator/manage to get a live origin for localStorage.
+2. Read crs-auth-state from localStorage; throw if missing (auth.setup didn't run).
+3. Mutate it: s.targetTenant = CHILD_TENANT; write back.
+4. page.reload() with domcontentloaded.
+5. Re-read crs-auth-state; assert tenant === ROOT_TENANT (session tenant unchanged) AND targetTenant === CHILD_TENANT (still pointing at child).
+
+This was prototyped as a UI test on the Phase 4 landing card, but timing on parallel reference-data fetches made it flaky — left as a localStorage round-trip.`,
+    },
+    tag: ['@area:configurator-manage', '@area:onboarding', '@ccrs:26', '@kind:regression', '@layer:api', '@persona:admin', '@pr:26'] }, async ({ page }) => {
     test.setTimeout(90_000);
 
     // Land on the app to get a live origin for localStorage.

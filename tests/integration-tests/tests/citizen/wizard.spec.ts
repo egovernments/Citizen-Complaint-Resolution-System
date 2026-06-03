@@ -20,7 +20,26 @@ import { citizenOtpLogin } from '../utils/citizen-login';
 import { BASE_URL, generateCitizenPhone } from '../utils/env';
 
 test.describe('Citizen file-complaint wizard', () => {
-  test('walks 6 steps + submits + lands on /pgr/response with NCCG-PGR ID', async ({ page }) => {
+  test('walks 6 steps + submits + lands on /pgr/response with NCCG-PGR ID', {
+    annotation: {
+      type: 'description',
+      description: `Citizen happy-path: a logged-in citizen files a complaint by walking all six steps of the file-complaint wizard, clicks Submit, and lands on the confirmation page with a Nairobi-County-Government PGR identifier.
+
+Steps:
+1. OTP-login as a fresh citizen phone number.
+2. Open /digit-ui/citizen/pgr/create-complaint/complaint-type.
+3. Step 1 (Complaint Details): pick Type and Subtype from the dropdowns, click Next.
+4. Step 2 (Pin Location): accept the default pin — do NOT touch the map (CCRS#469 keeps the test stable).
+5. Step 3 (Location Details): assert postal code is auto-filled from step 2; click Next.
+6. Step 4 (Complaint's Location): pick County → Sub-County → Ward (cascade gates each level — CCRS#477).
+7. Step 5 (Description): fill the required description, click Next.
+8. Step 6 (Photo): skip the optional dropzone, click SUBMIT.
+9. Assert the URL flips to /pgr/response and a complaint id matching ^NCCG-PGR-\\d{4}-\\d{2}-\\d{2}-\\d+$ is rendered.
+
+Test timeout is 180s — six steps plus DOM settles plus the final POST regularly exceeds 90s on Nairobi.`,
+    },
+    tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:citizen'],
+  }, async ({ page }) => {
     test.setTimeout(180_000);
     const phone = generateCitizenPhone();
     await citizenOtpLogin(page, phone);

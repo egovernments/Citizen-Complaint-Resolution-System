@@ -16,11 +16,13 @@ let pgrCreateRequestBody =
   '{"RequestInfo":{"authToken":"","userInfo":{}},"service":{"tenantId":"","serviceCode":"","description":"","accountId":"","source":"whatsapp","address":{"landmark":"","city":"","geoLocation":{"latitude": null, "longitude": null},"locality":{"code":""}}},"workflow":{"action":"APPLY","verificationDocuments":[]}}';
 
 class PGRService {
-  async fetchMdmsData(tenantId, moduleName, masterName, filterPath) {
+  async fetchMdmsData(tenantId, moduleName, masterName, filterPath, user) {
     var url =
       config.egovServices.egovServicesHost + config.egovServices.mdmsSearchPath;
     var request = {
-      RequestInfo: {},
+      RequestInfo: {
+        authToken: user ? user.authToken : undefined
+      },
       MdmsCriteria: {
         tenantId: tenantId,
         moduleDetails: [
@@ -46,35 +48,158 @@ class PGRService {
     };
 
     let response = await fetch(url, options);
+
+    if (!response.ok) {
+      throw new Error(`MDMS fetch failed with status ${response.status}`);
+    }
+
     let data = await response.json();
+
+    // Check if MdmsRes exists
+    if (!data["MdmsRes"]) {
+      throw new Error(`Invalid MDMS response structure - MdmsRes not found`);
+    }
+
+    // Check if module exists
+    if (!data["MdmsRes"][moduleName]) {
+      throw new Error(`Module ${moduleName} not found in MDMS data`);
+    }
+
+    // Check if master exists
+    if (!data["MdmsRes"][moduleName][masterName]) {
+      throw new Error(`Master ${masterName} not found in module ${moduleName}`);
+    }
 
     return data["MdmsRes"][moduleName][masterName];
   }
 
-  async fetchFrequentComplaints(tenantId) {
-    let complaintTypeMdmsData = await this.fetchMdmsData(
-      tenantId,
-      "RAINMAKER-PGR",
-      "ServiceDefs",
-      "$.[?(@.order && @.active == true)]"
-    );
-    let sortedData = complaintTypeMdmsData
-      .slice()
-      .sort((a, b) => a.order - b.order);
-    let complaintTypes = [];
-    for (let data of sortedData) {
-      if (!complaintTypes.includes(data.serviceCode))
-        complaintTypes.push(data.serviceCode);
+  async fetchMdmsV2Data(tenantId, moduleDetails, user) {
+    const url = `${config.egovServices.egovServicesHost}mdms-v2/v1/_search?tenantId=${tenantId}`;
+
+    const request = {
+      MdmsCriteria: {
+        tenantId: tenantId,
+        moduleDetails: moduleDetails
+      },
+      RequestInfo: {
+        apiId: "Rainmaker",
+        authToken: user ? user.authToken : undefined,
+        msgId: Date.now() + "|en_IN",
+        plainAccessRequest: {}
+      }
+    };
+
+    const options = {
+      method: "POST",
+      body: JSON.stringify(request),
+      headers: {
+        "Content-Type": "application/json"
+      }
+    };
+
+    let response = await fetch(url, options);
+
+    if (!response.ok) {
+      throw new Error(`MDMS v2 fetch failed with status ${response.status}`);
     }
-    let localisationPrefix = "SERVICEDEFS_";
-    let messageBundle = {};
-    for (let complaintType of complaintTypes) {
-      let message = localisationService.getMessageBundleForCode(
-        localisationPrefix + complaintType.toUpperCase()
+
+    let data = await response.json();
+    return data.MdmsRes || data.mdms || {};
+  }
+
+  async fetchFrequentComplaints(tenantId, user) {
+    try {
+
+      // Try MDMS v2 first
+      try {
+        const mdmsData = await this.fetchMdmsV2Data(
+          tenantId,
+          [
+            {
+              moduleName: "RAINMAKER-PGR",
+              masterDetails: [{ name: "ServiceDefs" }]
+            }
+          ],
+          user
+        );
+
+        if (mdmsData['RAINMAKER-PGR'] && mdmsData['RAINMAKER-PGR']['ServiceDefs']) {
+          const serviceDefs = mdmsData['RAINMAKER-PGR']['ServiceDefs'];
+
+          // Filter active services and limit to top frequent ones
+          const activeServices = serviceDefs
+            .filter(def => def.active === true)
+            .sort((a, b) => (a.order || 999) - (b.order || 999))
+            .slice(0, 5); // Show top 5 frequent complaints
+
+          let complaintTypes = [];
+          let messageBundle = {};
+
+          for (let service of activeServices) {
+            complaintTypes.push(service.serviceCode);
+            // Use the name from MDMS directly
+            messageBundle[service.serviceCode] = {
+              en_IN: service.name || service.serviceCode,
+              hi_IN: service.name || service.serviceCode
+            };
+          }
+
+          return { complaintTypes, messageBundle };
+        }
+      } catch (v2Error) {
+      }
+
+      // Fallback to MDMS v1
+      let complaintTypeMdmsData = await this.fetchMdmsData(
+        tenantId,
+        "RAINMAKER-PGR",
+        "ServiceDefs",
+        "$.[?(@.active == true)]",
+        user
       );
-      messageBundle[complaintType] = message;
+      let sortedData = complaintTypeMdmsData
+        .slice()
+        .sort((a, b) => (a.order || 999) - (b.order || 999))
+        .slice(0, 5); // Show top 5
+
+      let complaintTypes = [];
+      let messageBundle = {};
+
+      for (let data of sortedData) {
+        if (!complaintTypes.includes(data.serviceCode)) {
+          complaintTypes.push(data.serviceCode);
+          // Try to use name from data if available
+          messageBundle[data.serviceCode] = {
+            en_IN: data.name || data.serviceCode,
+            hi_IN: data.name || data.serviceCode
+          };
+        }
+      }
+
+      return { complaintTypes, messageBundle };
+    } catch (error) {
+
+      // Fallback to basic complaint types if MDMS fails
+      const fallbackTypes = [
+        { code: 'STREETLIGHT', name: 'Streetlight not working' },
+        { code: 'SEWAGE', name: 'Sewage overflow / blocked' },
+        { code: 'GARBAGE', name: 'Garbage not cleared' },
+        { code: 'WATER', name: 'Pipe broken / leaking' }
+      ];
+
+      let complaintTypes = [];
+      let messageBundle = {};
+
+      for (let type of fallbackTypes) {
+        complaintTypes.push(type.code);
+        messageBundle[type.code] = {
+          en_IN: type.name,
+          hi_IN: type.name
+        };
+      }
+
+      return { complaintTypes, messageBundle };
     }
-    return { complaintTypes, messageBundle };
   }
 
 
@@ -205,8 +330,8 @@ class PGRService {
     return shorturl;
   }
 
-  async fetchLocalitiesAndWebpageLink(tenantId, whatsAppBusinessNumber) {
-    let { localities, messageBundle } = await this.fetchLocalities(tenantId);
+  async fetchLocalitiesAndWebpageLink(tenantId, whatsAppBusinessNumber, user) {
+    let { localities, messageBundle } = await this.fetchLocalities(tenantId, user);
     let link = await this.getLocalityExternalWebpageLink(
       tenantId,
       whatsAppBusinessNumber
@@ -226,49 +351,233 @@ class PGRService {
     return shorturl;
   }
 
-  async fetchLocalities(tenantId) {
-    let moduleName = "egov-location";
-    let masterName = "TenantBoundary";
-    let filterPath =
-      '$.[?(@.hierarchyType.code=="ADMIN")].boundary.children.*.children.*.children.*';
+  async fetchLocalities(tenantId, user) {
+    try {
+      // First, fetch hierarchy schema to determine the lowest level
+      let lowestBoundaryType = 'Locality'; // Default
 
-    let boundaryData = await this.fetchMdmsData(
-      tenantId,
-      moduleName,
-      masterName,
-      filterPath
-    );
-    let localities = [];
-    for (let i = 0; i < boundaryData.length; i++) {
-      localities.push(boundaryData[i].code);
+      try {
+        const mdmsData = await this.fetchMdmsV2Data(
+          tenantId,
+          [
+            {
+              moduleName: "CMS-BOUNDARY",
+              masterDetails: [{ name: "HierarchySchema" }]
+            }
+          ],
+          user
+        );
+
+        if (mdmsData['CMS-BOUNDARY'] && mdmsData['CMS-BOUNDARY']['HierarchySchema']) {
+          const hierarchySchemas = mdmsData['CMS-BOUNDARY']['HierarchySchema'];
+          // Find ADMIN hierarchy
+          const adminHierarchy = hierarchySchemas.find(h => h.hierarchy === 'ADMIN');
+          if (adminHierarchy && adminHierarchy.lowestHierarchy) {
+            lowestBoundaryType = adminHierarchy.lowestHierarchy;
+          }
+        }
+      } catch (mdmsError) {
+      }
+
+      // Step 1: Fetch boundary data from boundary service with specific boundary type
+
+      // Use boundary type parameter to fetch only the lowest level boundaries
+      const boundaryUrl = `${config.egovServices.egovServicesHost}boundary-service/boundary-relationships/_search?tenantId=${tenantId}&hierarchyType=ADMIN&boundaryType=${lowestBoundaryType}&includeChildren=true`;
+
+      const boundaryRequest = {
+        RequestInfo: {
+          apiId: "Rainmaker",
+          msgId: Date.now() + "|en_IN",
+          authToken: user ? user.authToken : undefined,
+          plainAccessRequest: {}
+        }
+      };
+
+      const boundaryOptions = {
+        method: "POST",
+        body: JSON.stringify(boundaryRequest),
+        headers: {
+          "Content-Type": "application/json"
+        }
+      };
+
+      const boundaryResponse = await fetch(boundaryUrl, boundaryOptions);
+
+      if (!boundaryResponse.ok) {
+        throw new Error(`Boundary service returned status ${boundaryResponse.status}`);
+      }
+
+      const boundaryData = await boundaryResponse.json();
+
+      // Extract locality codes - When using boundaryType parameter, response contains only those boundaries
+      const localityCodes = [];
+      const localityMap = new Map(); // Store code to full locality object mapping
+
+      if (boundaryData && boundaryData.TenantBoundary && boundaryData.TenantBoundary.length > 0) {
+        const tenantBoundary = boundaryData.TenantBoundary[0];
+        const boundaries = tenantBoundary.boundary || [];
+
+        // When boundaryType is specified, boundaries array contains only that type
+        for (const boundary of boundaries) {
+          if (boundary.code) {
+            localityCodes.push(boundary.code);
+            localityMap.set(boundary.code, boundary);
+          }
+        }
+      }
+
+      if (localityCodes.length === 0) {
+        throw new Error(`No localities found for tenant ${tenantId}`);
+      }
+
+
+      // Step 2: Fetch localization messages for these locality codes from digit-tenants module
+      const localizationUrl = `${config.egovServices.egovServicesHost}localization/messages/v1/_search?module=digit-tenants&locale=en_IN&tenantId=${tenantId}`;
+
+      const localizationRequest = {
+        RequestInfo: {
+          apiId: "Rainmaker",
+          authToken: user ? user.authToken : undefined,
+          msgId: Date.now() + "|en_IN",
+          plainAccessRequest: {}
+        }
+      };
+
+      const localizationOptions = {
+        method: "POST",
+        body: JSON.stringify(localizationRequest),
+        headers: {
+          "Content-Type": "application/json"
+        }
+      };
+
+      let localizedMessages = {};
+
+      try {
+        const localizationResponse = await fetch(localizationUrl, localizationOptions);
+
+        if (localizationResponse.ok) {
+          const localizationData = await localizationResponse.json();
+
+          if (localizationData && localizationData.messages) {
+
+            // Create a map of code to message for locality codes
+            // The messages use ADMIN_ prefixed codes (e.g., ADMIN_SUN01)
+            localizationData.messages.forEach(msg => {
+              // Check if this message corresponds to a locality code
+              localityCodes.forEach(code => {
+                // Direct match for ADMIN_ prefixed codes
+                if (msg.code === code) {
+                  localizedMessages[code] = msg.message;
+                }
+              });
+            });
+
+          }
+        } else {
+        }
+      } catch (localizationError) {
+        // Continue without localized messages
+      }
+
+      // Step 3: Build the result with proper display names
+      const localities = [];
+      const messageBundle = {};
+
+      for (const code of localityCodes) {
+        // Remove ADMIN_ prefix for PGR usage
+        const localityCodeForPGR = code.replace(/^ADMIN_/, '');
+        localities.push(localityCodeForPGR);
+
+        // Use localized name if available, otherwise generate a readable name from the code
+        let displayName = localizedMessages[code];
+
+        if (!displayName) {
+          // Try to extract a readable name from the locality object if available
+          const localityObj = localityMap.get(code);
+          if (localityObj && localityObj.name) {
+            displayName = localityObj.name;
+          } else {
+            // Generate a readable name from the code (e.g., "ADMIN_SUN04" -> "Sun 04")
+            const cleanCode = localityCodeForPGR;
+            displayName = cleanCode
+              .replace(/([A-Z]+)(\d+)/, '$1 $2')  // Add space between letters and numbers
+              .replace(/_/g, ' ')  // Replace underscores with spaces
+              .split(' ')
+              .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+              .join(' ');
+          }
+        }
+
+        messageBundle[localityCodeForPGR] = {
+          en_IN: displayName,
+          hi_IN: displayName,  // Will use same unless we fetch hi_IN locale too
+          pa_IN: displayName   // Will use same unless we fetch pa_IN locale too
+        };
+      }
+
+      return { localities, messageBundle };
+
+    } catch (error) {
+
+      // Fallback to MDMS if boundary service fails
+      try {
+
+        let moduleName = "egov-location";
+        let masterName = "TenantBoundary";
+        let filterPath =
+          '$.[?(@.hierarchyType.code=="ADMIN")].boundary.children.*.children.*.children.*';
+
+        let boundaryData = await this.fetchMdmsData(
+          tenantId,
+          moduleName,
+          masterName,
+          filterPath,
+          user
+        );
+
+        if (boundaryData && boundaryData.length > 0) {
+          let localities = [];
+          for (let i = 0; i < boundaryData.length; i++) {
+            localities.push(boundaryData[i].code);
+          }
+
+          let localitiesLocalisationCodes = [];
+          for (let locality of localities) {
+            let localisationCode =
+              tenantId.replace(".", "_").toUpperCase() + "_ADMIN_" + locality;
+            localitiesLocalisationCodes.push(localisationCode);
+          }
+
+          let localisedMessages =
+            await localisationService.getMessagesForCodesAndTenantId(
+              localitiesLocalisationCodes,
+              tenantId
+            );
+
+          let messageBundle = {};
+          for (let locality of localities) {
+            let localisationCode =
+              tenantId.replace(".", "_").toUpperCase() + "_ADMIN_" + locality;
+            messageBundle[locality] = localisedMessages[localisationCode];
+          }
+
+          return { localities, messageBundle };
+        }
+      } catch (mdmsError) {
+      }
+
+      throw new Error(`Unable to fetch localities for tenant ${tenantId}`);
     }
-    let localitiesLocalisationCodes = [];
-    for (let locality of localities) {
-      let localisationCode =
-        tenantId.replace(".", "_").toUpperCase() + "_ADMIN_" + locality;
-      localitiesLocalisationCodes.push(localisationCode);
-    }
-    let localisedMessages =
-      await localisationService.getMessagesForCodesAndTenantId(
-        localitiesLocalisationCodes,
-        tenantId
-      );
-    let messageBundle = {};
-    for (let locality of localities) {
-      let localisationCode =
-        tenantId.replace(".", "_").toUpperCase() + "_ADMIN_" + locality;
-      messageBundle[locality] = localisedMessages[localisationCode];
-    }
-    return { localities, messageBundle };
   }
 
   async getCity(input, locale, tenantId) {
-    
+
     try {
     var url =
       config.egovServices.nlpEngineHost +
       config.egovServices.cityFuzzySearch;
-    
+
     // Add tenant ID to bypass gateway
     if (tenantId) {
       url += `?tenantId=${tenantId}`;
@@ -276,12 +585,12 @@ class PGRService {
 
     // Fix locale format - NLP expects "en" not "en_IN"
     const nlpLocale = locale === "en_IN" ? "en" : locale.split("_")[0];
-    
+
     var requestBody = {
       input_city: input,
       input_lang: nlpLocale,
     };
-    
+
     var options = {
       method: "POST",
       body: JSON.stringify(requestBody),
@@ -290,9 +599,9 @@ class PGRService {
       },
     };
 
-    
+
     let response = await fetch(url, options);
-    
+
     let predictedCity = null;
     let predictedCityCode = null;
     let isCityDataMatch = false;
@@ -315,11 +624,9 @@ class PGRService {
       }
     } else {
       const errorText = await response.text();
-      console.error("Error in fetching the city");
       return { predictedCityCode, predictedCity, isCityDataMatch };
     }
   } catch (error) {
-    console.error("Error in getCity:", error);
     return { predictedCityCode: null, predictedCity: null, isCityDataMatch: false };
   }
   }
@@ -328,7 +635,7 @@ class PGRService {
     var url =
       config.egovServices.nlpEngineHost +
       config.egovServices.localityFuzzySearch;
-    
+
     // Add tenant ID to bypass gateway
     if (tenantId) {
       url += `?tenantId=${tenantId}`;
@@ -348,7 +655,7 @@ class PGRService {
     };
 
     let response = await fetch(url, options);
-    
+
     let predictedLocality = null;
     let predictedLocalityCode = null;
     let isLocalityDataMatch = false;
@@ -387,7 +694,6 @@ class PGRService {
       }
     } else {
       const errorText = await response.text();
-      console.error("Error in fetching the locality");
       return { predictedLocalityCode, predictedLocality, isLocalityDataMatch };
     }
   }
@@ -419,14 +725,13 @@ class PGRService {
         filedDate = moment(filedDate)
           .tz(config.timeZone)
           .format(config.dateFormat);
-        let applicationStatus = localisationService.getMessageBundleForCode(
-          serviceWrapper.service.applicationStatus
-        );
+        // Use raw applicationStatus instead of trying to localize
+        let applicationStatus = serviceWrapper.service.applicationStatus;
         var data = {
           complaintType: dialog.get_message(serviceCode, locale),
           complaintNumber: serviceRequestId,
           filedDate: filedDate,
-          complaintStatus: dialog.get_message(applicationStatus, locale),
+          complaintStatus: applicationStatus,
           complaintLink: complaintURL,
         };
         count++;
@@ -449,7 +754,45 @@ class PGRService {
     requestBody["RequestInfo"]["authToken"] = authToken;
     requestBody["service"]["tenantId"] = city;
     requestBody["service"]["address"]["city"] = city;
-    requestBody["service"]["address"]["locality"]["code"] = locality;
+    requestBody["service"]["address"]["locality"]["code"] = "ADMIN_" + locality;
+
+    // Add localized locality name if available
+    if (slots.localityName) {
+      requestBody["service"]["address"]["locality"]["name"] = slots.localityName;
+    } else {
+      // Try to fetch the localized name
+      try {
+        const localizationUrl = `${config.egovServices.egovServicesHost}localization/messages/v1/_search?module=digit-tenants&locale=en_IN&tenantId=${city}`;
+        const localizationRequest = {
+          RequestInfo: {
+            apiId: "Rainmaker",
+            authToken: authToken,
+            msgId: Date.now() + "|en_IN",
+            plainAccessRequest: {}
+          }
+        };
+
+        const response = await fetch(localizationUrl, {
+          method: "POST",
+          body: JSON.stringify(localizationRequest),
+          headers: { "Content-Type": "application/json" }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.messages) {
+            // Look for ADMIN_<locality> code
+            const localityCode = `ADMIN_${locality}`;
+            const message = data.messages.find(m => m.code === localityCode);
+            if (message) {
+              requestBody["service"]["address"]["locality"]["name"] = message.message;
+            }
+          }
+        }
+      } catch (error) {
+      }
+    }
+
     requestBody["service"]["serviceCode"] = complaintType;
     requestBody["service"]["accountId"] = userId;
     requestBody["RequestInfo"]["userInfo"] = userInfo;
@@ -465,10 +808,10 @@ class PGRService {
     // Handle image upload from slots.image (existing flow)
     if (slots.image) {
       try {
-        let filestoreId = await this.getFileForFileStoreId(slots.image, city);
+        // slots.image already contains the filestore ID from channel upload
         var content = {
           documentType: "PHOTO",
-          filestoreId: filestoreId,
+          filestoreId: slots.image,
         };
         requestBody["workflow"]["verificationDocuments"].push(content);
       } catch (error) {
@@ -478,10 +821,10 @@ class PGRService {
     // Handle image upload from extraInfo.fileStoreId (new flow)
     if (extraInfo && extraInfo.fileStoreId) {
       try {
-        let filestoreId = await this.getFileForFileStoreId(extraInfo.fileStoreId, city);
+        // extraInfo.fileStoreId already contains the filestore ID
         var content = {
           documentType: "PHOTO",
-          filestoreId: filestoreId,
+          filestoreId: extraInfo.fileStoreId,
         };
         requestBody["workflow"]["verificationDocuments"].push(content);
       } catch (error) {
@@ -511,25 +854,28 @@ class PGRService {
       let responseBody = await response.json();
       results = await this.preparePGRResult(responseBody, user.locale);
     } else {
-      console.error("Error in creating the complaint, status:", response.status);
       const errorText = await response.text();
-      console.error("Error response body:", errorText);
       return undefined;
     }
     return results[0];
   }
 
-  async fetchOpenComplaints(user) {
+  async fetchOpenComplaints(user, extraInfo) {
     let requestBody = {
       RequestInfo: {
         authToken: user.authToken,
       },
     };
 
+    // Use tenant from extraInfo in sandbox mode, otherwise use root tenant
+    let tenantId = (config.enableSandboxMode && extraInfo && extraInfo.tenantId)
+      ? extraInfo.tenantId
+      : config.rootTenantId;
+
     var url =
       config.egovServices.egovServicesHost +
       config.egovServices.pgrSearchEndpoint;
-    url = url + "?tenantId=" + config.rootTenantId;
+    url = url + "?tenantId=" + tenantId;
     url += "&";
     url += "mobileNumber=" + user.mobileNumber;
 
@@ -548,7 +894,6 @@ class PGRService {
       let responseBody = await response.json();
       results = await this.preparePGRResult(responseBody, user.locale);
     } else {
-      console.error("Error in fetching the complaints");
       return [];
     }
 
@@ -576,11 +921,15 @@ class PGRService {
 
   async makeCitizenURLForComplaint(serviceRequestId, mobileNumber) {
     let encodedPath = urlencode(serviceRequestId, "utf8");
+
+    // Use sandbox-ui for sandbox mode, digit-ui otherwise
+    const uiPath = config.enableSandboxMode ? 'sandbox-ui' : 'digit-ui';
+
     let url =
       config.egovServices.externalHost +
       "citizen/otpLogin?mobileNo=" +
       mobileNumber +
-      "&redirectTo=digit-ui/citizen/pgr/complaints/" +
+      `&redirectTo=${uiPath}/citizen/pgr/complaints/` +
       encodedPath;
     let shortURL = await this.getShortenedURL(url);
     return shortURL;
@@ -591,17 +940,14 @@ class PGRService {
   if (!filename || filename.trim() === '') {
     const timestamp = Date.now();
     filename = `pgr_download_${timestamp}.jpg`;
-    console.warn(`Empty filename detected in PGR, using fallback: ${filename}`);
   }
-  
+
   filename = filename.toString().trim();
   if (filename === '') {
     filename = `pgr_fallback_${Date.now()}.jpg`;
-    console.warn(`Invalid filename after processing in PGR, using: ${filename}`);
   }
-  
-  console.log("PGR downloadImage - Using filename:", filename);
-  
+
+
     const writer = fs.createWriteStream(filename);
 
     const response = await axios({
@@ -654,12 +1000,12 @@ class PGRService {
 
     let response = await fetch(url, options);
     response = await response.json();
-    
+
     // Handle the correct response structure based on actual API response
     if (!response) {
       throw new Error("No response received from filestore");
     }
-    
+
     // Check for both possible response structures
     let fileData;
     if (response.fileStoreIds && response.fileStoreIds.length > 0 && response.fileStoreIds[0].url) {
@@ -667,13 +1013,13 @@ class PGRService {
       fileData = response.fileStoreIds[0];
     } else if (response.files && response.files.length > 0) {
       // New structure - need to make another call to get URL
-      
+
       // For now, construct the URL directly since the response only has fileStoreId and tenantId
       // This is a common pattern in DIGIT filestore services
-      let directUrl = config.egovServices.egovServicesHost + 
-                     "filestore/v1/files/id?fileStoreId=" + filestoreId + 
+      let directUrl = config.egovServices.egovServicesHost +
+                     "filestore/v1/files/id?fileStoreId=" + filestoreId +
                      "&tenantId=" + tenantId;
-      
+
       fileData = {
         fileStoreId: filestoreId,
         tenantId: tenantId,
@@ -682,11 +1028,11 @@ class PGRService {
     } else {
       throw new Error("Invalid filestore response structure");
     }
-    
+
     if (!fileData.url) {
       throw new Error("No URL found in filestore response");
     }
-    
+
     var fileURL = fileData.url.split(",");
     var fileName = geturl.parse(fileURL[0]);
     fileName = path.basename(fileName.pathname);

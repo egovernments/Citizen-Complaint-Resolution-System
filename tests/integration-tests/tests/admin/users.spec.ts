@@ -102,7 +102,20 @@ test.afterAll(async () => {
 });
 
 test.describe('manage/users', () => {
-  test('1. list renders with profile columns + at least one citizen row', async ({
+  test('1. list renders with profile columns + at least one citizen row', {
+    annotation: {
+      type: 'description',
+      description: `Asserts /manage/users renders with the four expected column headers (Username, Name, Mobile, Type) and at least one populated row. The default filter is roleCodes=['CITIZEN'] (configurator's hardcoded default), and the tenant has seeded ADMIN + test citizens.
+
+Steps:
+1. Navigate to /configurator/manage/users.
+2. Assert role=table is visible.
+3. For each header in ['Username','Name','Mobile','Type'], assert the matching role=columnheader is visible.
+4. Assert getByRole('row') count > 1 (header + at least one citizen).
+
+UserList does NOT have a search/filter bar (no filters prop in the source) — this spec asserts columns + count only, not narrow behavior the UI doesn't implement.`,
+    },
+    tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }) => {
     await page.goto(LIST_PATH);
@@ -122,7 +135,22 @@ test.describe('manage/users', () => {
     expect(await dataRows.count()).toBeGreaterThan(1);
   });
 
-  test('2. create — citizen user lands and is retrievable via API', async ({
+  test('2. create — citizen user lands and is retrievable via API', {
+    annotation: {
+      type: 'description',
+      description: `Drives the UserCreate form to create a fresh citizen, navigates back to the list, and verifies via egov-user _search that the user landed with the expected fields (userName, mobileNumber, active=true, type='CITIZEN'). Soft-deletes in afterAll.
+
+Steps:
+1. Generate a unique username (PW + lowercase test code) and a 10-digit mobile number; track for cleanup.
+2. Navigate to /configurator/manage/users/create.
+3. Fill labels Username, Name, Mobile Number, Email.
+4. Click Create; wait for navigation back to /configurator/manage/users (45s timeout).
+5. POST /user/_search with userName=uname; assert exactly 1 result.
+6. Assert userName / mobileNumber / active=true / type='CITIZEN' on the returned user.
+
+Teardown is API-only — egov-user has no UI delete affordance for users; the afterAll soft-deletes via _updatenovalidate with active=false.`,
+    },
+    tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
     const uname = `pw${testCode(testInfo, 'USR').toLowerCase().replace(/_/g, '')}`
@@ -159,7 +187,25 @@ test.describe('manage/users', () => {
     expect(list[0].type).toBe('CITIZEN');
   });
 
-  test('3. edit — username disabled, name updates round-trip', async ({
+  test('3. edit — username disabled, name updates round-trip', {
+    annotation: {
+      type: 'description',
+      description: `Confirms the UserEdit form's two read-only invariants (Username and Type cannot change after create) and a name update round-trips through _updatenovalidate. Seeds via API for speed; asserts both UI disabled state and the post-save API payload.
+
+Steps:
+1. Generate a unique username; track for cleanup.
+2. POST /user/users/_createnovalidate to seed a CITIZEN.
+3. POST /user/_search to get the user's uuid.
+4. Navigate to /configurator/manage/users/<uuid>; if an Edit button is visible, click it.
+5. Assert the Username input is disabled.
+6. Assert the Type field (Radix select trigger) is disabled.
+7. Fill Name with "PW Edited <uniq>".
+8. Click Save; wait 1.5s.
+9. POST /user/_search again; assert updated.name matches /PW Edited/.
+
+Tolerant of show-vs-edit routing differences — works whether /:id lands on Show or directly on Edit.`,
+    },
+    tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
     // Seed via API so we don't depend on test 2's UI state.
@@ -233,7 +279,21 @@ test.describe('manage/users', () => {
     expect(updated.name).toMatch(/PW Edited/);
   });
 
-  test('4. show — profile fields render for a freshly seeded user', async ({
+  test('4. show — profile fields render for a freshly seeded user', {
+    annotation: {
+      type: 'description',
+      description: `API-seeds a citizen, then navigates to the UserShow page and asserts the username, name, and mobile number all render as visible text. Confirms the FieldRow layout pulls the correct fields off the user object.
+
+Steps:
+1. Generate a unique username + 10-digit mobile; track for cleanup.
+2. POST /user/users/_createnovalidate with name "PW Show <uniq>", gender FEMALE.
+3. POST /user/_search for the uuid.
+4. Navigate to /configurator/manage/users/<uuid>.
+5. Assert each of uname / "PW Show <uniq>" / mobile is visible on the page.
+
+Pairs with the edit test — together they cover the two read-only routes (show + edit) the configurator exposes for users.`,
+    },
+    tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
     const uname = `pw${testCode(testInfo, 'USRSHOW').toLowerCase().replace(/_/g, '')}`

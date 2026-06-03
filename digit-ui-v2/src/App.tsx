@@ -21,6 +21,9 @@ import CitizenComplaintCreatePage from './pages/CitizenComplaintCreatePage';
 import CitizenProfilePage from './pages/CitizenProfilePage';
 import CitizenDashboardV2Page from './pages/CitizenDashboardV2Page';
 import CitizenLayout from './components/layout/CitizenLayout';
+import AdminLoginPage from './pages/AdminLoginPage';
+import AdminDashboardPage from './pages/AdminDashboardPage';
+import AdminBootstrapPage from './pages/AdminBootstrapPage';
 import { ThemeProvider } from './providers/ThemeProvider';
 import { citizenDataProvider, citizenAuthProvider } from './providers/citizenBridge';
 // Toaster removed — citizen UI v1 surfaces errors via inline Alert components.
@@ -176,6 +179,13 @@ function App() {
                 {/* KC callback is intentionally unguarded — the user is
                    mid-auth at this point and not yet logged in. */}
                 <Route path="/auth/callback" element={<CitizenKcCallback />} />
+                {/* Platform-admin surface — separate auth state from
+                    citizen (KC master realm, different localStorage key,
+                    different role model). Each page gates itself. */}
+                <Route path="/admin/login" element={<AdminLoginPage />} />
+                <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+                <Route path="/admin/bootstrap" element={<AdminBootstrapPage />} />
+                <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
                 <Route
                   path="/"
                   element={state.isAuthenticated ? <CitizenLayout /> : <Navigate to="/login" replace />}

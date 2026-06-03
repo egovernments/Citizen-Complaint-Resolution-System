@@ -114,7 +114,20 @@ async function createHierarchyApi(
 }
 
 test.describe('manage/boundary-hierarchies', () => {
-  test('1. list renders with hierarchy type + levels columns', async ({ page }) => {
+  test('1. list renders with hierarchy type + levels columns', {
+    annotation: {
+      type: 'description',
+      description: `Asserts the boundary-hierarchies list page renders with the three expected column headers (Hierarchy Type, Tenant, Levels) and at least one populated row (the seeded ADMIN hierarchy on 'ke' tenant).
+
+Steps:
+1. Navigate to /configurator/manage/boundary-hierarchies.
+2. Assert role=table is visible.
+3. For each header in ['Hierarchy Type','Tenant','Levels'], assert the matching role=columnheader is visible.
+4. Read row count via getByRole('row'); assert > 1 (header + at least one data row).
+
+Catches a regression where BoundaryHierarchyList loses a column or the data provider returns no records.`,
+    },
+    tag: ['@area:configurator-manage', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
     await page.goto(LIST_PATH);
 
     const table = page.getByRole('table');
@@ -131,7 +144,24 @@ test.describe('manage/boundary-hierarchies', () => {
     expect(await dataRows.count()).toBeGreaterThan(1);
   });
 
-  test('2. UI create happy path — chain of 2 levels shows up in list + API', async ({
+  test('2. UI create happy path — chain of 2 levels shows up in list + API', {
+    annotation: {
+      type: 'description',
+      description: `Drives the BoundaryHierarchyCreate form to create a 2-level chain (LEVEL_A → LEVEL_B), verifies the record landed via API, then verifies it appears in the manage list. Confirms the form's auto-pre-fill of parent (each new level's parent defaults to the previous row's boundaryType).
+
+Steps:
+1. Generate a unique hierarchyType via testCode; track it for cleanup logging.
+2. Navigate to /configurator/manage/boundary-hierarchies/create.
+3. Fill #hierarchyType.
+4. Fill the first "e.g. County" placeholder with LEVEL_A.
+5. Click "Add level"; fill the second placeholder with LEVEL_B (parent auto-populates to LEVEL_A).
+6. Click Create; wait for navigation back to LIST_PATH within 30s.
+7. searchHierarchies(hierarchyType) via API; assert exactly 1 record returned with the expected level chain (LEVEL_A→null, LEVEL_B→LEVEL_A).
+8. Navigate back to the list; type the hierarchyType in search; assert the matching row is visible.
+
+Teardown is logging-only — boundary service has no _delete endpoint. PW_<hash>_BH naming prevents collisions across runs.`,
+    },
+    tag: ['@area:configurator-manage', '@kind:happy-path', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
     const hierarchyType = testCode(testInfo, 'BH_CREATE');
@@ -177,7 +207,22 @@ test.describe('manage/boundary-hierarchies', () => {
     ).toBeVisible();
   });
 
-  test('3. show page renders levels in chain order', async ({ page }, testInfo) => {
+  test('3. show page renders levels in chain order', {
+    annotation: {
+      type: 'description',
+      description: `Seeds a 3-level hierarchy (ROOT → MID → LEAF) via API for speed, then opens the hierarchy's show page in the UI and asserts all three level badges render. Confirms BoundaryHierarchyShow correctly walks the chain and presents each level.
+
+Steps:
+1. Generate a unique hierarchyType; track it.
+2. createHierarchyApi with [ROOT(null), MID(parent=ROOT), LEAF(parent=MID)]; assert status is 200/201/202.
+3. Navigate to LIST_PATH; type the hierarchyType in search; click the row.
+4. Assert text 'ROOT' (exact) is visible.
+5. Assert text 'MID' (exact) is visible.
+6. Assert text 'LEAF' (exact) is visible.
+
+Skips three UI interactions by API-seeding — UI is the test subject for show, not create.`,
+    },
+    tag: ['@area:configurator-manage', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }, testInfo) => {
     const hierarchyType = testCode(testInfo, 'BH_SHOW');
     createdHierarchies.add(hierarchyType);
 
@@ -200,7 +245,20 @@ test.describe('manage/boundary-hierarchies', () => {
     await expect(page.getByText('LEAF', { exact: true })).toBeVisible();
   });
 
-  test('4. duplicate hierarchyType is rejected with DUPLICATE_RECORD', async ({}, testInfo) => {
+  test('4. duplicate hierarchyType is rejected with DUPLICATE_RECORD', {
+    annotation: {
+      type: 'description',
+      description: `Backend contract: creating a hierarchy with a hierarchyType that already exists must return HTTP 400 with error code DUPLICATE_RECORD. The UI relies on this server-side guard for create-idempotency (no pre-flight check in the form).
+
+Steps:
+1. Generate a unique hierarchyType; track it.
+2. createHierarchyApi with one level [X(null)]; assert status is 200/201/202.
+3. Re-create with same hierarchyType but different level [Y(null)]; assert second call returns status 400.
+4. Read body.Errors[].code; assert the codes array contains 'DUPLICATE_RECORD'.
+
+If the server starts overwriting on duplicate, this test catches it — the UI's idempotency assumption would silently break.`,
+    },
+    tag: ['@area:configurator-manage', '@kind:edge-case', '@layer:ui', '@persona:admin'] }, async ({}, testInfo) => {
     const hierarchyType = testCode(testInfo, 'BH_DUP');
     createdHierarchies.add(hierarchyType);
 
@@ -221,7 +279,20 @@ test.describe('manage/boundary-hierarchies', () => {
     expect(codes).toContain('DUPLICATE_RECORD');
   });
 
-  test('5. validation — empty hierarchyType blocks client-side submit', async ({
+  test('5. validation — empty hierarchyType blocks client-side submit', {
+    annotation: {
+      type: 'description',
+      description: `Form-validation edge case: leaving hierarchyType blank but filling a level must NOT submit. The form stays on /create and surfaces a validation error rather than POSTing to the API.
+
+Steps:
+1. Navigate to /configurator/manage/boundary-hierarchies/create.
+2. Fill the first "e.g. County" placeholder with 'LEVEL_Z'.
+3. Click Create.
+4. Assert page URL still matches /\\/create$/ within 5s (no navigation = validation blocked).
+
+Pairs with the duplicate-record test — together they bracket the form's create paths (client-side miss vs. server-side miss).`,
+    },
+    tag: ['@area:configurator-manage', '@kind:edge-case', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }) => {
     await page.goto(`${LIST_PATH}/create`);
@@ -237,7 +308,20 @@ test.describe('manage/boundary-hierarchies', () => {
     await expect(page).toHaveURL(/\/create$/, { timeout: 5_000 });
   });
 
-  test('6. API response shape — BoundaryHierarchy comes back as an array', async ({}, testInfo) => {
+  test('6. API response shape — BoundaryHierarchy comes back as an array', {
+    annotation: {
+      type: 'description',
+      description: `Pins the current API response shape. The client tolerates either a single object OR a single-element array on create. This test creates a hierarchy and asserts the BoundaryHierarchy response field is truthy AND is an array OR object — flagging any future server change for review.
+
+Steps:
+1. Generate a unique hierarchyType; track it.
+2. createHierarchyApi with one level [ONLY(null)]; assert status is 200/201/202.
+3. Read body.BoundaryHierarchy; assert it is truthy.
+4. Assert Array.isArray(bh) || typeof bh === 'object'.
+
+Documentation-by-test: if a future server rev flips the shape, the regression hits this assertion (and the UI keeps working because the data provider already handles both forms).`,
+    },
+    tag: ['@area:configurator-manage', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({}, testInfo) => {
     // The client allows either a single object or a single-element array
     // on create. Pin the current contract so a future server rev doesn't
     // break silently.

@@ -201,12 +201,16 @@ export default function Phase3Page() {
           complaintTypes.map(ct => ({
             serviceCode: ct.serviceCode,
             name: ct.name,
+            department: ct.department,
+            menuPath: 'Complaint',
           })),
           'en_IN'
         );
 
         setProgress(100);
       }
+
+      await localizationService.cacheBust().catch(e => console.warn('cache-bust failed', e));
 
       addUndo('create_complaints', `Created ${complaintsCreated} complaint types`);
       setStep('complete');

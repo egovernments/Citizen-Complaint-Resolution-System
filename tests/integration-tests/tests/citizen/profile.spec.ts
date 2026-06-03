@@ -43,7 +43,26 @@ const FORBIDDEN_INPUT_NAMES = [
 ];
 
 test.describe('Citizen profile field-set lock-down', () => {
-  test('only Name + Gender + Email + photo render (no password/language/mobile/notifications)', async ({
+  test('only Name + Gender + Email + photo render (no password/language/mobile/notifications)', {
+    annotation: {
+      type: 'description',
+      description: `Story 8.1 lock-down: /citizen/user/profile must render EXACTLY the expected field set (Name, Gender, Email, photo, Save) and NONE of the surfaces the original catalogue claimed (mobile / language / password / notifications / city). Catches both shrinkage (missing fields) and scope-creep (re-exposing sensitive surfaces without UX review).
+
+Steps:
+1. setTimeout 120s; OTP-login as a fresh citizen.
+2. Navigate to /digit-ui/citizen/user/profile, wait 5s.
+3. Assert body does NOT contain "Something went wrong".
+4. Snapshot bodyText once and inputs (name + type) once — avoids racing a renderer crash.
+5. For each EXPECTED_LABEL ['Name','Gender','Email'], assert it appears in body text.
+6. Assert input names include 'name' and 'email'.
+7. Assert a Save button is visible.
+8. For each FORBIDDEN_FORM_LABEL ('Mobile Number','Change Password','Current Password','New Password','WhatsApp'), assert it is NOT in body text.
+9. Assert no input has type="password".
+10. For each FORBIDDEN_INPUT_NAME ('mobileNumber','mobile','phone','language','password','newPassword','currentPassword'), assert it is NOT in input names.
+
+If a future build legitimately adds a field, update this spec AND citizen-flows.md Story 8.1 in the same PR — the doc is source of truth.`,
+    },
+    tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({
     page,
   }) => {
     test.setTimeout(120_000);

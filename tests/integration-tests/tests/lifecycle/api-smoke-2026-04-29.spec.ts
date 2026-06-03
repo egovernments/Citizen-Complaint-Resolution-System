@@ -2,19 +2,56 @@ import { test, expect } from '@playwright/test';
 import { loginEmployee, mdmsSearch, pgrSearch, hrmsSearch, workflowBusinessService } from '../utils/launch-fixes/api.js';
 
 test.describe('00-smoke: API helpers reach naipepea', () => {
-  test('login returns token', async () => {
+  test('login returns token', {
+    annotation: {
+      type: 'description',
+      description: `Smoke test for the API helper that all other API specs depend on. If this fails, every downstream API assertion is meaningless because no token can be acquired from the deployment.
+
+Steps:
+1. Call loginEmployee() — POSTs to /user/oauth/token with ADMIN credentials and the configured tenant.
+2. Assert the response carries a non-empty access_token.
+
+If this test fails, check egov-user is up and credentials in env match the deployment.`,
+    },
+    tag: ['@area:pgr', '@kind:lifecycle', '@kind:smoke', '@layer:api', '@persona:cross'],
+  }, async () => {
     const auth = await loginEmployee();
     expect(auth.token).toBeTruthy();
   });
 
-  test('mdms search returns Department schema records', async () => {
+  test('mdms search returns Department schema records', {
+    annotation: {
+      type: 'description',
+      description: `MDMS round-trip smoke check. The PGR UI relies on common-masters.Department being populated so the assignment dropdown has options; if MDMS is unreachable or the schema is empty, employee-side flows visibly break. This test logs in and asks MDMS for that exact slice.
+
+Steps:
+1. Log in as the test employee to get a token + userInfo.
+2. Call mdmsSearch(auth, 'ke.nairobi', 'common-masters.Department').
+3. Assert the response.mdms array exists and has length > 0.
+
+If this fails, every PGR assignment flow downstream will fail too.`,
+    },
+    tag: ['@area:pgr', '@kind:lifecycle', '@kind:smoke', '@layer:api', '@persona:cross'] }, async () => {
     const auth = await loginEmployee();
     const r = await mdmsSearch(auth, 'ke.nairobi', 'common-masters.Department');
     expect(Array.isArray(r.mdms)).toBe(true);
     expect(r.mdms.length).toBeGreaterThan(0);
   });
 
-  test('pgr search round-trips a known CLOSEDAFTERRESOLUTION complaint', async () => {
+  test('pgr search round-trips a known CLOSEDAFTERRESOLUTION complaint', {
+    annotation: {
+      type: 'description',
+      description: `Anchor smoke check against a fixed historical complaint (NCCG-PGR-2026-04-28-011862) in CLOSEDAFTERRESOLUTION state with rating 4. Confirms that pgr-services search is up, the DB still has this seeded record, and the persisted rating round-trips through the search API.
+
+Steps:
+1. Log in as the test employee.
+2. pgrSearch for the fixed serviceRequestId NCCG-PGR-2026-04-28-011862 in tenant ke.nairobi.
+3. Assert ServiceWrappers[0].service.applicationStatus === 'CLOSEDAFTERRESOLUTION'.
+4. Assert ServiceWrappers[0].service.rating === 4.
+
+If the seeded record gets purged or the ID format changes, swap the constant — the test isn't trying to validate a specific bug, just that PGR search works end-to-end.`,
+    },
+    tag: ['@area:pgr', '@kind:lifecycle', '@kind:smoke', '@layer:api', '@persona:cross'] }, async () => {
     const auth = await loginEmployee();
     const r = await pgrSearch(auth, 'ke.nairobi', 'NCCG-PGR-2026-04-28-011862');
     const sw = r.ServiceWrappers?.[0];
@@ -22,13 +59,37 @@ test.describe('00-smoke: API helpers reach naipepea', () => {
     expect(sw?.service?.rating).toBe(4);
   });
 
-  test('hrms employee search returns >0 LMEs', async () => {
+  test('hrms employee search returns >0 LMEs', {
+    annotation: {
+      type: 'description',
+      description: `Confirms HRMS has at least one employee with the PGR_LME role in ke.nairobi — without that, the GRO can't ASSIGN any complaint and the PGR workflow stalls at PENDINGFORASSIGNMENT.
+
+Steps:
+1. Log in as the test employee.
+2. hrmsSearch for employees in ke.nairobi filtered by role code PGR_LME.
+3. Assert response.Employees array has length > 0.
+
+A failure here predicts assignment flow failures throughout the rest of the suite.`,
+    },
+    tag: ['@area:pgr', '@kind:lifecycle', '@kind:smoke', '@layer:api', '@persona:cross'] }, async () => {
     const auth = await loginEmployee();
     const r = await hrmsSearch(auth, 'ke.nairobi', ['PGR_LME']);
     expect(r.Employees?.length).toBeGreaterThan(0);
   });
 
-  test('PGR business service is present', async () => {
+  test('PGR business service is present', {
+    annotation: {
+      type: 'description',
+      description: `Workflow-side smoke check: the egov-workflow-v2 businessservice _search must return a "PGR" entry for ke.nairobi. Without it, every PGR transition (APPLY/ASSIGN/RESOLVE) fails because the workflow engine has no state machine to drive.
+
+Steps:
+1. Log in as the test employee.
+2. workflowBusinessService(auth, 'ke.nairobi', 'PGR').
+3. Assert response.BusinessServices[0].businessService === 'PGR'.
+
+Pairs with the other smoke tests to confirm the four backend services PGR depends on (user, mdms, hrms, workflow) are all responsive.`,
+    },
+    tag: ['@area:pgr', '@kind:lifecycle', '@kind:smoke', '@layer:api', '@persona:cross'] }, async () => {
     const auth = await loginEmployee();
     const r = await workflowBusinessService(auth, 'ke.nairobi', 'PGR');
     expect(r.BusinessServices?.[0]?.businessService).toBe('PGR');

@@ -25,6 +25,7 @@ export const ENDPOINTS = {
   LOCALIZATION_SEARCH: '/localization/messages/v1/_search',
   LOCALIZATION_UPSERT: '/localization/messages/v1/_upsert',
   LOCALIZATION_DELETE: '/localization/messages/v1/_delete',
+  LOCALIZATION_CACHE_BUST: '/localization/messages/cache-bust',
   PGR_CREATE: '/pgr-services/v2/request/_create',
   PGR_SEARCH: '/pgr-services/v2/request/_search',
   PGR_UPDATE: '/pgr-services/v2/request/_update',

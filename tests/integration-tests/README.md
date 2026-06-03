@@ -25,11 +25,15 @@ npm run test:ui
 # Sanity-check that all specs parse without running them
 npm run test:list
 
-# Run against a different deployment
+# Run against a different deployment (bomet is single-tenant `ke`)
 BASE_URL=https://bometfeedbackhub.digit.org \
-DIGIT_TENANT=ke.bomet \
-LOCALITY_CODE=BOMET_SOTIK \
+DIGIT_TENANT=ke \
+LOCALITY_CODE=BOMET_BOMET_CENTRAL_CHESOEN \
+SERVICE_CODE=RudeBehavior \
 npx playwright test
+
+# …or source a ready-made per-deployment env file (see deploy/bomet.env)
+set -a; source deploy/bomet.env; set +a && npx playwright test
 ```
 
 The first run executes the `setup` project (auth.setup.ts) which logs into
@@ -50,11 +54,79 @@ projects pick up `storageState: 'auth.json'`. `auth.json` is gitignored.
 | `CITY_ADMIN_PASS` | `eGov@123` | City-level admin password |
 | `CITIZEN_PHONE_PREFIX` | `7` | First digit(s) for valid mobile numbers |
 | `FIXED_OTP` | `123456` | OTP value (for mock OTP deployments) |
-| `SERVICE_CODE` | `IllegalConstruction` | PGR service code for complaint tests |
+| `SERVICE_CODE` | `IllegalConstruction` | PGR service code for complaint tests (must exist on the deployment) |
 | `LOCALITY_CODE` | `NAIROBI_CITY_VIWANDANI` | Boundary locality code for address |
+| `EMPLOYEE_USER` / `EMPLOYEE_PASSWORD` | `BOMET_LME` / `eGov@123` | PGR_LME employee for inbox/resolve flows |
+| `GRO_USER` / `GRO_PASSWORD` | `KE_GRO` / `eGov@123` | GRO employee — required for the PGR `ASSIGN` action |
+| `WARD_CSR_USER` / `WARD_CSR_PASSWORD` | `BOMET_CSR_CHESOEN_…` / `eGov@123` | Ward-scoped CSR (boundary jurisdiction tests) |
+| `WARD_CSR_BOUNDARY` / `FORBIDDEN_WARDS` | bomet wards | Leaf ward the CSR is scoped to / sibling wards that must be hidden |
+| `CITY_TENANT` | `ke.nairobi` | A real city tenant in the configurator list (tenants-search test) |
+| `TENANT_LABEL` | `Bomet County` | Tenant label shown on the login City combobox |
 | `SCREENSHOT_DIR` | `/tmp/pgr-lifecycle-ui-screenshots` | Directory for UI test screenshots |
 
-See `.env.example` for a complete template.
+See `.env.example` for a complete template, and `deploy/bomet.env` for a
+worked per-deployment override file.
+
+## Portability
+
+This suite is meant to run against **any** DIGIT deployment, not just the
+one it was authored against (Nairobi). How far that holds depends on the
+spec. Every spec falls into one of three tiers — know which tier you're
+writing before you add assertions.
+
+### Tier 1 — Platform-portable (runs on any healthy deployment)
+
+Needs only a valid login + correct env **values**; it either asserts
+platform/UI *behaviour* or **self-seeds** the data it needs (registers its
+own citizen, creates its own complaint, onboards its own throwaway tenant).
+These are the bulk of the suite (most of the API surface + self-seeding
+flows). They pass anywhere the platform is healthy and the env vars point
+at valid values.
+
+**Rule for staying in Tier 1:** assert behaviour, not a particular
+deployment's data. Read the rule/label/locale the deployment actually has
+(e.g. "the configured locale resolves these keys") rather than pinning a
+literal (`sw_KE`, a specific label string, a fixed complaint id).
+
+### Tier 2 — Provisioning-coupled (runs only where the deployment is seeded for it)
+
+Needs the deployment to actually **have** specific entities wired up: a GRO,
+a `PGR_LME` *in the department the service routes to*, a ward-scoped CSR, a
+known assigned complaint. No env var can conjure these — they must exist in
+the deployment's HRMS / role / boundary / service→department topology.
+
+> Real example: PGR `ASSIGN` requires a GRO, and the assignee must be a
+> `PGR_LME` whose department matches the complaint's service-code routing.
+> On a box where every service routes to an empty department, the flow
+> cannot complete no matter how the test is configured — that's a
+> deployment data gap, not a test bug.
+
+**Rule for Tier 2:** discover the precondition at runtime and
+`test.skip(reason)` when it's absent, instead of failing red. A missing
+persona on deployment X should read as "skipped: no PGR_LME in dept Y", not
+as a failure. Prefer a shared resolver (look up a valid persona from HRMS)
+over a hardcoded username.
+
+### Tier 3 — Deployment-pinned (avoid; refactor toward Tier 1)
+
+Hardcodes one deployment's data into assertions (`ke.nairobi`, `sw_KE`,
+exact label text, "31 boundaries", a fixed complaint id). These only pass
+on the one box whose data matches. Treat any new Tier-3 assertion as a
+smell: parameterize the value via env, or rewrite it as a behavioural
+(Tier-1) check.
+
+### Practical checklist for a portable spec
+
+- Read deployment values from `tests/utils/env.ts` — never inline a tenant,
+  user, locale, service code, or boundary literal in a spec.
+- Self-seed data where you can (register citizen, create complaint/tenant)
+  instead of assuming pre-existing inventory.
+- When you genuinely need seeded state (Tier 2), `test.skip()` with a clear
+  reason if it's missing — don't fail.
+- Assert *behaviour and shape*, not a specific deployment's *values*.
+- Put per-deployment values in an env file (see `deploy/bomet.env`), not in
+  code defaults — code defaults should track the canonical reference
+  deployment only.
 
 ## Test Suites
 

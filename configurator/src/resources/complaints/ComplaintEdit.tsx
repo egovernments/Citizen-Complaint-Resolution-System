@@ -1,4 +1,4 @@
-import { DigitEdit, DigitFormInput, DigitFormSelect, WorkflowActionSelect } from '@/admin';
+import { DigitEdit, DigitFormInput, DigitFormSelect, WorkflowActionSelect, v } from '@/admin';
 import { FieldSection } from '@/admin/fields';
 import { LocalityPicker } from './LocalityPicker';
 
@@ -61,7 +61,7 @@ export function ComplaintEdit() {
         <div className="space-y-4">
           <LocalityPicker source="address.locality.code" label="Locality" />
           <DigitFormInput source="address.landmark" label="Landmark" />
-          <DigitFormInput source="address.pincode" label="Pincode" />
+          <DigitFormInput source="address.pincode" label="Pincode" validate={v.postalCodeKE} />
           <DigitFormInput source="address.street" label="Street" />
         </div>
       </FieldSection>

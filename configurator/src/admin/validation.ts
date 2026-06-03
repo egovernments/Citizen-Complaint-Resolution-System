@@ -45,6 +45,75 @@ export const phoneKE = raRegex(
   'Enter a valid Kenyan mobile starting with 7 or 1 (e.g. 712345678)',
 );
 
+/**
+ * Postal code validator — country-configurable.
+ *
+ * Per @vinothrallapalli-eGov review on PR #690: don't hardcode the
+ * length / starting-digit constraints, because each country has its
+ * own postal-code rule. The canonical source is the
+ * `common-masters.UserValidation` MDMS master — same master used for
+ * mobile validation — with `fieldType === "postalCode"`.
+ *
+ * Read order (matches `useMobileValidation`):
+ *   1. `window.__DIGIT_USER_VALIDATION.postalCode` — populated by the
+ *      `useUserValidation` hook from the MDMS master.
+ *   2. `globalConfigs.CORE_POSTAL_CODE_CONFIGS` — build-time fallback
+ *      rendered by the playbook.
+ *   3. Sensible default — `^[0-9]{5}$` (Kenya rule). Tenants with a
+ *      different rule MUST seed a UserValidation row OR set the
+ *      globalConfigs key.
+ *
+ * `postalCode` is a function-valued validator so the resolution runs
+ * at validation time (every keystroke), not at module-import time.
+ * That way a tenant switch mid-session picks up the latest rule.
+ *
+ * Form usage: `<DigitFormInput validate={v.postalCode} ... />` — the
+ * old `postalCodeKE` alias still works as a backward-compat shim
+ * pointing at the same dynamic validator.
+ */
+const DEFAULT_POSTAL_PATTERN = /^[0-9]{5}$/;
+const DEFAULT_POSTAL_MESSAGE = 'Enter a valid 5-digit postal code (e.g. 00100)';
+
+function resolvePostalRule(): { pattern: RegExp; message: string } {
+  const userValidation =
+    typeof window !== 'undefined'
+      ? (window as Record<string, unknown>).__DIGIT_USER_VALIDATION
+      : undefined;
+  const mdmsRule = (userValidation as Record<string, Record<string, unknown>> | undefined)?.postalCode;
+  const globalRule =
+    typeof window !== 'undefined'
+      ? (window as Record<string, { getConfig?: (key: string) => Record<string, unknown> }>)
+          .globalConfigs?.getConfig?.('CORE_POSTAL_CODE_CONFIGS')
+      : undefined;
+
+  const patternStr =
+    (mdmsRule?.pattern as string | undefined) ||
+    (globalRule?.postalCodePattern as string | undefined);
+  const message =
+    (mdmsRule?.errorMessage as string | undefined) ||
+    (globalRule?.postalCodeErrorMessage as string | undefined) ||
+    DEFAULT_POSTAL_MESSAGE;
+
+  if (patternStr) {
+    try {
+      return { pattern: new RegExp(patternStr), message };
+    } catch {
+      // Bad pattern in MDMS — fall through to the default rather than
+      // throwing during validation.
+    }
+  }
+  return { pattern: DEFAULT_POSTAL_PATTERN, message };
+}
+
+export const postalCode = (value: unknown) => {
+  if (value === undefined || value === null || value === '') return undefined;
+  const { pattern, message } = resolvePostalRule();
+  return pattern.test(String(value)) ? undefined : message;
+};
+
+/** Backward-compat alias for existing callers. Same dynamic validator. */
+export const postalCodeKE = postalCode;
+
 export const code = raRegex(
   /^[A-Za-z0-9][A-Za-z0-9_.\-/]*$/,
   'Use letters, numbers, underscores, dots, hyphens, or slashes',

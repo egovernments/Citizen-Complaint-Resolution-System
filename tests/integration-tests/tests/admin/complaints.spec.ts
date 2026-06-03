@@ -92,7 +92,27 @@ test.afterAll(async () => {
 });
 
 test.describe('manage/complaints', () => {
-  test('1. file complaint — citizen, locality, required landmark', async ({
+  test('1. file complaint — citizen, locality, required landmark', {
+    annotation: {
+      type: 'description',
+      description: `End-to-end create-complaint flow on the configurator's manage surface. Drives the whole form (complaint type, description, locality picker cascade, citizen mobile) and intercepts the _create XHR to verify the citizen tenantId is the STATE tenant (root) while address.tenantId is the CITY tenant — a critical contract. Asserts the redirect lands on a fresh PG-PGR-* show URL.
+
+Steps:
+1. test.skip if !liveServiceCode (beforeAll picks first active complaint type).
+2. Navigate to CREATE_PATH.
+3. Click Complaint Type select; pick the option matching liveServiceCode.
+4. Fill Description with >10 chars.
+5. pickLocality(page, liveBoundaryCode) — drives Hierarchy → Boundary type → Locality cascade.
+6. Fill Mobile number with a unique 10-digit phone starting with 7.
+7. Set up createReqPromise on /pgr-services/v2/request/_create.
+8. Click Create.
+9. Parse the captured request body; assert service.citizen.tenantId === TENANT_CODE (root) and service.address.tenantId === CITY_TENANT, and address.locality.code is non-empty.
+10. Wait for URL matching /PG-PGR-/ within 30s.
+11. Capture the SR id from the URL into createdComplaints for cleanup.
+
+Citizen tenant must be ROOT — assigning to city would break login flows. Cleanup is API-only via cleanupPgrComplaints in afterAll.`,
+    },
+    tag: ['@area:configurator-manage', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }) => {
     if (!liveServiceCode) test.skip(true, 'No active complaint type seeded on tenant');
@@ -145,7 +165,26 @@ test.describe('manage/complaints', () => {
     if (match) createdComplaints.add(match[1]);
   });
 
-  test('2. edit merges description + workflow ASSIGN in one round-trip', async ({
+  test('2. edit merges description + workflow ASSIGN in one round-trip', {
+    annotation: {
+      type: 'description',
+      description: `Confirms the configurator's complaint edit form merges field changes (description) AND workflow action (ASSIGN with assignee) into a single _update round-trip. Pre-fix description edits could be silently dropped when the workflow action was changed.
+
+Steps:
+1. test.skip if !lmeAssigneeUuid (beforeAll picks first PGR_LME employee).
+2. pickWorkableComplaint() — uses test 1's complaint or finds a fresh PENDINGFORASSIGNMENT.
+3. Navigate to /complaints/<id>/edit.
+4. Fill Description with 'PW edited at <ts>'.
+5. Click Action select; pick ASSIGN option.
+6. If an Assignee select appears, click it and pick the first option (PGR_LME exists per beforeAll).
+7. Click Save.
+8. pgrSearch for the complaint; assert wrappers.length > 0.
+9. Assert service.description matches the new value.
+10. Assert service.applicationStatus === 'PENDINGATLME' (ASSIGN moved it forward).
+
+Catches a regression where description doesn't ride along with the workflow transition.`,
+    },
+    tag: ['@area:configurator-manage', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }) => {
     if (!lmeAssigneeUuid) {
@@ -189,7 +228,21 @@ test.describe('manage/complaints', () => {
     expect(svc.applicationStatus).toBe('PENDINGATLME');
   });
 
-  test('3. workflow dropdown labels are human-readable, not UUIDs', async ({
+  test('3. workflow dropdown labels are human-readable, not UUIDs', {
+    annotation: {
+      type: 'description',
+      description: `UI hygiene: every option in the workflow Action dropdown must be a human-readable label, NOT a 36-character UUID. Catches a regression where the dataProvider stops mapping action UUIDs to their localized labels.
+
+Steps:
+1. pickWorkableComplaint(); test.skip if none.
+2. Navigate to /complaints/<id>/edit.
+3. Click the Action select.
+4. Read all option labels; assert count > 0.
+5. For each option, assert the label does NOT match the UUID regex /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.
+
+If ANY option label is a UUID, the dropdown is unusable for an admin who isn't memorizing workflow state IDs.`,
+    },
+    tag: ['@area:configurator-manage', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }) => {
     const target = await pickWorkableComplaint(loadAuth());
@@ -212,7 +265,22 @@ test.describe('manage/complaints', () => {
     }
   });
 
-  test('4. source select offers only Web/Mobile/WhatsApp', async ({ page }) => {
+  test('4. source select offers only Web/Mobile/WhatsApp', {
+    annotation: {
+      type: 'description',
+      description: `Locks down the Source dropdown allow-list: only Web, Mobile, and WhatsApp must appear. Catches CCRS-side regressions where IVR / Phone / Counter sneak back in (legacy India sources never available in Kenya).
+
+Steps:
+1. pickWorkableComplaint(); test.skip if none.
+2. Navigate to /complaints/<id>/edit.
+3. Click Source select.
+4. Read all option text contents; trim; filter empty.
+5. Assert sorted options exactly equal ['Web','Mobile','WhatsApp'] sorted.
+6. For each banned ['IVR','Phone','Counter'], assert it's NOT in the list (belt-and-braces with a clear failure message).
+
+Sorted exact comparison is strict — adding any new value (e.g. SMS) would fail; that's intentional and signals the team to update both this spec and the source allow-list.`,
+    },
+    tag: ['@area:configurator-manage', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
     const target = await pickWorkableComplaint(loadAuth());
     if (!target) test.skip(true, 'No workable complaint to inspect');
 
@@ -231,7 +299,21 @@ test.describe('manage/complaints', () => {
     }
   });
 
-  test('5. list footer count matches /pgr-services/v2/request/_count', async ({
+  test('5. list footer count matches /pgr-services/v2/request/_count', {
+    annotation: {
+      type: 'description',
+      description: `Confirms the complaints list footer ("of N") reflects the live total returned by /pgr-services/v2/request/_count. Catches a regression where the UI shows a client-side-sliced count instead of the real total.
+
+Steps:
+1. Navigate to /configurator/manage/complaints; wait networkidle.
+2. If a per-page selector is visible, click it and pick '10'; wait networkidle.
+3. pgrCount(auth, CITY_TENANT) — get the live API total.
+4. Locate footer text matching /of\\s+\\d+/i; read it.
+5. Parse the number after "of"; assert it equals apiCount.
+
+Catches the bug class where pagination renders fine but the count number is wrong, misleading admins about queue depth.`,
+    },
+    tag: ['@area:configurator-manage', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }) => {
     await page.goto(LIST_PATH);
@@ -259,7 +341,24 @@ test.describe('manage/complaints', () => {
     expect(uiCount).toBe(apiCount);
   });
 
-  test('6. status + date filters fire as XHR query params', async ({ page }) => {
+  test('6. status + date filters fire as XHR query params', {
+    annotation: {
+      type: 'description',
+      description: `Validates server-side filtering on the complaints list: changing the Status filter to PENDINGFORASSIGNMENT and setting From-date to 7 days ago must produce a /pgr-services/v2/request/_search XHR with both applicationStatus= and fromDate= query params.
+
+Steps:
+1. Navigate to /complaints; wait networkidle.
+2. Attach a request listener to capture _search URLs into 'seen'.
+3. Locate Status filter; test.skip if not visible; click; pick PENDINGFORASSIGNMENT.
+4. If From-date input exists, fill ISO date 7 days ago.
+5. Wait networkidle.
+6. Assert seen.length > 0 (at least one search XHR fired).
+7. Assert the latest URL matches /applicationStatus=/.
+8. If From-date was filled, assert the URL also matches /fromDate=/.
+
+Catches a regression where filters render but only update local state instead of triggering a server search.`,
+    },
+    tag: ['@area:configurator-manage', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
     await page.goto(LIST_PATH);
     await page.waitForLoadState('networkidle').catch(() => {});
 
@@ -294,7 +393,21 @@ test.describe('manage/complaints', () => {
     }
   });
 
-  test('7. department filter narrows visible rows', async ({ page }) => {
+  test('7. department filter narrows visible rows', {
+    annotation: {
+      type: 'description',
+      description: `Validates the Department filter on the complaints list: each visible row after filtering must reference the picked department (text match in row content). Picks the first available option to avoid hardcoding tenant-specific dept codes.
+
+Steps:
+1. Navigate to /complaints.
+2. Locate Department filter; test.skip if absent.
+3. Click filter; capture first option's text; click it; wait networkidle.
+4. Read row count; if <=1 return early (filter validly returned 0 rows).
+5. Sample up to 5 rows; lower-case row text and assert it contains the option's lowercased text.
+
+Loose match via text inclusion tolerates whatever the row actually renders (label, code, or both).`,
+    },
+    tag: ['@area:configurator-manage', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
     await page.goto(LIST_PATH);
     const filter = page.getByLabel(/^Department/i).first();
     if (!(await filter.isVisible().catch(() => false))) {
@@ -325,7 +438,23 @@ test.describe('manage/complaints', () => {
     }
   });
 
-  test('8. show page renders address extras and a working geo link', async ({
+  test('8. show page renders address extras and a working geo link', {
+    annotation: {
+      type: 'description',
+      description: `Confirms the complaint Show page renders the address-extras rows (Landmark, Street, Pincode) AND that the geo-link opens a maps URL containing the actual lat/lng. Skips if no complaint has non-zero coords.
+
+Steps:
+1. pgrSearch limit 50; iterate looking for a complaint with non-zero geoLocation.
+2. test.skip if none.
+3. Navigate to /complaints/<id>/show.
+4. For each label in ['Landmark','Street','Pincode'], assert the LABEL is visible (values may be blank).
+5. Set up a popup waitForEvent; click the Map/Geo/Location link.
+6. Read popupUrl; assert it matches /google.com\\/maps/.
+7. Assert popupUrl contains the target's lat AND lng.
+
+If the geo link doesn't pop a new tab or doesn't carry the coords, an admin can't verify a complaint's location — the show page is the only place this surfaces.`,
+    },
+    tag: ['@area:configurator-manage', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }) => {
     // Find a complaint that has non-zero geo coords; otherwise skip.
@@ -369,7 +498,20 @@ test.describe('manage/complaints', () => {
     expect(popupUrl).toContain(String(target!.lng));
   });
 
-  test('9. mobile-only citizen heuristic shows suffix on Show page', async ({
+  test('9. mobile-only citizen heuristic shows suffix on Show page', {
+    annotation: {
+      type: 'description',
+      description: `When a citizen registered with no name (the citizen.name field equals the mobileNumber), the complaint Show page must display a "mobile-only account" suffix — visual signal to the admin that the citizen identity is unconfirmed.
+
+Steps:
+1. pgrSearch limit 100; iterate looking for a complaint where citizen.name === citizen.mobileNumber.
+2. test.skip if none.
+3. Navigate to /complaints/<id>/show.
+4. Assert text /mobile-only account/i is visible within 10s.
+
+Catches a regression in the citizen-display heuristic — without this badge admins might mistake a mobile string for an actual name.`,
+    },
+    tag: ['@area:configurator-manage', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }) => {
     const auth = loadAuth();
@@ -393,7 +535,23 @@ test.describe('manage/complaints', () => {
     ).toBeVisible({ timeout: 10_000 });
   });
 
-  test('10. real pagination — offset-based _search fires with page 2 nav, not client-slice of first 100', async ({
+  test('10. real pagination — offset-based _search fires with page 2 nav, not client-slice of first 100', {
+    annotation: {
+      type: 'description',
+      description: `Pins the server-side pagination contract: clicking Next must trigger a fresh _search XHR with offset > 0, NOT a client-side slice of an already-loaded result set. Critical for tenants with thousands of complaints.
+
+Steps:
+1. pgrCount(auth, CITY_TENANT); test.skip if total < 26 (need 2+ pages at perPage=25).
+2. Navigate to /complaints; wait networkidle.
+3. Attach a request listener capturing _search URLs into searches[].
+4. Locate Next button; test.skip if not visible.
+5. Click Next; wait networkidle.
+6. Assert searches.length > 0 (paging triggered a new XHR).
+7. Read offset from the last URL's query params; assert > 0 (real server-side paging).
+
+Test data: ke.nairobi has 55 complaints (probed 2026-04-23). The 26 minimum keeps the test relevant on smaller seeds.`,
+    },
+    tag: ['@area:configurator-manage', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }) => {
     const auth = loadAuth();
@@ -427,7 +585,21 @@ test.describe('manage/complaints', () => {
     expect(offset, 'offset on second page should be > 0').toBeGreaterThan(0);
   });
 
-  test('11. department column renders via EntityLink — not a raw code', async ({
+  test('11. department column renders via EntityLink — not a raw code', {
+    annotation: {
+      type: 'description',
+      description: `Confirms the Department column in the complaints list renders an EntityLink (anchor pointing at the dept show page), not a raw text code. Catches a regression where the cross-reference is dropped and admins lose the click-through to dept details.
+
+Steps:
+1. Navigate to /complaints; wait networkidle.
+2. pgrSearch; iterate looking for a complaint with additionalDetail.department populated.
+3. test.skip if none.
+4. Build a lenient locator: look for an <a> linking to /manage/departments/.
+5. Assert at least one such link is visible within 15s.
+
+Loose check — only requires that SOME row's department renders as a link, not that every row's link points at the seeded dept code (that would require deeper matching).`,
+    },
+    tag: ['@area:configurator-manage', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }) => {
     await page.goto(LIST_PATH);
@@ -455,7 +627,25 @@ test.describe('manage/complaints', () => {
     await expect(anyDeptLink.or(link)).toBeVisible({ timeout: 15_000 });
   });
 
-  test('12. edit saves description + workflow in a single _update round-trip', async ({
+  test('12. edit saves description + workflow in a single _update round-trip', {
+    annotation: {
+      type: 'description',
+      description: `Catches the regression where the edit form sent the workflow action and the merged service object as separate updates, silently dropping description/source/address changes. Post-fix dataProvider.ts:617 merges both into ONE POST /request/_update — this test confirms exactly one _update XHR fires with the new description in service.description.
+
+Steps:
+1. pickWorkableComplaint(); test.skip if none.
+2. Navigate to /complaints/<id>/edit.
+3. Fill Description with a unique value containing 'PW single-roundtrip'.
+4. DON'T change the workflow action.
+5. Attach a request listener capturing _update POST bodies into updates[].
+6. Click Save; wait networkidle.
+7. Assert updates.length === 1 (exactly ONE update — not two separate POSTs).
+8. Parse the body; assert service.description matches the new value.
+9. pgrSearch for the complaint; assert persisted description matches.
+
+Both client-side (single XHR count) and server-side (persistence) checks — together they guarantee the merge happened correctly.`,
+    },
+    tag: ['@area:configurator-manage', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }) => {
     // Guards the regression where description / source / address edits
@@ -501,7 +691,21 @@ test.describe('manage/complaints', () => {
     expect(persisted).toBe(newDesc);
   });
 
-  test('13. PENDINGFORASSIGNMENT filter returns the expected queue size', async () => {
+  test('13. PENDINGFORASSIGNMENT filter returns the expected queue size', {
+    annotation: {
+      type: 'description',
+      description: `API-level coherence check: pgrCount and pgrSearch must agree on the PENDINGFORASSIGNMENT queue size. Doesn't pin a hard count (seed data drifts) — only that count >= 0, search returns <= count, and search respects the page size limit.
+
+Steps:
+1. pgrCount(auth, CITY_TENANT, { status: 'PENDINGFORASSIGNMENT' }).
+2. pgrSearch(auth, CITY_TENANT, { status: 'PENDINGFORASSIGNMENT', limit: 50 }).
+3. Assert count >= 0.
+4. Assert wrappers.length <= count.
+5. Assert wrappers.length <= 50 (page size respected).
+
+Probed 2026-04-23: 11 PENDINGFORASSIGNMENT on ke.nairobi. Hardcoding 11 would drift; this test validates the contract instead.`,
+    },
+    tag: ['@area:configurator-manage', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async () => {
     // Probed 2026-04-23: 11 PENDINGFORASSIGNMENT on ke.nairobi. Rather
     // than hard-code 11 (seed data drifts), we assert the server responds
     // coherently — both _count and _search agree on a non-negative

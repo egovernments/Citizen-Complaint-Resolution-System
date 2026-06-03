@@ -20,7 +20,22 @@ test.describe('hardcoding smoke', () => {
   // authed session that auth.setup.ts wrote — they share the chromium
   // project's storageState by default.
 
-  test('1. login tenant placeholder uses configured tenant, not "pg"', async ({
+  test('1. login tenant placeholder uses configured tenant, not "pg"', {
+    annotation: {
+      type: 'description',
+      description: `Smoke check that the configurator login form's tenant placeholder reflects the configured TENANT_CODE (default 'ke') and is NOT the legacy 'pg' (Punjab) value. Catches a regression where someone copy-pastes example markup with hardcoded 'pg' back into the login template.
+
+Steps:
+1. Open a fresh browser context with no storageState (need the unauthenticated form).
+2. Navigate to /configurator/login.
+3. Locate input#tenantCode; assert visible.
+4. Read placeholder attribute.
+5. Assert placeholder === TENANT_CODE (default 'ke').
+6. Assert placeholder.toLowerCase() !== 'pg' — belt-and-braces in case the placeholder is empty.
+
+Pairs with the other three hardcoding tests in this file — together they cover login UI + employee create + complaint create + localization endpoint as the four most common 'pg' leak vectors.`,
+    },
+    tag: ['@area:configurator-manage', '@kind:smoke', '@layer:ui', '@persona:admin'] }, async ({
     browser,
   }) => {
     // Fresh context with no storageState so we hit the login form.
@@ -42,7 +57,20 @@ test.describe('hardcoding smoke', () => {
     }
   });
 
-  test('2. employee create payload contains no literal "pg"', async ({
+  test('2. employee create payload contains no literal "pg"', {
+    annotation: {
+      type: 'description',
+      description: `Network-intercept smoke check: any HRMS employee create or user create XHR fired by the form must NOT contain a literal "pg" value (e.g. "tenantId":"pg"). The containsLiteralPg helper avoids false positives on substrings like "pgr" or "pageSize" by requiring "pg" to appear as a JSON value (after a colon or inside a comma-separated array).
+
+Steps:
+1. Attach a request listener; collect any URL matching /egov-hrms/employees/_create or /user/users/_createnovalidate where the body contains literal "pg".
+2. Navigate to /configurator/manage/employees/create.
+3. Wait for networkidle (settles ambient prefetches).
+4. Assert offending === [].
+
+Doesn't fill+submit — that would create a real employee. Catches only ambient/prefetch leaks, which is enough; deeper form-submission probes are in the cleanup-bearing tests.`,
+    },
+    tag: ['@area:configurator-manage', '@kind:smoke', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }) => {
     const offending: Array<{ url: string; body: string }> = [];
@@ -77,7 +105,20 @@ test.describe('hardcoding smoke', () => {
     ).toEqual([]);
   });
 
-  test('3. complaint create payload contains no literal "pg"', async ({
+  test('3. complaint create payload contains no literal "pg"', {
+    annotation: {
+      type: 'description',
+      description: `Sibling of test 2 for the complaint create surface. Intercepts /pgr-services/v2/request/_create XHRs on the configurator's complaint create page and fails if any body carries a literal "pg" value.
+
+Steps:
+1. Attach a request listener; collect URLs matching /pgr-services/v2/request/_create where body contains literal "pg".
+2. Navigate to /configurator/manage/complaints/create.
+3. Wait for networkidle.
+4. Assert offending === [].
+
+Same containsLiteralPg helper as test 2 — only matches "pg" as a JSON value, not as a substring.`,
+    },
+    tag: ['@area:configurator-manage', '@kind:smoke', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }) => {
     const offending: Array<{ url: string; body: string }> = [];
@@ -101,7 +142,20 @@ test.describe('hardcoding smoke', () => {
     ).toEqual([]);
   });
 
-  test('4. localization endpoint never uses tenantId=pg', async ({ page }) => {
+  test('4. localization endpoint never uses tenantId=pg', {
+    annotation: {
+      type: 'description',
+      description: `Network-intercept check across multiple high-traffic configurator pages: every /localization/messages/v1/_search XHR must NOT carry tenantId=pg in either the query string or the JSON body. Localization fetches happen on virtually every page load, so a leaked default would surface widely.
+
+Steps:
+1. Attach a request listener on /localization/messages/v1/_search.
+2. For each request, check both URL.searchParams.get('tenantId') and the JSON body for tenantId=pg; record offenders.
+3. Walk three pages to warm the localization client: /configurator/manage, /configurator/manage/departments, /configurator/manage/complaints (waiting for networkidle each).
+4. Assert offending === [].
+
+Multi-page walk catches the case where localization defaults to 'pg' only in certain code paths (e.g. dropdowns vs. labels).`,
+    },
+    tag: ['@area:configurator-manage', '@kind:smoke', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
     const offending: string[] = [];
 
     page.on('request', (req: Request) => {

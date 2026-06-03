@@ -167,85 +167,83 @@
     - name: "Docker host install + config (Linux/Debian targets only)"
       when: ansible_system != "Darwin"
       block:
-        # ==================== Docker Installation ====================
-        - name: Install Docker prerequisites
-          apt:
-            name: [ca-certificates, curl, gnupg]
-            state: present
-            update_cache: yes
+      # ==================== Docker Installation ====================
+      - name: Install Docker prerequisites
+        apt:
+          name: [ca-certificates, curl, gnupg]
+          state: present
+          update_cache: yes
 
-        - name: Add Docker GPG key
-          shell: |
-            install -m 0755 -d /etc/apt/keyrings
-            curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-            chmod a+r /etc/apt/keyrings/docker.asc
-          args:
-            creates: /etc/apt/keyrings/docker.asc
+      - name: Add Docker GPG key
+        shell: |
+          install -m 0755 -d /etc/apt/keyrings
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+          chmod a+r /etc/apt/keyrings/docker.asc
+        args:
+          creates: /etc/apt/keyrings/docker.asc
 
-        - name: Add Docker repository
-          shell: |
-            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
-          args:
-            creates: /etc/apt/sources.list.d/docker.list
+      - name: Add Docker repository
+        shell: |
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
+        args:
+          creates: /etc/apt/sources.list.d/docker.list
 
-        # Ubuntu 24.04 ships `docker.io` + `docker-compose-v2` from the
-        # archive. Both conflict with Docker's upstream packages — they own
-        # the same `/usr/libexec/docker/cli-plugins/docker-compose` file —
-        # so dpkg refuses to install the upstream packages until the archive
-        # ones are removed. Idempotent: no-op if they're not installed.
-        - name: Remove conflicting Ubuntu-archive Docker packages
-          apt:
-            name:
-              - docker.io
-              - docker-doc
-              - docker-compose
-              - docker-compose-v2
-              - podman-docker
-              - containerd
-              - runc
-            state: absent
-            purge: yes
+      # Ubuntu 24.04 ships `docker.io` + `docker-compose-v2` from the
+      # archive. Both conflict with Docker's upstream packages — they own
+      # the same `/usr/libexec/docker/cli-plugins/docker-compose` file —
+      # so dpkg refuses to install the upstream packages until the archive
+      # ones are removed. Idempotent: no-op if they're not installed.
+      - name: Remove conflicting Ubuntu-archive Docker packages
+        apt:
+          name:
+            - docker.io
+            - docker-doc
+            - docker-compose
+            - docker-compose-v2
+            - podman-docker
+            - containerd
+            - runc
+          state: absent
+          purge: yes
 
-        - name: Install Docker Engine
-          apt:
-            name:
-              - docker-ce
-              - docker-ce-cli
-              - containerd.io
-              - docker-buildx-plugin
-              - docker-compose-plugin
-            state: present
-            update_cache: yes
+      - name: Install Docker Engine
+        apt:
+          name:
+            - docker-ce
+            - docker-ce-cli
+            - containerd.io
+            - docker-buildx-plugin
+            - docker-compose-plugin
+          state: present
+          update_cache: yes
 
-        # apt installs docker.service `disabled` on Ubuntu 24.04 — enable +
-        # start it explicitly so subsequent tasks can talk to the daemon.
-        - name: Ensure docker daemon is enabled + running
-          service:
-            name: docker
-            state: started
-            enabled: yes
+      # apt installs docker.service `disabled` on Ubuntu 24.04 — enable +
+      # start it explicitly so subsequent tasks can talk to the daemon.
+      - name: Ensure docker daemon is enabled + running
+        service:
+          name: docker
+          state: started
+          enabled: yes
 
-        # ==================== Docker Configuration ====================
-        # Insecure registries (plain HTTP + no TLS verification). Defaults in
-        # group_vars/digit.yml to [docker_registry] to preserve the historical
-        # Hetzner-VPC behaviour (10.0.0.4:5000 over plain HTTP). For public
-        # registries (ghcr.io, docker.io) override `insecure_registries: []` in
-        # host_vars — Docker REJECTS path-bearing or TLS hostnames here and
-        # refuses to start, which takes the whole stack down. Skipping the
-        # write entirely when the list is empty leaves daemon.json untouched.
-        - name: Configure Docker insecure-registries
-          copy:
-            dest: /etc/docker/daemon.json
-            content: "{{ {'insecure-registries': insecure_registries} | to_nice_json }}\n"
-            mode: '0644'
-          register: daemon_json
-          when: insecure_registries | default([]) | length > 0
+      # ==================== Docker Configuration ====================
+      # The Hetzner VPC registry at {{ docker_registry }} (egov-ci) hosts every
+      # custom-built DIGIT image (digit-mcp, sb35-rebuilt egov-* services)
+      # over plain HTTP. Without this entry Docker refuses to pull with
+      # `http: server gave HTTP response to HTTPS client`. Restart the
+      # daemon when the file changes so the new config takes effect.
+      - name: Configure Docker insecure-registries for VPC registry
+        copy:
+          dest: /etc/docker/daemon.json
+          content: "{{ {'insecure-registries': insecure_registries} | to_nice_json }}\n"
+          mode: '0644'
+        register: daemon_json
+        when: insecure_registries | default([]) | length > 0
 
-        - name: Restart docker if daemon.json changed
-          service:
-            name: docker
-            state: restarted
-          when: daemon_json is defined and daemon_json.changed | default(false)
+      - name: Restart docker if daemon.json changed
+        service:
+          name: docker
+          state: restarted
+        when: daemon_json is defined and daemon_json.changed | default(false)
 
     # check_mode: false forces this to run even under `--check`, so the
     # version-compare task below has a real value to test against.
@@ -1351,6 +1349,124 @@
         - nginx_features.configurator | default(false)
         - configurator_build is defined
 
+    # ---- digit-integration-tests dashboards (opt-in: enable_integration_tests) ----
+    # Builds the react-admin catalog dashboard from the VENDORED in-tree source
+    # (tests/integration-tests/) and serves both the vanilla + react-admin
+    # dashboards as static files under /var/www. catalog.json + runs/ are
+    # produced out-of-band by a test runner (`make publish`), NOT this deploy —
+    # a placeholder catalog is seeded only if none exists yet so a fresh box
+    # renders. The nginx location blocks live in templates/nginx-site.conf.j2
+    # behind `nginx_features.integration_tests`; on hosts with
+    # nginx_preserve_vhost (e.g. Bomet) the template is NOT rendered, so wire
+    # the blocks from tests/integration-tests/deploy/nginx-integration-tests.conf
+    # by hand there.
+    - name: "integration-tests — install Node 20 if missing (Vite build needs it)"
+      ansible.builtin.apt:
+        name: nodejs
+        state: present
+      when:
+        - enable_integration_tests | default(false)
+        - ansible_system != "Darwin"
+
+    - name: "integration-tests — build react-admin dashboard (vendored in-tree source)"
+      ansible.builtin.command: >-
+        bash {{ playbook_dir }}/files/integration-tests-build.sh
+        "{{ integration_tests_src | default(playbook_dir ~ '/../../tests/integration-tests') }}"
+        "{{ integration_tests_dashboard_base | default('/integration-tests-v2/') }}"
+      register: it_build
+      changed_when: true
+      when: enable_integration_tests | default(false)
+
+    - name: "integration-tests — resolve vendored source dir"
+      ansible.builtin.set_fact:
+        integration_tests_dir: "{{ it_build.stdout_lines | last }}"
+      when:
+        - enable_integration_tests | default(false)
+        - it_build is defined
+        - it_build.stdout_lines | default([]) | length > 0
+
+    - name: "integration-tests — ensure web roots exist"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - /var/www/integration-tests
+        - /var/www/integration-tests-v2
+      when:
+        - enable_integration_tests | default(false)
+        - integration_tests_dir is defined
+
+    # rsync on the target; exclude the runner-owned data so re-deploying the
+    # static dashboard never clobbers a published run.
+    - name: "integration-tests — sync vanilla dashboard → /var/www/integration-tests/"
+      ansible.builtin.command: >-
+        rsync -a --no-perms --no-times --no-owner --no-group
+        --exclude=catalog.json --exclude=history.json --exclude=runs
+        "{{ integration_tests_dir }}/dashboard/" /var/www/integration-tests/
+      changed_when: true
+      when:
+        - enable_integration_tests | default(false)
+        - integration_tests_dir is defined
+
+    - name: "integration-tests — sync react-admin dist → /var/www/integration-tests-v2/"
+      ansible.builtin.command: >-
+        rsync -a --delete --no-perms --no-times --no-owner --no-group
+        "{{ integration_tests_dir }}/dashboard-react-admin/dist/" /var/www/integration-tests-v2/
+      changed_when: true
+      when:
+        - enable_integration_tests | default(false)
+        - integration_tests_dir is defined
+
+    - name: "integration-tests — seed placeholder catalog/history (only if absent; a real publish overwrites)"
+      ansible.builtin.copy:
+        dest: "/var/www/integration-tests/{{ item.name }}"
+        content: "{{ item.content }}"
+        force: false
+        mode: '0644'
+      loop:
+        - { name: 'catalog.json', content: '{"tests":[],"runs":[]}' }
+        - { name: 'history.json', content: '{"perTest":{},"runs":[]}' }
+      when:
+        - enable_integration_tests | default(false)
+        - integration_tests_dir is defined
+
+    - name: "integration-tests — point v2 dashboard at the shared catalog/runs (symlinks)"
+      ansible.builtin.file:
+        src: "../integration-tests/{{ item }}"
+        dest: "/var/www/integration-tests-v2/{{ item }}"
+        state: link
+        force: true
+      loop: [ 'catalog.json', 'history.json', 'runs' ]
+      when:
+        - enable_integration_tests | default(false)
+        - integration_tests_dir is defined
+
+    - name: "integration-tests — ensure htpasswd tooling for basic-auth"
+      ansible.builtin.apt:
+        name: apache2-utils
+        state: present
+      when:
+        - enable_integration_tests | default(false)
+        - integration_tests_basic_auth_password is defined
+        - ansible_system != "Darwin"
+
+    # Idempotent via `creates`: rotate the password by deleting the file and
+    # re-running. Password comes from vault/host_vars; the task skips entirely
+    # if unset (dashboards would then 401 with no valid user — set it).
+    - name: "integration-tests — basic-auth user in /etc/nginx/.htpasswd-tests"
+      ansible.builtin.command: >-
+        htpasswd -bBc /etc/nginx/.htpasswd-tests
+        "{{ integration_tests_basic_auth_user | default('digit-tests') }}"
+        "{{ integration_tests_basic_auth_password }}"
+      args:
+        creates: /etc/nginx/.htpasswd-tests
+      no_log: true
+      when:
+        - enable_integration_tests | default(false)
+        - integration_tests_basic_auth_password is defined
+        - ansible_system != "Darwin"
+
     # Host nginx (Linux/Debian) — apt nginx + /etc/nginx site. Skipped on
     # macOS, where nginx runs as a container instead (next block).
     - name: "Host nginx — Linux/Debian only"
@@ -1776,10 +1892,27 @@
         replace: '\1STATE_LEVEL_TENANT_ID: {{ state_root }}'
       when: state_root != 'pg'
 
-    - name: "post-bootstrap — restart services to pick up new STATE_LEVEL_TENANT_ID"
+    - name: "post-bootstrap — restart services (except egov-hrms) to pick up new STATE_LEVEL_TENANT_ID"
       ansible.builtin.shell: >-
         docker compose {{ compose_files }}
-        restart egov-user egov-workflow-v2 egov-enc-service pgr-services egov-hrms
+        restart egov-user egov-workflow-v2 egov-enc-service pgr-services
+      args:
+        chdir: "{{ digit_dir }}"
+      when: state_root != 'pg'
+
+    - name: "post-bootstrap — wait for egov-user healthy before restarting egov-hrms"
+      ansible.builtin.shell: >-
+        curl -sf http://127.0.0.1:{{ upstream_kong_port }}/user/health -o /dev/null
+      register: user_ready
+      retries: 18
+      delay: 10
+      until: user_ready.rc == 0
+      changed_when: false
+      when: state_root != 'pg'
+
+    - name: "post-bootstrap — restart egov-hrms after egov-user is healthy"
+      ansible.builtin.shell: >-
+        docker compose {{ compose_files }} restart egov-hrms
       args:
         chdir: "{{ digit_dir }}"
       changed_when: true

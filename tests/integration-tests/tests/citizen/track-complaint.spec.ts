@@ -118,7 +118,20 @@ test.describe.serial('Citizen track-complaint', () => {
     console.log(`Seeded complaint ${serviceRequestId} for ${CITIZEN_PHONE}`);
   });
 
-  test('My Complaints list shows the seeded complaint with OPEN badge', async ({ page }) => {
+  test('My Complaints list shows the seeded complaint with OPEN badge', {
+    annotation: {
+      type: 'description',
+      description: `Story 4.1 contract for /citizen/pgr/complaints: a freshly-filed complaint (still in PENDINGFORASSIGNMENT) must appear in the citizen's My Complaints list with the OPEN badge and the localized "Pending for assignment" status text.
+
+Steps:
+1. setTimeout 120s; citizenOtpLogin.
+2. Navigate to /digit-ui/citizen/pgr/complaints, wait 5s.
+3. Assert body contains "My Complaints", the seeded serviceRequestId, /OPEN/, and /Pending for assignment/i.
+4. Assert body does NOT contain "Something went wrong".
+
+beforeAll is API-only — registers a fresh citizen and files a complaint via PGR _create — so the test isn't tied to whatever's currently seeded on naipepea.`,
+    },
+    tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
     test.setTimeout(120_000);
     await citizenOtpLogin(page, CITIZEN_PHONE);
     await page.goto(`${BASE_URL}/digit-ui/citizen/pgr/complaints`, {
@@ -135,7 +148,20 @@ test.describe.serial('Citizen track-complaint', () => {
     await expect(body).not.toContainText('Something went wrong');
   });
 
-  test('Detail page renders Summary / Details / Map / Timeline sections', async ({ page }) => {
+  test('Detail page renders Summary / Details / Map / Timeline sections', {
+    annotation: {
+      type: 'description',
+      description: `Story 5.1 / 5.2 contract for the complaint detail page. Asserts the four canonical sections are visible — Complaint Summary, Complaint Details, Complaint Timeline, plus the Application Status row and the SR id itself.
+
+Steps:
+1. setTimeout 120s; citizenOtpLogin.
+2. Navigate to /digit-ui/citizen/pgr/complaints/{seeded id}, wait 5s.
+3. Assert body contains "Complaint Summary", "Complaint Details", "Complaint Timeline", the SR id, and "Application Status".
+4. Assert body does NOT contain "Something went wrong".
+
+The Map widget + "Open in Maps" only render when geoLocation has non-zero coords. This spec API-seeds with {0,0} so the map isn't asserted here — wizard.spec.ts walks the UI and drops a real pin so the map renders there.`,
+    },
+    tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
     test.setTimeout(120_000);
     await citizenOtpLogin(page, CITIZEN_PHONE);
     await page.goto(
@@ -160,7 +186,22 @@ test.describe.serial('Citizen track-complaint', () => {
     await expect(body).not.toContainText('Something went wrong');
   });
 
-  test('Detail URL uses /complaints/:id (PLURAL) — Routes.js export diverges', async ({ page }) => {
+  test('Detail URL uses /complaints/:id (PLURAL) — Routes.js export diverges', {
+    annotation: {
+      type: 'description',
+      description: `Documents the route divergence flagged in citizen-flows.md Routes table. The detail URL is /citizen/pgr/complaints/:id (PLURAL), NOT /complaint/details/:id as Routes.js exports. The card click is implemented via an onClick on a div (no <a> href to inspect), so the test navigates to the plural URL directly and asserts the page serves correctly.
+
+Steps:
+1. setTimeout 120s; citizenOtpLogin and visit /citizen/pgr/complaints (warm cache).
+2. Navigate directly to /digit-ui/citizen/pgr/complaints/{seeded id}; wait 4s.
+3. Assert page.url() matches /\\/digit-ui\\/citizen\\/pgr\\/complaints\\/NCCG-PGR-\\d{4}-\\d{2}-\\d{2}-\\d+/.
+4. Assert page.url() does NOT contain '/complaint/details/' (no auto-redirect to the singular form).
+5. Assert body contains "Complaint Summary".
+6. Assert body does NOT contain "Something went wrong".
+
+If the SPA ever redirects plural → singular (or 404s), this test catches the change.`,
+    },
+    tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
     test.setTimeout(120_000);
     await citizenOtpLogin(page, CITIZEN_PHONE);
     await page.goto(`${BASE_URL}/digit-ui/citizen/pgr/complaints`, {

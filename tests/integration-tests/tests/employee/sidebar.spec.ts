@@ -22,7 +22,20 @@ import { test, expect } from '@playwright/test';
 import { BASE_URL } from '../utils/env';
 
 test.describe('employee sidebar — IM filter #446', () => {
-  test('IM options hidden; HRMS + Complaint Registry visible', async ({ page }) => {
+  test('IM options hidden; HRMS + Complaint Registry visible', {
+    annotation: {
+      type: 'description',
+      description: `Catches CCRS#446: the employee sidebar used to show every module the user had access to including IM (Incident Management) ticketing entries — confusing noise on a PGR-focused Kenya deployment. PR #29 + globalConfig EMPLOYEE_MODULE_DENYLIST=["IM"] filters them out. This test asserts both the negative (IM gone) and positive (HRMS + Complaints still visible) outcomes.
+
+Steps:
+1. Navigate to /digit-ui/employee, wait for domcontentloaded then networkidle (modules render after a tenant fetch).
+2. Read body innerText and assert it does not match /Something went wrong/i.
+3. Negative: getByText(/new ticket|search ticket/i) — assert count === 0.
+4. Positive: assert HRMS and any element matching /complaint/i are both visible (within 10s each).
+
+Uses the ADMIN storageState — ADMIN has every role, so before the fix would have seen IM. The /complaint/i regex stays loose because the registry tile's exact label varies by localization.`,
+    },
+    tag: ['@area:pgr', '@ccrs:446', '@kind:regression', '@layer:ui', '@persona:employee'] }, async ({ page }) => {
     await page.goto(`${BASE_URL}/digit-ui/employee`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,

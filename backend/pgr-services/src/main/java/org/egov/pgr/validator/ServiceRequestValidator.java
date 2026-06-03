@@ -33,14 +33,16 @@ public class ServiceRequestValidator {
 
     private ServiceRequestRepository serviceRequestRepository;
 
-    @Autowired
     private ObjectMapper objectMapper;
 
     @Autowired
-    public ServiceRequestValidator(PGRConfiguration config, PGRRepository repository, HRMSUtil hrmsUtil) {
+    public ServiceRequestValidator(PGRConfiguration config, PGRRepository repository, HRMSUtil hrmsUtil,
+                                   ServiceRequestRepository serviceRequestRepository, ObjectMapper objectMapper) {
         this.config = config;
         this.repository = repository;
         this.hrmsUtil = hrmsUtil;
+        this.serviceRequestRepository = serviceRequestRepository;
+        this.objectMapper = objectMapper;
     }
 
 
@@ -53,8 +55,8 @@ public class ServiceRequestValidator {
         Map<String,String> errorMap = new HashMap<>();
         validateUserData(request,errorMap);
         validateSource(request.getService().getSource());
-//        validateBoundary(request);
-//        validateMDMS(request, mdmsData);
+        validateBoundary(request);
+        validateMDMS(request, mdmsData);
         if(config.getIsValidateDeptEnabled()) validateDepartment(request, mdmsData);
         if(!errorMap.isEmpty())
             throw new CustomException(errorMap);
@@ -71,7 +73,7 @@ public class ServiceRequestValidator {
         String id = request.getService().getId();
         String tenantId = request.getService().getTenantId();
         validateSource(request.getService().getSource());
-//        validateMDMS(request, mdmsData);
+        validateMDMS(request, mdmsData);
         validateDepartment(request, mdmsData);
         validateReOpen(request);
         RequestSearchCriteria criteria = RequestSearchCriteria.builder().ids(Collections.singleton(id)).tenantId(tenantId).build();
@@ -318,6 +320,8 @@ public class ServiceRequestValidator {
             if (!found) {
                 throw new CustomException("INVALID_BOUNDARY_CODE", "Invalid locality code: " + localityCode);
             }
+        } catch (CustomException e) {
+            throw e;
         } catch (Exception e) {
             throw new CustomException("BOUNDARY_SERVICE_SEARCH_ERROR", "Error while fetching boundaries from Boundary Service : " + e.getMessage());
         }

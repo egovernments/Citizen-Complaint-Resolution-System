@@ -1,4 +1,5 @@
 import type { ToolRegistry } from './registry.js';
+import { registerBoundaryTools } from './boundary.js';
 import { registerDiscoverTools } from './discover-tools.js';
 import { registerMdmsTenantTools } from './mdms-tenant.js';
 import { registerValidatorTools } from './validators.js';
@@ -17,6 +18,7 @@ import { registerApiCatalogTools } from './api-catalog.js';
 import { registerSessionTools } from './sessions.js';
 
 export function registerAllTools(registry: ToolRegistry): void {
+  registerBoundaryTools(registry);
   registerDiscoverTools(registry);
   registerMdmsTenantTools(registry);
   registerValidatorTools(registry);

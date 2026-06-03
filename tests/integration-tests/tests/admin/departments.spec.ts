@@ -47,7 +47,24 @@ test.afterAll(async () => {
 });
 
 test.describe('manage/departments', () => {
-  test('1. list renders with header columns and filter narrows results', async ({
+  test('1. list renders with header columns and filter narrows results', {
+    annotation: {
+      type: 'description',
+      description: `Asserts /manage/departments renders with the four expected columns (Code, Name, Status, Description), has data, the search filter narrows the row count, and the Status filter switch (if present) doesn't crash. Multi-purpose smoke that exercises the major surface in one pass.
+
+Steps:
+1. Navigate to /configurator/manage/departments.
+2. Assert role=table is visible.
+3. For each header in ['Code','Name','Status','Description'], assert the matching role=columnheader is visible.
+4. Read initial row count; assert > 1.
+5. Type 'zzz_no_such_dept_string' in the search input; wait networkidle.
+6. Read filtered count; assert filtered <= initial.
+7. Clear search; wait networkidle.
+8. If Status filter exists, click it, pick Inactive option, wait networkidle, assert count >= 0.
+
+Filters should compose; the test resets search before testing status to keep them independent.`,
+    },
+    tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }) => {
     await page.goto(LIST_PATH);
@@ -97,7 +114,23 @@ test.describe('manage/departments', () => {
     }
   });
 
-  test('2. single create → edit → deactivate round-trip', async ({ page }, testInfo) => {
+  test('2. single create → edit → deactivate round-trip', {
+    annotation: {
+      type: 'description',
+      description: `Drives a full UI lifecycle on a Department record: create → show → edit description → deactivate (with DeactivationGuard banner check) → confirm row appears under the Inactive status filter. Catches regressions in any of the four CRUD-ish surfaces in one walk.
+
+Steps:
+1. Generate a unique code + name; track for cleanup.
+2. Create: navigate to /create; fill Name + Code (force PW_ value) + Description; click Create; wait for navigation back to LIST_PATH.
+3. Verify in list: search for code, click matching row.
+4. Show: assert text 'Created by Playwright' is visible.
+5. Edit: click Edit; fill Description with 'Edited by Playwright'; Save; assert new text is visible.
+6. Deactivate: click Edit again; uncheck Active; assert a deactivation banner matching /depend|in use|will affect/i is visible within 10s; click Save.
+7. Back at the list, if Status filter exists, switch to Inactive; search for code; assert the row is visible.
+
+Guard banner check is loose because exact wording depends on dependency type and may include 0-count designations.`,
+    },
+    tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }, testInfo) => {
     const code = testCode(testInfo, 'DEPT_RT');
     const name = `PW Roundtrip ${code}`;
     createdCodes.add(code);
@@ -162,7 +195,24 @@ test.describe('manage/departments', () => {
     }
   });
 
-  test('3. bulk import — happy path creates 5 rows', async ({ page }, testInfo) => {
+  test('3. bulk import — happy path creates 5 rows', {
+    annotation: {
+      type: 'description',
+      description: `Drives the Department bulk-import flow: build a 5-row xlsx, upload via the dropzone, verify "5 valid" preview, click Create, verify "5 created", then sanity-check via API that all 5 codes exist and are active.
+
+Steps:
+1. Generate 5 unique codes via testCodeIndexed; track all for cleanup.
+2. Navigate to /departments/bulk.
+3. Build xlsx via buildDepartmentXlsx (single 'Department' sheet, columns code/name/description).
+4. Upload via input[type="file"]; setInputFiles with the buffer + xlsx mime type.
+5. Wait for /5\\s*(valid|rows)/i within 30s.
+6. Click button matching /Create\\s+\\d+\\s+(department|row)s?/i.
+7. Wait for /5\\s*(created|success)/i within 60s.
+8. searchByCodes(codes) via API; assert all 5 returned with isActive !== false.
+
+Loose regex on "department|row" tolerates UI label changes between Create-N-departments and Create-N-rows variants.`,
+    },
+    tag: ['@area:configurator-manage', '@area:hrms', '@kind:happy-path', '@layer:ui', '@persona:admin'] }, async ({ page }, testInfo) => {
     const codes = Array.from({ length: 5 }, (_, i) =>
       testCodeIndexed(testInfo, 'DEPT_BULK', i + 1),
     );
@@ -213,7 +263,22 @@ test.describe('manage/departments', () => {
     for (const r of records) expect(r.isActive).not.toBe(false);
   });
 
-  test('4. bulk import — duplicate code rejected client-side', async ({
+  test('4. bulk import — duplicate code rejected client-side', {
+    annotation: {
+      type: 'description',
+      description: `Bulk-import edge case: when an xlsx contains a row whose code already exists on the tenant, the duplicate row is flagged as Error/Invalid and the Create button reflects the reduced valid count (e.g. "Create 2 departments" instead of 3). Confirms client-side dedup happens BEFORE the create batch is sent.
+
+Steps:
+1. Seed an existing department via mdmsCreate; track for cleanup.
+2. Generate 2 fresh codes; track for cleanup.
+3. Build xlsx with 1 dup row + 2 fresh rows.
+4. Navigate to /departments/bulk; upload.
+5. Assert /already\\s+exists|duplicate/i text is visible within 30s.
+6. Assert button matching /Create\\s+2\\s+(department|row)s?/i is visible (the dup is excluded from the count).
+
+Catches a regression where the dup detection fails and all 3 rows would be sent — half of which would fail server-side.`,
+    },
+    tag: ['@area:configurator-manage', '@area:hrms', '@kind:edge-case', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
     // First, seed an existing record via the API so we know its code is
@@ -259,7 +324,23 @@ test.describe('manage/departments', () => {
     ).toBeVisible();
   });
 
-  test('5a. Show page renders "Related" reverse references (complaint-types + employees)', async ({
+  test('5a. Show page renders "Related" reverse references (complaint-types + employees)', {
+    annotation: {
+      type: 'description',
+      description: `Asserts the Department Show page renders the "Related" section with both "Complaint Types" and "Employees" sub-lists. Both should render even when empty. Picks the first non-PW_ active department to probe — avoids depending on any specific seed code.
+
+Steps:
+1. mdmsSearch for active departments (limit 20).
+2. Pick the first record where isActive !== false AND uniqueIdentifier doesn't start with 'PW_'.
+3. test.skip if no such record.
+4. Navigate to /departments/<code>/show.
+5. Assert text /^Related$/i is visible.
+6. Assert text /Complaint Types/i is visible.
+7. Assert text /^Employees$/i is visible.
+
+Doesn't assert what's INSIDE the related lists — that depends on tenant content. Only that the section structure renders.`,
+    },
+    tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }) => {
     // Seeded `ke` tenant has DEPT_7 with employees + complaint-types
@@ -282,7 +363,24 @@ test.describe('manage/departments', () => {
     await expect(page.getByText(/^Employees$/i).first()).toBeVisible();
   });
 
-  test('5b. deactivation guard probes designation + employee APIs', async ({
+  test('5b. deactivation guard probes designation + employee APIs', {
+    annotation: {
+      type: 'description',
+      description: `Confirms the DeactivationGuard's two probes fire when an admin tries to deactivate a department: (1) it counts designations referencing the department (visible in the banner), and (2) it can reach HRMS to count employees. Seeds a designation linked to a fresh dept so the count is at least 1.
+
+Steps:
+1. Generate dept code + designation code; track dept for cleanup.
+2. mdmsCreate a fresh Department; mdmsCreate a Designation linked to it.
+3. Annotate the test with the seed designation code.
+4. Navigate to /departments/<deptCode>/show; click Edit; uncheck Active.
+5. Assert a banner matching /designation|depend|in use/i is visible within 10s.
+6. Click Cancel — don't actually persist deactivation.
+7. cleanupMdms the seeded designation inline (it's on a separate schema not handled by afterAll).
+8. Sanity: employeeSearch with limit 1 — assert response is an array (HRMS reachable).
+
+Tests both halves of the guard's data dependencies in one walk.`,
+    },
+    tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
     // Seed a department with a designation linked to it, so the guard's
@@ -330,7 +428,24 @@ test.describe('manage/departments', () => {
     expect(Array.isArray(employees)).toBe(true);
   });
 
-  test('5c. API update round-trip preserves auditDetails on a department', async ({}, testInfo) => {
+  test('5c. API update round-trip preserves auditDetails on a department', {
+    annotation: {
+      type: 'description',
+      description: `Pure-API check that mdmsUpdate preserves the auditDetails block: lastModifiedTime should advance to >= the original createdTime. Ensures the data provider doesn't strip auditDetails (which would break list ordering by recency, related-row recency badges, etc).
+
+Steps:
+1. Generate a unique code; track for cleanup.
+2. mdmsCreate a Department with description 'Initial description'.
+3. mdmsSearch for [code]; capture pre record.
+4. Assert pre.auditDetails is truthy.
+5. Dynamically import mdmsUpdate; mutate pre.data.description to 'Edited description via API'.
+6. mdmsUpdate(auth, pre, true); capture updated.
+7. Assert updated.data.description === 'Edited description via API'.
+8. If both lastModifiedTime and createdTime are present, assert lastModifiedTime >= createdTime.
+
+Pure-API — exercises the dataProvider logic the UI uses for save without going through the form.`,
+    },
+    tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({}, testInfo) => {
     const auth = loadAuth();
     const code = testCode(testInfo, 'DEPT_AUDIT');
     createdCodes.add(code);
@@ -364,7 +479,22 @@ test.describe('manage/departments', () => {
     }
   });
 
-  test('6. bulk export round-trip — downloaded xlsx parses', async ({
+  test('6. bulk export round-trip — downloaded xlsx parses', {
+    annotation: {
+      type: 'description',
+      description: `Confirms the Export button on the Departments list produces a valid xlsx whose first sheet has the import template's header columns (code, name, description). Closes the import/export round-trip — same xlsx shape on both sides.
+
+Steps:
+1. Navigate to /configurator/manage/departments.
+2. Set up a download promise; click Export button.
+3. Await download; get download.path(); assert truthy.
+4. Open the xlsx with ExcelJS; assert sheets[0] exists.
+5. Read first row; lowercase the strings; assert headers includes 'code', 'name', 'description'.
+6. Assert sheet.actualRowCount > 1 (at least header + one data row).
+
+If a future build changes the export format (e.g. drops 'description'), the import flow would silently break — this test catches that.`,
+    },
+    tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }) => {
     await page.goto(LIST_PATH);

@@ -26,7 +26,7 @@ import { Header, SubHeader } from '@/components/digit/Header';
 import { LabelFieldPair, CardLabel, Field } from '@/components/digit/LabelFieldPair';
 import { SubmitBar } from '@/components/digit/SubmitBar';
 import { Banner } from '@/components/digit/Banner';
-import { boundaryService, localizationService, ApiClientError } from '@/api';
+import { apiClient, boundaryService, localizationService, ApiClientError } from '@/api';
 import { parseExcelFile, parseBoundaryExcel } from '@/utils/excelParser';
 import { downloadBoundaryTemplate } from '@/utils/templateBuilder';
 import { parseGeoJsonSidecar, geometryForBoundary, type ParsedGeoJsonSidecar } from '@/utils/boundaryGeoJson';
@@ -295,6 +295,41 @@ export default function Phase2Page() {
         selectedHierarchy.hierarchyType,
         'en_IN'
       );
+
+      // Create level-label localization keys so DIGIT-UI renders "MUNICÍPIO" / "DISTRITO"
+      // instead of the raw key "maputo_hierarchy_type_MUNICÍPIO" in the complaint form.
+      await localizationService.uploadHierarchyLevelLocalizations(
+        boundaryTenant,
+        selectedHierarchy.hierarchyType,
+        selectedHierarchy.boundaryHierarchy,
+        'en_IN'
+      ).catch(e => console.warn('hierarchy-level localization failed (non-fatal)', e));
+
+      await localizationService.cacheBust().catch(e => console.warn('cache-bust failed', e));
+
+      // Clear ancestralmaterializedpath so boundary-service includeChildren=true
+      // doesn't combine two overlapping queries and return each node twice in the
+      // citizen create-complaint dropdown. Fire-and-forget: if the MCP REST shim
+      // isn't deployed, Phase 2 still completes and an operator can run
+      // fix_boundary_paths via the MCP tool manually.
+      try {
+        const { token } = apiClient.getAuth();
+        const ac = new AbortController();
+        const timer = setTimeout(() => ac.abort(), 10_000);
+        const res = await fetch(`${window.location.origin}/v1/tools/fix_boundary_paths`, {
+          method: 'POST',
+          signal: ac.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ tenant_id: boundaryTenant }),
+        });
+        clearTimeout(timer);
+        if (!res.ok) console.warn(`[Phase 2] boundary path fix returned ${res.status}`);
+      } catch (e) {
+        console.warn('[Phase 2] boundary path fix skipped (MCP not reachable):', e);
+      }
 
       addUndo('create_boundaries', `Created ${result.success.length} boundaries`);
       setStep('complete');
