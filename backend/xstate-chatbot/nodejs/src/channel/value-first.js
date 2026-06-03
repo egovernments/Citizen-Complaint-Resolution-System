@@ -48,10 +48,10 @@ class ValueFirstWhatsAppProvider {
         return reformattedMessage;
     }
 
-    async fileStoreAPICall(fileName,fileData){
+    async fileStoreAPICall(fileName,fileData,tenantId = null){
 
         var url = config.egovServices.egovServicesHost+config.egovServices.egovFilestoreServiceUploadEndpoint;
-        url = url+'&tenantId='+config.rootTenantId;
+        url = url+'&tenantId='+(tenantId || config.rootTenantId);
         var form = new FormData();
         form.append("file", fileData, {
             filename: fileName,
@@ -68,7 +68,7 @@ class ValueFirstWhatsAppProvider {
     }
     
 
-    async convertFromBase64AndStore(imageInBase64String){
+    async convertFromBase64AndStore(imageInBase64String, tenantId = null){
 
         if (!imageInBase64String || typeof imageInBase64String !== "string") {
             throw new Error("Invalid imageInBase64String: Value is missing or not a string");
@@ -90,7 +90,7 @@ class ValueFirstWhatsAppProvider {
         });*/
 
         try {
-            var filestoreId = await this.fileStoreAPICall(tempName, buff);
+            var filestoreId = await this.fileStoreAPICall(tempName, buff, tenantId);
             //console.log("FileStore ID:", filestoreId);
             return filestoreId;
         } catch (error) {
@@ -130,7 +130,7 @@ class ValueFirstWhatsAppProvider {
         }
     }
 
-    async getUserMessage(requestBody){
+    async getUserMessage(requestBody, tenantId = null){
 
         console.log("Received requestBody:", JSON.stringify(requestBody, null, 2));
 
@@ -164,7 +164,7 @@ class ValueFirstWhatsAppProvider {
                     console.error("Error: Base64 image string is missing in requestBody!");
                 }
                 // metadata = await this.getMetadataFromBase64(imageInBase64String);
-                input = await this.convertFromBase64AndStore(imageInBase64String);
+                input = await this.convertFromBase64AndStore(imageInBase64String, tenantId);
             }
             else if(type === 'unknown' || type === 'document')
                 input = ' ';
@@ -211,14 +211,14 @@ class ValueFirstWhatsAppProvider {
         return false;
     };
 
-    async getTransformedRequest(requestBody){
+    async getTransformedRequest(requestBody, tenantId = null){
         var missCall = await this.checkForMissedCallNotification(requestBody);
         let reformattedMessage = {};
 
         if(missCall)
             reformattedMessage= await this.getMissedCallValues(requestBody);
         else
-            reformattedMessage= await this.getUserMessage(requestBody);
+            reformattedMessage= await this.getUserMessage(requestBody, tenantId);
 
         return reformattedMessage;
     }
@@ -334,12 +334,23 @@ class ValueFirstWhatsAppProvider {
             }     
             else {
                 // TODO for non-textual messages
-                let fileStoreId;
-                if(message)
-                    fileStoreId = message;
-                console.log("getTransformedResponse type for non-textual ",type)
-                console.log("getTransformedResponse message for non-textual ",message)
-                var fileURL = await this.getFileForFileStoreId(fileStoreId);
+                let fileURL;
+                
+                // Check if message is already a direct URL (for location instructions, etc.)
+                if (message && (message.startsWith('http://') || message.startsWith('https://'))) {
+                    // This is already a URL, use it directly
+                    fileURL = message;
+                    console.log("ValueFirst - Using direct URL for image:", fileURL);
+                } else {
+                    // This is a filestore ID, fetch the URL from filestore
+                    let fileStoreId;
+                    if(message)
+                        fileStoreId = message;
+                    console.log("getTransformedResponse type for non-textual ",type)
+                    console.log("getTransformedResponse message for non-textual ",message)
+                    fileURL = await this.getFileForFileStoreId(fileStoreId);
+                }
+                
                 var uniqueImageMessageId = uuid();
                 messageBody = JSON.parse(imageMessageBody);
                 if(type === 'pdf'){
@@ -406,7 +417,7 @@ class ValueFirstWhatsAppProvider {
           }
     }    
     
-    async processMessageFromUser(req) {
+    async processMessageFromUser(req, providedTenantId = null) {
         let reformattedMessage = {}
         let requestBody = req.query;
 
@@ -419,7 +430,10 @@ class ValueFirstWhatsAppProvider {
         if(requestBody.buttonLabel && requestBody.buttonLabel == '$btnLabel')
             return null;
         
-        reformattedMessage = await this.getTransformedRequest(requestBody);
+        // Use provided tenant ID, or fall back to query parameter, or use default
+        let tenantId = providedTenantId || req.query.tenantId || config.rootTenantId;
+        
+        reformattedMessage = await this.getTransformedRequest(requestBody, tenantId);
         return reformattedMessage;
 
     }

@@ -72,18 +72,22 @@ const pgr =  {
               states: {
                 question: {
                   invoke: {
-                    src: (context) => pgrService.fetchFrequentComplaints(context.extraInfo.tenantId),
+                    src: (context) => {
+                      return pgrService.fetchFrequentComplaints(context.extraInfo.tenantId, context.user);
+                    },
                     id: 'fetchFrequentComplaints',
                     onDone: {
                       actions: assign((context, event) => {
                         let preamble = dialog.get_message(messages.fileComplaint.complaintType.question.preamble, context.user.locale);
                         let {complaintTypes, messageBundle} = event.data;
-                        let {prompt, grammer} = dialog.constructListPromptAndGrammer(complaintTypes, messageBundle, context.user.locale, true);
+                        let {prompt, grammer} = dialog.constructListPromptAndGrammer(complaintTypes, messageBundle, context.user.locale, false);
                         context.grammer = grammer; // save the grammer in context to be used in next step
                         dialog.sendMessage(context, `${preamble}${prompt}`);
                       }) 
                     },
                     onError: {
+                      actions: (context, event) => {
+                      },
                       target: '#system_error'
                     }
                   },
@@ -101,7 +105,7 @@ const pgr =  {
                       cond: (context) => context.intention == dialog.INTENTION_MORE
                     },
                     {
-                      target: '#location',
+                      target: '#imageUpload',
                       cond: (context) => context.intention != dialog.INTENTION_UNKOWN,
                       actions: assign((context, event) => {
                         context.slots.pgr["complaint"]= context.intention;
@@ -260,10 +264,20 @@ const pgr =  {
             geoLocationSharingInfo: {
               id: 'geoLocationSharingInfo',
               onEntry: assign( (context, event) => {
-                var message = {
-                  type: 'image',
-                  output: config.pgrUseCase.informationImageFilestoreId
-                };
+                var message;
+                if (config.enableSandboxMode) {
+                  // In sandbox mode, use direct URL for location instructions
+                  message = {
+                    type: 'image',
+                    output: config.pgrUseCase.locationInstructionsUrl
+                  };
+                } else {
+                  // In production, use filestore ID
+                  message = {
+                    type: 'image',
+                    output: config.pgrUseCase.informationImageFilestoreId
+                  };
+                }
                 dialog.sendMessage(context, message);
               }),
               always: 'geoLocation'
@@ -306,17 +320,37 @@ const pgr =  {
                         })
                       },
                       {
+                        // In sandbox mode, if location was provided but city not detected, still proceed to locality selection
+                        target: '#locality',
+                        cond: (context, event) => !event.data && context.slots.pgr.geocode && config.enableSandboxMode,
+                        actions: assign((context, event) => {
+                          // Set city to organization code (tenant)
+                          context.slots.pgr.city = context.extraInfo.tenantId;
+                          // Location coordinates are already saved in context.slots.pgr.geocode
+                        })
+                      },
+                      {
+                        // In sandbox mode, skip city selection but go to locality selection
+                        target: '#locality',
+                        cond: (context, event) => !event.data && context.message ==='1' && config.enableSandboxMode,
+                        actions: assign((context, event) => {
+                          // Set city to organization code (tenant)
+                          context.slots.pgr.city = context.extraInfo.tenantId;
+                          // Don't set locality yet - let user select it
+                        })
+                      },
+                      {
                         target: '#city',
-                        cond: (context, event) => !event.data && context.message ==='1' && !config.pgrUseCase.geoSearch
+                        cond: (context, event) => !event.data && context.message ==='1' && !config.pgrUseCase.geoSearch && !config.enableSandboxMode
                         
                       },
                       {
                         target: '#nlpCitySearch',
-                        cond: (context, event) => !event.data && context.message ==='1' && config.pgrUseCase.geoSearch
+                        cond: (context, event) => !event.data && context.message ==='1' && config.pgrUseCase.geoSearch && !config.enableSandboxMode
                       },
                       {
                         target: '#geoLocation',
-                        cond: (context, event) => !event.data && context.message !='1',
+                        cond: (context, event) => !event.data && context.message !='1' && !context.slots.pgr.geocode,
                         actions: assign((context, event) => {
                           let message = dialog.get_message(dialog.global_messages.error.retry, context.user.locale);
                           dialog.sendMessage(context, message,false);
@@ -325,13 +359,23 @@ const pgr =  {
                     ],
                     onError: [
                       {
+                        // In sandbox mode, go to locality selection
+                        target: '#locality',
+                        cond: (context, event) => config.enableSandboxMode,
+                        actions: assign((context, event) => {
+                          // Set city to organization code (tenant)
+                          context.slots.pgr.city = context.extraInfo.tenantId;
+                          // Don't set locality yet - let user select it
+                        })
+                      },
+                      {
                         target: '#city',
-                        cond: (context, event) => !config.pgrUseCase.geoSearch,
+                        cond: (context, event) => !config.pgrUseCase.geoSearch && !config.enableSandboxMode,
 
                       },
                       {
                         target: '#nlpCitySearch',
-                        cond: (context, event) => config.pgrUseCase.geoSearch,
+                        cond: (context, event) => config.pgrUseCase.geoSearch && !config.enableSandboxMode,
                       }
 
                     ],
@@ -394,21 +438,31 @@ const pgr =  {
                       cond: (context, event) => context.message.isValid && context.slots.pgr["locationConfirmed"]  && context.slots.pgr["locality"]
                     },
                     {
+                      // In sandbox mode, go to locality selection if location not confirmed
                       target: '#locality',
-                      cond: (context, event) => context.message.isValid && !config.pgrUseCase.geoSearch && context.slots.pgr["locationConfirmed"] 
+                      cond: (context, event) => context.message.isValid && config.enableSandboxMode && !context.slots.pgr["locationConfirmed"],
+                      actions: assign((context, event) => {
+                        // Set city to organization code (tenant)
+                        context.slots.pgr.city = context.extraInfo.tenantId;
+                        // Don't set locality yet - let user select it
+                      })
+                    },
+                    {
+                      target: '#locality',
+                      cond: (context, event) => context.message.isValid && !config.pgrUseCase.geoSearch && context.slots.pgr["locationConfirmed"] && !config.enableSandboxMode
                     },
                     {
                       target: '#nlpLocalitySearch',
-                      cond: (context, event) => context.message.isValid && config.pgrUseCase.geoSearch && context.slots.pgr["locationConfirmed"] 
+                      cond: (context, event) => context.message.isValid && config.pgrUseCase.geoSearch && context.slots.pgr["locationConfirmed"] && !config.enableSandboxMode
                     },
                     {
                       target: '#city',
-                      cond: (context, event) => context.message.isValid && !config.pgrUseCase.geoSearch,
+                      cond: (context, event) => context.message.isValid && !config.pgrUseCase.geoSearch && !config.enableSandboxMode,
 
                     },
                     {
                       target: '#nlpCitySearch',
-                      cond: (context, event) => context.message.isValid && config.pgrUseCase.geoSearch,
+                      cond: (context, event) => context.message.isValid && config.pgrUseCase.geoSearch && !config.enableSandboxMode,
                     },
                     {
                       target: 'process',
@@ -444,7 +498,6 @@ const pgr =  {
                           return Promise.resolve(null);
                         }
                       } catch (error) {
-                        console.error("Error in PGR city search:", error);
                         return Promise.resolve(null);
                       }
                     },
@@ -557,14 +610,12 @@ const pgr =  {
                       try {
                         // Add null checking for event structure
                         if (event && event.message && event.message.input) {
-                          return pgrService.getLocality(event.message.input, context.slots.pgr["city"], context.user.locale, context.extraInfo.tenantId);
+                          return pgrService.getLocality(event.message.input, context.slots.pgr["city"], context.user.locale, context.extraInfo.tenantId, context.user);
                         } else {
                           // Handle case where event.message is undefined
-                          console.error("Invalid event structure for PGR locality search:", event);
                           return Promise.resolve(null);
                         }
                       } catch (error) {
-                        console.error("Error in PGR locality search:", error);
                         return Promise.resolve(null);
                       }
                     },
@@ -713,7 +764,7 @@ const pgr =  {
                 question: {
                   invoke: {
                     id: 'pgrFetchLocalities',
-                    src: (context) => pgrService.fetchLocalitiesAndWebpageLink(context.slots.pgr.city,context.extraInfo.whatsAppBusinessNumber),
+                    src: (context) => pgrService.fetchLocalitiesAndWebpageLink(context.slots.pgr.city, context.extraInfo.whatsAppBusinessNumber, context.user),
                     onDone: {
                       actions: assign((context, event) => {
                         let { localities, messageBundle } = event.data;
@@ -837,14 +888,12 @@ const pgr =  {
                 if (complaintDetails && complaintDetails.complaintNumber) {
                   message = message.replace('{{complaintNumber}}', complaintDetails.complaintNumber);
                 } else {
-                  console.warn('Complaint details or complaint number is missing');
                   message = message.replace('{{complaintNumber}}', 'N/A');
                 }
                 
                 if (complaintDetails && complaintDetails.complaintLink) {
                   message = message.replace('{{complaintLink}}', complaintDetails.complaintLink);
                 } else {
-                  console.warn('Complaint link is missing');
                   message = message.replace('{{complaintLink}}', '#');
                 }
                 
@@ -884,7 +933,7 @@ const pgr =  {
       id: 'trackComplaint',
       invoke: {
         id: 'fetchOpenComplaints',
-        src: (context) => pgrService.fetchOpenComplaints(context.user),
+        src: (context) => pgrService.fetchOpenComplaints(context.user, context.extraInfo),
         onDone: [
           {
             target: '#endstate',
@@ -899,6 +948,7 @@ const pgr =  {
                 );
                 complaintMessage = complaintMessage
                   .replace('{{complaintType}}', complaint.complaintType || 'Complaint')
+                  .replace('{{complaintNumber}}', complaint.complaintNumber || 'N/A')
                   .replace('{{filedDate}}', complaint.filedDate || 'N/A')
                   .replace('{{complaintStatus}}', complaint.complaintStatus || 'N/A');
                 message += `\n\n${complaintMessage}`;
@@ -1061,8 +1111,8 @@ let messages = {
         hi_IN: 'यहां आपकी हाल की शिकायतें हैं 👇'
       },
       complaintTemplate: {
-        en_IN: '*{{complaintType}}*\n\nFiled Date: {{filedDate}}\n\nComplaint Status: *{{complaintStatus}}*',
-        hi_IN: '*{{complaintType}}*\n\nदायर तिथि: {{filedDate}}\n\nशिकायत की स्थिति: *{{complaintStatus}}*'
+        en_IN: '*{{complaintType}}*\n\nComplaint No: {{complaintNumber}}\nFiled Date: {{filedDate}}\nStatus: *{{complaintStatus}}*',
+        hi_IN: '*{{complaintType}}*\n\nशिकायत संख्या: {{complaintNumber}}\nदायर तिथि: {{filedDate}}\nस्थिति: *{{complaintStatus}}*'
       },
       closingStatement: {
         en_IN: '\n\n👉 To go back to the main menu, type and send *egov*.',
