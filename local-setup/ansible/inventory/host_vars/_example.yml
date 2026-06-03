@@ -152,6 +152,20 @@ enable_digit_ui_v2: false
 digit_ui_v2_repo: "https://github.com/ChakshuGautam/Citizen-Complaint-Resolution-System.git"
 digit_ui_v2_branch: "feat/digit-ui-v2-keycloak"
 
+# digit-integration-tests dashboards. Builds the react-admin catalog dashboard
+# from the VENDORED in-tree source (tests/integration-tests/) and serves both
+# the vanilla (/integration-tests/) and react-admin (/integration-tests-v2/)
+# dashboards from /var/www. The deploy only SERVES them — catalog.json + runs/
+# are produced out-of-band by a test runner (`make publish` from
+# tests/integration-tests/). Pair with `nginx_features.integration_tests: true`
+# below (ignored on hosts with nginx_preserve_vhost — wire those by hand from
+# tests/integration-tests/deploy/nginx-integration-tests.conf).
+enable_integration_tests: false
+integration_tests_dashboard_base: "/integration-tests-v2/"
+integration_tests_basic_auth_user: "digit-tests"
+# Set in vault (never commit a real password). The htpasswd task skips if unset.
+# integration_tests_basic_auth_password: "{{ vault_integration_tests_password }}"
+
 # ────────── Optional services (opt-in via flags) ──────────
 
 # Bring up Elasticsearch + egov-indexer + inbox-v2. Heavy (~3GB RAM
@@ -274,6 +288,7 @@ nginx_features:
   mcp: true                  # /mcp + /v1/* — MCP HTTP transport + REST shim (requires enable_mcp: true)
   keycloak: false            # /auth/ + /token-exchange/ — requires enable_keycloak: true
   digit_ui_v2: false         # /citizen/ — Vite + React 19 SPA (requires enable_digit_ui_v2: true)
+  integration_tests: false   # /integration-tests/ + -v2/ — test dashboards (requires enable_integration_tests: true)
 
 # If true, the playbook will NOT render `templates/nginx-site.conf.j2` into
 # /etc/nginx/sites-available/ and will NOT touch /etc/nginx/sites-enabled/.
