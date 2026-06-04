@@ -17,13 +17,11 @@ export function ComplaintTypeShow() {
         return (
           <div className="space-y-6">
             <FieldSection title="Details">
-              <FieldRow label="Service Code">{String(rec.serviceCode ?? '')}</FieldRow>
-              <FieldRow label="Name">{String(rec.name ?? '')}</FieldRow>
+              <FieldRow label="Complaint Type (Menu Path)">{String(rec.menuPath ?? '--')}</FieldRow>
               <FieldRow label="Department">
                 {rec.department ? <EntityLink resource="departments" id={String(rec.department)} /> : '--'}
               </FieldRow>
               <FieldRow label="SLA (hours)">{String(rec.slaHours ?? '--')}</FieldRow>
-              <FieldRow label="Menu Path">{String(rec.menuPath ?? '--')}</FieldRow>
               <FieldRow label="Status">
                 <StatusChip value={rec.active} labels={{ true: 'Active', false: 'Inactive' }} />
               </FieldRow>
@@ -36,6 +34,8 @@ export function ComplaintTypeShow() {
                   </div>
                 </FieldRow>
               )}
+              <FieldRow label="Complaint Sub-Type">{String(rec.name ?? '')}</FieldRow>
+              <FieldRow label="Service Code">{String(rec.serviceCode ?? '')}</FieldRow>
             </FieldSection>
 
             <FieldSection title="Related">
