@@ -167,83 +167,83 @@
     - name: "Docker host install + config (Linux/Debian targets only)"
       when: ansible_system != "Darwin"
       block:
-      # ==================== Docker Installation ====================
-      - name: Install Docker prerequisites
-        apt:
-          name: [ca-certificates, curl, gnupg]
-          state: present
-          update_cache: yes
+        # ==================== Docker Installation ====================
+        - name: Install Docker prerequisites
+          apt:
+            name: [ca-certificates, curl, gnupg]
+            state: present
+            update_cache: yes
 
-      - name: Add Docker GPG key
-        shell: |
-          install -m 0755 -d /etc/apt/keyrings
-          curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-          chmod a+r /etc/apt/keyrings/docker.asc
-        args:
-          creates: /etc/apt/keyrings/docker.asc
+        - name: Add Docker GPG key
+          shell: |
+            install -m 0755 -d /etc/apt/keyrings
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+            chmod a+r /etc/apt/keyrings/docker.asc
+          args:
+            creates: /etc/apt/keyrings/docker.asc
 
-      - name: Add Docker repository
-        shell: |
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
-        args:
-          creates: /etc/apt/sources.list.d/docker.list
+        - name: Add Docker repository
+          shell: |
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
+          args:
+            creates: /etc/apt/sources.list.d/docker.list
 
-      # Ubuntu 24.04 ships `docker.io` + `docker-compose-v2` from the
-      # archive. Both conflict with Docker's upstream packages — they own
-      # the same `/usr/libexec/docker/cli-plugins/docker-compose` file —
-      # so dpkg refuses to install the upstream packages until the archive
-      # ones are removed. Idempotent: no-op if they're not installed.
-      - name: Remove conflicting Ubuntu-archive Docker packages
-        apt:
-          name:
-            - docker.io
-            - docker-doc
-            - docker-compose
-            - docker-compose-v2
-            - podman-docker
-            - containerd
-            - runc
-          state: absent
-          purge: yes
+        # Ubuntu 24.04 ships `docker.io` + `docker-compose-v2` from the
+        # archive. Both conflict with Docker's upstream packages — they own
+        # the same `/usr/libexec/docker/cli-plugins/docker-compose` file —
+        # so dpkg refuses to install the upstream packages until the archive
+        # ones are removed. Idempotent: no-op if they're not installed.
+        - name: Remove conflicting Ubuntu-archive Docker packages
+          apt:
+            name:
+              - docker.io
+              - docker-doc
+              - docker-compose
+              - docker-compose-v2
+              - podman-docker
+              - containerd
+              - runc
+            state: absent
+            purge: yes
 
-      - name: Install Docker Engine
-        apt:
-          name:
-            - docker-ce
-            - docker-ce-cli
-            - containerd.io
-            - docker-buildx-plugin
-            - docker-compose-plugin
-          state: present
-          update_cache: yes
+        - name: Install Docker Engine
+          apt:
+            name:
+              - docker-ce
+              - docker-ce-cli
+              - containerd.io
+              - docker-buildx-plugin
+              - docker-compose-plugin
+            state: present
+            update_cache: yes
 
-      # apt installs docker.service `disabled` on Ubuntu 24.04 — enable +
-      # start it explicitly so subsequent tasks can talk to the daemon.
-      - name: Ensure docker daemon is enabled + running
-        service:
-          name: docker
-          state: started
-          enabled: yes
+        # apt installs docker.service `disabled` on Ubuntu 24.04 — enable +
+        # start it explicitly so subsequent tasks can talk to the daemon.
+        - name: Ensure docker daemon is enabled + running
+          service:
+            name: docker
+            state: started
+            enabled: yes
 
-      # ==================== Docker Configuration ====================
-      # The Hetzner VPC registry at {{ docker_registry }} (egov-ci) hosts every
-      # custom-built DIGIT image (digit-mcp, sb35-rebuilt egov-* services)
-      # over plain HTTP. Without this entry Docker refuses to pull with
-      # `http: server gave HTTP response to HTTPS client`. Restart the
-      # daemon when the file changes so the new config takes effect.
-      - name: Configure Docker insecure-registries for VPC registry
-        copy:
-          dest: /etc/docker/daemon.json
-          content: "{{ {'insecure-registries': insecure_registries} | to_nice_json }}\n"
-          mode: '0644'
-        register: daemon_json
-        when: insecure_registries | default([]) | length > 0
+        # ==================== Docker Configuration ====================
+        # The Hetzner VPC registry at {{ docker_registry }} (egov-ci) hosts every
+        # custom-built DIGIT image (digit-mcp, sb35-rebuilt egov-* services)
+        # over plain HTTP. Without this entry Docker refuses to pull with
+        # `http: server gave HTTP response to HTTPS client`. Restart the
+        # daemon when the file changes so the new config takes effect.
+        - name: Configure Docker insecure-registries for VPC registry
+          copy:
+            dest: /etc/docker/daemon.json
+            content: "{{ {'insecure-registries': insecure_registries} | to_nice_json }}\n"
+            mode: '0644'
+          register: daemon_json
+          when: insecure_registries | default([]) | length > 0
 
-      - name: Restart docker if daemon.json changed
-        service:
-          name: docker
-          state: restarted
-        when: daemon_json is defined and daemon_json.changed | default(false)
+        - name: Restart docker if daemon.json changed
+          service:
+            name: docker
+            state: restarted
+          when: daemon_json is defined and daemon_json.changed | default(false)
 
     # check_mode: false forces this to run even under `--check`, so the
     # version-compare task below has a real value to test against.
@@ -1437,7 +1437,7 @@
         dest: "/var/www/integration-tests-v2/{{ item }}"
         state: link
         force: true
-      loop: [ 'catalog.json', 'history.json', 'runs' ]
+      loop: ['catalog.json', 'history.json', 'runs']
       when:
         - enable_integration_tests | default(false)
         - integration_tests_dir is defined
