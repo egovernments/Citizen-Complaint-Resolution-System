@@ -7,8 +7,7 @@ export function ComplaintTypeEdit() {
     <DigitEdit title="Edit Complaint Type">
       <FieldSection title="Details">
         <div className="space-y-4">
-          <DigitFormInput source="serviceCode" label="Service Code" disabled />
-          <DigitFormInput source="name" label="Name" validate={v.name} />
+          <DigitFormInput source="menuPath" label="Complaint Type (Menu Path)" validate={v.required} />
           <DigitFormSelect
             source="department"
             label="Department"
@@ -16,7 +15,6 @@ export function ComplaintTypeEdit() {
             placeholder="Select department..."
           />
           <DigitFormInput source="slaHours" label="SLA (hours)" type="number" validate={v.slaHours} />
-          <DigitFormInput source="menuPath" label="Menu Path" />
           <DigitFormInput source="keywords" label="Keywords" />
           {/* The active flag was previously omitted from this dedicated
               edit form, so operators had no way to enable/disable a
@@ -28,6 +26,8 @@ export function ComplaintTypeEdit() {
               "expected type: Boolean, found: String" — same fix
               Chakshu shipped for the generic edit path in #46. */}
           <BooleanInput source="active" label="Active" />
+          <DigitFormInput source="name" label="Complaint Sub-Type" validate={v.name} />
+          <DigitFormInput source="serviceCode" label="Service Code" disabled />
         </div>
       </FieldSection>
     </DigitEdit>
