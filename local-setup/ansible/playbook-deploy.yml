@@ -1415,9 +1415,11 @@
     # is the auth front. Requires the dashboards block above (needs
     # integration_tests_dir). A run is heavy and shares the box with the live
     # stack, so this stays opt-in and nice'd. Linux only.
-    - name: "integration-tests runner — install Playwright + browsers (needed to run, not just serve)"
-      ansible.builtin.command: >-
-        npx --yes playwright install --with-deps chromium
+    # Deps FIRST, so the next task installs the browser revision that matches
+    # the locked @playwright/test (1.59.1) rather than whatever an unpinned
+    # `npx playwright` would pull.
+    - name: "integration-tests runner — npm deps for the test suite (tsx + playwright)"
+      ansible.builtin.shell: npm ci || npm install
       args:
         chdir: "{{ integration_tests_dir }}"
       changed_when: true
@@ -1426,8 +1428,9 @@
         - integration_tests_dir is defined
         - ansible_system != "Darwin"
 
-    - name: "integration-tests runner — npm deps for the test suite (tsx + playwright)"
-      ansible.builtin.shell: npm ci || npm install
+    - name: "integration-tests runner — install Playwright browsers (repo-local binary, matched version)"
+      ansible.builtin.command: >-
+        node_modules/.bin/playwright install --with-deps chromium
       args:
         chdir: "{{ integration_tests_dir }}"
       changed_when: true

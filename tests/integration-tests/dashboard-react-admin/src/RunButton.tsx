@@ -11,7 +11,7 @@
  * overridable at build time with VITE_RUNNER_API_BASE.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button, useNotify } from 'react-admin';
+import { Button, useNotify, useRefresh } from 'react-admin';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import HourglassTopIcon from '@mui/icons-material/HourglassTop';
 import { refreshCatalog } from './dataProvider';
@@ -25,6 +25,11 @@ type Current =
 
 export default function RunButton() {
   const notify = useNotify();
+  const refresh = useRefresh();
+  // The runner is opt-in (enable_integration_tests_runner) and its API may not
+  // be deployed at all. Start hidden and only reveal the button once a probe
+  // succeeds, so dashboards without the runner don't show a button that 404s.
+  const [reachable, setReachable] = useState(false);
   const [running, setRunning] = useState(false);
   const [phase, setPhase] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
@@ -35,20 +40,24 @@ export default function RunButton() {
     try {
       const r = await fetch(`${API_BASE}/run/current`, { credentials: 'include' });
       if (!r.ok) return;
+      setReachable(true);
       const cur = (await r.json()) as Current;
       const isRunning = cur.state === 'running';
       setRunning(isRunning);
       setPhase(cur.state === 'running' ? cur.phase : null);
       if (wasRunning.current && !isRunning) {
-        // A run just finished — pull the fresh catalog into the dashboard.
+        // A run just finished — drop the cached catalog AND invalidate
+        // react-admin's query cache so the list/show views refetch.
         notify('Test run finished — refreshing results', { type: 'info' });
-        refreshCatalog().catch(() => undefined);
+        refreshCatalog()
+          .catch(() => undefined)
+          .finally(() => refresh());
       }
       wasRunning.current = isRunning;
     } catch {
-      /* daemon unreachable — leave the button as-is */
+      /* daemon unreachable — stays hidden / leaves the button as-is */
     }
-  }, [notify]);
+  }, [notify, refresh]);
 
   useEffect(() => {
     poll();
@@ -81,6 +90,9 @@ export default function RunButton() {
       setStarting(false);
     }
   }, [notify]);
+
+  // Hidden until the runner API answers — no button on runner-less dashboards.
+  if (!reachable) return null;
 
   const label = running ? (phase ? `Running… (${phase})` : 'Running…') : 'Run tests';
 
