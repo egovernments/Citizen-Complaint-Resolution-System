@@ -166,6 +166,21 @@ integration_tests_basic_auth_user: "digit-tests"
 # Set in vault (never commit a real password). The htpasswd task skips if unset.
 # integration_tests_basic_auth_password: "{{ vault_integration_tests_password }}"
 
+# RUN button: an on-box test-runner daemon that lets the v2 dashboard TRIGGER a
+# Playwright run (writes results back into /var/www/integration-tests). Requires
+# enable_integration_tests: true (it serves on the same vhost) AND
+# nginx_features.integration_tests_runner: true below. The API is proxied at
+# /integration-tests/api/ behind the SAME basic-auth as the dashboards.
+# NOTE: a run is CPU/RAM heavy and shares the box with the live DIGIT stack
+# (it's nice'd, but still). Leave off unless you want in-dashboard runs.
+enable_integration_tests_runner: false
+# integration_tests_runner_port: 8181        # loopback port the daemon listens on
+# integration_tests_runner_run_limit: 5      # keep at most N runs on disk
+# integration_tests_runner_branch: "deployed"
+# Env file the run sources so it targets THIS box's tenant (BASE_URL/DIGIT_TENANT/
+# LOCALITY_CODE/SERVICE_CODE). Point at the deploy env you already maintain.
+# integration_tests_runner_tenant_env: "/opt/integration-tests/deploy/bomet.env"
+
 # ────────── Optional services (opt-in via flags) ──────────
 
 # Bring up Elasticsearch + egov-indexer + inbox-v2. Heavy (~3GB RAM
@@ -289,6 +304,7 @@ nginx_features:
   keycloak: false            # /auth/ + /token-exchange/ — requires enable_keycloak: true
   digit_ui_v2: false         # /citizen/ — Vite + React 19 SPA (requires enable_digit_ui_v2: true)
   integration_tests: false   # /integration-tests/ + -v2/ — test dashboards (requires enable_integration_tests: true)
+  integration_tests_runner: false  # /integration-tests/api/ — RUN-button daemon proxy (requires enable_integration_tests_runner: true)
 
 # If true, the playbook will NOT render `templates/nginx-site.conf.j2` into
 # /etc/nginx/sites-available/ and will NOT touch /etc/nginx/sites-enabled/.

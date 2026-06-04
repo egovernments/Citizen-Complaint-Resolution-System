@@ -1409,6 +1409,54 @@
         - integration_tests_basic_auth_password is defined
         - ansible_system != "Darwin"
 
+    # ---- RUN button: on-box test-runner daemon (opt-in: enable_integration_tests_runner) ----
+    # Backs the "Run tests" button on the v2 dashboard. Loopback-only Node
+    # service; nginx (/integration-tests/api/, nginx_features.integration_tests_runner)
+    # is the auth front. Requires the dashboards block above (needs
+    # integration_tests_dir). A run is heavy and shares the box with the live
+    # stack, so this stays opt-in and nice'd. Linux only.
+    - name: "integration-tests runner — install Playwright + browsers (needed to run, not just serve)"
+      ansible.builtin.command: >-
+        npx --yes playwright install --with-deps chromium
+      args:
+        chdir: "{{ integration_tests_dir }}"
+      changed_when: true
+      when:
+        - enable_integration_tests_runner | default(false)
+        - integration_tests_dir is defined
+        - ansible_system != "Darwin"
+
+    - name: "integration-tests runner — npm deps for the test suite (tsx + playwright)"
+      ansible.builtin.shell: npm ci || npm install
+      args:
+        chdir: "{{ integration_tests_dir }}"
+      changed_when: true
+      when:
+        - enable_integration_tests_runner | default(false)
+        - integration_tests_dir is defined
+        - ansible_system != "Darwin"
+
+    - name: "integration-tests runner — install systemd unit"
+      ansible.builtin.template:
+        src: templates/integration-tests-runner.service.j2
+        dest: /etc/systemd/system/integration-tests-runner.service
+        mode: '0644'
+      when:
+        - enable_integration_tests_runner | default(false)
+        - integration_tests_dir is defined
+        - ansible_system != "Darwin"
+
+    - name: "integration-tests runner — enable + (re)start daemon"
+      ansible.builtin.systemd:
+        name: integration-tests-runner
+        state: restarted
+        enabled: true
+        daemon_reload: true
+      when:
+        - enable_integration_tests_runner | default(false)
+        - integration_tests_dir is defined
+        - ansible_system != "Darwin"
+
     # Host nginx (Linux/Debian) — apt nginx + /etc/nginx site. Skipped on
     # macOS, where nginx runs as a container instead (next block).
     - name: "Host nginx — Linux/Debian only"
