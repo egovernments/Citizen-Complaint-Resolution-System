@@ -1132,7 +1132,6 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         // reads role→action mappings directly from MDMS at the target tenant.
         'ACCESSCONTROL-ACTIONS-TEST.actions-test',
         'ACCESSCONTROL-ROLES.roles',
-        'ACCESSCONTROL-ROLEACTIONS.roleactions',
         // ── tenant module discovery ──
         // citymodule rows tell the UI which modules (PGR/HRMS/etc.) are
         // available on the tenant; without them the citizen menu is empty.
@@ -1178,6 +1177,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         'Workflow.AutoEscalationStatesToIgnore',
         // ── inbox ──
         'INBOX.InboxQueryConfiguration',
+        'ACCESSCONTROL-ROLEACTIONS.roleactions',
       ];
 
       // The MDMS schema definition + data writes go through Kafka and there's
@@ -1321,10 +1321,19 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           pct: 35 + Math.floor((i / schemasForCopy.length) * 40),
         });
         try {
-          // Fetch source records and existing target records for this schema
+          // Fetch source records and existing target records for this schema.
+          // Filter targetRecords to exact-tenant rows — MDMS v2 search is
+          // hierarchical and may return parent-tenant records (e.g. pg's
+          // ThemeConfig when querying mz). Without the filter, the bootstrap
+          // falsely sees the record as already present and skips copying it,
+          // leaving the target tenant without its own copy.
           const sourceRecords = await digitApi.mdmsV2SearchRaw(source, schemaCode, { limit: 500 });
           const targetRecords = await digitApi.mdmsV2SearchRaw(target, schemaCode, { limit: 500 });
-          const targetByUid = new Map(targetRecords.map((r) => [r.uniqueIdentifier, r]));
+          const targetByUid = new Map(
+            targetRecords
+              .filter((r) => (r as { tenantId?: string }).tenantId === target)
+              .map((r) => [r.uniqueIdentifier, r]),
+          );
 
           for (const record of sourceRecords) {
             const existing = targetByUid.get(record.uniqueIdentifier);
