@@ -79,12 +79,16 @@ function StatusPill({ status, t }) {
   );
 }
 
-function ComplaintRow({ data, onClick, t }) {
+function ComplaintRow({ data, onClick, t, menuPath }) {
   const { serviceCode, serviceRequestId, applicationStatus, auditDetails } = data;
-  const titleKey = `SERVICEDEFS.${(serviceCode || "").toUpperCase()}`;
+  // Card title shows the Complaint Type (menuPath / category), not the
+  // sub-type (serviceCode). Falls back to serviceCode if the matching
+  // service def has no menuPath.
+  const typeCode = menuPath || serviceCode;
+  const titleKey = `SERVICEDEFS.${(typeCode || "").toUpperCase()}`;
   const title = (() => {
     const v = t(titleKey);
-    return v === titleKey ? serviceCode : v;
+    return v === titleKey ? typeCode : v;
   })();
   const dateStr = auditDetails?.createdTime
     ? Digit.DateUtils.ConvertTimestampToDate(auditDetails.createdTime)
@@ -230,6 +234,17 @@ export const ComplaintsList = () => {
     mobileNumber
   );
 
+  // Service defs give us serviceCode -> menuPath so each card can show the
+  // Complaint Type (category) rather than the sub-type. Cached via MDMS.
+  const serviceDefs = Digit.Hooks.pgr.useServiceDefs(tenantId, "PGR");
+  const menuPathByCode = React.useMemo(() => {
+    const map = {};
+    (serviceDefs || []).forEach((def) => {
+      if (def?.serviceCode) map[def.serviceCode] = def.menuPath;
+    });
+    return map;
+  }, [serviceDefs]);
+
   useEffect(() => {
     revalidate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -326,6 +341,7 @@ export const ComplaintsList = () => {
                 key={service.serviceRequestId}
                 data={service}
                 t={t}
+                menuPath={menuPathByCode[service.serviceCode]}
                 onClick={() => history.push(`${path}/${service.serviceRequestId}`)}
               />
             ))}
