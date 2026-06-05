@@ -96,10 +96,19 @@
         if (rect.width === 0) return;
         var vw = document.documentElement.clientWidth;
         if (rect.right <= vw - MARGIN) return;
-        var newLeft = Math.max(MARGIN, vw - rect.width - MARGIN);
+        // `el.style.left` is relative to the menu's positioned ancestor
+        // (.header-dropdown-container), NOT the viewport. A trigger that sits
+        // far from the left edge (e.g. the footer action bar on desktop) would
+        // otherwise get the viewport-relative value added on top of its own
+        // offset, pushing the menu off-screen. Subtract the ancestor's offset
+        // so the menu's right edge lands MARGIN from the viewport's right edge.
+        var parentLeft = el.offsetParent ? el.offsetParent.getBoundingClientRect().left : 0;
+        var desiredViewportLeft = Math.max(MARGIN, vw - rect.width - MARGIN);
+        var newLeft = desiredViewportLeft - parentLeft;
         var currentLeft = parseFloat(el.style.left);
         if (isNaN(currentLeft) || Math.abs(currentLeft - newLeft) > 0.5) {
           el.style.left = newLeft + "px";
+          el.style.right = "auto";
         }
       }
       function clampAll() {
