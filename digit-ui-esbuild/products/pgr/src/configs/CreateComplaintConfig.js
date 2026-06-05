@@ -183,7 +183,14 @@ export const CreateComplaintConfig = {
                 required: false,
                 validation: {
                   required: false,
-                  pattern: /^[0-9]{5}$/,
+                  // Postal-code shape is per-country. Read the pattern from
+                  // globalConfigs CORE_POSTAL_CONFIGS (e.g. MZ = 4 digits)
+                  // instead of hardcoding 5, so this field rule matches the
+                  // config-driven check in createComplaintForm.js. Falls back
+                  // to the legacy 5-digit default when the host hasn't set it.
+                  pattern: new RegExp(
+                    window?.globalConfigs?.getConfig?.("CORE_POSTAL_CONFIGS")?.postalCodePattern || "^[0-9]{5}$"
+                  ),
                 },
                 error: "CS_COMPLAINT_POSTALCODE_INVALID_ERROR",
               },
