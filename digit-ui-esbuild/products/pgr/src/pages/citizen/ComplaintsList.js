@@ -80,16 +80,13 @@ function StatusPill({ status, t }) {
 }
 
 function ComplaintRow({ data, onClick, t, menuPath }) {
-  const { serviceCode, serviceRequestId, applicationStatus, auditDetails } = data;
-  // Card title shows the Complaint Type (menuPath / category), not the
-  // sub-type (serviceCode). Falls back to serviceCode if the matching
-  // service def has no menuPath.
-  const typeCode = menuPath || serviceCode;
-  const titleKey = `SERVICEDEFS.${(typeCode || "").toUpperCase()}`;
-  const title = (() => {
-    const v = t(titleKey);
-    return v === titleKey ? typeCode : v;
-  })();
+  const { serviceRequestId, applicationStatus, auditDetails } = data;
+  // Complaint Type = the service def's menuPath, shown through the
+  // SERVICEDEFS localization key — identical to the employee/citizen
+  // details pages. When the message isn't seeded, t() returns the key
+  // (e.g. "SERVICEDEFS.COMPLAINT"), same as the details screens.
+  const titleKey = menuPath ? `SERVICEDEFS.${menuPath.toUpperCase()}` : "SERVICEDEFS.OTHERS";
+  const title = t(titleKey);
   const dateStr = auditDetails?.createdTime
     ? Digit.DateUtils.ConvertTimestampToDate(auditDetails.createdTime)
     : "";
