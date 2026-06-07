@@ -37,10 +37,15 @@ const EMPLOYEE_PASS = process.env.FLOW5_EMPLOYEE_PASS || ADMIN_PASS;
 // Fixtures — long-lived complaints on naipepea. If they disappear, set
 // env overrides or refresh via:
 //   curl /pgr-services/v2/request/_search?tenantId=ke.nairobi&applicationStatus=...
-const TERMINAL_SRID =
-  process.env.FLOW5_TERMINAL_SRID || 'PG-PGR-2026-04-23-004403';
-const NONTERMINAL_SRID =
-  process.env.FLOW5_NONTERMINAL_SRID || 'NCCG-PGR-2026-05-06-023467';
+// Defaults are naipepea SRIDs; override per deployment via env.
+const TERMINAL_COMPLAINT_ID =
+  process.env.TERMINAL_COMPLAINT_SRID
+  || process.env.FLOW5_TERMINAL_SRID
+  || 'PG-PGR-2026-04-23-004403';
+const NONTERMINAL_COMPLAINT_ID =
+  process.env.NONTERMINAL_COMPLAINT_SRID
+  || process.env.FLOW5_NONTERMINAL_SRID
+  || 'NCCG-PGR-2026-05-06-023467';
 
 async function openDetails(page: Page, srid: string): Promise<void> {
   await loginViaApi(page, {
@@ -78,7 +83,7 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
   // Each test gets its own page context — no shared state between stories.
 
   test('Story 5.1 — details page loads without error (terminal fixture) @p0', async ({ page }) => {
-    await openDetails(page, TERMINAL_SRID);
+    await openDetails(page, TERMINAL_COMPLAINT_ID);
 
     const heading = page.getByText('Complaint Details', { exact: true }).first();
     await expect(heading).toBeVisible({ timeout: 10_000 });
@@ -89,14 +94,14 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
   });
 
   test('Story 5.4 — Complaint No. label + value match the SRID @p0', async ({ page }) => {
-    await openDetails(page, TERMINAL_SRID);
+    await openDetails(page, TERMINAL_COMPLAINT_ID);
 
     const value = await valueForLabel(page, 'Complaint No.');
-    expect(value).toBe(TERMINAL_SRID);
+    expect(value).toBe(TERMINAL_COMPLAINT_ID);
   });
 
   test('Story 5.5 — Current Status chip renders localized status text @p0', async ({ page }) => {
-    await openDetails(page, TERMINAL_SRID);
+    await openDetails(page, TERMINAL_COMPLAINT_ID);
 
     const status = await valueForLabel(page, 'Current Status');
     // We deliberately do not lock to a specific localization — just
@@ -108,7 +113,7 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
   });
 
   test('Story 5.6 — Complaint Type and Subtype labels render values @p1', async ({ page }) => {
-    await openDetails(page, TERMINAL_SRID);
+    await openDetails(page, TERMINAL_COMPLAINT_ID);
 
     const type = await valueForLabel(page, 'Complaint Type');
     expect(type.length).toBeGreaterThan(0);
@@ -120,14 +125,14 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
   });
 
   test('Story 5.9 — Filed Date renders in DD/MM/YYYY @p1', async ({ page }) => {
-    await openDetails(page, TERMINAL_SRID);
+    await openDetails(page, TERMINAL_COMPLAINT_ID);
 
     const filed = await valueForLabel(page, 'Filed Date');
     expect(filed).toMatch(/^\d{2}\/\d{2}\/\d{4}$/);
   });
 
   test('Story 5.16 — Complaint Timeline section renders with checkpoint rows @p0', async ({ page }) => {
-    await openDetails(page, TERMINAL_SRID);
+    await openDetails(page, TERMINAL_COMPLAINT_ID);
 
     const timelineHeader = page.getByText('Complaint Timeline', { exact: true });
     await expect(timelineHeader).toBeVisible({ timeout: 10_000 });
@@ -148,7 +153,7 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
     // ships.
     test.fail(true, 'CCRS #524 — fix merged in theflywheel/digit-ui-esbuild#112 but not deployed yet');
 
-    await openDetails(page, TERMINAL_SRID);
+    await openDetails(page, TERMINAL_COMPLAINT_ID);
 
     // Find any timeline actor row that names the admin who rejected
     // this complaint. Expected (post-fix): just "Nairobi Admin".
@@ -169,7 +174,7 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
   });
 
   test('Story 5.24a — Take Action HIDDEN on terminal-state complaint @p1', async ({ page }) => {
-    await openDetails(page, TERMINAL_SRID);
+    await openDetails(page, TERMINAL_COMPLAINT_ID);
 
     // CLOSEDAFTERREJECTION has no nextActions for any role, so the
     // button must not render. We do not just check count===0 — that
@@ -184,7 +189,7 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
   });
 
   test('Story 5.24b — Take Action VISIBLE on non-terminal complaint @p0', async ({ page }) => {
-    await openDetails(page, NONTERMINAL_SRID);
+    await openDetails(page, NONTERMINAL_COMPLAINT_ID);
 
     const takeAction = page.getByRole('button', { name: /^Take Action$/i });
     await expect(takeAction).toBeVisible({ timeout: 10_000 });
