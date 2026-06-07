@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { loginEmployee, mdmsSearch, pgrSearch, hrmsSearch, workflowBusinessService } from '../utils/launch-fixes/api.js';
 
+const KNOWN_RESOLVED_SRID = process.env.KNOWN_RESOLVED_SRID
+  || 'NCCG-PGR-2026-04-28-011862';  // naipepea default
+
 test.describe('00-smoke: API helpers reach naipepea', () => {
   test('login returns token', {
     annotation: {
@@ -41,19 +44,19 @@ If this fails, every PGR assignment flow downstream will fail too.`,
   test('pgr search round-trips a known CLOSEDAFTERRESOLUTION complaint', {
     annotation: {
       type: 'description',
-      description: `Anchor smoke check against a fixed historical complaint (NCCG-PGR-2026-04-28-011862) in CLOSEDAFTERRESOLUTION state with rating 4. Confirms that pgr-services search is up, the DB still has this seeded record, and the persisted rating round-trips through the search API.
+      description: `Anchor smoke check against a fixed historical complaint (default NCCG-PGR-2026-04-28-011862, override via KNOWN_RESOLVED_SRID) in CLOSEDAFTERRESOLUTION state with rating 4. Confirms that pgr-services search is up, the DB still has this seeded record, and the persisted rating round-trips through the search API.
 
 Steps:
 1. Log in as the test employee.
-2. pgrSearch for the fixed serviceRequestId NCCG-PGR-2026-04-28-011862 in tenant ke.nairobi.
+2. pgrSearch for the configured serviceRequestId (KNOWN_RESOLVED_SRID) in tenant ke.nairobi.
 3. Assert ServiceWrappers[0].service.applicationStatus === 'CLOSEDAFTERRESOLUTION'.
 4. Assert ServiceWrappers[0].service.rating === 4.
 
-If the seeded record gets purged or the ID format changes, swap the constant — the test isn't trying to validate a specific bug, just that PGR search works end-to-end.`,
+If the seeded record gets purged or the ID format changes, override KNOWN_RESOLVED_SRID — the test isn't trying to validate a specific bug, just that PGR search works end-to-end.`,
     },
     tag: ['@area:pgr', '@kind:lifecycle', '@kind:smoke', '@layer:api', '@persona:cross'] }, async () => {
     const auth = await loginEmployee();
-    const r = await pgrSearch(auth, 'ke.nairobi', 'NCCG-PGR-2026-04-28-011862');
+    const r = await pgrSearch(auth, 'ke.nairobi', KNOWN_RESOLVED_SRID);
     const sw = r.ServiceWrappers?.[0];
     expect(sw?.service?.applicationStatus).toBe('CLOSEDAFTERRESOLUTION');
     expect(sw?.service?.rating).toBe(4);
