@@ -22,8 +22,23 @@ import { test, expect } from '@playwright/test';
 import ExcelJS from 'exceljs';
 import { loadAuth, employeeSearch, type AuthInfo } from '../utils/manage/api';
 import { testCode, testCodeIndexed } from '../utils/manage/codes';
+import { TENANT } from '../utils/env';
+import {
+  getMobileValidationRule,
+  generateInvalidMobile,
+  type MobileRule,
+} from '../utils/mdms-mobile';
 
 const TENANT_CODE = process.env.TENANT_CODE || 'ke';
+
+let mobileRule: MobileRule;
+test.beforeAll(async () => {
+  mobileRule = await getMobileValidationRule(TENANT);
+});
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 const LIST_PATH = '/configurator/manage/employees';
 
 // HRMS endpoints — the configurator's DigitApiClient hits these verbatim.
@@ -281,31 +296,37 @@ Cleanup uses the inline softDeleteEmployee helper because HRMS has no DELETE end
     void found;
   });
 
-  test('3. Kenya-invalid mobile 99999 shows inline error', {
+  test('3. too-short mobile shows inline validation error', {
     annotation: {
       type: 'description',
-      description: `Edge case: a too-short mobile number ("99999") on the EmployeeCreate form must surface an inline validation error sourced from HRMS's clamped Kenya rule (10-digit Kenyan mobile, prefix 07/01/+254).
+      description: `Edge case: a too-short mobile number on the EmployeeCreate form must surface an inline validation error sourced from HRMS clamping the tenant's MDMS mobileNumberValidation rule.
 
 Steps:
 1. Navigate to /employees/create.
 2. Fill Name with a placeholder.
-3. Fill Mobile Number with "99999".
+3. Fill Mobile Number with a short candidate from generateInvalidMobile(rule, 'short').
 4. Click into Date of Birth to blur Mobile and trigger validation.
-5. Assert text matching /10.?digit Kenyan mobile|10 digits starting|MobileNumber|must be 10/i is visible within 10s.
+5. Assert the rule.errorMessage substring is visible within 10s (with a loose fallback regex to tolerate copy variants).
 
-Loose regex tolerates copy variants that may shift across HRMS releases. Pairs with the happy-path test (#2) — together they bracket valid + invalid mobile inputs.`,
+Pairs with the happy-path test (#2) — together they bracket valid + invalid mobile inputs.`,
     },
     tag: ['@area:configurator-manage', '@area:hrms', '@kind:edge-case', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
     await page.goto(`${LIST_PATH}/create`);
 
     await page.getByLabel(/^Name/i).fill('PW Bad Mobile');
-    await page.getByLabel(/^Mobile Number/i).fill('99999');
+    const shortMobile = generateInvalidMobile(mobileRule, 'short');
+    await page.getByLabel(/^Mobile Number/i).fill(shortMobile);
     // Blur to trigger the validator.
     await page.getByLabel(/^Date of Birth/i).click();
 
-    // The validator error copy is sourced from HRMS clamping the MDMS rule
-    // to 10 digits — message starts with "Enter a 10-digit Kenyan mobile".
-    const errorText = page.getByText(/10.?digit Kenyan mobile|10 digits starting|MobileNumber|must be 10/i).first();
+    // The validator error copy is sourced from HRMS clamping the MDMS rule.
+    // Assert on the rule.errorMessage substring (escaped for regex) with a
+    // loose fallback to tolerate minor copy variants across HRMS releases.
+    const ruleMsgRe = new RegExp(
+      `${escapeRegex(mobileRule.errorMessage)}|MobileNumber|must be \\d+|digits starting`,
+      'i',
+    );
+    const errorText = page.getByText(ruleMsgRe).first();
     await expect(errorText).toBeVisible({ timeout: 10_000 });
   });
 
