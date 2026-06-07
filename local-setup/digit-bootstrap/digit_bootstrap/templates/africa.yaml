@@ -2,14 +2,19 @@ name: africa
 modeled_on: kenya
 default: true
 
-# user_validation rules passed to tenant_bootstrap. Source tenant
-# (pg) ships no UserValidation so this is synthesized server-side.
+# Default user_validation seeded into common-masters.UserValidation
+# by the orchestrator's apply_user_validation step. If the master
+# already has a 'mobile' rule for the target tenant, the orchestrator
+# uses that instead (deployment is authoritative; template is only a
+# default). The pattern below accepts both bare-9 (712345678) and
+# trunk-zero (0712345678) forms, matching what live Kenya tenants
+# (e.g. ke on bometfeedbackhub) actually enforce.
 user_validation:
   - field_type: mobile
-    pattern: '^[17][0-9]{8}$'
+    pattern: '^0?[17][0-9]{8}$'
     min_length: 9
-    max_length: 9
-    error_message: 'Enter a 9-digit Kenya mobile starting with 1 or 7'
+    max_length: 10
+    error_message: 'CORE_COMMON_MOBILE_ERROR'
 
 mobile_display_prefix: '+254'
 
@@ -18,13 +23,14 @@ boundary_hierarchy:
   levels: [Country, County, SubCounty, Ward, Locality]
   complaint_filing_level: Ward
 
-# Boundary entities applied at city tenant via boundary_create.
-# Topologically sorted by the orchestrator (parent-first).
-boundary_entities:
-  - { code: COUNTY_NAIROBI, name: Nairobi County, type: County, parent: null }
-  - { code: SUBCOUNTY_WESTLANDS, name: Westlands, type: SubCounty, parent: COUNTY_NAIROBI }
-  - { code: WARD_WESTLANDS, name: Westlands Ward, type: Ward, parent: SUBCOUNTY_WESTLANDS }
-  - { code: LOC_WESTLANDS_1, name: Parklands, type: Locality, parent: WARD_WESTLANDS }
+# Boundary entity DATA (specific wards, sub-counties, localities) is
+# city-specific, NOT a country-wide concern, and must NOT be shipped
+# in the template. The entity tree is sourced separately per tenant
+# (real Bomet wards already exist on ke.bomet via the
+# digit-xlsx-onboard / boundary_mgmt_process paths; future tenants
+# can pull from OSM via a planned Phase 1.5 fetch tool).
+# boundary_entities stays empty so the orchestrator no-ops cleanly.
+boundary_entities: []
 
 # Per PREFLIGHT.md, tenant_bootstrap copies the source tenant's
 # ServiceDefs. complaint_types here adds Africa-specific types

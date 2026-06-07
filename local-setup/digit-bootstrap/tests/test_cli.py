@@ -28,6 +28,7 @@ def test_bootstrap_invokes_orchestrator(MockOrch, MockMcp, tmp_path):
     orch.setup_city.assert_called_once_with(
         root="ke", city_id="ke.nairobi", city_name="Nairobi"
     )
+    orch.apply_user_validation.assert_called_once_with(tenant_id="ke")
     orch.apply_boundary_entities.assert_called_once_with(city_id="ke.nairobi")
     orch.apply_complaint_types.assert_called_once_with(tenant_id="ke")
     orch.apply_localizations.assert_called_once_with(tenant_id="ke")

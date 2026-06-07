@@ -258,6 +258,62 @@ def test_apply_localizations_empty_is_noop():
     mcp.call.assert_not_called()
 
 
+# ── apply_user_validation ─────────────────────────────────────────────────
+
+
+def test_apply_user_validation_seeds_default_when_missing():
+    mcp = MagicMock()
+    mcp.call.side_effect = [
+        {"records": []},          # mdms_search returns nothing
+        {"status": "ok"},          # mdms_create lands
+    ]
+    orch = Orchestrator(mcp=mcp, template=_minimal_template())
+
+    written = orch.apply_user_validation(tenant_id="ke")
+
+    creates = [c for c in mcp.call.call_args_list if c[0][0] == "mdms_create"]
+    assert len(creates) == 1
+    payload = creates[0][0][1]
+    assert payload["tenant_id"] == "ke"
+    assert payload["schema_code"] == "common-masters.UserValidation"
+    assert payload["record"]["fieldType"] == "mobile"
+    assert payload["record"]["rules"]["pattern"] == r"^[17][0-9]{8}$"
+    assert payload["record"]["attributes"]["prefix"] == "+254"
+    assert orch._effective_mobile_pattern == r"^[17][0-9]{8}$"
+    assert orch._effective_mobile_prefix == "+254"
+    assert written["fieldType"] == "mobile"
+
+
+def test_apply_user_validation_uses_existing_master():
+    """If the deployment already has UserValidation, never overwrite — use it."""
+    mcp = MagicMock()
+    mcp.call.return_value = {
+        "records": [{
+            "data": {
+                "fieldType": "mobile",
+                "rules": {
+                    "pattern": r"^0?[17][0-9]{8}$",   # trunk-zero variant
+                    "minLength": 9,
+                    "maxLength": 10,
+                    "errorMessage": "CORE_COMMON_MOBILE_ERROR",
+                },
+                "attributes": {"prefix": "+254"},
+            },
+        }],
+    }
+    orch = Orchestrator(mcp=mcp, template=_minimal_template())
+
+    rule = orch.apply_user_validation(tenant_id="ke")
+
+    # No mdms_create — existing rule honored
+    creates = [c for c in mcp.call.call_args_list if c[0][0] == "mdms_create"]
+    assert creates == []
+    # Effective rule pulled from the deployment
+    assert orch._effective_mobile_pattern == r"^0?[17][0-9]{8}$"
+    assert orch._effective_mobile_prefix == "+254"
+    assert rule["rules"]["pattern"] == r"^0?[17][0-9]{8}$"
+
+
 # ── emit_env ──────────────────────────────────────────────────────────────
 
 
@@ -279,5 +335,28 @@ def test_emit_env_writes_expected_keys(tmp_path):
     assert "DIGIT_TENANT=ke.nairobi" in text
     assert "ADMIN_USER=ke-admin" in text
     assert "ADMIN_PASSWORD=eGov@123" in text
+    # Falls back to template default when apply_user_validation hasn't run
     assert "MOBILE_PATTERN=^[17][0-9]{8}$" in text
+    assert "MOBILE_PREFIX=+254" in text
+
+
+def test_emit_env_prefers_effective_rule_over_template(tmp_path):
+    """emit_env writes the deployment's actual rule, not the template's,
+    when apply_user_validation has populated the effective fields."""
+    orch = Orchestrator(mcp=MagicMock(), template=_minimal_template())
+    # Simulate apply_user_validation having run with a different effective rule
+    orch._effective_mobile_pattern = r"^0?[17][0-9]{8}$"
+    orch._effective_mobile_prefix = "+254"
+
+    out_path = tmp_path / "tenant.env"
+    orch.emit_env(
+        path=out_path,
+        root="ke",
+        city_id="ke.bomet",
+        admin_user="ke-admin",
+        admin_password="eGov@123",
+    )
+
+    text = out_path.read_text()
+    assert "MOBILE_PATTERN=^0?[17][0-9]{8}$" in text
     assert "MOBILE_PREFIX=+254" in text

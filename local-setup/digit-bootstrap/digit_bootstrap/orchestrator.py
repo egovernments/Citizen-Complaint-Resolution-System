@@ -29,6 +29,11 @@ class Orchestrator:
         self.mcp = mcp
         self.template = template
         self.localization_batch_size = localization_batch_size
+        # Populated by apply_user_validation; consumed by emit_env so the
+        # emitted MOBILE_PATTERN reflects the deployment-effective rule
+        # (existing master record if present, else the template default).
+        self._effective_mobile_pattern: str | None = None
+        self._effective_mobile_prefix: str | None = None
 
     # ── Phase 1, step 1: tenant root ───────────────────────────────────────
 
@@ -65,6 +70,68 @@ class Orchestrator:
             "source_tenant": root,
             "create_boundaries": True,
         })
+
+    # ── Phase 1, step 2b: user_validation master ──────────────────────────
+
+    def apply_user_validation(self, tenant_id: str) -> dict:
+        """Idempotently seed common-masters.UserValidation for the mobile field.
+
+        Probes MDMS first. If a 'mobile' UserValidation record already
+        exists on the target tenant, returns it verbatim — the
+        deployment is authoritative. If absent, seeds from the
+        template default via mdms_create and returns what was written.
+
+        The effective rule (pattern + prefix) is stashed on self so
+        emit_env can write the actually-true values into tenant.env
+        instead of always echoing the template.
+        """
+        mobile_uv = next(
+            (uv for uv in self.template.user_validation
+             if uv.field_type == "mobile"),
+            None,
+        )
+
+        probe = self.mcp.call("mdms_search", {
+            "tenant_id": tenant_id,
+            "schema_code": "common-masters.UserValidation",
+            "filter": {"fieldType": "mobile"},
+        })
+        records = probe.get("records") or []
+        if records:
+            existing = records[0].get("data") or {}
+            rules = existing.get("rules") or {}
+            attrs = existing.get("attributes") or {}
+            self._effective_mobile_pattern = rules.get("pattern", "")
+            self._effective_mobile_prefix = attrs.get(
+                "prefix", self.template.mobile_display_prefix
+            )
+            return existing
+
+        if mobile_uv is None:
+            return {}
+
+        record = {
+            "fieldType": "mobile",
+            "default": True,
+            "isActive": True,
+            "rules": {
+                "pattern": mobile_uv.pattern,
+                "minLength": mobile_uv.min_length,
+                "maxLength": mobile_uv.max_length,
+                "errorMessage": mobile_uv.error_message or "CORE_COMMON_MOBILE_ERROR",
+            },
+            "attributes": {
+                "prefix": self.template.mobile_display_prefix,
+            },
+        }
+        self.mcp.call("mdms_create", {
+            "tenant_id": tenant_id,
+            "schema_code": "common-masters.UserValidation",
+            "record": record,
+        })
+        self._effective_mobile_pattern = mobile_uv.pattern
+        self._effective_mobile_prefix = self.template.mobile_display_prefix
+        return record
 
     # ── Phase 1, step 3: boundary entity tree ──────────────────────────────
 
@@ -151,12 +218,28 @@ class Orchestrator:
         admin_user: str,
         admin_password: str,
     ) -> None:
-        """Write a sourceable shell env file for downstream phases."""
-        mobile_uv = next(
-            (uv for uv in self.template.user_validation if uv.field_type == "mobile"),
-            None,
+        """Write a sourceable shell env file for downstream phases.
+
+        MOBILE_PATTERN + MOBILE_PREFIX prefer the rule resolved by
+        apply_user_validation (i.e. what's actually in MDMS on the
+        target tenant). Falls back to the template default when
+        apply_user_validation hasn't run.
+        """
+        if self._effective_mobile_pattern is not None:
+            mobile_pattern = self._effective_mobile_pattern
+        else:
+            mobile_uv = next(
+                (uv for uv in self.template.user_validation if uv.field_type == "mobile"),
+                None,
+            )
+            mobile_pattern = mobile_uv.pattern if mobile_uv else ""
+
+        mobile_prefix = (
+            self._effective_mobile_prefix
+            if self._effective_mobile_prefix is not None
+            else self.template.mobile_display_prefix
         )
-        mobile_pattern = mobile_uv.pattern if mobile_uv else ""
+
         lines = [
             f"ROOT_TENANT={root}",
             f"CITY_TENANT={city_id}",
@@ -164,7 +247,7 @@ class Orchestrator:
             f"ADMIN_USER={admin_user}",
             f"ADMIN_PASSWORD={admin_password}",
             f"MOBILE_PATTERN={mobile_pattern}",
-            f"MOBILE_PREFIX={self.template.mobile_display_prefix}",
+            f"MOBILE_PREFIX={mobile_prefix}",
         ]
         with open(path, "w") as fh:
             fh.write("\n".join(lines) + "\n")

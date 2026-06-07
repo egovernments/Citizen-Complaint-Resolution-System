@@ -13,9 +13,13 @@ def test_africa_template_loads():
     assert tpl.name == "africa"
     assert tpl.default is True
     assert tpl.mobile_display_prefix == "+254"
-    assert any(uv.field_type == "mobile" for uv in tpl.user_validation)
+    mobile = next(uv for uv in tpl.user_validation if uv.field_type == "mobile")
+    # Pattern must accept trunk-zero form (matches live ke deployment)
+    assert mobile.pattern == r"^0?[17][0-9]{8}$"
+    assert mobile.max_length == 10
     assert tpl.boundary_hierarchy.complaint_filing_level == "Ward"
-    assert len(tpl.boundary_entities) >= 2
+    # boundary_entities deliberately empty — city-specific, not country-wide
+    assert tpl.boundary_entities == []
     assert len(tpl.complaint_types) >= 2
     # Africa only ships locale deltas; baseline en_IN comes from source
     assert all(r.locale != "en_IN" for r in tpl.localizations)

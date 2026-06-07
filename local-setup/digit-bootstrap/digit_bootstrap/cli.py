@@ -73,6 +73,7 @@ def bootstrap(
 
     orch.bootstrap_tenant(source=source, target=target)
     orch.setup_city(root=target, city_id=city, city_name=city_name)
+    orch.apply_user_validation(tenant_id=target)
     orch.apply_boundary_entities(city_id=city)
     orch.apply_complaint_types(tenant_id=target)
     orch.apply_localizations(tenant_id=target)
