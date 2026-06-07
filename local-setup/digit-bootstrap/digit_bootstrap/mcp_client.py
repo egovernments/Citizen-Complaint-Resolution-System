@@ -19,7 +19,10 @@ class McpError(RuntimeError):
 class McpClient:
     def __init__(self, base_url: str, timeout: float = 60.0) -> None:
         self.base_url = base_url.rstrip("/")
-        self._client = httpx.Client(timeout=timeout)
+        # trust_env=False so a SOCKS/HTTP proxy in the shell env (common
+        # on dev machines) doesn't intercept calls to the MCP shim.
+        # Operator passes the shim URL directly via --mcp-base.
+        self._client = httpx.Client(timeout=timeout, trust_env=False)
 
     def call(self, tool: str, payload: dict) -> dict:
         url = f"{self.base_url}/tools/{tool}"
