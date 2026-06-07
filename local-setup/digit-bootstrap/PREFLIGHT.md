@@ -2,11 +2,25 @@
 
 Probed against `https://subhadev.digitlab.in` (Self-hosted DIGIT). Source tenant `pg`, existing target root `mz`, existing city `mz.maputo`. ADMIN credentials worked with full role set (SUPERUSER, CSR, GRO, DGRO, PGR_LME, etc.).
 
-## MCP REST shim
+## MCP REST shim — RESOLVED 2026-06-07
 
-The `mcp__subha_dev__*` tools used here proxy through the Claude Code MCP integration to the DIGIT cluster's internal `http://kong:8000` API gateway. For the Phase 1 Python orchestrator, the equivalent REST shim URL pattern that the operator will hit is **TBD on first install** — likely `https://<digit-host>/<some-mcp-prefix>/tools/<tool_name>`. The orchestrator's `--mcp-base` flag accepts whatever URL the deployment exposes; the McpClient is URL-shape-agnostic.
+Initial probe assumed a REST-style shim at `/tools/<name>`. **That shim does NOT exist on subhadev.digitlab.in.** Direct HTTP probes:
 
-**Decision for the plan:** Don't hardcode a URL. Operator supplies `--mcp-base`. CLI tests use `http://mock`.
+```
+POST https://subhadev.digitlab.in/mcp (with MCP initialize)   → 200, server "digit-mcp" v1.0.0, protocolVersion 2025-06-18
+GET  https://subhadev.digitlab.in/tools/validate_tenant       → 404
+GET  https://subhadev.digitlab.in/mcp/tools/validate_tenant   → 404
+GET  https://subhadev.digitlab.in/mcp-shim                    → 404
+GET  https://subhadev.digitlab.in/api/mcp                     → 404
+```
+
+The deployment speaks the **MCP protocol** (JSON-RPC 2.0 over HTTP, SSE responses) at `/mcp` — NOT the REST `/tools/<name>` shape McpClient was built for.
+
+**Plan impact: McpClient needs a rewrite before the e2e smoke can run against this deployment.** Two options:
+1. **Rewrite McpClient to speak MCP protocol** (recommended). `POST /mcp` with `Content-Type: application/json` + `Accept: application/json, text/event-stream`. Body is `{"jsonrpc":"2.0","method":"tools/call","params":{"name":<tool>,"arguments":<payload>},"id":<n>}`. Response is SSE `event: message` containing the JSON-RPC envelope. ~2h of focused work. Orchestrator, templates, CLI, and all existing tests stay valid (same Python surface, different wire shape).
+2. Deploy a separate REST shim alongside the MCP server. Operational burden; doesn't simplify anything.
+
+Until McpClient is rewritten, the e2e smoke stays skipped (`DIGIT_BOOTSTRAP_E2E` only meaningful with a REST shim — none today). All 23 unit tests with mocked MCP pass; the 24th (e2e) skips correctly.
 
 ## Open question 2 — Does `tenant_bootstrap` copy ServiceDefs (complaint types)?
 
