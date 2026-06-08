@@ -2,7 +2,7 @@ package org.egov.pgr.repository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.egov.pgr.repository.rowmapper.PGRQueryBuilder;
+import org.egov.pgr.repository.rowmapper.DashboardQueryBuilder;
 import org.egov.pgr.util.PGRConstants;
 import org.egov.pgr.util.PGRUtils;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -23,7 +23,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class PGRRepository {
 
-    private final PGRQueryBuilder queryBuilder;
+    private final DashboardQueryBuilder queryBuilder;
     private final JdbcTemplate jdbcTemplate;
     private final PGRUtils utils;
 

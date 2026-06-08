@@ -69,20 +69,6 @@ public class WorkflowService {
         return service.getApplicationStatus();
     }
 
-    public List<String> getCurrentAssignees(String serviceRequestId) {
-        try {
-            List<WorkflowState> states = workflowClient.listStates(config.getWorkflowProcessCode());
-            return states.stream()
-                    .filter(s -> serviceRequestId.equals(s.getId()))
-                    .flatMap(s -> s.getActions() != null ? s.getActions().stream() : java.util.stream.Stream.empty())
-                    .map(Object::toString)
-                    .collect(Collectors.toList());
-        } catch (Exception e) {
-            log.error("Failed to get current assignees for {}", serviceRequestId, e);
-            return Collections.emptyList();
-        }
-    }
-
     public void enrichWorkflow(List<org.egov.pgr.web.models.ServiceWrapper> serviceWrappers) {
         for (org.egov.pgr.web.models.ServiceWrapper wrapper : serviceWrappers) {
             String serviceRequestId = wrapper.getService().getServiceRequestId();

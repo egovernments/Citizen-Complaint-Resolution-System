@@ -58,12 +58,8 @@ public class EscalationScheduler {
                     long elapsed = System.currentTimeMillis() - lastModified;
                     if (elapsed < config.getEscalationDefaultSlaMs()) continue;
 
-                    List<String> assignees = escalationService.getCurrentAssignees(
-                            complaint.getServiceRequestId());
-
-                    if (CollectionUtils.isEmpty(assignees)) { skipped++; continue; }
-
-                    Workflow currentWorkflow = Workflow.builder().assignes(assignees).build();
+                    // Assignees are tracked in additionalDetail by the previous escalation step
+                    Workflow currentWorkflow = Workflow.builder().assignes(Collections.emptyList()).build();
                     boolean success = escalationService.escalateComplaint(complaint, currentWorkflow);
                     if (success) escalated++; else skipped++;
                 }

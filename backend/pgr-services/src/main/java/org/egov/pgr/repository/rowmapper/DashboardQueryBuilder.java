@@ -195,6 +195,21 @@ public class DashboardQueryBuilder {
         }
     }
 
+    public String getResolvedComplaints(String tenantId, List<Object> preparedStmtList) {
+        StringBuilder sb = new StringBuilder(
+                "SELECT COUNT(*) FROM eg_pgr_service s WHERE s.applicationstatus IN ('RESOLVED','CLOSEDAFTERRESOLUTION') AND ");
+        appendTenantFilter(sb, "s.tenantid", tenantId, preparedStmtList);
+        return sb.toString();
+    }
+
+    public String getAverageResolutionTime(String tenantId, List<Object> preparedStmtList) {
+        StringBuilder sb = new StringBuilder(
+                "SELECT COALESCE(AVG(EXTRACT(EPOCH FROM (TO_TIMESTAMP(s.lastmodifiedtime/1000) - TO_TIMESTAMP(s.createdtime/1000)))/86400),0)::int" +
+                " FROM eg_pgr_service s WHERE s.applicationstatus IN ('RESOLVED','CLOSEDAFTERRESOLUTION') AND ");
+        appendTenantFilter(sb, "s.tenantid", tenantId, preparedStmtList);
+        return sb.toString();
+    }
+
     private void appendDateFilter(StringBuilder sb, Long fromDate, Long toDate, List<Object> preparedStmtList) {
         if (fromDate != null) {
             sb.append(" AND s.createdtime >= ?");

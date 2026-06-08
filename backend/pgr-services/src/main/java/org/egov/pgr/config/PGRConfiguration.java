@@ -25,6 +25,18 @@ public class PGRConfiguration {
     }
 
     // -------------------------------------------------------
+    // Tenant
+    // -------------------------------------------------------
+    @Value("${pgr.tenant-id:}")
+    private String tenantId;
+
+    // -------------------------------------------------------
+    // Domain events
+    // -------------------------------------------------------
+    @Value("${complaints.domain.events.enabled:true}")
+    private Boolean isComplaintsDomainEventEnabled;
+
+    // -------------------------------------------------------
     // IdGen (via digit-client)
     // -------------------------------------------------------
     @Value("${idgen.templateCode}")

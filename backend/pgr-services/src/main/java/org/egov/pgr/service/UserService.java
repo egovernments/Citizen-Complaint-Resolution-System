@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.digit.services.individual.IndividualClient;
 import org.digit.services.individual.model.Individual;
+import org.digit.services.individual.model.IndividualSearchResponse;
 import org.egov.pgr.web.models.RequestSearchCriteria;
 import org.egov.pgr.web.models.ServiceRequest;
 import org.egov.pgr.web.models.ServiceWrapper;
@@ -72,7 +73,12 @@ public class UserService {
         if (!StringUtils.hasText(mobileNumber)) return;
 
         try {
-            List<Individual> individuals = individualClient.searchByMobileNumber(mobileNumber);
+            IndividualSearchResponse resp = individualClient.searchAllIndividuals();
+            List<Individual> individuals = resp != null && resp.getIndividuals() != null
+                    ? resp.getIndividuals().stream()
+                            .filter(i -> mobileNumber.equals(i.getMobileNumber()))
+                            .collect(Collectors.toList())
+                    : Collections.emptyList();
             Set<String> userIds = individuals.stream()
                     .map(Individual::getId)
                     .filter(Objects::nonNull)
@@ -111,7 +117,12 @@ public class UserService {
     private void upsertIndividual(org.egov.pgr.web.models.Service service) {
         User citizen = service.getCitizen();
         try {
-            List<Individual> existing = individualClient.searchByMobileNumber(citizen.getMobileNumber());
+            IndividualSearchResponse searchResp = individualClient.searchAllIndividuals();
+            List<Individual> existing = searchResp != null && searchResp.getIndividuals() != null
+                    ? searchResp.getIndividuals().stream()
+                            .filter(i -> citizen.getMobileNumber().equals(i.getMobileNumber()))
+                            .collect(Collectors.toList())
+                    : Collections.emptyList();
             if (!CollectionUtils.isEmpty(existing)) {
                 Individual found = existing.get(0);
                 service.setAccountId(found.getId());
