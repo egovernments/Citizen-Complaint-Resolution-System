@@ -11,10 +11,9 @@ MATOMO_URL="https://unified-demo.digit.org/matomo/matomo.php"
 MATOMO_SITE_ID="${MATOMO_SITE_ID:-5}"
 DOCKER_SOCKET="/var/run/docker.sock"
 
-# Look back 120 s so we capture start events from containers that launched before
-# this sidecar (it is the last service in docker-compose.yml, so all peers fire
-# their "start" events before this script runs).
-START_SINCE=$(( $(date +%s) - 120 ))
+# Timestamp used for the live event stream (future events only).
+# Already-running containers are handled by the startup scan below.
+START_SINCE=$(date +%s)
 
 # Install curl + jq if missing (alpine base image)
 for cmd in curl jq; do
@@ -75,7 +74,8 @@ SELF=$(cat /etc/hostname 2>/dev/null || hostname)
 SELF_JSON=$(docker_api "/containers/$SELF/json" || echo '{}')
 COMPOSE_FILES=$(echo "$SELF_JSON" | jq -r '.Config.Labels["com.docker.compose.project.config_files"] // "docker-compose.yml"')
 COMPOSE_PROJECT=$(echo "$SELF_JSON" | jq -r '.Config.Labels["com.docker.compose.project"] // "local-setup"')
-CONTAINER_COUNT=$(docker_api "/containers/json" \
+ALL_CONTAINERS=$(docker_api "/containers/json" || echo '[]')
+CONTAINER_COUNT=$(echo "$ALL_CONTAINERS" \
   | jq "[.[] | select(.Labels[\"com.docker.compose.project\"]==\"$COMPOSE_PROJECT\")] | length" 2>/dev/null || echo "?")
 
 echo "[telemetry] project=$COMPOSE_PROJECT"
@@ -124,6 +124,19 @@ FILTER=$(printf '{"label":["com.docker.compose.project=%s"],"type":["container"]
   "$COMPOSE_PROJECT" | jq -sRr @uri)
 
 echo "[telemetry] Monitoring container events..."
+
+# ── Emit start events for containers already running at startup ───
+# The sidecar starts after all peers (it is last in docker-compose.yml
+# and Tilt deploys it last). The Docker event buffer may have evicted
+# those start events by the time we open the stream. Scan the live
+# container list instead so CI always sees at least one start event.
+echo "$ALL_CONTAINERS" \
+  | jq -r "[.[] | select(.Labels[\"com.docker.compose.project\"]==\"$COMPOSE_PROJECT\") | .Labels[\"com.docker.compose.service\"]] | unique | .[]" 2>/dev/null \
+  | while IFS= read -r svc; do
+      [ -z "$svc" ] && continue
+      echo "[telemetry] + $svc started"
+      send_event "container" "start" "$svc"
+    done
 
 docker_api "/events?since=${START_SINCE}&filters=${FILTER}" | while IFS= read -r line; do
   ACTION=$(echo "$line" | jq -r '.Action // empty' 2>/dev/null)
