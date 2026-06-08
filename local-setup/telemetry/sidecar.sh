@@ -11,8 +11,10 @@ MATOMO_URL="https://unified-demo.digit.org/matomo/matomo.php"
 MATOMO_SITE_ID="${MATOMO_SITE_ID:-5}"
 DOCKER_SOCKET="/var/run/docker.sock"
 
-# Record start time before package install so events during apk install are not missed
-START_SINCE=$(date +%s)
+# Look back 120 s so we capture start events from containers that launched before
+# this sidecar (it is the last service in docker-compose.yml, so all peers fire
+# their "start" events before this script runs).
+START_SINCE=$(( $(date +%s) - 120 ))
 
 # Install curl + jq if missing (alpine base image)
 for cmd in curl jq; do
