@@ -389,7 +389,15 @@ services:
     - egov-network
 
   egov-enc-service:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-enc-service:v2.9.2-4a60f20
+    # `:generatekey-endpoint` stacks the POST /crypto/v1/_generatekey
+    # endpoint (Digit-Core #1354) on top of :v2.9.2-4a60f20. Without
+    # _generatekey, the first encrypt for a brand-new state root (created
+    # by MCP tenant_bootstrap or similar) throws "Tenant Id not found" —
+    # enc-service only discovers tenants via MDMS search under
+    # STATE_LEVEL_TENANT_ID, and a brand-new root isn't under any
+    # existing root's tenant.tenants list. Bump can be replaced with a
+    # versioned tag once Digit-Core #1354 lands and a release ships.
+    image: registry.preview.egov.theflywheel.in/egovio/egov-enc-service:generatekey-endpoint
     container_name: egov-enc-service
     depends_on:
       egov-mdms-service:
