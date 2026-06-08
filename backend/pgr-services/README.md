@@ -1,140 +1,114 @@
 # PGR Service
-The objective of this service is to provide a functionality to raise a complaint/grievance by citizen in the system. The progress of complaint/grievance can be tracked by
-the citizen and will be updated by notifications whenever the status of the complaint progresses further.
-### DB UML Diagram
+
+The PGR (Public Grievance Redressal) service enables citizens to raise, track, and resolve complaints. Employees can assign, reassign, reject, or resolve complaints through a configurable workflow.
+
+> **DIGIT 3.0 Migration in progress** — see [`DIGIT3-MIGRATION.md`](./DIGIT3-MIGRATION.md) for full details of what changed, impact on dependent services, and how to run on the new platform.
+
+---
+
+## Service Overview
+
+- Citizens raise complaints with a service code, description, address, and optional documents
+- Complaints move through a workflow: `PENDINGFORASSIGNMENT → PENDINGATLME → RESOLVED / REJECTED`
+- Citizens can rate resolved complaints or re-open within a configurable idle window
+- Escalation scheduler auto-escalates SLA-breached complaints
+- Dashboard and analytics endpoints provide KPI data
+
+---
+
+## API Endpoints
+
+`BasePath`: `/pgr-services/v2`
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/request/_create` | Raise a complaint |
+| POST | `/request/_update` | Update / transition a complaint |
+| POST | `/request/_search` | Search complaints |
+| POST | `/request/_plainsearch` | Inter-service plain search |
+| POST | `/request/_count` | Count complaints |
+| GET | `/dashboard` | Dashboard KPIs |
+| POST | `/analytics/_query` | Dynamic analytics |
+
+---
+
+## Service Dependencies
+
+### DIGIT 3.0 (current branch: `pgr-on-digit3`)
+- Registry service
+- Workflow service
+- IdGen service
+- Boundary service
+- Individual service
+- Filestore service
+- Redis (cache)
+- Keycloak (auth)
+
+### DIGIT 2.x (branch: `develop`)
+- egov-idgen, egov-mdms, egov-user, egov-workflow-v2
+- egov-hrms, egov-localization, egov-url-shortening
+- Kafka + Persister
+
+---
+
+## Data Model
 
 ```mermaid
 erDiagram
     eg_pgr_service_v2 {
-        varchar(64)  id PK
-        varchar(256) tenantId PK
-        varchar(256) serviceCode
-        varchar(256) serviceRequestId
-        varchar(4000) description
-        varchar(256) accountId
-        jsonb        additionalDetails
-        varchar(128) applicationStatus
-        smallint     rating
-        varchar(256) source
-        boolean      active
-        varchar(256) createdby
-        bigint       createdtime
-        varchar(256) lastmodifiedby
-        bigint       lastmodifiedtime
+        varchar id PK
+        varchar tenantId
+        varchar serviceCode
+        varchar serviceRequestId
+        varchar applicationStatus
+        varchar accountId
+        jsonb   additionalDetails
+        smallint rating
+        varchar source
+        boolean active
+        bigint  createdtime
+        bigint  lastmodifiedtime
     }
 
     eg_pgr_address_v2 {
-        varchar(256) id PK
-        varchar(256) tenantId
-        varchar(256) parentid FK
-        varchar(128) doorno
-        varchar(256) plotno
-        varchar(1024) buildingName
-        varchar(1024) street
-        varchar(1024) landmark
-        varchar(512) city
-        varchar(16)  pincode
-        varchar(128) locality
-        varchar(256) district
-        varchar(256) region
-        varchar(256) state
-        varchar(512) country
-        numeric(9_6) latitude
-        numeric(10_7) longitude
-        jsonb        additionaldetails
-        varchar(128) createdby
-        bigint       createdtime
-        varchar(128) lastmodifiedby
-        bigint       lastmodifiedtime
+        varchar id PK
+        varchar parentid FK
+        varchar locality
+        varchar city
+        numeric latitude
+        numeric longitude
     }
 
     eg_pgr_document_v2 {
-        varchar(64) id PK
-        varchar(64) document_type
-        varchar(64) filestore_id
-        varchar(64) document_uid
-        varchar(64) service_id FK
-        jsonb       additional_details
-        varchar(64) created_by
-        varchar(64) last_modified_by
-        bigint      created_time
-        bigint      last_modified_time
+        varchar id PK
+        varchar service_id FK
+        varchar filestore_id
+        varchar document_type
     }
 
     eg_pgr_service_v2 ||--o{ eg_pgr_address_v2 : "has"
     eg_pgr_service_v2 ||--o{ eg_pgr_document_v2 : "has"
 ```
 
-### Service Dependencies
-- egov-user
-- egov-localization
-- egov-idgen
-- mdms-v2
-- egov-persister
-- egov-notification-sms
-- egov-notification-mail
-- egov-hrms
-- egov-workflow-v2
-- egov-url-shortening
+---
 
+## Configurable Properties
 
-### Swagger API Contract
-- Please refer to the [Swagger API contarct](https://raw.githubusercontent.com/egovernments/municipal-services/master/docs/pgr-services.yml) for PGR service to understand the structure of APIs and to have visualization of all internal APIs.
+| Property | Description | Default |
+|---|---|---|
+| `pgr.complain.idle.time` | Window (ms) within which citizen can reopen | `864000000` |
+| `pgr.default.limit` | Default search page size | `100` |
+| `pgr.search.max.limit` | Max records per search | `200` |
+| `pgr.escalation.enabled` | Enable/disable escalation scheduler | `true` |
+| `pgr.escalation.default.sla.ms` | Default SLA before escalation | `432000000` |
+| `pgr.dashboard.refresh.enabled` | Enable/disable MV refresh scheduler | `true` |
+| `notification.sms.enabled` | Enable/disable SMS notifications | `true` |
+| `complaints.domain.events.enabled` | Enable/disable domain event publishing | `true` |
 
+---
 
-## Service Details
-**Details of all the entities involved:**
+## Further Reading
 
-**a) PGREntity:** The top level wrapper object containing the Service and Workflow
-
-**b) Service:** The Service object contains the details of the complaint including the owner of the complaint.
-
-**c) Workflow:** The Workflow object contains the action which is to be performed on the complaint and other associated inforamtion like documents and comments given while performing the action.
-
-**d) Citizen:** The Citizen object is of type(class) User  and contains the info about the person who has filed the complaint or on whose behalf the complaint is filled.
-
-**e) Address:** Captures details of the address of the complaint.
-
-
-
-**Notification:**
-- Notification is sent to the phone number of the citizen who has been created in the system. This is an SMS notification.
-
-
-### Configurable properties
-
-| Environment Variables                     | Description                                                                                                                                               | Value                                             |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------|
-| `pgr.complain.idle.time`                  | The time after which the citizen cannot re-open the complaint.                                                                                            | 864000000                                         |
-| `pgr.default.offset`                      | The default offset in any search                                                                                                                          | 0                                                 |
-| `pgr.default.limit`                       | The default limit in any search call.                                                                                                                     | 100                                               |
-| `pgr.search.max.limit`                    | The maximum number of record returned in any search call                                                                                                  | 200                                               |
-| `notification.sms.enabled`                | Switch to enable/disable sms notification                                                                                                                 | true                                              |
-| `egov.user.event.notification.enabled`    | Switch to enable/disable event notification                                                                                                               | true                                              |
-### API Details
-
-`BasePath` /pgr-services/v2/[API endpoint]
-
-##### Method
-**a) Create Complaint `POST /_create` :** API to create/raise a complaint in the system
-
-**b) Update Complaint `POST /_update` :** API to update the details of complaint.(Used primarily to perform actions on the complaint)
-
-**c) Search Complaints `POST /_search` :** API to search the complaints based on certain predefined params. Default offset and limit will be applied on every search call if not provided in the search call
-
-**c) Count Complaints `POST /_search` :** API to return the count of total number of complaints satisfying the given criteria
-
-### Kafka Consumers
-
-- NA
-
-### Kafka Producers
-
-- Following are the Producer topic.
-    - **save-pgr-request** :- This topic is used to create new complaint in the system.
-    - **update-pgr-request** :- This topic is used to update the existing complaint in the systen.
-
-### note
-all master data, localisation data, boundary data, users, employees, workflow config will be update by a service in utilities/default-data-handler which update all these data which is maintained in resource folder.
-
-and all the configs which are required for pgr are maintained in configs folder.
+- [`DIGIT3-MIGRATION.md`](./DIGIT3-MIGRATION.md) — full migration guide (what changed, impact, TODOs)
+- [`LOCALSETUP.md`](./LOCALSETUP.md) — how to run locally
+- [`CHANGELOG.md`](./CHANGELOG.md) — version history
