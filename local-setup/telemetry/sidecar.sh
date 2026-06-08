@@ -125,17 +125,28 @@ FILTER=$(printf '{"label":["com.docker.compose.project=%s"],"type":["container"]
 
 echo "[telemetry] Monitoring container events..."
 
-# ── Emit start events for containers already running at startup ───
+# ── Emit start/healthy events for containers already up at startup ──
 # The sidecar starts after all peers (it is last in docker-compose.yml
 # and Tilt deploys it last). The Docker event buffer may have evicted
-# those start events by the time we open the stream. Scan the live
-# container list instead so CI always sees at least one start event.
+# both start and health_status events by the time we open the stream.
+# Scan the live container list so CI always sees at least one of each.
 echo "$ALL_CONTAINERS" \
   | jq -r "[.[] | select(.Labels[\"com.docker.compose.project\"]==\"$COMPOSE_PROJECT\") | .Labels[\"com.docker.compose.service\"]] | unique | .[]" 2>/dev/null \
   | while IFS= read -r svc; do
       [ -z "$svc" ] && continue
       echo "[telemetry] + $svc started"
       send_event "container" "start" "$svc"
+    done
+
+# The container list Status field contains "(healthy)" when the container
+# has passed its Docker healthcheck — use that instead of the Health
+# sub-object which is only available in the inspect endpoint.
+echo "$ALL_CONTAINERS" \
+  | jq -r "[.[] | select(.Labels[\"com.docker.compose.project\"]==\"$COMPOSE_PROJECT\" and (.Status // \"\" | contains(\"(healthy)\"))) | .Labels[\"com.docker.compose.service\"]] | unique | .[]" 2>/dev/null \
+  | while IFS= read -r svc; do
+      [ -z "$svc" ] && continue
+      echo "[telemetry] . $svc healthy"
+      send_event "container" "healthy" "$svc"
     done
 
 docker_api "/events?since=${START_SINCE}&filters=${FILTER}" | while IFS= read -r line; do
