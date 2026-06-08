@@ -776,6 +776,20 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
 
   if (loading || isValidationConfigLoading) return <Loader></Loader>;
 
+  // The mobile-edit affordance is only honest when the save path actually
+  // accepts the new number. The Individual-service write
+  // (`/individual/v1/_update`) does; the legacy egov-user write
+  // (`/user/profile/_update`) silently strips `mobileNumber` server-side
+  // via `User.nullifySensitiveFields()` because the mobile is the login
+  // handle and self-service rotation has no OTP-verify guard. On
+  // deployments without the Individual service wired (e.g. naipepea), the
+  // editable input is therefore a lie — render it read-only so we don't
+  // promise behavior the backend prohibits. CCRS#555 follow-up. Defined at
+  // component scope so both the citizen and employee profile branches can
+  // read it (previously scoped inside the citizen branch only, which
+  // crashed the employee profile with "canEditMobile is not defined").
+  const canEditMobile = !!window?.globalConfigs?.getConfig("INDIVIDUAL_SERVICE_CONTEXT_PATH");
+
   // ----------------------------------------------------------------------
   // v2 Citizen branch — modernized chrome (form sections in a Card,
   // inline sticky save bar, theme-aware tokens). Employee path below
@@ -794,16 +808,6 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
       value: l.value,
       label: l.label,
     }));
-    // The mobile-edit affordance is only honest when the save path actually
-    // accepts the new number. The Individual-service write
-    // (`/individual/v1/_update`) does; the legacy egov-user write
-    // (`/user/profile/_update`) silently strips `mobileNumber` server-side
-    // via `User.nullifySensitiveFields()` because the mobile is the login
-    // handle and self-service rotation has no OTP-verify guard. On
-    // deployments without the Individual service wired (e.g. naipepea), the
-    // editable input is therefore a lie — render it read-only so we don't
-    // promise behavior the backend prohibits. CCRS#555 follow-up.
-    const canEditMobile = !!window?.globalConfigs?.getConfig("INDIVIDUAL_SERVICE_CONTEXT_PATH");
     return (
       <div
         className="v2-scope"
