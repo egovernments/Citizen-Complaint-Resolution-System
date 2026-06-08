@@ -67,7 +67,16 @@ const defaultValidationConfig = {
       // contain "O'Brien" / "Mary-Anne" / "John Jr." which the
       // alpha-only regex rejected too.
       name: "/^[a-zA-Z0-9 .'\\-]+$/i",
-      mobileNumber: "/^[6-9]{1}[0-9]{9}$/",
+      // Fallback mobile pattern for when the MDMS ValidationConfigs master
+      // isn't seeded for the tenant. Pull the tenant's pattern from
+      // globalConfigs.CORE_MOBILE_CONFIGS (e.g. Mozambique "^8[0-9]{8}$")
+      // instead of the old hardcoded India regex (/^[6-9][0-9]{9}$/), which
+      // rejected valid 9-digit numbers on save. globalConfigs.js is loaded
+      // before the bundle, so getConfig is available at module init. The
+      // generic numeric pattern is only a last resort if the config is absent.
+      mobileNumber:
+        window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.mobileNumberPattern ||
+        "/^[0-9]{6,15}$/",
       password: "/^([a-zA-Z0-9@#$%]{8,15})$/i",
     },
   ],
@@ -279,7 +288,13 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
 
   useEffect(() => {
     if (mdmsValidationData && mdmsValidationData?.UserProfileValidationConfig?.[0]) {
-      const updatedValidationConfig = mapConfigToRegExp(mdmsValidationData);
+      const updatedValidationConfig = mapConfigToRegExp(mdmsValidationData) || {};
+      // When the MDMS master isn't seeded, the select still yields keys with
+      // `undefined` values (e.g. mobileNumber). Drop those so they don't
+      // clobber the globalConfigs/default fallback established above.
+      Object.keys(updatedValidationConfig).forEach((key) => {
+        if (updatedValidationConfig[key] === undefined) delete updatedValidationConfig[key];
+      });
       if (mdmsValidationData?.prefix) {
         updatedValidationConfig.prefix = mdmsValidationData.prefix;
       }
