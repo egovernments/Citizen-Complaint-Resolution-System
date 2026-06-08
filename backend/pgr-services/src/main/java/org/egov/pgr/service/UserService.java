@@ -1,271 +1,146 @@
 package org.egov.pgr.service;
 
-
-import org.egov.common.contract.request.RequestInfo;
-import org.egov.common.contract.request.Role;
-import org.egov.pgr.config.PGRConfiguration;
-import org.egov.pgr.util.UserUtils;
-import org.egov.pgr.web.models.*;
-import org.egov.pgr.web.models.user.CreateUserRequest;
-import org.egov.pgr.web.models.user.UserDetailResponse;
-import org.egov.pgr.web.models.user.UserSearchRequest;
-import org.egov.tracer.model.CustomException;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.digit.services.individual.IndividualClient;
+import org.digit.services.individual.model.Individual;
+import org.egov.pgr.web.models.RequestSearchCriteria;
+import org.egov.pgr.web.models.ServiceRequest;
+import org.egov.pgr.web.models.ServiceWrapper;
+import org.egov.pgr.web.models.User;
+import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 import java.util.*;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.egov.pgr.util.PGRConstants.USERTYPE_CITIZEN;
-
-@org.springframework.stereotype.Service
+@Slf4j
+@Service
+@RequiredArgsConstructor
 public class UserService {
 
+    private final IndividualClient individualClient;
 
-    private UserUtils userUtils;
+    /**
+     * Resolves and attaches citizen info on a create/update request.
+     * If accountId is present, looks up the individual and attaches to citizen field.
+     * If citizen object is present but no accountId, upserts the individual.
+     */
+    public void callUserService(ServiceRequest request) {
+        org.egov.pgr.web.models.Service service = request.getService();
 
-    private PGRConfiguration config;
-
-    @Autowired
-    public UserService(UserUtils userUtils, PGRConfiguration config) {
-        this.userUtils = userUtils;
-        this.config = config;
+        if (StringUtils.hasText(service.getAccountId())) {
+            enrichCitizenFromIndividual(service);
+        } else if (service.getCitizen() != null) {
+            upsertIndividual(service);
+        }
     }
 
     /**
-     * Calls user service to enrich user from search or upsert user
-     * @param request
+     * Enriches citizen field on each wrapper by looking up the individual by accountId.
      */
-    public void callUserService(ServiceRequest request){
+    public void enrichUsers(List<ServiceWrapper> serviceWrappers) {
+        Set<String> individualIds = serviceWrappers.stream()
+                .map(sw -> sw.getService().getAccountId())
+                .filter(StringUtils::hasText)
+                .collect(Collectors.toSet());
 
-        if(!StringUtils.isEmpty(request.getService().getAccountId()))
-            enrichUser(request);
-        else if(request.getService().getCitizen()!=null)
-            upsertUser(request);
+        if (individualIds.isEmpty()) return;
 
-    }
-
-    /**
-     * Calls user search to fetch the list of user and enriches it in serviceWrappers
-     * @param serviceWrappers
-     */
-    public void enrichUsers(List<ServiceWrapper> serviceWrappers){
-
-        Set<String> uuids = new HashSet<>();
-
-        serviceWrappers.forEach(serviceWrapper -> {
-            uuids.add(serviceWrapper.getService().getAccountId());
-        });
-
-        Map<String, User> idToUserMap = searchBulkUser(new LinkedList<>(uuids));
-
-        serviceWrappers.forEach(serviceWrapper -> {
-            serviceWrapper.getService().setCitizen(idToUserMap.get(serviceWrapper.getService().getAccountId()));
-        });
-
-    }
-
-
-    /**
-     * Creates or updates the user based on if the user exists. The user existance is searched based on userName = mobileNumber
-     * If the there is already a user with that mobileNumber, the existing user is updated
-     * @param request
-     */
-    private void upsertUser(ServiceRequest request){
-
-        User user = request.getService().getCitizen();
-        String tenantId = request.getService().getTenantId();
-        User userServiceResponse = null;
-
-        // Search on mobile number as user name
-        UserDetailResponse userDetailResponse = searchUser(userUtils.getStateLevelTenant(tenantId),null, user.getMobileNumber());
-        if (!userDetailResponse.getUser().isEmpty()) {
-            User userFromSearch = userDetailResponse.getUser().get(0);
-            if(!user.getName().equalsIgnoreCase(userFromSearch.getName())){
-                userServiceResponse = updateUser(request.getRequestInfo(),user,userFromSearch);
+        Map<String, User> idToUser = new HashMap<>();
+        for (String individualId : individualIds) {
+            try {
+                Individual ind = individualClient.getIndividualById(individualId);
+                if (ind != null) {
+                    idToUser.put(individualId, toUser(ind));
+                }
+            } catch (Exception e) {
+                log.warn("Could not fetch individual {}: {}", individualId, e.getMessage());
             }
-            else userServiceResponse = userDetailResponse.getUser().get(0);
-        }
-        else {
-            userServiceResponse = createUser(request.getRequestInfo(),tenantId,user);
         }
 
-        // Enrich the accountId
-        request.getService().setAccountId(userServiceResponse.getUuid());
-    }
-
-
-    /**
-     * Calls user search to fetch a user and enriches it in request
-     * @param request
-     */
-    private void enrichUser(ServiceRequest request){
-
-        RequestInfo requestInfo = request.getRequestInfo();
-        String accountId = request.getService().getAccountId();
-        String tenantId = request.getService().getTenantId();
-
-        UserDetailResponse userDetailResponse = searchUser(userUtils.getStateLevelTenant(tenantId),accountId,null);
-
-        if(userDetailResponse.getUser().isEmpty())
-            throw new CustomException("INVALID_ACCOUNTID","No user exist for the given accountId");
-
-        else request.getService().setCitizen(userDetailResponse.getUser().get(0));
-
+        serviceWrappers.forEach(sw ->
+                sw.getService().setCitizen(idToUser.get(sw.getService().getAccountId())));
     }
 
     /**
-     * Creates the user from the given userInfo by calling user service
-     * @param requestInfo
-     * @param tenantId
-     * @param userInfo
-     * @return
+     * Enriches userIds in search criteria from mobileNumber via individual lookup.
      */
-    private User createUser(RequestInfo requestInfo,String tenantId, User userInfo) {
-
-        userUtils.addUserDefaultFields(userInfo.getMobileNumber(),tenantId, userInfo);
-        StringBuilder uri = new StringBuilder(config.getUserHost())
-                .append(config.getUserContextPath())
-                .append(config.getUserCreateEndpoint());
-
-
-        UserDetailResponse userDetailResponse = userUtils.userCall(new CreateUserRequest(requestInfo, userInfo), uri);
-
-        return userDetailResponse.getUser().get(0);
-
-    }
-
-    /**
-     * Updates the given user by calling user service
-     * @param requestInfo
-     * @param user
-     * @param userFromSearch
-     * @return
-     */
-    private User updateUser(RequestInfo requestInfo,User user,User userFromSearch) {
-
-        userFromSearch.setName(user.getName());
-        userFromSearch.setActive(true);
-
-        StringBuilder uri = new StringBuilder(config.getUserHost())
-                .append(config.getUserContextPath())
-                .append(config.getUserUpdateEndpoint());
-
-
-        UserDetailResponse userDetailResponse = userUtils.userCall(new CreateUserRequest(requestInfo, userFromSearch), uri);
-
-        return userDetailResponse.getUser().get(0);
-
-    }
-
-    /**
-     * calls the user search API based on the given accountId and userName
-     * @param stateLevelTenant
-     * @param accountId
-     * @param userName
-     * @return
-     */
-    private UserDetailResponse searchUser(String stateLevelTenant, String accountId, String userName){
-
-        UserSearchRequest userSearchRequest =new UserSearchRequest();
-        userSearchRequest.setActive(true);
-        userSearchRequest.setUserType(USERTYPE_CITIZEN);
-        userSearchRequest.setTenantId(stateLevelTenant);
-
-        if(StringUtils.isEmpty(accountId) && StringUtils.isEmpty(userName))
-            return null;
-
-        if(!StringUtils.isEmpty(accountId))
-            userSearchRequest.setUuid(Collections.singletonList(accountId));
-
-        if(!StringUtils.isEmpty(userName))
-            userSearchRequest.setUserName(userName);
-
-        StringBuilder uri = new StringBuilder(config.getUserHost()).append(config.getUserSearchEndpoint());
-        return userUtils.userCall(userSearchRequest,uri);
-
-    }
-
-    /**
-     * calls the user search API based on the given list of user uuids
-     * @param uuids
-     * @return
-     */
-    private Map<String,User> searchBulkUser(List<String> uuids){
-
-        UserSearchRequest userSearchRequest =new UserSearchRequest();
-        userSearchRequest.setActive(true);
-        userSearchRequest.setUserType(USERTYPE_CITIZEN);
-
-
-        if(!CollectionUtils.isEmpty(uuids))
-            userSearchRequest.setUuid(uuids);
-
-
-        StringBuilder uri = new StringBuilder(config.getUserHost()).append(config.getUserSearchEndpoint());
-        UserDetailResponse userDetailResponse = userUtils.userCall(userSearchRequest,uri);
-        List<User> users = userDetailResponse.getUser();
-
-        if(CollectionUtils.isEmpty(users))
-            throw new CustomException("USER_NOT_FOUND","No user found for the uuids");
-
-        Map<String,User> idToUserMap = users.stream().collect(Collectors.toMap(User::getUuid, Function.identity()));
-
-        return idToUserMap;
-    }
-
-    /**
-     * Searches for a user by UUID (without userType restriction) and returns the name of their first role.
-     * Used to resolve the modifier's role from auditDetails.lastModifiedBy.
-     */
-    public String getFirstRoleNameByUuid(String uuid, String tenantId, RequestInfo requestInfo) {
-        if (!StringUtils.hasText(uuid) || !StringUtils.hasText(tenantId)) return null;
-
-        UserSearchRequest userSearchRequest = new UserSearchRequest();
-        userSearchRequest.setRequestInfo(requestInfo);
-        userSearchRequest.setUuid(Collections.singletonList(uuid));
-        userSearchRequest.setActive(true);
-        userSearchRequest.setTenantId(userUtils.getStateLevelTenant(tenantId));
-
-        StringBuilder uri = new StringBuilder(config.getUserHost()).append(config.getUserSearchEndpoint());
-        UserDetailResponse response = userUtils.userCall(userSearchRequest, uri);
-
-        if (response == null || CollectionUtils.isEmpty(response.getUser())) return null;
-        List<Role> roles = response.getUser().get(0).getRoles();
-        return CollectionUtils.isEmpty(roles) ? null : roles.get(0).getName();
-    }
-
-    /**
-     * Enriches the list of userUuids associated with the mobileNumber in the search criteria
-     * @param tenantId
-     * @param criteria
-     */
-    public void enrichUserIds(String tenantId, RequestSearchCriteria criteria){
-
+    public void enrichUserIds(String tenantId, RequestSearchCriteria criteria) {
         String mobileNumber = criteria.getMobileNumber();
+        if (!StringUtils.hasText(mobileNumber)) return;
 
-        UserSearchRequest userSearchRequest =new UserSearchRequest();
-        userSearchRequest.setActive(true);
-        userSearchRequest.setUserType(USERTYPE_CITIZEN);
-        userSearchRequest.setTenantId(tenantId);
-        userSearchRequest.setMobileNumber(mobileNumber);
-
-        StringBuilder uri = new StringBuilder(config.getUserHost()).append(config.getUserSearchEndpoint());
-        UserDetailResponse userDetailResponse = userUtils.userCall(userSearchRequest,uri);
-        List<User> users = userDetailResponse.getUser();
-
-        Set<String> userIds = users.stream().map(User::getUuid).collect(Collectors.toSet());
-        criteria.setUserIds(userIds);
+        try {
+            List<Individual> individuals = individualClient.searchByMobileNumber(mobileNumber);
+            Set<String> userIds = individuals.stream()
+                    .map(Individual::getId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+            criteria.setUserIds(userIds);
+        } catch (Exception e) {
+            log.warn("Failed to enrich userIds for mobileNumber {}: {}", mobileNumber, e.getMessage());
+            criteria.setUserIds(Collections.emptySet());
+        }
     }
 
+    public String getFirstRoleNameByUuid(String uuid, String tenantId) {
+        if (!StringUtils.hasText(uuid)) return null;
+        try {
+            Individual ind = individualClient.getIndividualById(uuid);
+            return ind != null ? ind.getName() : null;
+        } catch (Exception e) {
+            log.warn("Failed to get individual by uuid {}: {}", uuid, e.getMessage());
+            return null;
+        }
+    }
 
+    private void enrichCitizenFromIndividual(org.egov.pgr.web.models.Service service) {
+        try {
+            Individual ind = individualClient.getIndividualById(service.getAccountId());
+            if (ind == null) {
+                log.warn("No individual found for accountId={}", service.getAccountId());
+                return;
+            }
+            service.setCitizen(toUser(ind));
+        } catch (Exception e) {
+            log.warn("Failed to enrich citizen for accountId={}: {}", service.getAccountId(), e.getMessage());
+        }
+    }
 
+    private void upsertIndividual(org.egov.pgr.web.models.Service service) {
+        User citizen = service.getCitizen();
+        try {
+            List<Individual> existing = individualClient.searchByMobileNumber(citizen.getMobileNumber());
+            if (!CollectionUtils.isEmpty(existing)) {
+                Individual found = existing.get(0);
+                service.setAccountId(found.getId());
+                service.setCitizen(toUser(found));
+            } else {
+                Individual newInd = Individual.builder()
+                        .name(citizen.getName())
+                        .mobileNumber(citizen.getMobileNumber())
+                        .email(citizen.getEmailId())
+                        .gender("OTHER")
+                        .build();
+                Individual created = individualClient.createIndividual(newInd);
+                if (created != null) {
+                    service.setAccountId(created.getId());
+                    service.setCitizen(toUser(created));
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to upsert individual for citizen mobile={}: {}", citizen.getMobileNumber(), e.getMessage());
+        }
+    }
 
-
-
-
-
-
+    private User toUser(Individual ind) {
+        return User.builder()
+                .uuid(ind.getId())
+                .name(ind.getName())
+                .mobileNumber(ind.getMobileNumber())
+                .emailId(ind.getEmail())
+                .active(true)
+                .build();
+    }
 }

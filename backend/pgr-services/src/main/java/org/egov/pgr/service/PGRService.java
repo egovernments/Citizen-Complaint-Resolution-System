@@ -1,294 +1,164 @@
 package org.egov.pgr.service;
 
-
 import com.jayway.jsonpath.JsonPath;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.egov.common.contract.request.RequestInfo;
+import org.digit.services.registry.RegistryClient;
+import org.digit.services.registry.model.RegistryDataResponse;
 import org.egov.pgr.config.PGRConfiguration;
-import org.egov.pgr.producer.Producer;
-import org.egov.pgr.repository.PGRRepository;
-import org.egov.pgr.util.MDMSUtils;
 import org.egov.pgr.util.PGRUtils;
 import org.egov.pgr.validator.ServiceRequestValidator;
-import org.egov.pgr.web.models.Service;
-import org.egov.pgr.web.models.ServiceWrapper;
-import org.egov.pgr.web.models.RequestSearchCriteria;
-import org.egov.pgr.web.models.ServiceRequest;
-import org.egov.tracer.model.CustomException;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.egov.pgr.web.models.*;
 import org.springframework.util.CollectionUtils;
 
 import java.util.*;
 
-import static org.egov.pgr.util.PGRConstants.MDMS_DEPARTMENT_SEARCH;
-import static org.egov.pgr.util.PGRConstants.MDMS_DEPARTMENT_NAME_SEARCH;
-import static org.egov.pgr.util.PGRConstants.MDMS_SERVICENAME_SEARCH;
-
 @Slf4j
 @org.springframework.stereotype.Service
+@RequiredArgsConstructor
 public class PGRService {
 
+    private final EnrichmentService enrichmentService;
+    private final UserService userService;
+    private final WorkflowService workflowService;
+    private final ServiceRequestValidator validator;
+    private final RegistryService registryService;
+    private final PGRConfiguration config;
+    private final PGRUtils pgrUtils;
+    private final ComplaintDomainEventService complaintDomainEventService;
+    private final RegistryClient registryClient;
 
-
-    private EnrichmentService enrichmentService;
-
-    private UserService userService;
-
-    private WorkflowService workflowService;
-
-    private ServiceRequestValidator serviceRequestValidator;
-
-    private ServiceRequestValidator validator;
-
-    private Producer producer;
-
-    private PGRConfiguration config;
-
-    private PGRRepository repository;
-
-    private MDMSUtils mdmsUtils;
-
-    private ComplaintDomainEventService complaintDomainEventService;
-    
-    private PGRUtils pgrUtils;
-
-
-    @Autowired
-    public PGRService(EnrichmentService enrichmentService, UserService userService, WorkflowService workflowService,
-                      ServiceRequestValidator serviceRequestValidator, ServiceRequestValidator validator, Producer producer,
-                      PGRConfiguration config, PGRRepository repository, MDMSUtils mdmsUtils,
-                      ComplaintDomainEventService complaintDomainEventService, PGRUtils pgrUtils) {
-        this.enrichmentService = enrichmentService;
-        this.userService = userService;
-        this.workflowService = workflowService;
-        this.serviceRequestValidator = serviceRequestValidator;
-        this.validator = validator;
-        this.producer = producer;
-        this.config = config;
-        this.repository = repository;
-        this.mdmsUtils = mdmsUtils;
-        this.complaintDomainEventService = complaintDomainEventService;
-        this.pgrUtils = pgrUtils;
-    }
-
-
-    /**
-     * Creates a complaint in the system
-     * @param request The service request containg the complaint information
-     * @return
-     */
-	public ServiceRequest create(ServiceRequest request) {
-		String tenantId = request.getService().getTenantId();
-		String fromState = request.getService().getApplicationStatus();
-		Object mdmsData = mdmsUtils.mDMSCall(request);
-		validator.validateCreate(request, mdmsData);
-		enrichmentService.enrichCreateRequest(request);
-		workflowService.updateWorkflowStatus(request);
-
-		Service service = request.getService();
-
-		Map<String, Object> existing = pgrUtils.extractAdditionalDetails(service.getAdditionalDetail());
-		Map<String, Object> backend = new HashMap<>();
-		backend.put("department", getDepartmentFromMDMS(request, mdmsData));
-		backend.put("serviceName", getServiceNameFromMDMS(request, mdmsData));
-		Map<String, Object> merged = pgrUtils.deepMerge(existing, backend);
-		service.setAdditionalDetail(merged);
-		complaintDomainEventService.publishWorkflowTransitionEvent(request, fromState);
-
-		producer.push(tenantId, config.getCreateTopic(), request);
-		producer.push(tenantId, config.getInboxCreateTopic(), request);
-		return request;
-	}
-
-
-    /**
-     * Searches the complaints in the system based on the given criteria
-     * @param requestInfo The requestInfo of the search call
-     * @param criteria The search criteria containg the params on which to search
-     * @return
-     */
-    public List<ServiceWrapper> search(RequestInfo requestInfo, RequestSearchCriteria criteria){
-        validator.validateSearch(requestInfo, criteria);
-
-        enrichmentService.enrichSearchRequest(requestInfo, criteria);
-
-        if(criteria.isEmpty())
-            return new ArrayList<>();
-
-        if(criteria.getMobileNumber()!=null && CollectionUtils.isEmpty(criteria.getUserIds()))
-            return new ArrayList<>();
-
-        criteria.setIsPlainSearch(false);
-
-        List<ServiceWrapper> serviceWrappers = repository.getServiceWrappers(criteria);
-
-        if(CollectionUtils.isEmpty(serviceWrappers))
-            return new ArrayList<>();;
-
-        userService.enrichUsers(serviceWrappers);
-        List<ServiceWrapper> enrichedServiceWrappers = workflowService.enrichWorkflow(requestInfo,serviceWrappers);
-        Map<Long, List<ServiceWrapper>> sortedWrappers = new TreeMap<>(Collections.reverseOrder());
-        for(ServiceWrapper svc : enrichedServiceWrappers){
-            if(sortedWrappers.containsKey(svc.getService().getAuditDetails().getCreatedTime())){
-                sortedWrappers.get(svc.getService().getAuditDetails().getCreatedTime()).add(svc);
-            }else{
-                List<ServiceWrapper> serviceWrapperList = new ArrayList<>();
-                serviceWrapperList.add(svc);
-                sortedWrappers.put(svc.getService().getAuditDetails().getCreatedTime(), serviceWrapperList);
-            }
-        }
-        List<ServiceWrapper> sortedServiceWrappers = new ArrayList<>();
-        for(Long createdTimeDesc : sortedWrappers.keySet()){
-            sortedServiceWrappers.addAll(sortedWrappers.get(createdTimeDesc));
-        }
-        return sortedServiceWrappers;
-    }
-
-
-    /**
-     * Updates the complaint (used to forward the complaint from one application status to another)
-     * @param request The request containing the complaint to be updated
-     * @return
-     */
-    public ServiceRequest update(ServiceRequest request){
-        String tenantId = request.getService().getTenantId();
+    public ServiceRequest create(ServiceRequest request) {
         String fromState = request.getService().getApplicationStatus();
-        Object mdmsData = mdmsUtils.mDMSCall(request);
-        validator.validateUpdate(request, mdmsData);
-        enrichmentService.enrichUpdateRequest(request);
+
+        validator.validateCreate(request);
+        enrichmentService.enrichCreateRequest(request);
+
+        enrichServiceCodeMetadata(request);
+
         workflowService.updateWorkflowStatus(request);
-
-        Service updateService = request.getService();
-		Map<String, Object> existing = pgrUtils.extractAdditionalDetails(updateService.getAdditionalDetail());
-		Map<String, Object> backend = new HashMap<>();
-		backend.put("department", getDepartmentFromMDMS(request, mdmsData));
-		backend.put("serviceName", getServiceNameFromMDMS(request, mdmsData));
-		Map<String, Object> merged = pgrUtils.deepMerge(existing, backend);
-		updateService.setAdditionalDetail(merged);
-
         complaintDomainEventService.publishWorkflowTransitionEvent(request, fromState);
-        producer.push(tenantId,config.getUpdateTopic(),request);
-        producer.push(tenantId,config.getInboxUpdateTopic(),request);
+
+        registryService.save(request.getService());
         return request;
     }
 
-    /**
-     * Returns the total number of comaplaints matching the given criteria
-     * @param requestInfo The requestInfo of the search call
-     * @param criteria The search criteria containg the params for which count is required
-     * @return
-     */
-    public Integer count(RequestInfo requestInfo, RequestSearchCriteria criteria){
+    public List<ServiceWrapper> search(ServiceRequest request, RequestSearchCriteria criteria) {
+        validator.validateSearch(request, criteria);
+        enrichmentService.enrichSearchRequest(request, criteria);
+
+        if (criteria.isEmpty()) return new ArrayList<>();
+        if (criteria.getMobileNumber() != null && CollectionUtils.isEmpty(criteria.getUserIds()))
+            return new ArrayList<>();
+
         criteria.setIsPlainSearch(false);
-        Integer count = repository.getCount(criteria);
-        return count;
+        List<Service> services = registryService.search(criteria);
+
+        if (CollectionUtils.isEmpty(services)) return new ArrayList<>();
+
+        List<ServiceWrapper> wrappers = new ArrayList<>();
+        for (Service svc : services) {
+            wrappers.add(ServiceWrapper.builder().service(svc).workflow(new Workflow()).build());
+        }
+
+        userService.enrichUsers(wrappers);
+        workflowService.enrichWorkflow(wrappers);
+
+        wrappers.sort((a, b) -> {
+            long ta = a.getService().getAuditDetails() != null ? a.getService().getAuditDetails().getCreatedTime() : 0;
+            long tb = b.getService().getAuditDetails() != null ? b.getService().getAuditDetails().getCreatedTime() : 0;
+            return Long.compare(tb, ta);
+        });
+
+        return wrappers;
     }
 
+    public ServiceRequest update(ServiceRequest request) {
+        String fromState = request.getService().getApplicationStatus();
 
-    public List<ServiceWrapper> plainSearch(RequestInfo requestInfo, RequestSearchCriteria criteria) {
+        validator.validateUpdate(request);
+        enrichmentService.enrichUpdateRequest(request);
+
+        enrichServiceCodeMetadata(request);
+
+        workflowService.updateWorkflowStatus(request);
+        complaintDomainEventService.publishWorkflowTransitionEvent(request, fromState);
+
+        registryService.update(request.getService());
+        return request;
+    }
+
+    public Integer count(ServiceRequest request, RequestSearchCriteria criteria) {
+        criteria.setIsPlainSearch(false);
+        return registryService.count(criteria);
+    }
+
+    public List<ServiceWrapper> plainSearch(ServiceRequest request, RequestSearchCriteria criteria) {
         validator.validatePlainSearch(criteria);
-
         criteria.setIsPlainSearch(true);
 
-        if(criteria.getLimit()==null)
-            criteria.setLimit(config.getDefaultLimit());
+        if (criteria.getLimit() == null) criteria.setLimit(config.getDefaultLimit());
+        if (criteria.getOffset() == null) criteria.setOffset(config.getDefaultOffset());
+        if (criteria.getLimit() > config.getMaxLimit()) criteria.setLimit(config.getMaxLimit());
 
-        if(criteria.getOffset()==null)
-            criteria.setOffset(config.getDefaultOffset());
+        List<Service> services = registryService.search(criteria);
+        if (CollectionUtils.isEmpty(services)) return new ArrayList<>();
 
-        if(criteria.getLimit()!=null && criteria.getLimit() > config.getMaxLimit())
-            criteria.setLimit(config.getMaxLimit());
-
-        List<ServiceWrapper> serviceWrappers = repository.getServiceWrappers(criteria);
-
-        if(CollectionUtils.isEmpty(serviceWrappers)){
-            return new ArrayList<>();
+        List<ServiceWrapper> wrappers = new ArrayList<>();
+        for (Service svc : services) {
+            wrappers.add(ServiceWrapper.builder().service(svc).workflow(new Workflow()).build());
         }
 
-        userService.enrichUsers(serviceWrappers);
-        List<ServiceWrapper> enrichedServiceWrappers = workflowService.enrichWorkflow(requestInfo, serviceWrappers);
+        userService.enrichUsers(wrappers);
+        workflowService.enrichWorkflow(wrappers);
 
-        Map<Long, List<ServiceWrapper>> sortedWrappers = new TreeMap<>(Collections.reverseOrder());
-        for(ServiceWrapper svc : enrichedServiceWrappers){
-            if(sortedWrappers.containsKey(svc.getService().getAuditDetails().getCreatedTime())){
-                sortedWrappers.get(svc.getService().getAuditDetails().getCreatedTime()).add(svc);
-            }else{
-                List<ServiceWrapper> serviceWrapperList = new ArrayList<>();
-                serviceWrapperList.add(svc);
-                sortedWrappers.put(svc.getService().getAuditDetails().getCreatedTime(), serviceWrapperList);
-            }
-        }
-        List<ServiceWrapper> sortedServiceWrappers = new ArrayList<>();
-        for(Long createdTimeDesc : sortedWrappers.keySet()){
-            sortedServiceWrappers.addAll(sortedWrappers.get(createdTimeDesc));
-        }
-        return sortedServiceWrappers;
+        wrappers.sort((a, b) -> {
+            long ta = a.getService().getAuditDetails() != null ? a.getService().getAuditDetails().getCreatedTime() : 0;
+            long tb = b.getService().getAuditDetails() != null ? b.getService().getAuditDetails().getCreatedTime() : 0;
+            return Long.compare(tb, ta);
+        });
+
+        return wrappers;
     }
 
+    public Map<String, Integer> getDynamicData(String tenantId) {
+        RequestSearchCriteria resolved = RequestSearchCriteria.builder()
+                .tenantId(tenantId)
+                .applicationStatus(Set.of("RESOLVED"))
+                .build();
+        int resolvedCount = registryService.count(resolved);
+        return Map.of("complaintsResolved", resolvedCount, "averageResolutionTime", 0);
+    }
 
-	public Map<String, Integer> getDynamicData(String tenantId) {
-		
-		Map<String,Integer> dynamicData = repository.fetchDynamicData(tenantId);
+    public int getComplaintTypes() {
+        return Integer.parseInt(config.getComplaintTypes());
+    }
 
-		return dynamicData;
-	}
-
-
-	public int getComplaintTypes() {
-		
-		return Integer.valueOf(config.getComplaintTypes());
-	}
-
-    private String getDepartmentFromMDMS(ServiceRequest request, Object mdmsData) {
-
+    /**
+     * Pulls serviceName and department from Registry service-category schema
+     * and merges them into additionalDetail, matching the old MDMS lookup behaviour.
+     */
+    @SuppressWarnings("unchecked")
+    private void enrichServiceCodeMetadata(ServiceRequest request) {
         String serviceCode = request.getService().getServiceCode();
-        String jsonPath = MDMS_DEPARTMENT_SEARCH.replace("{SERVICEDEF}", serviceCode);
-
         try {
-            List<String> departmentCodeList = JsonPath.read(mdmsData, jsonPath);
+            RegistryDataResponse response = registryClient.searchRegistryData(
+                    config.getRegistryServiceCategorySchemaCode(), "code", serviceCode);
 
-            if (departmentCodeList == null || departmentCodeList.isEmpty()) {
-                log.warn("No department found in MDMS for service: {}. Defaulting to NA.", serviceCode);
-                return "NA";
-            }
+            if (response == null || !Boolean.TRUE.equals(response.getSuccess()) || response.getData() == null)
+                return;
 
-            String departmentCode = departmentCodeList.get(0);
-            String nameJsonPath = MDMS_DEPARTMENT_NAME_SEARCH.replace("{CODE}", departmentCode);
+            String json = response.getData().toString();
+            List<String> names = JsonPath.read(json, "$[0].data.name");
+            List<String> departments = JsonPath.read(json, "$[0].data.department");
 
-            try {
-                List<String> departmentNameList = JsonPath.read(mdmsData, nameJsonPath);
-                if (departmentNameList != null && !departmentNameList.isEmpty()) {
-                    return departmentNameList.get(0);
-                }
-            } catch (Exception e) {
-                log.warn("Failed to parse MDMS response for department name lookup, code: {}. Falling back to code.", departmentCode, e);
-            }
-
-            return departmentCode;
+            Map<String, Object> existing = pgrUtils.extractAdditionalDetails(request.getService().getAdditionalDetail());
+            Map<String, Object> backend = new HashMap<>();
+            if (!CollectionUtils.isEmpty(names)) backend.put("serviceName", names.get(0));
+            if (!CollectionUtils.isEmpty(departments)) backend.put("department", departments.get(0));
+            request.getService().setAdditionalDetail(pgrUtils.deepMerge(existing, backend));
         } catch (Exception e) {
-            log.warn("Failed to parse MDMS response for department lookup, service: {}. Defaulting to NA.", serviceCode, e);
-            return "NA";
+            log.warn("Could not enrich serviceCode metadata for {}: {}", serviceCode, e.getMessage());
         }
     }
-
-    private String getServiceNameFromMDMS(ServiceRequest request, Object mdmsData) {
-
-        String serviceCode = request.getService().getServiceCode();
-        String jsonPath = MDMS_SERVICENAME_SEARCH.replace("{SERVICEDEF}", serviceCode);
-
-        try {
-            List<String> names = JsonPath.read(mdmsData, jsonPath);
-
-            if (names == null || names.isEmpty()) {
-                log.warn("No service name found in MDMS for service: {}. Falling back to serviceCode.", serviceCode);
-                return serviceCode;
-            }
-
-            return names.get(0);
-        } catch (Exception e) {
-            log.warn("Failed to parse MDMS response for service name lookup, service: {}. Falling back to serviceCode.", serviceCode, e);
-            return serviceCode;
-        }
-    }
-
 }

@@ -2,7 +2,7 @@ package org.egov.pgr.analytics;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.extern.slf4j.Slf4j;
-import org.egov.common.contract.request.RequestInfo;
+import java.util.List;
 import org.egov.pgr.analytics.AnalyticsCatalog.Grain;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -27,9 +27,9 @@ public class AnalyticsService {
         this.planner = planner; this.catalog = catalog; this.jdbc = jdbc;
     }
 
-    public Map<String,Object> query(JsonNode body, RequestInfo requestInfo, String tenantId, int stateLevelLen){
+    public Map<String,Object> query(JsonNode body, String userId, List<String> roles, String tenantId, int stateLevelLen){
         if (tenantId == null || tenantId.isEmpty()) throw new IllegalArgumentException("invalid_param: tenantId is required");
-        AnalyticsScope scope = AnalyticsScope.resolve(requestInfo, tenantId, stateLevelLen);
+        AnalyticsScope scope = AnalyticsScope.resolve(userId, roles, tenantId, stateLevelLen);
 
         Map<String,Object> out = new LinkedHashMap<>();
         out.put("asOf", asOf());

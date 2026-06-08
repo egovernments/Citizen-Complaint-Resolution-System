@@ -1,32 +1,20 @@
 package org.egov.pgr.config;
 
-
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.egov.tracer.config.TracerConfiguration;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.AllArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
-import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
 
 @Component
 @Data
-@Import({TracerConfiguration.class})
 @NoArgsConstructor
 @AllArgsConstructor
 public class PGRConfiguration {
-
-
-
 
     @Value("${app.timezone}")
     private String timeZone;
@@ -36,80 +24,33 @@ public class PGRConfiguration {
         TimeZone.setDefault(TimeZone.getTimeZone(timeZone));
     }
 
-    @Bean
-    @Autowired
-    public MappingJackson2HttpMessageConverter jacksonConverter(ObjectMapper objectMapper) {
-        MappingJackson2HttpMessageConverter converter = new MappingJackson2HttpMessageConverter();
-        converter.setObjectMapper(objectMapper);
-        return converter;
-    }
+    // -------------------------------------------------------
+    // IdGen (via digit-client)
+    // -------------------------------------------------------
+    @Value("${idgen.templateCode}")
+    private String idGenTemplateCode;
 
-    // User Config
-    @Value("${egov.user.host}")
-    private String userHost;
+    // -------------------------------------------------------
+    // Workflow (via digit-client)
+    // -------------------------------------------------------
+    @Value("${pgr.workflow.processCode}")
+    private String workflowProcessCode;
 
-    @Value("${egov.user.context.path}")
-    private String userContextPath;
-
-    @Value("${egov.user.create.path}")
-    private String userCreateEndpoint;
-
-    @Value("${egov.user.search.path}")
-    private String userSearchEndpoint;
-
-    @Value("${egov.user.update.path}")
-    private String userUpdateEndpoint;
-
-    @Value("${egov.internal.microservice.user.uuid}")
-    private String egovInternalMicroserviceUserUuid;
-
-    //Idgen Config
-    @Value("${egov.idgen.host}")
-    private String idGenHost;
-
-    @Value("${egov.idgen.path}")
-    private String idGenPath;
-
-    @Value("${egov.idgen.pgr.serviceRequestId.name}")
-    private String serviceRequestIdGenName;
-
-    @Value("${egov.idgen.pgr.serviceRequestId.format}")
-    private String serviceRequestIdGenFormat;
-
-    //Workflow Config
     @Value("${pgr.business.codes}")
-    private List<String> businessServiceList;
+    private String businessCodes;
 
-    @Value("${egov.workflow.host}")
-    private String wfHost;
+    // -------------------------------------------------------
+    // Registry schema codes
+    // -------------------------------------------------------
+    @Value("${pgr.registry.schema-code}")
+    private String registryServiceCategorySchemaCode;
 
-    @Value("${egov.workflow.transition.path}")
-    private String wfTransitionPath;
+    @Value("${pgr.registry.pgr-storage.schema-code}")
+    private String registryStorageSchemaCode;
 
-    @Value("${egov.workflow.businessservice.search.path}")
-    private String wfBusinessServiceSearchPath;
-
-    @Value("${egov.workflow.processinstance.search.path}")
-    private String wfProcessInstanceSearchPath;
-
-    @Value("${is.workflow.enabled}")
-    private Boolean isWorkflowEnabled;
-
-
-    // PGR Variables
-
-    @Value("${pgr.complain.idle.time}")
-    private Long complainMaxIdleTime;
-
-    @Value("${pgr.kafka.create.topic}")
-    private String createTopic;
-
-    @Value("${pgr.kafka.migration.persister.topic}")
-    private String batchCreateTopic;
-
-    @Value("${pgr.kafka.update.topic}")
-    private String updateTopic;
-
+    // -------------------------------------------------------
+    // PGR search / pagination
+    // -------------------------------------------------------
     @Value("${pgr.default.offset}")
     private Integer defaultOffset;
 
@@ -119,57 +60,41 @@ public class PGRConfiguration {
     @Value("${pgr.search.max.limit}")
     private Integer maxLimit;
 
+    // -------------------------------------------------------
+    // PGR business rules
+    // -------------------------------------------------------
+    @Value("${pgr.complain.idle.time}")
+    private Long complainMaxIdleTime;
 
-    //MDMS
-    @Value("${egov.mdms.host}")
-    private String mdmsHost;
+    @Value("${pgr.business.level.sla}")
+    private Long businessLevelSla;
 
-    @Value("${egov.mdms.search.endpoint}")
-    private String mdmsEndPoint;
+    @Value("${allowed.source}")
+    private String allowedSource;
 
-    //HRMS
-    @Value("${egov.hrms.host}")
-    private String hrmsHost;
+    @Value("${pgr.validate.dept.enabled}")
+    private Boolean isValidateDeptEnabled;
 
-    @Value("${egov.hrms.search.endpoint}")
-    private String hrmsEndPoint;
+    // -------------------------------------------------------
+    // Search parameter config (per role)
+    // -------------------------------------------------------
+    @Value("${citizen.allowed.search.params}")
+    private String allowedCitizenSearchParameters;
 
-    //Notification
-    @Value("${egov.user.event.notification.enabled}")
-    private Boolean isUserEventsNotificationEnabled;
+    @Value("${employee.allowed.search.params}")
+    private String allowedEmployeeSearchParameters;
 
+    // -------------------------------------------------------
+    // Notification
+    // -------------------------------------------------------
     @Value("${notification.sms.enabled}")
     private Boolean isSMSEnabled;
 
-    @Value("${egov.localization.statelevel}")
-    private Boolean isLocalizationStateLevel;
-
-    @Value("${egov.localization.host}")
-    private String localizationHost;
-
-    @Value("${egov.localization.context.path}")
-    private String localizationContextPath;
-
-    @Value("${egov.localization.search.endpoint}")
-    private String localizationSearchEndpoint;
-
-    @Value("${kafka.topics.notification.sms}")
-    private String smsNotifTopic;
-
-    @Value("${egov.usr.events.create.topic}")
-    private String saveUserEventsTopic;
+    @Value("${egov.user.event.notification.enabled}")
+    private Boolean isUserEventsNotificationEnabled;
 
     @Value("${mseva.mobile.app.download.link}")
     private String mobileDownloadLink;
-
-    @Value("${egov.url.shortner.host}")
-    private String urlShortnerHost;
-
-    @Value("${egov.url.shortner.endpoint}")
-    private String urlShortnerEndpoint;
-
-    @Value("#{${egov.ui.app.host.map}}")
-    private Map<String, String> uiAppHostMap;
 
     @Value("${egov.pgr.events.rate.link}")
     private String rateLink;
@@ -183,70 +108,18 @@ public class PGRConfiguration {
     @Value("${egov.usr.events.reopen.code}")
     private String reopenCode;
 
+    @Value("${egov.url.shortner.host}")
+    private String urlShortnerHost;
 
+    @Value("${egov.url.shortner.endpoint}")
+    private String urlShortnerEndpoint;
 
-    //Allowed Search Parameters
-    @Value("${citizen.allowed.search.params}")
-    private String allowedCitizenSearchParameters;
+    @Value("#{${egov.ui.app.host.map}}")
+    private Map<String, String> uiAppHostMap;
 
-    @Value("${employee.allowed.search.params}")
-    private String allowedEmployeeSearchParameters;
-
-    //Sources
-    @Value("${allowed.source}")
-    private String allowedSource;
-
-
-    // Migration
-    @Value("${persister.save.transition.wf.topic}")
-    private String workflowSaveTopic;
-
-    @Value("${persister.save.transition.wf.migration.topic}")
-    private String batchWorkflowSaveTopic;
-
-    @Value("${pgr.business.level.sla}")
-    private Long businessLevelSla;
-
-    @Value("${egov.dynamicdata.period}")
-    private String numberOfDays;
-
-    @Value("${egov.complaints.category}")
-    private String complaintTypes;
-
-
-    // central-instance configs
-
-    @Value("${state.level.tenantid.length}")
-    private Integer stateLevelTenantIdLength;
-
-    @Value("${is.environment.central.instance}")
-    private Boolean isEnvironmentCentralInstance;
-
-    @Value("${pgr.validate.dept.enabled}")
-    private Boolean isValidateDeptEnabled;
-
-    @Value("${egov.boundary.host}")
-    private String boundaryHost;
-
-    @Value("${egov.boundary.search.url}")
-    private String boundarySearchEndpoint;
-
-    @Value("${pgr.kafka.create.inbox.topic}")
-    private String inboxCreateTopic;
-
-    @Value("${pgr.kafka.update.inbox.topic}")
-    private String inboxUpdateTopic;
-
-    @Value("${kafka.topics.complaints.domain.events:complaints.domain.events}")
-    private String complaintsDomainEventsTopic;
-
-    @Value("${complaints.domain.events.enabled:true}")
-    private Boolean isComplaintsDomainEventEnabled;
-
-    @Value("${complaints.domain.events.default.locale:en_IN}")
-    private String complaintsDomainEventDefaultLocale;
-
-    // Escalation
+    // -------------------------------------------------------
+    // Escalation scheduler
+    // -------------------------------------------------------
     @Value("${pgr.escalation.enabled}")
     private Boolean escalationEnabled;
 
@@ -262,14 +135,30 @@ public class PGRConfiguration {
     @Value("${pgr.escalation.max.depth}")
     private Integer escalationMaxDepth;
 
-    @Value("${pgr.escalation.kafka.topic}")
-    private String escalationKafkaTopic;
-
-    // Dashboard
+    // -------------------------------------------------------
+    // Dashboard refresh scheduler
+    // -------------------------------------------------------
     @Value("${pgr.dashboard.refresh.enabled:true}")
     private Boolean dashboardRefreshEnabled;
 
     @Value("${pgr.dashboard.refresh.interval.ms:300000}")
     private Long dashboardRefreshIntervalMs;
 
+    // -------------------------------------------------------
+    // Dynamic data / complaint types
+    // -------------------------------------------------------
+    @Value("${egov.dynamicdata.period}")
+    private String numberOfDays;
+
+    @Value("${egov.complaints.category}")
+    private String complaintTypes;
+
+    // -------------------------------------------------------
+    // Central instance
+    // -------------------------------------------------------
+    @Value("${state.level.tenantid.length}")
+    private Integer stateLevelTenantIdLength;
+
+    @Value("${is.environment.central.instance}")
+    private Boolean isEnvironmentCentralInstance;
 }

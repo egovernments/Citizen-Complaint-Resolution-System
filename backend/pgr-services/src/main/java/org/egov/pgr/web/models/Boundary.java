@@ -1,71 +1,46 @@
 package org.egov.pgr.web.models;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import jakarta.validation.constraints.NotNull;
+import lombok.*;
 
 import java.util.ArrayList;
 import java.util.List;
-
-import org.hibernate.validator.constraints.SafeHtml;
-import org.springframework.validation.annotation.Validated;
-import javax.validation.Valid;
-import jakarta.validation.constraints.NotNull;
-
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-import lombok.Builder;
-
-/**
- * Boundary
- */
-@Validated
-//@javax.annotation.Generated(value = "org.egov.codegen.SpringBootCodegen", date = "2020-07-15T11:35:33.568+05:30")
 
 @Getter
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class Boundary   {
+public class Boundary {
 
-        @NotNull
-        @SafeHtml
-        @JsonProperty("code")
-        private String code = null;
+    @NotNull
+    @JsonProperty("code")
+    private String code;
 
-        @SafeHtml
-        @JsonProperty("name")
-        private String name = null;
+    @JsonProperty("name")
+    private String name;
 
-        @SafeHtml
-        @JsonProperty("label")
-        private String label = null;
+    @JsonProperty("label")
+    private String label;
 
-        @SafeHtml
-        @JsonProperty("latitude")
-        private String latitude = null;
+    @JsonProperty("latitude")
+    private String latitude;
 
-        @SafeHtml
-        @JsonProperty("longitude")
-        private String longitude = null;
+    @JsonProperty("longitude")
+    private String longitude;
 
-        @JsonProperty("children")
-        @Valid
-        private List<Boundary> children = null;
+    @JsonProperty("children")
+    private List<Boundary> children;
 
-        @SafeHtml
-        @JsonProperty("materializedPath")
-        private String materializedPath = null;
+    @JsonProperty("materializedPath")
+    private String materializedPath;
 
-
-        public Boundary addChildrenItem(Boundary childrenItem) {
-            if (this.children == null) {
+    public Boundary addChildrenItem(Boundary childrenItem) {
+        if (this.children == null) {
             this.children = new ArrayList<>();
-            }
+        }
         this.children.add(childrenItem);
         return this;
-        }
-
+    }
 }
-

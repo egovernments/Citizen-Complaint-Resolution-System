@@ -5,7 +5,6 @@ import org.egov.pgr.repository.rowmapper.DashboardQueryBuilder;
 import org.egov.pgr.util.PGRUtils;
 import org.egov.pgr.web.models.DashboardResponse;
 import org.egov.pgr.web.models.DashboardResponse.*;
-import org.egov.tracer.model.CustomException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -235,12 +234,7 @@ public class DashboardRepository {
     // --- Helpers ---
 
     private String replaceSchema(String query, String tenantId) {
-        try {
-            return utils.replaceSchemaPlaceholder(query, tenantId);
-        } catch (Exception e) {
-            throw new CustomException("PGR_DASHBOARD_ERROR",
-                    "TenantId length is not sufficient to replace query schema in a multi state instance");
-        }
+        return utils.replaceSchemaPlaceholder(query, tenantId);
     }
 
     private DashboardKpi aggregateKpi(List<DashboardKpi> rows) {

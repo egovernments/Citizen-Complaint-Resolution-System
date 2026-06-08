@@ -1,160 +1,81 @@
 package org.egov.pgr.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jayway.jsonpath.JsonPath;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.egov.common.contract.request.RequestInfo;
-import org.egov.common.contract.request.Role;
-import org.egov.common.contract.request.User;
-import org.egov.common.utils.MultiStateInstanceUtil;
-import org.egov.mdms.model.*;
 import org.egov.pgr.config.PGRConfiguration;
-import org.egov.pgr.repository.PGRRepository;
-import org.egov.pgr.repository.ServiceRequestRepository;
-import org.egov.pgr.util.MDMSUtils;
-import org.egov.pgr.web.models.*;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
+import org.egov.pgr.web.models.RequestSearchCriteria;
+import org.egov.pgr.web.models.Service;
+import org.egov.pgr.web.models.ServiceWrapper;
+import org.egov.pgr.web.models.Workflow;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
-import static org.egov.pgr.util.PGRConstants.*;
+import static org.egov.pgr.util.PGRConstants.PENDINGATLME;
+import static org.egov.pgr.util.PGRConstants.PENDINGFORASSIGNMENT;
 
 @Component
 @Slf4j
+@RequiredArgsConstructor
 public class EscalationScheduler {
 
     private final PGRConfiguration config;
-    private final PGRRepository repository;
+    private final RegistryService registryService;
     private final EscalationService escalationService;
-    private final ServiceRequestRepository serviceRequestRepository;
-    private final MDMSUtils mdmsUtils;
     private final ObjectMapper mapper;
-    private final MultiStateInstanceUtil multiStateInstanceUtil;
-
-    @Value("${egov.state.level.tenant.id:ke}")
-    private String stateLevelTenantId;
-
-    @Autowired
-    public EscalationScheduler(PGRConfiguration config, PGRRepository repository,
-                               EscalationService escalationService,
-                               ServiceRequestRepository serviceRequestRepository,
-                               MDMSUtils mdmsUtils, ObjectMapper mapper,
-                               MultiStateInstanceUtil multiStateInstanceUtil) {
-        this.config = config;
-        this.repository = repository;
-        this.escalationService = escalationService;
-        this.serviceRequestRepository = serviceRequestRepository;
-        this.mdmsUtils = mdmsUtils;
-        this.mapper = mapper;
-        this.multiStateInstanceUtil = multiStateInstanceUtil;
-    }
 
     @Scheduled(fixedDelayString = "${pgr.escalation.interval.ms}")
     public void scanAndEscalate() {
-        if (!Boolean.TRUE.equals(config.getEscalationEnabled())) {
-            return;
-        }
+        if (!Boolean.TRUE.equals(config.getEscalationEnabled())) return;
 
         log.info("Escalation scan started");
 
-        RequestInfo systemRequestInfo = buildSystemRequestInfo();
-
-        // Fetch escalation config from MDMS (will use default SLA if MDMS config not found)
-        Map<String, Object> escalationConfig = fetchEscalationConfig(systemRequestInfo);
-
-        int maxDepth = getMaxDepth(escalationConfig);
-        List<Long> defaultSlaByLevel = getDefaultSlaByLevel(escalationConfig);
-        Map<String, List<Long>> overrides = getOverrides(escalationConfig);
-
-        // Search for complaints in PENDINGATLME and PENDINGFORASSIGNMENT
-        Set<String> statuses = new HashSet<>(Arrays.asList(PENDINGATLME, PENDINGFORASSIGNMENT));
-
-        // Get all tenants — for now, use the state-level tenant from config
-        // In a multi-tenant setup, this would iterate over all tenants
-        String stateLevelTenantId = getStateLevelTenantId();
-        if (stateLevelTenantId == null) {
-            log.warn("Cannot determine state-level tenant ID, skipping escalation scan");
+        String tenantId = resolveTenantId();
+        if (tenantId == null) {
+            log.warn("No tenant ID found, skipping escalation scan");
             return;
         }
 
-        int scanned = 0;
-        int escalated = 0;
-        int skipped = 0;
+        int scanned = 0, escalated = 0, skipped = 0;
 
-        for (String status : statuses) {
+        for (String status : List.of(PENDINGATLME, PENDINGFORASSIGNMENT)) {
             try {
-                List<ServiceWrapper> complaints = searchComplaintsByStatus(stateLevelTenantId, status);
+                List<ServiceWrapper> complaints = fetchByStatus(tenantId, status);
 
                 for (ServiceWrapper wrapper : complaints) {
                     scanned++;
                     Service complaint = wrapper.getService();
 
-                    // Determine SLA for this complaint's serviceCode + escalation level
-                    int currentLevel = getEscalationLevel(complaint);
-                    if (currentLevel >= maxDepth) {
-                        skipped++;
-                        continue;
-                    }
+                    int level = getEscalationLevel(complaint);
+                    if (level >= config.getEscalationMaxDepth()) { skipped++; continue; }
 
-                    long sla = resolveSla(complaint.getServiceCode(), currentLevel, defaultSlaByLevel, overrides);
-
-                    // Check if SLA is breached based on lastModifiedTime
-                    long lastModified = 0L;
-                    if (complaint.getAuditDetails() != null) {
-                        Long modified = complaint.getAuditDetails().getLastModifiedTime();
-                        if (modified != null && modified > 0) {
-                            lastModified = modified;
-                        } else if (complaint.getAuditDetails().getCreatedTime() != null) {
-                            lastModified = complaint.getAuditDetails().getCreatedTime();
-                        }
-                    }
-
-                    if (lastModified == 0L) {
-                        skipped++;
-                        continue;
-                    }
+                    long lastModified = resolveLastModified(complaint);
+                    if (lastModified == 0L) { skipped++; continue; }
 
                     long elapsed = System.currentTimeMillis() - lastModified;
-                    if (elapsed < sla) {
-                        // SLA not yet breached
-                        continue;
-                    }
+                    if (elapsed < config.getEscalationDefaultSlaMs()) continue;
 
-                    // SLA breached — get current assignees from workflow
                     List<String> assignees = escalationService.getCurrentAssignees(
-                            complaint.getServiceRequestId(), complaint.getTenantId(), systemRequestInfo);
+                            complaint.getServiceRequestId());
 
-                    if (CollectionUtils.isEmpty(assignees)) {
-                        skipped++;
-                        continue;
-                    }
+                    if (CollectionUtils.isEmpty(assignees)) { skipped++; continue; }
 
                     Workflow currentWorkflow = Workflow.builder().assignes(assignees).build();
-
-                    boolean success = escalationService.escalateComplaint(complaint, currentWorkflow, systemRequestInfo);
-                    if (success) {
-                        escalated++;
-                    } else {
-                        skipped++;
-                    }
+                    boolean success = escalationService.escalateComplaint(complaint, currentWorkflow);
+                    if (success) escalated++; else skipped++;
                 }
             } catch (Exception e) {
-                log.error("Error scanning complaints in status {} for tenant {}", status, stateLevelTenantId, e);
+                log.error("Error scanning complaints in status {} for tenant {}", status, tenantId, e);
             }
         }
 
         log.info("Escalation scan complete: scanned={}, escalated={}, skipped={}", scanned, escalated, skipped);
     }
 
-    /**
-     * Searches complaints by application status using the PGR repository.
-     */
-    private List<ServiceWrapper> searchComplaintsByStatus(String tenantId, String status) {
+    private List<ServiceWrapper> fetchByStatus(String tenantId, String status) {
         RequestSearchCriteria criteria = RequestSearchCriteria.builder()
                 .tenantId(tenantId)
                 .applicationStatus(Collections.singleton(status))
@@ -163,167 +84,39 @@ public class EscalationScheduler {
                 .isPlainSearch(true)
                 .build();
 
-        return repository.getServiceWrappers(criteria);
-    }
-
-    /**
-     * Builds a system RequestInfo for internal service-to-service calls.
-     */
-    private RequestInfo buildSystemRequestInfo() {
-        // The workflow validator looks up roles by tenantId (action's tenant + its
-        // state-level parent). A tenant-less Role never matches. Tag the SYSTEM
-        // role with the state-level tenant (e.g. "ke") so the validator's
-        // parent-tenant fallback (line 113-117 of WorkflowValidator.java) finds it
-        // for all city tenants like "ke.nairobi", "ke.bomet", etc.
-        User systemUser = User.builder()
-                .uuid(config.getEgovInternalMicroserviceUserUuid())
-                .type("SYSTEM")
-                .roles(Collections.singletonList(
-                        Role.builder().code("SYSTEM").name("System").tenantId(stateLevelTenantId).build()
-                ))
-                .build();
-
-        return RequestInfo.builder()
-                .apiId("Rainmaker")
-                .ver(".01")
-                .ts(null)
-                .action("")
-                .did("1")
-                .key("")
-                .msgId("20170310130900|en_IN")
-                .authToken("")
-                .userInfo(systemUser)
-                .build();
-    }
-
-    /**
-     * Fetches EscalationConfig from MDMS. Returns null if not found.
-     */
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> fetchEscalationConfig(RequestInfo requestInfo) {
-        try {
-            String tenantId = getStateLevelTenantId();
-            if (tenantId == null) return null;
-
-            List<MasterDetail> masterDetails = Collections.singletonList(
-                    MasterDetail.builder().name(MDMS_ESCALATION_CONFIG).build()
-            );
-
-            ModuleDetail moduleDetail = ModuleDetail.builder()
-                    .masterDetails(masterDetails)
-                    .moduleName(MDMS_MODULE_NAME)
-                    .build();
-
-            MdmsCriteria mdmsCriteria = MdmsCriteria.builder()
-                    .moduleDetails(Collections.singletonList(moduleDetail))
-                    .tenantId(multiStateInstanceUtil.getStateLevelTenant(tenantId))
-                    .build();
-
-            MdmsCriteriaReq mdmsCriteriaReq = MdmsCriteriaReq.builder()
-                    .mdmsCriteria(mdmsCriteria)
-                    .requestInfo(requestInfo)
-                    .build();
-
-            Object result = serviceRequestRepository.fetchResult(mdmsUtils.getMdmsSearchUrl(), mdmsCriteriaReq);
-
-            List<Map<String, Object>> configs = JsonPath.read(result, MDMS_ESCALATION_CONFIG_JSONPATH);
-            if (configs != null && !configs.isEmpty()) {
-                return configs.get(0);
-            }
-        } catch (Exception e) {
-            log.warn("Failed to fetch EscalationConfig from MDMS, using defaults", e);
+        List<Service> services = registryService.search(criteria);
+        List<ServiceWrapper> wrappers = new ArrayList<>();
+        for (Service svc : services) {
+            wrappers.add(ServiceWrapper.builder().service(svc).workflow(new Workflow()).build());
         }
-        return null;
+        return wrappers;
     }
 
-    /**
-     * Gets the state-level tenant ID from the configuration.
-     */
-    private String getStateLevelTenantId() {
-        // Use the user host map keys as a hint for available tenants,
-        // or fall back to deriving from config
+    private String resolveTenantId() {
         Map<String, String> hostMap = config.getUiAppHostMap();
-        if (hostMap != null && !hostMap.isEmpty()) {
-            return hostMap.keySet().iterator().next();
-        }
-        return null;
+        if (hostMap != null && !hostMap.isEmpty()) return hostMap.keySet().iterator().next();
+        return config.getTenantId();
     }
 
-    private int getMaxDepth(Map<String, Object> escalationConfig) {
-        if (escalationConfig != null && escalationConfig.containsKey("maxDepth")) {
-            return ((Number) escalationConfig.get("maxDepth")).intValue();
-        }
-        return config.getEscalationMaxDepth();
-    }
-
-    @SuppressWarnings("unchecked")
-    private List<Long> getDefaultSlaByLevel(Map<String, Object> escalationConfig) {
-        if (escalationConfig != null && escalationConfig.containsKey("defaultSlaByLevel")) {
-            List<Number> slaList = (List<Number>) escalationConfig.get("defaultSlaByLevel");
-            return slaList.stream().map(Number::longValue).collect(Collectors.toList());
-        }
-        // Fallback: use the single default SLA for all levels
-        return Collections.singletonList(config.getEscalationDefaultSlaMs());
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<String, List<Long>> getOverrides(Map<String, Object> escalationConfig) {
-        if (escalationConfig != null && escalationConfig.containsKey("overrides")) {
-            Map<String, List<Number>> raw = (Map<String, List<Number>>) escalationConfig.get("overrides");
-            Map<String, List<Long>> result = new HashMap<>();
-            for (Map.Entry<String, List<Number>> entry : raw.entrySet()) {
-                result.put(entry.getKey(),
-                        entry.getValue().stream().map(Number::longValue).collect(Collectors.toList()));
-            }
-            return result;
-        }
-        return Collections.emptyMap();
-    }
-
-    /**
-     * Resolves the SLA for a specific complaint type and escalation level.
-     * Priority: overrides[serviceCode][level] > defaultSlaByLevel[level] > last value in array
-     */
-    private long resolveSla(String serviceCode, int level, List<Long> defaultSlaByLevel, Map<String, List<Long>> overrides) {
-        // Check overrides first
-        if (overrides.containsKey(serviceCode)) {
-            List<Long> slaList = overrides.get(serviceCode);
-            if (level < slaList.size()) {
-                return slaList.get(level);
-            }
-            // Use last value if level exceeds array
-            return slaList.get(slaList.size() - 1);
-        }
-
-        // Use default SLA by level
-        if (level < defaultSlaByLevel.size()) {
-            return defaultSlaByLevel.get(level);
-        }
-
-        // Use last value in default array
-        return defaultSlaByLevel.get(defaultSlaByLevel.size() - 1);
+    private long resolveLastModified(Service complaint) {
+        if (complaint.getAuditDetails() == null) return 0L;
+        Long modified = complaint.getAuditDetails().getLastModifiedTime();
+        if (modified != null && modified > 0) return modified;
+        Long created = complaint.getAuditDetails().getCreatedTime();
+        return created != null ? created : 0L;
     }
 
     @SuppressWarnings("unchecked")
     private int getEscalationLevel(Service complaint) {
         Object additionalDetail = complaint.getAdditionalDetail();
         if (additionalDetail == null) return 0;
-
         try {
-            Map<String, Object> details;
-            if (additionalDetail instanceof Map) {
-                details = (Map<String, Object>) additionalDetail;
-            } else {
-                details = mapper.convertValue(additionalDetail, Map.class);
-            }
-
+            Map<String, Object> details = additionalDetail instanceof Map
+                    ? (Map<String, Object>) additionalDetail
+                    : mapper.convertValue(additionalDetail, Map.class);
             Object level = details.get("escalationLevel");
-            if (level instanceof Number) {
-                return ((Number) level).intValue();
-            }
-        } catch (Exception e) {
-            // ignore
-        }
+            if (level instanceof Number) return ((Number) level).intValue();
+        } catch (Exception ignored) {}
         return 0;
     }
 }

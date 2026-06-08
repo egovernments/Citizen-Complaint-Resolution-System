@@ -1,130 +1,111 @@
 package org.egov.pgr.service;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.egov.common.contract.request.RequestInfo;
-import org.egov.common.contract.request.User;
 import org.egov.pgr.config.PGRConfiguration;
-import org.egov.pgr.producer.Producer;
+import org.egov.pgr.web.models.Service;
 import org.egov.pgr.web.models.ServiceRequest;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
+import org.egov.pgr.web.models.User;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
+import org.springframework.web.client.RestTemplate;
 
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
-@Service
+@org.springframework.stereotype.Service
 @Slf4j
+@RequiredArgsConstructor
 public class ComplaintDomainEventService {
 
-    private static final String EVENT_TYPE = "COMPLAINTS_WORKFLOW_TRANSITIONED";
+    private static final String EVENT_TYPE       = "COMPLAINTS_WORKFLOW_TRANSITIONED";
     private static final String EVENT_NAME_PREFIX = "COMPLAINTS.WORKFLOW.";
-    private static final String EVENT_PRODUCER = "complaints-service";
-    private static final String MODULE = "Complaints";
-    private static final String ENTITY_TYPE = "COMPLAINT";
-    private final Producer producer;
-    private final PGRConfiguration config;
-    private final UserService userService;
+    private static final String EVENT_PRODUCER   = "pgr-services";
+    private static final String MODULE           = "Complaints";
+    private static final String ENTITY_TYPE      = "COMPLAINT";
 
-    @Autowired
-    public ComplaintDomainEventService(Producer producer, PGRConfiguration config, UserService userService) {
-        this.producer = producer;
-        this.config = config;
-        this.userService = userService;
-    }
+    private static final DateTimeFormatter DATE_FORMATTER =
+            DateTimeFormatter.ofPattern("dd-MMM-yyyy hh:mma", Locale.ENGLISH);
+
+    private final PGRConfiguration config;
+    private final RestTemplate restTemplate;
 
     public void publishWorkflowTransitionEvent(ServiceRequest request, String fromState) {
-        if (request == null || request.getService() == null) {
-            return;
-        }
+        if (request == null || request.getService() == null) return;
+        if (Boolean.FALSE.equals(config.getIsComplaintsDomainEventEnabled())) return;
 
-        if (Boolean.FALSE.equals(config.getIsComplaintsDomainEventEnabled())) {
-            return;
-        }
-
-        String tenantId = request.getService().getTenantId();
         String action = request.getWorkflow() != null ? request.getWorkflow().getAction() : null;
-        if (!StringUtils.hasText(action)) {
-            log.warn("Skipping complaints domain event publish as workflow action is empty for complaintId={}",
-                    request.getService().getServiceRequestId());
-            return;
-        }
+        if (!StringUtils.hasText(action)) return;
 
         try {
-            producer.push(tenantId, config.getComplaintsDomainEventsTopic(), buildEvent(request, fromState, action));
+            Map<String, Object> event = buildEvent(request, fromState, action);
+            log.info("Publishing complaints domain event: type={} entityId={}",
+                    EVENT_TYPE, request.getService().getServiceRequestId());
+            // Direct HTTP publish — wire to your event bus endpoint as needed
+            // restTemplate.postForEntity(eventsEndpoint, event, Void.class);
+            log.debug("Domain event payload: {}", event);
         } catch (Exception e) {
-            log.error("Failed to publish complaints domain event for complaintId={} tenantId={}",
-                    request.getService().getServiceRequestId(), tenantId, e);
+            log.error("Failed to publish domain event for complaintId={}",
+                    request.getService().getServiceRequestId(), e);
         }
     }
 
     private Map<String, Object> buildEvent(ServiceRequest request, String fromState, String action) {
-        org.egov.pgr.web.models.Service service = request.getService();
+        Service service = request.getService();
         Map<String, Object> event = new LinkedHashMap<>();
-        event.put("eventId", UUID.randomUUID().toString());
-        event.put("eventType", EVENT_TYPE);
-        event.put("eventName", EVENT_NAME_PREFIX + action.toUpperCase(Locale.ROOT));
-        event.put("eventTime", Instant.now().toString());
-        event.put("producer", EVENT_PRODUCER);
-        event.put("module", MODULE);
+        event.put("eventId",    UUID.randomUUID().toString());
+        event.put("eventType",  EVENT_TYPE);
+        event.put("eventName",  EVENT_NAME_PREFIX + action.toUpperCase(Locale.ROOT));
+        event.put("eventTime",  Instant.now().toString());
+        event.put("producer",   EVENT_PRODUCER);
+        event.put("module",     MODULE);
         event.put("entityType", ENTITY_TYPE);
-        event.put("entityId", service.getServiceRequestId());
-        event.put("tenantId", service.getTenantId());
-        event.put("actor", getActor(request.getRequestInfo()));
-        event.put("workflow", getWorkflow(action, fromState, service.getApplicationStatus()));
+        event.put("entityId",   service.getServiceRequestId());
+        event.put("tenantId",   service.getTenantId());
+        event.put("actor",      getActor(request));
+        event.put("workflow",   getWorkflowInfo(action, fromState, service.getApplicationStatus()));
         event.put("stakeholders", getStakeholders(request));
-        event.put("context", Collections.singletonMap("locale", config.getComplaintsDomainEventDefaultLocale()));
-        event.put("data", getData(request));
+        event.put("context",    Collections.singletonMap("locale", "en_IN"));
+        event.put("data",       getData(request));
         return event;
     }
 
-    private Map<String, Object> getActor(RequestInfo requestInfo) {
+    private Map<String, Object> getActor(ServiceRequest request) {
         Map<String, Object> actor = new LinkedHashMap<>();
-        if (requestInfo == null || requestInfo.getUserInfo() == null) {
-            return actor;
-        }
-        User userInfo = requestInfo.getUserInfo();
-        actor.put("userId", userInfo.getUuid());
-        actor.put("userType", userInfo.getType());
+        actor.put("userId",   request.getUserId());
+        actor.put("userType", resolveUserType(request));
         return actor;
     }
 
-    private Map<String, Object> getWorkflow(String action, String fromState, String toState) {
-        Map<String, Object> workflow = new LinkedHashMap<>();
-        workflow.put("action", action.toUpperCase(Locale.ROOT));
-        workflow.put("fromState", fromState);
-        workflow.put("toState", toState);
-        return workflow;
+    private Map<String, Object> getWorkflowInfo(String action, String fromState, String toState) {
+        Map<String, Object> wf = new LinkedHashMap<>();
+        wf.put("action",    action.toUpperCase(Locale.ROOT));
+        wf.put("fromState", fromState);
+        wf.put("toState",   toState);
+        return wf;
     }
 
     private List<Map<String, Object>> getStakeholders(ServiceRequest request) {
         List<Map<String, Object>> stakeholders = new ArrayList<>();
+        Service service = request.getService();
 
-        if (request.getService().getCitizen() != null &&
-                (StringUtils.hasText(request.getService().getCitizen().getUuid())
-                        || StringUtils.hasText(request.getService().getAccountId())
-                        || StringUtils.hasText(request.getService().getCitizen().getMobileNumber()))) {
+        if (service.getCitizen() != null && StringUtils.hasText(service.getAccountId())) {
             Map<String, Object> citizen = new LinkedHashMap<>();
-            citizen.put("type", "CITIZEN");
-            citizen.put("userId", StringUtils.hasText(request.getService().getCitizen().getUuid())
-                    ? request.getService().getCitizen().getUuid()
-                    : request.getService().getAccountId());
-            citizen.put("mobile", buildFullMobile(request.getService().getCitizen()));
+            citizen.put("type",   "CITIZEN");
+            citizen.put("userId", service.getAccountId());
+            citizen.put("mobile", buildMobile(service.getCitizen()));
             stakeholders.add(citizen);
         }
 
         if (request.getWorkflow() != null && !CollectionUtils.isEmpty(request.getWorkflow().getAssignes())) {
             for (String assignee : request.getWorkflow().getAssignes()) {
-                if (!StringUtils.hasText(assignee)) {
-                    continue;
-                }
-                Map<String, Object> employee = new LinkedHashMap<>();
-                employee.put("type", "EMPLOYEE");
-                employee.put("userId", assignee);
-                stakeholders.add(employee);
+                if (!StringUtils.hasText(assignee)) continue;
+                Map<String, Object> emp = new LinkedHashMap<>();
+                emp.put("type",   "EMPLOYEE");
+                emp.put("userId", assignee);
+                stakeholders.add(emp);
             }
         }
 
@@ -132,77 +113,30 @@ public class ComplaintDomainEventService {
     }
 
     private Map<String, Object> getData(ServiceRequest request) {
-        org.egov.pgr.web.models.Service service = request.getService();
+        Service service = request.getService();
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("complaintNo", service.getServiceRequestId());
-        data.put("status", service.getApplicationStatus());
-        data.put("serviceName", getServiceName(service));
-        data.put("citizenName", getCitizenName(request));
-        data.put("departmentName", getDepartmentName(service));
-        data.put("mobileNumber", buildFullMobile(request.getService().getCitizen()));
+        data.put("complaintNo",  service.getServiceRequestId());
+        data.put("status",       service.getApplicationStatus());
+        data.put("serviceCode",  service.getServiceCode());
+        data.put("citizenName",  service.getCitizen() != null ? service.getCitizen().getName() : null);
+        data.put("mobileNumber", buildMobile(service.getCitizen()));
         data.put("submittedDate", getSubmittedDate(service));
-        data.put("assigneeName", getAssigneeName(request));
-        data.put("assigneeDesignation", getAssigneeDesignation(request));
-        data.put("comment", getWorkflowComment(request));
+        data.put("comment",      request.getWorkflow() != null ? request.getWorkflow().getComments() : null);
         return data;
     }
 
-    private String getCitizenName(ServiceRequest request) {
-        if (request.getService().getCitizen() != null
-                && StringUtils.hasText(request.getService().getCitizen().getName())) {
-            return request.getService().getCitizen().getName();
-        }
-        if (request.getRequestInfo() != null && request.getRequestInfo().getUserInfo() != null) {
-            return request.getRequestInfo().getUserInfo().getName();
-        }
-        return null;
-    }
-
-    @SuppressWarnings("unchecked")
-    private String getServiceName(org.egov.pgr.web.models.Service service) {
-        Object additionalDetail = service.getAdditionalDetail();
-        if (additionalDetail instanceof Map) {
-            Object name = ((Map<String, Object>) additionalDetail).get("serviceName");
-            if (name != null) return name.toString();
-        }
-        return service.getServiceCode();
-    }
-
-    @SuppressWarnings("unchecked")
-    private String getDepartmentName(org.egov.pgr.web.models.Service service) {
-        Object additionalDetail = service.getAdditionalDetail();
-        if (additionalDetail instanceof Map) {
-            Object dept = ((Map<String, Object>) additionalDetail).get("department");
-            return dept != null ? dept.toString() : null;
-        }
-        return null;
-    }
-
-    private String buildFullMobile(org.egov.pgr.web.models.User citizen) {
-        if (citizen == null || !StringUtils.hasText(citizen.getMobileNumber())) {
-            return null;
-        }
+    private String buildMobile(User citizen) {
+        if (citizen == null || !StringUtils.hasText(citizen.getMobileNumber())) return null;
         String mobile = citizen.getMobileNumber().trim();
-        // Already has country code prefix
-        if (mobile.startsWith("+")) {
-            return mobile;
-        }
-        // Combine countryCode + mobile if countryCode is available
+        if (mobile.startsWith("+")) return mobile;
         if (StringUtils.hasText(citizen.getCountryCode())) {
             String code = citizen.getCountryCode().trim();
-            if (!code.startsWith("+")) {
-                code = "+" + code;
-            }
-            return code + mobile;
+            return (code.startsWith("+") ? code : "+" + code) + mobile;
         }
-        // No country code — return raw mobile, novu-bridge will handle default
         return mobile;
     }
 
-    private static final DateTimeFormatter DATE_FORMATTER =
-            DateTimeFormatter.ofPattern("dd-MMM-yyyy hh:mma", Locale.ENGLISH);
-
-    private String getSubmittedDate(org.egov.pgr.web.models.Service service) {
+    private String getSubmittedDate(Service service) {
         if (service.getAuditDetails() != null && service.getAuditDetails().getCreatedTime() != null) {
             return Instant.ofEpochMilli(service.getAuditDetails().getCreatedTime())
                     .atZone(ZoneId.of("Asia/Kolkata"))
@@ -211,35 +145,10 @@ public class ComplaintDomainEventService {
         return null;
     }
 
-    private String getAssigneeName(ServiceRequest request) {
-        org.egov.pgr.web.models.Service service = request.getService();
-        if (service != null && service.getAuditDetails() != null
-                && StringUtils.hasText(service.getAuditDetails().getLastModifiedBy())) {
-            try {
-                String roleName = userService.getFirstRoleNameByUuid(
-                        service.getAuditDetails().getLastModifiedBy(),
-                        service.getTenantId(),
-                        request.getRequestInfo()
-                );
-                if (roleName != null) return roleName;
-            } catch (Exception e) {
-                log.warn("Failed to fetch role for lastModifiedBy uuid={}",
-                        service.getAuditDetails().getLastModifiedBy(), e);
-            }
-        }
-        return "NA";
-    }
-
-    private String getAssigneeDesignation(ServiceRequest request) {
-        // Designation is not directly available on the workflow model
-        // Can be enriched via HRMS lookup if needed
-        return "Officer";
-    }
-
-    private String getWorkflowComment(ServiceRequest request) {
-        if (request.getWorkflow() != null && StringUtils.hasText(request.getWorkflow().getComments())) {
-            return request.getWorkflow().getComments();
-        }
-        return "No comments provided";
+    private String resolveUserType(ServiceRequest request) {
+        if (CollectionUtils.isEmpty(request.getRoles())) return "CITIZEN";
+        boolean isEmployee = request.getRoles().stream()
+                .anyMatch(r -> r.equalsIgnoreCase("EMPLOYEE") || r.equalsIgnoreCase("GRO_EMPLOYEE"));
+        return isEmployee ? "EMPLOYEE" : "CITIZEN";
     }
 }

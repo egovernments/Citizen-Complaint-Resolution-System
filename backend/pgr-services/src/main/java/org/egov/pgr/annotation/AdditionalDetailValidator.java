@@ -1,30 +1,20 @@
 package org.egov.pgr.annotation;
 
-import javax.validation.ConstraintValidator;
-import javax.validation.ConstraintValidatorContext;
-import javax.validation.Payload;
+import jakarta.validation.ConstraintValidator;
+import jakarta.validation.ConstraintValidatorContext;
 
-public class AdditionalDetailValidator  implements ConstraintValidator<CharacterConstraint, Object> {
-
+public class AdditionalDetailValidator implements ConstraintValidator<CharacterConstraint, Object> {
 
     private Integer size;
 
-
     @Override
-    public void initialize(CharacterConstraint additionalDetails) {
-        size = additionalDetails.size();
+    public void initialize(CharacterConstraint constraint) {
+        this.size = constraint.size();
     }
 
     @Override
-    public boolean isValid(Object additionalDetails, ConstraintValidatorContext cxt) {
-
-        if(additionalDetails==null)
-            return true;
-
-        if(additionalDetails.toString().length() > size)
-            return false;
-        else
-            return true;
+    public boolean isValid(Object value, ConstraintValidatorContext ctx) {
+        if (value == null) return true;
+        return value.toString().length() <= size;
     }
-
 }

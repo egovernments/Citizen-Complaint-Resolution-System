@@ -1,9 +1,8 @@
 package org.egov.pgr.web.models;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import jakarta.validation.Valid;
 import lombok.*;
-
-import javax.validation.Valid;
 
 @Data
 @AllArgsConstructor
@@ -11,14 +10,12 @@ import javax.validation.Valid;
 @Builder
 public class ServiceWrapper {
 
-
     @Valid
     @NonNull
     @JsonProperty("service")
-    private Service service = null;
+    private Service service;
 
     @Valid
     @JsonProperty("workflow")
-    private Workflow workflow = null;
-
+    private Workflow workflow;
 }

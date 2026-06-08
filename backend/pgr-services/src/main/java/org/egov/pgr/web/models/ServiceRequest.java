@@ -1,41 +1,34 @@
 package org.egov.pgr.web.models;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.swagger.annotations.ApiModel;
-import lombok.*;
-import org.egov.common.contract.request.RequestInfo;
-import org.springframework.validation.annotation.Validated;
-
-import javax.validation.Valid;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import lombok.*;
+
+import java.util.List;
 
 /**
- * Request object to fetch the report data
+ * Internal transport object used across the service layer.
+ * Auth context (userId, tenantId, roles) is passed separately from the JWT.
  */
-@ApiModel(description = "Request object to fetch the report data")
-@Validated
-//@javax.annotation.Generated(value = "org.egov.codegen.SpringBootCodegen", date = "2020-07-15T11:35:33.568+05:30")
-
 @Getter
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class ServiceRequest   {
+public class ServiceRequest {
 
-        @NotNull
-        @JsonProperty("RequestInfo")
-        private RequestInfo requestInfo = null;
+    @Valid
+    @NotNull
+    @JsonProperty("service")
+    private Service service;
 
-        @Valid
-        @NonNull
-        @JsonProperty("service")
-        private Service service = null;
+    @Valid
+    @JsonProperty("workflow")
+    private Workflow workflow;
 
-        @Valid
-        @JsonProperty("workflow")
-        private Workflow workflow = null;
-
-
+    // JWT-derived fields — populated by the controller, not from request body
+    private String userId;
+    private String tenantId;
+    private List<String> roles;
 }
-

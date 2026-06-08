@@ -1,330 +1,171 @@
 package org.egov.pgr.validator;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jayway.jsonpath.JsonPath;
-import jakarta.validation.Valid;
-import org.egov.common.contract.request.RequestInfo;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.egov.pgr.config.PGRConfiguration;
-import org.egov.pgr.repository.PGRRepository;
-import org.egov.pgr.repository.ServiceRequestRepository;
-import org.egov.pgr.util.HRMSUtil;
-import org.egov.pgr.web.models.*;
-import org.egov.pgr.web.models.boundary.Boundary;
-import org.egov.pgr.web.models.boundary.BoundaryResponse;
-import org.egov.tracer.model.CustomException;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.egov.pgr.service.RegistryCacheService;
+import org.egov.pgr.service.RegistryService;
+import org.egov.pgr.web.models.RequestSearchCriteria;
+import org.egov.pgr.web.models.Service;
+import org.egov.pgr.web.models.ServiceRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
 
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.Arrays;
+import java.util.List;
 
 import static org.egov.pgr.util.PGRConstants.*;
 
+@Slf4j
 @Component
+@RequiredArgsConstructor
 public class ServiceRequestValidator {
 
+    private final PGRConfiguration config;
+    private final RegistryCacheService registryCacheService;
+    private final RegistryService registryService;
 
-    private PGRConfiguration config;
-
-    private PGRRepository repository;
-
-    private HRMSUtil hrmsUtil;
-
-    private ServiceRequestRepository serviceRequestRepository;
-
-    private ObjectMapper objectMapper;
-
-    @Autowired
-    public ServiceRequestValidator(PGRConfiguration config, PGRRepository repository, HRMSUtil hrmsUtil,
-                                   ServiceRequestRepository serviceRequestRepository, ObjectMapper objectMapper) {
-        this.config = config;
-        this.repository = repository;
-        this.hrmsUtil = hrmsUtil;
-        this.serviceRequestRepository = serviceRequestRepository;
-        this.objectMapper = objectMapper;
-    }
-
-
-    /**
-     * Validates the create request
-     * @param request Request for creating the complaint
-     * @param mdmsData The master data for pgr
-     */
-    public void validateCreate(ServiceRequest request, Object mdmsData){
-        Map<String,String> errorMap = new HashMap<>();
-        validateUserData(request,errorMap);
-        validateSource(request.getService().getSource());
-        validateBoundary(request);
-        validateMDMS(request, mdmsData);
-        if(config.getIsValidateDeptEnabled()) validateDepartment(request, mdmsData);
-        if(!errorMap.isEmpty())
-            throw new CustomException(errorMap);
-    }
-
-
-    /**
-     * Validates if the update request is valid
-     * @param request The request to update complaint
-     * @param mdmsData The master data for pgr
-     */
-    public void validateUpdate(ServiceRequest request, Object mdmsData){
-
-        String id = request.getService().getId();
-        String tenantId = request.getService().getTenantId();
-        validateSource(request.getService().getSource());
-        validateMDMS(request, mdmsData);
-        validateDepartment(request, mdmsData);
-        validateReOpen(request);
-        RequestSearchCriteria criteria = RequestSearchCriteria.builder().ids(Collections.singleton(id)).tenantId(tenantId).build();
-        criteria.setIsPlainSearch(false);
-        List<ServiceWrapper> serviceWrappers = repository.getServiceWrappers(criteria);
-
-        if(CollectionUtils.isEmpty(serviceWrappers))
-            throw new CustomException("INVALID_UPDATE","The record that you are trying to update does not exists");
-
-        // TO DO
-
-    }
-
-    /**
-     * Validates the user related data in the complaint
-     * @param request The request of creating/updating complaint
-     * @param errorMap HashMap to capture any errors
-     */
-    private void validateUserData(ServiceRequest request,Map<String, String> errorMap){
-
-        RequestInfo requestInfo = request.getRequestInfo();
-        String accountId = request.getService().getAccountId();
-
-        /*if(requestInfo.getUserInfo().getType().equalsIgnoreCase(USERTYPE_CITIZEN)
-            && StringUtils.isEmpty(accountId)){
-            errorMap.put("INVALID_REQUEST","AccountId cannot be null");
-        }
-        else if(requestInfo.getUserInfo().getType().equalsIgnoreCase(USERTYPE_CITIZEN)
-                && !StringUtils.isEmpty(accountId)
-                && !accountId.equalsIgnoreCase(requestInfo.getUserInfo().getUuid())){
-            errorMap.put("INVALID_ACCOUNTID","The accountId is different from the user logged in");
-        }*/
-
-        if(requestInfo.getUserInfo().getType().equalsIgnoreCase(USERTYPE_EMPLOYEE)){
-            User citizen = request.getService().getCitizen();
-            if(citizen == null)
-                errorMap.put("INVALID_REQUEST","Citizen object cannot be null");
-            else if(citizen.getMobileNumber()==null || citizen.getName()==null)
-                errorMap.put("INVALID_REQUEST","Name and Mobile Number is mandatory in citizen object");
-        }
-
-    }
-
-
-    /**
-     * Validated the master data sent in the request
-     * @param request The request of creating/updating complaint
-     * @param mdmsData The master data for pgr
-     */
-    private void validateMDMS(ServiceRequest request, Object mdmsData){
-
-        String serviceCode = request.getService().getServiceCode();
-        String jsonPath = MDMS_SERVICEDEF_SEARCH.replace("{SERVICEDEF}",serviceCode);
-
-        List<Object> res = null;
-
-        try{
-            res = JsonPath.read(mdmsData,jsonPath);
-        }
-        catch (Exception e){
-            throw new CustomException("JSONPATH_ERROR","Failed to parse mdms response");
-        }
-
-        if(CollectionUtils.isEmpty(res))
-            throw new CustomException("INVALID_SERVICECODE","The service code: "+serviceCode+" is not present in MDMS");
-
-
-    }
-
-
-    /**
-     *
-     * @param request
-     * @param mdmsData
-     */
-    private void validateDepartment(ServiceRequest request, Object mdmsData){
-
-        String serviceCode = request.getService().getServiceCode();
-        List<String> assignes = request.getWorkflow().getAssignes();
-
-        if(CollectionUtils.isEmpty(assignes))
-            return;
-
-        List<String> departments = hrmsUtil.getDepartment(assignes, request.getRequestInfo(),request.getService().getTenantId());
-
-        String jsonPath = MDMS_DEPARTMENT_SEARCH.replace("{SERVICEDEF}",serviceCode);
-
-        List<String> res = null;
-        String departmentFromMDMS;
-
-        try{
-            res = JsonPath.read(mdmsData,jsonPath);
-        }
-        catch (Exception e){
-            throw new CustomException("JSONPATH_ERROR","Failed to parse mdms response for department");
-        }
-
-        if(CollectionUtils.isEmpty(res))
-            throw new CustomException("PARSING_ERROR","Failed to fetch department from mdms data for serviceCode: "+serviceCode);
-        else departmentFromMDMS = res.get(0);
-
-        Map<String, String> errorMap = new HashMap<>();
-
-        if(!departments.contains(departmentFromMDMS))
-            errorMap.put("INVALID_ASSIGNMENT","The application cannot be assigned to employee of department: "+departments.toString());
-
-
-        if(!errorMap.isEmpty())
-            throw new CustomException(errorMap);
-
-    }
-
-
-    /**
-     *
-     * @param request
-     */
-    private void validateReOpen(ServiceRequest request){
-
-        if(!request.getWorkflow().getAction().equalsIgnoreCase(PGR_WF_REOPEN))
-            return;
-
-
+    public void validateCreate(ServiceRequest request) {
         Service service = request.getService();
-        RequestInfo requestInfo = request.getRequestInfo();
-        Long lastModifiedTime = service.getAuditDetails().getLastModifiedTime();
 
-        if(requestInfo.getUserInfo().getType().equalsIgnoreCase(USERTYPE_CITIZEN)){
-            if(!requestInfo.getUserInfo().getUuid().equalsIgnoreCase(service.getAccountId()))
-                throw new CustomException("INVALID_ACTION","Not authorized to re-open the complain");
+        validateSource(service.getSource());
+        validateBoundary(service);
+        validateServiceCode(service);
+
+        String userType = resolveUserType(request);
+        if (USERTYPE_EMPLOYEE.equalsIgnoreCase(userType)) {
+            if (service.getCitizen() == null)
+                throw new IllegalArgumentException("Citizen object is required when filing on behalf of citizen");
+            if (!StringUtils.hasText(service.getCitizen().getMobileNumber()) ||
+                    !StringUtils.hasText(service.getCitizen().getName()))
+                throw new IllegalArgumentException("Citizen name and mobile number are required");
         }
-
-        if(System.currentTimeMillis()-lastModifiedTime > config.getComplainMaxIdleTime())
-            throw new CustomException("INVALID_ACTION","Complaint is closed");
-
     }
 
+    public void validateUpdate(ServiceRequest request) {
+        Service service = request.getService();
 
-    /**
-     *
-     * @param criteria
-     */
-    public void validateSearch(RequestInfo requestInfo, RequestSearchCriteria criteria){
+        validateSource(service.getSource());
+        validateServiceCode(service);
+        validateRecordExists(service);
 
-        /*
-        * Checks if tenatId is provided with the search params
-        * */
-        if( (criteria.getMobileNumber()!=null 
-                || criteria.getServiceRequestId()!=null || criteria.getIds()!=null
-                || criteria.getServiceCode()!=null )
-                && criteria.getTenantId()==null)
-            throw new CustomException("INVALID_SEARCH","TenantId is mandatory search param");
-
-        validateSearchParam(requestInfo, criteria);
-
+        if (request.getWorkflow() != null &&
+                PGR_WF_REOPEN.equalsIgnoreCase(request.getWorkflow().getAction())) {
+            validateReOpen(request);
+        }
     }
 
-
-    /**
-     * Validates if the user have access to search on given param
-     * @param requestInfo
-     * @param criteria
-     */
-    private void validateSearchParam(RequestInfo requestInfo, RequestSearchCriteria criteria){
-
-        if(requestInfo.getUserInfo().getType().equalsIgnoreCase("EMPLOYEE" ) && criteria.isEmpty())
-            throw new CustomException("INVALID_SEARCH","Search without params is not allowed");
-
-//        if(requestInfo.getUserInfo().getType().equalsIgnoreCase("EMPLOYEE") && criteria.getTenantId().split("\\.").length == config.getStateLevelTenantIdLength()){
-//            throw new CustomException("INVALID_SEARCH", "Employees cannot perform state level searches.");
-//        }
-
-        String allowedParamStr = null;
-
-        if(requestInfo.getUserInfo().getType().equalsIgnoreCase("CITIZEN" ))
-            allowedParamStr = config.getAllowedCitizenSearchParameters();
-        else if(requestInfo.getUserInfo().getType().equalsIgnoreCase("EMPLOYEE" ) || requestInfo.getUserInfo().getType().equalsIgnoreCase("SYSTEM") )
-            allowedParamStr = config.getAllowedEmployeeSearchParameters();
-        else throw new CustomException("INVALID SEARCH","The userType: "+requestInfo.getUserInfo().getType()+
-                    " does not have any search config");
-
-        List<String> allowedParams = Arrays.asList(allowedParamStr.split(","));
-
-        if(criteria.getServiceCode()!=null && !allowedParams.contains("serviceCode"))
-            throw new CustomException("INVALID SEARCH","Search on serviceCode is not allowed");
-
-        if(criteria.getServiceRequestId()!=null && !allowedParams.contains("serviceRequestId"))
-            throw new CustomException("INVALID SEARCH","Search on serviceRequestId is not allowed");
-
-        if(criteria.getApplicationStatus()!=null && !allowedParams.contains("applicationStatus"))
-            throw new CustomException("INVALID SEARCH","Search on applicationStatus is not allowed");
-
-        if(criteria.getMobileNumber()!=null && !allowedParams.contains("mobileNumber"))
-            throw new CustomException("INVALID SEARCH","Search on mobileNumber is not allowed");
-
-        if(criteria.getIds()!=null && !allowedParams.contains("ids"))
-            throw new CustomException("INVALID SEARCH","Search on ids is not allowed");
-
+    public void validateSearch(ServiceRequest request, RequestSearchCriteria criteria) {
+        if ((criteria.getMobileNumber() != null || criteria.getServiceRequestId() != null
+                || criteria.getIds() != null || criteria.getServiceCode() != null)
+                && criteria.getTenantId() == null) {
+            throw new IllegalArgumentException("tenantId is mandatory when searching by specific fields");
+        }
+        validateSearchParam(request, criteria);
     }
-
-    /**
-     * Validates if the source is in the given list configures in application properties
-     * @param source
-     */
-    private void validateSource(String source){
-
-        List<String> allowedSourceStr = Arrays.asList(config.getAllowedSource().split(","));
-
-        if(!allowedSourceStr.contains(source))
-            throw new CustomException("INVALID_SOURCE","The source: "+source+" is not valid");
-
-    }
-
 
     public void validatePlainSearch(RequestSearchCriteria criteria) {
-        if(CollectionUtils.isEmpty(criteria.getTenantIds())){
-            throw new CustomException("TENANT_ID_LIST_EMPTY", "Tenant ids not provided for searching.");
+        if (CollectionUtils.isEmpty(criteria.getTenantIds())) {
+            throw new IllegalArgumentException("tenantIds must be provided for plain search");
         }
     }
 
-    public void validateBoundary(ServiceRequest request) {
-        if (request.getService().getAddress() == null || request.getService().getAddress().getLocality() == null || request.getService().getAddress().getLocality().getCode() == null) {
-            throw new CustomException("INVALID_BOUNDARY", "Boundary is required");
-        }
+    // -------------------------------------------------------
 
-        String localityCode = request.getService().getAddress().getLocality().getCode();
-
-        try {
-            Object rawResponse = serviceRequestRepository.fetchResult(
-                    new StringBuilder(config.getBoundaryHost()
-                            + config.getBoundarySearchEndpoint()
-                            + "?limit=10"
-                            + "&offset=0&tenantId=" + request.getService().getTenantId()
-                            + "&codes=" + localityCode),
-                    request.getRequestInfo()
-            );
-
-            BoundaryResponse boundarySearchResponse = objectMapper.convertValue(rawResponse, BoundaryResponse.class);
-            @Valid List<Boundary> boundaries = boundarySearchResponse.getBoundary();
-
-            boolean found = boundaries != null && boundaries.stream()
-                    .anyMatch(boundary -> localityCode.equals(boundary.getCode()));
-
-            if (!found) {
-                throw new CustomException("INVALID_BOUNDARY_CODE", "Invalid locality code: " + localityCode);
-            }
-        } catch (CustomException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new CustomException("BOUNDARY_SERVICE_SEARCH_ERROR", "Error while fetching boundaries from Boundary Service : " + e.getMessage());
+    private void validateSource(String source) {
+        if (!StringUtils.hasText(source)) return;
+        List<String> allowed = Arrays.asList(config.getAllowedSource().split(","));
+        if (!allowed.contains(source.trim())) {
+            throw new IllegalArgumentException("Invalid source: " + source +
+                    ". Allowed: " + config.getAllowedSource());
         }
     }
 
+    private void validateBoundary(Service service) {
+        if (service.getAddress() == null ||
+                service.getAddress().getLocality() == null ||
+                !StringUtils.hasText(service.getAddress().getLocality().getCode())) {
+            throw new IllegalArgumentException("address.locality.code is required");
+        }
+        String code = service.getAddress().getLocality().getCode();
+        if (!registryCacheService.isValidBoundaryCode(code)) {
+            throw new IllegalArgumentException("Invalid boundary code: " + code);
+        }
+    }
+
+    private void validateServiceCode(Service service) {
+        if (!StringUtils.hasText(service.getServiceCode())) return;
+        if (!registryCacheService.isValidServiceCode(
+                config.getRegistryServiceCategorySchemaCode(), service.getServiceCode())) {
+            throw new IllegalArgumentException("Invalid serviceCode: " + service.getServiceCode());
+        }
+    }
+
+    private void validateRecordExists(Service service) {
+        if (!StringUtils.hasText(service.getId()) && !StringUtils.hasText(service.getServiceRequestId()))
+            throw new IllegalArgumentException("id or serviceRequestId is required for update");
+
+        Service existing = registryService.findByServiceRequestId(service.getServiceRequestId());
+        if (existing == null) {
+            throw new IllegalArgumentException("No record found for serviceRequestId: " +
+                    service.getServiceRequestId());
+        }
+    }
+
+    private void validateReOpen(ServiceRequest request) {
+        Service service = request.getService();
+        Long lastModifiedTime = service.getAuditDetails() != null
+                ? service.getAuditDetails().getLastModifiedTime() : null;
+
+        if (lastModifiedTime != null &&
+                System.currentTimeMillis() - lastModifiedTime > config.getComplainMaxIdleTime()) {
+            throw new IllegalArgumentException(
+                    "Complaint cannot be reopened — idle time limit exceeded");
+        }
+
+        String citizenUuid = service.getCitizen() != null ? service.getCitizen().getUuid() : null;
+        if (USERTYPE_CITIZEN.equalsIgnoreCase(resolveUserType(request)) &&
+                StringUtils.hasText(citizenUuid) &&
+                !citizenUuid.equals(service.getAccountId())) {
+            throw new IllegalArgumentException("Only the complaint owner can reopen it");
+        }
+    }
+
+    private void validateSearchParam(ServiceRequest request, RequestSearchCriteria criteria) {
+        String userType = resolveUserType(request);
+
+        if (USERTYPE_EMPLOYEE.equalsIgnoreCase(userType) && criteria.isEmpty()) {
+            throw new IllegalArgumentException("Search without any parameters is not allowed for employees");
+        }
+
+        String allowedParamStr;
+        if (USERTYPE_CITIZEN.equalsIgnoreCase(userType)) {
+            allowedParamStr = config.getAllowedCitizenSearchParameters();
+        } else {
+            allowedParamStr = config.getAllowedEmployeeSearchParameters();
+        }
+
+        List<String> allowed = Arrays.asList(allowedParamStr.split(","));
+
+        if (criteria.getServiceCode() != null && !allowed.contains("serviceCode"))
+            throw new IllegalArgumentException("Search on serviceCode is not allowed for " + userType);
+        if (criteria.getServiceRequestId() != null && !allowed.contains("serviceRequestId"))
+            throw new IllegalArgumentException("Search on serviceRequestId is not allowed for " + userType);
+        if (criteria.getApplicationStatus() != null && !allowed.contains("applicationStatus"))
+            throw new IllegalArgumentException("Search on applicationStatus is not allowed for " + userType);
+        if (criteria.getMobileNumber() != null && !allowed.contains("mobileNumber"))
+            throw new IllegalArgumentException("Search on mobileNumber is not allowed for " + userType);
+        if (criteria.getIds() != null && !allowed.contains("ids"))
+            throw new IllegalArgumentException("Search on ids is not allowed for " + userType);
+    }
+
+    private String resolveUserType(ServiceRequest request) {
+        if (CollectionUtils.isEmpty(request.getRoles())) return USERTYPE_CITIZEN;
+        boolean isEmployee = request.getRoles().stream()
+                .anyMatch(r -> r.equalsIgnoreCase(USERTYPE_EMPLOYEE)
+                        || r.equalsIgnoreCase("GRO_EMPLOYEE")
+                        || r.equalsIgnoreCase("DGRO"));
+        return isEmployee ? USERTYPE_EMPLOYEE : USERTYPE_CITIZEN;
+    }
 }

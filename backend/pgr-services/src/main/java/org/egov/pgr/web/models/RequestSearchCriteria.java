@@ -2,13 +2,8 @@ package org.egov.pgr.web.models;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import org.hibernate.validator.constraints.SafeHtml;
+import lombok.*;
 
-import jakarta.validation.constraints.NotNull;
 import java.util.Set;
 
 @Data
@@ -17,7 +12,6 @@ import java.util.Set;
 @Builder
 public class RequestSearchCriteria {
 
-    @SafeHtml
     @JsonProperty("tenantId")
     private String tenantId;
 
@@ -30,20 +24,12 @@ public class RequestSearchCriteria {
     @JsonProperty("applicationStatus")
     private Set<String> applicationStatus;
 
-    @SafeHtml
     @JsonProperty("mobileNumber")
     private String mobileNumber;
 
-    @SafeHtml
     @JsonProperty("serviceRequestId")
     private String serviceRequestId;
 
-    @JsonProperty("sortBy")
-    private SortBy sortBy;
-
-    @JsonProperty("sortOrder")
-    private SortOrder sortOrder;
-  
     @JsonProperty("locality")
     private Set<String> locality;
 
@@ -62,11 +48,20 @@ public class RequestSearchCriteria {
     @JsonProperty("slaDeltaMinLimit")
     private Long slaDeltaMinLimit;
 
+    @JsonProperty("sortBy")
+    private SortBy sortBy;
+
+    @JsonProperty("sortOrder")
+    private SortOrder sortOrder;
+
     @JsonProperty("limit")
     private Integer limit;
 
     @JsonProperty("offset")
     private Integer offset;
+
+    @JsonProperty("accountId")
+    private String accountId;
 
     @JsonIgnore
     private Set<String> userIds;
@@ -74,26 +69,17 @@ public class RequestSearchCriteria {
     @JsonIgnore
     private Boolean isPlainSearch;
 
-
     public enum SortOrder {
-        ASC,
-        DESC
+        ASC, DESC
     }
 
     public enum SortBy {
-        locality,
-        applicationStatus,
-        serviceRequestId,
-        createdTime
+        locality, applicationStatus, serviceRequestId, createdTime
     }
 
-    @SafeHtml
-    @JsonProperty("accountId")
-    private String accountId;
-
-    public boolean isEmpty(){
-        return (this.tenantId==null && this.serviceCode==null && this.mobileNumber==null && this.serviceRequestId==null
-        && this.applicationStatus==null && this.ids==null && this.userIds==null && this.locality==null);
+    public boolean isEmpty() {
+        return tenantId == null && serviceCode == null && mobileNumber == null
+                && serviceRequestId == null && applicationStatus == null
+                && ids == null && userIds == null && locality == null;
     }
-
 }

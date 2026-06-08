@@ -2,11 +2,11 @@ package org.egov.pgr.web.models;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.*;
-import org.egov.common.contract.request.RequestInfo;
 
-import javax.validation.Valid;
-
-
+/**
+ * Thin wrapper used by search and count endpoints.
+ * Auth context comes from the JWT; this carries only optional metadata.
+ */
 @Getter
 @Setter
 @AllArgsConstructor
@@ -14,8 +14,6 @@ import javax.validation.Valid;
 @Builder
 public class RequestInfoWrapper {
 
-	@NonNull
-	@Valid
-	@JsonProperty("RequestInfo")
-	private RequestInfo requestInfo;
+    @JsonProperty("userType")
+    private String userType;
 }
