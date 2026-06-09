@@ -66,10 +66,10 @@ import {
 } from './slaService';
 import {
   DEFAULT_STATE_DEFAULTS,
-  PATHS,
   STATE_KEYS,
   STATE_LABELS,
   formatCell,
+  isStateDefaultsEmpty,
   makeCategoryUid,
   type CellValue,
   type Path,
@@ -82,7 +82,7 @@ import { recordsToCsv } from './csvParser';
 import type { MdmsRecord } from '@digit-mcp/data-provider';
 import type { CategorySlaRecord } from './types';
 
-type PathFilter = 'all' | Path;
+type PathFilter = string; // 'all' | <distinct path value from loaded rows>
 
 export function CategorySlaMatrixPage() {
   const { state } = useApp();
@@ -154,6 +154,13 @@ export function CategorySlaMatrixPage() {
   );
   const subcatAutocomplete = useMemo(
     () => Array.from(new Set(rows.map((r) => r.subcategoryL1).filter(Boolean))).sort(),
+    [rows],
+  );
+  // Distinct `path` values actually present in loaded rows. The chip set is
+  // dynamic — operators pick their own routing keys via the free-text path
+  // input on each row, and the filter reflects whatever they typed.
+  const distinctPaths = useMemo(
+    () => Array.from(new Set(rows.map((r) => r.path).filter(Boolean))).sort(),
     [rows],
   );
 
@@ -404,9 +411,9 @@ export function CategorySlaMatrixPage() {
 
       {/* Toolbar */}
       <div className="rounded-md border border-border bg-card p-3 flex flex-wrap items-center gap-2">
-        {/* Path filter */}
+        {/* Path filter — "All" plus one chip per distinct path in loaded rows */}
         <div className="inline-flex rounded-md border border-border bg-background overflow-hidden">
-          {(['all', ...PATHS] as PathFilter[]).map((p) => (
+          {(['all', ...distinctPaths] as PathFilter[]).map((p) => (
             <button
               key={p}
               onClick={() => setPathFilter(p)}
@@ -524,13 +531,13 @@ export function CategorySlaMatrixPage() {
                 return (
                   <tr key={rk} className={`border-b border-border ${r.modified ? 'bg-amber-50/30' : ''} ${isDup ? 'bg-red-50/40' : ''}`}>
                     <td className="px-2 py-1.5 sticky left-0 bg-inherit">
-                      <select
+                      <Input
+                        list="path-autocomplete"
                         value={r.path}
-                        onChange={(e) => patchRow(rk, { path: e.target.value as Path })}
-                        className="text-xs h-7 border border-border rounded px-1.5 bg-background"
-                      >
-                        {PATHS.map((p) => <option key={p} value={p}>{p}</option>)}
-                      </select>
+                        onChange={(e) => patchRow(rk, { path: e.target.value })}
+                        className="h-7 text-xs w-20"
+                        placeholder="path"
+                      />
                     </td>
                     <td className="px-2 py-1.5 sticky left-[80px] bg-inherit">
                       <Input
@@ -597,6 +604,9 @@ export function CategorySlaMatrixPage() {
       </div>
 
       {/* Autocomplete datalists */}
+      <datalist id="path-autocomplete">
+        {distinctPaths.map((p) => <option key={p} value={p} />)}
+      </datalist>
       <datalist id="cat-autocomplete">
         {categoryAutocomplete.map((c) => <option key={c} value={c} />)}
       </datalist>
@@ -653,7 +663,7 @@ function makeAudit(
 // ---------------------------------------------------------------------------
 interface CellEditorProps {
   value: CellValue;
-  fallback: number;
+  fallback: number | null;
   onChange: (v: CellValue) => void;
 }
 function CellEditor({ value, fallback, onChange }: CellEditorProps) {
@@ -683,15 +693,16 @@ function CellEditor({ value, fallback, onChange }: CellEditorProps) {
     setEditing(false);
   }
 
+  const fallbackLabel = fallback === null || fallback === undefined ? 'unset' : `${fallback}h`;
   if (!editing) {
     return (
       <button
         onClick={() => setEditing(true)}
         className="w-full text-center hover:bg-muted/50 rounded px-1 py-0.5 transition-colors"
-        title={`Default: ${fallback}h`}
+        title={`Default: ${fallbackLabel}`}
       >
         {value === null || value === undefined ? (
-          <span className="text-muted-foreground/60 italic">— <span className="text-[10px]">(def {fallback}h)</span></span>
+          <span className="text-muted-foreground/60 italic">— <span className="text-[10px]">(def {fallbackLabel})</span></span>
         ) : (
           <span className="font-medium">{formatCell(value)}</span>
         )}
@@ -738,29 +749,54 @@ function CellEditor({ value, fallback, onChange }: CellEditorProps) {
 // ---------------------------------------------------------------------------
 function StateDefaultsRow({ defaults, onSave }: { defaults: StateDefaults; onSave: (next: StateDefaults) => Promise<void> }) {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(defaults);
+  const [draft, setDraft] = useState<StateDefaults>(defaults);
   useEffect(() => { setDraft(defaults); }, [defaults]);
+
+  const empty = isStateDefaultsEmpty(defaults);
+
+  // When everything is null AND we're not editing, render an explicit
+  // "not configured" prompt instead of fabricating magic numbers.
+  if (empty && !editing) {
+    return (
+      <div className="rounded-md border border-border bg-blue-50/40 p-3 flex items-center gap-3 flex-wrap">
+        <Badge variant="outline" className="bg-blue-100 text-blue-900 border-blue-300">Defaults (StateSLA)</Badge>
+        <span className="text-xs text-muted-foreground">
+          Not configured. Click "Edit defaults…" to set per-state SLA hours.
+        </span>
+        <div className="ml-auto">
+          <Button size="sm" variant="outline" onClick={() => setEditing(true)}>Edit defaults…</Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-md border border-border bg-blue-50/40 p-3 flex items-center gap-3 flex-wrap">
       <Badge variant="outline" className="bg-blue-100 text-blue-900 border-blue-300">Defaults (StateSLA)</Badge>
       <span className="text-xs text-muted-foreground">Fallback when matrix cells are empty</span>
       <div className="flex items-center gap-3 ml-auto">
-        {STATE_KEYS.map((k) => (
-          <div key={k} className="flex items-center gap-1">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{STATE_LABELS[k]}</span>
-            {editing ? (
-              <input
-                type="number"
-                value={draft[k]}
-                onChange={(e) => setDraft((d) => ({ ...d, [k]: Number(e.target.value) }))}
-                className="h-6 w-14 text-xs border border-border rounded px-1"
-              />
-            ) : (
-              <span className="text-xs font-medium">{defaults[k]}h</span>
-            )}
-          </div>
-        ))}
+        {STATE_KEYS.map((k) => {
+          const val = (editing ? draft[k] : defaults[k]);
+          return (
+            <div key={k} className="flex items-center gap-1">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{STATE_LABELS[k]}</span>
+              {editing ? (
+                <input
+                  type="number"
+                  value={draft[k] ?? ''}
+                  onChange={(e) => setDraft((d) => ({
+                    ...d,
+                    [k]: e.target.value === '' ? null : Number(e.target.value),
+                  }))}
+                  className="h-6 w-14 text-xs border border-border rounded px-1"
+                  placeholder="—"
+                />
+              ) : (
+                <span className="text-xs font-medium">{val === null || val === undefined ? '—' : `${val}h`}</span>
+              )}
+            </div>
+          );
+        })}
         {editing ? (
           <>
             <Button size="sm" onClick={async () => { await onSave(draft); setEditing(false); }}>Save defaults</Button>
@@ -778,12 +814,13 @@ function StateDefaultsRow({ defaults, onSave }: { defaults: StateDefaults; onSav
 // AddRowDialog
 // ---------------------------------------------------------------------------
 function AddRowDialog({ open, onClose, onAdd }: { open: boolean; onClose: () => void; onAdd: (r: { path: Path; category: string; subcategoryL1: string }) => void }) {
-  const [path, setPath] = useState<Path>('IGE');
+  const [path, setPath] = useState<Path>('');
   const [category, setCategory] = useState('');
   const [subcategoryL1, setSubcategoryL1] = useState('');
   function handleAdd() {
-    if (!category.trim() || !subcategoryL1.trim()) return;
-    onAdd({ path, category: category.trim(), subcategoryL1: subcategoryL1.trim() });
+    if (!path.trim() || !category.trim() || !subcategoryL1.trim()) return;
+    onAdd({ path: path.trim(), category: category.trim(), subcategoryL1: subcategoryL1.trim() });
+    setPath('');
     setCategory('');
     setSubcategoryL1('');
     onClose();
@@ -798,9 +835,13 @@ function AddRowDialog({ open, onClose, onAdd }: { open: boolean; onClose: () => 
         <div className="space-y-3">
           <div className="space-y-1">
             <label className="text-xs font-medium">Path</label>
-            <select value={path} onChange={(e) => setPath(e.target.value as Path)} className="h-8 w-full text-xs border border-border rounded px-2">
-              {PATHS.map((p) => <option key={p} value={p}>{p}</option>)}
-            </select>
+            <Input
+              list="path-autocomplete"
+              value={path}
+              onChange={(e) => setPath(e.target.value)}
+              className="h-8 text-xs"
+              placeholder="tenant-defined routing key"
+            />
           </div>
           <div className="space-y-1">
             <label className="text-xs font-medium">Category</label>
@@ -812,7 +853,7 @@ function AddRowDialog({ open, onClose, onAdd }: { open: boolean; onClose: () => 
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button onClick={handleAdd} disabled={!category.trim() || !subcategoryL1.trim()}>Add row</Button>
+            <Button onClick={handleAdd} disabled={!path.trim() || !category.trim() || !subcategoryL1.trim()}>Add row</Button>
           </div>
         </div>
       </DialogContent>

@@ -23,3 +23,25 @@ WHERE code LIKE 'CRS.%'
 SELECT code, jsonb_typeof(definition->'x-ref-schema') AS x_ref_type
 FROM eg_mdms_schema_definition
 WHERE code LIKE 'CRS.%';
+
+-- 2026-06-09 follow-up: drop path enum on CRS.CategorySLA
+--
+-- Symptom: POST /mdms-v2/v2/_create/CRS.CategorySLA with path != "IGE"/"IGSAE"
+-- → HTTP 400 schema-validation error (path must be one of [IGE, IGSAE]).
+--
+-- Root cause: the initial CRS.CategorySLA schema baked in a Mozambique-specific
+-- path enum. The schema has been corrected upstream (CRS.json) but mdms-v2's
+-- schema/v1 API has no _update endpoint, so we patch the definition row
+-- in place to match the new generic shape.
+--
+-- Safe to re-run; the WHERE clause skips rows that no longer carry an enum.
+
+UPDATE eg_mdms_schema_definition
+SET definition = jsonb_set(definition, '{properties,path}',
+  '{"type":"string","minLength":1,"description":"Tenant-defined routing path; opaque to the scheduler."}'::jsonb)
+WHERE code = 'CRS.CategorySLA'
+  AND definition->'properties'->'path'->'enum' IS NOT NULL;
+
+SELECT code, definition->'properties'->'path' AS path_property
+FROM eg_mdms_schema_definition
+WHERE code = 'CRS.CategorySLA';

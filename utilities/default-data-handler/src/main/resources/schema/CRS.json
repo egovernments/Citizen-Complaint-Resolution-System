@@ -23,7 +23,8 @@
       "properties": {
         "path": {
           "type": "string",
-          "enum": ["IGE", "IGSAE"]
+          "minLength": 1,
+          "description": "Tenant-defined routing path (e.g. an institutional silo, a geographic region, or any tenant-meaningful grouping). The scheduler treats it as an opaque key."
         },
         "category": {
           "type": "string",

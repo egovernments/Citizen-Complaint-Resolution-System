@@ -70,7 +70,13 @@ export async function loadCategorySla(tenantId: string): Promise<MatrixRow[]> {
   return mdmsToMatrixRows(active);
 }
 
-/** Read StateSLA singleton; if absent return the in-memory fallback. */
+/**
+ * Read StateSLA singleton; if absent return the (now empty) in-memory
+ * fallback. Callers must check `isStateDefaultsEmpty(defaults)` and render
+ * an explicit "not configured" prompt rather than fall back to magic
+ * numbers — `DEFAULT_STATE_DEFAULTS` is intentionally all-null so the
+ * page never lies about values the tenant has never set.
+ */
 export async function loadStateSla(tenantId: string): Promise<{ defaults: StateDefaults; record?: MdmsRecord }> {
   const records = await digitClient.mdmsSearch(tenantId, STATE_SLA_SCHEMA, { limit: 5 });
   const active = records.filter((r) => r.isActive !== false);
@@ -78,7 +84,7 @@ export async function loadStateSla(tenantId: string): Promise<{ defaults: StateD
     return { defaults: { ...DEFAULT_STATE_DEFAULTS } };
   }
   const record = active[0];
-  const data = record.data as { stateDefaults?: StateDefaults };
+  const data = record.data as { stateDefaults?: Partial<StateDefaults> };
   return { defaults: { ...DEFAULT_STATE_DEFAULTS, ...(data.stateDefaults ?? {}) }, record };
 }
 

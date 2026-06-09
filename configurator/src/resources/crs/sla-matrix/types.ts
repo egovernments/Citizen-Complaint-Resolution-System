@@ -11,9 +11,20 @@
  * Mirrors the CRS.CategorySLA MDMS schema 1:1.
  */
 
-export type Path = 'IGE' | 'IGSAE';
+/**
+ * `path` is a tenant-defined routing key — any non-empty string. The schema
+ * accepts arbitrary strings; the UI derives the available chip set from
+ * whatever values the operator has actually entered in CategorySLA rows.
+ */
+export type Path = string;
 
-export const PATHS: Path[] = ['IGE', 'IGSAE'];
+/**
+ * Empty by default — operators populate paths as they add rows. The page
+ * computes the live distinct set from loaded CategorySLA records and uses
+ * that for the path filter chips. Kept exported so legacy imports still
+ * resolve.
+ */
+export const PATHS: Path[] = [];
 
 /**
  * The 6 PGR/CRS workflow states the scheduler tracks. Names match the
@@ -67,32 +78,39 @@ export interface CategorySlaRecord {
 }
 
 export interface StateDefaults {
-  new: number;
-  triage: number;
-  forwarded: number;
-  investigation: number;
-  awaiting: number;
-  resolved: number;
+  new: number | null;
+  triage: number | null;
+  forwarded: number | null;
+  investigation: number | null;
+  awaiting: number | null;
+  resolved: number | null;
 }
 
 /**
- * In-memory fallback values used to render greyed-out "default: Xh"
- * hints in empty matrix cells when the tenant has not yet persisted a
- * CRS.StateSLA singleton. Operators are expected to populate the real
- * defaults via the configurator UI; these numbers are only a
- * placeholder so the page is usable on a brand-new tenant.
+ * Empty by default — operators populate via the configurator. Listed here
+ * only as a typed shape hint so the page can iterate STATE_KEYS without
+ * branching on missing keys. When CRS.StateSLA is empty AND every value
+ * here is null, the page renders a "Not configured" prompt instead of
+ * fake magic numbers.
  *
- * `new = 0` so the scheduler's `elapsed >= sla` check fires on the
- * first scan after creation if the operator chooses to leave it at 0.
+ * Historically this carried a Mozambique-specific set of BRD §5.2 values
+ * ({new:0, triage:24, forwarded:48, investigation:120, awaiting:120,
+ * resolved:360}) — that has been removed so the configurator does not
+ * lie about defaults the tenant has never set.
  */
 export const DEFAULT_STATE_DEFAULTS: StateDefaults = {
-  new: 0,
-  triage: 24,
-  forwarded: 48,
-  investigation: 120,
-  awaiting: 120,
-  resolved: 360,
+  new: null,
+  triage: null,
+  forwarded: null,
+  investigation: null,
+  awaiting: null,
+  resolved: null,
 };
+
+/** True when no per-state default has been configured (all six null). */
+export function isStateDefaultsEmpty(d: StateDefaults): boolean {
+  return STATE_KEYS.every((k) => d[k] === null || d[k] === undefined);
+}
 
 /** Compose the uniqueIdentifier the MDMS schema expects. */
 export function makeCategoryUid(rec: { path: Path; category: string; subcategoryL1: string }): string {

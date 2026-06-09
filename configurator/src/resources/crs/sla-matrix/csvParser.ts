@@ -9,7 +9,7 @@
  */
 
 import type { CategorySlaRecord, CellValue, Path, SlaHoursByState, StateKey } from './types';
-import { PATHS, STATE_KEYS, makeCategoryUid } from './types';
+import { STATE_KEYS, makeCategoryUid } from './types';
 import * as XLSX from 'xlsx';
 
 export interface ParsedRow {
@@ -94,10 +94,9 @@ function buildRecord(rowNumber: number, raw: Record<string, string>): ParsedRow 
       errors.push(`missing required column "${col}"`);
     }
   }
-  const path = raw.path?.trim() as Path;
-  if (raw.path && !PATHS.includes(path)) {
-    errors.push(`invalid path "${raw.path}" (expected one of ${PATHS.join(', ')})`);
-  }
+  const path = (raw.path?.trim() ?? '') as Path;
+  // `path` is a tenant-defined opaque string — any non-empty value is accepted.
+  // Required-column check above already catches the empty case.
   const slaHoursByState: SlaHoursByState = {};
   for (const [colName, stateKey] of Object.entries(SLA_COL_KEYS)) {
     const cellRaw = raw[colName] ?? '';
