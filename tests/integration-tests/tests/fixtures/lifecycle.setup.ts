@@ -183,7 +183,10 @@ async function createComplaint(t: Tokens, descriptionTag: string): Promise<strin
       workflow: { action: 'APPLY', verificationDocuments: [] },
     }),
   });
-  expect(resp.ok, `create complaint (${descriptionTag}) HTTP ${resp.status}`).toBe(true);
+  if (!resp.ok) {
+    const errBody = await resp.text();
+    throw new Error(`create complaint (${descriptionTag}) HTTP ${resp.status} body=${errBody.slice(0, 1500)}`);
+  }
   const data: any = await resp.json();
   const srv = data.ServiceWrappers[0].service;
   const srid: string = srv.serviceRequestId;

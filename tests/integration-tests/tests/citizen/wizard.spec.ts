@@ -50,8 +50,17 @@ Test timeout is 180s — six steps plus DOM settles plus the final POST regularl
     );
     await page.waitForTimeout(5000);
 
-    const dropdowns = page.locator('input.digit-dropdown-employee-select-wrap--elipses');
-    const cascadeDropdowns = page.locator('input[class*="select-wrap--elipses"]');
+    // Modern digit-ui renders dropdowns as <button role="combobox"> (shadcn
+    // style); older builds used `input.digit-dropdown-employee-select-wrap--elipses`.
+    // Match both so the test survives on either build.
+    const dropdowns = page.locator(
+      'button[role="combobox"], input.digit-dropdown-employee-select-wrap--elipses',
+    );
+    // Modern wizard uses <button role="combobox">; older builds used a
+    // wrapped <input>. Match both for cross-build compatibility.
+    const cascadeDropdowns = page.locator(
+      'button[role="combobox"], input[class*="select-wrap--elipses"]',
+    );
 
     const clickNext = async () => {
       const btn = page.locator('button:visible').filter({ hasText: /^NEXT$/ }).first();
@@ -65,13 +74,13 @@ Test timeout is 180s — six steps plus DOM settles plus the final POST regularl
     await dropdowns.first().waitFor({ state: 'visible', timeout: 15_000 });
     await dropdowns.first().click();
     await page.waitForTimeout(800);
-    await page.locator('.digit-dropdown-item').first().click();
+    await page.locator('[role="option"], .digit-dropdown-item').first().click();
     await page.waitForTimeout(1500);
 
     // Subtype is the 2nd dropdown — required-* appears after Type pick
     await dropdowns.nth(1).click();
     await page.waitForTimeout(800);
-    await page.locator('.digit-dropdown-item').first().click();
+    await page.locator('[role="option"], .digit-dropdown-item').first().click();
     await page.waitForTimeout(1000);
     await clickNext();
 
@@ -85,26 +94,26 @@ Test timeout is 180s — six steps plus DOM settles plus the final POST regularl
     );
     await expect(pincodeToast).toHaveCount(0);
 
-    // ── Step 3: Location Details ────────────────────────────────────
-    await page.waitForTimeout(1500);
-    await clickNext();
-
-    // ── Step 4: Complaint's Location cascade (County → Sub → Ward) ──
+    // ── Step 3: Location Details — pick County → SubCounty → Ward ──
+    // The modern wizard collapses the old separate "location cascade"
+    // (was Step 4) into Step 3: the County dropdown appears immediately;
+    // SubCounty and Ward appear progressively as parents get picked.
     await page.waitForTimeout(2000);
-    await cascadeDropdowns.first().click();
-    await page.waitForTimeout(800);
-    await page.locator('.digit-dropdown-item').first().click();
-    await page.waitForTimeout(1500);
-
-    await cascadeDropdowns.nth(1).click();
-    await page.waitForTimeout(800);
-    await page.locator('.digit-dropdown-item').first().click();
-    await page.waitForTimeout(1500);
-
-    await cascadeDropdowns.nth(2).click();
-    await page.waitForTimeout(800);
-    await page.locator('.digit-dropdown-item').first().click();
-    await page.waitForTimeout(1000);
+    for (let i = 0; i < 3; i++) {
+      const dd = cascadeDropdowns.nth(i);
+      // Wait briefly — the cascade child may not have rendered yet.
+      const visible = await dd.isVisible({ timeout: 5000 }).catch(() => false);
+      if (!visible) break;
+      // Skip if this dropdown already has a selection.
+      const hasValue = await dd.evaluate(
+        (el) => !(el as HTMLElement).innerText.match(/^Select /i),
+      ).catch(() => false);
+      if (hasValue) continue;
+      await dd.click();
+      await page.waitForTimeout(800);
+      await page.locator('[role="option"], .digit-dropdown-item').first().click();
+      await page.waitForTimeout(1500);
+    }
     await clickNext();
 
     // ── Step 5: Additional Details (Description required) ──────────
