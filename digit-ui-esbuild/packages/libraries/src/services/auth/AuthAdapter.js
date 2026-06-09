@@ -1,7 +1,9 @@
 /**
  * AuthAdapter interface.
  * All implementations must provide these methods.
- * Active adapter is selected via globalConfigs.getConfig("AUTH_PROVIDER").
+ * The active adapter is selected per surface by getAuthProvider() in
+ * ./authSurface.js (CITIZEN_AUTH_PROVIDER / EMPLOYEE_AUTH_PROVIDER, with the
+ * legacy AUTH_PROVIDER honoured for the citizen surface only).
  */
 
 export class AuthAdapter {

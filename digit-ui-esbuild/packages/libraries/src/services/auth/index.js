@@ -1,4 +1,5 @@
 import { AuthAdapter } from "./AuthAdapter";
+import { getAuthProvider } from "./authSurface";
 
 let _adapter = null;
 
@@ -8,7 +9,9 @@ export function getAuthAdapter() {
 }
 
 export async function initAuthAdapter() {
-  const provider = window?.globalConfigs?.getConfig("AUTH_PROVIDER") || "digit";
+  // Resolve per the current surface so the employee bundle never instantiates
+  // the Keycloak adapter off a global AUTH_PROVIDER flag.
+  const provider = getAuthProvider();
 
   if (provider === "keycloak") {
     const { KeycloakAuthAdapter } = await import("./KeycloakAuthAdapter");

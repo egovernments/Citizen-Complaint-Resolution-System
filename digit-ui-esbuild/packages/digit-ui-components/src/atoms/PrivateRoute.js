@@ -2,8 +2,19 @@ import React from "react";
 import PropTypes from "prop-types";
 import { Route, Redirect } from "react-router-dom";
 
-function isKeycloakAuth() {
-  return window?.globalConfigs?.getConfig("AUTH_PROVIDER") === "keycloak";
+// Keycloak/SSO is resolved per surface: citizen may use Keycloak while the
+// employee surface always stays on DIGIT password auth. Keep in sync with
+// libraries/src/services/auth/authSurface.js (inlined here to avoid a
+// cross-package import).
+function isKeycloakAuth(pathname) {
+  const parts = (pathname || "").split("/").filter(Boolean);
+  const surface = parts[1] === "employee" ? "employee" : "citizen";
+  const cfg = (key) => window?.globalConfigs?.getConfig(key);
+  const provider =
+    surface === "employee"
+      ? cfg("EMPLOYEE_AUTH_PROVIDER") || "digit"
+      : cfg("CITIZEN_AUTH_PROVIDER") || cfg("AUTH_PROVIDER") || "digit";
+  return provider === "keycloak";
 }
 
 export const PrivateRoute = ({ component: Component, roles, ...rest }) => {
@@ -18,7 +29,7 @@ export const PrivateRoute = ({ component: Component, roles, ...rest }) => {
         // `/<contextPath>/employee/...` → employee, anything else → citizen.
         const pathParts = (props.location.pathname || "").split("/").filter(Boolean);
         const pathUserType = pathParts[1] === "employee" ? "employee" : "citizen";
-        const loginPath = isKeycloakAuth()
+        const loginPath = isKeycloakAuth(props.location.pathname)
           ? `/${window?.contextPath}/user/login`
           : (pathUserType === "employee"
             ? `/${window?.contextPath}/employee/user/language-selection`

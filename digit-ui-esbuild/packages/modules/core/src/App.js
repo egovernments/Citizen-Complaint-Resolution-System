@@ -11,8 +11,15 @@ import SignUpV2 from "./pages/employee/SignUp-v2";
 import LoginV2 from "./pages/employee/Login-v2";
 import UnifiedLogin from "./pages/common/Login/index";
 
-const isKeycloakAuth = () =>
-  window?.globalConfigs?.getConfig("AUTH_PROVIDER") === "keycloak";
+// The unified `/user/login` + `/user/sign-up` entries (and the contextPath
+// mount below) are the CITIZEN single-sign-on surface. Resolve the citizen
+// provider here (falling back to the legacy global AUTH_PROVIDER). Employees
+// always use DIGIT password auth via `/<contextPath>/employee/...` and are
+// routed by EmployeeApp, independent of this flag.
+const isKeycloakAuth = () => {
+  const cfg = (key) => window?.globalConfigs?.getConfig(key);
+  return (cfg("CITIZEN_AUTH_PROVIDER") || cfg("AUTH_PROVIDER") || "digit") === "keycloak";
+};
 
 export const DigitApp = ({ stateCode, modules, appTenants, logoUrl, logoUrlWhite, initData, defaultLanding = "citizen",allowedUserTypes=["citizen","employee"] }) => {
   const history = useHistory();
