@@ -110,7 +110,10 @@ def parse_cell(raw: str) -> Optional[object]:
 
 
 def seed_state_sla(base_url: str, token: str, tenant: str) -> None:
-    ok, detail = mdms_create(base_url, token, tenant, "CRS.StateSLA", "default", {"stateDefaults": STATE_DEFAULTS})
+    ok, detail = mdms_create(
+        base_url, token, tenant, "CRS.StateSLA", "default",
+        {"singletonKey": "default", "stateDefaults": STATE_DEFAULTS},
+    )
     print(f"  StateSLA singleton: {'ok' if ok else 'skip'} ({detail})")
 
 

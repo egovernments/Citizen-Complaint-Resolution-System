@@ -35,15 +35,8 @@
         },
         "slaHoursByState": {
           "type": "object",
-          "properties": {
-            "new": { "oneOf": [{ "type": "null" }, { "type": "number", "minimum": 0, "maximum": 8760 }, { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 8760 }, "minItems": 2, "maxItems": 2 }] },
-            "triage": { "oneOf": [{ "type": "null" }, { "type": "number", "minimum": 0, "maximum": 8760 }, { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 8760 }, "minItems": 2, "maxItems": 2 }] },
-            "forwarded": { "oneOf": [{ "type": "null" }, { "type": "number", "minimum": 0, "maximum": 8760 }, { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 8760 }, "minItems": 2, "maxItems": 2 }] },
-            "investigation": { "oneOf": [{ "type": "null" }, { "type": "number", "minimum": 0, "maximum": 8760 }, { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 8760 }, "minItems": 2, "maxItems": 2 }] },
-            "awaiting": { "oneOf": [{ "type": "null" }, { "type": "number", "minimum": 0, "maximum": 8760 }, { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 8760 }, "minItems": 2, "maxItems": 2 }] },
-            "resolved": { "oneOf": [{ "type": "null" }, { "type": "number", "minimum": 0, "maximum": 8760 }, { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 8760 }, "minItems": 2, "maxItems": 2 }] }
-          },
-          "additionalProperties": false
+          "description": "Per-workflow-state SLA values. Each cell is normally a number (hours) but may also be a 2-element [min,max] tuple when the row models a range. NOTE: validation of the cell shape (number | [min,max] | null) is enforced application-side because the egov-mdms-v2 validator throws ClassCastException on JSON-Schema `oneOf` variants mixing number/array. Bounds (0 < n < 8760) likewise enforced client-side.",
+          "additionalProperties": true
         },
         "isActive": {
           "type": "boolean"
@@ -63,10 +56,18 @@
       "title": "Generated schema for Root",
       "$schema": "http://json-schema.org/draft-07/schema#",
       "required": [
+        "singletonKey",
         "stateDefaults"
       ],
-      "x-unique": [],
+      "x-unique": [
+        "singletonKey"
+      ],
       "properties": {
+        "singletonKey": {
+          "type": "string",
+          "description": "Always 'default' — uniqueness key so the MDMS v2 validator can find a non-empty x-unique. Singleton record per tenant.",
+          "enum": ["default"]
+        },
         "stateDefaults": {
           "type": "object",
           "required": ["new", "triage", "forwarded", "investigation", "awaiting", "resolved"],

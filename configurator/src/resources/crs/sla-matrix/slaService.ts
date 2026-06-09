@@ -104,7 +104,10 @@ export async function saveStateSla(
   defaults: StateDefaults,
   existing?: MdmsRecord,
 ): Promise<MdmsRecord> {
-  const data = { stateDefaults: defaults };
+  // singletonKey is a placeholder field required by the schema's x-unique
+  // (MDMS v2 trips an internal ClassCastException when x-unique is empty,
+  // so we tag the singleton with a fixed key value "default").
+  const data = { singletonKey: STATE_SLA_UID, stateDefaults: defaults };
   if (existing) {
     return digitClient.mdmsUpdate({ ...existing, data: data as unknown as Record<string, unknown> }, true);
   }
