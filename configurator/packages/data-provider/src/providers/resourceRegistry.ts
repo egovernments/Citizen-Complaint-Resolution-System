@@ -124,7 +124,19 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   // EscalationConfig: state-level PGR escalation scheduler config. Single record
   // per root tenant (e.g. `ke`). idField is `maxDepth` purely so the generic
   // CRUD routing finds *something* unique — the record is effectively a singleton.
+  // NOTE: superseded by `crs-sla-matrix` (CRS.CategorySLA + CRS.StateSLA). Kept
+  // visible so operators with existing v0 config can still read it.
   'escalation-config':      { type: 'mdms', label: 'PGR Escalation Config',    schema: 'RAINMAKER-PGR.EscalationConfig',           idField: 'maxDepth',          nameField: 'maxDepth' },
+
+  // CRS escalation-SLA scope (read by EscalationScheduler.resolveSlaHours):
+  //   crs-sla-matrix is rendered by its own page (CategorySlaMatrixPage) wired
+  //   in App.tsx, so this entry is mostly here as a registry-level identifier.
+  //   `idField` is set to `uniqueIdentifier` because the page never goes
+  //   through react-admin's row-click → /show flow; it manages records
+  //   directly. The label drives the sidebar item + audit drawer.
+  'crs-sla-matrix':         { type: 'mdms', label: 'Category SLA Matrix',      schema: 'CRS.CategorySLA',                          idField: 'uniqueIdentifier',  nameField: 'category',  dedicated: true },
+  'crs-state-sla':          { type: 'mdms', label: 'State SLA Defaults',       schema: 'CRS.StateSLA',                             idField: 'uniqueIdentifier',  nameField: 'uniqueIdentifier' },
+  'crs-sla-audit-log':      { type: 'mdms', label: 'SLA Audit Log',            schema: 'CRS.SLAAuditLog',                          idField: 'uniqueIdentifier',  nameField: 'recordIdentifier' },
 };
 
 export function getResourceConfig(resource: string): ResourceConfig | undefined {

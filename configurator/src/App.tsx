@@ -30,6 +30,7 @@ import {
   AdvancedPage,
 } from '@/resources';
 import PgrDashboard from './pages/PgrDashboard';
+import { CategorySlaMatrixPage } from './resources/crs/sla-matrix/CategorySlaMatrixPage';
 import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, digitClient, resetProviders, i18nProvider } from '@/providers/bridge';
 import { ThemeProvider } from '@/providers/ThemeProvider';
 import HelpModal from './components/ui/HelpModal';
@@ -143,6 +144,11 @@ function ManagementAdmin() {
           <Route path="/departments/bulk" element={<DepartmentBulkImport />} />
           <Route path="/designations/bulk" element={<DesignationBulkImport />} />
           <Route path="/localization/bulk" element={<LocalizationBulkImport />} />
+          {/* ESCALATION — escalation-SLA scope. Owns the CRS.CategorySLA + CRS.StateSLA
+              editing surface (a single-page matrix), bulk import, and the trace-back tool.
+              Not wired as a <Resource> because the page manages MDMS records directly
+              instead of going through react-admin's list→edit pipeline. */}
+          <Route path="/crs-sla-matrix" element={<CategorySlaMatrixPage />} />
         </CustomRoutes>
       </CoreAdminUI>
     </CoreAdminContext>
