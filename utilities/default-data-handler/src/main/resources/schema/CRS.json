@@ -142,5 +142,28 @@
       "x-ref-schema": [],
       "additionalProperties": false
     }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "CRS.WorkflowStateMapping",
+    "description": "Maps a tenant's workflow state names (e.g. PENDINGFORASSIGNMENT, PENDINGATLME for PGR; or BRD §5.2 names for CRS) onto the canonical SLA-column keys the scheduler uses (new, triage, forwarded, investigation, awaiting, resolved). Without this mapping, the scheduler cannot resolve which SLA cell applies to a complaint in a given state. Singleton-shaped: one record per tenant; uniqueIdentifier always \"default\".",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "CRS Workflow State Mapping",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": ["singletonKey", "mappings"],
+      "x-unique": ["singletonKey"],
+      "properties": {
+        "singletonKey": { "type": "string", "enum": ["default"] },
+        "mappings": {
+          "type": "object",
+          "description": "Map of workflow state name → canonical SLA key (one of: new, triage, forwarded, investigation, awaiting, resolved). Operator-defined.",
+          "additionalProperties": { "type": "string", "enum": ["new","triage","forwarded","investigation","awaiting","resolved"] }
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
   }
 ]
