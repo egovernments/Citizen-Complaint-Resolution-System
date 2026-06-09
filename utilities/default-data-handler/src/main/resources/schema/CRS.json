@@ -1,0 +1,144 @@
+[
+  {
+    "tenantId": "{tenantid}",
+    "code": "CRS.CategorySLA",
+    "description": "Per (path, category, subcategoryL1) SLA table consumed by the PGR escalation scheduler. `slaHoursByState` keys map 1:1 to the 6 PGR/CRS workflow states (BRD §5.2). A cell can be null (fall back to CRS.StateSLA), a single number (hours), or a [min,max] array. When ranged, the scheduler uses MAX for breach detection; the UI displays the range. uniqueIdentifier convention: `<path>:<category>:<subcategoryL1>`.",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Generated schema for Root",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "path",
+        "category",
+        "subcategoryL1",
+        "slaHoursByState",
+        "isActive"
+      ],
+      "x-unique": [
+        "path",
+        "category",
+        "subcategoryL1"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "enum": ["IGE", "IGSAE"]
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subcategoryL1": {
+          "type": "string",
+          "minLength": 1
+        },
+        "slaHoursByState": {
+          "type": "object",
+          "properties": {
+            "new": { "oneOf": [{ "type": "null" }, { "type": "number", "minimum": 0, "maximum": 8760 }, { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 8760 }, "minItems": 2, "maxItems": 2 }] },
+            "triage": { "oneOf": [{ "type": "null" }, { "type": "number", "minimum": 0, "maximum": 8760 }, { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 8760 }, "minItems": 2, "maxItems": 2 }] },
+            "forwarded": { "oneOf": [{ "type": "null" }, { "type": "number", "minimum": 0, "maximum": 8760 }, { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 8760 }, "minItems": 2, "maxItems": 2 }] },
+            "investigation": { "oneOf": [{ "type": "null" }, { "type": "number", "minimum": 0, "maximum": 8760 }, { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 8760 }, "minItems": 2, "maxItems": 2 }] },
+            "awaiting": { "oneOf": [{ "type": "null" }, { "type": "number", "minimum": 0, "maximum": 8760 }, { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 8760 }, "minItems": 2, "maxItems": 2 }] },
+            "resolved": { "oneOf": [{ "type": "null" }, { "type": "number", "minimum": 0, "maximum": 8760 }, { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 8760 }, "minItems": 2, "maxItems": 2 }] }
+          },
+          "additionalProperties": false
+        },
+        "isActive": {
+          "type": "boolean"
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "CRS.StateSLA",
+    "description": "Singleton: per-tenant default SLA (in hours) per workflow state. Used by the escalation scheduler whenever the matching CRS.CategorySLA cell is null. Seeded from BRD §5.2 (Case Life Cycle): new=0 (immediate), triage=24, forwarded=48, investigation=120, awaiting=120, resolved=360. uniqueIdentifier is always `default`.",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Generated schema for Root",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "stateDefaults"
+      ],
+      "x-unique": [],
+      "properties": {
+        "stateDefaults": {
+          "type": "object",
+          "required": ["new", "triage", "forwarded", "investigation", "awaiting", "resolved"],
+          "properties": {
+            "new": { "type": "number", "minimum": 0, "maximum": 8760 },
+            "triage": { "type": "number", "minimum": 0, "maximum": 8760 },
+            "forwarded": { "type": "number", "minimum": 0, "maximum": 8760 },
+            "investigation": { "type": "number", "minimum": 0, "maximum": 8760 },
+            "awaiting": { "type": "number", "minimum": 0, "maximum": 8760 },
+            "resolved": { "type": "number", "minimum": 0, "maximum": 8760 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "CRS.SLAAuditLog",
+    "description": "Append-only audit trail for changes to CRS.CategorySLA and CRS.StateSLA. One entry per save (per row for inline edits, one summary entry per bulk-import). uniqueIdentifier convention: `<timestamp>:<userUuid>:<recordIdentifier>` so concurrent writes don't collide on the same identifier. `beforeJson` / `afterJson` are serialized snapshots of the affected record.",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Generated schema for Root",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "timestamp",
+        "userUuid",
+        "userName",
+        "action",
+        "schemaCode",
+        "recordIdentifier"
+      ],
+      "x-unique": [
+        "timestamp",
+        "userUuid",
+        "recordIdentifier"
+      ],
+      "properties": {
+        "timestamp": {
+          "type": "number"
+        },
+        "userUuid": {
+          "type": "string"
+        },
+        "userName": {
+          "type": "string"
+        },
+        "action": {
+          "type": "string",
+          "enum": ["create", "update", "delete", "bulk-import"]
+        },
+        "schemaCode": {
+          "type": "string"
+        },
+        "recordIdentifier": {
+          "type": "string"
+        },
+        "beforeJson": {
+          "type": "string"
+        },
+        "afterJson": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  }
+]
