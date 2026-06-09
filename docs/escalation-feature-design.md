@@ -405,6 +405,275 @@ section).
 
 ---
 
+## Configurator UI
+
+The escalation page is a **single-page editor** inside the existing
+`digit-configurator` SPA. There is no separate list/show/edit triad
+(react-admin's default pattern) because the matrix itself is the editor:
+every cell is independently editable, the row is the unit of meaning,
+and there is no per-row identifier worth surfacing in the URL.
+
+### Information architecture
+
+The sidebar gets a new top-level group called **ESCALATION** with two
+siblings under it:
+
+- **SLA Matrix** (`/manage/crs-sla-matrix`) — the new editor described
+  in the rest of this section.
+- **Legacy SLA (v0)** (`/manage/escalation-config`) — the v0
+  `EscalationConfig` page, kept visible as a transition aid. It renders
+  a deprecation banner pointing at SLA Matrix and is removed in the
+  next major (see [v0 deprecation path](#v0-deprecation-path)).
+
+![sidebar ESCALATION group with SLA Matrix and Legacy SLA (v0)](images/escalation/sidebar-escalation-group.png)
+
+Route choice: `/manage/crs-sla-matrix` has no per-row id segment. The
+row (path / category / subcategoryL1) is not a navigable resource —
+it's a cell-set inside the matrix, and you address it by its three-tuple
+inside the page, not by URL.
+
+### Page anatomy
+
+![populated SLA Matrix with toolbar, defaults row and grid](images/escalation/populated-state.png)
+
+The page is structured top-to-bottom as:
+
+- **Header** — page title, one-line explainer
+  ("Per-category SLAs override the per-state defaults below."), and a
+  **Trace escalation…** button top-right that opens the read-only
+  diagnostic drawer (see [Trace-back drawer](#trace-back-drawer-operator-debug-surface)).
+- **Toolbar (row 1)** — **Path filter** (chips dynamically derived from
+  whatever `path` values appear in the loaded rows; no enum), a
+  **Search** input that filters by `category` / `subcategoryL1`
+  substring, **Bulk import…** and **Add row** buttons on the right.
+- **Toolbar (row 2)** — **Export CSV**, **Reload** (re-fetch from MDMS,
+  warns if dirty), **Revert** (drop local edits, appears only when
+  dirty), **Save changes** (disabled when clean, shows
+  "N pending" badge when dirty), **Audit log** drawer trigger.
+- **Defaults (StateSLA) strip** — a single row showing the per-state
+  default SLA hours. When `CRS.StateSLA` is empty, this strip renders
+  a "Not configured — set defaults" prompt instead of cell values
+  (clicking opens the same defaults editor inline).
+- **Matrix grid** — sticky-left columns (`Path`, `Category`,
+  `Subcategory L1`, `Active`) followed by six state columns:
+  `NEW`, `TRIAGE`, `FORWARDED`, `INVESTIGATION`, `AWAITING`,
+  `RESOLVED`. Cells render either a number, a range, or a muted dash
+  for "use default" (see [Cell semantics](#cell-semantics)).
+- **Empty state** — when no rows exist, the grid area is replaced by
+  a full-bleed centered CTA (described below).
+
+### UI states
+
+The page is a small state machine driven by `(rowCount, dirty, modalOpen)`.
+Each state has a screenshot and a corresponding affordance set.
+
+**Empty** — no `CRS.CategorySLA` rows AND no `CRS.StateSLA` row. The
+matrix area collapses into a centered call-to-action with two buttons:
+"Bulk import from CSV" and "Edit defaults…". The toolbar's editing
+controls (Save changes, Revert) stay disabled.
+
+![empty state with centered CTA](images/escalation/empty-state.png)
+
+**Populated** — one or more rows exist. The grid renders, sticky-left
+columns stay visible while scrolling state columns horizontally. All
+cells are clickable.
+
+![populated grid](images/escalation/populated-state.png)
+
+**Editing (cell active)** — clicking a numeric cell turns it into an
+inline form: a single number input for scalars, or a number + range
+checkbox + min/max inputs when "range" is toggled. Enter commits;
+Escape cancels.
+
+![cell in edit mode with number input](images/escalation/edit-cell.png)
+
+**Dirty (unsaved changes)** — any commit to a cell or row toggles
+`dirty=true`. The Save changes button enables and gains a "N pending"
+badge, Revert appears, Reload warns before discarding. No dedicated
+screenshot — the toolbar in `populated-state.png` shows the steady
+("clean") state; in dirty mode the right-side cluster reads
+**Revert · Save changes (N pending)**.
+
+**Bulk-import preview** — the bulk-import modal opens with a preview
+table showing each parsed row with a status icon and inline error
+message. The footer button is dynamic: "Import 0 valid rows" while
+errors exist, "Import N valid rows" once at least one row is clean.
+
+![bulk import modal with preview table](images/escalation/bulk-import-preview.png)
+
+**Trace-back drawer** — a right-side drawer opened from the header's
+Trace escalation… button. Read-only diagnostic over
+`POST /escalation/_trigger` (see below).
+
+![trace-back drawer with diagnostic output](images/escalation/trace-back-drawer.png)
+
+**Add-row form** — a modal opened from the toolbar's Add row button.
+Three required string inputs (`path`, `category`, `subcategoryL1`),
+optional initial values for each state column, an Active toggle
+defaulting to true. Save creates the row in local state (still needs a
+top-level Save changes to land in MDMS).
+
+![add row modal form](images/escalation/add-row-form.png)
+
+**Audit log drawer** — right-side drawer triggered from the toolbar's
+Audit log button. Lists the most recent `CRS.SLAAuditLog` entries
+across all actions (create, update, delete, bulk-import).
+
+![audit log drawer entries](images/escalation/audit-log-drawer.png)
+
+**v0 deprecation banner** — visible only when the operator visits the
+legacy `/manage/escalation-config` page. Yellow banner pinned above the
+v0 editor with a link to the new SLA Matrix and the removal-version
+note.
+
+![v0 deprecation banner on legacy page](images/escalation/v0-deprecation-banner.png)
+
+### Cell semantics
+
+Each cell in the matrix renders one of four states. The visual
+distinguishes "explicitly set" from "falls through to default":
+
+| Cell value | Visual | Meaning | Edit behaviour |
+|---|---|---|---|
+| number (e.g. `120`) | `120h` solid | Cell value drives scheduler SLA for this `(path, category, subcategoryL1, state)` | Click → number input |
+| `[min, max]` range | `24–120h` solid | Scheduler uses MAX for math; UI shows the range so operators see the spread | Click → number + range checkbox + min/max inputs |
+| `null` | `—` muted, faint "default: 48h" hint on hover | Falls through to `CRS.StateSLA[state]` | Click → number input (creating a value here promotes the cell to "explicitly set") |
+| (no row at all) | n/a | Falls through to `CRS.StateSLA[state]`; if that is also empty, falls through to v0 hardcoded fallback | Add the row via the toolbar's **Add row** |
+
+The "muted dash + default hint" treatment is deliberate: operators
+should be able to scan the grid and instantly see which cells are
+policy-overridden versus inherited from the per-state default.
+
+### Empty-state UX
+
+The empty state is intentionally not auto-seeded. SLAs are **policy**
+— defaulting to magic numbers would silently commit the tenant to
+values nobody chose. Instead, the empty state directs the operator
+toward one of two explicit choices:
+
+1. **Bulk import** the org's existing SLAs from a CSV (download the
+   `example.csv` from the modal as a starter template), or
+2. **Edit defaults…** to populate `CRS.StateSLA` first (six numbers,
+   one per state), then add overrides incrementally as the org's
+   categorisation matures.
+
+Either path produces a visible audit-log entry. The page never writes
+on the operator's behalf without an explicit save.
+
+### Validation feedback
+
+Validation runs in two layers: inline (per-cell, pre-save) and
+batch (on save).
+
+- **Per-cell** — invalid values highlight red with a tooltip
+  explaining the rule: `SLA must be > 0 and < 8760` (≤ one year);
+  if a range is used, `min < max`; the `(path, category, subcategoryL1)`
+  triple must be unique among active rows.
+- **Pre-save** — the Save changes button shows a `(N pending)` badge
+  reflecting the number of rows touched. If any cell is invalid,
+  Save changes stays disabled.
+- **Save flow** — writes go through `slaService.persistChanges`,
+  which fans out per-row MDMS updates. Writes are batched but **not
+  transactional** across rows: if row K fails, rows 1…K-1 already
+  landed. The UI catches this and shows a partial-success toast plus
+  a per-row retry affordance on the failed rows.
+- **Toasts** — success and error feedback use the existing global
+  `<Toaster />` (sonner). Errors include the MDMS response body when
+  the status is 4xx.
+
+### Audit log
+
+Every save produces audit entries:
+
+- **Per-row** writes (create / update / soft-delete) produce one
+  `CRS.SLAAuditLog` row each.
+- **Bulk import** produces a single summary entry with
+  `action = bulk-import` and a reason of the shape
+  `"<imported> rows imported, <failed> failed"`, plus one row entry per
+  successfully-imported row (so per-row provenance is preserved).
+- The drawer renders the last N entries with timestamp, user,
+  `action`, identifier (`<path>/<category>/<subcategoryL1>` or
+  `state-defaults`), and a JSON diff for create/update entries.
+
+Audit is escalation-specific today. The generic `CRS.ConfigAuditLog`
+under roadmap **G4** supersedes this drawer with a cross-feature
+"recent changes" view (see
+[`docs/crs-configurator-roadmap.md`](./crs-configurator-roadmap.md)
+Cross-cutting section).
+
+### Trace-back drawer (operator debug surface)
+
+The trace-back drawer is the answer to "why didn't this complaint
+escalate?" — a question that previously required reading scheduler
+logs.
+
+Operator flow:
+
+1. Open from the header's **Trace escalation…** button.
+2. Paste a `serviceRequestId` from a stuck complaint, submit.
+3. Drawer calls `POST /escalation/_trigger` (read-only; see
+   [`EscalationController`](../backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/EscalationController.java))
+   and renders the per-complaint outcome: `action`, `reason`, `detail`,
+   `slaSource`, `fromAssignee`, `toAssignee`.
+
+The endpoint **does not** mutate state — it runs the same decision
+function the scheduler runs, but the actual escalation only happens on
+the scheduler's tick. This is the diagnostic surface for replacing
+"did escalation work?" guesswork with "show me the per-complaint
+decision and the SLA source that drove it."
+
+### Bulk import workflow
+
+1. Click **Bulk import…** in the toolbar; pick a CSV or XLSX file.
+2. The modal renders a preview table. Each row has a status icon:
+   `✓` for valid, `✗` for invalid with the parser/validator error
+   inline. The footer button reads "Import N valid rows" and the count
+   updates as the operator fixes the source file and re-uploads, or
+   skips invalid rows.
+3. Click **Import** → one bulk-import audit-log entry plus per-row
+   `CRS.CategorySLA` writes via the same per-row fan-out as manual save.
+4. Modal closes and the matrix reloads to show the new rows.
+
+A **Download example.csv** link in the modal pulls
+[`configurator/src/resources/crs/sla-matrix/_seed/example.csv`](../configurator/src/resources/crs/sla-matrix/_seed/example.csv)
+as a starter template. The CSV format mirrors the matrix columns
+(`path,category,subcategoryL1,active,new,triage,forwarded,investigation,awaiting,resolved`).
+
+### Sidebar grouping rationale
+
+Escalation lives in its own ESCALATION sidebar group rather than under
+"Complaint Management" because it is a **cross-cutting concern**:
+
+- SLAs apply across complaint categories — the matrix is a policy
+  surface, not a complaint admin tool.
+- The trace-back drawer is a debugging tool for operators investigating
+  scheduler behaviour, not a UI for handling complaints.
+- Co-locating **SLA Matrix** (the new editor) and **Legacy SLA (v0)**
+  (the deprecated editor) under one named group makes the deprecation
+  handoff explicit: an operator opening Legacy SLA sees an obviously
+  related sibling already waiting in the sidebar.
+
+When the v0 page is removed, the ESCALATION group still makes sense as
+the home for trace-back tooling, future per-tenant escalation policies
+(e.g. holiday calendars), and any cross-category SLA reporting.
+
+### Accessibility and responsiveness
+
+- **Keyboard navigation** — Tab / Shift-Tab move through cells in
+  row-major order; Enter activates inline edit on the focused cell;
+  Escape cancels the active edit without committing.
+- **Semantic markup** — toolbar controls are real `<button>` elements
+  with descriptive `aria-label` attributes; the matrix uses a real
+  `<table>` (not a div grid); each header cell carries `scope="col"`
+  and the sticky-left columns carry `scope="row"` on their `<th>`s.
+- **Viewport** — the configurator is desktop-only (matching the rest
+  of the app); the matrix targets a minimum viewport of 1280×800. No
+  mobile or tablet layout is shipped — the matrix's six state columns
+  plus four sticky-left columns do not fold cleanly to narrow
+  viewports, and the operator persona is a desk-bound admin user.
+
+---
+
 ## Tenant agnosticism
 
 This is the load-bearing design property of PR #770. The schemas and the
