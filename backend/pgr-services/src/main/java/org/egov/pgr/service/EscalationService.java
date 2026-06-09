@@ -194,31 +194,51 @@ public class EscalationService {
     }
 
     /**
-     * Gets current assignee UUIDs from workflow process instance search.
+     * Gets current assignee UUIDs for a complaint.
+     *
+     * DIGIT's workflow service has a known quirk: a self-loop ASSIGN action
+     * (e.g. PENDINGFORASSIGNMENT → PENDINGATLME → next ASSIGN within
+     * PENDINGATLME) can return an empty assignees array on the latest
+     * ProcessInstance even though the action carried assignees. Falling back
+     * to history=true and walking back to the most recent ProcessInstance
+     * with a non-empty assignees list closes that hole.
      */
     public List<String> getCurrentAssignees(String serviceRequestId, String tenantId, RequestInfo requestInfo) {
 
         StringBuilder url = workflowService.getprocessInstanceSearchURL(tenantId, serviceRequestId);
         RequestInfoWrapper requestInfoWrapper = RequestInfoWrapper.builder().requestInfo(requestInfo).build();
 
-        Object result = serviceRequestRepository.fetchResult(url, requestInfoWrapper);
-
         try {
+            Object result = serviceRequestRepository.fetchResult(url, requestInfoWrapper);
             ProcessInstanceResponse response = mapper.convertValue(result, ProcessInstanceResponse.class);
-            if (response == null || CollectionUtils.isEmpty(response.getProcessInstances())) {
-                return Collections.emptyList();
+            if (response != null && !CollectionUtils.isEmpty(response.getProcessInstances())) {
+                ProcessInstance pi = response.getProcessInstances().get(0);
+                if (!CollectionUtils.isEmpty(pi.getAssignes())) {
+                    return pi.getAssignes().stream().map(User::getUuid).collect(Collectors.toList());
+                }
             }
-
-            ProcessInstance processInstance = response.getProcessInstances().get(0);
-            if (CollectionUtils.isEmpty(processInstance.getAssignes())) {
-                return Collections.emptyList();
-            }
-
-            return processInstance.getAssignes().stream()
-                    .map(User::getUuid)
-                    .collect(Collectors.toList());
         } catch (Exception e) {
-            log.error("Failed to get assignees for complaint {}", serviceRequestId, e);
+            log.warn("Current-PI assignee lookup failed for {}, falling back to history", serviceRequestId, e);
+        }
+
+        // Fallback: history=true → most recent PI with non-empty assignees
+        StringBuilder hUrl = new StringBuilder(url).append("&history=true");
+        try {
+            Object hResult = serviceRequestRepository.fetchResult(hUrl, requestInfoWrapper);
+            ProcessInstanceResponse hResp = mapper.convertValue(hResult, ProcessInstanceResponse.class);
+            if (hResp == null || CollectionUtils.isEmpty(hResp.getProcessInstances())) {
+                return Collections.emptyList();
+            }
+            // History is ordered most-recent-first by the workflow service; walk it
+            // and pick the first PI that carries assignees.
+            for (ProcessInstance pi : hResp.getProcessInstances()) {
+                if (!CollectionUtils.isEmpty(pi.getAssignes())) {
+                    return pi.getAssignes().stream().map(User::getUuid).collect(Collectors.toList());
+                }
+            }
+            return Collections.emptyList();
+        } catch (Exception e) {
+            log.error("Failed to get assignees (history fallback) for complaint {}", serviceRequestId, e);
             return Collections.emptyList();
         }
     }
