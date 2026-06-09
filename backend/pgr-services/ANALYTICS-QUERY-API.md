@@ -155,8 +155,10 @@ as the last refresh, not real-time. Durations are epoch-milliseconds.
   does not itself verify a token. **Deploy it behind the API gateway's authentication** so `userInfo`
   is trustworthy; otherwise the citizen-self scope is spoofable. (Tracked as a limitation below.)
 - **Injection-safe:** identifiers are whitelisted against the catalog, literals are bound parameters.
-- **Freshness:** facts/events are materialized views (refresh on a schedule); the daily table is
-  appended once per day. Read `asOf` for the as-of time.
+- **Freshness:** `complaint_facts`/`complaint_events` are materialized views and
+  `complaint_open_state_daily` is appended once per day. Read `asOf` for the as-of time. **Note:** the
+  refresh scheduler does not yet refresh the V2 grains (see Limitations) — they are populated at
+  migration time and otherwise static until that wiring lands, so `asOf` may lag.
 
 ---
 
@@ -280,6 +282,11 @@ A new **grain** is added the same way (a table + a catalog entry); the grammar i
 
 ## 9. Limitations / not yet implemented
 
+- **MV refresh scheduling** — the migration creates the grains `WITH DATA`, but the dashboard
+  refresh scheduler (`DashboardRefreshScheduler.MV_NAMES`) does not yet include `complaint_facts`/
+  `complaint_events`, and the daily `complaint_open_state_daily` snapshot insert is not yet wired.
+  Until that follow-up, the V2 grains do not refresh and the daily backlog history does not
+  accumulate — `asOf` reflects the migration-time (or last manual) refresh.
 - **Authentication** — relies on gateway-injected `userInfo`; add the API gateway auth (or the
   standard DIGIT auth filter) so scope is non-spoofable.
 - **Employee jurisdiction scope** — the boundary-subtree hook is wired but resolves to tenant-level
