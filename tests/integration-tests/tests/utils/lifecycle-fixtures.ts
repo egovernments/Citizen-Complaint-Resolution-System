@@ -21,13 +21,22 @@ import path from 'path';
 export interface LifecycleFixtures {
   generated_at: string;
   tenant: string;
-  complaints: {
+  /**
+   * When the setup couldn't run end-to-end (e.g. the deployment has a
+   * broken user-service), `status: 'skipped'` is written with a
+   * reason. Consumers should fall through to their own env-var or
+   * historical defaults instead of using `complaints` (which will be
+   * absent in this case).
+   */
+  status?: 'ok' | 'skipped';
+  skipped_reason?: string;
+  complaints?: {
     /** Complaint left at PENDINGFORASSIGNMENT (Take Action visible). */
     non_terminal: string;
     /** Complaint walked through ASSIGN → RESOLVE → RATE → CLOSEDAFTERRESOLUTION. */
     terminal_rated: string;
   };
-  citizen: {
+  citizen?: {
     phone: string;
     name: string;
   };
