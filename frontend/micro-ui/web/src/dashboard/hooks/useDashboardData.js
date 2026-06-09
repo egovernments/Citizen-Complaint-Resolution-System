@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   BATCH_QUERIES,
-  LOADING_VALUE,
   buildAllSubMetricValues,
   parseBarChart,
   parseDowChart,
@@ -13,7 +12,7 @@ const LOGIN_MESSAGE =
   "Log in at /digit-ui/employee/login to load live dashboard data.";
 
 const TUNNEL_MESSAGE =
-  "Start the analytics SSH tunnel: ssh -N -L 18280:127.0.0.1:18000 bomet — then restart npm start and refresh.";
+  "Set ANALYTICS_PROXY_URL and SSH-tunnel local port 18280 to your Kong gateway, then restart npm start and refresh.";
 
 function extractAsOf(results) {
   if (!results || typeof results !== "object") return null;

@@ -17,6 +17,12 @@ var globalConfigs = (function () {
   var mdmsContext = "mdms-v2";
   var hrmsContext = "egov-hrms";
   var invalidEmployeeRoles = ["SYSTEM"];
+  var dashboardStateLabel = "State";
+  var dashboardProductLabel = "Complaint Resolution";
+  var dashboardSystemTitle = null;
+  var dashboardBrandPrimary = "#0d9488";
+  var dashboardBrandDark = "#134e4a";
+  var dashboardBrandSlate = "#334155";
 
   var getConfig = function (key) {
     if (key === "STATE_LEVEL_TENANT_ID") return stateTenantId;
@@ -37,6 +43,12 @@ var globalConfigs = (function () {
     if (key === "MDMS_V1_CONTEXT_PATH") return mdmsContext;
     if (key === "HRMS_CONTEXT_PATH") return hrmsContext;
     if (key === "INVALIDROLES") return invalidEmployeeRoles;
+    if (key === "DASHBOARD_STATE_LABEL") return dashboardStateLabel;
+    if (key === "DASHBOARD_PRODUCT_LABEL") return dashboardProductLabel;
+    if (key === "DASHBOARD_SYSTEM_TITLE") return dashboardSystemTitle;
+    if (key === "DASHBOARD_BRAND_PRIMARY") return dashboardBrandPrimary;
+    if (key === "DASHBOARD_BRAND_DARK") return dashboardBrandDark;
+    if (key === "DASHBOARD_BRAND_SLATE") return dashboardBrandSlate;
     return null;
   };
 

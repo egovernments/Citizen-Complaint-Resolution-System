@@ -1,10 +1,10 @@
 import { useCallback, useState } from "react";
+import { getLayoutStorageKey } from "../config/dashboardConfig";
 import {
   DEFAULT_CHART_LAYOUT,
   DEFAULT_KPI_LAYOUT_ITEM,
   DEFAULT_LAYOUT,
   GRID_COLS,
-  LAYOUT_STORAGE_KEY,
   TOP_ROW_CHART_IDS,
   WIDGETS,
   isChartWidget,
@@ -152,7 +152,7 @@ function normalizeChartItem(item) {
 
 function loadLayout() {
   try {
-    const saved = localStorage.getItem(LAYOUT_STORAGE_KEY);
+    const saved = localStorage.getItem(getLayoutStorageKey());
     if (!saved) return DEFAULT_LAYOUT;
 
     const parsed = JSON.parse(saved);
@@ -176,7 +176,7 @@ function loadLayout() {
 }
 
 function persistLayout(layout) {
-  localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(layout));
+  localStorage.setItem(getLayoutStorageKey(), JSON.stringify(layout));
 }
 
 function nextKpiPosition(layout) {
@@ -213,7 +213,7 @@ export function useDashboardLayout() {
 
   const resetLayout = useCallback(() => {
     setLayout(DEFAULT_LAYOUT);
-    localStorage.removeItem(LAYOUT_STORAGE_KEY);
+    localStorage.removeItem(getLayoutStorageKey());
   }, []);
 
   const removeWidgetFromLayout = useCallback((widgetId) => {

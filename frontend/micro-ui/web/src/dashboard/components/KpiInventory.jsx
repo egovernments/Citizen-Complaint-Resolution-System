@@ -2,7 +2,7 @@ import React, { useMemo } from "react";
 import { KPI_METRICS } from "../config/kpiQueries";
 import { INVENTORY_SECTIONS, getSubMetricDef, subMetricValueKey } from "../config/complaintLandscape";
 
-const DRAG_TYPE = "application/x-bomet-kpi";
+const DRAG_TYPE = "application/x-supervisor-dashboard-kpi";
 
 const METRIC_LOOKUP = Object.fromEntries(KPI_METRICS.map((m) => [m.id, m]));
 

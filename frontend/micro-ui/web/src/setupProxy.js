@@ -1,28 +1,38 @@
 const { createProxyMiddleware } = require("http-proxy-middleware");
 
-// Use HTTPS to Bomet directly. http://127.0.0.1:18000 (SSH tunnel :80) gets 301 → empty city list.
-const proxyTarget =
-  process.env.REACT_APP_PROXY_URL || "https://bometfeedbackhub.digit.org";
-const isLocalTunnel = /localhost|127\.0\.0\.1/.test(proxyTarget);
+const proxyTarget = process.env.REACT_APP_PROXY_URL;
+const isLocalTunnel = proxyTarget && /localhost|127\.0\.0\.1/.test(proxyTarget);
+
+function hostFromTarget(target) {
+  if (!target) return null;
+  try {
+    return new URL(target).host;
+  } catch {
+    return null;
+  }
+}
+
+const proxyHost =
+  process.env.REACT_APP_PROXY_HOST || hostFromTarget(proxyTarget);
 
 const onProxyReq = (proxyReq) => {
-  if (isLocalTunnel) {
-    proxyReq.setHeader("host", "bometfeedbackhub.digit.org");
+  if (isLocalTunnel && proxyHost) {
+    proxyReq.setHeader("host", proxyHost);
   }
 };
 
-const createProxy = createProxyMiddleware({
-  target: proxyTarget,
-  changeOrigin: true,
-  secure: !isLocalTunnel,
-  onProxyReq,
-});
+const createProxy = proxyTarget
+  ? createProxyMiddleware({
+      target: proxyTarget,
+      changeOrigin: true,
+      secure: !isLocalTunnel,
+      onProxyReq,
+    })
+  : null;
 
 // Browser path must match REACT_APP_ANALYTICS_BASE (see analyticsService.js).
-// Public /api/analytics is behind nginx HTTP Basic Auth (realm "bomet analytics"),
-// which triggers a browser sign-in loop on 401. On Bomet, analytics is on Kong
-// at 127.0.0.1:18000 (/pgr-services/v2/analytics). Tunnel local 18280 there:
-//   ssh -N -L 18280:127.0.0.1:18000 bomet
+// Public /api/analytics may require HTTP Basic Auth on some deployments.
+// For local dev, SSH-tunnel local 18280 to your Kong gateway / analytics service.
 const analyticsBrowserPath = (
   process.env.REACT_APP_ANALYTICS_BASE || "/pgr-analytics"
 ).replace(/\/$/, "");
@@ -41,7 +51,9 @@ const analyticsProxy = createProxyMiddleware({
     ? { [analyticsPathKey]: "/pgr-services/v2/analytics" }
     : { [analyticsPathKey]: "/api/analytics" },
   onProxyReq: (proxyReq) => {
-    onProxyReq(proxyReq);
+    if (isLocalTunnel && proxyHost) {
+      proxyReq.setHeader("host", proxyHost);
+    }
     if (!analyticsUsesInternalPort) {
       const user = process.env.ANALYTICS_BASIC_USER;
       const pass = process.env.ANALYTICS_BASIC_PASSWORD;
@@ -56,6 +68,10 @@ const analyticsProxy = createProxyMiddleware({
 module.exports = function (app) {
   if (!/^https?:\/\//i.test(analyticsBrowserPath)) {
     app.use(analyticsBrowserPath, analyticsProxy);
+  }
+
+  if (!createProxy) {
+    return;
   }
 
   [

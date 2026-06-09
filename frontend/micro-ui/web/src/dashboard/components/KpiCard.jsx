@@ -1,7 +1,7 @@
 import React from "react";
 
 const ACCENT_STYLES = {
-  teal: "tw-border-l-4 tw-border-bomet-teal",
+  teal: "tw-border-l-4 tw-border-brand-teal",
   green: "tw-border-l-4 tw-border-green-500",
   amber: "tw-border-l-4 tw-border-amber-500",
   red: "tw-border-l-4 tw-border-red-500",
@@ -32,7 +32,7 @@ const KpiCard = ({
         onChange={(e) => onSubMetricChange(e.target.value)}
         onMouseDown={(e) => e.stopPropagation()}
         aria-label={`View for ${metric}`}
-        className="tw-mt-1 tw-max-w-full tw-self-start tw-rounded tw-border tw-border-slate-200 tw-bg-white tw-px-1.5 tw-py-0.5 tw-text-[10px] tw-leading-tight tw-text-slate-700 focus:tw-border-bomet-teal focus:tw-outline-none"
+          className="tw-mt-1 tw-max-w-full tw-self-start tw-rounded tw-border tw-border-slate-200 tw-bg-white tw-px-1.5 tw-py-0.5 tw-text-[10px] tw-leading-tight tw-text-slate-700 focus:tw-border-brand-teal focus:tw-outline-none"
       >
         {subMetrics.map((sub) => (
           <option key={sub.id} value={sub.id}>

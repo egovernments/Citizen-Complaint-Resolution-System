@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import { getSystemTitle } from "../config/dashboardConfig";
 
 function getUserInfo() {
   try {
@@ -25,6 +26,7 @@ function formatAsOf(asOf) {
 
 const Navbar = ({ onResetLayout, asOf }) => {
   const user = useMemo(() => getUserInfo(), []);
+  const systemTitle = useMemo(() => getSystemTitle(), []);
 
   const displayName = user?.name || "Admin User";
   const displayRole =
@@ -35,7 +37,7 @@ const Navbar = ({ onResetLayout, asOf }) => {
     <header className="tw-flex tw-h-16 tw-flex-shrink-0 tw-items-center tw-justify-between tw-border-b tw-border-slate-200 tw-bg-white tw-px-6 tw-shadow-sm">
       <div>
         <h2 className="tw-text-lg tw-font-semibold tw-text-slate-800">
-          Bomet County — Complaint Resolution System
+          {systemTitle}
         </h2>
         <p className="tw-text-xs tw-text-slate-500">
           {asOfLabel ? `Data as of ${asOfLabel}` : "Supervisor dashboard"}
@@ -53,7 +55,7 @@ const Navbar = ({ onResetLayout, asOf }) => {
           <p className="tw-text-sm tw-font-medium tw-text-slate-800">{displayName}</p>
           <p className="tw-text-xs tw-text-slate-500">{displayRole}</p>
         </div>
-        <div className="tw-flex tw-h-10 tw-w-10 tw-items-center tw-justify-center tw-rounded-full tw-bg-bomet-teal tw-text-sm tw-font-bold tw-text-white">
+        <div className="tw-flex tw-h-10 tw-w-10 tw-items-center tw-justify-center tw-rounded-full tw-bg-brand-teal tw-text-sm tw-font-bold tw-text-white">
           {displayName.charAt(0).toUpperCase()}
         </div>
       </div>

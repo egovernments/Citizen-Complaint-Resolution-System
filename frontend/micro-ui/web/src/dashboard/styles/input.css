@@ -43,7 +43,7 @@
   }
 
   .dashboard-kpi-widget:hover .dashboard-widget {
-    @apply tw-border-bomet-teal tw-bg-teal-50/40 tw-shadow-md;
+    @apply tw-border-brand-teal tw-bg-teal-50/40 tw-shadow-md;
     box-shadow: 0 4px 12px rgb(13 148 136 / 0.12);
   }
 

@@ -9,10 +9,12 @@ const RankedList = ({ items }) => (
           className="tw-flex tw-items-center tw-justify-between tw-rounded-md tw-bg-slate-50 tw-px-3 tw-py-2"
         >
           <div className="tw-flex tw-min-w-0 tw-items-center tw-gap-2">
-            <span className="tw-flex tw-h-6 tw-w-6 tw-flex-shrink-0 tw-items-center tw-justify-center tw-rounded-full tw-bg-bomet-teal tw-text-xs tw-font-bold tw-text-white">
+            <span className="tw-flex tw-h-6 tw-w-6 tw-flex-shrink-0 tw-items-center tw-justify-center tw-rounded-full tw-bg-brand-teal tw-text-xs tw-font-bold tw-text-white">
               {item.rank}
             </span>
-            <span className="tw-truncate tw-text-sm tw-text-slate-700">{item.label}</span>
+            <span className="tw-line-clamp-2 tw-text-sm tw-leading-snug tw-text-slate-700" title={item.label}>
+              {item.label}
+            </span>
           </div>
           <span className="tw-ml-2 tw-flex-shrink-0 tw-text-sm tw-font-semibold tw-text-slate-800">
             {item.value}

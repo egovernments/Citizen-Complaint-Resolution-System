@@ -1,7 +1,5 @@
 import { CHART_WIDGETS, KPI_METRICS } from "../config/kpiQueries";
 
-export const LAYOUT_STORAGE_KEY = "bomet-crs-dashboard-complaint-landscape-v7";
-
 export const GRID_COLS = 12;
 export const KPI_ROW_HEIGHT = 52;
 
@@ -35,10 +33,10 @@ export const DEFAULT_KPI_LAYOUT_ITEM = {
 };
 
 export const DEFAULT_CHART_LAYOUT = {
-  "cl-chart-categories": { x: 0, w: 6, h: 3, minW: 4, minH: 2 },
-  "cl-list-categories": { x: 6, w: 3, h: 3, minW: 3, minH: 2 },
-  "cl-chart-wards": { x: 9, w: 3, h: 3, minW: 3, minH: 2 },
-  "cl-chart-dow": { x: 0, w: 12, h: 3, minW: 6, minH: 2 },
+  "cl-chart-categories": { x: 0, w: 6, h: 6, minW: 4, minH: 5 },
+  "cl-list-categories": { x: 6, w: 3, h: 6, minW: 3, minH: 5 },
+  "cl-chart-wards": { x: 9, w: 3, h: 6, minW: 3, minH: 5 },
+  "cl-chart-dow": { x: 0, w: 12, h: 6, minW: 6, minH: 5 },
 };
 
 export const TOP_ROW_CHART_IDS = [
@@ -57,7 +55,7 @@ export const DEFAULT_LAYOUT = [
   { i: "cl-chart-categories", x: 0, y: 2, ...DEFAULT_CHART_LAYOUT["cl-chart-categories"] },
   { i: "cl-list-categories", x: 6, y: 2, ...DEFAULT_CHART_LAYOUT["cl-list-categories"] },
   { i: "cl-chart-wards", x: 9, y: 2, ...DEFAULT_CHART_LAYOUT["cl-chart-wards"] },
-  { i: "cl-chart-dow", x: 0, y: 5, ...DEFAULT_CHART_LAYOUT["cl-chart-dow"] },
+  { i: "cl-chart-dow", x: 0, y: 8, ...DEFAULT_CHART_LAYOUT["cl-chart-dow"] },
 ];
 
 export const DROPPING_ITEM_ID = "__dropping-kpi__";

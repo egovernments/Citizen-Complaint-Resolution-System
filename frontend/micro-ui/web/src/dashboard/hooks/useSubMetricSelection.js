@@ -1,11 +1,10 @@
 import { useCallback, useState } from "react";
+import { getSubMetricStorageKey } from "../config/dashboardConfig";
 import { KPI_METRICS } from "../config/kpiQueries";
-
-const STORAGE_KEY = "bomet-dashboard-submetric-selection-v1";
 
 function loadSelection() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(getSubMetricStorageKey());
     return raw ? JSON.parse(raw) : {};
   } catch {
     return {};
@@ -27,7 +26,7 @@ export function useSubMetricSelection() {
   const setSubMetricId = useCallback((metricId, subMetricId) => {
     setSelection((prev) => {
       const next = { ...prev, [metricId]: subMetricId };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      localStorage.setItem(getSubMetricStorageKey(), JSON.stringify(next));
       return next;
     });
   }, []);

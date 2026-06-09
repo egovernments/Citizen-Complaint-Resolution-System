@@ -15,7 +15,7 @@ import {
   subMetricValueKey,
 } from "../config/kpiQueries";
 import KpiCard from "./KpiCard";
-import DepartmentBarChart from "./DepartmentBarChart";
+import DepartmentBarChart, { WEEKDAY_CHART_ORDER } from "./DepartmentBarChart";
 import RankedList from "./RankedList";
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
@@ -97,19 +97,24 @@ const DashboardGrid = ({
     if (widgetId === "cl-chart-categories") {
       if (loading && !chartData.categories?.length) return <ChartPlaceholder message="Loading…" />;
       if (!chartData.categories?.length) return <ChartPlaceholder message="No data" />;
-      return <DepartmentBarChart data={chartData.categories} />;
+      return <DepartmentBarChart data={chartData.categories} labelRotate />;
     }
 
     if (widgetId === "cl-chart-wards") {
       if (loading && !chartData.wards?.length) return <ChartPlaceholder message="Loading…" />;
       if (!chartData.wards?.length) return <ChartPlaceholder message="No data" />;
-      return <DepartmentBarChart data={chartData.wards} />;
+      return <DepartmentBarChart data={chartData.wards} labelRotate />;
     }
 
     if (widgetId === "cl-chart-dow") {
-      if (loading && !chartData.dow?.length) return <ChartPlaceholder message="Loading…" />;
-      if (!chartData.dow?.length) return <ChartPlaceholder message="No data" />;
-      return <DepartmentBarChart data={chartData.dow} />;
+      if (loading) return <ChartPlaceholder message="Loading…" />;
+      return (
+        <DepartmentBarChart
+          data={chartData.dow}
+          categoryOrder={WEEKDAY_CHART_ORDER}
+          labelRotate={false}
+        />
+      );
     }
 
     if (widgetId === "cl-list-categories") {
@@ -221,7 +226,7 @@ const DashboardGrid = ({
                   ×
                 </button>
                 {meta && <WidgetHeader metric={meta.metric} subMetric={meta.subMetric} />}
-                <div className="tw-h-[calc(100%-52px)] tw-overflow-hidden">
+                <div className="tw-h-[calc(100%-52px)] tw-min-h-[300px] tw-overflow-hidden">
                   {renderWidget(item.i)}
                 </div>
               </div>

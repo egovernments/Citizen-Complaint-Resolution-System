@@ -8,10 +8,10 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        bomet: {
-          teal: "#0d9488",
-          dark: "#134e4a",
-          slate: "#334155",
+        brand: {
+          teal: "var(--brand-teal, #0d9488)",
+          dark: "var(--brand-dark, #134e4a)",
+          slate: "var(--brand-slate, #334155)",
         },
       },
     },
