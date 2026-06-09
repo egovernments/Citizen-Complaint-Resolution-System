@@ -121,6 +121,10 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   'auto-escalation-ignore': { type: 'mdms', label: 'Auto-Escalation Ignored',  schema: 'Workflow.AutoEscalationStatesToIgnore',    idField: 'businessService',   nameField: 'businessService' },
   'workflow-bs-master':     { type: 'mdms', label: 'Workflow BS Master',       schema: 'Workflow.BusinessServiceMasterConfig',     idField: 'active',            nameField: 'businessService' },
   'pgr-ui-constants':       { type: 'mdms', label: 'PGR UI Constants',         schema: 'RAINMAKER-PGR.UIConstants',                idField: 'REOPENSLA',         nameField: 'REOPENSLA' },
+  // EscalationConfig: state-level PGR escalation scheduler config. Single record
+  // per root tenant (e.g. `ke`). idField is `maxDepth` purely so the generic
+  // CRUD routing finds *something* unique — the record is effectively a singleton.
+  'escalation-config':      { type: 'mdms', label: 'PGR Escalation Config',    schema: 'RAINMAKER-PGR.EscalationConfig',           idField: 'maxDepth',          nameField: 'maxDepth' },
 };
 
 export function getResourceConfig(resource: string): ResourceConfig | undefined {
