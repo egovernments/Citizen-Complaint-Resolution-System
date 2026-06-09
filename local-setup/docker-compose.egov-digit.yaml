@@ -1238,7 +1238,16 @@ services:
   # PGR Services (Public Grievance Redressal)
   # ===========================================================================
   pgr-services:
-    image: registry.preview.egov.theflywheel.in/pgr-services-dev:latest
+    # Pinned to the CRS-SLA build cut from
+    # backend/pgr-services @ 7326e9ce1 ("fix(crs-seed): recovery SQL for
+    # x-ref-schema regression on CRS.* schemas") on branch
+    # feat/escalation-otel-configurator-designer. It carries the structured
+    # escalation skip reasons + OTEL + /escalation/_trigger surface
+    # (a43e4adfc) plus the CRS.CategorySLA/CRS.StateSLA scheduler reader
+    # (33dd3f6e4). Avoid `:latest` here — it has previously masked
+    # silent rolls of the running image; explicit short-SHA tags keep the
+    # live container in sync with what's reviewed in source.
+    image: registry.preview.egov.theflywheel.in/egovio/pgr-services-dev:escalation-otel-amd64-crs-sla-7326e9ce1
     depends_on:
       pgbouncer:
         condition: service_healthy
