@@ -1,0 +1,314 @@
+[
+  {
+    "tenantId": "ke",
+    "data": {
+      "state": "REJECTED",
+      "topic": "im-auto-escalation",
+      "action": "CLOSE",
+      "active": "true",
+      "module": "im-services",
+      "stateSLA": 3.0,
+      "businessSLA": 3456,
+      "businessService": "Incident"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "state": "REJECTED",
+      "topic": "im-auto-escalation",
+      "action": "CLOSE",
+      "active": "true",
+      "module": "im-services",
+      "stateSLA": 3.0,
+      "businessSLA": 3456,
+      "businessService": "Incident_High"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "state": "REJECTED",
+      "topic": "im-auto-escalation",
+      "action": "CLOSE",
+      "active": "true",
+      "module": "im-services",
+      "stateSLA": 3.0,
+      "businessSLA": 3456,
+      "businessService": "Incident_Low"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "state": "REJECTED",
+      "topic": "im-auto-escalation",
+      "action": "CLOSE",
+      "active": "true",
+      "module": "im-services",
+      "stateSLA": 3.0,
+      "businessSLA": 3456,
+      "businessService": "Incident_Medium"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "state": "RESOLVED",
+      "topic": "im-auto-escalation",
+      "action": "CLOSE",
+      "active": "true",
+      "module": "im-services",
+      "stateSLA": 3.0,
+      "businessSLA": 3456,
+      "businessService": "Incident"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "state": "RESOLVED",
+      "topic": "im-auto-escalation",
+      "action": "CLOSE",
+      "active": "true",
+      "module": "im-services",
+      "stateSLA": 3.0,
+      "businessSLA": 3456,
+      "businessService": "Incident_High"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "state": "RESOLVED",
+      "topic": "im-auto-escalation",
+      "action": "CLOSE",
+      "active": "true",
+      "module": "im-services",
+      "stateSLA": 3.0,
+      "businessSLA": 3456,
+      "businessService": "Incident_Low"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "state": "RESOLVED",
+      "topic": "im-auto-escalation",
+      "action": "CLOSE",
+      "active": "true",
+      "module": "im-services",
+      "stateSLA": 3.0,
+      "businessSLA": 3456,
+      "businessService": "Incident_Medium"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "state": "RESOLVED",
+      "topic": "im-auto-escalation",
+      "action": "CLOSE",
+      "active": "true",
+      "module": "im-services",
+      "stateSLA": 3.0,
+      "businessSLA": 3456,
+      "businessService": "Incident_Low"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "state": "REJECTED",
+      "topic": "im-auto-escalation",
+      "action": "CLOSE",
+      "active": "true",
+      "module": "im-services",
+      "stateSLA": 3.0,
+      "businessSLA": 3456,
+      "businessService": "Incident"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "state": "REJECTED",
+      "topic": "im-auto-escalation",
+      "action": "CLOSE",
+      "active": "true",
+      "module": "im-services",
+      "stateSLA": 3.0,
+      "businessSLA": 3456,
+      "businessService": "Incident_High"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "state": "REJECTED",
+      "topic": "im-auto-escalation",
+      "action": "CLOSE",
+      "active": "true",
+      "module": "im-services",
+      "stateSLA": 3.0,
+      "businessSLA": 3456,
+      "businessService": "Incident_Medium"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "state": "RESOLVED",
+      "topic": "im-auto-escalation",
+      "action": "CLOSE",
+      "active": "true",
+      "module": "im-services",
+      "stateSLA": 3.0,
+      "businessSLA": 3456,
+      "businessService": "Incident_Medium"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "state": "RESOLVED",
+      "topic": "im-auto-escalation",
+      "action": "CLOSE",
+      "active": "true",
+      "module": "im-services",
+      "stateSLA": 3.0,
+      "businessSLA": 3456,
+      "businessService": "Incident_High"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "state": "REJECTED",
+      "topic": "im-auto-escalation",
+      "action": "CLOSE",
+      "active": "true",
+      "module": "im-services",
+      "stateSLA": 3.0,
+      "businessSLA": 3456,
+      "businessService": "Incident_Low"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "state": "RESOLVED",
+      "topic": "im-auto-escalation",
+      "action": "CLOSE",
+      "active": "true",
+      "module": "im-services",
+      "stateSLA": 3.0,
+      "businessSLA": 3456,
+      "businessService": "Incident"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "state": "REJECTED",
+      "topic": "im-auto-escalation",
+      "action": "CLOSE",
+      "active": "true",
+      "module": "im-services",
+      "stateSLA": 3.0,
+      "businessSLA": 3456,
+      "businessService": "Incident"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "state": "REJECTED",
+      "topic": "im-auto-escalation",
+      "action": "CLOSE",
+      "active": "true",
+      "module": "im-services",
+      "stateSLA": 3.0,
+      "businessSLA": 3456,
+      "businessService": "Incident_High"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "state": "REJECTED",
+      "topic": "im-auto-escalation",
+      "action": "CLOSE",
+      "active": "true",
+      "module": "im-services",
+      "stateSLA": 3.0,
+      "businessSLA": 3456,
+      "businessService": "Incident_Low"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "state": "REJECTED",
+      "topic": "im-auto-escalation",
+      "action": "CLOSE",
+      "active": "true",
+      "module": "im-services",
+      "stateSLA": 3.0,
+      "businessSLA": 3456,
+      "businessService": "Incident_Medium"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "state": "RESOLVED",
+      "topic": "im-auto-escalation",
+      "action": "CLOSE",
+      "active": "true",
+      "module": "im-services",
+      "stateSLA": 3.0,
+      "businessSLA": 3456,
+      "businessService": "Incident"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "state": "RESOLVED",
+      "topic": "im-auto-escalation",
+      "action": "CLOSE",
+      "active": "true",
+      "module": "im-services",
+      "stateSLA": 3.0,
+      "businessSLA": 3456,
+      "businessService": "Incident_High"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "state": "RESOLVED",
+      "topic": "im-auto-escalation",
+      "action": "CLOSE",
+      "active": "true",
+      "module": "im-services",
+      "stateSLA": 3.0,
+      "businessSLA": 3456,
+      "businessService": "Incident_Low"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "state": "RESOLVED",
+      "topic": "im-auto-escalation",
+      "action": "CLOSE",
+      "active": "true",
+      "module": "im-services",
+      "stateSLA": 3.0,
+      "businessSLA": 3456,
+      "businessService": "Incident_Medium"
+    }
+  }
+]

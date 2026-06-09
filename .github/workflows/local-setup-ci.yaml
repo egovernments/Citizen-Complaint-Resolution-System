@@ -27,11 +27,18 @@ jobs:
       - name: Free disk space
         working-directory: .
         run: |
-          # Remove unnecessary tools to free space
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf /opt/ghc
           sudo rm -rf /usr/local/share/boost
           df -h
+
+      - name: Pre-run cleanup
+        working-directory: local-setup
+        run: |
+          docker compose down -v --remove-orphans 2>/dev/null || true
+          docker ps -a --filter status=exited --filter "name=act-Local-Setup-CI" -q 2>/dev/null \
+            | xargs -r docker rm 2>/dev/null || true
+          docker container prune -f 2>/dev/null || true
 
       - name: Verify telemetry in all compose files and Tiltfile
         run: |
@@ -237,11 +244,7 @@ jobs:
           '
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: local-setup/tests/package-lock.json
+        run: node --version && npm --version
 
       - name: Install test dependencies
         run: |
@@ -277,7 +280,7 @@ jobs:
       - name: Run Postman core validation
         run: |
           npx newman@latest run postman/digit-core-validation.postman_collection.json \
-            --env-var "baseUrl=http://localhost"
+            --env-var "baseUrl=http://localhost:18000"
 
       - name: Run Postman complaints demo
         run: |

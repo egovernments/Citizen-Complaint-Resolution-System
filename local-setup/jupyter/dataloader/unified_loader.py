@@ -7,7 +7,6 @@ Users should not modify this file directly
 import pandas as pd
 import json
 import math
-import re
 import warnings
 import requests
 import time
@@ -363,7 +362,7 @@ class UnifiedExcelReader:
                     })
 
                     # Auto-generate designation localization
-                    loc_code = f"COMMON_MASTERS_DESIGNATION_{desig_code}"
+                    loc_code = f"COMMON_MASTERS_{desig_code}"
                     desig_localizations.append({
                         'code': loc_code,
                         'message': desig_name,
@@ -417,11 +416,12 @@ class UnifiedExcelReader:
 
                 # Auto-generate localization for parent type (only once)
                 if parent_type not in localized_parent_types:
-                    parent_type_code = '_'.join(word.capitalize() for word in parent_type.split())
-                    loc_code = f"SERVICEDEFS_{parent_type_code.upper()}"
+                    # Generate code by removing spaces and capitalizing, but keep original for message
+                    parent_type_code = ''.join(word.capitalize() for word in parent_type.split())
+                    loc_code = f"SERVICEDFS.{parent_type_code.upper()}"
                     localizations.append({
                         'code': loc_code,
-                        'message': parent_type,
+                        'message': parent_type,  # Keep original format with spaces
                         'module': 'rainmaker-pgr',
                         'locale': 'en_IN'
                     })
@@ -431,15 +431,16 @@ class UnifiedExcelReader:
             if pd.notna(row.get('Complaint sub type*')) and str(row['Complaint sub type*']).strip() != '':
                 sub_type_name = str(row['Complaint sub type*']).strip()
 
-                # Auto-generate service code from sub-type name
-                service_code = ''.join(word.capitalize() for word in sub_type_name.split())
+                # Use the exact sub-type name as service code (preserve user input)
+                service_code = sub_type_name
+
+                # Keep original parent type format for menuPath
                 menu_path_value = current_parent['type'] if current_parent else sub_type_name
 
                 ct = {
-                    'serviceCode': service_code,
-                    'name': sub_type_name,
-                    'menuPath': menu_path_value,
-                    'menuPathName': menu_path_value,
+                    'serviceCode': service_code,  # Keep exact user input as service code
+                    'name': sub_type_name,  # Keep original format with spaces
+                    'menuPath': menu_path_value,  # Keep original parent type format
                     'active': True
                 }
 
@@ -456,22 +457,16 @@ class UnifiedExcelReader:
 
                 complaint_types.append(ct)
 
-                # Auto-generate localization for sub-type. DIGIT UI resolves
-                # complaint labels using the department-scoped key when present.
-                loc_code = f"SERVICEDEFS_{service_code.upper()}"
+                # Auto-generate localization for sub-type
+                # Create a code-friendly version for localization key (remove spaces, uppercase)
+                loc_key = ''.join(word.upper() for word in sub_type_name.split())
+                loc_code = f"SERVICEDFS.{loc_key}"
                 localizations.append({
                     'code': loc_code,
-                    'message': sub_type_name,
+                    'message': sub_type_name,  # Keep original format with spaces
                     'module': 'rainmaker-pgr',
                     'locale': 'en_IN'
                 })
-                if current_parent and current_parent.get('department'):
-                    localizations.append({
-                        'code': f"{loc_code}.{current_parent['department']}",
-                        'message': sub_type_name,
-                        'module': 'rainmaker-pgr',
-                        'locale': 'en_IN'
-                    })
 
         return complaint_types, localizations
 
@@ -635,20 +630,7 @@ class UnifiedExcelReader:
         return employees
 
     def read_localization(self):
-        """Read localization rows from Excel.
-
-        Expected sheet names:
-        - Localization
-        - localization
-
-        Supported columns:
-        - Required: Code
-        - Message source: Message
-        - Optional: Module, Locale
-
-        If Module/Locale are not provided, fall back to the historical
-        code-pattern defaults so older sheets still work.
-        """
+        """Read localization with auto-determination of module and locale based on code pattern"""
         try:
             df = pd.read_excel(self.excel_file, sheet_name='Localization')
         except:
@@ -664,45 +646,35 @@ class UnifiedExcelReader:
         localizations = []
 
         for _, row in df.iterrows():
-            if pd.isna(row.get('Code')):
-                continue
+            # Skip rows with missing required fields
+            if pd.notna(row.get('Code')) and pd.notna(row.get('Message')):
+                code = str(row['Code']).strip()
+                message = str(row['Message']).strip()
 
-            code = str(row['Code']).strip()
-            if not code:
-                continue
+                # Skip if code or message is empty after stripping
+                if not code or not message:
+                    continue
 
-            message_cell = row.get('Message')
-            message_value = str(message_cell).strip() if pd.notna(message_cell) and str(message_cell).strip() else None
-            if not message_value:
-                continue
-
-            module_value = row.get('Module')
-            locale_value = row.get('Locale')
-
-            module = str(module_value).strip() if pd.notna(module_value) and str(module_value).strip() else None
-            locale = str(locale_value).strip() if pd.notna(locale_value) and str(locale_value).strip() else None
-
-            # Historical fallback for older sheets that omitted module/locale.
-            if not module or not locale:
-                if code.startswith('SERVICEDEFS.') or code.startswith('SERVICEDFS.'):
-                    fallback_module = 'rainmaker-pgr'
-                    fallback_locale = 'en_IN'
+                # Determine module and locale based on code pattern
+                if code.startswith('SERVICEDFS.'):
+                    # Service definitions → rainmaker-pgr
+                    module = 'rainmaker-pgr'
+                    locale = 'en_IN'
                 elif code.startswith('COMMON_MASTERS_') or code.startswith('TENANT_TENANTS_'):
-                    fallback_module = 'rainmaker-common'
-                    fallback_locale = 'en_IN'
+                    # Common masters (departments, designations, tenants) → rainmaker-common
+                    module = 'rainmaker-common'
+                    locale = 'en_IN'
                 else:
-                    fallback_module = 'rainmaker-common'
-                    fallback_locale = 'en_IN'
+                    # Default fallback
+                    module = 'rainmaker-common'
+                    locale = 'en_IN'
 
-                module = module or fallback_module
-                locale = locale or fallback_locale
-
-            localizations.append({
-                'code': code,
-                'message': message_value,
-                'module': module,
-                'locale': locale
-            })
+                localizations.append({
+                    'code': code,
+                    'message': message,
+                    'module': module,
+                    'locale': locale
+                })
 
         return localizations
 
@@ -1120,13 +1092,6 @@ class APIUploader:
             # Track row-by-row status for Excel update
             row_statuses = []
 
-            # MDMS evaluates access using both the auth token and the tenant
-            # embedded in RequestInfo.userInfo. For cross-root bootstrap flows,
-            # keep userInfo aligned with the tenant being mutated.
-            user_info_copy = self.user_info.copy() if self.user_info else {}
-            if user_info_copy:
-                user_info_copy['tenantId'] = tenant
-
             for i, data_obj in enumerate(data_list, 1):
                 unique_id = (
                     data_obj.get('code') or
@@ -1166,7 +1131,7 @@ class APIUploader:
                     "RequestInfo": {
                         "apiId": "Rainmaker",
                         "authToken": self.auth_token,
-                        "userInfo": user_info_copy,
+                        "userInfo": self.user_info,
                         "msgId": "1695889012604|en_IN",
                         "plainAccessRequest": {}
                     },
@@ -1800,281 +1765,153 @@ class APIUploader:
             # Don't fail if protection doesn't work
             print(f"   ⚠️  Could not apply sheet protection: {str(e)}")
 
-    LOCALIZATION_BATCH_SIZE = 500
-    LOCALIZATION_UPSERT_TIMEOUT = 60
-
-    def _normalize_localizations(self, messages: List[Dict]) -> List[Dict]:
-        """Normalize localization rows before batching."""
-        normalized = []
-
-        for raw_message in messages:
-            message = clean_nans(raw_message.copy())
-
-            code = str(message.get('code') or '').strip()
-            text = str(message.get('message') or '').strip()
-            module = str(message.get('module') or 'rainmaker-common').strip() or 'rainmaker-common'
-            locale = str(message.get('locale') or 'en_IN').strip() or 'en_IN'
-
-            if not code or not text:
-                continue
-
-            message['code'] = code
-            message['message'] = text
-            message['module'] = module
-            message['locale'] = locale
-            normalized.append(message)
-
-        return normalized
-
-    def _chunk_by_locale(self, localization_list: List[Dict], batch_size: int = None) -> Dict[str, List[List[Dict]]]:
-        """Group normalized localizations by locale and chunk into outgoing batches."""
-        if batch_size is None:
-            batch_size = self.LOCALIZATION_BATCH_SIZE
-
-        by_locale = {}
-        for localization in localization_list:
-            locale = localization['locale']
-            by_locale.setdefault(locale, []).append(localization)
-
-        return {
-            locale: [
-                locale_rows[index:index + batch_size]
-                for index in range(0, len(locale_rows), batch_size)
-            ]
-            for locale, locale_rows in by_locale.items()
-        }
-
-    def _sanitize_localization_batch(self, batch: List[Dict]) -> Dict[str, Any]:
-        """Deduplicate one outgoing batch by code, preserving first occurrence."""
-        sanitized = []
-        seen_codes = set()
-        skipped_duplicates = 0
-
-        for message in batch:
-            code = message.get('code')
-            if code in seen_codes:
-                skipped_duplicates += 1
-                continue
-
-            seen_codes.add(code)
-            sanitized.append(message)
-
-        return {
-            'messages': sanitized,
-            'skipped_duplicates': skipped_duplicates
-        }
-
-    def _is_expected_localization_exists_error(self, status_code: int, error_text: str) -> bool:
-        """Return True for expected duplicate/upsert-already-exists outcomes."""
-        if status_code not in (400, 409):
-            return False
-
-        normalized_error = (error_text or '').lower()
-        expected_markers = (
-            'core.duplicate_message_identity',
-            'already exists',
-            'duplicate',
-            'conflict'
-        )
-        return any(marker in normalized_error for marker in expected_markers)
-
-    def _record_localization_batch_failure(self, results: Dict[str, Any], batch: List[Dict],
-                                           locale: str, batch_num: int, status_code: int,
-                                           error_message: str):
-        """Record a failed localization batch for concise summary reporting."""
-        results['failed'] += len(batch)
-        results['errors'].append({
-            'locale': locale,
-            'batch': batch_num,
-            'count': len(batch),
-            'error': error_message
-        })
-
-    def _upload_localization_batch(self, url: str, tenant: str, locale: str, batch_num: int,
-                                   total_batches: int, batch: List[Dict]) -> Dict[str, Any]:
-        """Upload one sanitized localization batch to the upsert endpoint."""
-        payload = {
-            "RequestInfo": {
-                "apiId": "emp",
-                "ver": "1.0",
-                "action": "create",
-                "msgId": f"{int(time.time() * 1000)}",
-                "authToken": self.auth_token,
-                "userInfo": self.user_info
-            },
-            "locale": locale,
-            "tenantId": tenant,
-            "messages": batch
-        }
-
-        try:
-            response = self._request_with_retry(
-                url,
-                json=payload,
-                headers={'Content-Type': 'application/json'},
-                timeout=self.LOCALIZATION_UPSERT_TIMEOUT
-            )
-            response.raise_for_status()
-            return {
-                'status': 'upserted',
-                'count': len(batch)
-            }
-
-        except requests.exceptions.HTTPError as e:
-            status_code = e.response.status_code if e.response is not None else 500
-            error_text = e.response.text if e.response is not None else str(e)
-            error_message = self._extract_error_message(error_text) if error_text else str(e)[:200]
-
-            if status_code == 401:
-                return {
-                    'status': 'auth_failed',
-                    'status_code': status_code,
-                    'error': 'Authorization failed (401) - endpoint not in whitelist'
-                }
-
-            if self._is_expected_localization_exists_error(status_code, error_text):
-                return {
-                    'status': 'exists',
-                    'count': len(batch)
-                }
-
-            return {
-                'status': 'failed',
-                'status_code': status_code,
-                'error': error_message
-            }
-
-        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
-            return {
-                'status': 'failed',
-                'status_code': 0,
-                'error': str(e)[:200]
-            }
-
-        except Exception as e:
-            return {
-                'status': 'failed',
-                'status_code': 0,
-                'error': str(e)[:200]
-            }
-
     def create_localization_messages(self, localization_list: List[Dict], tenant: str, sheet_name: str = 'Localization'):
-        """Upload localization messages via localization service API.
-
-        Flow:
-        1. Normalize incoming rows.
-        2. Group rows by locale and chunk into outgoing batches.
-        3. Sanitize each outgoing batch by deduplicating on code only.
-        4. Upload the sanitized batch with timeout and retry handling.
-        5. Aggregate upserted / exists / failed counters with concise logging.
-        """
+        """Upload localization messages via localization service API"""
         url = f"{self.localization_url}/messages/v1/_upsert"
-        state_tenant = tenant.split(".")[0] if tenant and "." in tenant else tenant
+
         results = {
-            'upserted': 0,
             'created': 0,
             'exists': 0,
             'failed': 0,
-            'errors': []
+            'errors': [],
+            'failed_records': []
         }
 
         print(f"\n[UPLOADING] Localization Messages")
-        print(f"   Tenant: {state_tenant}")
-        if tenant != state_tenant:
-            print(f"   Requested tenant: {tenant}")
-            print(f"   Using state-level tenant for localization: {state_tenant}")
-        localization_list = self._normalize_localizations(localization_list)
+        print(f"   Tenant: {tenant}")
         print(f"   Total Messages: {len(localization_list)}")
         print(f"   API URL: {url}")
-        print(f"   Timeout: {self.LOCALIZATION_UPSERT_TIMEOUT}s")
         print("="*60)
 
-        localized_batches = self._chunk_by_locale(localization_list)
+        # Group messages by locale for batch upload
+        from collections import defaultdict
+        by_locale = defaultdict(list)
+        for loc in localization_list:
+            by_locale[loc['locale']].append(loc)
 
-        print(f"\n   Found {len(localized_batches)} locales: {', '.join(localized_batches.keys())}")
-        for locale, batches in localized_batches.items():
-            locale_count = sum(len(batch) for batch in batches)
-            print(f"   - {locale}: {locale_count} messages")
+        print(f"\n   Found {len(by_locale)} locales: {', '.join(by_locale.keys())}")
         print("="*60)
 
-        for locale, batches in localized_batches.items():
-            total_batches = len(batches)
+        # Upload each locale batch - split into smaller chunks to avoid 413 error
+        BATCH_SIZE = 500  # Upload 500 messages at a time
 
-            for batch_num, batch in enumerate(batches, start=1):
-                sanitized_batch = self._sanitize_localization_batch(batch)
-                outgoing_batch = sanitized_batch['messages']
-                skipped_duplicates = sanitized_batch['skipped_duplicates']
+        for locale, messages in by_locale.items():
+            total_messages = len(messages)
+            print(f"   📤 Locale: {locale} - Uploading {total_messages} messages in batches of {BATCH_SIZE}...")
 
-                if not outgoing_batch:
-                    print(
-                        f"   [{locale}] batch {batch_num}/{total_batches} "
-                        f"size=0 skipped_duplicates={skipped_duplicates}"
-                    )
-                    continue
+            # Split into batches
+            for batch_idx in range(0, total_messages, BATCH_SIZE):
+                batch = messages[batch_idx:batch_idx + BATCH_SIZE]
+                batch_num = (batch_idx // BATCH_SIZE) + 1
+                total_batches = (total_messages + BATCH_SIZE - 1) // BATCH_SIZE
 
-                upload_result = self._upload_localization_batch(
-                    url=url,
-                    tenant=state_tenant,
-                    locale=locale,
-                    batch_num=batch_num,
-                    total_batches=total_batches,
-                    batch=outgoing_batch
-                )
+                payload = {
+                    "RequestInfo": {
+                        "apiId": "emp",
+                        "ver": "1.0",
+                        "action": "create",
+                        "msgId": f"{int(time.time() * 1000)}",
+                        "authToken": self.auth_token,
+                        "userInfo": self.user_info
+                    },
+                    "locale": locale,
+                    "tenantId": tenant,
+                    "messages": batch
+                }
 
-                if upload_result['status'] == 'auth_failed':
-                    print(f"\n   ❌ AUTHORIZATION FAILED - Cannot upload localization messages")
-                    print(f"   The endpoint /localization/messages/v1/_upsert requires authentication.")
-                    print(f"   Ask admin to add it to EGOV_OPEN_ENDPOINTS_WHITELIST.")
-                    results['failed'] = len(localization_list)
-                    results['errors'].append({'error': upload_result['error']})
-                    return results
+                headers = {'Content-Type': 'application/json'}
+                status_code = None
 
-                if upload_result['status'] == 'upserted':
-                    results['upserted'] += upload_result['count']
-                    results['created'] += upload_result['count']
-                    print(
-                        f"   [{locale}] batch {batch_num}/{total_batches} "
-                        f"size={len(outgoing_batch)} skipped_duplicates={skipped_duplicates} "
-                        f"exists=0"
-                    )
-                elif upload_result['status'] == 'exists':
-                    results['exists'] += upload_result['count']
-                    print(
-                        f"   [{locale}] batch {batch_num}/{total_batches} "
-                        f"size={len(outgoing_batch)} skipped_duplicates={skipped_duplicates} "
-                        f"exists={upload_result['count']}"
-                    )
-                else:
-                    self._record_localization_batch_failure(
-                        results=results,
-                        batch=outgoing_batch,
-                        locale=locale,
-                        batch_num=batch_num,
-                        status_code=upload_result['status_code'],
-                        error_message=upload_result['error']
-                    )
-                    print(
-                        f"   [{locale}] batch {batch_num}/{total_batches} "
-                        f"size={len(outgoing_batch)} skipped_duplicates={skipped_duplicates} "
-                        f"failed={len(outgoing_batch)}"
-                    )
+                try:
+                    response = self._request_with_retry(url, json=payload, headers=headers, timeout=120)
+                    status_code = response.status_code
+                    response.raise_for_status()
+                    print(f"      ✅ Batch {batch_num}/{total_batches}: {len(batch)} messages uploaded")
+                    results['created'] += len(batch)
+
+                except requests.exceptions.HTTPError as e:
+                    status_code = e.response.status_code if hasattr(e, 'response') and e.response is not None else 500
+                    error_text = e.response.text if hasattr(e, 'response') and e.response is not None else str(e)
+
+                    # Extract clean error message from API response
+                    error_message = self._extract_error_message(error_text) if error_text else str(e)[:200]
+
+                    # Fail fast on auth errors
+                    if status_code == 401:
+                        print(f"\n   ❌ AUTHORIZATION FAILED - Cannot upload localization messages")
+                        print(f"   The endpoint /localization/messages/v1/_upsert requires authentication.")
+                        print(f"   Ask admin to add it to EGOV_OPEN_ENDPOINTS_WHITELIST.")
+                        results['failed'] = total_messages
+                        results['errors'].append({'error': 'Authorization failed (401) - endpoint not in whitelist'})
+                        return results
+
+                    # Check for duplicate/already exists errors
+                    if ('duplicate' in error_text.lower() or
+                        'already exists' in error_text.lower() or
+                        'DUPLICATE_RECORDS' in error_text or
+                        'DuplicateMessageIdentityException' in error_text or
+                        'unique_message_entry' in error_text.lower()):
+                        print(f"      ⚠️ Batch {batch_num}/{total_batches}: {len(batch)} messages already exist")
+                        results['exists'] += len(batch)
+                        # DON'T add to failed_records - already exists is not a failure!
+                    else:
+                        # True failure
+                        print(f"      ❌ Batch {batch_num}/{total_batches} FAILED (HTTP {status_code})")
+                        print(f"         ERROR: {error_message}")
+                        results['failed'] += len(batch)
+                        results['errors'].append({
+                            'locale': locale,
+                            'batch': batch_num,
+                            'count': len(batch),
+                            'error': error_message
+                        })
+
+                        # Store failed messages for Excel export - ONLY TRUE FAILURES
+                        for msg in batch:
+                            failed_record = msg.copy()
+                            failed_record['_STATUS'] = 'FAILED'
+                            failed_record['_STATUS_CODE'] = status_code
+                            failed_record['_ERROR_MESSAGE'] = error_message
+                            results['failed_records'].append(failed_record)
+
+                except Exception as e:
+                    error_message = str(e)[:200]
+                    status_code = 0
+                    print(f"      ❌ Batch {batch_num}/{total_batches} ERROR: {error_message}")
+                    results['failed'] += len(batch)
+                    results['errors'].append({
+                        'locale': locale,
+                        'batch': batch_num,
+                        'count': len(batch),
+                        'error': error_message
+                    })
+
+                    # Store failed messages for Excel export
+                    for msg in batch:
+                        failed_record = msg.copy()
+                        failed_record['_STATUS'] = 'FAILED'
+                        failed_record['_STATUS_CODE'] = status_code
+                        failed_record['_ERROR_MESSAGE'] = error_message
+                        results['failed_records'].append(failed_record)
 
             time.sleep(0.2)
 
         # Summary
         print("="*60)
-        print(f"[SUMMARY] Upserted: {results['upserted']}")
         print(f"[SUMMARY] Created: {results['created']}")
         print(f"[SUMMARY] Already Exists: {results['exists']}")
         print(f"[SUMMARY] Failed: {results['failed']}")
 
         if results['errors']:
-            print(f"\n[ERRORS] {len(results['errors'])} batch(es) failed")
-            for err in results['errors'][:5]:
-                print(
-                    f"   - locale={err['locale']} batch={err['batch']} "
-                    f"count={err['count']} error={err['error'][:120]}"
-                )
+            print(f"\n[ERRORS] Found {len(results['errors'])} error(s):")
+            for err in results['errors']:
+                print(f"   - Locale: {err['locale']} ({err['count']} messages)")
+                print(f"     Error: {err['error'][:100]}")
+
+        # Generate error Excel if there are failures
+        if results['failed_records'] and sheet_name:
+            error_file = self._generate_error_excel(results['failed_records'], 'localization.messages', sheet_name)
+            results['error_file'] = error_file
 
         print("="*60)
 
@@ -2706,7 +2543,6 @@ class APIUploader:
             'status': 'processing',
             'boundaries_created': 0,
             'relationships_created': 0,
-            'localizations_upserted': 0,
             'errors': []
         }
 
@@ -2742,82 +2578,99 @@ class APIUploader:
                 print("   ⚠️ Could not fetch hierarchy, will use boundaryType from Excel")
                 boundary_types = df['boundaryType'].unique().tolist() if 'boundaryType' in df.columns else []
 
-            # Pre-check: fetch existing boundary codes so we skip duplicates
-            existing_codes = set()
-            existing_relationships = set()
-            try:
-                search_resp = self._request_with_retry(
-                    f"{self.boundary_url}/boundary-relationships/_search",
-                    json={"RequestInfo": {"apiId": "Rainmaker", "authToken": self.auth_token, "userInfo": self.user_info}},
-                    params={"tenantId": tenant_id, "hierarchyType": hierarchy_type, "includeChildren": "true"},
-                    headers={"Content-Type": "application/json"}
-                )
-                if search_resp.status_code in [200, 201]:
-                    def _collect_existing(nodes, parent_code=''):
-                        for n in nodes:
-                            code = str(n.get("code", "") or '').strip()
-                            boundary_type = str(n.get("boundaryType", "") or '').strip()
-                            if code:
-                                existing_codes.add(code)
-                                existing_relationships.add((code, boundary_type, parent_code))
-                            _collect_existing(n.get("children", []), code)
-                    for tb in search_resp.json().get("TenantBoundary", []):
-                        _collect_existing(tb.get("boundary", []))
-            except Exception:
-                pass  # If search fails, proceed without dedup — create API will catch duplicates
-            if existing_codes:
-                print(f"   Found {len(existing_codes)} existing boundary codes — will skip duplicates")
+            # Check if Excel has the standard format (code, name, boundaryType, parentCode)
+            if 'code' in df.columns and 'boundaryType' in df.columns:
+                print("   Using standard format (code, boundaryType, parentCode)")
 
-            records = self._extract_boundary_records(df, boundary_types, hierarchy_type, existing_codes)
-            localization_messages = self._build_boundary_localizations(records)
-            seen_codes = set(existing_codes)
-            seen_relationships = set(existing_relationships)
+                # Map Excel boundary types to hierarchy types if they don't match
+                # Common mappings for Punjab-style templates
+                type_mapping = {
+                    'State': 'Country',  # If hierarchy starts with Country
+                    'District': 'State',
+                    'Tehsil': 'City',
+                    'Block': 'Ward',
+                    'Village': 'Locality'
+                }
 
-            for record in records:
-                code = record.get('code')
-                boundary_type = record.get('boundaryType')
-                parent_code = record.get('parentCode')
-                mapped_type = record.get('mappedBoundaryType', boundary_type)
+                # Check if we need mapping (Excel types vs hierarchy types)
+                excel_types = set(df['boundaryType'].unique())
+                hierarchy_set = set(boundary_types) if boundary_types else set()
 
-                if not code or not boundary_type:
-                    continue
+                # If Excel types match hierarchy, no mapping needed
+                if excel_types.issubset(hierarchy_set) or not hierarchy_set:
+                    use_mapping = False
+                    print("   Boundary types match hierarchy - no mapping needed")
+                else:
+                    use_mapping = True
+                    print(f"   ⚠️ Boundary type mismatch detected")
+                    print(f"      Excel types: {excel_types}")
+                    print(f"      Hierarchy types: {hierarchy_set}")
+                    print(f"      Will attempt to map types")
 
-                if code in existing_codes:
-                    print(f"   ⏭️  Skipping {code} [{boundary_type}] — already exists")
-                elif code not in seen_codes:
+                # Process each row
+                for idx, row in df.iterrows():
+                    code = str(row.get('code', '')).strip()
+                    boundary_type = str(row.get('boundaryType', '')).strip()
+                    parent_code = str(row.get('parentCode', '')).strip() if pd.notna(row.get('parentCode')) else None
+
+                    if not code or not boundary_type:
+                        continue
+
+                    # Apply type mapping if needed
+                    mapped_type = type_mapping.get(boundary_type, boundary_type) if use_mapping else boundary_type
+
+                    # Create boundary entity
                     success = self._create_boundary_entity(tenant_id, code)
                     if success:
                         results['boundaries_created'] += 1
-                        seen_codes.add(code)
 
-                relationship_key = (code, mapped_type, parent_code or '')
-                if relationship_key in seen_relationships:
-                    print(f"   ⏭️  Skipping relationship {code} [{mapped_type}] — already exists")
-                    continue
+                    # Create boundary relationship - try with original type first, then mapped
+                    rel_success = self._create_boundary_relationship(
+                        tenant_id, hierarchy_type, code, boundary_type, parent_code
+                    )
+                    if not rel_success and use_mapping and mapped_type != boundary_type:
+                        # Try with mapped type
+                        rel_success = self._create_boundary_relationship(
+                            tenant_id, hierarchy_type, code, mapped_type, parent_code
+                        )
+                    if rel_success:
+                        results['relationships_created'] += 1
+            else:
+                # Handle column-per-level format
+                print("   Using column-per-level format")
+                for boundary_type in boundary_types:
+                    if boundary_type not in df.columns:
+                        continue
 
-                rel_success = self._create_boundary_relationship(
-                    tenant_id, hierarchy_type, code, mapped_type, parent_code
-                )
-                if rel_success:
-                    results['relationships_created'] += 1
-                    seen_relationships.add(relationship_key)
+                    boundaries_at_level = df[boundary_type].dropna().unique()
 
-            if localization_messages:
-                localization_result = self.create_localization_messages(
-                    localization_list=localization_messages,
-                    tenant=tenant_id,
-                    sheet_name='Boundary'
-                )
-                results['localizations_upserted'] = (
-                    localization_result.get('upserted', 0) +
-                    localization_result.get('exists', 0)
-                )
+                    for boundary_code in boundaries_at_level:
+                        if pd.isna(boundary_code) or str(boundary_code).strip() == '':
+                            continue
+
+                        boundary_code = str(boundary_code).strip()
+                        success = self._create_boundary_entity(tenant_id, boundary_code)
+                        if success:
+                            results['boundaries_created'] += 1
+
+                        parent_type_idx = boundary_types.index(boundary_type) - 1
+                        parent_code = None
+                        if parent_type_idx >= 0:
+                            parent_type = boundary_types[parent_type_idx]
+                            row = df[df[boundary_type] == boundary_code].iloc[0] if len(df[df[boundary_type] == boundary_code]) > 0 else None
+                            if row is not None and parent_type in df.columns:
+                                parent_code = str(row[parent_type]).strip() if pd.notna(row[parent_type]) else None
+
+                        rel_success = self._create_boundary_relationship(
+                            tenant_id, hierarchy_type, boundary_code, boundary_type, parent_code
+                        )
+                        if rel_success:
+                            results['relationships_created'] += 1
 
             results['status'] = 'completed'
             print(f"\n✅ Boundary processing completed!")
             print(f"   Boundaries created: {results['boundaries_created']}")
             print(f"   Relationships created: {results['relationships_created']}")
-            print(f"   Localizations processed: {results['localizations_upserted']}")
 
         except Exception as e:
             print(f"❌ Error processing boundaries: {str(e)}")
@@ -2825,254 +2678,6 @@ class APIUploader:
             results['errors'].append(str(e))
 
         return results
-
-    def _normalize_boundary_column_name(self, value: str) -> str:
-        """Normalize boundary Excel/header names for tolerant matching."""
-        return ''.join(ch.lower() for ch in str(value or '') if ch.isalnum())
-
-    def _extract_boundary_records(self, df: pd.DataFrame, boundary_types: List[str], hierarchy_type: str,
-                                  existing_codes: set = None) -> List[Dict[str, Any]]:
-        """Normalize either supported boundary sheet shape into canonical records."""
-        if 'code' in df.columns and 'boundaryType' in df.columns:
-            print("   Using standard format (code, boundaryType, parentCode)")
-            return self._extract_standard_boundary_records(df, boundary_types)
-
-        print("   Using column-per-level format")
-        return self._extract_column_level_boundary_records(df, boundary_types, hierarchy_type, existing_codes or set())
-
-    def _extract_standard_boundary_records(self, df: pd.DataFrame, boundary_types: List[str]) -> List[Dict[str, Any]]:
-        """Read the already-normalized standard boundary sheet."""
-        type_mapping = {
-            'State': 'Country',
-            'District': 'State',
-            'Tehsil': 'City',
-            'Block': 'Ward',
-            'Village': 'Locality'
-        }
-
-        excel_types = set(df['boundaryType'].dropna().astype(str).str.strip())
-        hierarchy_set = set(boundary_types) if boundary_types else set()
-        use_mapping = not (excel_types.issubset(hierarchy_set) or not hierarchy_set)
-
-        if use_mapping:
-            print(f"   ⚠️ Boundary type mismatch detected")
-            print(f"      Excel types: {excel_types}")
-            print(f"      Hierarchy types: {hierarchy_set}")
-            print(f"      Will attempt to map types")
-        else:
-            print("   Boundary types match hierarchy - no mapping needed")
-
-        records = []
-        seen = set()
-
-        for _, row in df.iterrows():
-            code = str(row.get('code', '')).strip()
-            boundary_type = str(row.get('boundaryType', '')).strip()
-            parent_code = str(row.get('parentCode', '')).strip() if pd.notna(row.get('parentCode')) else None
-            if not code or not boundary_type:
-                continue
-
-            mapped_type = type_mapping.get(boundary_type, boundary_type) if use_mapping else boundary_type
-            key = (code, mapped_type, parent_code or '')
-            if key in seen:
-                continue
-            seen.add(key)
-            records.append({
-                'code': code,
-                'name': str(row.get('name', '')).strip() if pd.notna(row.get('name')) else '',
-                'boundaryType': boundary_type,
-                'mappedBoundaryType': mapped_type,
-                'parentCode': parent_code
-            })
-
-        return records
-
-    def _build_boundary_localizations(self, records: List[Dict[str, Any]]) -> List[Dict[str, str]]:
-        """Build unique localization entries from normalized boundary records."""
-        localization_by_code = {}
-
-        for record in records:
-            code = str(record.get('code', '')).strip()
-            name = str(record.get('name', '')).strip()
-            if not code or not name:
-                continue
-
-            existing = localization_by_code.get(code)
-            if existing and existing.get('message'):
-                continue
-
-            localization_by_code[code] = {
-                'code': code,
-                'message': name,
-                'module': 'rainmaker-pgr',
-                'locale': 'en_IN'
-            }
-
-        return list(localization_by_code.values())
-
-    def _extract_column_level_boundary_records(self, df: pd.DataFrame, boundary_types: List[str], hierarchy_type: str,
-                                               existing_codes: set) -> List[Dict[str, Any]]:
-        """Expand column-per-level rows into canonical boundary records."""
-        level_column_map = {}
-        unmatched_boundary_types = []
-
-        for boundary_type in boundary_types:
-            matched_column = self._find_best_column_match(df.columns, boundary_type, hierarchy_type)
-            if matched_column:
-                level_column_map[boundary_type] = matched_column
-            else:
-                unmatched_boundary_types.append(boundary_type)
-
-        if level_column_map:
-            printable_map = ", ".join(
-                f"{boundary_type} -> {column_name}"
-                for boundary_type, column_name in level_column_map.items()
-            )
-            print(f"   Matched hierarchy columns: {printable_map}")
-        if unmatched_boundary_types:
-            print(f"   ⚠️ No matching Excel column found for: {', '.join(unmatched_boundary_types)}")
-
-        code_column = self._find_best_column_match(df.columns, 'CRS_BOUNDARY_CODE', hierarchy_type)
-        has_explicit_codes = bool(code_column and not df[code_column].dropna().empty)
-        if code_column and not has_explicit_codes:
-            print("   CRS_BOUNDARY_CODE is blank — generating codes from hierarchy path values")
-
-        assigned_codes = set(existing_codes)
-        path_to_code = {}
-        records = []
-        seen_records = set()
-
-        for _, row in df.iterrows():
-            path_values = []
-            parent_code = None
-            row_entries = []
-
-            for boundary_type in boundary_types:
-                level_column = level_column_map.get(boundary_type)
-                if not level_column:
-                    continue
-
-                raw_value = row.get(level_column)
-                if pd.isna(raw_value) or str(raw_value).strip() == '':
-                    continue
-
-                raw_value = str(raw_value).strip()
-                path_values.append(raw_value)
-                row_entries.append((boundary_type, raw_value))
-
-            if not row_entries:
-                continue
-
-            leaf_explicit_code = None
-            if code_column:
-                explicit_value = row.get(code_column)
-                if pd.notna(explicit_value) and str(explicit_value).strip():
-                    leaf_explicit_code = str(explicit_value).strip()
-            row_uses_direct_codes = bool(
-                leaf_explicit_code and row_entries and row_entries[-1][1] == leaf_explicit_code
-            )
-
-            for idx, (boundary_type, raw_value) in enumerate(row_entries):
-                current_path_values = [value for _, value in row_entries[:idx + 1]]
-                path_key = self._normalize_boundary_path_key(current_path_values)
-                boundary_code = path_to_code.get(path_key)
-
-                if not boundary_code:
-                    if row_uses_direct_codes:
-                        boundary_code = raw_value
-                    elif idx == len(row_entries) - 1 and leaf_explicit_code:
-                        boundary_code = leaf_explicit_code
-                    else:
-                        boundary_code = self._generate_unique_boundary_code(current_path_values, assigned_codes)
-                    path_to_code[path_key] = boundary_code
-                    assigned_codes.add(boundary_code)
-
-                record_key = (boundary_code, boundary_type, parent_code or '')
-                if record_key not in seen_records:
-                    seen_records.add(record_key)
-                    records.append({
-                        'code': boundary_code,
-                        'name': raw_value,
-                        'boundaryType': boundary_type,
-                        'mappedBoundaryType': boundary_type,
-                        'parentCode': parent_code
-                    })
-
-                parent_code = boundary_code
-
-        return records
-
-    def _sanitize_boundary_code_part(self, value: str) -> str:
-        """Convert a free-text boundary label into a stable code segment."""
-        cleaned = re.sub(r'[^A-Za-z0-9]+', '_', str(value or '').strip())
-        return cleaned.strip('_').upper()
-
-    def _normalize_boundary_path_key(self, path_values: List[str]) -> tuple:
-        """Normalize a hierarchy path so equivalent labels reuse the same generated code."""
-        return tuple(
-            self._sanitize_boundary_code_part(value)
-            for value in path_values
-            if str(value or '').strip()
-        )
-
-    def _looks_like_boundary_code(self, value: str) -> bool:
-        """Heuristic to decide whether a cell already contains a boundary code."""
-        value = str(value or '').strip()
-        if not value:
-            return False
-        return value == self._sanitize_boundary_code_part(value) and any(ch.isupper() for ch in value)
-
-    def _generate_boundary_code_from_path(self, path_values: List[str]) -> str:
-        """Generate a stable boundary code from the non-empty labels in a hierarchy path."""
-        parts = [self._sanitize_boundary_code_part(value) for value in path_values if str(value or '').strip()]
-        return "_".join(part for part in parts if part)
-
-    def _generate_unique_boundary_code(self, path_values: List[str], seen_codes: set) -> str:
-        """Generate the deterministic boundary code for a hierarchy path."""
-        base_code = self._generate_boundary_code_from_path(path_values)
-        return base_code
-
-    def _find_best_column_match(self, columns, boundary_type: str, hierarchy_type: str = None) -> str:
-        """Match a hierarchy level to the best Excel column name.
-
-        Supports generated boundary templates like ADMIN_STATE / ADMIN_DISTRICT
-        in addition to exact level names like State / District.
-        """
-        if not boundary_type:
-            return None
-
-        columns = list(columns)
-        normalized_target = self._sanitize_boundary_code_part(boundary_type)
-        normalized_hierarchy = self._sanitize_boundary_code_part(hierarchy_type or '')
-
-        # 1. Exact match
-        if boundary_type in columns:
-            return boundary_type
-
-        # 2. Case-insensitive exact match
-        for column in columns:
-            if str(column).strip().lower() == str(boundary_type).strip().lower():
-                return column
-
-        # 3. Normalized exact match
-        for column in columns:
-            if self._sanitize_boundary_code_part(column) == normalized_target:
-                return column
-
-        # 4. Ignore hierarchy prefixes like ADMIN_
-        for column in columns:
-            normalized_column = self._sanitize_boundary_code_part(column)
-            candidate = normalized_column
-            hierarchy_prefix = f"{normalized_hierarchy}_"
-            if normalized_hierarchy and candidate.startswith(hierarchy_prefix):
-                candidate = candidate[len(hierarchy_prefix):]
-
-            if candidate == normalized_target:
-                return column
-            if normalized_column.endswith(f"_{normalized_target}"):
-                return column
-
-        return None
 
     def _get_boundary_hierarchy(self, tenant_id: str, hierarchy_type: str) -> Dict:
         """Fetch boundary hierarchy definition"""
@@ -4477,46 +4082,3 @@ class APIUploader:
                 'error': str(e),
                 'data': None
             }
-
-    def _build_boundary_level_localizations(self, records: List[Dict[str, Any]], hierarchy_type: str = None) -> List[Dict[str, str]]:
-        """Build localization entries for boundary column level names and hierarchy type.
-
-        Localization code is built as {HIERARCHY}_{LEVEL} matching the Excel column name format.
-
-        Examples (hierarchy=ADMIN, levels=["State","District type","Locality"]):
-          ADMIN_STATE         -> "State"
-          ADMIN_DISTRICT_TYPE -> "District type"
-          ADMIN_LOCALITY      -> "Locality"
-          ADMIN               -> "ADMIN"  (hierarchy type)
-        """
-        localization_by_code = {}
-        seen_boundary_types = set()
-
-        for record in records:
-            boundary_type = str(record.get('boundaryType', '')).strip()
-            if boundary_type and boundary_type not in seen_boundary_types:
-                seen_boundary_types.add(boundary_type)
-                normalized_type = boundary_type.upper()
-                normalized_hierarchy = (hierarchy_type or '').upper().replace(' ', '_')
-
-                # e.g. ADMIN_STATE, ADMIN_DISTRICT_TYPE, ADMIN_LOCALITY
-                loc_key = f"{normalized_hierarchy}_{normalized_type}" if normalized_hierarchy else normalized_type
-                localization_by_code[loc_key] = {
-                    'code': loc_key,
-                    'message': boundary_type,
-                    'module': 'rainmaker-common',
-                    'locale': 'en_IN'
-                }
-
-        # Hierarchy type itself e.g. ADMIN -> "ADMIN"
-        if hierarchy_type:
-            normalized_hierarchy = hierarchy_type.upper()
-            if normalized_hierarchy not in localization_by_code:
-                localization_by_code[normalized_hierarchy] = {
-                    'code': normalized_hierarchy,
-                    'message': hierarchy_type,
-                    'module': 'rainmaker-common',
-                    'locale': 'en_IN'
-                }
-
-        return list(localization_by_code.values())

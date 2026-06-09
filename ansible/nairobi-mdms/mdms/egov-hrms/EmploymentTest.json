@@ -1,0 +1,65 @@
+[
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "APTITUDETEST",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "MAINS",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "PRELIMS",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "MAINS",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "PRELIMS",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "APTITUDETEST",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "APTITUDETEST",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "MAINS",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "PRELIMS",
+      "active": true
+    }
+  }
+]

@@ -77,12 +77,15 @@ public class NotificationService {
             }
 
             Map<String, List<String>> finalMessage = getFinalMessage(request, topic, applicationStatus);
-            String citizenMobileNumber = request.getService().getCitizen().getMobileNumber();
+            org.egov.pgr.web.models.User citizenUser = request.getService().getCitizen();
+            String citizenCountryCode = citizenUser != null ? citizenUser.getCountryCode() : null;
+            String citizenMobileNumber = buildMobileWithCountryCode(
+                    citizenUser != null ? citizenUser.getMobileNumber() : null, citizenCountryCode);
             String employeeMobileNumber = null;
 
             if(applicationStatus.equalsIgnoreCase(PENDINGFORASSIGNMENT) && action.equalsIgnoreCase(PGR_WF_REOPEN)) {
                 ProcessInstance processInstance = getEmployeeName(serviceWrapper.getService().getTenantId(),serviceWrapper.getService().getServiceRequestId(),request.getRequestInfo(),ASSIGN);
-                employeeMobileNumber = processInstance.getAssignes().get(0).getMobileNumber();
+                employeeMobileNumber = buildMobileWithCountryCode(processInstance.getAssignes().get(0).getMobileNumber(), citizenCountryCode);
             }
             else if(applicationStatus.equalsIgnoreCase(PENDINGFORASSIGNMENT) && action.equalsIgnoreCase(APPLY)) {
                 employeeMobileNumber = null;
@@ -92,21 +95,24 @@ public class NotificationService {
             }
             else  if (applicationStatus.equalsIgnoreCase(RESOLVED)  && action.equalsIgnoreCase(PGR_WF_RESOLVE)){
                 ProcessInstance processInstance = getEmployeeName(serviceWrapper.getService().getTenantId(),serviceWrapper.getService().getServiceRequestId(),request.getRequestInfo(),ASSIGN);
-                employeeMobileNumber = processInstance.getAssignes().get(0).getMobileNumber();
+                employeeMobileNumber = buildMobileWithCountryCode(processInstance.getAssignes().get(0).getMobileNumber(), citizenCountryCode);
             }
             else  if ((applicationStatus.equalsIgnoreCase(CLOSED_AFTER_RESOLUTION) || applicationStatus.equalsIgnoreCase(CLOSED_AFTER_REJECTION)) && action.equalsIgnoreCase(RATE)) {
                 ProcessInstance processInstance = getEmployeeName(serviceWrapper.getService().getTenantId(),serviceWrapper.getService().getServiceRequestId(),request.getRequestInfo(),ASSIGN);
-                employeeMobileNumber = processInstance.getAssignes().get(0).getMobileNumber();
+                employeeMobileNumber = buildMobileWithCountryCode(processInstance.getAssignes().get(0).getMobileNumber(), citizenCountryCode);
             }
             else if ((applicationStatus.equalsIgnoreCase(PENDINGATLME) && action.equalsIgnoreCase(ASSIGN)) || (applicationStatus.equalsIgnoreCase(PENDING_FOR_REASSIGNMENT) && action.equalsIgnoreCase(REASSIGN))){
-                employeeMobileNumber = fetchUserByUUID(request.getWorkflow().getAssignes().get(0), request.getRequestInfo(), request.getService().getTenantId()).getMobileNumber();
+                org.egov.pgr.web.models.User empUser = fetchUserByUUID(request.getWorkflow().getAssignes().get(0), request.getRequestInfo(), request.getService().getTenantId());
+                employeeMobileNumber = buildMobileWithCountryCode(empUser.getMobileNumber(), empUser.getCountryCode());
             }
             else if(applicationStatus.equalsIgnoreCase(PENDINGATLME) && action.equalsIgnoreCase(REASSIGN))
             {
-                employeeMobileNumber = fetchUserByUUID(request.getWorkflow().getAssignes().get(0), request.getRequestInfo(), request.getService().getTenantId()).getMobileNumber();
+                org.egov.pgr.web.models.User empUser = fetchUserByUUID(request.getWorkflow().getAssignes().get(0), request.getRequestInfo(), request.getService().getTenantId());
+                employeeMobileNumber = buildMobileWithCountryCode(empUser.getMobileNumber(), empUser.getCountryCode());
             }
             else {
-                employeeMobileNumber = fetchUserByUUID(request.getService().getAuditDetails().getCreatedBy(), request.getRequestInfo(), request.getService().getTenantId()).getMobileNumber();
+                org.egov.pgr.web.models.User empUser = fetchUserByUUID(request.getService().getAuditDetails().getCreatedBy(), request.getRequestInfo(), request.getService().getTenantId());
+                employeeMobileNumber = buildMobileWithCountryCode(empUser.getMobileNumber(), empUser.getCountryCode());
             }
 
             if(!StringUtils.isEmpty(finalMessage)) {
@@ -532,7 +538,7 @@ public class NotificationService {
      * @param tenantId - Tenant Id
      * @return - Returns User object with given UUID
      */
-    public User fetchUserByUUID(String uuidstring, RequestInfo requestInfo, String tenantId) {
+    public org.egov.pgr.web.models.User fetchUserByUUID(String uuidstring, RequestInfo requestInfo, String tenantId) {
         User userInfoCopy = requestInfo.getUserInfo();
 
         User userInfo = getInternalMicroserviceUser(tenantId);
@@ -548,13 +554,13 @@ public class NotificationService {
         Set<String> uuid = new HashSet<>() ;
         uuid.add(uuidstring);
         userSearchRequest.put("uuid", uuid);
-        User user = null;
+        org.egov.pgr.web.models.User user = null;
         try {
             LinkedHashMap<String, Object> responseMap = (LinkedHashMap<String, Object>) serviceRequestRepository.fetchResult(uri, userSearchRequest);
             List<LinkedHashMap<String, Object>> users = (List<LinkedHashMap<String, Object>>) responseMap.get("user");
             String dobFormat = "yyyy-MM-dd";
             parseResponse(responseMap,dobFormat);
-            user = 	mapper.convertValue(users.get(0), User.class);
+            user = mapper.convertValue(users.get(0), org.egov.pgr.web.models.User.class);
 
         }catch(Exception e) {
             log.error("Exception while trying parse user object: ",e);
@@ -811,6 +817,15 @@ public class NotificationService {
     {
         String stateLevelTenantId = centralInstanceUtil.getStateLevelTenant(tenantId);
         return config.getUiAppHostMap().get(stateLevelTenantId);
+    }
+
+    private String buildMobileWithCountryCode(String mobileNumber, String countryCode) {
+        if (mobileNumber == null) return null;
+        if (mobileNumber.startsWith("+")) return mobileNumber;
+        if (countryCode != null && !countryCode.isEmpty()) {
+            return countryCode + mobileNumber;
+        }
+        return mobileNumber;
     }
 
 }

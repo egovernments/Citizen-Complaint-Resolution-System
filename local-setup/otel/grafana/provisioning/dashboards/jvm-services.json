@@ -1,0 +1,193 @@
+{
+  "title": "DIGIT JVM Services",
+  "uid": "digit-jvm",
+  "schemaVersion": 39,
+  "version": 3,
+  "tags": ["digit", "jvm", "rightsizing"],
+  "timezone": "browser",
+  "time": { "from": "now-3h", "to": "now" },
+  "refresh": "30s",
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "type": "table",
+      "title": "Right-sizing snapshot — heap profile per service (heap, MB)",
+      "description": "max = Xmx (jvm_memory_limit_bytes). committed = currently allocated to the JVM. current = used right now. peak = max used in the last 1h. headroom = (committed - peak) / committed.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": { "unit": "decmbytes", "custom": { "align": "left" } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "service_name" }, "properties": [{ "id": "unit", "value": "string" }, { "id": "custom.width", "value": 220 }] },
+          { "matcher": { "id": "byName", "options": "headroom_pct" }, "properties": [{ "id": "unit", "value": "percent" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "orange", "value": 10 }, { "color": "green", "value": 30 }] } }, { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "gradient" } }] }
+        ]
+      },
+      "options": { "showHeader": true, "footer": { "show": false }, "sortBy": [{ "displayName": "peak_heap_mb", "desc": true }] },
+      "transformations": [
+        { "id": "merge", "options": {} },
+        { "id": "organize", "options": {
+          "excludeByName": { "Time": true, "__name__": true, "instance": true, "job": true },
+          "indexByName": { "service_name": 0, "current_heap_mb": 1, "peak_heap_mb": 2, "committed_mb": 3, "max_heap_mb": 4, "headroom_pct": 5 },
+          "renameByName": {
+            "Value #A": "current_heap_mb",
+            "Value #B": "peak_heap_mb",
+            "Value #C": "committed_mb",
+            "Value #D": "max_heap_mb",
+            "Value #E": "headroom_pct"
+          }
+        }}
+      ],
+      "targets": [
+        { "refId": "A", "format": "table", "instant": true,
+          "expr": "sum by (service_name) (jvm_memory_used_bytes{jvm_memory_type=\"heap\"}) / 1024 / 1024" },
+        { "refId": "B", "format": "table", "instant": true,
+          "expr": "max_over_time(sum by (service_name) (jvm_memory_used_bytes{jvm_memory_type=\"heap\"})[1h:1m]) / 1024 / 1024" },
+        { "refId": "C", "format": "table", "instant": true,
+          "expr": "sum by (service_name) (jvm_memory_committed_bytes{jvm_memory_type=\"heap\"}) / 1024 / 1024" },
+        { "refId": "D", "format": "table", "instant": true,
+          "expr": "sum by (service_name) (jvm_memory_limit_bytes{jvm_memory_type=\"heap\"}) / 1024 / 1024" },
+        { "refId": "E", "format": "table", "instant": true,
+          "expr": "100 * (1 - max_over_time(sum by (service_name) (jvm_memory_used_bytes{jvm_memory_type=\"heap\"})[1h:1m]) / sum by (service_name) (jvm_memory_committed_bytes{jvm_memory_type=\"heap\"}))" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "logs",
+      "title": "Incidents — OOM / heap-space errors (last range)",
+      "description": "Loki search for OutOfMemoryError, heap space, or GC overhead events across all DIGIT containers.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 16, "x": 0, "y": 12 },
+      "options": { "showTime": true, "showLabels": false, "wrapLogMessage": true, "dedupStrategy": "exact", "enableLogDetails": false },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "{service_name=~\".+\"} |~ \"(?i)OutOfMemoryError|GC overhead limit|java heap space\"",
+          "queryType": "range"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "OOM events (current range)",
+      "description": "Count of OutOfMemoryError lines across all DIGIT services in the selected time range. >0 needs attention.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 12 },
+      "fieldConfig": {
+        "defaults": { "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] }, "color": { "mode": "thresholds" } }
+      },
+      "options": { "reduceOptions": { "calcs": ["sum"], "fields": "", "values": false }, "graphMode": "area", "colorMode": "background" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum(count_over_time({service_name=~\".+\"} |~ \"(?i)OutOfMemoryError|GC overhead limit\" [$__range]))",
+          "queryType": "instant"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Heap used (MB) — by service",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 20 },
+      "fieldConfig": { "defaults": { "unit": "decmbytes" }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (service_name) (jvm_memory_used_bytes{jvm_memory_type=\"heap\"}) / 1024 / 1024",
+          "legendFormat": "{{service_name}}"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Heap committed vs used (MB) — by service",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 20 },
+      "fieldConfig": { "defaults": { "unit": "decmbytes" }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (service_name) (jvm_memory_committed_bytes{jvm_memory_type=\"heap\"}) / 1024 / 1024",
+          "legendFormat": "committed: {{service_name}}"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (service_name) (jvm_memory_used_bytes{jvm_memory_type=\"heap\"}) / 1024 / 1024",
+          "legendFormat": "used: {{service_name}}"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "JVM CPU — recent utilization (ratio)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 29 },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1 } },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "jvm_cpu_recent_utilization_ratio",
+          "legendFormat": "{{service_name}}"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Live threads",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 29 },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (service_name) (jvm_thread_count)",
+          "legendFormat": "{{service_name}}"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "GC pause time (s/s) — by service",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 38 },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (service_name) (rate(jvm_gc_duration_seconds_sum[5m]))",
+          "legendFormat": "{{service_name}}"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "Loaded classes",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 38 },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (service_name) (jvm_class_count)",
+          "legendFormat": "{{service_name}}"
+        }
+      ]
+    }
+  ]
+}

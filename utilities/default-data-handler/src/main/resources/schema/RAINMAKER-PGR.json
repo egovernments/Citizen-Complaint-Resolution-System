@@ -14,9 +14,7 @@
         "keywords",
         "department",
         "slaHours",
-        "active",
-        "menuPath",
-        "menuPathName"
+        "active"
       ],
       "x-unique": [
         "serviceCode"
@@ -72,6 +70,77 @@
       "properties": {
         "REOPENSLA": {
           "type": "number"
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "RAINMAKER-PGR.EscalationConfig",
+    "description": "Per-tenant auto-escalation config consumed by pgr-services EscalationScheduler. `defaultSlaByLevel` is an array of SLA windows in MILLISECONDS, one per escalation depth (level 0 = first scan); `overrides` keys by serviceCode for per-complaint-type SLA arrays; `maxDepth` caps how many times a single complaint can be auto-escalated before stopping. Per-level enablement is opt-in via `enabledByLevel` (boolean array, same length as `defaultSlaByLevel`; defaults to all-true when omitted) and `overrides[<serviceCode>].enabledByLevel` for per-service-code overrides. Without an EscalationConfig record pgr-services falls back to its 5-day default SLA — see https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/585.",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Generated schema for Root",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "maxDepth",
+        "defaultSlaByLevel"
+      ],
+      "x-unique": [
+        "maxDepth"
+      ],
+      "properties": {
+        "maxDepth": {
+          "type": "number"
+        },
+        "defaultSlaByLevel": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1
+        },
+        "enabledByLevel": {
+          "type": "array",
+          "description": "Optional per-level enablement flags. Same length as defaultSlaByLevel. Missing or empty = all levels enabled (current behaviour). Per @vinothrallapalli-eGov review on PR #692 — keeps the door open for tenants that want escalation only at level N without rewriting the schema.",
+          "items": {
+            "type": "boolean"
+          }
+        },
+        "overrides": {
+          "type": "object",
+          "description": "Per-serviceCode SLA override. Value may be EITHER (a) a plain array of SLA windows (same shape as defaultSlaByLevel, applies to all levels) for backward compatibility, OR (b) an object with explicit `slaByLevel` and optional `enabledByLevel` for per-service-code per-level control.",
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "slaByLevel": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    }
+                  },
+                  "enabledByLevel": {
+                    "type": "array",
+                    "items": {
+                      "type": "boolean"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          }
         }
       },
       "x-ref-schema": [],

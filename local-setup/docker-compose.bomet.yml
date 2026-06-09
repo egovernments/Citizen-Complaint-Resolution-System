@@ -1,0 +1,21 @@
+# Per-tenant compose overlay for bomet (state tenant `ke`).
+#
+# This file is copied to the target server as
+# /opt/digit/docker-compose.<inventory_hostname>.yml by the per-tenant overlay
+# step in playbook-deploy.yml, then included in every `docker compose` call.
+# Use it for bomet-only env tweaks and image pins that don't belong in the
+# shared docker-compose.egov-digit.yaml.
+services:
+  # Inbox defaults STATE_LEVEL/PARENT_LEVEL to mz; bomet has no DataSecurity at
+  # mz → encryptionPolicyConfiguration crash on boot. Pin both to ke.
+  inbox:
+    environment:
+      STATE_LEVEL_TENANT_ID: "ke"
+      PARENT_LEVEL_TENANT_ID: "ke"
+
+  # bomet's restored Flyway state has no V1 record → re-running V1 collides
+  # with the pre-existing eg_url_shortener table. Skip Flyway entirely.
+  egov-url-shortening:
+    environment:
+      SPRING_FLYWAY_ENABLED: "false"
+

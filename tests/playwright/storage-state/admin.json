@@ -1,0 +1,33 @@
+{
+  "cookies": [
+    {
+      "name": "ph_phc_NsoEDZg2dvgulUBNHAlf0GeRxmEgncH5L79yUvOhuwZ_posthog",
+      "value": "%7B%22%24device_id%22%3A%22019e7e41-1ec7-7618-a452-2cac03d9c5b5%22%2C%22distinct_id%22%3A%22ADMIN%22%2C%22%24sesid%22%3A%5B1780234659250%2C%22019e7e41-2464-70e6-9da6-40cb747a84fd%22%2C1780234658916%5D%2C%22%24epp%22%3Atrue%2C%22%24user_state%22%3A%22identified%22%7D",
+      "domain": ".digit.org",
+      "path": "/",
+      "expires": 1811770659,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "https://bometfeedbackhub.digit.org",
+      "localStorage": [
+        {
+          "name": "digit-theme",
+          "value": "digit-orange"
+        },
+        {
+          "name": "ph_phc_NsoEDZg2dvgulUBNHAlf0GeRxmEgncH5L79yUvOhuwZ_posthog",
+          "value": "{\"$device_id\":\"019e7e41-1ec7-7618-a452-2cac03d9c5b5\",\"distinct_id\":\"ADMIN\",\"$sesid\":[1780234659250,\"019e7e41-2464-70e6-9da6-40cb747a84fd\",1780234658916],\"$user_state\":\"identified\",\"$initialization_time\":\"2026-05-31T13:37:39.187Z\",\"$configured_session_timeout_ms\":1800000,\"$error_tracking_suppression_rules\":[],\"$session_recording_remote_config\":{\"cache_timestamp\":1780234659257,\"enabled\":true,\"canvasFps\":null,\"canvasQuality\":null,\"consoleLogRecordingEnabled\":true,\"endpoint\":\"/s/\",\"eventTriggers\":[],\"linkedFlag\":null,\"masking\":null,\"minimumDurationMilliseconds\":null,\"networkPayloadCapture\":{\"capturePerformance\":{\"network_timing\":true,\"web_vitals\":true,\"web_vitals_allowed_metrics\":null}},\"recordCanvas\":false,\"recorderVersion\":\"v2\",\"sampleRate\":null,\"scriptConfig\":{\"script\":\"posthog-recorder\"},\"triggerMatchType\":null,\"urlBlocklist\":[],\"urlTriggers\":[],\"version\":1,\"canvasRecording\":{\"enabled\":false,\"fps\":null,\"quality\":null}},\"$autocapture_disabled_server_side\":false,\"$product_tours_enabled_server_side\":false,\"$heatmaps_enabled_server_side\":true,\"$web_vitals_enabled_server_side\":true,\"$web_vitals_allowed_metrics\":null,\"$exception_capture_enabled_server_side\":false,\"$dead_clicks_enabled_server_side\":false,\"$client_session_props\":{\"sessionId\":\"019e7e41-2464-70e6-9da6-40cb747a84fd\",\"props\":{\"r\":\"$direct\",\"u\":\"https://bometfeedbackhub.digit.org/configurator/login\"}},\"$sess_rec_flush_size\":29719,\"$epp\":true,\"$user_id\":\"ADMIN\",\"$stored_person_properties\":{\"name\":\"ADMIN\",\"email\":\"\",\"tenant\":\"ke\",\"roles\":\"MDMS_ADMIN, EMPLOYEE, SUPERUSER\"},\"$debug_first_full_snapshot_timestamp\":1780234659254}"
+        },
+        {
+          "name": "crs-auth-state",
+          "value": "{\"isAuthenticated\":true,\"user\":{\"id\":33,\"uuid\":\"fd328e56-5834-4e95-bf41-28bd7242714b\",\"name\":\"ADMIN\",\"mobileNumber\":\"9999999999\",\"email\":\"\",\"roles\":[\"MDMS_ADMIN\",\"EMPLOYEE\",\"SUPERUSER\"]},\"environment\":\"https://bometfeedbackhub.digit.org\",\"tenant\":\"ke\",\"targetTenant\":\"ke\",\"mode\":\"management\",\"currentPhase\":1,\"completedPhases\":[],\"authToken\":\"21a54145-b072-46be-a6cd-7db37808e948\"}"
+        }
+      ]
+    }
+  ]
+}

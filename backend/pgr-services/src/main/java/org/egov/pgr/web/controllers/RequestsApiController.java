@@ -4,11 +4,13 @@ package org.egov.pgr.web.controllers;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.response.ResponseInfo;
+import org.egov.pgr.service.DashboardService;
 import org.egov.pgr.service.PGRService;
 import org.egov.pgr.util.PGRConstants;
 import org.egov.pgr.util.ResponseInfoFactory;
 import org.egov.pgr.web.models.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
@@ -16,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 import javax.validation.Valid;
 
@@ -32,12 +35,15 @@ public class RequestsApiController{
 
     private ResponseInfoFactory responseInfoFactory;
 
+    private DashboardService dashboardService;
 
     @Autowired
-    public RequestsApiController(ObjectMapper objectMapper, PGRService pgrService, ResponseInfoFactory responseInfoFactory) {
+    public RequestsApiController(ObjectMapper objectMapper, PGRService pgrService,
+                                 ResponseInfoFactory responseInfoFactory, DashboardService dashboardService) {
         this.objectMapper = objectMapper;
         this.pgrService = pgrService;
         this.responseInfoFactory = responseInfoFactory;
+        this.dashboardService = dashboardService;
     }
 
 
@@ -96,6 +102,20 @@ public class RequestsApiController{
         CountResponse response = CountResponse.builder().responseInfo(responseInfo).count(count).build();
         return new ResponseEntity<>(response, HttpStatus.OK);
 
+    }
+
+    @GetMapping("/dashboard")
+    public ResponseEntity<DashboardResponse> dashboard(
+            @RequestParam String tenantId,
+            @RequestParam(required = false) Long fromDate,
+            @RequestParam(required = false) Long toDate) {
+        DashboardResponse response = dashboardService.getDashboardData(tenantId, fromDate, toDate);
+        CacheControl cacheControl = CacheControl
+                .maxAge(fromDate != null ? 30 : 60, TimeUnit.SECONDS)
+                .cachePublic();
+        return ResponseEntity.ok()
+                .cacheControl(cacheControl)
+                .body(response);
     }
 
 }

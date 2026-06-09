@@ -13,7 +13,7 @@ const Urls = {
     update: `/pgr-services/v2/request/_update`,
   },
   workflow: {
-    processSearch: `egov-workflow-v2/egov-wf/process/_search`,
+    processSearch: `/egov-workflow-v2/egov-wf/process/_search`,
     businessServiceSearch:  `/egov-workflow-v2/egov-wf/businessservice/_search`,
   }
 };

@@ -1,0 +1,3 @@
+[submodule "local-setup/ansible/nairobi-mdms"]
+	path = local-setup/ansible/nairobi-mdms
+	url = https://github.com/ChakshuGautam/nairobi-digit-configs.git

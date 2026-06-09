@@ -7,8 +7,24 @@
  * @link section: Provides navigation to the Create Complaint screen.
  */
 
-import { range } from "lodash";
+import _, { range } from "lodash";
 import Urls from "../utils/urls";
+
+// Why this exists: ResultsDataTableWrapper inside @egovernments/digit-ui-components
+// passes a no-op (rowA, rowB) => 0 to react-data-table-component when a column
+// does not declare its own sortFunction. That makes the column-header toggle
+// flip visually but never reorder rows. Providing a real sortFunction per
+// column bypasses the no-op default. Sort the underlying jsonPath value so
+// the order matches what the cell renders.
+const compareByJsonPath = (jsonPath) => (rowA, rowB) => {
+  const a = _.get(rowA, jsonPath);
+  const b = _.get(rowB, jsonPath);
+  if (a == null && b == null) return 0;
+  if (a == null) return -1;
+  if (b == null) return 1;
+  if (typeof a === "number" && typeof b === "number") return a - b;
+  return String(a).localeCompare(String(b));
+};
 
 const PGRSearchInboxConfig = () => {
     const tenantId = Digit.ULBService.getCurrentTenantId();
@@ -52,6 +68,7 @@ const PGRSearchInboxConfig = () => {
                     defaultValues: {
                         complaintNumber: "",
                         mobileNumber: "",
+                        countryCode: "",
                         range: null
 
                     },
@@ -103,28 +120,34 @@ const PGRSearchInboxConfig = () => {
                             jsonPath: "businessObject.service.serviceRequestId",
                             key: "complaintNumber",
                             additionalCustomization: true,
+                            sortFunction: compareByJsonPath("businessObject.service.serviceRequestId"),
                         },
                         {
                             label: "WF_INBOX_HEADER_LOCALITY",
                             jsonPath: "businessObject.service.address.locality.code",
                             additionalCustomization: true,
+                            sortFunction: compareByJsonPath("businessObject.service.address.locality.code"),
                         },
                         {
                             label: "CS_COMPLAINT_DETAILS_CURRENT_STATUS",
                             jsonPath: "businessObject.service.applicationStatus",
                             additionalCustomization: true,
+                            sortFunction: compareByJsonPath("businessObject.service.applicationStatus"),
                         },
                         {
                             label: "WF_INBOX_HEADER_CURRENT_OWNER",
                             jsonPath: "ProcessInstance.assignes",
                             additionalCustomization: true,
                             key: "assignee",
+                            // Cell renders assignes[0].name, so sort on that path too.
+                            sortFunction: compareByJsonPath("ProcessInstance.assignes[0].name"),
                         },
                         {
                             label: "WF_INBOX_HEADER_SLA_DAYS_REMAINING",
                             jsonPath: "businessObject.serviceSla",
                             additionalCustomization: true,
                             key: "state",
+                            sortFunction: compareByJsonPath("businessObject.serviceSla"),
                         },
                     ],
                     enableGlobalSearch: false,

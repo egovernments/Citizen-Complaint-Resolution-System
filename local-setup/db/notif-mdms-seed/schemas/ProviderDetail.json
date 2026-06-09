@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "title": "ProviderDetail",
+  "description": "Schema for provider configurations per tenant and channel",
+  "properties": {
+    "tenantId": {
+      "type": "string",
+      "description": "Tenant identifier"
+    },
+    "providerName": {
+      "type": "string",
+      "description": "Provider name (e.g., twilio, sendgrid, etc.)"
+    },
+    "channel": {
+      "type": "string",
+      "description": "Communication channel (whatsapp, sms, email)"
+    },
+    "credentials": {
+      "type": "object",
+      "description": "Provider-specific credentials in Novu-compatible format",
+      "x-security": ["credentials"]
+    },
+    "novuApiKey": {
+      "type": "string",
+      "description": "Optional provider-specific Novu API key",
+      "x-security": ["novuApiKey"]
+    },
+    "isActive": {
+      "type": "boolean",
+      "description": "Whether this provider is active",
+      "default": true
+    },
+    "priority": {
+      "type": "integer",
+      "description": "Provider priority (lower = higher priority)",
+      "default": 0
+    }
+  },
+  "required": ["tenantId", "providerName", "channel"],
+  "x-unique": ["tenantId", "providerName", "channel"]
+}

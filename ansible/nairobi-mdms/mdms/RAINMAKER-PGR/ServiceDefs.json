@@ -1,0 +1,483 @@
+[
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "NO WATER SUPPLY",
+      "order": 1,
+      "active": true,
+      "keywords": "water, no water supply",
+      "menuPath": "WaterRelated",
+      "slaHours": 72,
+      "department": "DEPT_01",
+      "serviceCode": "NoWaterSupply"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "INCORRECT BILLING",
+      "order": 2,
+      "active": true,
+      "keywords": "billing, wrong bill, overcharge",
+      "menuPath": "FinanceAndRevenue",
+      "slaHours": 48,
+      "department": "DEPT_03",
+      "serviceCode": "IncorrectBilling"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "PAYMENT NOT REFLECTED",
+      "order": 3,
+      "active": true,
+      "keywords": "payment, receipt, not updated",
+      "menuPath": "FinanceAndRevenue",
+      "slaHours": 24,
+      "department": "DEPT_03",
+      "serviceCode": "PaymentNotReflected"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "ILLEGAL CLAMPING",
+      "order": 4,
+      "active": true,
+      "keywords": "clamp, parking, towed",
+      "menuPath": "Parking",
+      "slaHours": 4,
+      "department": "DEPT_03",
+      "serviceCode": "IllegalClamping"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "PARKING TICKET DISPUTE",
+      "order": 5,
+      "active": true,
+      "keywords": "ticket, parking fine, dispute",
+      "menuPath": "Parking",
+      "slaHours": 48,
+      "department": "DEPT_03",
+      "serviceCode": "ParkingTicketDispute"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "LAND RATES DISPUTE",
+      "order": 6,
+      "active": true,
+      "keywords": "land rates, valuation, rates bill",
+      "menuPath": "LandRates",
+      "slaHours": 72,
+      "department": "DEPT_03",
+      "serviceCode": "LandRatesDispute"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "LAND RATES CLEARANCE",
+      "order": 7,
+      "active": true,
+      "keywords": "clearance, certificate, rates",
+      "menuPath": "LandRates",
+      "slaHours": 48,
+      "department": "DEPT_03",
+      "serviceCode": "LandRatesClearance"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "MARKET STALL DISPUTE",
+      "order": 8,
+      "active": true,
+      "keywords": "market, stall, vendor",
+      "menuPath": "Markets",
+      "slaHours": 48,
+      "department": "DEPT_10",
+      "serviceCode": "MarketStallDispute"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "ILLEGAL HAWKING",
+      "order": 9,
+      "active": true,
+      "keywords": "hawker, hawking, illegal trading",
+      "menuPath": "Markets",
+      "slaHours": 24,
+      "department": "DEPT_10",
+      "serviceCode": "IllegalHawking"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "DELAYED SERVICE",
+      "order": 10,
+      "active": true,
+      "keywords": "delay, slow service, waiting",
+      "menuPath": "CustomerService",
+      "slaHours": 24,
+      "department": "DEPT_04",
+      "serviceCode": "DelayedService"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "RUDE STAFF",
+      "order": 11,
+      "active": true,
+      "keywords": "rude, staff, conduct",
+      "menuPath": "CustomerService",
+      "slaHours": 8,
+      "department": "DEPT_04",
+      "serviceCode": "RudeStaff"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "ILLEGAL DUMPING",
+      "order": 12,
+      "active": true,
+      "keywords": "dumping, garbage, littering",
+      "menuPath": "Environment",
+      "slaHours": 48,
+      "department": "DEPT_07",
+      "serviceCode": "IllegalDumping"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "WATER CONTAMINATION",
+      "order": 13,
+      "active": true,
+      "keywords": "contamination, dirty water, water quality",
+      "menuPath": "Environment",
+      "slaHours": 24,
+      "department": "DEPT_07",
+      "serviceCode": "WaterContamination"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "ILLEGAL CONSTRUCTION",
+      "order": 14,
+      "active": true,
+      "keywords": "illegal building, construction, permit",
+      "menuPath": "UrbanDevelopment",
+      "slaHours": 72,
+      "department": "DEPT_06",
+      "serviceCode": "IllegalConstruction"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "PLANNING PERMIT DELAY",
+      "order": 15,
+      "active": true,
+      "keywords": "permit, approval, planning",
+      "menuPath": "UrbanDevelopment",
+      "slaHours": 48,
+      "department": "DEPT_06",
+      "serviceCode": "PlanningPermitDelay"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "HARASSMENT BY COUNTY ASKARIS",
+      "order": 16,
+      "active": true,
+      "keywords": "askari, harassment, enforcement",
+      "menuPath": "Security",
+      "slaHours": 8,
+      "department": "DEPT_09",
+      "serviceCode": "HarassmentByCountyAskaris"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "NOISE POLLUTION",
+      "order": 17,
+      "active": true,
+      "keywords": "noise, disturbance, nuisance",
+      "menuPath": "Security",
+      "slaHours": 24,
+      "department": "DEPT_09",
+      "serviceCode": "NoisePollution"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "POTHOLE / ROAD DAMAGE",
+      "order": 18,
+      "active": true,
+      "keywords": "pothole, road, damage",
+      "menuPath": "MobilityAndWorks",
+      "slaHours": 72,
+      "department": "DEPT_16",
+      "serviceCode": "PotholeRoadDamage"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "STREET LIGHT OUTAGE",
+      "order": 19,
+      "active": true,
+      "keywords": "street light, darkness, outage",
+      "menuPath": "MobilityAndWorks",
+      "slaHours": 48,
+      "department": "DEPT_16",
+      "serviceCode": "StreetLightOutage"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "FLOODING",
+      "order": 20,
+      "active": true,
+      "keywords": "flood, flooding, water",
+      "menuPath": "DisasterManagement",
+      "slaHours": 12,
+      "department": "DEPT_17",
+      "serviceCode": "Flooding"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "FIRE INCIDENT",
+      "order": 21,
+      "active": true,
+      "keywords": "fire, burning, blaze",
+      "menuPath": "DisasterManagement",
+      "slaHours": 4,
+      "department": "DEPT_17",
+      "serviceCode": "FireIncident"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "STAFF MISCONDUCT",
+      "order": 22,
+      "active": true,
+      "keywords": "misconduct, staff, borough officer",
+      "menuPath": "PublicService",
+      "slaHours": 24,
+      "department": "DEPT_05",
+      "serviceCode": "StaffMisconduct"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "SERVICE DELIVERY FAILURE",
+      "order": 23,
+      "active": true,
+      "keywords": "service, delivery, failure, personnel",
+      "menuPath": "PublicService",
+      "slaHours": 48,
+      "department": "DEPT_05",
+      "serviceCode": "ServiceDeliveryFailure"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "LAND OWNERSHIP DISPUTE",
+      "order": 24,
+      "active": true,
+      "keywords": "land, ownership, dispute, title",
+      "menuPath": "Lands",
+      "slaHours": 72,
+      "department": "DEPT_08",
+      "serviceCode": "LandOwnershipDispute"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "SURVEYING DELAY",
+      "order": 25,
+      "active": true,
+      "keywords": "survey, boundary, delay",
+      "menuPath": "Lands",
+      "slaHours": 72,
+      "department": "DEPT_08",
+      "serviceCode": "SurveyingDelay"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "ECD FACILITY COMPLAINT",
+      "order": 26,
+      "active": true,
+      "keywords": "ECD, nursery, pre-school, facility",
+      "menuPath": "EcdAndVocationalTraining",
+      "slaHours": 48,
+      "department": "DEPT_11",
+      "serviceCode": "EcdFacilityComplaint"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "TRAINING QUALITY CONCERN",
+      "order": 27,
+      "active": true,
+      "keywords": "vocational, training, quality, TVET",
+      "menuPath": "EcdAndVocationalTraining",
+      "slaHours": 48,
+      "department": "DEPT_11",
+      "serviceCode": "TrainingQualityConcern"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "ICT EQUIPMENT FAULT",
+      "order": 28,
+      "active": true,
+      "keywords": "computer, ICT, equipment, lab",
+      "menuPath": "IctLab",
+      "slaHours": 24,
+      "department": "DEPT_12",
+      "serviceCode": "IctEquipmentFault"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "SYSTEM ACCESS ISSUE",
+      "order": 29,
+      "active": true,
+      "keywords": "system, login, access, portal",
+      "menuPath": "IctLab",
+      "slaHours": 12,
+      "department": "DEPT_12",
+      "serviceCode": "SystemAccessIssue"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "SPORTS FACILITY DAMAGE",
+      "order": 30,
+      "active": true,
+      "keywords": "sports, field, facility, damage",
+      "menuPath": "YouthTalentAndSports",
+      "slaHours": 48,
+      "department": "DEPT_13",
+      "serviceCode": "SportsFacilityDamage"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "YOUTH PROGRAMME COMPLAINT",
+      "order": 31,
+      "active": true,
+      "keywords": "youth, programme, talent, training",
+      "menuPath": "YouthTalentAndSports",
+      "slaHours": 48,
+      "department": "DEPT_13",
+      "serviceCode": "YouthProgrammeComplaint"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "LEGAL ADVICE DELAY",
+      "order": 32,
+      "active": true,
+      "keywords": "legal, attorney, advice, county",
+      "menuPath": "OfficeOfTheCountyAttorney",
+      "slaHours": 72,
+      "department": "DEPT_14",
+      "serviceCode": "LegalAdviceDelay"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "CONTRACT DISPUTE",
+      "order": 33,
+      "active": true,
+      "keywords": "contract, dispute, legal",
+      "menuPath": "OfficeOfTheCountyAttorney",
+      "slaHours": 72,
+      "department": "DEPT_14",
+      "serviceCode": "ContractDispute"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "DIGITAL SERVICE OUTAGE",
+      "order": 34,
+      "active": true,
+      "keywords": "digital, online, portal, outage",
+      "menuPath": "InnovationAndDigitalEconomy",
+      "slaHours": 12,
+      "department": "DEPT_15",
+      "serviceCode": "DigitalServiceOutage"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "STARTUP SUPPORT REQUEST",
+      "order": 35,
+      "active": true,
+      "keywords": "startup, innovation, SMART, digital economy",
+      "menuPath": "InnovationAndDigitalEconomy",
+      "slaHours": 72,
+      "department": "DEPT_15",
+      "serviceCode": "StartupSupportRequest"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "OFFICE SERVICES COMPLAINT",
+      "order": 36,
+      "active": true,
+      "keywords": "administration, office, services",
+      "menuPath": "Administration",
+      "slaHours": 24,
+      "department": "DEPT_18",
+      "serviceCode": "OfficeServicesComplaint"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "name": "DOCUMENT PROCESSING DELAY",
+      "order": 37,
+      "active": true,
+      "keywords": "document, processing, delay, records",
+      "menuPath": "Administration",
+      "slaHours": 48,
+      "department": "DEPT_18",
+      "serviceCode": "DocumentProcessingDelay"
+    }
+  }
+]

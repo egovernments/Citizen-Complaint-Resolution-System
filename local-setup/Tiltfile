@@ -81,7 +81,7 @@ if CI_MODE:
     digit_ui_exists = str(local('docker images -q digit-ui-dev:latest 2>/dev/null || echo "missing"', quiet=True)).strip()
     if digit_ui_exists == '' or 'missing' in digit_ui_exists:
         print('digit-ui-dev not found, pulling from Docker Hub...')
-        local('docker pull egovio/digit-ui:master-e58961a && docker tag egovio/digit-ui:master-e58961a digit-ui-dev:latest')
+        local('docker pull egovio/digit-ui:dev-ff0db90 && docker tag egovio/digit-ui:dev-ff0db90 digit-ui-dev:latest')
 else:
     # Local Dev Mode: Build with live sync for hot reload
     # Check if yarn is available for UI watching
@@ -184,6 +184,24 @@ dc_resource('egov-persister', labels=['core-services'],
     resource_deps=['egov-mdms-service'],
     links=[
         link('http://localhost:18091/common-persist/actuator/health', 'Health'),
+    ])
+
+dc_resource('egov-otp', labels=['core-services'],
+    resource_deps=['pgbouncer'],
+    links=[
+        link('http://localhost:18089/otp/health', 'Health'),
+    ])
+
+dc_resource('user-otp', labels=['core-services'],
+    resource_deps=['egov-otp', 'egov-user'],
+    links=[
+        link('http://localhost:18095/user-otp/actuator/health', 'Health'),
+    ])
+
+dc_resource('egov-notification-sms', labels=['core-services'],
+    resource_deps=['redpanda'],
+    links=[
+        link('http://localhost:18093/notification-sms/actuator/health', 'Health'),
     ])
 
 # ==================== API Gateway ====================

@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <link rel="icon" href="https://egov-dev-assets.s3.ap-south-1.amazonaws.com/browser-icon.png" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap"
+    rel="stylesheet" type="text/css" />
+  <link rel="stylesheet" href="/digit-ui/vendor/digit-ui-components-css.css" />
+  <link rel="stylesheet" href="/digit-ui/vendor/digit-ui-health-css.css" />
+  <link rel="stylesheet" href="/digit-ui/vendor/digit-ui-css.css" />
+  <link rel="stylesheet" href="/digit-ui/vendor/overrides.css" />
+  <link rel="stylesheet" href="/digit-ui/vendor/tailwind.css" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#00bcd1" />
+  <title>DIGIT</title>
+  <script>if(typeof process==="undefined"){window.process={env:{NODE_ENV:"production",REACT_APP_STATE_LEVEL_TENANT_ID:""}}}</script>
+  <script src="/digit-ui/globalConfigs.js"></script>
+  <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+  <script src="https://unpkg.com/keycloak-js@24.0.5/dist/keycloak.js"></script>
+  <script>
+    // DOM Override for Profile Page
+    (function () {
+      setInterval(function () {
+        if (window.location.href.indexOf("/employee/user/profile") > -1) {
+          var mobileConfig = window.globalConfigs && window.globalConfigs.getConfig("CORE_MOBILE_CONFIGS");
+          if (mobileConfig && mobileConfig.mobilePrefix) {
+            var prefixEls = document.querySelectorAll(".digit-prefix");
+            prefixEls.forEach(function (el) {
+              if (el.innerText.trim() !== mobileConfig.mobilePrefix) {
+                el.innerText = mobileConfig.mobilePrefix;
+              }
+            });
+          }
+        }
+      }, 500);
+    })();
+
+    // Force fresh page navigations to start at scrollY=0. Vendor's
+    // form components run scrollIntoView during mount, pulling a long
+    // form's first input into view (~450px down) so the user lands
+    // mid-form. Override every scroll for the first 3s after a route
+    // change OR until the user explicitly scrolls.
+    (function () {
+      var lastUrl = location.href;
+      var clamping = false;
+      var clampUntil = 0;
+      var userScrolled = false;
+      function startClamp() {
+        userScrolled = false;
+        clamping = true;
+        clampUntil = Date.now() + 3000;
+        if (window.scrollY !== 0) window.scrollTo(0, 0);
+        function tick() {
+          if (!clamping) return;
+          if (userScrolled) { clamping = false; return; }
+          if (Date.now() > clampUntil) { clamping = false; return; }
+          if (window.scrollY !== 0) window.scrollTo(0, 0);
+          requestAnimationFrame(tick);
+        }
+        requestAnimationFrame(tick);
+      }
+      // Treat wheel/touch/key as user intent; stop clamping immediately.
+      ["wheel", "touchmove", "keydown"].forEach(function (evt) {
+        window.addEventListener(evt, function () { userScrolled = true; }, { passive: true, capture: true });
+      });
+      // Trigger on initial load and route changes.
+      if (document.readyState === "complete") {
+        startClamp();
+      } else {
+        window.addEventListener("load", startClamp);
+      }
+      setInterval(function () {
+        if (location.href !== lastUrl) {
+          lastUrl = location.href;
+          startClamp();
+        }
+      }, 200);
+    })();
+
+    // Smart positioning for header dropdowns — vendor sets `left:
+    // <trigger-x>px` on `.header-dropdown-menu`, which lets the popup
+    // overflow the viewport when its trigger sits near the right edge
+    // (citizen language picker, employee user-menu, etc.). Clamp the
+    // left position so the popup's right edge always sits 16px from
+    // the viewport edge while staying anchored under its trigger when
+    // there's room. Same approach handles future header layouts —
+    // any popup with right-overflow gets shifted in.
+    (function () {
+      var MARGIN = 16;
+      function clampDropdown(el) {
+        if (!el || !el.style) return;
+        var rect = el.getBoundingClientRect();
+        if (rect.width === 0) return;
+        var vw = document.documentElement.clientWidth;
+        if (rect.right <= vw - MARGIN) return;
+        // `el.style.left` is relative to the menu's positioned ancestor
+        // (.header-dropdown-container), NOT the viewport. A trigger that sits
+        // far from the left edge (e.g. the footer action bar on desktop) would
+        // otherwise get the viewport-relative value added on top of its own
+        // offset, pushing the menu off-screen. Subtract the ancestor's offset
+        // so the menu's right edge lands MARGIN from the viewport's right edge.
+        var parentLeft = el.offsetParent ? el.offsetParent.getBoundingClientRect().left : 0;
+        var desiredViewportLeft = Math.max(MARGIN, vw - rect.width - MARGIN);
+        var newLeft = desiredViewportLeft - parentLeft;
+        var currentLeft = parseFloat(el.style.left);
+        if (isNaN(currentLeft) || Math.abs(currentLeft - newLeft) > 0.5) {
+          el.style.left = newLeft + "px";
+          el.style.right = "auto";
+        }
+      }
+      function clampAll() {
+        var menus = document.querySelectorAll(".header-dropdown-menu");
+        for (var i = 0; i < menus.length; i++) clampDropdown(menus[i]);
+      }
+      // Run on every animation frame for the first second after a
+      // header trigger is clicked — handles vendor-set positioning
+      // that lands AFTER the popup is mounted to the DOM.
+      var rafId = null;
+      var until = 0;
+      function tick() {
+        clampAll();
+        if (Date.now() < until) {
+          rafId = requestAnimationFrame(tick);
+        } else {
+          rafId = null;
+        }
+      }
+      function scheduleClamp(durationMs) {
+        until = Date.now() + (durationMs || 800);
+        if (!rafId) rafId = requestAnimationFrame(tick);
+      }
+      // Capture-phase click anywhere — catches all dropdown opens.
+      document.addEventListener("click", function () { scheduleClamp(800); }, true);
+      // Re-clamp on viewport resize.
+      window.addEventListener("resize", clampAll, { passive: true });
+      // Initial sweep + occasional safety net for auto-opened popups.
+      setInterval(clampAll, 500);
+    })();
+  </script>
+
+  <style>
+    .digit-inbox-search-composer-label-pair .digit-employee-select-wrap {
+      margin-top: -0.5rem !important;
+    }
+
+    @media (min-width: 768px) {
+      .user-profile .digit-label-field-pair {
+        display: flex !important;
+        align-items: center !important;
+        gap: 1rem !important;
+        padding-left: 1.5rem !important;
+      }
+
+      .user-profile .digit-label-field-pair .digit-card-label {
+        margin: 0 !important;
+        min-width: 150px !important;
+        flex-shrink: 0 !important;
+      }
+
+      .user-profile button[style*="margin-top: 24px"] {
+        margin-left: 1.5rem !important;
+      }
+    }
+
+    @media (max-width: 767px) {
+      .user-profile .digit-label-field-pair {
+        display: block !important;
+        padding-left: 1rem !important;
+      }
+
+      .user-profile .digit-label-field-pair .digit-card-label {
+        margin-bottom: 0.5rem !important;
+      }
+
+      .user-profile button[style*="margin-top: 24px"] {
+        margin-left: 1rem !important;
+      }
+    }
+
+    .digit-label-field-pair.boundary-filter-label-left-align {
+      display: block !important;
+
+      .digit-header-content.label {
+        display: none !important;
+      }
+
+      .digit-field {
+        width: 100% !important;
+
+        .selecting-boundary-div {
+          .boundary-item {
+            margin-bottom: 24px !important;
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            gap: clamp(1rem, 2.5vw, 2rem) !important;
+
+            h2.boundary-selection-label {
+              margin: 0 !important;
+              width: 32.33% !important;
+              padding: 0 !important;
+              font-weight: normal !important;
+              font-size: 1rem !important;
+              color: #0b0c0c !important;
+              line-height: 19px !important;
+              margin-bottom: 0px !important;
+              overflow: hidden !important;
+              white-space: nowrap !important;
+              text-overflow: ellipsis !important;
+            }
+
+            .digit-field-full {
+              width: auto !important;
+              flex: 1 !important;
+              min-width: 0 !important;
+
+              .padding-dropdown {
+                width: 100% !important;
+                display: flex !important;
+                justify-content: flex-start !important;
+
+                .digit-dropdown-employee-select-wrap {
+                  width: 100% !important;
+
+                  @media (min-aspect-ratio: 3/4) {
+                    max-width: 37.5rem;
+                  }
+
+                  .digit-dropdown-select {
+                    width: 100% !important;
+                    max-width: 37.5rem !important;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    .digit-header-content.label .label-container {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      gap: .25rem;
+    }
+  </style>
+</head>
+
+<body>
+  <noscript>You need to enable JavaScript to run this app.</noscript>
+  <div id="root"></div>
+</body>
+
+</html>

@@ -9,6 +9,7 @@ import BoundaryComponent from "./components/BoundaryComponent";
 import PGRDetails from "./pages/employee/PGRDetails";
 import TimelineWrapper from "./components/TimeLineWrapper";
 import AssigneeComponent from "./components/AssigneeComponent";
+import ActionUploadComponent from "./components/ActionUploadComponent";
 import PGRSearchInbox from "./pages/employee/PGRInbox";
 import CreateComplaint from "./pages/employee/CreateComplaint";
 import Response from "./components/Response";
@@ -25,10 +26,30 @@ import SelectImages from "../../pgr/src/pages/citizen/Create/Steps/SelectImages"
 import CreatePGRFlow from "./pages/citizen/Create/FormExplorer";
 import TrackOnWhatsApp from "./components/TrackOnWhatsApp";
 import Complaint from "./components/Complaint";
+import MobileNumberWithPrefix from "./components/MobileNumberWithPrefix";
+import { WorkflowService as PGRWorkflowService } from "./services/workflow/Workflow";
+import "./utils/pgrUIOverrides";
 
 export const PGRReducers = getRootReducer;
 
+// Override Digit.WorkflowService methods so the resulting Request payloads
+// include userInfo in RequestInfo. Only needed for inbox-v1; v2 doesn't hit
+// these endpoints the same way. The library lazily attaches WorkflowService to
+// window.Digit *after* this module is imported, so applyWorkflowServiceOverride
+// must be invoked from inside the PGRModule component (by which time
+// Digit.WorkflowService is populated). Idempotent — re-running is a no-op.
+const applyWorkflowServiceOverride = () => {
+  if (typeof window === "undefined") return;
+  if (window.globalConfigs?.getConfig("USE_INBOX_V1") !== true) return;
+  const ws = window.Digit && window.Digit.WorkflowService;
+  if (!ws || ws.__pgrPatched) return;
+  ws.init = PGRWorkflowService.init;
+  ws.getByBusinessId = PGRWorkflowService.getByBusinessId;
+  ws.__pgrPatched = true;
+};
+
 export const PGRModule = ({ stateCode, userType, tenants }) => {
+  applyWorkflowServiceOverride();
   const { path, url } = useRouteMatch();
   const tenantId = Digit.ULBService.getCurrentTenantId();
 
@@ -98,20 +119,23 @@ const componentsToRegister = {
   PGRComplaintDetails: PGRDetails,
   PGRTimeLineWrapper: TimelineWrapper,
   PGRAssigneeComponent: AssigneeComponent,
+  PGRActionUploadComponent: ActionUploadComponent,
   PGRSearchInbox,
+  PGRComplaintDetailsPage: ComplaintDetailsPage,
+  PGRResponseCitzen: ResponseCitizen,
   PGRResponse: Response,
-  PGRCreateComplaint: CreateComplaint,
   PGRBreadCrumbs: BreadCrumbs,
   PGRComplaintsList: ComplaintsList,
-  PGRComplaintDetailsPage: ComplaintDetailsPage,
-  PGRSelectRating: SelectRating,
-  PGRResponseCitzen: ResponseCitizen,
+  PGRCreateComplaint: CreateComplaint,
+ 
   CreatePGRFlow: CreatePGRFlow,
-  GeoLocations,
-  SelectAddress,
+  PGRSelectRating: SelectRating,
   SelectImages,
+  SelectAddress,
+  GeoLocations,
   PGRTrackOnWhatsApp: TrackOnWhatsApp,
   PGRComplaint: Complaint,
+  MobileNumberWithPrefix: MobileNumberWithPrefix,
 };
 
 export const initPGRComponents = () => {

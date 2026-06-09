@@ -83,7 +83,8 @@ public class RequestSearchCriteria {
     public enum SortBy {
         locality,
         applicationStatus,
-        serviceRequestId
+        serviceRequestId,
+        createdTime
     }
 
     @SafeHtml

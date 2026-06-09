@@ -1,0 +1,107 @@
+[
+  {
+    "_comment": "Lifecycle rows carry real Twilio-approved WhatsApp Content SIDs (eGov account, EN, *_message_new family). paramOrder maps ComplaintsDomainEvent.data keys (complaintNo,status,serviceName,citizenName,departmentName,mobileNumber,submittedDate,assigneeName,assigneeDesignation,comment) onto each template's {{1}},{{2}},... positions verified via the Content API. channel is whatsapp because these templates are WhatsApp-approved and the bridge resolves whatsapp. OTP.SEND intentionally has NO contentSid and stays on the hardcoded OTP path for now.",
+    "schemaCode": "TemplateBinding",
+    "data": {
+      "tenantId": "{{TENANT}}",
+      "eventName": "COMPLAINTS.WORKFLOW.APPLY",
+      "channel": "whatsapp",
+      "locale": "en_IN",
+      "templateId": "complaints-workflow-apply",
+      "contentSid": "HX67fae4a61c4f50db8a11ebac21c50a79",
+      "paramOrder": ["serviceName", "complaintNo", "submittedDate"],
+      "requiredVars": ["complaintNo"]
+    }
+  },
+  {
+    "schemaCode": "TemplateBinding",
+    "data": {
+      "tenantId": "{{TENANT}}",
+      "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+      "channel": "whatsapp",
+      "locale": "en_IN",
+      "templateId": "complaints-workflow-assign",
+      "contentSid": "HX9d0ab22fb14080bdfd3d4cb43d9bd6f7",
+      "paramOrder": ["serviceName", "complaintNo", "submittedDate", "assigneeName", "assigneeDesignation", "departmentName"],
+      "requiredVars": ["complaintNo"]
+    }
+  },
+  {
+    "schemaCode": "TemplateBinding",
+    "data": {
+      "tenantId": "{{TENANT}}",
+      "eventName": "COMPLAINTS.WORKFLOW.RESOLVE",
+      "channel": "whatsapp",
+      "locale": "en_IN",
+      "templateId": "complaints-workflow-resolve",
+      "contentSid": "HXe6f34b83cc6e7179c0ede06472dd81fb",
+      "paramOrder": ["serviceName", "complaintNo", "submittedDate", "assigneeName"],
+      "requiredVars": ["complaintNo"]
+    }
+  },
+  {
+    "schemaCode": "TemplateBinding",
+    "data": {
+      "tenantId": "{{TENANT}}",
+      "eventName": "COMPLAINTS.WORKFLOW.REJECT",
+      "channel": "whatsapp",
+      "locale": "en_IN",
+      "templateId": "complaints-workflow-reject",
+      "contentSid": "HXea318abc741dd5c09555617a4ecad490",
+      "paramOrder": ["serviceName", "complaintNo", "submittedDate", "comment"],
+      "requiredVars": ["complaintNo"]
+    }
+  },
+  {
+    "schemaCode": "TemplateBinding",
+    "data": {
+      "tenantId": "{{TENANT}}",
+      "eventName": "COMPLAINTS.WORKFLOW.REOPEN",
+      "channel": "whatsapp",
+      "locale": "en_IN",
+      "templateId": "complaints-workflow-reopen",
+      "contentSid": "HXc7f239a0b267bbe208898c32bbd6034a",
+      "paramOrder": ["serviceName", "complaintNo", "submittedDate"],
+      "requiredVars": ["complaintNo"]
+    }
+  },
+  {
+    "schemaCode": "TemplateBinding",
+    "data": {
+      "tenantId": "{{TENANT}}",
+      "eventName": "COMPLAINTS.WORKFLOW.REASSIGN",
+      "channel": "whatsapp",
+      "locale": "en_IN",
+      "templateId": "complaints-workflow-reassign",
+      "contentSid": "HX7dc390ab0a8cd7cd3bde32768278dbd7",
+      "paramOrder": ["serviceName", "complaintNo", "submittedDate", "assigneeName", "assigneeDesignation", "departmentName"],
+      "requiredVars": ["complaintNo"]
+    }
+  },
+  {
+    "schemaCode": "TemplateBinding",
+    "data": {
+      "tenantId": "{{TENANT}}",
+      "eventName": "COMPLAINTS.WORKFLOW.RATE",
+      "channel": "whatsapp",
+      "locale": "en_IN",
+      "templateId": "complaints-workflow-rate",
+      "contentSid": "HXa0ad0ef3f58903809464f1707a9347a8",
+      "paramOrder": ["serviceName", "complaintNo", "submittedDate"],
+      "requiredVars": ["complaintNo"]
+    }
+  },
+  {
+    "_comment": "OTP intentionally left on the hardcoded path: no contentSid, channel sms, not wired to Twilio. No twilio/authentication template exists on the account and SMS-OTP needs the #43 bridge fix + an SMS-capable sender. Revisit once those land.",
+    "schemaCode": "TemplateBinding",
+    "data": {
+      "tenantId": "{{TENANT}}",
+      "eventName": "OTP.SEND",
+      "channel": "sms",
+      "locale": "en_IN",
+      "templateId": "otp-send",
+      "paramOrder": ["otp", "userType"],
+      "requiredVars": ["otp"]
+    }
+  }
+]

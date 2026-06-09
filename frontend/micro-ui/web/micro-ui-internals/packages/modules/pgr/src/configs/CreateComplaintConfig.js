@@ -1,5 +1,5 @@
 export const CreateComplaintConfig = {
-  tenantId: Digit.ULBService.getCurrentTenantId(),
+  get tenantId() { return Digit.ULBService.getCurrentTenantId(); },
   moduleName: "RAINMAKER-PGR",
   CreateComplaintConfig: [
     {

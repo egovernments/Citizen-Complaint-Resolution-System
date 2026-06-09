@@ -26,7 +26,11 @@ public class NovuBridgeConfiguration {
     @Value("${novu.bridge.kafka.dlq.topic:novu-bridge.dlq}")
     private String dlqTopic;
 
-    @Value("${novu.bridge.channel:WHATSAPP}")
+    // Default channel for dispatch. SMS is the safer default — works
+    // with any Twilio SMS-capable sender out of the box. WhatsApp
+    // requires a pre-approved Twilio Programmable WhatsApp sender
+    // (sandbox or production). Override via NOVU_BRIDGE_CHANNEL env.
+    @Value("${novu.bridge.channel:SMS}")
     private String channel;
 
     @Value("${novu.bridge.default.locale:en_IN}")

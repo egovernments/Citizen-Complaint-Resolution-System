@@ -1,0 +1,68 @@
+/*
+ * v2 theme tokens.
+ *
+ * Each token is an HSL channel triple (e.g. "215 27% 17%") so Tailwind can
+ * apply alpha modifiers (`bg-primary/40`).
+ *
+ * The fallbacks below are sensible neutral defaults; tenants override
+ * `--v2-*` directly via MDMS or pipe their existing brand vars in (see
+ * `var()` chains under .v2-scope at the bottom).
+ */
+
+:root {
+  /* Surfaces */
+  --v2-background: 0 0% 100%;
+  --v2-foreground: 222 18% 17%;
+  --v2-surface: 0 0% 100%;
+
+
+  /* Brand */
+  --v2-primary: 22 90% 53%;
+  --v2-primary-foreground: 0 0% 100%;
+
+  /* Neutrals */
+  --v2-muted: 220 14% 96%;
+  --v2-muted-foreground: 220 9% 46%;
+  --v2-accent: 220 14% 96%;
+  --v2-accent-foreground: 222 18% 17%;
+  --v2-border: 220 13% 91%;
+  --v2-input: 220 13% 91%;
+  --v2-ring: 22 90% 53%;
+
+  /* Status */
+  --v2-destructive: 0 72% 51%;
+  --v2-destructive-foreground: 0 0% 100%;
+  --v2-success: 156 72% 30%;
+  --v2-success-foreground: 0 0% 100%;
+
+  /* Radius */
+  --v2-radius: 0.5rem;
+}
+
+/*
+ * Tenant bridge: when v2 is rendered inside `.v2-scope`, prefer the existing
+ * MDMS-driven brand vars when set, fall back to the neutral defaults above.
+ *
+ * The legacy theme stack stores brand colors as raw hex (`--color-text-primary`,
+ * `--color-sidebar-bg`). Tailwind needs HSL channels to apply opacity, so the
+ * cleanest bridge today is HEX-fallback at the var level — tenants that want
+ * full v2 fidelity can also set `--v2-primary` etc. directly in their MDMS
+ * brand JSON. Done this way the citizen file-complaint flow renders kenya-green
+ * on naipepea today (via brand HEX) and gets pixel-tunable HSL the moment a
+ * tenant adds v2 tokens.
+ */
+.v2-scope {
+  /* Hex-fallback path: whichever the tenant exposes wins, otherwise the v2 default applies. */
+  --v2-page-bg: var(--color-page-bg, #f5f5f5);
+  --v2-text-primary: var(--color-text-primary, #0b0c0c);
+  --v2-text-secondary: var(--color-text-secondary, #4b5462);
+  --v2-brand: var(--color-primary, #f47738);
+  --v2-sidebar-bg: var(--color-sidebar-bg, #204d56);
+  --v2-header-bg: var(--color-header-bg, #ffffff);
+}
+
+/* Apply at the v2 boundary so Tailwind classes pick up themed tokens. */
+.v2-scope {
+  background-color: var(--v2-page-bg);
+  color: var(--v2-text-primary);
+}

@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Tokens load before Tailwind utilities so var() chains resolve at compile of utility class refs. */
+@import "./tokens.css";
+
+/*
+ * v2 typography baseline — only applied inside .v2-scope so we don't disturb
+ * legacy pages. The body font/size/leading is intentionally larger than the
+ * legacy default for better mobile legibility.
+ */
+.v2-scope {
+  font-family: theme("fontFamily.sans");
+  font-size: theme("fontSize.base[0]");
+  line-height: theme("fontSize.base[1].lineHeight");
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Box-sizing reset, scoped */
+.v2-scope *,
+.v2-scope *::before,
+.v2-scope *::after {
+  box-sizing: border-box;
+}
+
+/* Sticky action bar safe-area padding for mobile */
+.v2-scope .v2-action-bar {
+  padding-bottom: max(env(safe-area-inset-bottom), 0.75rem);
+}

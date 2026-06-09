@@ -1,0 +1,104 @@
+{#-
+  Per-tenant Keycloak realm. Renders by:
+    1. Loading the canonical template from local-setup/keycloak/realm-template.json
+       (the canonical version shipped by /root/DIGIT-keycloak-overlay).
+    2. Substituting __REALM_NAME__ with the tenant's state_tenant_id.
+    3. Setting the digit-ui client's rootUrl + redirectUris + webOrigins
+       to point at this tenant's public domain (so OAuth callbacks land
+       on the right host instead of the template's placeholders).
+    4. Injecting a Google identityProvider when keycloak_google_client_id
+       is set in host_vars (skipped otherwise — the template ships an
+       empty identityProviders list).
+
+  All substitution happens through ansible-style Jinja filters (no shell-
+  out, no jq), so the rendered file is just plain JSON with no further
+  processing required by kcadm import.
+-#}
+{%- set tpl_path = playbook_dir + '/../keycloak/realm-template.json' -%}
+{%- set tpl = lookup('file', tpl_path) | from_json -%}
+{%- set _ = tpl.update({'realm': state_tenant_id}) -%}
+
+{%- set scheme = 'https://' if (tls_enabled | default(true)) else 'http://' -%}
+{%- set base = scheme + domain -%}
+
+{#- Patch the digit-ui client in place. The template ships one client
+    (digit-ui); if that ever changes, this loop tolerates extra clients
+    by only mutating the one we know about.
+
+    redirectUris cover the three SPAs that may live on the same domain:
+      /citizen/*       — digit-ui-v2 (Vite + React 19) at /var/www/citizen/
+      /digit-ui/*      — legacy digit-ui-esbuild bundle
+      /auth/callback*  — explicit callback path some auth-adapters POST to
+    localhost:* keeps `npm run dev`-style local testing of any SPA working.
+    -#}
+{#- realm.attributes.frontendUrl: KC uses this when emitting absolute
+    URLs (broker callbacks, well-known issuer, OAuth code-exchange
+    redirect targets). Without it KC falls back to KC_HOSTNAME without
+    the path component, so it emits e.g.
+       https://{domain}/realms/ke/broker/google/login
+    instead of
+       https://{domain}/auth/realms/ke/broker/google/login
+    — the unprefixed URL bypasses the nginx /auth/ → kong → keycloak
+    route and 404s at Kong with "no Route matched". Always include the
+    /auth path here. -#}
+{%- set _ = tpl.setdefault('attributes', {}).update({'frontendUrl': base + '/auth'}) -%}
+
+{%- for client in tpl.clients -%}
+  {%- if client.clientId == (keycloak_client_id | default('digit-ui')) -%}
+    {%- set _ = client.update({'rootUrl': base}) -%}
+    {%- set _ = client.update({'baseUrl': '/citizen/'}) -%}
+    {#- Auth flow flags. publicClient + standardFlowEnabled covers the
+        Google/OAuth Authorization Code redirect; directAccessGrantsEnabled
+        is what lets the overlay POST grant_type=password to /token (mobile+
+        OTP citizens auth this way via the overlay's KC+DIGIT fallback).
+        Without it KC returns unauthorized_client. PKCE is required at the
+        realm template level — UI sends code_challenge_method=S256. -#}
+    {%- set _ = client.update({'publicClient': true}) -%}
+    {%- set _ = client.update({'standardFlowEnabled': true}) -%}
+    {%- set _ = client.update({'directAccessGrantsEnabled': true}) -%}
+    {%- set _ = client.setdefault('attributes', {}).update({'pkce.code.challenge.method': 'S256'}) -%}
+    {%- set new_redirects = [
+        base + '/citizen/*',
+        base + '/digit-ui/*',
+        base + '/auth/callback*',
+        'http://localhost:*'
+    ] -%}
+    {%- set _ = client.update({'redirectUris': new_redirects}) -%}
+    {%- set new_origins = [
+        base,
+        'http://localhost:3000',
+        'http://localhost:5173'
+    ] -%}
+    {%- set _ = client.update({'webOrigins': new_origins}) -%}
+  {%- endif -%}
+{%- endfor -%}
+
+{#- Google IdP wiring is opt-in. When keycloak_google_client_id is set,
+    inject the standard google providerId entry; otherwise leave the
+    empty list the template ships. kcadm-driven IdP creation (in the
+    playbook) is the runtime path, but baking it into the realm import
+    keeps a fresh re-import idempotent. -#}
+{%- if (keycloak_google_client_id | default('')) | length > 0 -%}
+  {#- The client secret lives in OpenBao (bootstrap_secrets.keycloak_google_client_secret),
+      so prefer bao_secrets if available; fall back to a host_var of the
+      same name for sandbox/test renders without OpenBao. -#}
+  {%- set google_secret = (bao_secrets.json.data.data.keycloak_google_client_secret
+                            if (bao_secrets is defined
+                                and bao_secrets.json is defined)
+                            else (keycloak_google_client_secret | default(''))) -%}
+  {%- set idp = {
+      'alias': 'google',
+      'providerId': 'google',
+      'enabled': true,
+      'trustEmail': true,
+      'firstBrokerLoginFlowAlias': 'first broker login',
+      'config': {
+          'clientId': keycloak_google_client_id,
+          'clientSecret': google_secret,
+          'syncMode': 'IMPORT'
+      }
+  } -%}
+  {%- set _ = tpl.update({'identityProviders': [idp]}) -%}
+{%- endif -%}
+
+{{ tpl | to_nice_json(indent=2) }}

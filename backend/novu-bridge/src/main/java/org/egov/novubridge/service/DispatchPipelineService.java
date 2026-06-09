@@ -69,9 +69,9 @@ public class DispatchPipelineService {
         log.info("Updated context locale from user preferences: eventId={}, userId={}, locale={}", 
                 event.getEventId(), recipientUuid, userPreferredLocale);
 
-        boolean preferenceAllowed = preferenceServiceClient.isWhatsAppAllowed(event.getTenantId(), recipientUuid, context.getRecipientMobile());
+        boolean preferenceAllowed = preferenceServiceClient.isChannelAllowed(event.getTenantId(), recipientUuid, context.getRecipientMobile(), context.getChannel());
         if (!preferenceAllowed) {
-            persist(event, context, null, "SKIPPED", "NB_PREFERENCE_DENIED", "WhatsApp preference denied", null, 1);
+            persist(event, context, null, "SKIPPED", "NB_PREFERENCE_DENIED", context.getChannel() + " preference denied", null, 1);
             return DispatchResult.builder()
                     .valid(true)
                     .preferenceAllowed(false)
@@ -87,22 +87,19 @@ public class DispatchPipelineService {
                 resolvedTemplate.getRequiredVars(), resolvedTemplate.getParamOrder());
         validateTemplateConfig(resolvedTemplate);
         
-        // Resolve providers by channel only, then select by priority
+        // Resolve providers by channel with priority=1, pick the first one
         List<ResolvedProvider> availableProviders = configServiceClient.resolveProvidersByChannel(event.getTenantId(), context.getChannel());
-        ResolvedProvider resolvedProvider = availableProviders.stream()
-                .filter(ResolvedProvider::getIsActive)
-                .sorted(Comparator.comparing(ResolvedProvider::getPriority))
-                .findFirst()
-                .orElseThrow(() -> new CustomException("NB_NO_ACTIVE_PROVIDER", 
-                        "No active provider found for tenant=" + event.getTenantId() + " channel=" + context.getChannel()));
-        
+        if (availableProviders.isEmpty()) {
+            throw new CustomException("NB_NO_ACTIVE_PROVIDER",
+                    "No provider found with priority 1 for tenant=" + event.getTenantId() + " channel=" + context.getChannel());
+        }
+        ResolvedProvider resolvedProvider = availableProviders.get(0);
+
         log.info("Resolved provider: eventId={}, provider={}, channel={}, isActive={}, priority={}, credentialKeys={}, senderNumber={}, availableCount={}",
                 event.getEventId(), resolvedProvider.getProviderName(), resolvedProvider.getChannel(),
-                resolvedProvider.getIsActive(), resolvedProvider.getPriority(), 
+                resolvedProvider.getIsActive(), resolvedProvider.getPriority(),
                 resolvedProvider.getCredentials() != null ? resolvedProvider.getCredentials().keySet() : "null",
                 resolvedProvider.getSenderNumber(), availableProviders.size());
-        
-        // Provider is already filtered for active status above, no need to check again
         
         List<String> missingVars = findMissingRequiredVars(resolvedTemplate, event.getData());
         if (!missingVars.isEmpty()) {
@@ -133,13 +130,13 @@ public class DispatchPipelineService {
                     .build();
         }
 
-        String whatsappPhone = formatWhatsappPhone(context.getRecipientMobile(), event.getTenantId(), requestInfo);
+        String recipientPhone = formatRecipientPhone(context.getRecipientMobile(), event.getTenantId(), context.getChannel(), requestInfo);
 
         log.info("Dispatching notification: eventId={}, eventName={}, tenant={}, complaintNo={}, " +
                  "templateKey={}, subscriberId={}, provider={}, channel={}, senderNumber={}",
                 event.getEventId(), event.getEventName(), event.getTenantId(),
                 event.getData() != null ? event.getData().get("complaintNo") : "N/A",
-                resolvedTemplate.getTemplateKey(), subscriberId, 
+                resolvedTemplate.getTemplateKey(), subscriberId,
                 resolvedProvider.getProviderName(), resolvedProvider.getChannel(),
                 resolvedProvider.getSenderNumber());
         log.info("Novu trigger payload: paramOrder={}, novuBaseUrl={}, providerCredentials={}",
@@ -162,7 +159,7 @@ public class DispatchPipelineService {
         NovuClient.NovuResponse novuResponse = novuClient.triggerWithProviderConfig(
                 resolvedTemplate.getTemplateKey(),
                 subscriberId,
-                whatsappPhone,
+                recipientPhone,
                 event.getData(),
                 event.getEventId(),
                 resolvedProvider,
@@ -195,7 +192,7 @@ public class DispatchPipelineService {
         return novuClient.trigger(
                 templateKey,
                 subscriberId,
-                formatWhatsappPhone(phone, null, requestInfo),
+                formatRecipientPhone(phone, null, config.getChannel(), requestInfo),
                 payload,
                 transactionId,
                 buildTemplateOverrides(contentSid, contentVariables));
@@ -249,32 +246,40 @@ public class DispatchPipelineService {
         return overrides;
     }
 
-    private String formatWhatsappPhone(String mobile, String tenantId, RequestInfo requestInfo) {
+    private String formatRecipientPhone(String mobile, String tenantId, String channel, RequestInfo requestInfo) {
         if (!StringUtils.hasText(mobile)) {
             return null;
         }
+        boolean isWhatsapp = "whatsapp".equalsIgnoreCase(channel);
         String normalized = mobile.trim();
+
+        // Strip any pre-existing whatsapp: prefix so we control formatting from here.
         if (normalized.startsWith("whatsapp:")) {
-            return normalized;
+            normalized = normalized.substring("whatsapp:".length());
         }
+
+        String e164;
         if (normalized.startsWith("+")) {
-            return "whatsapp:" + normalized;
-        }
-        // Fetch default country-code prefix from MDMS
-        if (!StringUtils.hasText(tenantId)) {
-            throw new CustomException("NB_TENANT_ID_MISSING",
-                    "tenantId is required to resolve phone country-code prefix from MDMS");
-        }
-        MobileValidationConfig validationConfig = mdmsServiceClient.getMobileValidationConfig( tenantId, requestInfo );
-
-        if (normalized.matches(validationConfig.getPattern())) {
-
-            return "whatsapp:"+ validationConfig.getPrefix()+ normalized;
-        }
-        else {
+            e164 = normalized;
+        } else {
+            // Fetch default country-code prefix from MDMS
+            if (!StringUtils.hasText(tenantId)) {
+                throw new CustomException("NB_TENANT_ID_MISSING",
+                        "tenantId is required to resolve phone country-code prefix from MDMS");
+            }
+            MobileValidationConfig validationConfig = mdmsServiceClient.getMobileValidationConfig(tenantId, requestInfo);
+            if (!normalized.matches(validationConfig.getPattern())) {
                 throw new CustomException("INVALID_MOBILE_NUMBER",
-                    "Mobile number is not matching with default mobile pattern in MDMS");
+                        "Mobile number is not matching with default mobile pattern in MDMS");
+            }
+            e164 = validationConfig.getPrefix() + normalized;
         }
+
+        // Twilio Programmable WhatsApp requires the `whatsapp:` prefix on the
+        // recipient address; SMS / Vonage / Value-First / WhatsApp Business
+        // API all take raw E.164. Keying off the dispatch channel keeps SMS
+        // routes from being silently shunted into Twilio's WhatsApp pipeline.
+        return isWhatsapp ? "whatsapp:" + e164 : e164;
     }
 
     private DerivedContext deriveContext(ComplaintsDomainEvent event) {

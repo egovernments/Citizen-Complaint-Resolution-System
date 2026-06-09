@@ -1,0 +1,50 @@
+[
+  {
+    "tenantId": "ke",
+    "data": {
+      "active": "true",
+      "isStatelevel": "true",
+      "businessService": "Incident"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "active": "true",
+      "isStatelevel": "true",
+      "businessService": "Incident"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "active": "true",
+      "isStatelevel": "false",
+      "businessService": "Default"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "active": "true",
+      "isStatelevel": "true",
+      "businessService": "Incident"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "active": "true",
+      "isStatelevel": "true",
+      "businessService": "PGR"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "active": "true",
+      "isStatelevel": "true",
+      "businessService": "Incident"
+    }
+  }
+]

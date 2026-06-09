@@ -1,0 +1,156 @@
+[
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "ORDERBYCOMMISSIONER",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "code": "OTHERS",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "ORDERBYCOMMISSIONER",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "code": "OTHERS",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "ORDERBYCOMMISSIONER",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "code": "OTHERS",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "ORDERBYCOMMISSIONER",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "code": "OTHERS",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "ORDERBYCOMMISSIONER",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "code": "OTHERS",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "ORDERBYCOMMISSIONER",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "code": "OTHERS",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "ORDERBYCOMMISSIONER",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "code": "OTHERS",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "ORDERBYCOMMISSIONER",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "code": "OTHERS",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "ORDERBYCOMMISSIONER",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "OTHERS",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "OTHERS",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "ORDERBYCOMMISSIONER",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "ORDERBYCOMMISSIONER",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "OTHERS",
+      "active": true
+    }
+  }
+]

@@ -1,0 +1,346 @@
+# ═══════════════════════════════════════════════════════════════════
+# Example host_vars file — tracked in git as the template.
+#
+# Real per-tenant files (e.g. mytenant.yml) are gitignored, so this is
+# the ONLY host_vars file that lives in the repo. Workflow:
+#
+#   1. cp inventory/host_vars/_example.yml \
+#         inventory/host_vars/mytenant.yml
+#   2. Fill in the values below for your environment.
+#   3. Add `mytenant:` under `digit:` in inventory/hosts.yml.
+#   4. Make sure the controller can SSH to ansible_host as root.
+#   5. ./deploy.sh mytenant
+#
+# Comments below explain every field. Anything marked "REQUIRED" must
+# be set; everything else has a sensible default in group_vars/digit.yml
+# and can be omitted.
+# ═══════════════════════════════════════════════════════════════════
+
+# ────────── Networking ──────────
+
+# REQUIRED. IP or hostname Ansible SSHes into. Can be a Tailscale IP
+# (100.x.x.x), a Hetzner VPC IP (10.0.0.x), or a public address.
+ansible_host: 10.0.0.10
+
+# REQUIRED. Public hostname for the deployment. Used in:
+#   - nginx `server_name`
+#   - Grafana root URL (so dashboard links use the real domain)
+#   - Let's Encrypt certificate
+#   - Citizen-facing URLs the UI generates
+domain: digit.example.com
+
+# Default `true`. Renders nginx with `listen 443 ssl` + HTTP→HTTPS
+# redirect, expects Let's Encrypt certs at /etc/letsencrypt/live/<domain>/.
+# Set `false` for sandbox / Tailscale-only deploys without certs — nginx
+# listens on plain HTTP and the playbook's validate-* tasks switch to
+# 127.0.0.1 with `Host:` header.
+tls_enabled: true
+
+# ────────── DIGIT tenancy ──────────
+
+# REQUIRED. Four-tier tenant slug:
+#   state_root       — top-level country/state tenant. DIGIT services
+#                       use this for STATE_LEVEL_TENANT_ID env vars
+#                       (auth lookup encryption, MDMS state defaults,
+#                       boundary root). One per country; "ke", "pb", "mz".
+#                       NOT the same as state_tenant_id below — see the
+#                       digit-ui notes for why those diverge.
+#   state_tenant_id  — root tenant the citizen UI binds to. Usually the
+#                       city tenant (e.g. ke.nairobi) when the SPA is
+#                       pinned to a single city.
+#   boot_tenant      — tenant the citizen-side citizen-current-tenant
+#                       resolves to (usually same as state_tenant_id)
+#   tenant_id        — city/operating tenant used in templates that
+#                       need a single value (e.g. ke.nairobi)
+state_root: ke
+state_tenant_id: ke.mycity
+boot_tenant: ke.mycity
+tenant_id: ke.mycity
+
+# Default map centre — UI map starts here when no GPS / no complaint
+# location. Pick something inside your service area.
+map_center:
+  lat: 0.0
+  lng: 0.0
+
+# Only these tenants can log in. Most deployments allow exactly one
+# city tenant. Leave empty to allow all.
+login_tenant_allowlist:
+  - ke.mycity
+
+# Hide these modules in the employee UI. Common: ["IM"] to hide
+# inbox-v2 if you're not running the search stack.
+employee_module_denylist:
+  - IM
+
+# ────────── Country-specific UI configuration ──────────
+# group_vars/digit.yml defaults these to empty — you MUST set them
+# per tenant. The example values below are for Kenya; swap them for
+# your country.
+
+# PGR boundary level taxonomy. The SPA renders complaint-location
+# selectors in this order (highest → lowest).
+#   Kenya: County  → Sub-County → Ward
+#   India: State   → District   → Locality
+pgr_boundary_highest_level: "County"
+pgr_boundary_lowest_level: "Ward"
+boundary_type: "Ward"          # what the smallest selectable boundary is called
+
+# Mobile-number validation rules used by the citizen-side UI on signup.
+# Kenya: +254 prefix, 9 digits starting with 1 or 7.
+core_mobile_configs:
+  mobilePrefix: "+254"
+  mobileNumberPattern: "^[17][0-9]{8}$"
+  mobileNumberLength: 9
+  mobileNumberAllowedStartingCharacters: ["1", "7"]
+  mobileNumberErrorMessage: "CORE_COMMON_MOBILE_ERROR"
+
+# Postal-code validation. The SPA reads this via globalConfigs key
+# `CORE_POSTAL_CONFIGS` for submit-time pattern checks in the citizen +
+# employee PGR create-complaint flows. Empty/absent → the legacy hard
+# default (^[0-9]{5}$ / Kenya) is used as a fallback. Examples:
+#   Kenya:   ^[0-9]{5}$              (5 digits)
+#   India:   ^[0-9]{6}$              (6 digits)
+#   UK:      ^[A-Z]{1,2}[0-9R][0-9A-Z]? ?[0-9][A-Z-[CIKMOV]]{2}$  (alnum)
+#   US:      ^[0-9]{5}(-[0-9]{4})?$  (5 or 5+4)
+core_postal_configs:
+  postalCodePattern: "^[0-9]{5}$"
+  postalCodeLength: 5
+  postalCodeErrorMessage: "CS_COMPLAINT_POSTALCODE_INVALID_ERROR"
+
+# S3 bucket name used by egov-filestore as the asset bucket (sees
+# `asset_s3_bucket` in globalConfigs.js).
+asset_s3_bucket: "mytenant-egov-assets"
+
+# ────────── Branding ──────────
+
+# Footer logos shown in citizen + employee UI. Use absolute URLs;
+# the playbook copies brand assets to /var/www/brand/ when
+# nginx_features.brand_assets: true.
+footer_logo_url: ""
+footer_bw_logo_url: ""
+
+# ────────── digit-ui serving mode ──────────
+
+# How the SPA is served on this box:
+#   hmr     — esbuild.dev.js runs in tmux session `esbuild` watching
+#             /opt/digit-ui-esbuild/, live-reloads on file save. Good
+#             for active development; survives container restarts.
+#   static  — host nginx serves /opt/digit-ui-esbuild/build/ directly.
+#             Bundle built by `node esbuild.build.js` at deploy time.
+#             Fewer moving parts; stable for production.
+# Both modes bind port 18080 internally; only one can be active.
+digit_ui_mode: static
+
+# ────────── digit-ui-v2 (Vite + React 19 citizen SPA) ──────────
+#
+# New citizen-facing SPA served at /citizen/ (separate from the
+# legacy /digit-ui/ esbuild bundle). When true, the playbook:
+#   1. Clones {{ digit_ui_v2_repo }}@{{ digit_ui_v2_branch }} to
+#      /opt/digit-ui-v2 on the target.
+#   2. `npm install` + `npm run build` (Vite) with the VITE_* env-var
+#      contract baked into the bundle.
+#   3. Syncs dist/ to /var/www/citizen/.
+# Pair with `nginx_features.digit_ui_v2: true` below so nginx actually
+# serves /citizen/* — turning on the build without the nginx flag would
+# leave the bundle on disk but unreachable.
+enable_digit_ui_v2: false
+
+# Git source for the citizen SPA. Cloned on the TARGET (not the
+# controller) so native Vite binaries (esbuild, lightningcss) match
+# the runtime arch.
+digit_ui_v2_repo: "https://github.com/ChakshuGautam/Citizen-Complaint-Resolution-System.git"
+digit_ui_v2_branch: "feat/digit-ui-v2-keycloak"
+
+# digit-integration-tests dashboards. Builds the react-admin catalog dashboard
+# from the VENDORED in-tree source (tests/integration-tests/) and serves both
+# the vanilla (/integration-tests/) and react-admin (/integration-tests-v2/)
+# dashboards from /var/www. The deploy only SERVES them — catalog.json + runs/
+# are produced out-of-band by a test runner (`make publish` from
+# tests/integration-tests/). Pair with `nginx_features.integration_tests: true`
+# below (ignored on hosts with nginx_preserve_vhost — wire those by hand from
+# tests/integration-tests/deploy/nginx-integration-tests.conf).
+enable_integration_tests: false
+integration_tests_dashboard_base: "/integration-tests-v2/"
+integration_tests_basic_auth_user: "digit-tests"
+# Set in vault (never commit a real password). The htpasswd task skips if unset.
+# integration_tests_basic_auth_password: "{{ vault_integration_tests_password }}"
+
+# RUN button: an on-box test-runner daemon that lets the v2 dashboard TRIGGER a
+# Playwright run (writes results back into /var/www/integration-tests). Requires
+# enable_integration_tests: true (it serves on the same vhost) AND
+# nginx_features.integration_tests_runner: true below. The API is proxied at
+# /integration-tests/api/ behind the SAME basic-auth as the dashboards.
+# NOTE: a run is CPU/RAM heavy and shares the box with the live DIGIT stack
+# (it's nice'd, but still). Leave off unless you want in-dashboard runs.
+enable_integration_tests_runner: false
+# integration_tests_runner_port: 8181        # loopback port the daemon listens on
+# integration_tests_runner_run_limit: 5      # keep at most N runs on disk
+# integration_tests_runner_branch: "deployed"
+# Env file the run sources so it targets THIS box's tenant (BASE_URL/DIGIT_TENANT/
+# LOCALITY_CODE/SERVICE_CODE). Point at the deploy env you already maintain.
+# integration_tests_runner_tenant_env: "/opt/integration-tests/deploy/bomet.env"
+
+# ────────── Optional services (opt-in via flags) ──────────
+
+# Bring up Elasticsearch + egov-indexer + inbox-v2. Heavy (~3GB RAM
+# extra). Off by default; only enable if you actually use the inbox.
+enable_search_stack: false
+
+# Pull + start digit-mcp + mcp-postgres. The MCP server exposes a REST
+# shim on :3000 (POST /v1/tenant/bootstrap, POST /v1/tools/:name) that
+# the configurator/frontend uses for tenant onboarding. The image lives
+# in the Hetzner VPC registry (10.0.0.4:5000) — only Hetzner-internal
+# hosts can reach it. Compose validates every image before starting any
+# service, so a public-internet box with this on would fail at
+# `docker compose up`. Flip to false (or override `docker_registry` to
+# a public mirror) if you're not on the VPC.
+enable_mcp: true
+
+# ────────── Notifications (Novu + Twilio WhatsApp) ──────────
+# Turn on the `notifications` compose profile — adds 8 containers:
+#   digit-config-service, digit-user-preferences-service, novu-bridge,
+#   novu-api, novu-worker, novu-ws, novu-dashboard, novu-mongo.
+# Roughly +1GB RAM + ~5min slower first boot.
+#
+# Workflow when enable_novu: true:
+#   1. First deploy brings up the stack. Operator hits
+#      <scheme>://<host>/novu/ and signs up (creates the first
+#      organization + environment + API key in self-hosted Novu).
+#   2. Operator pastes the API key + Twilio creds into host_vars
+#      (or into OpenBao if they don't want them in plain text).
+#   3. Second deploy runs the bootstrap script, which creates the
+#      Twilio integration + workflow inside Novu, then seeds the
+#      DIGIT-side TemplateBinding records.
+#
+# Skip the bootstrap step entirely by leaving novu_api_key empty —
+# Novu still comes up, operator can configure it via the UI later.
+enable_novu: false
+
+# Pasted from the Novu dashboard after first sign-up.
+# https://docs.novu.co/sdks/api-keys for where to find it.
+novu_api_key: ""
+
+# Twilio credentials for the bootstrap script to register a Twilio
+# SMS integration with Novu. The "FROM" must be a WhatsApp-enabled
+# number — for testing, use the Twilio Sandbox number after enrolling
+# your test phone via the `join <code>` SMS dance.
+twilio_account_sid: ""
+twilio_auth_token: ""
+twilio_whatsapp_from: "whatsapp:+14155238886"   # Twilio Sandbox default
+
+# ────────── Keycloak SSO (opt-in) ──────────
+# Adds 2 containers (keycloak + token-exchange-svc) plus the host
+# nginx /auth/ and /token-exchange/ location blocks. Inert in the
+# rest of the stack — DIGIT keeps booting fine with OTP login. The UI
+# only switches to the Keycloak code path when auth_provider:
+# 'keycloak'; the cutover is intentionally a separate PR.
+#
+# Workflow when enable_keycloak: true:
+#   1. First deploy creates the `keycloak` Postgres DB (via the
+#      first-boot init script), starts the keycloak + token-exchange
+#      containers, and the playbook's keycloak-bootstrap block
+#      imports a per-tenant realm rendered from
+#      local-setup/keycloak/realm-template.json. Realm name =
+#      state_tenant_id.
+#   2. (Optional) set keycloak_google_client_id +
+#      keycloak_google_client_secret to add Google as a federated IdP.
+#   3. Flip auth_provider: 'keycloak' (in a follow-up PR) to switch
+#      the SPA's auth-adapter to OIDC PKCE.
+enable_keycloak: false
+
+# 'keycloak' = SSO via the auth-adapter. '' (default) keeps OTP login.
+# Don't flip this until the realm is imported and the operator has
+# verified a successful test login via /auth/realms/<realm>/account.
+auth_provider: ""
+
+# OIDC public client id in the per-tenant realm. The realm template
+# ships `digit-ui`; only change this if you've forked the template
+# and added a different client.
+keycloak_client_id: "digit-ui"
+
+# Federated Google login (optional). Leave blank to skip Google IdP
+# wiring entirely. When set, the bootstrap will register a Google
+# identity-provider in the realm during deploy.
+keycloak_google_client_id: ""
+
+# Init the nairobi-mdms git submodule on the controller. The submodule
+# lives in a separate repo and isn't auto-fetched on clone — turn this
+# on only if your tenant onboarding uses those JSONs. See
+# https://github.com/ChakshuGautam/nairobi-digit-configs
+requires_nairobi_mdms: false
+
+# Required for fresh installs. Layers docker-compose.fast-path.yml
+# which pre-loads db/full-dump.sql into Postgres on first boot — 54
+# tables + Flyway history + 20K localization rows + base demo tenant
+# data created in seconds. There's no SQL-based fallback; the
+# slow-path seed containers were removed in favour of "load the dump,
+# then layer tenant data via MDMS API + nairobi-mdms submodule".
+#
+# DON'T enable on a tenant with live data in an anonymous postgres
+# volume — the overlay also corrects the named-volume mount path,
+# which forces container recreation and wipes the existing data.
+db_fast_path: true
+
+# Run the post-deploy CI suite (XLSX dataloader + Playwright). Requires
+# a sibling `digit-ui-fix/` clone next to this repo on the controller.
+# Off by default — production deploys skip CI tests.
+run_ci_tests: false
+
+# Install Claude Code CLI + sync controller's ~/.claude config to the
+# target. Hard-codes /root/.claude paths; only safe when the controller
+# is a Linux box running as root.
+install_claude_code: false
+
+# ────────── nginx features (location blocks rendered into the host nginx site) ──────────
+
+nginx_features:
+  brand_assets: false        # /brand/ — local logo/banner mirror
+  configurator: false        # /configurator/ — DIGIT Studio SPA
+  configurator_caching: false  # asset-level cache headers for above
+  status: true               # /status/ — Gatus health dashboard
+  api_pgr: false             # /api/pgr/ — proxied to MCP server
+  mcp: true                  # /mcp + /v1/* — MCP HTTP transport + REST shim (requires enable_mcp: true)
+  keycloak: false            # /auth/ + /token-exchange/ — requires enable_keycloak: true
+  digit_ui_v2: false         # /citizen/ — Vite + React 19 SPA (requires enable_digit_ui_v2: true)
+  integration_tests: false   # /integration-tests/ + -v2/ — test dashboards (requires enable_integration_tests: true)
+  integration_tests_runner: false  # /integration-tests/api/ — RUN-button daemon proxy (requires enable_integration_tests_runner: true)
+
+# If true, the playbook will NOT render `templates/nginx-site.conf.j2` into
+# /etc/nginx/sites-available/ and will NOT touch /etc/nginx/sites-enabled/.
+# nginx still gets installed (apt task is unconditional) but the operator's
+# hand-managed vhost is left as-is. Use for tenants whose production vhost
+# has hand-crafted routing the template can't (yet) render — e.g. Bomet's
+# /egov-rainmaker/ filestore passthrough, /novu/+/novu-api/ routing, the
+# /digit-ui/ host-alias. Default false so new tenants get the standard
+# templated vhost.
+nginx_preserve_vhost: false
+
+# ────────── OpenBao (per-tenant secrets backend) ──────────
+
+# REQUIRED. Path under the kv/ mount where this tenant's secrets live.
+# Convention: kv/digit/<tenant>. Non-sensitive — what's *behind* it is.
+secrets_path: kv/digit/mytenant
+
+# Seeded into OpenBao ONLY on the first deploy of this tenant. After
+# that, edit via the UI or `bao kv put`; subsequent edits to this file
+# are ignored (cas=0 on the seed).
+#
+# If db_fast_path: true, elasticsearch_master_password MUST equal
+# `asd@#$@$!132123` — the dump's eg_enc_*_keys decrypt only under that
+# value. Mismatch → AEADBadTagException in egov-enc-service on boot.
+bootstrap_secrets:
+  postgres_password: change-me-strong
+  mcp_db_password: change-me-strong
+  minio_root_user: minioadmin
+  minio_root_password: change-me-strong
+  elasticsearch_master_password: "asd@#$@$!132123"  # see comment above
+  egov_hrms_default_password: "eGov@123"
+  # Keycloak secrets — only consumed when enable_keycloak: true.
+  # Leave empty on tenants without Keycloak; the playbook only resolves
+  # these via `| mandatory` inside the digit.env.j2 keycloak block,
+  # which is itself gated on enable_keycloak.
+  keycloak_admin_password: ""               # master realm admin login
+  keycloak_db_password: ""                  # Keycloak's Postgres connection
+  keycloak_google_client_secret: ""         # only if keycloak_google_client_id is set
+  token_exchange_system_password: "eGov@123"  # DIGIT system user the exchange impersonates

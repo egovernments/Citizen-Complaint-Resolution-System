@@ -171,12 +171,36 @@ const FormExplorer = () => {
       }
       : user;
 
+    const boundaryHierarchy = (() => {
+      const bc = Array.isArray(formData?.boundaryComponent) ? formData.boundaryComponent : [];
+      // Ordered level names matching bc by index (highest → lowest)
+      const levelNames = [hierarchyData?.highestHierarchy, hierarchyData?.lowestHierarchy].filter(Boolean);
+      if (levelNames.length > 0) {
+        const obj = {};
+        levelNames.forEach((levelName, i) => {
+          if (levelName && bc[i]) obj[levelName] = bc[i];
+        });
+        return obj;
+      }
+      return bc;
+    })();
+
     const additionalDetail = {
       supervisorName: formData?.SupervisorName?.trim() || null,
       supervisorContactNumber: formData?.SupervisorContactNumber?.trim() || null,
+      boundaryHierarchy: boundaryHierarchy,
     };
 
     const geoLocation = formData?.GeoLocationsPoint || { lat: null, lng: null };
+
+    const documentsList = Array.isArray(formData?.ComplaintImagesPoint)
+      ? formData.ComplaintImagesPoint.map((image) => ({
+        documentType: "PHOTO",
+        fileStoreId: image,
+        documentUid: "",
+        additionalDetails: {},
+      }))
+      : [];
 
     return {
       service: {
@@ -202,24 +226,17 @@ const FormExplorer = () => {
             longitude: geoLocation.lng,
           }),
         },
-        additionalDetail: JSON.stringify(additionalDetail),
+        additionalDetail: additionalDetail,
         auditDetails: {
           createdBy: user?.uuid,
           createdTime: timestamp,
           lastModifiedBy: user?.uuid,
           lastModifiedTime: timestamp,
         },
+        documents: documentsList,
       },
       workflow: {
         action: "APPLY",
-        verificationDocuments: Array.isArray(formData?.ComplaintImagesPoint)
-          ? formData.ComplaintImagesPoint.map((image) => ({
-            documentType: "PHOTO",
-            fileStoreId: image,
-            documentUid: "",
-            additionalDetails: {},
-          }))
-          : [],
       },
     };
   };
@@ -404,6 +421,16 @@ const FormExplorer = () => {
 
   return (
     <Card type="secondary">
+      <style>{`
+        .previous-button.digit-button-secondary {
+          height: 2.5rem !important;
+          min-width: 15rem;
+        }
+        h2.boundary-selection-label::after {
+          content: " *";
+          color: #d4351c;
+        }
+      `}</style>
 
       <FormComposerV2
         config={[configs[currentStep]]}

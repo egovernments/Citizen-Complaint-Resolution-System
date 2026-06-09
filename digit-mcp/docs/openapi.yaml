@@ -1,0 +1,1313 @@
+openapi: 3.0.3
+info:
+  title: DIGIT Platform API — MCP Server Coverage
+  description: |
+    OpenAPI specification documenting all DIGIT platform API endpoints used by the CRS Validator MCP Server.
+
+    This spec covers 16 DIGIT services:
+    - 15 services with HTTP APIs (used by MCP tools or documented)
+    - 1 infrastructure service (egov-persister) that is Kafka-only with no user-facing API
+
+    **Authentication**: Most endpoints require an OAuth2 bearer token obtained via `/user/oauth/token`.
+    The token is passed both as an `Authorization: Bearer` header and inside the `RequestInfo.authToken`
+    field in the JSON request body.
+
+    **Encryption service** (`egov-enc-service`) does NOT require authentication — it handles its own
+    key management internally.
+  version: 1.0.0
+  contact:
+    name: DIGIT MCP Server
+    url: https://github.com/ChakshuGautam/DIGIT-MCP
+
+servers:
+  - url: https://chakshu-digit.egov.theflywheel.in
+    description: Chakshu Dev (default)
+  - url: https://unified-dev.digit.org
+    description: Unified Dev
+  - url: http://0.0.0.0:18000
+    description: Local Docker (Kong gateway)
+
+tags:
+  - name: auth
+    description: Authentication (egov-user)
+  - name: mdms
+    description: Master Data Management (egov-mdms-service v2)
+  - name: boundary
+    description: Boundary Service (boundary-service)
+  - name: hrms
+    description: Human Resource Management (egov-hrms)
+  - name: localization
+    description: Localization (egov-localization)
+  - name: pgr
+    description: Public Grievance Redressal (pgr-services)
+  - name: workflow
+    description: Workflow Engine (egov-workflow-v2)
+  - name: filestore
+    description: File Storage (egov-filestore)
+  - name: access-control
+    description: Access Control (egov-accesscontrol)
+  - name: idgen
+    description: ID Generation (egov-idgen)
+  - name: location
+    description: Location/Geography (egov-location)
+  - name: encryption
+    description: Encryption Service (egov-enc-service)
+  - name: boundary-mgmt
+    description: Boundary Management (egov-bndry-mgmnt)
+  - name: persister
+    description: Persister (egov-persister) — Kafka consumer, no user-facing API
+
+paths:
+  # ── Authentication ──
+  /user/oauth/token:
+    post:
+      tags: [auth]
+      summary: Obtain OAuth2 access token
+      description: |
+        Authenticate with username/password to get a bearer token.
+        Uses HTTP Basic auth with client credentials + form-encoded body.
+      operationId: login
+      security:
+        - basicAuth: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [username, password, userType, tenantId, scope, grant_type]
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+                userType:
+                  type: string
+                  enum: [EMPLOYEE, CITIZEN]
+                tenantId:
+                  type: string
+                scope:
+                  type: string
+                  default: read
+                grant_type:
+                  type: string
+                  default: password
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                  token_type:
+                    type: string
+                  expires_in:
+                    type: integer
+                  UserRequest:
+                    $ref: '#/components/schemas/UserInfo'
+
+  /user/_search:
+    post:
+      tags: [auth]
+      summary: Search users
+      operationId: userSearch
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                RequestInfo:
+                  $ref: '#/components/schemas/RequestInfo'
+                tenantId:
+                  type: string
+      responses:
+        '200':
+          description: User search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserInfo'
+
+  # ── MDMS v2 ──
+  /egov-mdms-service/v2/_search:
+    post:
+      tags: [mdms]
+      summary: Search MDMS v2 records
+      description: Generic search across any MDMS schema. Returns master data records with audit details.
+      operationId: mdmsV2Search
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [RequestInfo, MdmsCriteria]
+              properties:
+                RequestInfo:
+                  $ref: '#/components/schemas/RequestInfo'
+                MdmsCriteria:
+                  type: object
+                  required: [tenantId, schemaCode]
+                  properties:
+                    tenantId:
+                      type: string
+                    schemaCode:
+                      type: string
+                      description: 'Schema code (e.g. "common-masters.Department")'
+                    limit:
+                      type: integer
+                      default: 100
+                    offset:
+                      type: integer
+                      default: 0
+                    uniqueIdentifiers:
+                      type: array
+                      items:
+                        type: string
+      responses:
+        '200':
+          description: MDMS records
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mdms:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MdmsRecord'
+
+  /egov-mdms-service/v2/_create/{schemaCode}:
+    post:
+      tags: [mdms]
+      summary: Create MDMS v2 record
+      operationId: mdmsV2Create
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: schemaCode
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [RequestInfo, Mdms]
+              properties:
+                RequestInfo:
+                  $ref: '#/components/schemas/RequestInfo'
+                Mdms:
+                  type: object
+                  properties:
+                    tenantId:
+                      type: string
+                    schemaCode:
+                      type: string
+                    uniqueIdentifier:
+                      type: string
+                    data:
+                      type: object
+                    isActive:
+                      type: boolean
+      responses:
+        '200':
+          description: Created MDMS record
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Mdms:
+                    $ref: '#/components/schemas/MdmsRecord'
+
+  # ── Boundary Service ──
+  /boundary-service/boundary/_search:
+    post:
+      tags: [boundary]
+      summary: Search boundary hierarchy
+      operationId: boundarySearch
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [RequestInfo, Boundary]
+              properties:
+                RequestInfo:
+                  $ref: '#/components/schemas/RequestInfo'
+                Boundary:
+                  type: object
+                  properties:
+                    tenantId:
+                      type: string
+                    hierarchyType:
+                      type: string
+                    limit:
+                      type: integer
+                    offset:
+                      type: integer
+      responses:
+        '200':
+          description: Boundary tree
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  TenantBoundary:
+                    type: array
+                    items:
+                      type: object
+
+  /boundary-service/boundary-hierarchy-definition/_search:
+    post:
+      tags: [boundary]
+      summary: Search boundary hierarchy definitions
+      operationId: boundaryHierarchySearch
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                RequestInfo:
+                  $ref: '#/components/schemas/RequestInfo'
+                tenantId:
+                  type: string
+      responses:
+        '200':
+          description: Hierarchy definitions
+          content:
+            application/json:
+              schema:
+                type: object
+
+  # ── HRMS ──
+  /egov-hrms/employees/_search:
+    post:
+      tags: [hrms]
+      summary: Search HRMS employees
+      operationId: employeeSearch
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: codes
+          in: query
+          schema:
+            type: string
+            description: Comma-separated employee codes
+        - name: departments
+          in: query
+          schema:
+            type: string
+            description: Comma-separated department codes
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                RequestInfo:
+                  $ref: '#/components/schemas/RequestInfo'
+      responses:
+        '200':
+          description: Employee list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Employees:
+                    type: array
+                    items:
+                      type: object
+
+  # ── Localization ──
+  /localization/messages/v1/_search:
+    post:
+      tags: [localization]
+      summary: Search localization messages
+      operationId: localizationSearch
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: locale
+          in: query
+          required: true
+          schema:
+            type: string
+            default: en_IN
+        - name: module
+          in: query
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                RequestInfo:
+                  $ref: '#/components/schemas/RequestInfo'
+      responses:
+        '200':
+          description: Localization messages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        code:
+                          type: string
+                        message:
+                          type: string
+                        module:
+                          type: string
+                        locale:
+                          type: string
+
+  /localization/messages/v1/_upsert:
+    post:
+      tags: [localization]
+      summary: Create or update localization messages
+      operationId: localizationUpsert
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: locale
+          in: query
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                RequestInfo:
+                  $ref: '#/components/schemas/RequestInfo'
+                messages:
+                  type: array
+                  items:
+                    type: object
+                    required: [code, message, module]
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                      module:
+                        type: string
+                      locale:
+                        type: string
+      responses:
+        '200':
+          description: Upserted messages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      type: object
+
+  # ── PGR ──
+  /pgr-services/v2/request/_search:
+    post:
+      tags: [pgr]
+      summary: Search PGR complaints
+      operationId: pgrSearch
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: serviceRequestId
+          in: query
+          schema:
+            type: string
+        - name: applicationStatus
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                RequestInfo:
+                  $ref: '#/components/schemas/RequestInfo'
+      responses:
+        '200':
+          description: PGR complaints
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ServiceWrappers:
+                    type: array
+                    items:
+                      type: object
+
+  /pgr-services/v2/request/_create:
+    post:
+      tags: [pgr]
+      summary: Create PGR complaint
+      operationId: pgrCreate
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [RequestInfo, ServiceWrapper]
+              properties:
+                RequestInfo:
+                  $ref: '#/components/schemas/RequestInfo'
+                ServiceWrapper:
+                  type: object
+                  properties:
+                    service:
+                      type: object
+                      properties:
+                        tenantId:
+                          type: string
+                        serviceCode:
+                          type: string
+                        description:
+                          type: string
+                        address:
+                          type: object
+                        source:
+                          type: string
+                        active:
+                          type: boolean
+                    workflow:
+                      type: object
+                      properties:
+                        action:
+                          type: string
+                          enum: [APPLY]
+      responses:
+        '200':
+          description: Created complaint
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ServiceWrappers:
+                    type: array
+                    items:
+                      type: object
+
+  /pgr-services/v2/request/_update:
+    post:
+      tags: [pgr]
+      summary: Update PGR complaint via workflow action
+      operationId: pgrUpdate
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [RequestInfo, ServiceWrapper]
+              properties:
+                RequestInfo:
+                  $ref: '#/components/schemas/RequestInfo'
+                ServiceWrapper:
+                  type: object
+                  properties:
+                    service:
+                      type: object
+                    workflow:
+                      type: object
+                      properties:
+                        action:
+                          type: string
+                          enum: [ASSIGN, REASSIGN, RESOLVE, REJECT, REOPEN, CLOSEDAFTERRESOLUTION]
+                        comments:
+                          type: string
+      responses:
+        '200':
+          description: Updated complaint
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ServiceWrappers:
+                    type: array
+                    items:
+                      type: object
+
+  # ── Workflow ──
+  /egov-workflow-v2/egov-wf/businessservice/_search:
+    post:
+      tags: [workflow]
+      summary: Search workflow business service definitions
+      operationId: workflowBusinessServiceSearch
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: businessServices
+          in: query
+          schema:
+            type: string
+            description: Comma-separated business service codes (e.g. "PGR")
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                RequestInfo:
+                  $ref: '#/components/schemas/RequestInfo'
+      responses:
+        '200':
+          description: Workflow state machine definitions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  BusinessServices:
+                    type: array
+                    items:
+                      type: object
+
+  /egov-workflow-v2/egov-wf/process/_search:
+    post:
+      tags: [workflow]
+      summary: Search workflow process instances
+      operationId: workflowProcessSearch
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                RequestInfo:
+                  $ref: '#/components/schemas/RequestInfo'
+                criteria:
+                  type: object
+                  properties:
+                    tenantId:
+                      type: string
+                    businessIds:
+                      type: array
+                      items:
+                        type: string
+                    limit:
+                      type: integer
+                    offset:
+                      type: integer
+      responses:
+        '200':
+          description: Workflow process instances
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ProcessInstances:
+                    type: array
+                    items:
+                      type: object
+
+  # ── Filestore ──
+  /filestore/v1/files:
+    post:
+      tags: [filestore]
+      summary: Upload file to filestore
+      operationId: filestoreUpload
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                tenantId:
+                  type: string
+                module:
+                  type: string
+      responses:
+        '200':
+          description: Upload result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  files:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        fileStoreId:
+                          type: string
+
+  /filestore/v1/files/url:
+    get:
+      tags: [filestore]
+      summary: Get download URLs for file store IDs
+      operationId: filestoreGetUrl
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: fileStoreIds
+          in: query
+          required: true
+          schema:
+            type: string
+            description: Comma-separated file store IDs
+      responses:
+        '200':
+          description: File URLs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fileStoreIds:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        url:
+                          type: string
+
+  # ── Access Control ──
+  /access/v1/roles/_search:
+    post:
+      tags: [access-control]
+      summary: Search access control roles
+      operationId: accessRolesSearch
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                RequestInfo:
+                  $ref: '#/components/schemas/RequestInfo'
+      responses:
+        '200':
+          description: Role list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  roles:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        code:
+                          type: string
+                        name:
+                          type: string
+                        description:
+                          type: string
+
+  /access/v1/actions/_search:
+    post:
+      tags: [access-control]
+      summary: Search actions/permissions by role
+      operationId: accessActionsSearch
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                RequestInfo:
+                  $ref: '#/components/schemas/RequestInfo'
+                roleCodes:
+                  type: array
+                  items:
+                    type: string
+                tenantId:
+                  type: string
+      responses:
+        '200':
+          description: Action list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  actions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        url:
+                          type: string
+                        displayName:
+                          type: string
+                        serviceName:
+                          type: string
+                        enabled:
+                          type: boolean
+
+  # ── ID Generation ──
+  /egov-idgen/id/_generate:
+    post:
+      tags: [idgen]
+      summary: Generate unique IDs
+      description: |
+        Generate formatted unique IDs using pre-configured ID formats.
+        Common ID names: `pgr.servicerequestid`, `rainmaker.pgr.count`.
+        Returns sequential, formatted IDs (e.g. "PG-PGR-2026-02-16-005850").
+      operationId: idgenGenerate
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [RequestInfo, idRequests]
+              properties:
+                RequestInfo:
+                  $ref: '#/components/schemas/RequestInfo'
+                idRequests:
+                  type: array
+                  items:
+                    type: object
+                    required: [idName, tenantId]
+                    properties:
+                      idName:
+                        type: string
+                        description: Name of the configured ID format
+                      tenantId:
+                        type: string
+                      format:
+                        type: string
+                        description: Optional custom format string
+      responses:
+        '200':
+          description: Generated IDs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  idResponses:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+
+  # ── Location ──
+  /egov-location/location/v11/boundarys/_search:
+    post:
+      tags: [location]
+      summary: Search geographic boundaries (legacy)
+      description: |
+        Search boundaries via the legacy egov-location service.
+        Note: This service may not be available in all environments (e.g. local Docker).
+        For the newer boundary API, use boundary-service endpoints instead.
+      operationId: locationBoundarySearch
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                RequestInfo:
+                  $ref: '#/components/schemas/RequestInfo'
+                tenantId:
+                  type: string
+                boundaryType:
+                  type: string
+                hierarchyType:
+                  type: string
+      responses:
+        '200':
+          description: Boundary data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  TenantBoundary:
+                    type: array
+                    items:
+                      type: object
+
+  # ── Encryption ──
+  /egov-enc-service/crypto/v1/_encrypt:
+    post:
+      tags: [encryption]
+      summary: Encrypt data
+      description: |
+        Encrypt sensitive data values. Does NOT require RequestInfo or authentication —
+        the encryption service manages its own keys internally.
+      operationId: encryptData
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [encryptionRequests]
+              properties:
+                encryptionRequests:
+                  type: array
+                  items:
+                    type: object
+                    required: [tenantId, type, value]
+                    properties:
+                      tenantId:
+                        type: string
+                      type:
+                        type: string
+                        enum: [Normal]
+                      value:
+                        type: string
+      responses:
+        '200':
+          description: Encrypted values (flat string array)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+
+  /egov-enc-service/crypto/v1/_decrypt:
+    post:
+      tags: [encryption]
+      summary: Decrypt data
+      description: |
+        Decrypt previously encrypted values. Does NOT require RequestInfo or authentication.
+        May return 500 if encryption keys are not configured for the tenant.
+      operationId: decryptData
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decryptionRequests]
+              properties:
+                decryptionRequests:
+                  type: array
+                  items:
+                    type: object
+                    required: [tenantId, type, value]
+                    properties:
+                      tenantId:
+                        type: string
+                      type:
+                        type: string
+                        enum: [Normal]
+                      value:
+                        type: string
+                        description: Encrypted string to decrypt
+      responses:
+        '200':
+          description: Decrypted values (flat string array)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+
+  # ── Boundary Management ──
+  /egov-bndry-mgmnt/v1/_process:
+    post:
+      tags: [boundary-mgmt]
+      summary: Process boundary data
+      description: Upload and process boundary data from a filestore file.
+      operationId: boundaryMgmtProcess
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [RequestInfo, ResourceDetails]
+              properties:
+                RequestInfo:
+                  $ref: '#/components/schemas/RequestInfo'
+                ResourceDetails:
+                  type: object
+                  properties:
+                    type:
+                      type: string
+                    fileStoreId:
+                      type: string
+                    action:
+                      type: string
+                    hierarchyType:
+                      type: string
+                    tenantId:
+                      type: string
+      responses:
+        '200':
+          description: Process result
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /egov-bndry-mgmnt/v1/_process-search:
+    post:
+      tags: [boundary-mgmt]
+      summary: Search processed boundary data
+      operationId: boundaryMgmtProcessSearch
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                RequestInfo:
+                  $ref: '#/components/schemas/RequestInfo'
+      responses:
+        '200':
+          description: Processed boundary resources
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ResourceDetails:
+                    type: array
+                    items:
+                      type: object
+
+  /egov-bndry-mgmnt/v1/_generate:
+    post:
+      tags: [boundary-mgmt]
+      summary: Generate boundary codes
+      description: Generate boundary code mappings from processed boundary data.
+      operationId: boundaryMgmtGenerate
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [RequestInfo, ResourceDetails]
+              properties:
+                RequestInfo:
+                  $ref: '#/components/schemas/RequestInfo'
+                ResourceDetails:
+                  type: object
+                  properties:
+                    type:
+                      type: string
+                    hierarchyType:
+                      type: string
+                    tenantId:
+                      type: string
+      responses:
+        '200':
+          description: Generation result
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /egov-bndry-mgmnt/v1/_generate-search:
+    post:
+      tags: [boundary-mgmt]
+      summary: Search generated boundary data
+      operationId: boundaryMgmtGenerateSearch
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                RequestInfo:
+                  $ref: '#/components/schemas/RequestInfo'
+      responses:
+        '200':
+          description: Generated boundary resources
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ResourceDetails:
+                    type: array
+                    items:
+                      type: object
+
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+      description: OAuth2 client credentials (egov-user-client with empty secret)
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Bearer token from /user/oauth/token
+
+  schemas:
+    RequestInfo:
+      type: object
+      required: [apiId, msgId, authToken]
+      properties:
+        apiId:
+          type: string
+          default: Rainmaker
+        ver:
+          type: string
+          default: '1.0'
+        ts:
+          type: integer
+          format: int64
+          description: Unix timestamp in milliseconds
+        action:
+          type: string
+        did:
+          type: string
+        key:
+          type: string
+        msgId:
+          type: string
+          description: 'Format: "{timestamp}|{locale}"'
+        authToken:
+          type: string
+          description: OAuth2 access token
+        userInfo:
+          $ref: '#/components/schemas/UserInfo'
+
+    UserInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+        uuid:
+          type: string
+        userName:
+          type: string
+        name:
+          type: string
+        mobileNumber:
+          type: string
+        emailId:
+          type: string
+        type:
+          type: string
+        tenantId:
+          type: string
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/Role'
+
+    Role:
+      type: object
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        tenantId:
+          type: string
+        description:
+          type: string
+
+    MdmsRecord:
+      type: object
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        schemaCode:
+          type: string
+        uniqueIdentifier:
+          type: string
+        data:
+          type: object
+        isActive:
+          type: boolean
+        auditDetails:
+          type: object
+          properties:
+            createdBy:
+              type: string
+            createdTime:
+              type: integer
+              format: int64
+            lastModifiedBy:
+              type: string
+            lastModifiedTime:
+              type: integer
+              format: int64
+
+    ApiError:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        description:
+          type: string

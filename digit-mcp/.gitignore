@@ -1,0 +1,6 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+data/*.jsonl
+agent-tests/data/

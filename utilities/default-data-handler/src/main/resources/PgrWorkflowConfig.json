@@ -206,6 +206,17 @@
                 "AUTO_ESCALATE"
               ],
               "active": true
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "PENDINGATLME",
+              "action": "ESCALATE",
+              "nextState": "PENDINGATSUPERVISOR",
+              "roles": [
+                "PGR_LME",
+                "PGR_VIEWER"
+              ],
+              "active": true
             }
           ]
         },
