@@ -2,7 +2,16 @@
 
 > **Source of truth**: `/escalation/BRD_ Plataforma de Reclamacoes e Denuncias V4.0 ENG.docx.pdf`
 > (Mozambique PRD/CRS, version 4.0, Maputo June 2026). All citations below are to that
-> document — e.g. `(BRD §5.2)`, `(BRD Appendix A)`.
+> document — e.g. `(BRD §5.2)`, `(BRD Appendix A)`. The BRD is referenced here as a
+> real-world industry source that informs the *shape* of these future phases.
+>
+> **Important.** Nothing from the BRD is auto-seeded by PR #770. The escalation feature
+> ships only the MDMS schemas, the scheduler patch, the configurator UI and a tiny
+> generic `example.csv` placeholder. Any tenant that wants BRD-style content (Mozambique
+> IGE/IGSAE included) populates it by hand via the configurator UI, by importing their
+> own CSV via the bulk-import dialog, or by running the `import_csv.py` helper against
+> their own file. The future phases below (G1–G8) likewise only ship schemas + editors;
+> they do not auto-populate any BRD-specific data.
 
 ## Scope
 
@@ -31,8 +40,8 @@ everything **else** the BRD calls out so the team has somewhere stable to plan f
 
 **Free-text → constrained-picker migration path.** The SLA Matrix editor shipping in
 #770 takes the category, sub-category L1 and sub-category L2 as **free-text-with-autocomplete**
-strings (autocomplete is fed from BRD Appendix A as seed suggestions). When the Taxonomy
-editor lands in Phase G1, the same three fields switch to a **strict picker** sourced from
+strings (autocomplete is fed from whatever rows already exist on the tenant). When the
+Taxonomy editor lands in Phase G1, the same three fields switch to a **strict picker** sourced from
 `CRS.CategoryTaxonomy`. No data migration is required if operators have been disciplined
 about spelling — the SLA records key on these strings and the picker will produce the same
 strings. If operators have drifted, a one-shot dedup script reconciles SLA records against
