@@ -1,0 +1,34 @@
+[
+  {
+    "tenantId": "{tenantid}",
+    "code": "CRS.DashboardIndicator",
+    "description": "STUB — reserved for Phase G7 (Dashboard Configuration). One row per indicator surfaced on the IGE/IGSAE dashboards. Holds the indicator's metadata (label, unit, grouping, access level) and a tenant-editable formula expression in a constrained mini-DSL evaluated server-side by the dashboard service. uniqueIdentifier convention: `<dashboard>:<code>`. No data is auto-seeded; operators populate via the configurator UI or by importing the BRD Appendix C indicator pack. Schema shape is intentionally left as a stub (additionalProperties=true) until the design sub-doc at docs/g-phases/g7-dashboard-config.md is ratified — at which point the properties block fills in to match the doc's contract.",
+    "isActive": false,
+    "definition": {
+      "type": "object",
+      "title": "CRS Dashboard Indicator (G7 stub)",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [],
+      "x-unique": [],
+      "properties": {},
+      "x-ref-schema": [],
+      "additionalProperties": true
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "CRS.DashboardLayout",
+    "description": "STUB — reserved for Phase G7 (Dashboard Configuration). Singleton per (tenant, dashboard) holding the row/column grid arrangement of indicator codes that the dashboard renders. uniqueIdentifier convention: `<dashboard>` (e.g. `IGE`, `IGSAE`). No data is auto-seeded. Schema shape is intentionally left as a stub (additionalProperties=true) until the design sub-doc at docs/g-phases/g7-dashboard-config.md is ratified.",
+    "isActive": false,
+    "definition": {
+      "type": "object",
+      "title": "CRS Dashboard Layout (G7 stub)",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [],
+      "x-unique": [],
+      "properties": {},
+      "x-ref-schema": [],
+      "additionalProperties": true
+    }
+  }
+]
