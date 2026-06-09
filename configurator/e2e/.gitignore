@@ -1,0 +1,4 @@
+# Playwright artifacts (mirrors e2e-onboarding/.gitignore — keep in sync)
+results/
+report/
+screenshots/
