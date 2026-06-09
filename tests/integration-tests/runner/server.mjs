@@ -5,12 +5,12 @@
  * The dashboards are static files served by nginx; nothing in the browser can
  * start Playwright or write into the webroot. This tiny HTTP service does, and
  * NOTHING ELSE. It is deliberately dependency-free (Node core only) and bound
- * to loopback — nginx proxies `/integration-tests/api/` to it WITH the existing
+ * to loopback — nginx proxies `/tests/api/` to it WITH the existing
  * basic-auth (digit-tests / .htpasswd-tests), so auth is enforced by nginx, not
  * re-implemented here. The loopback bind + remote-addr guard below make sure the
  * daemon can't be reached around nginx.
  *
- * Endpoints (all relative to the proxied /integration-tests/api/):
+ * Endpoints (all relative to the proxied /tests/api/):
  *   POST /run            → 202 {run_id} | 409 {running, run_id}   (single-flight)
  *   GET  /run/current    → {state, run_id, started_at, phase, exit_code}
  *   GET  /run/:id/log    → text/plain, current contents of that run's run.log
