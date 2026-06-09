@@ -1,12 +1,17 @@
 package org.egov.pgr.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.opentelemetry.api.trace.Span;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.request.User;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.producer.Producer;
 import org.egov.pgr.repository.ServiceRequestRepository;
+import org.egov.pgr.util.EscalationSkipReason;
 import org.egov.pgr.util.HRMSUtil;
 import org.egov.pgr.web.models.*;
 import org.egov.pgr.web.models.workflow.ProcessInstance;
@@ -48,33 +53,55 @@ public class EscalationService {
      * Escalates a single complaint by finding the supervisor of the current assignee
      * and transitioning the workflow with the ESCALATE action (self-loop).
      *
-     * @param complaint       the PGR service record
-     * @param currentWorkflow the current workflow state (with assignees)
-     * @param requestInfo     system RequestInfo for internal calls
+     * <p>Kept as a boolean-returning facade for backwards compatibility with any
+     * existing call site; internally delegates to {@link #escalateComplaintWithReason}.</p>
+     *
      * @return true if escalation was performed, false if skipped
      */
     public boolean escalateComplaint(Service complaint, Workflow currentWorkflow, RequestInfo requestInfo) {
+        return escalateComplaintWithReason(complaint, currentWorkflow, requestInfo).isSuccess();
+    }
+
+    /**
+     * Same as {@link #escalateComplaint} but returns the reason it skipped (or SUCCESS),
+     * so the caller (scheduler / /escalation/_trigger) can aggregate diagnostics.
+     */
+    public EscalationResult escalateComplaintWithReason(Service complaint,
+                                                        Workflow currentWorkflow,
+                                                        RequestInfo requestInfo) {
 
         String serviceRequestId = complaint.getServiceRequestId();
         String tenantId = complaint.getTenantId();
-
-        // 1. Get current escalation level from additionalDetails
         int currentLevel = getEscalationLevel(complaint);
 
-        // 2. Check max depth
+        // Record per-complaint OTEL attributes BEFORE any early-return path so
+        // even skipped escalations show up in traces with full context.
+        Span span = Span.current();
+        span.setAttribute("complaint.serviceRequestId", serviceRequestId == null ? "" : serviceRequestId);
+        span.setAttribute("complaint.tenantId", tenantId == null ? "" : tenantId);
+        span.setAttribute("escalation.fromLevel", currentLevel);
+        List<String> currentAssignees = currentWorkflow.getAssignes();
+        String currentAssigneeUuid = (currentAssignees != null && !currentAssignees.isEmpty())
+                ? currentAssignees.get(0)
+                : null;
+        span.setAttribute("escalation.fromAssignee", currentAssigneeUuid != null ? currentAssigneeUuid : "");
+
+        // 1. Max depth
         if (currentLevel >= config.getEscalationMaxDepth()) {
             log.info("Complaint {} already at max escalation depth {}, skipping", serviceRequestId, currentLevel);
-            return false;
+            span.setAttribute("escalation.skipReason", EscalationSkipReason.MAX_DEPTH_REACHED.name());
+            return EscalationResult.skip(EscalationSkipReason.MAX_DEPTH_REACHED,
+                    "currentLevel=" + currentLevel + ", maxDepth=" + config.getEscalationMaxDepth());
         }
 
-        // 3. Get current assignee UUIDs from workflow
-        List<String> currentAssignees = currentWorkflow.getAssignes();
+        // 2. Current assignees
         if (CollectionUtils.isEmpty(currentAssignees)) {
             log.warn("Complaint {} has no current assignees, skipping escalation", serviceRequestId);
-            return false;
+            span.setAttribute("escalation.skipReason", EscalationSkipReason.NO_ASSIGNEES.name());
+            return EscalationResult.skip(EscalationSkipReason.NO_ASSIGNEES, "workflow returned 0 assignees");
         }
 
-        // 4. Find supervisor for the first assignee
+        // 3. Find supervisor for the first assignee that has one
         String supervisorUuid = null;
         for (String assigneeUuid : currentAssignees) {
             supervisorUuid = hrmsUtil.getSupervisorUuid(assigneeUuid, requestInfo, tenantId);
@@ -85,24 +112,26 @@ public class EscalationService {
 
         if (supervisorUuid == null) {
             log.warn("No supervisor found for any assignee of complaint {}, skipping escalation", serviceRequestId);
-            return false;
+            span.setAttribute("escalation.skipReason", EscalationSkipReason.NO_SUPERVISOR_IN_HRMS.name());
+            return EscalationResult.skip(EscalationSkipReason.NO_SUPERVISOR_IN_HRMS,
+                    "HRMS returned no reportingTo for assignees=" + currentAssignees);
         }
 
-        // 5. Build the escalation workflow
+        // 4. Build the escalation workflow
         Workflow escalationWorkflow = Workflow.builder()
                 .action(ESCALATE)
                 .assignes(Collections.singletonList(supervisorUuid))
                 .comments("Auto-escalated: SLA breach at level " + currentLevel)
                 .build();
 
-        // 6. Update additionalDetails with escalation metadata
+        // 5. Update additionalDetails with escalation metadata
         Map<String, Object> additionalDetails = getAdditionalDetailsMap(complaint);
         additionalDetails.put("escalationLevel", currentLevel + 1);
         additionalDetails.put("lastEscalatedAt", System.currentTimeMillis());
         additionalDetails.put("escalatedFrom", currentAssignees);
         complaint.setAdditionalDetail(additionalDetails);
 
-        // 7. Build ServiceRequest and transition workflow
+        // 6. Build ServiceRequest and transition workflow
         ServiceRequest serviceRequest = ServiceRequest.builder()
                 .requestInfo(requestInfo)
                 .service(complaint)
@@ -113,13 +142,15 @@ public class EscalationService {
             workflowService.updateWorkflowStatus(serviceRequest);
         } catch (Exception e) {
             log.error("Failed to transition workflow for complaint {} during escalation", serviceRequestId, e);
-            return false;
+            span.setAttribute("escalation.skipReason", EscalationSkipReason.WORKFLOW_TRANSITION_FAILED.name());
+            return EscalationResult.skip(EscalationSkipReason.WORKFLOW_TRANSITION_FAILED,
+                    "workflow-v2 rejected ESCALATE: " + e.getMessage());
         }
 
-        // 8. Publish to update topic so persister saves the updated additionalDetails
+        // 7. Publish to update topic so persister saves the updated additionalDetails
         producer.push(tenantId, config.getUpdateTopic(), serviceRequest);
 
-        // 9. Publish escalation event for future notification listeners
+        // 8. Publish escalation event for future notification listeners
         Map<String, Object> escalationEvent = new HashMap<>();
         escalationEvent.put("serviceRequestId", serviceRequestId);
         escalationEvent.put("tenantId", tenantId);
@@ -129,10 +160,37 @@ public class EscalationService {
         escalationEvent.put("timestamp", System.currentTimeMillis());
         producer.push(tenantId, config.getEscalationKafkaTopic(), escalationEvent);
 
+        span.setAttribute("escalation.toAssignee", supervisorUuid);
+        span.setAttribute("escalation.toLevel", currentLevel + 1);
+
         log.info("Escalated complaint {} from level {} to {} (assignee: {} -> {})",
                 serviceRequestId, currentLevel, currentLevel + 1, currentAssignees, supervisorUuid);
 
-        return true;
+        return EscalationResult.success(supervisorUuid, currentLevel + 1);
+    }
+
+    /**
+     * Outcome of a single {@link #escalateComplaintWithReason} call. Either a
+     * successful escalation (with the new assignee + level) or a skip with a
+     * structured reason and optional human-readable detail.
+     */
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class EscalationResult {
+        private final boolean success;
+        private final EscalationSkipReason reason;
+        private final String detail;
+        private final String newAssigneeUuid;
+        private final Integer newLevel;
+
+        public static EscalationResult success(String newAssigneeUuid, int newLevel) {
+            return new EscalationResult(true, EscalationSkipReason.SUCCESS, null, newAssigneeUuid, newLevel);
+        }
+
+        public static EscalationResult skip(EscalationSkipReason reason, String detail) {
+            return new EscalationResult(false, reason, detail, null, null);
+        }
     }
 
     /**

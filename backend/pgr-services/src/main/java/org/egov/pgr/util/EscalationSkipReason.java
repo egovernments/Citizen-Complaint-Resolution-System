@@ -1,0 +1,41 @@
+package org.egov.pgr.util;
+
+/**
+ * Enumerates the reasons the escalation scheduler may decide NOT to escalate a
+ * given complaint. Surfaced in structured log lines, OTEL span attributes and
+ * the synchronous {@code /escalation/_trigger} response so operators can tell
+ * exactly why a scan that touched N complaints escalated only M of them.
+ */
+public enum EscalationSkipReason {
+
+    /** Complaint is already at or above the configured max escalation depth. */
+    MAX_DEPTH_REACHED("Complaint already at or above max escalation depth"),
+
+    /** AuditDetails has neither lastModifiedTime nor createdTime; can't compute SLA elapsed. */
+    NO_LAST_MODIFIED_TIME("Complaint has no last-modified or created timestamp"),
+
+    /** Elapsed time since lastModified is still under the resolved SLA. */
+    SLA_NOT_BREACHED("SLA window has not yet elapsed since last modification"),
+
+    /** Workflow process instance returned no current assignees to escalate from. */
+    NO_ASSIGNEES("No current assignees on the workflow to escalate from"),
+
+    /** None of the current assignees has a reportingTo set in HRMS. */
+    NO_SUPERVISOR_IN_HRMS("No supervisor (reportingTo) found in HRMS for any current assignee"),
+
+    /** egov-workflow-v2 rejected the ESCALATE transition (validation/state mismatch). */
+    WORKFLOW_TRANSITION_FAILED("Workflow service rejected the ESCALATE transition"),
+
+    /** Sentinel: escalation completed successfully (used in span attrs / response payloads). */
+    SUCCESS("Escalation performed successfully");
+
+    private final String description;
+
+    EscalationSkipReason(String description) {
+        this.description = description;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+}
