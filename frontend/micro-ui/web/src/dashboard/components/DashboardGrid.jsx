@@ -5,55 +5,136 @@ import "react-resizable/css/styles.css";
 import {
   DROPPING_ITEM,
   DROPPING_ITEM_ID,
+  KPI_ROW_HEIGHT,
   WIDGETS,
   isKpiWidget,
 } from "../constants/layoutConfig";
-import { KPI_INVENTORY, departmentComplaints, monthlyTrend } from "../data/dummyData";
+import {
+  KPI_METRICS,
+  getSubMetricDef,
+  subMetricValueKey,
+} from "../config/kpiQueries";
 import KpiCard from "./KpiCard";
 import DepartmentBarChart from "./DepartmentBarChart";
-import TrendLineChart from "./TrendLineChart";
+import RankedList from "./RankedList";
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
-const KPI_LOOKUP = Object.fromEntries(KPI_INVENTORY.map((k) => [k.id, k]));
+const METRIC_LOOKUP = Object.fromEntries(KPI_METRICS.map((m) => [m.id, m]));
+
+const ChartPlaceholder = ({ message }) => (
+  <div className="dashboard-widget tw-flex tw-h-full tw-items-center tw-justify-center tw-p-4 tw-text-sm tw-text-slate-500">
+    {message}
+  </div>
+);
+
+const WidgetHeader = ({ metric, subMetric }) => (
+  <div className="dashboard-drag-handle tw-border-b tw-border-slate-100 tw-px-4 tw-py-2">
+    <p className="tw-text-xs tw-font-semibold tw-text-slate-700">{metric}</p>
+    <p className="tw-truncate tw-text-[10px] tw-text-slate-400">{subMetric}</p>
+  </div>
+);
 
 const GRID_MARGIN = [16, 16];
 const DROP_SIZE = { w: DROPPING_ITEM.w, h: DROPPING_ITEM.h };
+const FULL_RESIZE_HANDLES = ["n", "s", "e", "w", "ne", "nw", "se", "sw"];
+const KPI_RESIZE_HANDLES = [];
 
-const DashboardGrid = ({ layout, onLayoutChange, onRemoveKpi, onDropKpi, draggingKpiId }) => {
+const DashboardGrid = ({
+  layout,
+  onLayoutChange,
+  onLayoutStop,
+  onRemoveWidget,
+  onDropKpi,
+  draggingKpiId,
+  subMetricValues = {},
+  getSubMetricId,
+  setSubMetricId,
+  chartData = { categories: [], wards: [], dow: [], rankedCategories: [] },
+  loading = false,
+}) => {
   const isExternalDrag = Boolean(draggingKpiId);
 
-  const layouts = useMemo(() => ({ lg: layout }), [layout]);
+  const layouts = useMemo(
+    () => ({
+      lg: layout.map((item) => ({
+        ...item,
+        resizeHandles: isKpiWidget(item.i) ? KPI_RESIZE_HANDLES : FULL_RESIZE_HANDLES,
+      })),
+    }),
+    [layout]
+  );
+
+  const renderKpi = (metricId) => {
+    const metric = METRIC_LOOKUP[metricId];
+    if (!metric) return null;
+
+    const selectedSubMetricId = getSubMetricId(metricId);
+    const sub = getSubMetricDef(metric, selectedSubMetricId);
+    const value = subMetricValues[subMetricValueKey(metricId, sub.id)];
+
+    return (
+      <KpiCard
+        metric={metric.metric}
+        subMetrics={metric.subMetrics}
+        selectedSubMetricId={sub.id}
+        onSubMetricChange={(nextId) => setSubMetricId(metricId, nextId)}
+        value={value}
+        accent={metric.accent}
+        loading={loading && value == null}
+      />
+    );
+  };
 
   const renderWidget = (widgetId) => {
     const meta = WIDGETS[widgetId];
     if (!meta) return null;
 
     if (meta.type === "kpi") {
-      const kpi = KPI_LOOKUP[widgetId];
-      return kpi ? <KpiCard label={kpi.label} value={kpi.value} accent={kpi.accent} /> : null;
+      return renderKpi(widgetId);
     }
-    if (widgetId === "chart-departments") {
-      return <DepartmentBarChart data={departmentComplaints} />;
+
+    if (widgetId === "cl-chart-categories") {
+      if (loading && !chartData.categories?.length) return <ChartPlaceholder message="Loading…" />;
+      if (!chartData.categories?.length) return <ChartPlaceholder message="No data" />;
+      return <DepartmentBarChart data={chartData.categories} />;
     }
-    if (widgetId === "chart-trend") {
-      return <TrendLineChart data={monthlyTrend} />;
+
+    if (widgetId === "cl-chart-wards") {
+      if (loading && !chartData.wards?.length) return <ChartPlaceholder message="Loading…" />;
+      if (!chartData.wards?.length) return <ChartPlaceholder message="No data" />;
+      return <DepartmentBarChart data={chartData.wards} />;
     }
+
+    if (widgetId === "cl-chart-dow") {
+      if (loading && !chartData.dow?.length) return <ChartPlaceholder message="Loading…" />;
+      if (!chartData.dow?.length) return <ChartPlaceholder message="No data" />;
+      return <DepartmentBarChart data={chartData.dow} />;
+    }
+
+    if (widgetId === "cl-list-categories") {
+      if (loading && !chartData.rankedCategories?.length) {
+        return <ChartPlaceholder message="Loading…" />;
+      }
+      if (!chartData.rankedCategories?.length) return <ChartPlaceholder message="No data" />;
+      return <RankedList items={chartData.rankedCategories} />;
+    }
+
     return null;
   };
 
   const handleRemove = (event, widgetId) => {
     event.preventDefault();
     event.stopPropagation();
-    onRemoveKpi(widgetId);
+    onRemoveWidget(widgetId);
   };
 
   const handleDrop = useCallback(
-    (_layout, item, event) => {
+    (_layout, _item, event) => {
       const widgetId = event.dataTransfer.getData("text/plain");
-      if (!widgetId || !isKpiWidget(widgetId) || !item) return;
+      if (!widgetId || !isKpiWidget(widgetId)) return;
       if (layout.some((entry) => entry.i === widgetId)) return;
-      onDropKpi(widgetId, { x: item.x, y: item.y });
+      onDropKpi(widgetId);
     },
     [layout, onDropKpi]
   );
@@ -66,16 +147,22 @@ const DashboardGrid = ({ layout, onLayoutChange, onRemoveKpi, onDropKpi, draggin
 
   const handleLayoutChange = useCallback(
     (_, allLayouts) => {
-      // Ignore layout sync while an inventory KPI is being dragged — otherwise the
-      // controlled layout prop resets RGL's internal drop placeholder and it jumps.
       if (isExternalDrag) return;
-
       const next = allLayouts.lg || layout;
       const withoutPlaceholder = next.filter((item) => item.i !== DROPPING_ITEM_ID);
       if (withoutPlaceholder.length !== next.length) return;
       onLayoutChange(withoutPlaceholder);
     },
     [isExternalDrag, layout, onLayoutChange]
+  );
+
+  const handleLayoutStop = useCallback(
+    (nextLayout) => {
+      if (isExternalDrag) return;
+      const withoutPlaceholder = nextLayout.filter((item) => item.i !== DROPPING_ITEM_ID);
+      onLayoutStop(withoutPlaceholder);
+    },
+    [isExternalDrag, onLayoutStop]
   );
 
   return (
@@ -86,12 +173,15 @@ const DashboardGrid = ({ layout, onLayoutChange, onRemoveKpi, onDropKpi, draggin
           layouts={layouts}
           breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480 }}
           cols={{ lg: 12, md: 12, sm: 6, xs: 4 }}
-          rowHeight={60}
+          rowHeight={KPI_ROW_HEIGHT}
           margin={GRID_MARGIN}
           containerPadding={[0, 0]}
           onLayoutChange={handleLayoutChange}
-          draggableHandle=".dashboard-drag-handle"
-          compactType="vertical"
+          onDragStop={handleLayoutStop}
+          onResizeStop={handleLayoutStop}
+          draggableHandle=".dashboard-drag-handle, .dashboard-kpi-widget"
+          compactType={null}
+          preventCollision
           isResizable
           isDroppable={isExternalDrag}
           droppingItem={DROPPING_ITEM}
@@ -100,32 +190,40 @@ const DashboardGrid = ({ layout, onLayoutChange, onRemoveKpi, onDropKpi, draggin
         >
           {layout.map((item) => {
             const isKpi = isKpiWidget(item.i);
+            const meta = WIDGETS[item.i];
 
             if (isKpi) {
               return (
-                <div key={item.i} className="dashboard-kpi-widget tw-group tw-flex tw-h-full tw-flex-col">
-                  <div className="dashboard-drag-handle dashboard-kpi-drag-handle tw-flex tw-justify-end">
-                    <button
-                      type="button"
-                      title="Remove from dashboard"
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onClick={(e) => handleRemove(e, item.i)}
-                      className="dashboard-kpi-remove tw-flex tw-h-5 tw-w-5 tw-cursor-pointer tw-items-center tw-justify-center tw-rounded tw-bg-slate-200 tw-text-xs tw-font-bold tw-text-slate-600 hover:tw-bg-red-100 hover:tw-text-red-700"
-                    >
-                      ×
-                    </button>
-                  </div>
-                  <div className="tw-min-h-0 tw-flex-1 tw-overflow-hidden">{renderWidget(item.i)}</div>
+                <div key={item.i} className="dashboard-kpi-widget tw-group tw-relative tw-h-full">
+                  <button
+                    type="button"
+                    title="Remove from dashboard"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => handleRemove(e, item.i)}
+                    className="dashboard-kpi-remove tw-absolute tw-right-2 tw-top-2 tw-z-10 tw-flex tw-h-5 tw-w-5 tw-cursor-pointer tw-items-center tw-justify-center tw-rounded tw-bg-slate-200 tw-text-xs tw-font-bold tw-text-slate-600 hover:tw-bg-red-100 hover:tw-text-red-700"
+                  >
+                    ×
+                  </button>
+                  <div className="tw-h-full tw-overflow-hidden">{renderWidget(item.i)}</div>
                 </div>
               );
             }
 
             return (
-              <div key={item.i} className="tw-h-full">
-                <div className="dashboard-drag-handle tw-flex tw-items-center tw-justify-between tw-gap-2">
-                  <span className="tw-truncate">{WIDGETS[item.i]?.label}</span>
+              <div key={item.i} className="tw-group tw-relative tw-h-full">
+                <button
+                  type="button"
+                  title="Remove from dashboard"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => handleRemove(e, item.i)}
+                  className="dashboard-kpi-remove tw-absolute tw-right-2 tw-top-2 tw-z-10 tw-flex tw-h-5 tw-w-5 tw-cursor-pointer tw-items-center tw-justify-center tw-rounded tw-bg-slate-200 tw-text-xs tw-font-bold tw-text-slate-600 hover:tw-bg-red-100 hover:tw-text-red-700"
+                >
+                  ×
+                </button>
+                {meta && <WidgetHeader metric={meta.metric} subMetric={meta.subMetric} />}
+                <div className="tw-h-[calc(100%-52px)] tw-overflow-hidden">
+                  {renderWidget(item.i)}
                 </div>
-                <div className="tw-h-[calc(100%-36px)] tw-overflow-hidden">{renderWidget(item.i)}</div>
               </div>
             );
           })}

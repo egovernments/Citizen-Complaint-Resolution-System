@@ -2,7 +2,7 @@ import React from "react";
 import Chart from "react-apexcharts";
 
 const DepartmentBarChart = ({ data }) => {
-  const categories = data.map((d) => d.department);
+  const categories = data.map((d) => d.label ?? d.department);
   const series = [{ name: "Complaints", data: data.map((d) => d.count) }];
 
   const options = {
@@ -20,9 +20,6 @@ const DepartmentBarChart = ({ data }) => {
 
   return (
     <div className="dashboard-widget tw-flex tw-h-full tw-flex-col tw-p-4">
-      <h3 className="tw-mb-2 tw-text-sm tw-font-semibold tw-text-slate-700">
-        Department-wise Complaint Count
-      </h3>
       <div className="tw-min-h-0 tw-flex-1">
         <Chart options={options} series={series} type="bar" height="100%" width="100%" />
       </div>

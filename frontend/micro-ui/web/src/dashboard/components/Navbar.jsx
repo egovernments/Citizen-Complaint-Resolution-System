@@ -16,12 +16,20 @@ function getUserInfo() {
   return null;
 }
 
-const Navbar = ({ onResetLayout }) => {
+function formatAsOf(asOf) {
+  if (asOf == null) return null;
+  const date = new Date(Number(asOf));
+  if (!Number.isFinite(date.getTime())) return null;
+  return date.toLocaleString();
+}
+
+const Navbar = ({ onResetLayout, asOf }) => {
   const user = useMemo(() => getUserInfo(), []);
 
   const displayName = user?.name || "Admin User";
   const displayRole =
     user?.roles?.[0]?.name || user?.type || "Administrator";
+  const asOfLabel = formatAsOf(asOf);
 
   return (
     <header className="tw-flex tw-h-16 tw-flex-shrink-0 tw-items-center tw-justify-between tw-border-b tw-border-slate-200 tw-bg-white tw-px-6 tw-shadow-sm">
@@ -29,7 +37,9 @@ const Navbar = ({ onResetLayout }) => {
         <h2 className="tw-text-lg tw-font-semibold tw-text-slate-800">
           Bomet County — Complaint Resolution System
         </h2>
-        <p className="tw-text-xs tw-text-slate-500">Admin Dashboard</p>
+        <p className="tw-text-xs tw-text-slate-500">
+          {asOfLabel ? `Data as of ${asOfLabel}` : "Supervisor dashboard"}
+        </p>
       </div>
       <div className="tw-flex tw-items-center tw-gap-4">
         <button
