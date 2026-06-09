@@ -34,6 +34,14 @@ public enum EscalationSkipReason {
      */
     UNMAPPED_CATEGORY("Complaint could not be mapped to a CRS.CategorySLA row (path/category/subcategoryL1)"),
 
+    /**
+     * The workflow state on the complaint has no entry in CRS.WorkflowStateMapping
+     * AND CRS.StateSLA has no matching key either — so the scheduler cannot resolve
+     * which SLA column applies. Operators see this when they bring up a new
+     * workflow (or rename a state) without updating the mapping singleton.
+     */
+    STATE_MAPPING_MISSING("Workflow state has no mapping in CRS.WorkflowStateMapping and no CRS.StateSLA fallback"),
+
     /** Sentinel: escalation completed successfully (used in span attrs / response payloads). */
     SUCCESS("Escalation performed successfully");
 

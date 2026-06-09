@@ -103,11 +103,14 @@ public class EscalationScheduler {
         Map<String, List<Long>> overrides = getOverrides(escalationConfig);
 
         // CRS escalation-SLA (BRD v4.0) — loaded once per scan so the per-complaint
-        // resolveSlaHours call is a pure local lookup. Both reads are best-effort:
+        // resolveSlaHours call is a pure local lookup. All reads are best-effort:
         // a missing/empty CRS namespace falls through to the v0 EscalationConfig
         // path below.
         List<Map<String, Object>> crsCategorySla = fetchCrsCategorySla(requestInfo, tenantId);
         Map<String, Number> crsStateSlaDefaults = fetchCrsStateSlaDefaults(requestInfo, tenantId);
+        // Workflow-state → canonical-SLA-key mapping (CRS.WorkflowStateMapping).
+        // Replaces the old hardcoded PGR-state switch. Operator-defined per tenant.
+        Map<String, String> crsWorkflowStateMapping = fetchCrsWorkflowStateMapping(requestInfo, tenantId);
         Map<String, Map<String, Object>> serviceCodeToCategory = buildServiceCodeMapping(requestInfo, tenantId);
 
         Set<String> statuses = new HashSet<>(Arrays.asList(PENDINGATLME, PENDINGFORASSIGNMENT));
@@ -150,7 +153,8 @@ public class EscalationScheduler {
                     // OTEL span gets a `escalation.slaSource` attribute so operators can tell
                     // which layer answered the lookup.
                     SlaResolution slaRes = resolveSlaHours(
-                            complaint, status, crsCategorySla, crsStateSlaDefaults, serviceCodeToCategory,
+                            complaint, status, crsCategorySla, crsStateSlaDefaults,
+                            crsWorkflowStateMapping, serviceCodeToCategory,
                             currentLevel, defaultSlaByLevel, overrides);
                     long sla = slaRes.slaMs;
                     span.setAttribute("escalation.slaSource", slaRes.source);
@@ -160,6 +164,14 @@ public class EscalationScheduler {
                         log.warn("Escalation SLA UNMAPPED_CATEGORY — srid={} serviceCode={} (fell back to {})",
                                 srid, complaint.getServiceCode(), slaRes.source);
                         skipMap.merge(EscalationSkipReason.UNMAPPED_CATEGORY, 1, Integer::sum);
+                    }
+                    if (slaRes.stateMappingMissing) {
+                        // The workflow state has no entry in CRS.WorkflowStateMapping AND
+                        // CRS.StateSLA had no fallback either — v0 EscalationConfig answered
+                        // but operators should know this state is unmapped.
+                        log.warn("Escalation SLA STATE_MAPPING_MISSING — srid={} workflowState={} (fell back to {})",
+                                srid, status, slaRes.source);
+                        skipMap.merge(EscalationSkipReason.STATE_MAPPING_MISSING, 1, Integer::sum);
                     }
 
                     long lastModified = 0L;
@@ -461,10 +473,18 @@ public class EscalationScheduler {
         final long slaMs;
         final String source;
         final boolean unmappedCategory;
-        SlaResolution(long slaMs, String source, boolean unmappedCategory) {
+        /**
+         * True when the workflow state could not be translated via
+         * CRS.WorkflowStateMapping AND CRS.StateSLA had no entry to fall back
+         * to. v0 EscalationConfig answered, but operators should know the
+         * state is unmapped so they can complete the singleton.
+         */
+        final boolean stateMappingMissing;
+        SlaResolution(long slaMs, String source, boolean unmappedCategory, boolean stateMappingMissing) {
             this.slaMs = slaMs;
             this.source = source;
             this.unmappedCategory = unmappedCategory;
+            this.stateMappingMissing = stateMappingMissing;
         }
     }
 
@@ -477,13 +497,14 @@ public class EscalationScheduler {
                                    String workflowState,
                                    List<Map<String, Object>> crsCategorySla,
                                    Map<String, Number> crsStateSlaDefaults,
+                                   Map<String, String> crsWorkflowStateMapping,
                                    Map<String, Map<String, Object>> serviceCodeToCategory,
                                    int currentLevel,
                                    List<Long> defaultSlaByLevel,
                                    Map<String, List<Long>> overrides) {
 
         Map<String, Object> categoryTuple = extractCategoryTuple(complaint, serviceCodeToCategory);
-        String stateKey = mapWorkflowStateToKey(workflowState);
+        String stateKey = mapWorkflowStateToKey(workflowState, crsWorkflowStateMapping);
         boolean unmapped = false;
 
         // 1) CategorySLA hit
@@ -499,7 +520,7 @@ public class EscalationScheduler {
                 Object cell = ((Map<String, Object>) by).get(stateKey);
                 Long cellMs = cellToMillis(cell);
                 if (cellMs != null) {
-                    return new SlaResolution(cellMs, PGRConstants.SLA_SOURCE_CATEGORY, false);
+                    return new SlaResolution(cellMs, PGRConstants.SLA_SOURCE_CATEGORY, false, false);
                 }
                 break; // matched row, but cell is null/missing → fall through
             }
@@ -511,15 +532,20 @@ public class EscalationScheduler {
         if (stateKey != null && crsStateSlaDefaults != null) {
             Number defHrs = crsStateSlaDefaults.get(stateKey);
             if (defHrs != null) {
-                return new SlaResolution(hoursToMillis(defHrs.doubleValue()), PGRConstants.SLA_SOURCE_STATE, unmapped);
+                return new SlaResolution(hoursToMillis(defHrs.doubleValue()), PGRConstants.SLA_SOURCE_STATE, unmapped, false);
             }
         }
+
+        // The workflow state was either unmapped (CRS.WorkflowStateMapping miss)
+        // or mapped to a key that StateSLA doesn't know — either way, v0 will
+        // answer but the situation is actionable.
+        boolean stateMappingMissing = (stateKey == null);
 
         // 3) v0 EscalationConfig fallback (existing behaviour).
         log.info("Escalation SLA falling back to v0 EscalationConfig for srid={} stateKey={}",
                 complaint.getServiceRequestId(), stateKey);
         long v0 = resolveSla(complaint.getServiceCode(), currentLevel, defaultSlaByLevel, overrides);
-        return new SlaResolution(v0, PGRConstants.SLA_SOURCE_V0, unmapped);
+        return new SlaResolution(v0, PGRConstants.SLA_SOURCE_V0, unmapped, stateMappingMissing);
     }
 
     private static Long cellToMillis(Object cell) {
@@ -544,25 +570,19 @@ public class EscalationScheduler {
     }
 
     /**
-     * Map a DIGIT PGR workflow state name to the schema key. Conservative;
-     * only states the BRD §5.2 table names are mapped. Anything else returns
-     * null and the caller falls through to v0.
+     * Translate a workflow state name (e.g. {@code PENDINGFORASSIGNMENT}) to
+     * the canonical SLA-column key (one of: new, triage, forwarded,
+     * investigation, awaiting, resolved) using the operator-defined
+     * CRS.WorkflowStateMapping singleton.
+     *
+     * <p>If the mapping is null/missing or has no entry for the state, returns
+     * null and the caller falls through to CRS.StateSLA / v0 EscalationConfig.
+     * This is the only place tenant-specific workflow state names are
+     * referenced — everything else in the scheduler is generic.</p>
      */
-    private static String mapWorkflowStateToKey(String workflowState) {
-        if (workflowState == null) return null;
-        switch (workflowState) {
-            case "PENDINGFORASSIGNMENT": return "new";
-            case "PENDINGATLME":         return "forwarded";
-            case "IN_TRIAGE":
-            case "TRIAGE":               return "triage";
-            case "FORWARDED":            return "forwarded";
-            case "UNDER_INVESTIGATION":
-            case "INVESTIGATION":        return "investigation";
-            case "AWAITING_INFORMATION":
-            case "AWAITING":             return "awaiting";
-            case "RESOLVED":             return "resolved";
-            default: return null;
-        }
+    static String mapWorkflowStateToKey(String workflowState, Map<String, String> mapping) {
+        if (workflowState == null || mapping == null) return null;
+        return mapping.get(workflowState);
     }
 
     /**
@@ -630,6 +650,27 @@ public class EscalationScheduler {
             if (defaults instanceof Map) return (Map<String, Number>) defaults;
         } catch (Exception e) {
             log.debug("CRS.StateSLA fetch failed (probably not seeded yet): {}", e.getMessage());
+        }
+        return Collections.emptyMap();
+    }
+
+    /**
+     * Fetch CRS.WorkflowStateMapping singleton's {@code mappings} object —
+     * workflow state name → canonical SLA-column key. Returns an empty map
+     * (not null) when the schema isn't seeded yet so {@link #resolveSlaHours}
+     * can still call {@code .get(state)} without a null guard at every site.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, String> fetchCrsWorkflowStateMapping(RequestInfo requestInfo, String tenantId) {
+        try {
+            Object res = fetchMdmsModule(requestInfo, tenantId, "CRS", "WorkflowStateMapping");
+            if (res == null) return Collections.emptyMap();
+            List<Map<String, Object>> rows = JsonPath.read(res, "$.MdmsRes.CRS.WorkflowStateMapping");
+            if (rows == null || rows.isEmpty()) return Collections.emptyMap();
+            Object mappings = rows.get(0).get("mappings");
+            if (mappings instanceof Map) return (Map<String, String>) mappings;
+        } catch (Exception e) {
+            log.debug("CRS.WorkflowStateMapping fetch failed (probably not seeded yet): {}", e.getMessage());
         }
         return Collections.emptyMap();
     }

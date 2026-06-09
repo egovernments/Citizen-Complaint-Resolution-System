@@ -174,6 +174,8 @@ public class PGRConstants {
     public static final String CRS_CATEGORY_SLA_SCHEMA = "CRS.CategorySLA";
     /** MDMS v2 schema code for the per-state SLA singleton. */
     public static final String CRS_STATE_SLA_SCHEMA = "CRS.StateSLA";
+    /** MDMS v2 schema code for the workflow-state → canonical-SLA-key mapping singleton. */
+    public static final String CRS_WORKFLOW_STATE_MAPPING_SCHEMA = "CRS.WorkflowStateMapping";
 
     /** Source-of-SLA labels written to the OTEL escalation span as {@code escalation.slaSource}. */
     public static final String SLA_SOURCE_CATEGORY = "CRS.CategorySLA";

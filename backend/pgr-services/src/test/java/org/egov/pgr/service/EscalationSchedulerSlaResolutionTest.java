@@ -61,12 +61,13 @@ public class EscalationSchedulerSlaResolutionTest {
                 row("IGSAE", "Business", "Establishment", "forwarded", 24.0));
 
         EscalationScheduler.SlaResolution result = scheduler.resolveSlaHours(
-                complaint, "PENDINGATLME", rows, brdDefaults(), Collections.emptyMap(),
+                complaint, "PENDINGATLME", rows, brdDefaults(), pgrMapping(), Collections.emptyMap(),
                 0, Collections.singletonList(1L), Collections.emptyMap());
 
         assertEquals(24L * 60 * 60 * 1000, result.slaMs);
         assertEquals(PGRConstants.SLA_SOURCE_CATEGORY, result.source);
         assertFalse(result.unmappedCategory);
+        assertFalse(result.stateMappingMissing);
     }
 
     /** CategorySLA range collapses to MAX. */
@@ -77,7 +78,7 @@ public class EscalationSchedulerSlaResolutionTest {
                 row("IGSAE", "Tourism and Catering", "Hygiene", "forwarded", Arrays.asList(24.0, 120.0)));
 
         EscalationScheduler.SlaResolution result = scheduler.resolveSlaHours(
-                complaint, "PENDINGATLME", rows, brdDefaults(), Collections.emptyMap(),
+                complaint, "PENDINGATLME", rows, brdDefaults(), pgrMapping(), Collections.emptyMap(),
                 0, Collections.singletonList(1L), Collections.emptyMap());
 
         // MAX of the range — 120h, not 24h.
@@ -101,7 +102,8 @@ public class EscalationSchedulerSlaResolutionTest {
         r.put("isActive", true);
 
         EscalationScheduler.SlaResolution result = scheduler.resolveSlaHours(
-                complaint, "PENDINGATLME", Collections.singletonList(r), brdDefaults(), Collections.emptyMap(),
+                complaint, "PENDINGATLME", Collections.singletonList(r), brdDefaults(),
+                pgrMapping(), Collections.emptyMap(),
                 0, Collections.singletonList(1L), Collections.emptyMap());
 
         // BRD default for "forwarded" = 48h.
@@ -119,7 +121,8 @@ public class EscalationSchedulerSlaResolutionTest {
         // no additionalDetail tuple, no ServiceDefs mapping
 
         EscalationScheduler.SlaResolution result = scheduler.resolveSlaHours(
-                complaint, "PENDINGATLME", Collections.emptyList(), Collections.emptyMap(), Collections.emptyMap(),
+                complaint, "PENDINGATLME", Collections.emptyList(), Collections.emptyMap(),
+                pgrMapping(), Collections.emptyMap(),
                 0, Collections.singletonList(60_000L), Collections.emptyMap());
 
         assertEquals(60_000L, result.slaMs);
@@ -165,5 +168,18 @@ public class EscalationSchedulerSlaResolutionTest {
         d.put("awaiting", 120);
         d.put("resolved", 360);
         return d;
+    }
+
+    /**
+     * The PGR-shaped CRS.WorkflowStateMapping these tests rely on. Mirrors
+     * what an operator on a PGR-default tenant would seed into the singleton
+     * via the configurator. Tests around the mapping itself (mapping miss,
+     * typo'd mapping) live in EscalationSchedulerStateMappingTest.
+     */
+    private static Map<String, String> pgrMapping() {
+        Map<String, String> m = new HashMap<>();
+        m.put("PENDINGFORASSIGNMENT", "new");
+        m.put("PENDINGATLME", "forwarded");
+        return m;
     }
 }
