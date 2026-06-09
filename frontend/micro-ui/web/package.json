@@ -85,9 +85,8 @@
   },
   "scripts": {
     "build:dashboard-css": "tailwindcss -c src/dashboard/tailwind.config.js -i src/dashboard/styles/input.css -o src/dashboard/styles/dashboard.css",
-    "postinstall": "rm -rf node_modules/react-resizable/node_modules/react-draggable 2>/dev/null || true",
-    "start": "npm run build:dashboard-css && react-scripts start",
-    "build": "npm run build:dashboard-css && GENERATE_SOURCEMAP=false SKIP_PREFLIGHT_CHECK=true react-scripts build",
+    "start": "react-scripts start",
+    "build": "GENERATE_SOURCEMAP=false SKIP_PREFLIGHT_CHECK=true react-scripts build",
     "build:prepare": "./build.sh",
     "build:libraries": "cd micro-ui-internals && yarn build",
     "build:prod": "webpack --mode production",
