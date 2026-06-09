@@ -9,8 +9,8 @@
  * from existing rows. This is interim: the planned CRS.CategoryTaxonomy
  * editor (roadmap phase G1) will replace the free-text inputs with a
  * picker bound to the canonical taxonomy. Until then we keep the inputs
- * permissive so operators can backfill values from the BRD or external
- * lists; the bulk-import path enforces the same liberal shape.
+ * permissive so operators can backfill values from any external list;
+ * the bulk-import path enforces the same liberal shape.
  *
  * Save flow is transactional per-row, NOT all-or-nothing — a single
  * failing row leaves the others queued so the operator can fix and retry.
@@ -65,7 +65,7 @@ import {
   type AuditEntry,
 } from './slaService';
 import {
-  BRD_STATE_DEFAULTS,
+  DEFAULT_STATE_DEFAULTS,
   PATHS,
   STATE_KEYS,
   STATE_LABELS,
@@ -91,7 +91,7 @@ export function CategorySlaMatrixPage() {
 
   // --- state ---
   const [rows, setRows] = useState<MatrixRow[]>([]);
-  const [stateDefaults, setStateDefaults] = useState<StateDefaults>(BRD_STATE_DEFAULTS);
+  const [stateDefaults, setStateDefaults] = useState<StateDefaults>(DEFAULT_STATE_DEFAULTS);
   const [stateDefaultsRecord, setStateDefaultsRecord] = useState<MdmsRecord | undefined>();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -508,11 +508,11 @@ export function CategorySlaMatrixPage() {
                   <td colSpan={11} className="px-3 py-12 text-center text-muted-foreground space-y-3">
                     <p className="text-sm">No SLA rows yet for this tenant.</p>
                     <p className="text-xs">
-                      Get started with the BRD Appendix A seed, or add a row manually.
+                      Get started with a CSV import, or add a row manually.
                     </p>
                     <Button size="sm" onClick={() => setShowBulkImport(true)}>
                       <Upload className="w-3.5 h-3.5 mr-1.5" />
-                      Import from BRD Appendix A
+                      Import from CSV
                     </Button>
                   </td>
                 </tr>

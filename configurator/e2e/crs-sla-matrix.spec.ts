@@ -2,17 +2,18 @@
  * E2E spec for the CRS Category SLA Matrix page — configurator-owned.
  *
  * Covers the escalation-SLA scope landed in PR #770:
- *   - /manage/crs-sla-matrix renders header, toolbar, defaults row, and a
- *     populated matrix (the Bomet seed includes BRD Appendix A).
+ *   - /manage/crs-sla-matrix renders header, toolbar, and defaults row.
+ *     Matrix body is asserted as "either populated or empty-state" so
+ *     the spec is tenant-agnostic (no BRD/Appendix-A seed assumed).
  *   - The Trace escalation… drawer accepts a service request ID, calls
  *     /pgr-services/escalation/_trigger, and renders the structured
  *     verdict + reason + detail.
  *   - The v0 EscalationConfig editor at /manage/escalation-config/3
  *     surfaces the deprecation banner deep-linking back to the matrix.
  *
- * Read-only against live tenants (Bomet/Nairobi). Save/import flows are
- * intentionally NOT exercised here — they're verified in the seeder
- * script that lands Appendix A on Bomet during the deploy step.
+ * Read-only against live tenants. Save/import flows are intentionally
+ * NOT exercised here — operators populate their own data via the
+ * configurator UI or the CSV importer.
  *
  * Run:
  *   cd configurator
@@ -89,10 +90,15 @@ test.describe.serial('Category SLA Matrix', () => {
     // Defaults row — "Defaults (StateSLA)" badge from the inline editor.
     await expect(page.getByText(/Defaults \(StateSLA\)/i)).toBeVisible();
 
-    // Matrix rows from the Appendix A seed (≥5 rows is a low-watermark
-    // that survives a partially-seeded tenant without false positives).
+    // Matrix body: either populated (≥1 data row) or the empty-state
+    // tr (which shows "Import from CSV" CTA). Both are acceptable;
+    // this spec is tenant-agnostic so a brand-new install passes too.
     const rowCount = await page.locator('table tbody tr').count();
-    expect(rowCount).toBeGreaterThanOrEqual(5);
+    expect(rowCount).toBeGreaterThanOrEqual(1);
+    if (rowCount === 1) {
+      // empty-state row — assert the CTA is the new generic copy.
+      await expect(page.getByRole('button', { name: /Import from CSV/i })).toBeVisible();
+    }
   });
 
   test('Trace escalation drawer renders structured outcome', async ({ page }) => {

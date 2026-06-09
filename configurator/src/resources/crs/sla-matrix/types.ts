@@ -16,9 +16,9 @@ export type Path = 'IGE' | 'IGSAE';
 export const PATHS: Path[] = ['IGE', 'IGSAE'];
 
 /**
- * The 6 PGR/CRS workflow states from BRD §5.2. Names match the JSON
- * property names in CRS.CategorySLA.slaHoursByState — keep these in
- * sync if the schema is renamed.
+ * The 6 PGR/CRS workflow states the scheduler tracks. Names match the
+ * JSON property names in CRS.CategorySLA.slaHoursByState — keep these
+ * in sync if the schema is renamed.
  */
 export type StateKey =
   | 'new'
@@ -76,14 +76,16 @@ export interface StateDefaults {
 }
 
 /**
- * BRD §5.2 default values — used to seed CRS.StateSLA on first install
- * and to render greyed-out "default: Xh" hints in empty matrix cells.
+ * In-memory fallback values used to render greyed-out "default: Xh"
+ * hints in empty matrix cells when the tenant has not yet persisted a
+ * CRS.StateSLA singleton. Operators are expected to populate the real
+ * defaults via the configurator UI; these numbers are only a
+ * placeholder so the page is usable on a brand-new tenant.
  *
- * `new` is documented as "Immediate" in the BRD; we encode it as 0h so
- * the scheduler's `elapsed >= sla` check fires on the first scan after
- * creation.
+ * `new = 0` so the scheduler's `elapsed >= sla` check fires on the
+ * first scan after creation if the operator chooses to leave it at 0.
  */
-export const BRD_STATE_DEFAULTS: StateDefaults = {
+export const DEFAULT_STATE_DEFAULTS: StateDefaults = {
   new: 0,
   triage: 24,
   forwarded: 48,

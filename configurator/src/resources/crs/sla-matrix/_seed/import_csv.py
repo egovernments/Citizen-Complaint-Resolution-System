@@ -1,26 +1,37 @@
 #!/usr/bin/env python3
 """
-Seed CRS.CategorySLA + CRS.StateSLA on a target tenant from BRD Appendix A.
+Seed CRS.CategorySLA on a target tenant from a CSV.
 
 Usage:
-    python3 import_appendix_a.py \
-        --base-url https://bometfeedbackhub.digit.org \
-        --tenant ke \
+    python3 import_csv.py \
+        --base-url https://your-tenant.example.org \
+        --tenant <tenantId> \
         --username ADMIN \
-        --password 'eGov@123'
+        --password '<password>' \
+        [--csv /path/to/your.csv]
+
+If --csv is omitted, the script falls back to `example.csv` shipped next
+to this file — a tiny 3-row placeholder used to demonstrate the expected
+CSV shape. Operators are expected to point --csv at their own file.
 
 The script is intentionally idempotent: re-running it against an already-
 seeded tenant produces phantom-200 responses from MDMS (empty `mdms`
 array on duplicate) and the script reports them as "already present".
 
-Two things land per run:
-    1. CRS.StateSLA singleton (uniqueIdentifier = "default") with BRD §5.2
-       defaults — new=0, triage=24, forwarded=48, investigation=120,
-       awaiting=120, resolved=360.
-    2. One CRS.CategorySLA row per non-empty Appendix A line, with the
-       `investigation` cell populated from the spreadsheet's hour value
-       (the BRD's per-state grid is the singleton above, not the
-       category-level matrix).
+CRS.StateSLA (the per-state default singleton) is NOT seeded by this
+script — operators populate it via the configurator UI at
+/manage/crs-sla-matrix once they decide on their per-state default
+hours. Until that record exists, the page falls back to in-memory
+defaults at render time.
+
+CSV columns (header row required):
+    path, category, subcategoryL1, subcategoryL2,
+    sla_new, sla_triage, sla_forwarded, sla_investigation,
+    sla_awaiting, sla_resolved
+
+`subcategoryL2` is informational only — the SLA table keys off
+(path, category, subcategoryL1). Empty SLA cells are stored as null
+and fall back to CRS.StateSLA at scheduler time.
 """
 import argparse
 import csv
@@ -32,17 +43,7 @@ from typing import Optional
 
 import requests
 
-# BRD §5.2 — Case Life Cycle table. Used to seed CRS.StateSLA singleton.
-STATE_DEFAULTS = {
-    "new": 0,
-    "triage": 24,
-    "forwarded": 48,
-    "investigation": 120,
-    "awaiting": 120,
-    "resolved": 360,
-}
-
-SEED_CSV = Path(__file__).parent / "appendix-a.csv"
+DEFAULT_CSV = Path(__file__).parent / "example.csv"
 
 
 def login(base_url: str, tenant: str, username: str, password: str) -> str:
@@ -109,18 +110,10 @@ def parse_cell(raw: str) -> Optional[object]:
     return int(raw)
 
 
-def seed_state_sla(base_url: str, token: str, tenant: str) -> None:
-    ok, detail = mdms_create(
-        base_url, token, tenant, "CRS.StateSLA", "default",
-        {"singletonKey": "default", "stateDefaults": STATE_DEFAULTS},
-    )
-    print(f"  StateSLA singleton: {'ok' if ok else 'skip'} ({detail})")
-
-
-def seed_category_sla(base_url: str, token: str, tenant: str) -> tuple[int, int]:
+def seed_category_sla(base_url: str, token: str, tenant: str, csv_path: Path) -> tuple[int, int]:
     ok_count = 0
     skip_count = 0
-    with SEED_CSV.open() as fh:
+    with csv_path.open() as fh:
         for row in csv.DictReader(fh):
             sla_by_state = {
                 "new": parse_cell(row.get("sla_new", "")),
@@ -150,21 +143,25 @@ def seed_category_sla(base_url: str, token: str, tenant: str) -> tuple[int, int]
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--base-url", required=True, help="DIGIT base URL, e.g. https://bometfeedbackhub.digit.org")
+    ap.add_argument("--base-url", required=True, help="DIGIT base URL, e.g. https://your-tenant.example.org")
     ap.add_argument("--tenant", default=os.environ.get("CRS_TENANT", "ke"))
     ap.add_argument("--username", default=os.environ.get("CRS_USERNAME", "ADMIN"))
     ap.add_argument("--password", default=os.environ.get("CRS_PASSWORD", "eGov@123"))
+    ap.add_argument("--csv", default=str(DEFAULT_CSV),
+                    help=f"Path to CSV file (default: {DEFAULT_CSV.name} next to this script)")
     args = ap.parse_args()
 
-    print(f"[seed] tenant={args.tenant} base={args.base_url}")
+    csv_path = Path(args.csv)
+    if not csv_path.exists():
+        print(f"[seed] ERROR: csv not found: {csv_path}")
+        return 1
+
+    print(f"[seed] tenant={args.tenant} base={args.base_url} csv={csv_path.name}")
     token = login(args.base_url, args.tenant, args.username, args.password)
     print("[seed] logged in")
 
-    print("[seed] CRS.StateSLA")
-    seed_state_sla(args.base_url, token, args.tenant)
-
-    print("[seed] CRS.CategorySLA (BRD Appendix A)")
-    ok, skip = seed_category_sla(args.base_url, token, args.tenant)
+    print(f"[seed] CategorySLA from {csv_path.name}")
+    ok, skip = seed_category_sla(args.base_url, token, args.tenant, csv_path)
     print(f"[seed] done: {ok} created, {skip} skipped (already present)")
     return 0
 

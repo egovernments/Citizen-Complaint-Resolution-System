@@ -43,8 +43,9 @@ interface TraceResult {
 
 const STATE_TO_KEY: Record<string, StateKey> = {
   // Map DIGIT PGR workflow states → schema state keys. Conservative: only
-  // the states the BRD §5.2 grid names. Anything else falls back to null
-  // (and the resolvedSla pane shows "no matching state column").
+  // the six states the schema's slaHoursByState keys cover. Anything else
+  // falls back to null (and the resolvedSla pane shows "no matching state
+  // column").
   PENDINGFORASSIGNMENT: 'new',
   PENDINGATLME: 'forwarded',
   PENDING_AT_LME: 'forwarded',

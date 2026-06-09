@@ -7,7 +7,7 @@
 import { digitClient } from '@/providers/bridge';
 import type { MdmsRecord } from '@digit-mcp/data-provider';
 import type { CategorySlaRecord, StateDefaults } from './types';
-import { makeCategoryUid, BRD_STATE_DEFAULTS } from './types';
+import { makeCategoryUid, DEFAULT_STATE_DEFAULTS } from './types';
 
 const CATEGORY_SLA_SCHEMA = 'CRS.CategorySLA';
 const STATE_SLA_SCHEMA = 'CRS.StateSLA';
@@ -56,24 +56,30 @@ export function mdmsToMatrixRows(records: MdmsRecord[]): MatrixRow[] {
   });
 }
 
-/** Read all CategorySLA rows for the tenant. */
+/** Read all active CategorySLA rows for the tenant. */
 export async function loadCategorySla(tenantId: string): Promise<MatrixRow[]> {
-  // 500 is plenty for Appendix A (~30 rows). If tenants outgrow this we
-  // switch to paginated load — the rest of the page is wired to take a
-  // single MatrixRow[] so swapping the data source is local.
+  // 500 is a safe upper bound for the matrix size we expect from typical
+  // tenants. If a tenant outgrows this we switch to paginated load — the
+  // rest of the page is wired to take a single MatrixRow[] so swapping
+  // the data source is local.
   const records = await digitClient.mdmsSearch(tenantId, CATEGORY_SLA_SCHEMA, { limit: 500 });
-  return mdmsToMatrixRows(records);
+  // MDMS v2 search returns soft-deleted (isActive=false) rows too; filter
+  // them client-side so the empty state actually shows when an operator
+  // has deactivated everything.
+  const active = records.filter((r) => r.isActive !== false);
+  return mdmsToMatrixRows(active);
 }
 
-/** Read StateSLA singleton; if absent return the BRD defaults. */
+/** Read StateSLA singleton; if absent return the in-memory fallback. */
 export async function loadStateSla(tenantId: string): Promise<{ defaults: StateDefaults; record?: MdmsRecord }> {
   const records = await digitClient.mdmsSearch(tenantId, STATE_SLA_SCHEMA, { limit: 5 });
-  if (records.length === 0) {
-    return { defaults: { ...BRD_STATE_DEFAULTS } };
+  const active = records.filter((r) => r.isActive !== false);
+  if (active.length === 0) {
+    return { defaults: { ...DEFAULT_STATE_DEFAULTS } };
   }
-  const record = records[0];
+  const record = active[0];
   const data = record.data as { stateDefaults?: StateDefaults };
-  return { defaults: { ...BRD_STATE_DEFAULTS, ...(data.stateDefaults ?? {}) }, record };
+  return { defaults: { ...DEFAULT_STATE_DEFAULTS, ...(data.stateDefaults ?? {}) }, record };
 }
 
 /** Save (create or update) a single CategorySLA row. */

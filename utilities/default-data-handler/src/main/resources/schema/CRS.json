@@ -2,7 +2,7 @@
   {
     "tenantId": "{tenantid}",
     "code": "CRS.CategorySLA",
-    "description": "Per (path, category, subcategoryL1) SLA table consumed by the PGR escalation scheduler. `slaHoursByState` keys map 1:1 to the 6 PGR/CRS workflow states (BRD §5.2). A cell can be null (fall back to CRS.StateSLA), a single number (hours), or a [min,max] array. When ranged, the scheduler uses MAX for breach detection; the UI displays the range. uniqueIdentifier convention: `<path>:<category>:<subcategoryL1>`.",
+    "description": "Per (path, category, subcategoryL1) SLA table consumed by the PGR escalation scheduler. `slaHoursByState` keys map 1:1 to the 6 PGR/CRS workflow states. A cell can be null (fall back to CRS.StateSLA), a single number (hours), or a [min,max] array. When ranged, the scheduler uses MAX for breach detection; the UI displays the range. uniqueIdentifier convention: `<path>:<category>:<subcategoryL1>`. Operators populate rows via the configurator UI or the CSV importer; nothing is auto-seeded.",
     "isActive": true,
     "definition": {
       "type": "object",
@@ -49,7 +49,7 @@
   {
     "tenantId": "{tenantid}",
     "code": "CRS.StateSLA",
-    "description": "Singleton: per-tenant default SLA (in hours) per workflow state. Used by the escalation scheduler whenever the matching CRS.CategorySLA cell is null. Seeded from BRD §5.2 (Case Life Cycle): new=0 (immediate), triage=24, forwarded=48, investigation=120, awaiting=120, resolved=360. uniqueIdentifier is always `default`.",
+    "description": "Singleton: per-tenant default SLA (in hours) per workflow state. Used by the escalation scheduler whenever the matching CRS.CategorySLA cell is null. Operators populate this via the configurator before relying on the CategorySLA layer; nothing is auto-seeded. uniqueIdentifier is always `default`.",
     "isActive": true,
     "definition": {
       "type": "object",
