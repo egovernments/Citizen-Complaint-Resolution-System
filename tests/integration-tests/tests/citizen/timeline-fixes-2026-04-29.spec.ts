@@ -1,12 +1,17 @@
 // Citizen timeline + rating display. UI test against the live digit-ui.
 import { test, expect } from '@playwright/test';
 import { loginEmployee, pgrSearch } from '../utils/launch-fixes/api.js';
+import { readLifecycleFixtures } from '../utils/lifecycle-fixtures';
 
-// Deployment-pinned SRID for a complaint in CLOSEDAFTERRESOLUTION with rating=4.
-// Defaults to the verified naipepea record so the test still runs there with
-// no extra config; override PINNED_COMPLAINT_SRID when targeting any other
-// deployment (or when the seeded record gets purged).
-const SR_ID = process.env.PINNED_COMPLAINT_SRID || 'NCCG-PGR-2026-04-28-011862';
+// SRID precedence:
+//   1. PINNED_COMPLAINT_SRID env (operator-supplied)
+//   2. lifecycle.setup.ts → terminal_rated (suite seeds it against
+//      the live tenant, status=CLOSEDAFTERRESOLUTION, rating=4)
+//   3. naipepea historical fallback
+const SR_ID =
+  process.env.PINNED_COMPLAINT_SRID
+  || readLifecycleFixtures()?.complaints.terminal_rated
+  || 'NCCG-PGR-2026-04-28-011862';
 
 test.describe('04-citizen-timeline (#473 follow-up)', () => {
   test('PGR _search returns service.rating + workflow.action=RATE for the rated complaint', {

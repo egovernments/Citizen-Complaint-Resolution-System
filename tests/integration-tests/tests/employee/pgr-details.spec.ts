@@ -34,17 +34,24 @@ import { BASE_URL, TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
 const EMPLOYEE_USER = process.env.FLOW5_EMPLOYEE_USER || ADMIN_USER;
 const EMPLOYEE_PASS = process.env.FLOW5_EMPLOYEE_PASS || ADMIN_PASS;
 
-// Fixtures — long-lived complaints on naipepea. If they disappear, set
-// env overrides or refresh via:
-//   curl /pgr-services/v2/request/_search?tenantId=ke.nairobi&applicationStatus=...
-// Defaults are naipepea SRIDs; override per deployment via env.
+// Fixture SRIDs — precedence:
+//   1. explicit env (TERMINAL_COMPLAINT_SRID / NONTERMINAL_COMPLAINT_SRID)
+//   2. legacy env (FLOW5_*)
+//   3. lifecycle.setup.ts output (lifecycle-fixtures.json) — the suite
+//      seeds these against the configured tenant before chromium runs,
+//      so the SRIDs always match the live deployment
+//   4. naipepea defaults (last-resort)
+import { readLifecycleFixtures } from '../utils/lifecycle-fixtures';
+const _fixtures = readLifecycleFixtures();
 const TERMINAL_COMPLAINT_ID =
   process.env.TERMINAL_COMPLAINT_SRID
   || process.env.FLOW5_TERMINAL_SRID
+  || _fixtures?.complaints.terminal_rated
   || 'PG-PGR-2026-04-23-004403';
 const NONTERMINAL_COMPLAINT_ID =
   process.env.NONTERMINAL_COMPLAINT_SRID
   || process.env.FLOW5_NONTERMINAL_SRID
+  || _fixtures?.complaints.non_terminal
   || 'NCCG-PGR-2026-05-06-023467';
 
 async function openDetails(page: Page, srid: string): Promise<void> {

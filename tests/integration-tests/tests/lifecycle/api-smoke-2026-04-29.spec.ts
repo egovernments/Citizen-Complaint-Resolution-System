@@ -1,8 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { loginEmployee, mdmsSearch, pgrSearch, hrmsSearch, workflowBusinessService } from '../utils/launch-fixes/api.js';
+import { readLifecycleFixtures } from '../utils/lifecycle-fixtures';
 
-const KNOWN_RESOLVED_SRID = process.env.KNOWN_RESOLVED_SRID
-  || 'NCCG-PGR-2026-04-28-011862';  // naipepea default
+// SRID precedence: explicit env → lifecycle.setup fixtures → naipepea default
+const KNOWN_RESOLVED_SRID =
+  process.env.KNOWN_RESOLVED_SRID
+  || readLifecycleFixtures()?.complaints.terminal_rated
+  || 'NCCG-PGR-2026-04-28-011862';
 
 test.describe('00-smoke: API helpers reach naipepea', () => {
   test('login returns token', {
