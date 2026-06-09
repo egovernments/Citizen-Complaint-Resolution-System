@@ -20,9 +20,9 @@ const createProxy = createProxyMiddleware({
 
 // Browser path must match REACT_APP_ANALYTICS_BASE (see analyticsService.js).
 // Public /api/analytics is behind nginx HTTP Basic Auth (realm "bomet analytics"),
-// which triggers a browser sign-in loop on 401. The service itself listens on
-// 127.0.0.1:18280 as /pgr-services/v2/analytics — tunnel that port instead:
-//   ssh -N -L 18280:127.0.0.1:18280 bomet
+// which triggers a browser sign-in loop on 401. On Bomet, analytics is on Kong
+// at 127.0.0.1:18000 (/pgr-services/v2/analytics). Tunnel local 18280 there:
+//   ssh -N -L 18280:127.0.0.1:18000 bomet
 const analyticsBrowserPath = (
   process.env.REACT_APP_ANALYTICS_BASE || "/pgr-analytics"
 ).replace(/\/$/, "");
