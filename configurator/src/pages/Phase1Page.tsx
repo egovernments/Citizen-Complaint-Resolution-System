@@ -27,6 +27,7 @@ import { Banner } from '@/components/digit/Banner';
 import { parseExcelFile, parseTenantExcel } from '@/utils/excelParser';
 import * as XLSX from 'xlsx';
 import { mdmsService, localizationService, apiClient, ApiClientError } from '@/api';
+import { toast } from '@/hooks/use-toast';
 import { bootstrapStateRoot, bootstrapLocalization, stateNeedsBootstrap, type BootstrapProgress } from '@/api/services/tenantBootstrap';
 import type { TenantExcelRow, Tenant, ValidationResult } from '@/api/types';
 
@@ -104,6 +105,24 @@ export default function Phase1Page() {
         if (url) URL.revokeObjectURL(url);
       });
     };
+  }, []);
+
+  // Show a one-shot toast when the operator was bounced here from a /manage/*
+  // URL because they're in onboarding mode. The flag is set by
+  // `ManagementRedirectFlash` in App.tsx and cleared after we read it so the
+  // hint never replays on subsequent renders of Phase 1.
+  useEffect(() => {
+    let attempted: string | null = null;
+    try {
+      attempted = sessionStorage.getItem('flash:wrong-mode');
+      if (attempted) sessionStorage.removeItem('flash:wrong-mode');
+    } catch { /* sessionStorage unavailable — nothing to do */ }
+    if (!attempted) return;
+    toast({
+      title: 'Switch to Management mode',
+      description: `You tried to open ${attempted} — switch to Management mode from the header to access it.`,
+      duration: 8000,
+    });
   }, []);
   const [validation, setValidation] = useState<ValidationResult | null>(null);
 
