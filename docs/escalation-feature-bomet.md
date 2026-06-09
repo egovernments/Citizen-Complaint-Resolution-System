@@ -81,7 +81,7 @@ The escalation chain does not actually fire on Bomet today because of an **upstr
 - Both `processInstance.assignes` AND `ServiceWrapper.workflow.assignes` come back as `null` / empty
 - `SELECT * FROM eg_wf_assignee_v2 WHERE processinstanceid IN (...)` returns 0 rows
 
-The new `history=true` fallback in `getCurrentAssignees()` is harmless but cannot rescue this — the data is missing from the DB itself. **Tracked as a follow-up** (TASK-052 in the operator's TODO).
+The new `history=true` fallback in `getCurrentAssignees()` is harmless but cannot rescue this — the data is missing from the DB itself. **Tracked as a follow-up**: an upstream egov-workflow-v2 bug where the ASSIGN action does not persist assignees to `eg_wf_assignee_v2` — to be raised against the workflow-v2 repo separately.
 
 When that upstream bug is fixed, the chain fires automatically for any complaint with assignees + breached SLA. `/escalation/_trigger` will then return `escalated >= 1` with full per-complaint details, and OTEL spans get the per-complaint custom attributes (`escalation.fromAssignee`, `toAssignee`, `fromLevel`, `toLevel`, …) that are already wired in the code.
 

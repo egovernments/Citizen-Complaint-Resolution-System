@@ -436,10 +436,11 @@ out of its way to keep it that way:
   today hardcodes a switch from DIGIT-PGR state names
   (`PENDINGFORASSIGNMENT`, `PENDINGATLME`, ...) to the CRS canonical keys.
   This is the one piece of tenant-specific knowledge baked into the scheduler.
-  Future work — **TASK-063** — replaces it with a `CRS.WorkflowStateMapping`
-  MDMS record so each tenant can wire their own workflow state names. Until
-  TASK-063 lands, a tenant whose workflow uses non-PGR state names falls
-  through to v0 for any complaint not in one of the seven mapped states.
+  Future work (see follow-up PR linked from this PR's description) replaces it
+  with a `CRS.WorkflowStateMapping` MDMS record so each tenant can wire their
+  own workflow state names. Until that follow-up lands, a tenant whose
+  workflow uses non-PGR state names falls through to v0 for any complaint not
+  in one of the seven mapped states.
 
 The implication: Bomet (Kenya, PGR), Nairobi (Kenya, PGR), and the future
 Mozambique CRS deployment all run **the same code** and **the same schemas**.
@@ -576,7 +577,8 @@ ASSIGNed. `SELECT * FROM eg_wf_assignee_v2 WHERE processinstanceid IN (...)`
 returns 0 rows.
 
 **Root cause.** DIGIT `egov-workflow-v2` ASSIGN action does not persist
-assignees to `eg_wf_assignee_v2` (upstream bug, tracked as **TASK-052**).
+assignees to `eg_wf_assignee_v2` — an upstream egov-workflow-v2 bug to be
+raised against the workflow-v2 repo separately.
 
 **Effect on the scheduler.** Without an assignee,
 [`EscalationScheduler` line 191-199](../backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationScheduler.java#L191)
@@ -689,10 +691,12 @@ validator is opaque and tightly coupled to a live Postgres. What we do have:
     — UI-drive of the configurator escalation editor.
   - [`tests/integration-tests/tests/utils/tempo.ts`](../tests/integration-tests/tests/utils/tempo.ts)
     — helper to query the per-tenant Tempo and assert OTEL span attributes.
-- **Caveat.** The assignee-persistence upstream bug (TASK-052) blocks the
-  full chain end-to-end on Bomet. The integration tests correctly **catch
-  this regression** rather than masking it — they fail at the ASSIGN step,
-  not the escalation step, with a clear diagnosis (`eg_wf_assignee_v2` row
+- **Caveat.** The assignee-persistence upstream bug in `egov-workflow-v2`
+  (ASSIGN action does not persist assignees to `eg_wf_assignee_v2`, to be
+  raised against the workflow-v2 repo separately) blocks the full chain
+  end-to-end on Bomet. The integration tests correctly **catch this
+  regression** rather than masking it — they fail at the ASSIGN step, not
+  the escalation step, with a clear diagnosis (`eg_wf_assignee_v2` row
   count == 0). When upstream fixes the bug, the tests pass without
   modification.
 
@@ -752,8 +756,8 @@ For the Bomet operator runbook (Tempo curl + log greps), see
 
 | # | Item | Tracking |
 |---|---|---|
-| 1 | Hardcoded PGR→CRS state-name mapping in `mapWorkflowStateToKey` — replace with a `CRS.WorkflowStateMapping` MDMS record per tenant | **TASK-063** |
-| 2 | Upstream DIGIT workflow ASSIGN-assignee persistence bug — blocks end-to-end escalation testing on Bomet | **TASK-052** |
+| 1 | Hardcoded PGR→CRS state-name mapping in `mapWorkflowStateToKey` — replace with a `CRS.WorkflowStateMapping` MDMS record per tenant | see follow-up PR linked from this PR's description |
+| 2 | Upstream DIGIT workflow ASSIGN-assignee persistence bug — blocks end-to-end escalation testing on Bomet | upstream `egov-workflow-v2`, to be raised against the workflow-v2 repo separately |
 | 3 | Category Taxonomy editor (constrained picker) — replaces the free-text category/subcategoryL1 inputs in the SLA Matrix | Roadmap phase **G1** ([`docs/crs-configurator-roadmap.md`](./crs-configurator-roadmap.md)) |
 | 4 | Path Routing Rules — `(category, subcategoryL1) → path` editable rules | Roadmap phase **G2** |
 | 5 | Submission Form Customization — required for **Strategy A** wiring of new tenants | Roadmap phase **G8** |
