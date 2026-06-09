@@ -26,6 +26,14 @@ public enum EscalationSkipReason {
     /** egov-workflow-v2 rejected the ESCALATE transition (validation/state mismatch). */
     WORKFLOW_TRANSITION_FAILED("Workflow service rejected the ESCALATE transition"),
 
+    /**
+     * Complaint could not be mapped to a (path, category, subcategoryL1) tuple
+     * needed to look up its CRS.CategorySLA row. Falls through to CRS.StateSLA
+     * or the v0 EscalationConfig, but the warning is surfaced so operators can
+     * complete the mapping in the Category SLA Matrix editor.
+     */
+    UNMAPPED_CATEGORY("Complaint could not be mapped to a CRS.CategorySLA row (path/category/subcategoryL1)"),
+
     /** Sentinel: escalation completed successfully (used in span attrs / response payloads). */
     SUCCESS("Escalation performed successfully");
 

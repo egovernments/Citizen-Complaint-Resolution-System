@@ -167,4 +167,17 @@ public class PGRConstants {
 
     public static final String HRMS_REPORTING_TO_JSONPATH = "$.Employees[0].assignments[?(@.isCurrentAssignment==true)].reportingTo";
 
+    // -----------------------------------------------------------------------
+    // CRS escalation-SLA scope (BRD v4.0)
+    // -----------------------------------------------------------------------
+    /** MDMS v2 schema code for the per-category SLA matrix. */
+    public static final String CRS_CATEGORY_SLA_SCHEMA = "CRS.CategorySLA";
+    /** MDMS v2 schema code for the per-state SLA singleton. */
+    public static final String CRS_STATE_SLA_SCHEMA = "CRS.StateSLA";
+
+    /** Source-of-SLA labels written to the OTEL escalation span as {@code escalation.slaSource}. */
+    public static final String SLA_SOURCE_CATEGORY = "CRS.CategorySLA";
+    public static final String SLA_SOURCE_STATE = "CRS.StateSLA";
+    public static final String SLA_SOURCE_V0 = "v0.EscalationConfig";
+
 }
