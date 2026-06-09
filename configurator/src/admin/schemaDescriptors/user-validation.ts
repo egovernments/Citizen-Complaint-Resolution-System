@@ -16,7 +16,7 @@ import type { SchemaDescriptor } from './types';
 export const userValidationDescriptor: SchemaDescriptor = {
   schema: 'common-masters.UserValidation',
   groups: [
-    { title: 'Field', fields: ['fieldType', 'default', 'isActive'] },
+    { title: 'Field', fields: ['zone', 'fieldType', 'default', 'isActive'] },
     { title: 'Format rules', fields: [
       'attributes.prefix',
       'rules.pattern',
@@ -27,8 +27,10 @@ export const userValidationDescriptor: SchemaDescriptor = {
     ] },
   ],
   fields: [
+    { path: 'zone', widget: 'text', required: true,
+      help: 'Unique identifier for this validation record (e.g. the tenant/zone). This is the record\'s unique key.' },
     { path: 'fieldType', widget: 'text', required: true,
-      help: 'e.g. "mobile", "email". Becomes the record\'s unique identifier.' },
+      help: 'e.g. "mobile", "email". The kind of field this rule applies to (no longer the unique key).' },
     { path: 'default', widget: 'boolean',
       help: 'Mark this rule as the default for its fieldType.' },
     { path: 'isActive', widget: 'boolean' },
