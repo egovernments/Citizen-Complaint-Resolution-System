@@ -1,0 +1,133 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .dashboard-widget {
+    @apply tw-h-full tw-overflow-hidden tw-rounded-lg tw-border tw-border-slate-200 tw-bg-white tw-shadow-sm;
+  }
+
+  .dashboard-drag-handle {
+    @apply tw-cursor-move tw-rounded-t-lg tw-border-b tw-border-slate-100 tw-bg-slate-50 tw-px-3 tw-py-2 tw-text-xs tw-font-medium tw-uppercase tw-tracking-wide tw-text-slate-500;
+  }
+
+  .kpi-inventory-item:active {
+    @apply tw-opacity-70;
+  }
+
+  /* Keep drag-over events on the grid container so the drop placeholder tracks smoothly */
+  .dashboard-external-drag .react-grid-item {
+    pointer-events: none;
+  }
+
+  .dashboard-external-drag .react-grid-placeholder {
+    transition: none;
+  }
+
+  .dashboard-kpi-drag-handle {
+    @apply tw-shrink-0 tw-border-0 tw-bg-transparent tw-py-1 tw-normal-case tw-tracking-normal;
+    min-height: 1.25rem;
+  }
+
+  .dashboard-kpi-remove {
+    @apply tw-opacity-0 tw-transition-opacity group-hover:tw-opacity-100;
+  }
+
+  .dashboard-kpi-widget .dashboard-widget {
+    @apply tw-transition-all tw-duration-150;
+  }
+
+  .dashboard-kpi-card.dashboard-widget {
+    @apply tw-h-full tw-overflow-hidden;
+    min-height: 0;
+  }
+
+  .dashboard-kpi-widget:hover .dashboard-widget {
+    @apply tw-border-brand-teal tw-bg-teal-50/40 tw-shadow-md;
+    box-shadow: 0 4px 12px rgb(13 148 136 / 0.12);
+  }
+
+  /* Resize like Canva: no visible arrows, edge-hover cursors */
+  .layout .react-grid-item > .react-resizable-handle::after {
+    content: none;
+    border: 0;
+  }
+
+  .layout .react-grid-item > .react-resizable-handle {
+    background: transparent;
+    opacity: 0;
+  }
+
+  .layout .react-grid-item > .react-resizable-handle.react-resizable-handle-n {
+    top: -4px;
+    left: 0;
+    width: 100%;
+    height: 8px;
+    cursor: n-resize;
+  }
+
+  .layout .react-grid-item > .react-resizable-handle.react-resizable-handle-s {
+    bottom: -4px;
+    left: 0;
+    width: 100%;
+    height: 8px;
+    cursor: s-resize;
+  }
+
+  .layout .react-grid-item > .react-resizable-handle.react-resizable-handle-e {
+    right: -4px;
+    top: 0;
+    width: 8px;
+    height: 100%;
+    cursor: e-resize;
+  }
+
+  .layout .react-grid-item > .react-resizable-handle.react-resizable-handle-w {
+    left: -4px;
+    top: 0;
+    width: 8px;
+    height: 100%;
+    cursor: w-resize;
+  }
+
+  .layout .react-grid-item > .react-resizable-handle.react-resizable-handle-ne {
+    top: -4px;
+    right: -4px;
+    width: 12px;
+    height: 12px;
+    cursor: ne-resize;
+    transform: none;
+  }
+
+  .layout .react-grid-item > .react-resizable-handle.react-resizable-handle-nw {
+    top: -4px;
+    left: -4px;
+    width: 12px;
+    height: 12px;
+    cursor: nw-resize;
+    transform: none;
+  }
+
+  .layout .react-grid-item > .react-resizable-handle.react-resizable-handle-se {
+    bottom: -4px;
+    right: -4px;
+    width: 12px;
+    height: 12px;
+    cursor: se-resize;
+  }
+
+  .layout .react-grid-item > .react-resizable-handle.react-resizable-handle-sw {
+    bottom: -4px;
+    left: -4px;
+    width: 12px;
+    height: 12px;
+    cursor: sw-resize;
+    transform: none;
+  }
+
+  .layout .react-grid-placeholder {
+    background: transparent !important;
+    opacity: 0 !important;
+    border: 0 !important;
+  }
+}
