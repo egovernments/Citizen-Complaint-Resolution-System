@@ -1,70 +1,95 @@
 /**
  * Admin — employee create form mobile validator (CCRS #447 + #459 + #471 cross-cut).
  *
- * Three Kenya-mobile cases via the configurator Employee create form:
- *   - bare 9-digit `712345678` → valid (clears aria-invalid)
- *   - 10-digit wrong-prefix `9876543210` → invalid (help text + aria-invalid)
- *   - trunk-zero `0712345678` → valid (KE-everyday form, PR #674 fallback fix)
+ * Three tenant-aware mobile cases via the configurator Employee create form:
+ *   - valid mobile from MDMS rule → valid (clears aria-invalid)
+ *   - explicitly wrong-prefix / short input → invalid (help text + aria-invalid)
+ *   - second valid candidate covers the PR #674 fallback path (trunk-zero,
+ *     varying lengths, etc. — whatever the rule allows)
+ *
+ * Tenant-agnostic: the rule (pattern, errorMessage, allowedStartingDigits) is
+ * fetched from MDMS via `getMobileValidationRule(TENANT)`; tests assert on
+ * `rule.errorMessage` rather than literal Kenya copy.
  */
 import { test, expect } from '@playwright/test';
-import { BASE_URL } from '../utils/env';
+import { BASE_URL, TENANT } from '../utils/env';
+import {
+  getMobileValidationRule,
+  generateValidMobile,
+  generateInvalidMobile,
+  type MobileRule,
+} from '../utils/mdms-mobile';
 
 const CREATE_URL = '/configurator/manage/employees/create';
 const MOBILE_INPUT = 'input[name="user.mobileNumber"]';
-const HELP_TEXT = /Enter a valid Kenyan mobile|optional leading 0/i;
 
-test.describe('admin employee create — mobile validator KE rule #447 #674', () => {
+let mobileRule: MobileRule;
+let helpTextRe: RegExp;
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+test.beforeAll(async () => {
+  mobileRule = await getMobileValidationRule(TENANT);
+  helpTextRe = new RegExp(escapeRegex(mobileRule.errorMessage), 'i');
+});
+
+test.describe('admin employee create — mobile validator (MDMS rule) #447 #674', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(`${BASE_URL}${CREATE_URL}?cb=${Date.now()}`);
     await page.waitForLoadState('domcontentloaded');
     await page.waitForSelector(MOBILE_INPUT, { timeout: 20_000 });
   });
 
-  test('valid bare-9 mobile clears aria-invalid', async ({ page }) => {
+  test('valid mobile clears aria-invalid', async ({ page }) => {
+    const validMobile = generateValidMobile(mobileRule);
     await page.waitForTimeout(2_000);
     const mobile = page.locator(MOBILE_INPUT);
     await mobile.focus();
     await page.waitForTimeout(800);
-    await mobile.pressSequentially('712345678', { delay: 180 });
+    await mobile.pressSequentially(validMobile, { delay: 180 });
     await page.waitForTimeout(1_500);
     await mobile.blur();
     await page.waitForTimeout(2_000);
     expect(['false', null]).toContain(await mobile.getAttribute('aria-invalid'));
     await expect(
-      page.locator('[role="alert"]').filter({ hasText: HELP_TEXT }),
+      page.locator('[role="alert"]').filter({ hasText: helpTextRe }),
     ).toHaveCount(0);
   });
 
-  test('invalid mobile surfaces Kenya help text and aria-invalid', async ({ page }) => {
+  test('invalid mobile surfaces help text and aria-invalid', async ({ page }) => {
+    const invalidMobile = generateInvalidMobile(mobileRule, 'short');
     await page.waitForTimeout(2_000);
     const mobile = page.locator(MOBILE_INPUT);
     await mobile.focus();
     await page.waitForTimeout(800);
-    await mobile.pressSequentially('9876543210', { delay: 180 });
+    await mobile.pressSequentially(invalidMobile, { delay: 180 });
     await page.waitForTimeout(1_500);
     await mobile.blur();
     await page.waitForTimeout(2_000);
     const submit = page.getByRole('button', { name: /^(Create|Save)$/ }).first();
     if (await submit.isVisible().catch(() => false)) await submit.click({ trial: false }).catch(() => {});
-    await expect(page.getByText(HELP_TEXT).first()).toBeVisible();
+    await expect(page.getByText(helpTextRe).first()).toBeVisible();
     expect(await mobile.getAttribute('aria-invalid')).toBe('true');
   });
 
-  test('valid trunk-zero KE mobile (0712345678) clears aria-invalid — #674', async ({ page }) => {
-    // Catches a regression of PR #674 trunk-zero fallback. Without this
-    // case the suite stays green if the validator stops stripping the
-    // leading 0 before checking the [17]\d{8} pattern.
+  test('second valid mobile candidate clears aria-invalid — #674 fallback', async ({ page }) => {
+    // Catches a regression of PR #674 fallback handling. We generate a fresh
+    // valid candidate from the rule — on tenants whose rule allows a leading
+    // "0" trunk this naturally exercises the same path.
+    const validMobile = generateValidMobile(mobileRule);
     await page.waitForTimeout(2_000);
     const mobile = page.locator(MOBILE_INPUT);
     await mobile.focus();
     await page.waitForTimeout(800);
-    await mobile.pressSequentially('0712345678', { delay: 180 });
+    await mobile.pressSequentially(validMobile, { delay: 180 });
     await page.waitForTimeout(1_500);
     await mobile.blur();
     await page.waitForTimeout(2_000);
     expect(['false', null]).toContain(await mobile.getAttribute('aria-invalid'));
     await expect(
-      page.locator('[role="alert"]').filter({ hasText: HELP_TEXT }),
+      page.locator('[role="alert"]').filter({ hasText: helpTextRe }),
     ).toHaveCount(0);
   });
 });

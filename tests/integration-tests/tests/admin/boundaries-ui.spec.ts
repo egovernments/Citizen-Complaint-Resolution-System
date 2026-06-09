@@ -33,11 +33,11 @@ import os from 'node:os';
 import fs from 'node:fs';
 import ExcelJS from 'exceljs';
 import { getDigitToken } from '../utils/auth';
+import { ROOT_TENANT as ROOT, ADMIN_USER, ADMIN_PASS, BASE_URL } from '../utils/env';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
 const SUFFIX = Date.now().toString().slice(-8);
-const ROOT = process.env.ROOT_TENANT || 'ke';
 const TENANT_CODE = `${ROOT}.pwt${SUFFIX}`;
 const TENANT_NAME = `Playwright Test ${SUFFIX}`;
 const HIERARCHY_TYPE = `PWHIER${SUFFIX}`;
@@ -46,10 +46,6 @@ const BOUNDARY_CHILD = `PWB2_${SUFFIX}`;
 
 const TENANT_FIXTURE = path.join(os.tmpdir(), `tenant-end-${SUFFIX}.xlsx`);
 const BOUNDARY_FIXTURE = path.join(os.tmpdir(), `boundary-end-${SUFFIX}.xlsx`);
-
-const ADMIN_USER = process.env.ADMIN_USER || 'ADMIN';
-const ADMIN_PASS = process.env.ADMIN_PASSWORD || 'eGov@123';
-const BASE_URL = process.env.BASE_URL || 'https://naipepea.digit.org';
 
 async function generateTenantFixture(): Promise<void> {
   const wb = new ExcelJS.Workbook();

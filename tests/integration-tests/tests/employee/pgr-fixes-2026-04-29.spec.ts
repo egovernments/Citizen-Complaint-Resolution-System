@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { loginEmployee, hrmsSearch, workflowBusinessService } from '../utils/launch-fixes/api.js';
+import { TENANT, BASE_URL } from '../utils/env';
 
 test.describe('02-pgr-employee: assign + workflow guards (#479 + follow-ups)', () => {
   test('PGR business service: PENDINGFORASSIGNMENT.ASSIGN forward-state is PENDINGATLME, not a self-loop', {
@@ -18,7 +19,7 @@ Catches CCRS#479 regression directly at the workflow-config layer.`,
     },
     tag: ['@area:pgr', '@ccrs:479', '@kind:regression', '@layer:api', '@persona:employee'] }, async () => {
     const auth = await loginEmployee();
-    const r = await workflowBusinessService(auth, 'ke.nairobi', 'PGR');
+    const r = await workflowBusinessService(auth, TENANT, 'PGR');
     const states: any[] = r.BusinessServices?.[0]?.states ?? [];
     const pfa = states.find(s => s.applicationStatus === 'PENDINGFORASSIGNMENT');
     const assign = pfa?.actions?.find((a: any) => a.action === 'ASSIGN');
@@ -45,7 +46,7 @@ Pairs with the workflow nextState test — together they ensure both halves of t
     // roles. For ASSIGN→PENDINGATLME, that's [PGR_LME, PGR_VIEWER].
     // Sanity check: PGR_LME alone returns more than zero employees.
     const auth = await loginEmployee();
-    const r = await hrmsSearch(auth, 'ke.nairobi', ['PGR_LME']);
+    const r = await hrmsSearch(auth, TENANT, ['PGR_LME']);
     expect(r.Employees?.length).toBeGreaterThan(0);
   });
 
@@ -67,13 +68,13 @@ If this fails on a fresh deployment, the configurator seed needs to add at least
     // this test checks the upstream data exists. If MDMS doesn't have
     // any rejection reasons, the form is hopeless regardless of UI fix.
     const auth = await loginEmployee();
-    const r = await fetch(`${process.env.NAIPEPEA_BASE ?? 'https://naipepea.digit.org'}/mdms-v2/v1/_search`, {
+    const r = await fetch(`${BASE_URL}/mdms-v2/v1/_search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         RequestInfo: { authToken: auth.token, apiId: 'Rainmaker' },
         MdmsCriteria: {
-          tenantId: 'ke.nairobi',
+          tenantId: TENANT,
           moduleDetails: [{ moduleName: 'RAINMAKER-PGR', masterDetails: [{ name: 'RejectionReasons' }] }],
         },
       }),
