@@ -53,6 +53,13 @@ const navGroups = [
       { id: 'complaint-types', nameKey: 'app.nav.complaint_types', path: '/manage/complaint-types', icon: AlertTriangle },
       { id: 'complaints', nameKey: 'app.nav.complaints', path: '/manage/complaints', icon: MessageSquare },
       { id: 'localization', nameKey: 'app.nav.localization', path: '/manage/localization', icon: Globe },
+      // EscalationConfig is the per-tenant PGR scheduler config (max depth +
+      // default SLA per level + per-service overrides). Without a dedicated
+      // sidebar entry it only surfaces via /manage/advanced (one of ~40
+      // generic MDMS resources), so operators looking for "escalation rules"
+      // never find it. Same icon as complaint-types so the link reads as
+      // "rules around complaints" rather than a new module.
+      { id: 'escalation-config', nameKey: 'app.nav.escalation_config', path: '/manage/escalation-config', icon: AlertTriangle },
     ],
   },
   {

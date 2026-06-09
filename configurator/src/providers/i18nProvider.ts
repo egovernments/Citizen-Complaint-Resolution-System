@@ -45,6 +45,7 @@ const customEnglishMessages: TranslationMessages = {
       complaint_types: 'Complaint Types',
       complaints: 'Complaints',
       localization: 'Localization',
+      escalation_config: 'Escalation Rules',
       people: 'People',
       employees: 'Employees',
       users: 'Users',
