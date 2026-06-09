@@ -1,8 +1,5 @@
 import Axios from "axios";
-
-function isKeycloakAuth() {
-  return window?.globalConfigs?.getConfig("AUTH_PROVIDER") === "keycloak";
-}
+import { isKeycloakAuth } from "../../auth/authSurface";
 
 function getTokenExchangeUrl() {
   return window?.globalConfigs?.getConfig("TOKEN_EXCHANGE_URL") || "";

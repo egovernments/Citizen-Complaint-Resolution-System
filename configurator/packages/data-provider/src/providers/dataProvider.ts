@@ -41,7 +41,13 @@ function normalizeMdmsRecord(mdms: MdmsRecord, config: ResourceConfig): RaRecord
   }
   return {
     ...data,
-    id: extractId(data, config),
+    // Key by the MDMS uniqueIdentifier (genuinely unique per record) rather
+    // than data[idField]. When two records share the idField value (e.g. two
+    // UserValidation rows both fieldType "mobile"), data[idField] collapsed
+    // them to the same react-admin id, so every row opened the first record.
+    // uniqueIdentifier is always distinct; fall back to data[idField] only
+    // for legacy records that lack it.
+    id: mdms.uniqueIdentifier || extractId(data, config),
     _uniqueIdentifier: mdms.uniqueIdentifier,
     _isActive: mdms.isActive,
     _auditDetails: mdms.auditDetails,
@@ -163,9 +169,25 @@ async function boundaryGetList(client: DigitApiClient, config: ResourceConfig, t
     return flat;
   }
 
-  // Always fetch the session tenant's tree first.
-  const rootTrees = await client.boundaryRelationshipSearch(tenantId, 'ADMIN').catch(() => []);
-  const rootFlat = flattenTrees(rootTrees as Record<string, unknown>[]);
+  // Fetch the boundary tree for EVERY hierarchy type defined on the tenant —
+  // not just "ADMIN". Boundaries can be seeded under any hierarchy (e.g. Maputo
+  // uses "Divisão Administrativa", so an "ADMIN"-only query returned an empty
+  // tree and left the Boundary picker blank). Falls back to "ADMIN" when no
+  // hierarchy definitions are found.
+  async function flatForTenant(t: string): Promise<RaRecord[]> {
+    const hierarchies = await client.boundaryHierarchySearch(t).catch(() => []);
+    const hierarchyTypes = (hierarchies as Record<string, unknown>[])
+      .map((h) => (typeof h.hierarchyType === 'string' ? h.hierarchyType : ''))
+      .filter(Boolean);
+    const types = hierarchyTypes.length > 0 ? hierarchyTypes : ['ADMIN'];
+    const treeLists = await Promise.all(
+      types.map((ht) => client.boundaryRelationshipSearch(t, ht).catch(() => [])),
+    );
+    return treeLists.flatMap((trees) => flattenTrees(trees as Record<string, unknown>[]));
+  }
+
+  // Always fetch the session tenant's tree(s) first.
+  const rootFlat = await flatForTenant(tenantId);
 
   // When the session is at state level, aggregate city sub-tenants too — a
   // seeded BOMET tree at `ke` would otherwise hide NAIROBI_CITY at
@@ -178,25 +200,9 @@ async function boundaryGetList(client: DigitApiClient, config: ResourceConfig, t
       .map((r) => String(r.data.code));
 
     if (cityTenants.length > 0) {
-      const hierarchyChecks = await Promise.allSettled(
-        cityTenants.map((ct) => client.boundaryHierarchySearch(ct)),
-      );
-      const tenantsWithHierarchies = cityTenants.filter((_, i) => {
-        const result = hierarchyChecks[i];
-        return result.status === 'fulfilled' && Array.isArray(result.value) && result.value.length > 0;
-      });
-
-      if (tenantsWithHierarchies.length > 0) {
-        const cityResults = await Promise.all(
-          tenantsWithHierarchies.map((ct) =>
-            client.boundaryRelationshipSearch(ct, 'ADMIN').catch(() => []),
-          ),
-        );
-        const cityFlat = cityResults.flatMap((trees) =>
-          flattenTrees(trees as Record<string, unknown>[]),
-        );
-        return [...rootFlat, ...cityFlat];
-      }
+      const cityFlatLists = await Promise.all(cityTenants.map((ct) => flatForTenant(ct)));
+      const cityFlat = cityFlatLists.flat();
+      if (cityFlat.length > 0) return [...rootFlat, ...cityFlat];
     }
   }
 

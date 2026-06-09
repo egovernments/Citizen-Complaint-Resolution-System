@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import { initLibraries } from "@egovernments/digit-ui-libraries";
+import { isKeycloakAuth } from "../packages/libraries/src/services/auth/authSurface";
 import "./index.css";
 import App from './App';
 import { applyTheme } from "./theme/applyTheme";
@@ -47,9 +48,6 @@ const normalizeLocale = () => {
     window.Digit.StoreData.setCurrentLanguage(DEFAULT_LOCALE);
   }
 };
-
-const isKeycloakAuth = () =>
-  window?.globalConfigs?.getConfig("AUTH_PROVIDER") === "keycloak";
 
 async function bootstrap() {
   if (isKeycloakAuth()) {
