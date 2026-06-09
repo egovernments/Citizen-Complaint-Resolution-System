@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+
+# NOTE: if /mdms-v2/v2/_create/CRS.* returns HTTP 400 with ClassCastException
+# (JSONObject cannot be cast to JSONArray), the registered schema's
+# x-ref-schema field landed as {} instead of []. Run fix-xref-schema.sql
+# against the MDMS postgres to repair in place.
+
 """
 Register CRS.CategorySLA + CRS.StateSLA + CRS.SLAAuditLog schemas on a
 target tenant via mdms-v2/schema/v1/_create.
