@@ -584,7 +584,22 @@ services:
     restart: "no"
 
   egov-user:
-    image: egovio/egov-user:maven-jdk21-9f83afb
+    # Custom image stacks (a) the tenant-aware encryption fix from
+    # egovernments/Digit-Core#1044 — cherry-pick of c6f5438 + call-site
+    # migration 884c5e6 — on (b) the ccc0e13 NPE fix base in
+    # _updatenovalidate / profile/_update. Built off the pre-d69ce29
+    # commit lineage, so it also sidesteps the SafeHtmlValidator
+    # BeanCreationException regression that blocks citizen registration on
+    # the stock maven-jdk21-* images (CCRS#771).
+    #
+    # When Digit-Core#1044 merges upstream and an official
+    # `egovio/egov-user:<post-1044>` tag exists, replace this pin with
+    # the canonical image.
+    #
+    # `registry.preview.egov.theflywheel.in` is a read-only HTTPS proxy
+    # in front of the egov-ci VPC registry — public cert, no
+    # insecure-registries trust required, pullable from anywhere.
+    image: registry.preview.egov.theflywheel.in/egovio/egov-user:1044-preview
     depends_on:
       pgbouncer:
         condition: service_healthy
