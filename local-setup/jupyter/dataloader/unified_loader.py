@@ -416,11 +416,12 @@ class UnifiedExcelReader:
 
                 # Auto-generate localization for parent type (only once)
                 if parent_type not in localized_parent_types:
+                    # Generate code by removing spaces and capitalizing, but keep original for message
                     parent_type_code = ''.join(word.capitalize() for word in parent_type.split())
                     loc_code = f"SERVICEDFS.{parent_type_code.upper()}"
                     localizations.append({
                         'code': loc_code,
-                        'message': parent_type,
+                        'message': parent_type,  # Keep original format with spaces
                         'module': 'rainmaker-pgr',
                         'locale': 'en_IN'
                     })
@@ -430,15 +431,16 @@ class UnifiedExcelReader:
             if pd.notna(row.get('Complaint sub type*')) and str(row['Complaint sub type*']).strip() != '':
                 sub_type_name = str(row['Complaint sub type*']).strip()
 
-                # Auto-generate service code from sub-type name
-                service_code = ''.join(word.capitalize() for word in sub_type_name.split())
+                # Use the exact sub-type name as service code (preserve user input)
+                service_code = sub_type_name
 
+                # Keep original parent type format for menuPath
                 menu_path_value = current_parent['type'] if current_parent else sub_type_name
 
                 ct = {
-                    'serviceCode': service_code,
-                    'name': sub_type_name,
-                    'menuPath': menu_path_value,
+                    'serviceCode': service_code,  # Keep exact user input as service code
+                    'name': sub_type_name,  # Keep original format with spaces
+                    'menuPath': menu_path_value,  # Keep original parent type format
                     'active': True
                 }
 
@@ -456,10 +458,12 @@ class UnifiedExcelReader:
                 complaint_types.append(ct)
 
                 # Auto-generate localization for sub-type
-                loc_code = f"SERVICEDFS.{service_code.upper()}"
+                # Create a code-friendly version for localization key (remove spaces, uppercase)
+                loc_key = ''.join(word.upper() for word in sub_type_name.split())
+                loc_code = f"SERVICEDFS.{loc_key}"
                 localizations.append({
                     'code': loc_code,
-                    'message': sub_type_name,
+                    'message': sub_type_name,  # Keep original format with spaces
                     'module': 'rainmaker-pgr',
                     'locale': 'en_IN'
                 })

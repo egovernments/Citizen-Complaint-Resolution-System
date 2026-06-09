@@ -60,8 +60,7 @@ export function ComplaintTypeCreate() {
 
   return (
     <DigitCreate title="Create Complaint Type" record={defaultRecord} afterCreate={afterCreate}>
-      <DigitFormInput source="name" label="Name" validate={v.name} />
-      <DigitFormCodeInput source="serviceCode" label="Service Code" deriveFrom="name" validate={v.codeRequired} />
+      <DigitFormInput source="menuPath" label="Complaint Type (Menu Path)" validate={v.required} />
       <DigitFormSelect
         source="department"
         label="Department"
@@ -70,7 +69,8 @@ export function ComplaintTypeCreate() {
         validate={v.required}
       />
       <DigitFormInput source="slaHours" label="SLA (hours)" type="number" validate={v.slaHours} />
-      <DigitFormInput source="menuPath" label="Menu Path" />
+      <DigitFormInput source="name" label="Complaint Sub-Type" validate={v.name} />
+      <DigitFormCodeInput source="serviceCode" label="Service Code" deriveFrom="name" validate={v.codeRequired} />
     </DigitCreate>
   );
 }

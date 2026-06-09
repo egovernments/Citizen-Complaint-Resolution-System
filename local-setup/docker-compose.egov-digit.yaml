@@ -259,7 +259,7 @@ services:
   # Elasticsearch Indexer - Reads Kafka topics, indexes into Elasticsearch
   # ===========================================================================
   egov-indexer:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-indexer:v2.9.2-4a60f20
+    image: egovio/egov-indexer:maven-jdk21-9f83afb
     profiles: ["search"]
     container_name: egov-indexer
     depends_on:
@@ -389,7 +389,15 @@ services:
     - egov-network
 
   egov-enc-service:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-enc-service:v2.9.2-4a60f20
+    # `:generatekey-endpoint` stacks the POST /crypto/v1/_generatekey
+    # endpoint (Digit-Core #1354) on top of :v2.9.2-4a60f20. Without
+    # _generatekey, the first encrypt for a brand-new state root (created
+    # by MCP tenant_bootstrap or similar) throws "Tenant Id not found" —
+    # enc-service only discovers tenants via MDMS search under
+    # STATE_LEVEL_TENANT_ID, and a brand-new root isn't under any
+    # existing root's tenant.tenants list. Bump can be replaced with a
+    # versioned tag once Digit-Core #1354 lands and a release ships.
+    image: registry.preview.egov.theflywheel.in/egovio/egov-enc-service:generatekey-endpoint
     container_name: egov-enc-service
     depends_on:
       egov-mdms-service:
@@ -442,7 +450,7 @@ services:
 
   # MDMS Backend (actual service)
   mdms-backend:
-    image: registry.preview.egov.theflywheel.in/egovio/mdms-v2:v2.9.2-4a60f20
+    image: egovio/mdms-v2:maven-jdk21-9f83afb
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -510,7 +518,7 @@ services:
     - egov-network
 
   egov-idgen:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-idgen:v2.9.2-4a60f20
+    image: egovio/egov-idgen:maven-jdk21-9f83afb
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -576,7 +584,22 @@ services:
     restart: "no"
 
   egov-user:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-user:updatenovalidate-fix
+    # Custom image stacks (a) the tenant-aware encryption fix from
+    # egovernments/Digit-Core#1044 — cherry-pick of c6f5438 + call-site
+    # migration 884c5e6 — on (b) the ccc0e13 NPE fix base in
+    # _updatenovalidate / profile/_update. Built off the pre-d69ce29
+    # commit lineage, so it also sidesteps the SafeHtmlValidator
+    # BeanCreationException regression that blocks citizen registration on
+    # the stock maven-jdk21-* images (CCRS#771).
+    #
+    # When Digit-Core#1044 merges upstream and an official
+    # `egovio/egov-user:<post-1044>` tag exists, replace this pin with
+    # the canonical image.
+    #
+    # `registry.preview.egov.theflywheel.in` is a read-only HTTPS proxy
+    # in front of the egov-ci VPC registry — public cert, no
+    # insecure-registries trust required, pullable from anywhere.
+    image: registry.preview.egov.theflywheel.in/egovio/egov-user:1044-preview
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -657,7 +680,7 @@ services:
     - egov-network
 
   egov-workflow-v2:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-workflow-v2:jdk21-cds
+    image: egovio/egov-workflow-v2:maven-jdk21-983e8b2
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -739,7 +762,7 @@ services:
     - egov-network
 
   egov-localization:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-localization:jdk21-cds
+    image: egovio/egov-localization:maven-jdk21-9f83afb
     container_name: egov-localization
     depends_on:
       pgbouncer:
@@ -787,7 +810,7 @@ services:
     - egov-network
 
   boundary-service:
-    image: registry.preview.egov.theflywheel.in/egovio/boundary-service:v2.9.2-dual-mode
+    image: egovio/boundary-service:maven-jdk21-9f83afb
     container_name: boundary-service
     depends_on:
       pgbouncer:
@@ -845,7 +868,7 @@ services:
     - egov-network
 
   egov-accesscontrol:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-accesscontrol:v2.9.2-4a60f20
+    image: egovio/egov-accesscontrol:maven-jdk21-9f83afb
     container_name: egov-accesscontrol
     depends_on:
       pgbouncer:
@@ -923,7 +946,7 @@ services:
       - egov-network
 
   egov-persister:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-persister:v2.9.2-4a60f20
+    image: egovio/egov-persister:maven-jdk21-9f83afb
     container_name: egov-persister
     depends_on:
       pgbouncer:
@@ -973,7 +996,7 @@ services:
   # Filestore Service - File upload/download
   # ===========================================================================
   egov-filestore:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-filestore:v2.9.2-4a60f20
+    image: egovio/egov-filestore:maven-jdk21-9f83afb
     container_name: egov-filestore
     depends_on:
       pgbouncer:
@@ -1303,7 +1326,7 @@ services:
   # URL Shortening Service (required by PGR for notification links)
   # ===========================================================================
   egov-url-shortening:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-url-shortening:v2.9.2-4a60f20
+    image: egovio/egov-url-shortening:maven-jdk21-983e8b2
     container_name: egov-url-shortening
     restart: unless-stopped
     depends_on:

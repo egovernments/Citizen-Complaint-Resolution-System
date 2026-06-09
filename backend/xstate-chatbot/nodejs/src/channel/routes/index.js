@@ -2,14 +2,28 @@ const express = require("express"),
   router = express.Router(),
   config = require("../../env-variables"),
   sessionManager = require("../../session/session-manager"),
-  channelProvider = require("../");
-remindersService = require("../../machine/service/reminders-service");
+  channelProvider = require("../"),
+  remindersService = require("../../machine/service/reminders-service");
 
 router.post("/message", async (req, res) => {
   try {
     console.log("Request URL: " + req.originalUrl);
     console.log('Request Body Object: ' + JSON.stringify(req.body));
-    let reformattedMessage = await channelProvider.processMessageFromUser(req);
+    
+    // Check if this is an image upload in sandbox mode
+    let tenantIdForUpload = null;
+    if (config.enableSandboxMode && req.body && req.body.NumMedia && parseInt(req.body.NumMedia) > 0) {
+      // This is an image upload - try to get tenant from tracker
+      // Extract mobile number from the From field (format: whatsapp:+917061170992)
+      let fromNumber = req.body.From;
+      if (fromNumber && fromNumber.includes(':')) {
+        let mobileNumber = fromNumber.split(':')[1].replace('+91', '');
+        tenantIdForUpload = sessionManager.getTenantForMobileNumber(mobileNumber);
+        console.log(`Image upload detected for ${mobileNumber}, using tenant: ${tenantIdForUpload || 'default'}`);
+      }
+    }
+    
+    let reformattedMessage = await channelProvider.processMessageFromUser(req, tenantIdForUpload);
     if (reformattedMessage != null) sessionManager.fromUser(reformattedMessage);
   } catch (e) {
     console.log(e);

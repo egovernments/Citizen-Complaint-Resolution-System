@@ -55,13 +55,18 @@ export function deriveValidMobile(regex: string, length: number, preferred?: str
   const matches = (s?: string): s is string => !!s && (!re || re.test(s));
   if (matches(preferred)) return preferred;
   const n = length && length > 0 ? length : 10;
-  // Lead digit: a literal (`^8`) or the first member of a class (`^[6-9]`).
-  const body = (regex || '').replace(/^\^/, '');
-  const lead = body.match(/^\[([0-9])/) || body.match(/^([0-9])/);
-  const first = lead ? lead[1] : '9';
-  for (const d of ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']) {
-    const cand = first + d.repeat(Math.max(0, n - 1));
-    if (cand.length === n && matches(cand)) return cand;
+  // Try every lead digit x fill digit at length n (and n+1 / n-1, since
+  // patterns like ^0?[17][0-9]{8}$ accept 9 OR 10 digits). Looping the lead
+  // digit instead of parsing it handles optional prefixes like `0?` and
+  // character classes uniformly.
+  for (const len of [n, n + 1, n - 1]) {
+    if (len <= 0) continue;
+    for (const f of '0123456789') {
+      for (const d of '0123456789') {
+        const cand = f + d.repeat(len - 1);
+        if (cand.length === len && matches(cand)) return cand;
+      }
+    }
   }
   return preferred || '9'.repeat(n);
 }
@@ -967,6 +972,28 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
 
       const target = args.target_tenant as string;
       const source = (args.source_tenant as string) || 'pg';
+      if (!args.mobile_regex) {
+        // When no explicit regex is passed (e.g. the bootstrap wizard, which
+        // only sends target_tenant + source_tenant), inherit the SOURCE
+        // tenant's own mobile rule from common-masters.UserValidation so the
+        // derived ADMIN mobile validates against the same egov-user rule the
+        // target inherits (e.g. Kenya ^0?[17][0-9]{8}$) instead of a hardcoded
+        // India default. Tenant-specific values stay in MDMS, not in code.
+        try {
+          const uv = await digitApi.mdmsV2SearchRaw(source, 'common-masters.UserValidation', { limit: 50 });
+          const mob = (uv || []).find(
+            (r: any) => (r && r.data && r.data.fieldType === 'mobile') || (r && r.uniqueIdentifier === 'mobile'),
+          );
+          if (mob && mob.data && mob.data.rules && mob.data.rules.pattern) {
+            (args as any).mobile_regex = mob.data.rules.pattern;
+            if (!args.mobile_length && mob.data.rules.minLength) {
+              (args as any).mobile_length = mob.data.rules.minLength;
+            }
+          }
+        } catch (e) {
+          /* no UserValidation at source -> fall through to the generic default */
+        }
+      }
       const mobileRegex = (args.mobile_regex as string) || '^[6-9][0-9]{9}$';
 
       const results: {
@@ -1105,7 +1132,6 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         // reads role→action mappings directly from MDMS at the target tenant.
         'ACCESSCONTROL-ACTIONS-TEST.actions-test',
         'ACCESSCONTROL-ROLES.roles',
-        'ACCESSCONTROL-ROLEACTIONS.roleactions',
         // ── tenant module discovery ──
         // citymodule rows tell the UI which modules (PGR/HRMS/etc.) are
         // available on the tenant; without them the citizen menu is empty.
@@ -1151,6 +1177,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         'Workflow.AutoEscalationStatesToIgnore',
         // ── inbox ──
         'INBOX.InboxQueryConfiguration',
+        'ACCESSCONTROL-ROLEACTIONS.roleactions',
       ];
 
       // The MDMS schema definition + data writes go through Kafka and there's
@@ -1294,10 +1321,19 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           pct: 35 + Math.floor((i / schemasForCopy.length) * 40),
         });
         try {
-          // Fetch source records and existing target records for this schema
+          // Fetch source records and existing target records for this schema.
+          // Filter targetRecords to exact-tenant rows — MDMS v2 search is
+          // hierarchical and may return parent-tenant records (e.g. pg's
+          // ThemeConfig when querying mz). Without the filter, the bootstrap
+          // falsely sees the record as already present and skips copying it,
+          // leaving the target tenant without its own copy.
           const sourceRecords = await digitApi.mdmsV2SearchRaw(source, schemaCode, { limit: 500 });
           const targetRecords = await digitApi.mdmsV2SearchRaw(target, schemaCode, { limit: 500 });
-          const targetByUid = new Map(targetRecords.map((r) => [r.uniqueIdentifier, r]));
+          const targetByUid = new Map(
+            targetRecords
+              .filter((r) => (r as { tenantId?: string }).tenantId === target)
+              .map((r) => [r.uniqueIdentifier, r]),
+          );
 
           for (const record of sourceRecords) {
             const existing = targetByUid.get(record.uniqueIdentifier);
@@ -1443,6 +1479,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
                 `Invalid mobile number (expected ${Number(args.mobile_length) || 10} digits matching ${mobileRegex})`,
             }];
       emitProgress({ phase: 'uservalidation:start', message: `Synthesizing ${validationRules.length} UserValidation rule(s)`, pct: 76 });
+      let uvNewlySeeded = false;
       try {
         try {
           await digitApi.mdmsSchemaCreate(target, 'common-masters.UserValidation',
@@ -1475,15 +1512,42 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         // too. egov-user resolves UserValidation by EXACT tenant, so filter the
         // existence check to exact-tenant rows by fieldType.
         const existingUVraw = await digitApi.mdmsV2SearchRaw(target, 'common-masters.UserValidation', { limit: 50 });
-        const haveField = (ft: string) => existingUVraw.some(
+        const getExistingUV = (ft: string) => existingUVraw.find(
           (r) => (r as { tenantId?: string }).tenantId === target
             && ((r as { data?: { fieldType?: string } }).data?.fieldType === ft),
         );
         for (const rule of validationRules) {
-          if (haveField(rule.fieldType)) {
+          const existing = getExistingUV(rule.fieldType);
+          const existingPattern = (existing as { data?: { rules?: { pattern?: string } } } | undefined)
+            ?.data?.rules?.pattern;
+
+          if (existing && existingPattern === rule.pattern) {
+            // Already correct — no action needed.
             results.data.skipped.push(`common-masters.UserValidation/${rule.fieldType}`);
             continue;
           }
+
+          if (existing && existingPattern !== rule.pattern) {
+            // Wrong pattern present — egov-user may have auto-seeded its own
+            // default (India ^[6-9][0-9]{9}$) when it received the first
+            // tenantId=<target> API call before our bootstrap ran Step 3b.
+            // Update in-place so egov-user picks up the correct country pattern.
+            await digitApi.mdmsV2UpdateData(existing, {
+              fieldType: rule.fieldType,
+              isActive: true,
+              rules: {
+                pattern: rule.pattern,
+                minLength: rule.minLength ?? undefined,
+                maxLength: rule.maxLength ?? undefined,
+                errorMessage: rule.errorMessage ?? `Invalid ${rule.fieldType}`,
+              },
+            });
+            results.data.copied.push(`common-masters.UserValidation/${rule.fieldType} (pattern corrected: ${existingPattern} → ${rule.pattern})`);
+            uvNewlySeeded = true;
+            continue;
+          }
+
+          // No existing record — create fresh.
           await mdmsCreateWithSchemaWait(target, 'common-masters.UserValidation', rule.fieldType, {
             fieldType: rule.fieldType,
             isActive: true,
@@ -1495,9 +1559,39 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             },
           });
           results.data.copied.push(`common-masters.UserValidation/${rule.fieldType} (synthesized, pattern=${rule.pattern})`);
+          uvNewlySeeded = true;
         }
       } catch (e) {
         results.data.failed.push(`common-masters.UserValidation: ${e instanceof Error ? e.message : String(e)}`);
+      }
+
+      // Wait until the CORRECT pattern is readable in MDMS before Step 4 creates
+      // the ADMIN user. Simply checking record existence is not enough — the
+      // data-handler may have already seeded an India record for this tenant, so
+      // "exists" would be true immediately while our UPDATE (published to Kafka)
+      // is still being processed by the persister. We must confirm the target
+      // pattern itself is in MDMS so egov-user's Cache MISS reads the right data.
+      if (uvNewlySeeded) {
+        const pollIntervalMs = 2000;
+        const maxAttempts = 15; // up to 30 s
+        let uvReady = false;
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+          try {
+            const uvRows = await digitApi.mdmsV2SearchRaw(target, 'common-masters.UserValidation', { limit: 5 });
+            const allCorrect = validationRules.every(rule =>
+              uvRows.some(r =>
+                (r as { tenantId?: string }).tenantId === target &&
+                (r as { data?: { fieldType?: string } }).data?.fieldType === rule.fieldType &&
+                (r as { data?: { rules?: { pattern?: string } } }).data?.rules?.pattern === rule.pattern,
+              ),
+            );
+            if (allCorrect) { uvReady = true; break; }
+          } catch { /* ignore transient read errors, keep polling */ }
+          await new Promise(res => setTimeout(res, pollIntervalMs));
+        }
+        if (!uvReady) {
+          console.warn(`[tenant_bootstrap] UserValidation correct pattern not yet readable on "${target}" after ${maxAttempts * pollIntervalMs / 1000}s — proceeding anyway`);
+        }
       }
 
       // ── Step 3c: bridge ACCESSCONTROL-ACTIONS.actions from -TEST ─────────
@@ -1918,6 +2012,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           // isn't in the city's local Department schema. Backfill any
           // root-only depts/desigs into the city before building the
           // employee.
+          let deptNewlySeeded = false;
           if (target !== targetRoot) {
             const cityDeptCodes = new Set<string>();
             for (const d of cityDepts) {
@@ -1934,6 +2029,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
                   code, (d.data as Record<string, unknown>) || { code });
                 (cityDepts as Record<string, unknown>[]).push(created as unknown as Record<string, unknown>);
                 cityDeptCodes.add(code);
+                deptNewlySeeded = true;
               } catch (e) {
                 const msg = e instanceof Error ? e.message : String(e);
                 if (!isDuplicateError(msg)) {
@@ -1961,6 +2057,31 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
                 if (!isDuplicateError(msg)) {
                   console.error(`[tenant_bootstrap] city Designation backfill ${code}: ${msg.slice(0, 200)}`);
                 }
+              }
+            }
+
+            // Same Kafka-persister lag as UserValidation: mdmsV2Create publishes
+            // to Kafka and returns before the persister writes to Postgres.
+            // egov-hrms validates department/designation codes against MDMS at
+            // employeeCreate time — if the backfilled rows aren't visible yet it
+            // rejects with ERR_HRMS_INVALID_DEPARTMENT. Poll until at least one
+            // city-scoped Department row is readable before calling employeeCreate.
+            if (deptNewlySeeded) {
+              const pollIntervalMs = 2000;
+              const maxAttempts = 15; // up to 30 s
+              let deptReady = false;
+              for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                try {
+                  const deptRows = await digitApi.mdmsV2SearchRaw(target, 'common-masters.Department', { limit: 5 });
+                  if (deptRows.some(r => (r as { tenantId?: string }).tenantId === target)) {
+                    deptReady = true;
+                    break;
+                  }
+                } catch { /* ignore transient read errors, keep polling */ }
+                await new Promise(res => setTimeout(res, pollIntervalMs));
+              }
+              if (!deptReady) {
+                console.warn(`[tenant_bootstrap] Department not yet readable on "${target}" after ${maxAttempts * pollIntervalMs / 1000}s — proceeding anyway`);
               }
             }
           }

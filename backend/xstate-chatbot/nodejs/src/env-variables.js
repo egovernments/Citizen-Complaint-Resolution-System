@@ -1,26 +1,32 @@
 const os = require('os');
 
 const envVariables = {
-    serviceId : process.env.NAME || 'xstate-chatbot',
-    ver : process.env.VERSION || '0.0.1',
+    serviceId: process.env.NAME || 'xstate-chatbot',
+    ver: process.env.VERSION || '0.0.1',
 
     port: process.env.SERVICE_PORT || 8082,
-    contextPath : process.env.CONTEXT_PATH || '/xstate-chatbot',
+    contextPath: process.env.CONTEXT_PATH || '/xstate-chatbot',
 
-   //whatsAppProvider: process.env.WHATSAPP_PROVIDER || 'ValueFirst',
-   whatsAppProvider: process.env.WHATSAPP_PROVIDER || 'Console',
+    whatsAppProvider: process.env.WHATSAPP_PROVIDER || 'ValueFirst',
 
     serviceProvider: process.env.SERVICE_PROVIDER || 'eGov',
 
     repoProvider: process.env.REPO_PROVIDER || 'InMemory',
 
-    whatsAppBusinessNumber : process.env.WHATSAPP_BUSINESS_NUMBER || '918750975975',
+    whatsAppBusinessNumber: process.env.WHATSAPP_BUSINESS_NUMBER || '919880900990',
 
     rootTenantId: process.env.ROOT_TENANTID || 'pg',
 
     supportedLocales: process.env.SUPPORTED_LOCALES || 'en_IN',
 
-    googleAPIKey: process.env.GOOGLE_MAPS_API_KEY || 'AIzaSyDjSk-Bw1OuiOE-5K7jsP6KGN2rbcN7iBk',
+    // Sandbox mode configuration
+    enableSandboxMode: process.env.ENABLE_SANDBOX_MODE === 'true',
+    tenantManagementHost: process.env.TENANT_MANAGEMENT_HOST || 'https://sandbox-demo.digit.org',
+    sandboxHost: process.env.SANDBOX_HOST || 'https://sandbox-demo.digit.org',
+
+
+
+    googleAPIKey: process.env.GOOGLE_MAPS_API_KEY || '',
 
     dateFormat: process.env.DATEFORMAT || 'DD/MM/YYYY',
     timeZone: process.env.TIMEZONE || 'Asia/Kolkata',
@@ -34,7 +40,7 @@ const envVariables = {
         dbPort: process.env.DB_PORT || '5432',
         dbName: process.env.DB_NAME || 'postgres4',
         dbUsername: process.env.DB_USER || 'postgres',
-        dbPassword: process.env.DB_PASSWORD || '1234',
+        dbPassword: process.env.DB_PASSWORD || '',
         dbSSL: process.env.DB_SSL === 'true'
     },
 
@@ -56,10 +62,10 @@ const envVariables = {
     twilio: {
         accountSid: process.env.TWILIO_ACCOUNT_SID || '',
         authToken: process.env.TWILIO_AUTH_TOKEN || '',
-        whatsappNumber: process.env.TWILIO_WHATSAPP_NUMBER || '',
+        whatsappNumber: process.env.TWILIO_WHATSAPP_NUMBER || '+919880900990',
         baseUrl: process.env.TWILIO_BASE_URL || '',
     },
-   
+
     valueFirstWhatsAppProvider: {
         valueFirstUsername: process.env.VALUEFIRST_USERNAME || 'demo',
         valueFirstPassword: process.env.VALUEFIRST_PASSWORD || 'demo',
@@ -80,20 +86,20 @@ const envVariables = {
         valuefirstNotificationOtherWSBillSuccessTemplateid: process.env.VALUEFIRST_NOTIFICATION_OTHER_WS_BILL_SUCCESS_TEMPLATEID || '3618675,4156317',
         valuefirstNotificationTrackCompliantTemplateid: process.env.VALUEFIRST_NOTIFICATION_TRACK_COMPLAINT_TEMPLATEID || '4052381,4156335',
         valuefirstNotificationLodgeCompliantTemplateid: process.env.VALUEFIRST_NOTIFICATION_LODGE_COMPLAINT_TEMPLATEID || '4052379,4156333',
-        valuefirstLoginAuthorizationHeader: process.env.VALUEFIRST_LOGIN_AUTHORIZATION_HEADER || 'Basic bXNldmF1cmJhbndhOjE+PkdpZ3pINCU=',
+        valuefirstLoginAuthorizationHeader: process.env.VALUEFIRST_LOGIN_AUTHORIZATION_HEADER || '',
     },
 
     egovServices: {
-        egovServicesHost: process.env.EGOV_SERVICES_HOST || 'https://unified-demo.digit.org/',
-        externalHost: process.env.EXTERNAL_HOST || 'https://unified-demo.digit.org/',
-        searcherHost: process.env.EGOV_SEARCHER_HOST || "https://unified-demo.digit.org/",
-        userServiceHost: process.env.USER_SERVICE_HOST || 'https://unified-demo.digit.org/',
+        egovServicesHost: process.env.EGOV_SERVICES_HOST || 'https://sandbox-demo.digit.org/',
+        externalHost: process.env.EXTERNAL_HOST || 'https://sandbox-demo.digit.org/',
+        searcherHost: process.env.EGOV_SEARCHER_HOST || 'https://sandbox-demo.digit.org/',
+        userServiceHost: process.env.USER_SERVICE_HOST || 'https://sandbox-demo.digit.org/',
         userServiceOAuthPath: process.env.USER_SERVICE_OAUTH_PATH || 'user/oauth/token',
         userServiceCreateCitizenPath: process.env.USER_SERVICE_CREATE_CITIZEN_PATH || 'user/citizen/_create',
         userServiceUpdateProfilePath: process.env.USER_SERVICE_UPDATE_PROFILE_PATH || 'user/profile/_update',
         userServiceCitizenDetailsPath: process.env.USER_SERVICE_CITIZEN_DETAILS_PATH || 'user/_details',
 
-        egovlocalizationhost : process.env.LOCALISATION_SERVICE_HOST || "https://unified-demo.digit.org/",
+        egovlocalizationhost: process.env.LOCALISATION_SERVICE_HOST || 'https://sandbox-demo.digit.org/',
         mdmsSearchPath: process.env.MDMS_SEARCH_PATH || 'egov-mdms-service/v1/_search',
         localisationServiceSearchPath: process.env.LOCALISATION_SERVICE_SEARCH_PATH || 'localization/messages/v1/_search',
         billServiceSearchPath: process.env.BILL_SERVICE_SEARCH_PATH || 'billing-service/bill/v2/_fetchbill',
@@ -103,13 +109,13 @@ const envVariables = {
         collectonServicSearchEndpoint: process.env.COLLECTION_SERVICE_SEARCH_ENDPOINT || 'collection-services/payments/$module/_search',
         pgrCreateEndpoint: process.env.PGR_CREATE_ENDPOINT || 'pgr-services/v2/request/_create',
         pgrSearchEndpoint: process.env.PGR_SEARCH_ENDPOINT || 'pgr-services/v2/request/_search',
-        swachCreateEndpoint:process.env.SWACH_CREATE_ENDPOINT || "swach-services/v2/request/_create",
-        swachSearchEndpoint:process.env.SWACH_SEARCH_ENDPOINT || "swach-services/v2/request/_search",
+        swachCreateEndpoint: process.env.SWACH_CREATE_ENDPOINT || "swach-services/v2/request/_create",
+        swachSearchEndpoint: process.env.SWACH_SEARCH_ENDPOINT || "swach-services/v2/request/_search",
         pgrv1CreateEndpoint: process.env.PGR_CREATE_ENDPOINT || 'rainmaker-pgr/v1/requests/_create',
         pgrv1SearchEndpoint: process.env.PGR_SEARCH_ENDPOINT || 'rainmaker-pgr/v1/requests/_search',
         waterConnectionSearch: process.env.WATER_CONNECTION_SEARCH || 'ws-services/wc/_search?searchType=CONNECTION',
         sewerageConnectionSearch: process.env.SEWERAGE_CONNECTION_SEARCH || 'sw-services/swc/_search?searchType=CONNECTION',
-        nlpEngineHost: process.env.NLP_ENGINE_HOST || 'https://unified-demo.digit.org/',
+        nlpEngineHost: process.env.NLP_ENGINE_HOST || 'https://sandbox-demo.digit.org/',
         cityFuzzySearch: process.env.CITY_FUZZY_SEARCH || 'nlp-engine/fuzzy/city',
         localityFuzzySearch: process.env.LOCALITY_FUZZY_SEARCH || 'nlp-engine/fuzzy/locality',
 
@@ -124,14 +130,15 @@ const envVariables = {
 
     userService: {
         userServiceHardCodedPassword: process.env.USER_SERVICE_HARDCODED_PASSWORD || '123456',
-        userLoginAuthorizationHeader: process.env.USER_LOGIN_AUTHORIZATION_HEADER || 'Basic ZWdvdi11c2VyLWNsaWVudDo=',
+        userLoginAuthorizationHeader: process.env.USER_LOGIN_AUTHORIZATION_HEADER || '',
         systemUserMobile: process.env.SYSTEM_USER_MOBILE || '9999999999',
     },
 
     pgrUseCase: {
         pgrVersion: process.env.PGR_VERSION || 'v2',
         complaintSearchLimit: process.env.COMPLAINT_SEARCH_LIMIT || 3,
-        informationImageFilestoreId: process.env.INFORMATION_IMAGE_FILESTORE_ID ||'5425a590-4105-4036-9769-e916c5176930',
+        informationImageFilestoreId: process.env.INFORMATION_IMAGE_FILESTORE_ID || '5425a590-4105-4036-9769-e916c5176930',
+        locationInstructionsUrl: process.env.LOCATION_INSTRUCTIONS_URL || 'https://cdn-icons-png.flaticon.com/512/535/535239.png',
         pgrUpdateTopic: process.env.PGR_UPDATE_TOPIC || 'update-pgr-request',
         geoSearch: process.env.GEO_SEARCH === 'false' ? false : true
     },

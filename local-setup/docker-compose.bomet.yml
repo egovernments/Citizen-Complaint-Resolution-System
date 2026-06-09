@@ -19,19 +19,3 @@ services:
     environment:
       SPRING_FLYWAY_ENABLED: "false"
 
-  # CCRS #622 / Digit-Core #1044: tenant-aware encryption.
-  #
-  # Custom image built on egov-ci (89.167.55.190) by cherry-picking c6f5438
-  # ("add tenant-aware encryption overloads") onto ccc0e13 ("prevent NPE in
-  # _updatenovalidate and profile _update"), then migrating the 6
-  # encryptObject(...) call sites in UserService.java to pass the request's
-  # tenantId. See https://github.com/egovernments/Digit-Core/pull/1044 —
-  # once the upstream `egovio/egov-user` image carries the same fix this
-  # block can be dropped.
-  #
-  # `registry.preview.egov.theflywheel.in` is a read-only TLS proxy
-  # (nginx vhost on the egov dev box) in front of the egov-ci VPC
-  # registry — same blob storage, valid public certificate, pullable
-  # from anywhere without insecure-registries setup.
-  egov-user:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-user:dynamic-tenant-bomet

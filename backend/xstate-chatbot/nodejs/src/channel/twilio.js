@@ -41,9 +41,9 @@ class TwilioWhatsAppProvider {
         return fileInBase64String.replace(/^data:[^;]+;base64,/, '');
     }
 
-    async fileStoreAPICall(fileName, fileData, contentType = 'application/octet-stream') {
+    async fileStoreAPICall(fileName, fileData, contentType = 'application/octet-stream', tenantId = null) {
         var url = config.egovServices.egovServicesHost + config.egovServices.egovFilestoreServiceUploadEndpoint;
-        url = url + '&tenantId=' + config.rootTenantId;
+        url = url + '&tenantId=' + (tenantId || config.rootTenantId);
         var form = new FormData();
         form.append("file", fileData, {
             filename: fileName,
@@ -59,7 +59,7 @@ class TwilioWhatsAppProvider {
         return filestore['files'][0]['fileStoreId'];
     }
 
-    async convertFromBase64AndStore(fileInBase64String) {
+    async convertFromBase64AndStore(fileInBase64String, tenantId = null) {
         if (!fileInBase64String || typeof fileInBase64String !== "string") {
             throw new Error("Invalid fileInBase64String: Value is missing or not a string");
         }
@@ -71,7 +71,7 @@ class TwilioWhatsAppProvider {
         var tempName = 'pgr-whatsapp-' + Date.now() + fileExtension;
 
         try {
-            var filestoreId = await this.fileStoreAPICall(tempName, buff, contentType);
+            var filestoreId = await this.fileStoreAPICall(tempName, buff, contentType, tenantId);
             return filestoreId;
         } catch (error) {
             console.error("Error in fileStoreAPICall:", error);
@@ -170,7 +170,7 @@ class TwilioWhatsAppProvider {
         return number;
     }
 
-    async getUserMessage(requestBody) {
+    async getUserMessage(requestBody, tenantId = null) {
         console.log("Twilio - Received requestBody:", JSON.stringify(requestBody, null, 2));
 
         let reformattedMessage = {};
@@ -213,7 +213,7 @@ class TwilioWhatsAppProvider {
                     });
                     const fileBuffer = Buffer.from(response.data);
                     const tempName = 'pgr-whatsapp-' + Date.now() + fileExtension;
-                    input = await this.fileStoreAPICall(tempName, fileBuffer, mediaType || response.headers['content-type']);
+                    input = await this.fileStoreAPICall(tempName, fileBuffer, mediaType || response.headers['content-type'], tenantId);
                 } catch (error) {
                     console.error("Error downloading/storing media:", error);
                     input = ' ';
@@ -247,7 +247,7 @@ class TwilioWhatsAppProvider {
         return reformattedMessage;
     }
 
-    async processMessageFromUser(req) {
+    async processMessageFromUser(req, providedTenantId = null) {
         let reformattedMessage = {};
         let requestBody = req.body;
 
@@ -261,7 +261,10 @@ class TwilioWhatsAppProvider {
             return null;
         }
 
-        reformattedMessage = await this.getUserMessage(requestBody);
+        // Use provided tenant ID, or fall back to query parameter, or use default
+        let tenantId = providedTenantId || req.query.tenantId || config.rootTenantId;
+        
+        reformattedMessage = await this.getUserMessage(requestBody, tenantId);
         return reformattedMessage;
     }
 
@@ -365,9 +368,20 @@ class TwilioWhatsAppProvider {
                 else if (type === 'image' || type === 'pdf') {
                     // For media messages, get the file URL
                     try {
-                        let fileStoreId = content;
-                        console.log("Twilio - Attempting to fetch filestore ID:", fileStoreId);
-                        let fileURL = await this.getFileForFileStoreId(fileStoreId);
+                        let fileURL;
+                        
+                        // Check if content is already a direct URL (for location instructions, etc.)
+                        if (content && (content.startsWith('http://') || content.startsWith('https://'))) {
+                            // This is already a URL, use it directly
+                            fileURL = content;
+                            console.log("Twilio - Using direct URL for image:", fileURL);
+                        } else {
+                            // This is a filestore ID, fetch the URL from filestore
+                            let fileStoreId = content;
+                            console.log("Twilio - Fetching from filestore ID:", fileStoreId);
+                            fileURL = await this.getFileForFileStoreId(fileStoreId);
+                        }
+                        
                         let caption = extraInfo && extraInfo.fileName ? extraInfo.fileName : '';
                         await this.sendMediaMessage(userMobile, fileURL, caption);
                     } catch (fileError) {

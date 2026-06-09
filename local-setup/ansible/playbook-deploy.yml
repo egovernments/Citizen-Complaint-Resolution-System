@@ -188,8 +188,7 @@
           content: "{{ {'insecure-registries': insecure_registries} | to_nice_json }}\n"
           mode: '0644'
         register: daemon_json
-        vars:
-          insecure_registries: "{{ insecure_registries | default([]) }}"
+        when: insecure_registries | default([]) | length > 0
 
       - name: Restart docker if daemon.json changed
         service:
@@ -1292,6 +1291,175 @@
         - nginx_features.configurator | default(false)
         - configurator_build is defined
 
+    # ---- digit-integration-tests dashboards (opt-in: enable_integration_tests) ----
+    # Builds the react-admin catalog dashboard from the VENDORED in-tree source
+    # (tests/integration-tests/) and serves both the vanilla + react-admin
+    # dashboards as static files under /var/www. catalog.json + runs/ are
+    # produced out-of-band by a test runner (`make publish`), NOT this deploy —
+    # a placeholder catalog is seeded only if none exists yet so a fresh box
+    # renders. The nginx location blocks live in templates/nginx-site.conf.j2
+    # behind `nginx_features.integration_tests`; on hosts with
+    # nginx_preserve_vhost (e.g. Bomet) the template is NOT rendered, so wire
+    # the blocks from tests/integration-tests/deploy/nginx-integration-tests.conf
+    # by hand there.
+    - name: "integration-tests — install Node 20 if missing (Vite build needs it)"
+      ansible.builtin.apt:
+        name: nodejs
+        state: present
+      when:
+        - enable_integration_tests | default(false)
+        - ansible_system != "Darwin"
+
+    - name: "integration-tests — build react-admin dashboard (vendored in-tree source)"
+      ansible.builtin.command: >-
+        bash {{ playbook_dir }}/files/integration-tests-build.sh
+        "{{ integration_tests_src | default(playbook_dir ~ '/../../tests/integration-tests') }}"
+        "{{ integration_tests_dashboard_base | default('/integration-tests-v2/') }}"
+      register: it_build
+      changed_when: true
+      when: enable_integration_tests | default(false)
+
+    - name: "integration-tests — resolve vendored source dir"
+      ansible.builtin.set_fact:
+        integration_tests_dir: "{{ it_build.stdout_lines | last }}"
+      when:
+        - enable_integration_tests | default(false)
+        - it_build is defined
+        - it_build.stdout_lines | default([]) | length > 0
+
+    - name: "integration-tests — ensure web roots exist"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - /var/www/integration-tests
+        - /var/www/integration-tests-v2
+      when:
+        - enable_integration_tests | default(false)
+        - integration_tests_dir is defined
+
+    # rsync on the target; exclude the runner-owned data so re-deploying the
+    # static dashboard never clobbers a published run.
+    - name: "integration-tests — sync vanilla dashboard → /var/www/integration-tests/"
+      ansible.builtin.command: >-
+        rsync -a --no-perms --no-times --no-owner --no-group
+        --exclude=catalog.json --exclude=history.json --exclude=runs
+        "{{ integration_tests_dir }}/dashboard/" /var/www/integration-tests/
+      changed_when: true
+      when:
+        - enable_integration_tests | default(false)
+        - integration_tests_dir is defined
+
+    - name: "integration-tests — sync react-admin dist → /var/www/integration-tests-v2/"
+      ansible.builtin.command: >-
+        rsync -a --delete --no-perms --no-times --no-owner --no-group
+        "{{ integration_tests_dir }}/dashboard-react-admin/dist/" /var/www/integration-tests-v2/
+      changed_when: true
+      when:
+        - enable_integration_tests | default(false)
+        - integration_tests_dir is defined
+
+    - name: "integration-tests — seed placeholder catalog/history (only if absent; a real publish overwrites)"
+      ansible.builtin.copy:
+        dest: "/var/www/integration-tests/{{ item.name }}"
+        content: "{{ item.content }}"
+        force: false
+        mode: '0644'
+      loop:
+        - { name: 'catalog.json', content: '{"tests":[],"runs":[]}' }
+        - { name: 'history.json', content: '{"perTest":{},"runs":[]}' }
+      when:
+        - enable_integration_tests | default(false)
+        - integration_tests_dir is defined
+
+    - name: "integration-tests — point v2 dashboard at the shared catalog/runs (symlinks)"
+      ansible.builtin.file:
+        src: "../integration-tests/{{ item }}"
+        dest: "/var/www/integration-tests-v2/{{ item }}"
+        state: link
+        force: true
+      loop: [ 'catalog.json', 'history.json', 'runs' ]
+      when:
+        - enable_integration_tests | default(false)
+        - integration_tests_dir is defined
+
+    - name: "integration-tests — ensure htpasswd tooling for basic-auth"
+      ansible.builtin.apt:
+        name: apache2-utils
+        state: present
+      when:
+        - enable_integration_tests | default(false)
+        - integration_tests_basic_auth_password is defined
+        - ansible_system != "Darwin"
+
+    # Idempotent via `creates`: rotate the password by deleting the file and
+    # re-running. Password comes from vault/host_vars; the task skips entirely
+    # if unset (dashboards would then 401 with no valid user — set it).
+    - name: "integration-tests — basic-auth user in /etc/nginx/.htpasswd-tests"
+      ansible.builtin.command: >-
+        htpasswd -bBc /etc/nginx/.htpasswd-tests
+        "{{ integration_tests_basic_auth_user | default('digit-tests') }}"
+        "{{ integration_tests_basic_auth_password }}"
+      args:
+        creates: /etc/nginx/.htpasswd-tests
+      no_log: true
+      when:
+        - enable_integration_tests | default(false)
+        - integration_tests_basic_auth_password is defined
+        - ansible_system != "Darwin"
+
+    # ---- RUN button: on-box test-runner daemon (opt-in: enable_integration_tests_runner) ----
+    # Backs the "Run tests" button on the v2 dashboard. Loopback-only Node
+    # service; nginx (/integration-tests/api/, nginx_features.integration_tests_runner)
+    # is the auth front. Requires the dashboards block above (needs
+    # integration_tests_dir). A run is heavy and shares the box with the live
+    # stack, so this stays opt-in and nice'd. Linux only.
+    # Deps FIRST, so the next task installs the browser revision that matches
+    # the locked @playwright/test (1.59.1) rather than whatever an unpinned
+    # `npx playwright` would pull.
+    - name: "integration-tests runner — npm deps for the test suite (tsx + playwright)"
+      ansible.builtin.shell: npm ci || npm install
+      args:
+        chdir: "{{ integration_tests_dir }}"
+      changed_when: true
+      when:
+        - enable_integration_tests_runner | default(false)
+        - integration_tests_dir is defined
+        - ansible_system != "Darwin"
+
+    - name: "integration-tests runner — install Playwright browsers (repo-local binary, matched version)"
+      ansible.builtin.command: >-
+        node_modules/.bin/playwright install --with-deps chromium
+      args:
+        chdir: "{{ integration_tests_dir }}"
+      changed_when: true
+      when:
+        - enable_integration_tests_runner | default(false)
+        - integration_tests_dir is defined
+        - ansible_system != "Darwin"
+
+    - name: "integration-tests runner — install systemd unit"
+      ansible.builtin.template:
+        src: templates/integration-tests-runner.service.j2
+        dest: /etc/systemd/system/integration-tests-runner.service
+        mode: '0644'
+      when:
+        - enable_integration_tests_runner | default(false)
+        - integration_tests_dir is defined
+        - ansible_system != "Darwin"
+
+    - name: "integration-tests runner — enable + (re)start daemon"
+      ansible.builtin.systemd:
+        name: integration-tests-runner
+        state: restarted
+        enabled: true
+        daemon_reload: true
+      when:
+        - enable_integration_tests_runner | default(false)
+        - integration_tests_dir is defined
+        - ansible_system != "Darwin"
+
     # Host nginx (Linux/Debian) — apt nginx + /etc/nginx site. Skipped on
     # macOS, where nginx runs as a container instead (next block).
     - name: "Host nginx — Linux/Debian only"
@@ -1712,15 +1880,6 @@
         docker compose {{ compose_files }} restart egov-hrms
       args:
         chdir: "{{ digit_dir }}"
-      when: state_root != 'pg'
-
-    - name: "post-bootstrap — wait for egov-hrms to be healthy after restart"
-      ansible.builtin.shell: docker inspect --format '{{ "{{" }}.State.Health.Status{{ "}}" }}' egov-hrms
-      register: hrms_health_post
-      retries: 30
-      delay: 10
-      until: hrms_health_post.stdout == 'healthy'
-      changed_when: false
       when: state_root != 'pg'
 
     # `docker compose restart egov-user` above does NOT cascade to

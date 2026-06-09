@@ -1657,7 +1657,18 @@ export const UICustomizations = {
                   {String(value ? (column.translate ? t(column.prefix ? `${column.prefix}${value}` : value) : value) : t("ES_COMMON_NA"))}
                 </Link>
               </span>
-              <span>{t(`SERVICEDEFS.${row?.businessObject?.service?.serviceCode?.toUpperCase()}`)}</span>
+              {(() => {
+                // Show the Complaint Type (menuPath / category) instead of
+                // the sub-type (serviceCode). serviceDefs are cached in
+                // SessionStorage by useServiceDefs (the inbox filter loads
+                // them on mount). Fall back to the serviceCode key if the
+                // def or its menuPath is unavailable.
+                const sc = row?.businessObject?.service?.serviceCode;
+                const defs = Digit.SessionStorage.get("serviceDefs") || [];
+                const def = Array.isArray(defs) ? defs.find((d) => d?.serviceCode === sc) : null;
+                const typeCode = def?.menuPath || sc;
+                return <span>{t(`SERVICEDEFS.${(typeCode || "").toUpperCase()}`)}</span>;
+              })()}
             </div>
           );
 

@@ -2,6 +2,7 @@ import type { DataProvider, RaRecord, GetListResult, GetOneResult, GetManyResult
 import type { DigitApiClient } from '../client/DigitApiClient.js';
 import type { MdmsRecord } from '../client/types.js';
 import { getResourceConfig, type ResourceConfig } from './resourceRegistry.js';
+import { migrateThemeConfigToV3 } from './themeConfigMigration.js';
 
 /** Extended data provider type with DIGIT-specific custom methods */
 export type DigitDataProvider = DataProvider & {
@@ -30,7 +31,14 @@ function normalizeRecord(raw: Record<string, unknown>, config: ResourceConfig): 
 }
 
 function normalizeMdmsRecord(mdms: MdmsRecord, config: ResourceConfig): RaRecord {
-  const data = mdms.data || {};
+  let data = mdms.data || {};
+  // Legacy ThemeConfig records (v1 nested / v2 semantic shapes) don't carry the
+  // flat v3 keys the Theme editor binds to, so the form would load blank. Project
+  // them into the v3 shape on read so the editor shows the live colors and saves
+  // a clean record. Idempotent for records already in v3. See themeConfigMigration.
+  if (config.schema === 'common-masters.ThemeConfig') {
+    data = migrateThemeConfigToV3(data as Record<string, unknown>);
+  }
   return {
     ...data,
     id: extractId(data, config),

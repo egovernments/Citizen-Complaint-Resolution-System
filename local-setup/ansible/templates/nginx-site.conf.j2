@@ -66,6 +66,47 @@ server {
   }
 
 {% endif %}
+{% if nginx_features.integration_tests | default(false) %}
+  # digit-integration-tests dashboards — vanilla catalog SPA at
+  # /integration-tests/ and the react-admin rebuild at /integration-tests-v2/.
+  # Built from the vendored tests/integration-tests/ source and synced to
+  # /var/www/integration-tests{,-v2}/ by the deploy. Behind basic-auth
+  # (/etc/nginx/.htpasswd-tests, created by the playbook). catalog.json + runs/
+  # are produced out-of-band by a test runner (make publish), not the deploy.
+  location = /integration-tests    { return 301 /integration-tests/; }
+  location = /integration-tests-v2 { return 301 /integration-tests-v2/; }
+  location /integration-tests/ {
+    alias /var/www/integration-tests/;
+    auth_basic "DIGIT integration tests";
+    auth_basic_user_file /etc/nginx/.htpasswd-tests;
+    add_header Cache-Control "no-cache, must-revalidate" always;
+    try_files $uri $uri/ $uri/index.html =404;
+  }
+  location /integration-tests-v2/ {
+    alias /var/www/integration-tests-v2/;
+    auth_basic "DIGIT integration tests";
+    auth_basic_user_file /etc/nginx/.htpasswd-tests;
+    add_header Cache-Control "no-cache, must-revalidate" always;
+    try_files $uri $uri/ /integration-tests-v2/index.html =404;
+  }
+{% if nginx_features.integration_tests_runner | default(false) %}
+  # RUN button → on-box test-runner daemon (loopback only; nginx is the auth).
+  # SAME realm string as the dashboards above so the browser reuses the already-
+  # entered basic-auth creds for the API calls. Longest-prefix match means this
+  # wins over /integration-tests/ for /integration-tests/api/*. Long read-timeout
+  # + buffering off so /run/<id>/log can stream a live console.
+  location /integration-tests/api/ {
+    auth_basic "DIGIT integration tests";
+    auth_basic_user_file /etc/nginx/.htpasswd-tests;
+    proxy_pass http://127.0.0.1:{{ integration_tests_runner_port | default(8181) }}/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_read_timeout 3600s;
+    proxy_buffering off;
+  }
+{% endif %}
+
+{% endif %}
   # Grafana dashboard
   location /grafana/ {
     proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_grafana_port }};
