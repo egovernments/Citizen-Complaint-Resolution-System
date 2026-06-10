@@ -1,12 +1,11 @@
 import {
-  LANDSCAPE_CHARTS,
-  LANDSCAPE_METRICS,
+  KPI_METRICS,
+  CHART_WIDGETS,
   getSubMetricDef,
   subMetricValueKey,
-} from "./complaintLandscape";
+} from "./supervisorMetrics";
 
-export const KPI_METRICS = LANDSCAPE_METRICS;
-export const CHART_WIDGETS = LANDSCAPE_CHARTS;
+export { KPI_METRICS, CHART_WIDGETS, getSubMetricDef, subMetricValueKey };
 
 const channelRatio = (sources) => ({
   name: "pct",
@@ -33,6 +32,16 @@ const openWindow = (name) => ({
   window: { name, timeRole: "filed_at" },
   filters: { is_open: true },
   measures: [{ name: "total", agg: "count" }],
+});
+
+const officerTopCount = (filters, timeWindow) => ({
+  grain: "facts",
+  ...(timeWindow ? { window: timeWindow } : {}),
+  filters,
+  dimensions: ["current_assignee_uuid"],
+  measures: [{ name: "total", agg: "count" }],
+  sort: [{ by: "total", dir: "desc" }],
+  limit: 1,
 });
 
 export const BATCH_QUERIES = {
@@ -119,12 +128,68 @@ export const BATCH_QUERIES = {
     measures: [{ name: "total", agg: "count" }],
     sort: [{ by: "created_dow", dir: "asc" }],
   },
+  // Employee performance
+  ep_open_by_officer: officerTopCount({ is_open: true }),
+  ep_ttr_avg: {
+    grain: "facts",
+    window: { name: "wtd", timeRole: "resolved_at" },
+    filters: { is_resolved: true },
+    measures: [{ name: "avg_ms", agg: "avg", column: "resolution_ms" }],
+  },
+  ep_ttr_median: {
+    grain: "facts",
+    window: { name: "wtd", timeRole: "resolved_at" },
+    filters: { is_resolved: true },
+    measures: [{ name: "median_ms", agg: "percentile", column: "resolution_ms", p: 50 }],
+  },
+  ep_closed_by_officer: officerTopCount(
+    { is_resolved: true },
+    { name: "wtd", timeRole: "resolved_at" }
+  ),
+  ep_leaderboard_closed: {
+    grain: "facts",
+    window: { name: "wtd", timeRole: "resolved_at" },
+    filters: { is_resolved: true },
+    dimensions: ["current_assignee_uuid"],
+    measures: [{ name: "total", agg: "count" }],
+    sort: [{ by: "total", dir: "desc" }],
+    limit: 5,
+  },
+  ep_reopen_7d: {
+    grain: "facts",
+    window: { name: "last_7d", timeRole: "resolved_at" },
+    filters: { is_resolved: true },
+    measures: [
+      {
+        name: "pct",
+        agg: "ratio",
+        numerator: { agg: "count", filter: { is_reopened: true } },
+        denominator: { agg: "count" },
+      },
+    ],
+  },
+  ep_reopen_30d: {
+    grain: "facts",
+    window: { name: "last_30d", timeRole: "resolved_at" },
+    filters: { is_resolved: true },
+    measures: [
+      {
+        name: "pct",
+        agg: "ratio",
+        numerator: { agg: "count", filter: { is_reopened: true } },
+        denominator: { agg: "count" },
+      },
+    ],
+  },
 };
 
 const DOW_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export const UNSUPPORTED_VALUE = "—";
 export const LOADING_VALUE = "…";
+
+const MS_PER_DAY = 86400000;
+const MS_PER_HOUR = 3600000;
 
 function daysElapsedThisWeek() {
   const day = new Date().getDay();
@@ -139,6 +204,23 @@ function formatPercentDelta() {
   return UNSUPPORTED_VALUE;
 }
 
+function formatMsAsDays(ms) {
+  const days = Number(ms) / MS_PER_DAY;
+  return Number.isFinite(days) ? days.toFixed(1) : UNSUPPORTED_VALUE;
+}
+
+function formatMsAsHours(ms) {
+  const hours = Number(ms) / MS_PER_HOUR;
+  return Number.isFinite(hours) ? hours.toFixed(1) : UNSUPPORTED_VALUE;
+}
+
+function formatLeaderboardRank(subMetric, results) {
+  if (!subMetric.queryKey) return UNSUPPORTED_VALUE;
+  const rows = results?.[subMetric.queryKey]?.rows;
+  if (!rows?.length) return UNSUPPORTED_VALUE;
+  return "1";
+}
+
 export function formatSubMetricValue(subMetric, results) {
   if (!subMetric || subMetric.format === "na" || subMetric.format === "text") {
     return UNSUPPORTED_VALUE;
@@ -146,6 +228,10 @@ export function formatSubMetricValue(subMetric, results) {
 
   if (subMetric.format === "percentDelta" || subMetric.format === "multiplier") {
     return formatPercentDelta();
+  }
+
+  if (subMetric.format === "ordinal") {
+    return formatLeaderboardRank(subMetric, results);
   }
 
   if (subMetric.derived === "dailyAvgFromWeekly") {
@@ -173,7 +259,8 @@ export function formatSubMetricValue(subMetric, results) {
   switch (subMetric.format) {
     case "integer":
       return String(Math.round(Number(raw)));
-    case "percentInteger": {
+    case "percentInteger":
+    case "percentNoDecimal": {
       const pct = Number(raw) <= 1 ? Number(raw) * 100 : Number(raw);
       return Number.isFinite(pct) ? `${Math.round(pct)}%` : UNSUPPORTED_VALUE;
     }
@@ -185,6 +272,10 @@ export function formatSubMetricValue(subMetric, results) {
       const n = Number(raw);
       return Number.isFinite(n) ? n.toFixed(1) : UNSUPPORTED_VALUE;
     }
+    case "hoursDays":
+      return formatMsAsDays(raw);
+    case "hoursDecimal":
+      return formatMsAsHours(raw);
     default:
       return String(raw);
   }
@@ -192,7 +283,7 @@ export function formatSubMetricValue(subMetric, results) {
 
 export function buildAllSubMetricValues(results, loading) {
   const values = {};
-  for (const metric of LANDSCAPE_METRICS) {
+  for (const metric of KPI_METRICS) {
     for (const sub of metric.subMetrics) {
       const key = subMetricValueKey(metric.id, sub.id);
       if (loading) {
@@ -211,8 +302,6 @@ export function getDisplayValue(metric, subMetricId, allValues, loading) {
   if (loading) return LOADING_VALUE;
   return allValues[key] ?? UNSUPPORTED_VALUE;
 }
-
-export { getSubMetricDef, subMetricValueKey };
 
 export function parseBarChart(result, labelKey) {
   if (!result?.rows?.length) return [];

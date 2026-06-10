@@ -1,4 +1,4 @@
-import { CHART_WIDGETS, KPI_METRICS } from "../config/kpiQueries";
+import { CHART_WIDGETS, KPI_METRICS } from "../config/supervisorMetrics";
 
 export const GRID_COLS = 12;
 export const KPI_ROW_HEIGHT = 52;

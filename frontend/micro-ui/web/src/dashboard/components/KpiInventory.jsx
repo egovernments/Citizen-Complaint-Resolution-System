@@ -1,6 +1,5 @@
 import React, { useMemo } from "react";
-import { KPI_METRICS } from "../config/kpiQueries";
-import { INVENTORY_SECTIONS } from "../config/complaintLandscape";
+import { KPI_METRICS, INVENTORY_SECTIONS } from "../config/supervisorMetrics";
 
 const DRAG_TYPE = "application/x-supervisor-dashboard-kpi";
 
