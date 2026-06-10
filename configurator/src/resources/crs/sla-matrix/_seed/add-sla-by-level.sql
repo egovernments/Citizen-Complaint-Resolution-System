@@ -19,7 +19,7 @@
 
 UPDATE eg_mdms_schema_definition
 SET definition = jsonb_set(definition, '{properties,slaHoursByLevel}',
-  '{"type":"array","description":"Optional per-escalation-level SLA hours; index = escalation level ([L0, L1, L2, ...]). Each cell is a number (hours) or null (fall through to the next SLA source). NOTE: items is deliberately {} because the egov-mdms-v2 validator throws ClassCastException on JSON-Schema oneOf unions mixing number/null; cell shape and bounds (0 <= n <= 8760) are enforced application-side, same precedent as slaHoursByState additionalProperties: true.","items":{}}'::jsonb)
+  '{"type":"array","description":"Optional per-escalation-level SLA hours; index = escalation level ([L0, L1, L2, ...]). Each cell is a number (hours) or null (fall through to the next SLA source). NOTE: items is deliberately {} because the egov-mdms-v2 validator throws ClassCastException on JSON-Schema oneOf unions mixing number/null; cell shape and bounds are enforced application-side (0 < n <= 8760; zero/negative cells are ignored and fall through), same precedent as slaHoursByState additionalProperties: true.","items":{}}'::jsonb)
 WHERE code = 'CRS.CategorySLA'
   AND definition->'properties'->'slaHoursByLevel' IS NULL;
 
