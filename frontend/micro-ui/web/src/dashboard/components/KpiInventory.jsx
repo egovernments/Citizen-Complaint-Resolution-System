@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { KPI_METRICS } from "../config/kpiQueries";
-import { INVENTORY_SECTIONS, getSubMetricDef, subMetricValueKey } from "../config/complaintLandscape";
+import { INVENTORY_SECTIONS } from "../config/complaintLandscape";
 
 const DRAG_TYPE = "application/x-supervisor-dashboard-kpi";
 
@@ -11,8 +11,6 @@ const KpiInventory = ({
   onAddKpi,
   onDragKpiStart,
   onDragKpiEnd,
-  subMetricValues = {},
-  getSubMetricId,
 }) => {
   const sections = useMemo(
     () =>
@@ -27,12 +25,6 @@ const KpiInventory = ({
   );
 
   const totalAvailable = sections.reduce((sum, section) => sum + section.metrics.length, 0);
-
-  const previewValue = (metric) => {
-    const subId = getSubMetricId?.(metric.id) || metric.defaultSubMetricId;
-    const sub = getSubMetricDef(metric, subId);
-    return subMetricValues[subMetricValueKey(metric.id, sub.id)] ?? "…";
-  };
 
   const handleDragStart = (event, metricId) => {
     event.dataTransfer.setData("text/plain", metricId);
@@ -94,29 +86,19 @@ const KpiInventory = ({
                         draggable
                         onDragStart={(event) => handleDragStart(event, metric.id)}
                         onDragEnd={onDragKpiEnd}
-                        className="kpi-inventory-item tw-cursor-grab tw-rounded-md tw-border tw-border-teal-700 tw-bg-teal-900/40 tw-px-3 tw-py-2 active:tw-cursor-grabbing"
+                        className="kpi-inventory-item tw-flex tw-cursor-grab tw-items-center tw-justify-between tw-gap-2 tw-rounded-md tw-border tw-border-teal-700 tw-bg-teal-900/40 tw-px-3 tw-py-2 active:tw-cursor-grabbing"
                       >
-                        <div className="tw-flex tw-items-start tw-justify-between tw-gap-2">
-                          <div className="tw-min-w-0">
-                            <p className="tw-text-xs tw-font-medium tw-leading-snug tw-text-teal-50">
-                              {metric.metric}
-                            </p>
-                            <p className="tw-mt-0.5 tw-text-[10px] tw-text-teal-400">
-                              {metric.subMetrics.length} sub-metrics
-                            </p>
-                            <p className="tw-mt-0.5 tw-text-xs tw-font-semibold tw-text-teal-200">
-                              {previewValue(metric)}
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onMouseDown={(event) => event.stopPropagation()}
-                            onClick={() => onAddKpi(metric.id)}
-                            className="tw-flex-shrink-0 tw-rounded tw-bg-teal-700 tw-px-1.5 tw-py-0.5 tw-text-[10px] tw-font-medium tw-text-white hover:tw-bg-teal-600"
-                          >
-                            Add
-                          </button>
-                        </div>
+                        <p className="tw-min-w-0 tw-flex-1 tw-text-xs tw-font-medium tw-leading-snug tw-text-teal-50">
+                          {metric.metric}
+                        </p>
+                        <button
+                          type="button"
+                          onMouseDown={(event) => event.stopPropagation()}
+                          onClick={() => onAddKpi(metric.id)}
+                          className="tw-flex-shrink-0 tw-rounded tw-bg-teal-700 tw-px-1.5 tw-py-0.5 tw-text-[10px] tw-font-medium tw-text-white hover:tw-bg-teal-600"
+                        >
+                          Add
+                        </button>
                       </div>
                     </li>
                   ))}

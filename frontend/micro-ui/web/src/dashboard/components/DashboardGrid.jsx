@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { Responsive, WidthProvider } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
@@ -6,6 +6,7 @@ import {
   DROPPING_ITEM,
   DROPPING_ITEM_ID,
   KPI_ROW_HEIGHT,
+  RANKED_LIST_WIDGET_ID,
   WIDGETS,
   isKpiWidget,
 } from "../constants/layoutConfig";
@@ -22,23 +23,24 @@ const ResponsiveGridLayout = WidthProvider(Responsive);
 
 const METRIC_LOOKUP = Object.fromEntries(KPI_METRICS.map((m) => [m.id, m]));
 
+const WIDGET_PADDING = "tw-p-3";
+
 const ChartPlaceholder = ({ message }) => (
-  <div className="dashboard-widget tw-flex tw-h-full tw-items-center tw-justify-center tw-p-4 tw-text-sm tw-text-slate-500">
+  <div className={`tw-flex tw-h-full tw-items-center tw-justify-center tw-text-sm tw-text-slate-500 ${WIDGET_PADDING}`}>
     {message}
   </div>
 );
 
 const WidgetHeader = ({ metric, subMetric }) => (
-  <div className="dashboard-drag-handle tw-border-b tw-border-slate-100 tw-px-4 tw-py-2">
-    <p className="tw-text-xs tw-font-semibold tw-text-slate-700">{metric}</p>
+  <div className={`dashboard-drag-handle tw-min-w-0 tw-shrink-0 tw-border-b tw-border-slate-100 tw-px-3 tw-py-2`}>
+    <p className="tw-truncate tw-text-xs tw-font-semibold tw-text-slate-700">{metric}</p>
     <p className="tw-truncate tw-text-[10px] tw-text-slate-400">{subMetric}</p>
   </div>
 );
 
 const GRID_MARGIN = [16, 16];
 const DROP_SIZE = { w: DROPPING_ITEM.w, h: DROPPING_ITEM.h };
-const FULL_RESIZE_HANDLES = ["n", "s", "e", "w", "ne", "nw", "se", "sw"];
-const KPI_RESIZE_HANDLES = [];
+const RESIZE_HANDLES = ["se"];
 
 const DashboardGrid = ({
   layout,
@@ -54,12 +56,15 @@ const DashboardGrid = ({
   loading = false,
 }) => {
   const isExternalDrag = Boolean(draggingKpiId);
+  const activeItemRef = useRef(null);
+  const interactionRef = useRef(null);
+  const [preventCollision, setPreventCollision] = useState(true);
 
   const layouts = useMemo(
     () => ({
       lg: layout.map((item) => ({
         ...item,
-        resizeHandles: isKpiWidget(item.i) ? KPI_RESIZE_HANDLES : FULL_RESIZE_HANDLES,
+        resizeHandles: RESIZE_HANDLES,
       })),
     }),
     [layout]
@@ -97,13 +102,13 @@ const DashboardGrid = ({
     if (widgetId === "cl-chart-categories") {
       if (loading && !chartData.categories?.length) return <ChartPlaceholder message="Loading…" />;
       if (!chartData.categories?.length) return <ChartPlaceholder message="No data" />;
-      return <DepartmentBarChart data={chartData.categories} labelRotate />;
+      return <DepartmentBarChart data={chartData.categories} />;
     }
 
     if (widgetId === "cl-chart-wards") {
       if (loading && !chartData.wards?.length) return <ChartPlaceholder message="Loading…" />;
       if (!chartData.wards?.length) return <ChartPlaceholder message="No data" />;
-      return <DepartmentBarChart data={chartData.wards} labelRotate />;
+      return <DepartmentBarChart data={chartData.wards} />;
     }
 
     if (widgetId === "cl-chart-dow") {
@@ -112,7 +117,7 @@ const DashboardGrid = ({
         <DepartmentBarChart
           data={chartData.dow}
           categoryOrder={WEEKDAY_CHART_ORDER}
-          labelRotate={false}
+          compact
         />
       );
     }
@@ -135,11 +140,11 @@ const DashboardGrid = ({
   };
 
   const handleDrop = useCallback(
-    (_layout, _item, event) => {
+    (gridLayout, item, event) => {
       const widgetId = event.dataTransfer.getData("text/plain");
       if (!widgetId || !isKpiWidget(widgetId)) return;
       if (layout.some((entry) => entry.i === widgetId)) return;
-      onDropKpi(widgetId);
+      onDropKpi(widgetId, { x: item.x, y: item.y });
     },
     [layout, onDropKpi]
   );
@@ -156,19 +161,53 @@ const DashboardGrid = ({
       const next = allLayouts.lg || layout;
       const withoutPlaceholder = next.filter((item) => item.i !== DROPPING_ITEM_ID);
       if (withoutPlaceholder.length !== next.length) return;
-      onLayoutChange(withoutPlaceholder);
+
+      const mode = interactionRef.current;
+      onLayoutChange(withoutPlaceholder, activeItemRef.current, {
+        passThrough: mode === "drag",
+        mode,
+      });
     },
     [isExternalDrag, layout, onLayoutChange]
   );
 
-  const handleLayoutStop = useCallback(
+  const handleDragStop = useCallback(
     (nextLayout) => {
       if (isExternalDrag) return;
       const withoutPlaceholder = nextLayout.filter((item) => item.i !== DROPPING_ITEM_ID);
-      onLayoutStop(withoutPlaceholder);
+      const activeId = activeItemRef.current;
+      activeItemRef.current = null;
+      interactionRef.current = null;
+      setPreventCollision(true);
+      onLayoutStop(withoutPlaceholder, "drag", activeId);
     },
     [isExternalDrag, onLayoutStop]
   );
+
+  const handleResizeStop = useCallback(
+    (nextLayout) => {
+      if (isExternalDrag) return;
+      const withoutPlaceholder = nextLayout.filter((item) => item.i !== DROPPING_ITEM_ID);
+      const activeId = activeItemRef.current;
+      activeItemRef.current = null;
+      interactionRef.current = null;
+      setPreventCollision(true);
+      onLayoutStop(withoutPlaceholder, "resize", activeId);
+    },
+    [isExternalDrag, onLayoutStop]
+  );
+
+  const handleDragStart = useCallback((_layout, _oldItem, newItem) => {
+    activeItemRef.current = newItem.i;
+    interactionRef.current = "drag";
+    setPreventCollision(true);
+  }, []);
+
+  const handleResizeStart = useCallback((_layout, _oldItem, newItem) => {
+    activeItemRef.current = newItem.i;
+    interactionRef.current = "resize";
+    setPreventCollision(false);
+  }, []);
 
   return (
     <div>
@@ -182,11 +221,13 @@ const DashboardGrid = ({
           margin={GRID_MARGIN}
           containerPadding={[0, 0]}
           onLayoutChange={handleLayoutChange}
-          onDragStop={handleLayoutStop}
-          onResizeStop={handleLayoutStop}
+          onDragStart={handleDragStart}
+          onResizeStart={handleResizeStart}
+          onDragStop={handleDragStop}
+          onResizeStop={handleResizeStop}
           draggableHandle=".dashboard-drag-handle, .dashboard-kpi-widget"
           compactType={null}
-          preventCollision
+          preventCollision={preventCollision}
           isResizable
           isDroppable={isExternalDrag}
           droppingItem={DROPPING_ITEM}
@@ -214,8 +255,13 @@ const DashboardGrid = ({
               );
             }
 
+            const isRankedList = item.i === RANKED_LIST_WIDGET_ID;
+
             return (
-              <div key={item.i} className="tw-group tw-relative tw-h-full">
+              <div
+                key={item.i}
+                className={`tw-group tw-relative ${isRankedList ? "tw-h-auto" : "tw-h-full"}`}
+              >
                 <button
                   type="button"
                   title="Remove from dashboard"
@@ -225,9 +271,21 @@ const DashboardGrid = ({
                 >
                   ×
                 </button>
-                {meta && <WidgetHeader metric={meta.metric} subMetric={meta.subMetric} />}
-                <div className="tw-h-[calc(100%-52px)] tw-min-h-[300px] tw-overflow-hidden">
-                  {renderWidget(item.i)}
+                <div
+                  className={`dashboard-widget ${
+                    isRankedList ? "dashboard-list-widget" : "dashboard-chart-widget"
+                  } tw-flex tw-min-h-0 tw-w-full tw-flex-col ${
+                    isRankedList ? "tw-h-auto tw-self-start" : "tw-h-full"
+                  }`}
+                >
+                  {meta && <WidgetHeader metric={meta.metric} subMetric={meta.subMetric} />}
+                  <div
+                    className={`tw-flex tw-min-h-0 tw-shrink-0 tw-flex-col tw-justify-start tw-overflow-visible ${WIDGET_PADDING} ${
+                      isRankedList ? "" : "tw-flex-1"
+                    }`}
+                  >
+                    {renderWidget(item.i)}
+                  </div>
                 </div>
               </div>
             );
