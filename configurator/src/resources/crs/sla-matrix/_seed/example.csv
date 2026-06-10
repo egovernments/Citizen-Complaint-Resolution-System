@@ -1,0 +1,4 @@
+path,category,subcategoryL1,subcategoryL2,sla_new,sla_triage,sla_forwarded,sla_investigation,sla_awaiting,sla_resolved
+SAMPLE,General,Standard,Default issues,,,,72,,
+SAMPLE,General,Urgent,Critical issues,,,,24,,
+SAMPLE,Other,Misc,Catch-all,,,,168,,
