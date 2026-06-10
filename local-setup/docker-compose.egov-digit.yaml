@@ -665,7 +665,7 @@ services:
     - egov-network
 
   egov-workflow-v2:
-    image: egovio/egov-workflow-v2:maven-jdk21-983e8b2
+    image: 10.0.0.4:5000/egovio/egov-workflow-v2:maven-jdk21-43f925c2
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -1224,7 +1224,7 @@ services:
   # ===========================================================================
   pgr-services:
     # Pinned: escalation stack (PR #815). :latest predates /escalation/_trigger.
-    image: registry.preview.egov.theflywheel.in/egovio/pgr-services-dev:escalation-prd-042c61758
+    image: registry.preview.egov.theflywheel.in/egovio/pgr-services-dev:escalation-prd-1d2e95262
     depends_on:
       pgbouncer:
         condition: service_healthy
