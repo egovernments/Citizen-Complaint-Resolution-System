@@ -29,6 +29,40 @@ export interface PreBreachWarning {
 }
 
 /**
+ * Opt-in role-level escalation (PRD primary journey: complaints nobody
+ * has picked up). `enabled` gates everything — absent/false means the
+ * scheduler's behaviour is byte-identical to today. `actingRoleByState`
+ * maps each watched workflow state to the role that owes action;
+ * `supervisorRoleByRole` is the role ladder used to resolve the
+ * escalation target; `maxPerScan` caps role-escalations per scan (the
+ * backend defaults to 10 when absent).
+ */
+export interface RoleEscalation {
+  enabled?: boolean;
+  /** Workflow state (e.g. `PENDINGFORASSIGNMENT`) → role that owes action. */
+  actingRoleByState?: Record<string, string>;
+  /** Role ladder: acting role → the role its complaints escalate to. */
+  supervisorRoleByRole?: Record<string, string>;
+  /** Blast-radius cap (1–100) on role-escalations per scan. */
+  maxPerScan?: number;
+}
+
+/**
+ * CRS.RoleSupervisors row — explicit per-role escalation target (the pin
+ * the resolver checks first). One row per (role, department);
+ * `department: "ALL"` is the tenant-wide default (mdms-v2 rejects empty
+ * values inside the x-unique tuple, so "ALL" is the sentinel, never "").
+ * `assigneeUuid` must be an active HRMS employee — the backend validates
+ * at escalation time and a stale pin falls through to the role ladder.
+ */
+export interface RoleSupervisorRow {
+  role: string;
+  department: string;
+  assigneeUuid: string;
+  isActive: boolean;
+}
+
+/**
  * CRS.EscalationPolicy — deployment-wide escalation behaviour. Every field
  * is optional; an unset field means "use the previous setting" (v0
  * RAINMAKER-PGR.EscalationConfig, then static service config).
@@ -52,6 +86,11 @@ export interface EscalationPolicy {
   preBreachWarning?: PreBreachWarning;
   /** Whether staff must enter a comment when escalating manually. */
   escalateCommentRequired?: boolean;
+  /**
+   * Opt-in role-level escalation. Omit the key entirely on tenants that
+   * never used the feature — disabled must stay byte-identical to today.
+   */
+  roleEscalation?: RoleEscalation;
 }
 
 /**

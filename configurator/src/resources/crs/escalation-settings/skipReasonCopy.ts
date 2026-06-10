@@ -22,10 +22,25 @@ export const SKIP_REASON_COPY: Record<string, SkipReasonCopy> = {
     explanation: 'The complaint has no timestamp to measure the SLA from.',
   },
   NO_ASSIGNEES: {
-    explanation: 'Nobody is currently assigned, so there is no one to escalate from.',
+    explanation:
+      "Nobody is currently assigned, so there is no one to escalate from — enable 'Escalate complaints nobody has picked up' under Escalation behaviour to act on these.",
   },
   NO_SUPERVISOR_IN_HRMS: {
     explanation: 'The assigned staff member has no supervisor on record.',
+  },
+  // Role-escalation skips — appear only once "Escalate complaints nobody
+  // has picked up" is enabled in Escalation behaviour.
+  ROLE_NOT_MAPPED: {
+    explanation:
+      "The complaint's status has no acting role under 'Escalate complaints nobody has picked up' — add one in Escalation behaviour.",
+  },
+  ROLE_SUPERVISOR_AMBIGUOUS: {
+    explanation:
+      'Two or more people matched as the escalation target — pin a specific person for the role, or fix the staff records so exactly one matches.',
+  },
+  NO_ROLE_SUPERVISOR: {
+    explanation:
+      'No one matched as the escalation target — create or activate the supervisor in the staff records, or pin a specific person for the role.',
   },
   WORKFLOW_TRANSITION_FAILED: {
     explanation: 'The complaint system refused the escalation step.',

@@ -82,7 +82,9 @@ export function VerifyCard({ stateTenant, onOpenTrace }: VerifyCardProps) {
   const needsAttention = attentionEntries.reduce((sum, [, count]) => sum + count, 0);
 
   return (
-    <Card>
+    // The id is the scroll target for PolicyCard's "Run a test scan
+    // first" nudge in the role-escalation enable flow.
+    <Card id="verify-card">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <FlaskConical className="w-4 h-4 text-primary" />

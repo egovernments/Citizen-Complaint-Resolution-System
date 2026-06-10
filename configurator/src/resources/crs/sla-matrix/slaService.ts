@@ -10,12 +10,13 @@ import { digitClient } from '@/providers/bridge';
 import type { MdmsRecord } from '@digit-mcp/data-provider';
 import type { CategorySlaRecord, StateDefaults } from './types';
 import { makeCategoryUid, DEFAULT_STATE_DEFAULTS } from './types';
-import type { EscalationPolicy, WorkflowStateMapping } from './escalationTypes';
+import type { EscalationPolicy, RoleSupervisorRow, WorkflowStateMapping } from './escalationTypes';
 
 const CATEGORY_SLA_SCHEMA = 'CRS.CategorySLA';
 const STATE_SLA_SCHEMA = 'CRS.StateSLA';
 const ESCALATION_POLICY_SCHEMA = 'CRS.EscalationPolicy';
 const WORKFLOW_STATE_MAPPING_SCHEMA = 'CRS.WorkflowStateMapping';
+const ROLE_SUPERVISORS_SCHEMA = 'CRS.RoleSupervisors';
 const AUDIT_LOG_SCHEMA = 'CRS.SLAAuditLog';
 const STATE_SLA_UID = 'default';
 
@@ -264,6 +265,89 @@ export async function saveWorkflowStateMapping(
   return saved;
 }
 
+/**
+ * A CRS.RoleSupervisors pin hydrated with its MDMS record references
+ * (same shape pattern as MatrixRow — `original` keeps updates
+ * round-tripping auditDetails).
+ */
+export interface RoleSupervisorPin extends RoleSupervisorRow {
+  /** MDMS record id when persisted; absent for unsaved rows. */
+  recordId?: string;
+  /** uniqueIdentifier composed from role:department. */
+  uniqueIdentifier: string;
+  /** Original MDMS record (kept so updates round-trip auditDetails). */
+  original?: MdmsRecord;
+}
+
+/** uniqueIdentifier for a pin — mirrors the schema's x-unique tuple. */
+export function makeRoleSupervisorUid(row: { role: string; department: string }): string {
+  return `${row.role}:${row.department}`;
+}
+
+/**
+ * Read all CRS.RoleSupervisors pins (always from the STATE tenant — the
+ * scheduler resolves them there, same split-brain rule as the policy).
+ * Record-level soft-deleted rows are filtered out; the data-level
+ * `isActive` flag stays visible so the editor can switch pins off
+ * without losing them.
+ */
+export async function loadRoleSupervisors(tenantId: string): Promise<RoleSupervisorPin[]> {
+  const records = await digitClient.mdmsSearch(toStateTenant(tenantId), ROLE_SUPERVISORS_SCHEMA, { limit: 200 });
+  const active = records.filter((r) => r.isActive !== false);
+  return active.map((rec) => {
+    const data = rec.data as unknown as RoleSupervisorRow;
+    return {
+      ...data,
+      uniqueIdentifier: rec.uniqueIdentifier,
+      recordId: rec.id,
+      original: rec,
+    };
+  });
+}
+
+/**
+ * Save (create or update) one CRS.RoleSupervisors pin at the STATE
+ * tenant, then append an audit-log entry (recordIdentifier
+ * 'role:department') attributed to `actor`. (role, department) is the
+ * record's identity (x-unique) — callers must not change those fields on
+ * an existing record; deactivate and create a new pin instead.
+ */
+export async function saveRoleSupervisorRow(
+  tenantId: string,
+  row: RoleSupervisorRow,
+  existing: MdmsRecord | undefined,
+  actor: AuditActor,
+): Promise<MdmsRecord> {
+  const stateTenant = toStateTenant(tenantId);
+  const uid = makeRoleSupervisorUid(row);
+  const data: RoleSupervisorRow = {
+    role: row.role,
+    department: row.department,
+    assigneeUuid: row.assigneeUuid,
+    isActive: row.isActive,
+  };
+  const saved = existing
+    ? await digitClient.mdmsUpdate({ ...existing, data: data as unknown as Record<string, unknown> }, true)
+    : await digitClient.mdmsCreate(stateTenant, ROLE_SUPERVISORS_SCHEMA, uid, data as unknown as Record<string, unknown>);
+  // MDMS v2 "phantom 200": a duplicate create returns HTTP 200 with an empty
+  // mdms array. Without this guard we'd log an audit entry for a write that
+  // never landed and tell the operator it "may be delayed" forever.
+  if (!saved) {
+    throw new Error('The save was not accepted (a pin for this role and department may already exist) — reload the page and try again.');
+  }
+  await writeAuditEntry(stateTenant, {
+    timestamp: Date.now(),
+    userUuid: actor.uuid ?? 'unknown',
+    userName: actor.name ?? 'unknown',
+    action: existing ? 'update' : 'create',
+    schemaCode: ROLE_SUPERVISORS_SCHEMA,
+    recordIdentifier: uid,
+    beforeJson: existing ? JSON.stringify(existing.data) : undefined,
+    afterJson: JSON.stringify(data),
+  });
+  return saved;
+}
+
 /** Delay before the read-after-write verification re-fetch (~1.5s). */
 export const READ_AFTER_WRITE_DELAY_MS = 1500;
 
@@ -329,5 +413,6 @@ export {
   STATE_SLA_SCHEMA,
   ESCALATION_POLICY_SCHEMA,
   WORKFLOW_STATE_MAPPING_SCHEMA,
+  ROLE_SUPERVISORS_SCHEMA,
   AUDIT_LOG_SCHEMA,
 };
