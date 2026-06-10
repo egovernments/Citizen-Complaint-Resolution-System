@@ -8,6 +8,7 @@ import org.egov.pgr.producer.Producer;
 import org.egov.pgr.repository.ServiceRequestRepository;
 import org.egov.pgr.util.EscalationSkipReason;
 import org.egov.pgr.util.HRMSUtil;
+import org.egov.pgr.web.models.AuditDetails;
 import org.egov.pgr.web.models.Service;
 import org.egov.pgr.web.models.ServiceRequest;
 import org.egov.pgr.web.models.Workflow;
@@ -170,6 +171,53 @@ public class EscalationServiceTest {
     }
 
     @Test
+    void happyPath_refreshesAuditLastModified_soNextTickGetsFreshSlaWindow() {
+        long testStart = System.currentTimeMillis();
+        long staleTime = testStart - 100_000L;
+        complaint.setAuditDetails(AuditDetails.builder()
+                .createdTime(staleTime)
+                .lastModifiedTime(staleTime)
+                .lastModifiedBy("old-user-uuid")
+                .build());
+        when(hrmsUtil.getSupervisorUuid(eq("emp-1-uuid"), any(), eq("ke.bomet")))
+                .thenReturn("supervisor-uuid");
+
+        EscalationService.EscalationResult result =
+                escalationService.escalateComplaintWithReason(complaint, currentWorkflow, systemRequestInfo,
+                        3, 7_200_000L, 3_600_000L);
+
+        assertTrue(result.isSuccess());
+        // The persister maps lastmodifiedtime from this object — it must be
+        // refreshed to "now" so the next scheduler tick measures elapsed time
+        // from the escalation moment, not the pre-escalation timestamp.
+        assertNotNull(complaint.getAuditDetails().getLastModifiedTime());
+        assertTrue(complaint.getAuditDetails().getLastModifiedTime() >= testStart,
+                "lastModifiedTime must be refreshed on successful escalation (fresh SLA window per level)");
+        assertEquals("system-uuid", complaint.getAuditDetails().getLastModifiedBy());
+    }
+
+    @Test
+    void previewEscalation_leavesAuditDetailsUntouched() {
+        long staleTime = System.currentTimeMillis() - 100_000L;
+        complaint.setAuditDetails(AuditDetails.builder()
+                .createdTime(staleTime)
+                .lastModifiedTime(staleTime)
+                .lastModifiedBy("old-user-uuid")
+                .build());
+        when(hrmsUtil.getSupervisorUuid(eq("emp-1-uuid"), any(), eq("ke.bomet")))
+                .thenReturn("supervisor-uuid");
+
+        EscalationService.EscalationResult result =
+                escalationService.previewEscalation(complaint, currentWorkflow, systemRequestInfo,
+                        3, 7_200_000L, 3_600_000L);
+
+        assertTrue(result.isSuccess());
+        // Dry-run is read-only: the SLA clock must NOT be reset.
+        assertEquals(Long.valueOf(staleTime), complaint.getAuditDetails().getLastModifiedTime());
+        assertEquals("old-user-uuid", complaint.getAuditDetails().getLastModifiedBy());
+    }
+
+    @Test
     void commentEnrichment_includesNameAndDesignation_whenHrmsSummaryResolves() {
         when(hrmsUtil.getSupervisorUuid(eq("emp-1-uuid"), any(), eq("ke.bomet")))
                 .thenReturn("supervisor-uuid");
@@ -187,6 +235,28 @@ public class EscalationServiceTest {
         ArgumentCaptor<ServiceRequest> captor = ArgumentCaptor.forClass(ServiceRequest.class);
         verify(workflowService).updateWorkflowStatus(captor.capture());
         assertEquals("Auto-escalated to Jane Wanjiku (DEPT_HEAD): SLA breached at level 0 (elapsed 10h > SLA 4h)",
+                captor.getValue().getWorkflow().getComments());
+    }
+
+    @Test
+    void commentEnrichment_nameOnlyTier_whenDesignationMissingFromSummary() {
+        when(hrmsUtil.getSupervisorUuid(eq("emp-1-uuid"), any(), eq("ke.bomet")))
+                .thenReturn("supervisor-uuid");
+        // Partial HRMS summary: designation read failed, name resolved.
+        Map<String, String> summary = new HashMap<>();
+        summary.put("name", "Jane Wanjiku");
+        when(hrmsUtil.getEmployeeSummary(eq("supervisor-uuid"), any(), eq("ke.bomet")))
+                .thenReturn(summary);
+
+        EscalationService.EscalationResult result =
+                escalationService.escalateComplaintWithReason(complaint, currentWorkflow, systemRequestInfo,
+                        3, 36_000_000L, 14_400_000L); // elapsed 10h, SLA 4h
+
+        assertTrue(result.isSuccess());
+        ArgumentCaptor<ServiceRequest> captor = ArgumentCaptor.forClass(ServiceRequest.class);
+        verify(workflowService).updateWorkflowStatus(captor.capture());
+        // Name-only tier: human-readable name, no "(designation)" and no raw uuid.
+        assertEquals("Auto-escalated to Jane Wanjiku: SLA breached at level 0 (elapsed 10h > SLA 4h)",
                 captor.getValue().getWorkflow().getComments());
     }
 

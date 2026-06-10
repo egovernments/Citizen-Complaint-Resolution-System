@@ -3,7 +3,9 @@ package org.egov.pgr.validator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jayway.jsonpath.JsonPath;
 import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
+import org.egov.common.utils.MultiStateInstanceUtil;
 import org.egov.mdms.model.MasterDetail;
 import org.egov.mdms.model.MdmsCriteria;
 import org.egov.mdms.model.MdmsCriteriaReq;
@@ -27,6 +29,7 @@ import java.util.stream.Collectors;
 import static org.egov.pgr.util.PGRConstants.*;
 
 @Component
+@Slf4j
 public class ServiceRequestValidator {
 
 
@@ -42,16 +45,19 @@ public class ServiceRequestValidator {
 
     private MDMSUtils mdmsUtils;
 
+    private MultiStateInstanceUtil multiStateInstanceUtil;
+
     @Autowired
     public ServiceRequestValidator(PGRConfiguration config, PGRRepository repository, HRMSUtil hrmsUtil,
                                    ServiceRequestRepository serviceRequestRepository, ObjectMapper objectMapper,
-                                   MDMSUtils mdmsUtils) {
+                                   MDMSUtils mdmsUtils, MultiStateInstanceUtil multiStateInstanceUtil) {
         this.config = config;
         this.repository = repository;
         this.hrmsUtil = hrmsUtil;
         this.serviceRequestRepository = serviceRequestRepository;
         this.objectMapper = objectMapper;
         this.mdmsUtils = mdmsUtils;
+        this.multiStateInstanceUtil = multiStateInstanceUtil;
     }
 
 
@@ -140,7 +146,10 @@ public class ServiceRequestValidator {
                     .build();
             MdmsCriteria mdmsCriteria = MdmsCriteria.builder()
                     .moduleDetails(Collections.singletonList(moduleDetail))
-                    .tenantId(request.getService().getTenantId())
+                    // The CRS.EscalationPolicy singleton lives at the state level —
+                    // the scheduler resolves it the same way, so a city tenantId
+                    // here would miss the record the operator actually seeded.
+                    .tenantId(multiStateInstanceUtil.getStateLevelTenant(request.getService().getTenantId()))
                     .build();
             MdmsCriteriaReq mdmsCriteriaReq = MdmsCriteriaReq.builder()
                     .mdmsCriteria(mdmsCriteria)
@@ -154,6 +163,8 @@ public class ServiceRequestValidator {
             }
         } catch (Exception e) {
             // fetch failure ⇒ keep today's behaviour: comment required
+            log.warn("CRS.EscalationPolicy fetch failed while checking escalateCommentRequired "
+                    + "(defaulting to required): {}", e.getMessage());
         }
         return null;
     }

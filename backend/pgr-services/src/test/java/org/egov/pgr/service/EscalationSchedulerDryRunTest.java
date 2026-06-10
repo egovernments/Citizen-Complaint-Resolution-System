@@ -95,7 +95,9 @@ public class EscalationSchedulerDryRunTest {
 
         assertTrue(response.isDryRun());
         assertEquals(1, response.getScanned());
-        assertEquals(1, response.getEscalated());
+        // Dry runs never count as real escalations — they surface separately.
+        assertEquals(0, response.getEscalated());
+        assertEquals(1, response.getWouldEscalate());
         assertTrue(response.getDetails().stream()
                         .anyMatch(d -> "WOULD_ESCALATE".equals(d.getAction())
                                 && "PGR-DRY-1".equals(d.getServiceRequestId())),

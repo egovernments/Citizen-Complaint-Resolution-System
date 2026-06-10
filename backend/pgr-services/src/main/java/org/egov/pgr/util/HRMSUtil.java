@@ -111,24 +111,40 @@ public class HRMSUtil {
         RequestInfoWrapper requestInfoWrapper = RequestInfoWrapper.builder().requestInfo(requestInfo).build();
 
         Map<String, String> summary = new HashMap<>();
+
+        Object res;
         try {
-            Object res = serviceRequestRepository.fetchResult(url, requestInfoWrapper);
-            if (res == null) {
-                log.warn("HRMS returned null for employee UUID: {}", uuid);
-                return summary;
-            }
+            res = serviceRequestRepository.fetchResult(url, requestInfoWrapper);
+        } catch (Exception e) {
+            log.warn("Failed to fetch HRMS employee summary for UUID: {}", uuid, e);
+            return summary;
+        }
+        if (res == null) {
+            log.warn("HRMS returned null for employee UUID: {}", uuid);
+            return summary;
+        }
+
+        // The two reads are isolated on purpose: a failed designation JsonPath
+        // must not discard an already-resolved name (partial summary still
+        // yields a human-readable escalation comment).
+        try {
             String name = JsonPath.read(res, "$.Employees[0].user.name");
-            List<String> designations = JsonPath.read(res, "$.Employees[0].assignments[?(@.isCurrentAssignment==true)].designation");
             if (name != null) {
                 summary.put("name", name);
             }
+        } catch (Exception e) {
+            log.warn("Failed to read HRMS employee name for UUID: {}", uuid, e);
+        }
+
+        try {
+            List<String> designations = JsonPath.read(res, "$.Employees[0].assignments[?(@.isCurrentAssignment==true)].designation");
             if (!CollectionUtils.isEmpty(designations) && designations.get(0) != null) {
                 summary.put("designation", designations.get(0));
             }
         } catch (Exception e) {
-            log.warn("Failed to fetch HRMS employee summary for UUID: {}", uuid, e);
-            return new HashMap<>();
+            log.warn("Failed to read HRMS designation for UUID: {} (keeping name if resolved)", uuid, e);
         }
+
         return summary;
     }
 

@@ -35,6 +35,13 @@ public class EscalationTriggerResponse {
     @JsonProperty("escalated")
     private int escalated;
 
+    /**
+     * Dry-run only: breached complaints that WOULD have been escalated.
+     * Always 0 on real runs; conversely {@code escalated} stays 0 on dry runs.
+     */
+    @JsonProperty("wouldEscalate")
+    private int wouldEscalate;
+
     @JsonProperty("skipped")
     private int skipped;
 

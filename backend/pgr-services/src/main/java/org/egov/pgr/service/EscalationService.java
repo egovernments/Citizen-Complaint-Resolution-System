@@ -155,10 +155,22 @@ public class EscalationService {
                     "workflow-v2 rejected ESCALATE: " + e.getMessage());
         }
 
-        // 7. Publish to update topic so persister saves the updated additionalDetails
+        // 7. Refresh audit details BEFORE pushing to the update topic. The
+        //    persister maps eg_pgr_service_v2.lastmodifiedtime from this object;
+        //    without the refresh the next tick measures elapsed from the
+        //    pre-escalation timestamp, and decreasing per-level SLAs cascade
+        //    straight to maxDepth (PRD P6: each level gets a fresh window).
+        if (complaint.getAuditDetails() != null) {
+            complaint.getAuditDetails().setLastModifiedTime(System.currentTimeMillis());
+            if (requestInfo.getUserInfo() != null && requestInfo.getUserInfo().getUuid() != null) {
+                complaint.getAuditDetails().setLastModifiedBy(requestInfo.getUserInfo().getUuid());
+            }
+        }
+
+        // 8. Publish to update topic so persister saves the updated additionalDetails
         producer.push(tenantId, config.getUpdateTopic(), serviceRequest);
 
-        // 8. Publish escalation event for future notification listeners
+        // 9. Publish escalation event for future notification listeners
         Map<String, Object> escalationEvent = new HashMap<>();
         escalationEvent.put("serviceRequestId", serviceRequestId);
         escalationEvent.put("tenantId", tenantId);
@@ -247,9 +259,16 @@ public class EscalationService {
                                                int currentLevel, long elapsedMs, long slaMs) {
         long elapsedH = elapsedMs / (60L * 60L * 1000L);
         long slaH = slaMs / (60L * 60L * 1000L);
+        // Three tiers: name+designation → name only → uuid fallback. A partial
+        // HRMS summary (designation JsonPath failed but name resolved) still
+        // yields a human-readable comment instead of a raw uuid.
         if (summary.containsKey("name") && summary.containsKey("designation")) {
             return String.format("Auto-escalated to %s (%s): SLA breached at level %d (elapsed %dh > SLA %dh)",
                     summary.get("name"), summary.get("designation"), currentLevel, elapsedH, slaH);
+        }
+        if (summary.containsKey("name")) {
+            return String.format("Auto-escalated to %s: SLA breached at level %d (elapsed %dh > SLA %dh)",
+                    summary.get("name"), currentLevel, elapsedH, slaH);
         }
         return String.format("Auto-escalated to %s: SLA breached at level %d (elapsed %dh > SLA %dh)",
                 supervisorUuid, currentLevel, elapsedH, slaH);

@@ -1,6 +1,7 @@
 package org.egov.pgr.validator;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.egov.common.utils.MultiStateInstanceUtil;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.repository.PGRRepository;
 import org.egov.pgr.repository.ServiceRequestRepository;
@@ -35,6 +36,7 @@ public class ServiceRequestValidatorTest {
     @Mock private ServiceRequestRepository serviceRequestRepository;
     @Mock private ObjectMapper objectMapper;
     @Mock private MDMSUtils mdmsUtils;
+    @Mock private MultiStateInstanceUtil multiStateInstanceUtil;
 
     @InjectMocks
     private ServiceRequestValidator validator;
@@ -173,6 +175,8 @@ public class ServiceRequestValidatorTest {
         root.put("MdmsRes", mdmsRes);
 
         when(mdmsUtils.getMdmsSearchUrl()).thenReturn(new StringBuilder("http://mdms/_search"));
+        // The validator resolves the policy at the state level, mirroring the scheduler.
+        when(multiStateInstanceUtil.getStateLevelTenant(any())).thenReturn("pg");
         when(serviceRequestRepository.fetchResult(any(), any())).thenReturn(root);
     }
 

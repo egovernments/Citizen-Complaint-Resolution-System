@@ -141,6 +141,7 @@ public class EscalationScheduler {
 
         int scanned = 0;
         int escalated = 0;
+        int wouldEscalate = 0;
         int skipped = 0;
         int preBreachWarnings = 0;
         Map<EscalationSkipReason, Integer> skipMap = new EnumMap<>(EscalationSkipReason.class);
@@ -236,7 +237,10 @@ public class EscalationScheduler {
                             event.put("slaMs", sla);
                             event.put("thresholdPercent", thresholdPercent);
                             event.put("timestamp", System.currentTimeMillis());
-                            producer.push(tenantId, config.getEscalationPreBreachTopic(), event);
+                            // Route by the complaint's own tenant (not the scan-scope
+                            // tenant) so topic prefixing matches the escalation event
+                            // and the event payload's own tenantId.
+                            producer.push(complaint.getTenantId(), config.getEscalationPreBreachTopic(), event);
                             preBreachWarnings++;
                             preBreachEmitted = true;
                         }
@@ -268,7 +272,13 @@ public class EscalationScheduler {
                             : escalationService.escalateComplaintWithReason(complaint, currentWorkflow, requestInfo, maxDepth, elapsed, sla);
 
                     if (result.isSuccess()) {
-                        escalated++;
+                        // Dry runs report would-be escalations separately — `escalated`
+                        // only ever counts real, mutating escalations.
+                        if (dryRun) {
+                            wouldEscalate++;
+                        } else {
+                            escalated++;
+                        }
                         details.add(EscalationOutcome.builder()
                                 .serviceRequestId(srid)
                                 .action(dryRun ? "WOULD_ESCALATE" : "ESCALATED")
@@ -294,6 +304,7 @@ public class EscalationScheduler {
 
         span.setAttribute("escalation.scanned", scanned);
         span.setAttribute("escalation.escalated", escalated);
+        span.setAttribute("escalation.wouldEscalate", wouldEscalate);
         span.setAttribute("escalation.skipped", skipped);
         span.setAttribute("escalation.preBreachWarnings", preBreachWarnings);
         if (dryRun) {
@@ -306,13 +317,14 @@ public class EscalationScheduler {
         Map<String, Integer> skipBreakdown = new LinkedHashMap<>();
         skipMap.forEach((reason, count) -> skipBreakdown.put(reason.name(), count));
 
-        log.info("Escalation scan complete: scanned={}, escalated={}, skipped={}, preBreachWarnings={}, dryRun={}, skipBreakdown={}",
-                scanned, escalated, skipped, preBreachWarnings, dryRun, skipBreakdown);
+        log.info("Escalation scan complete: scanned={}, escalated={}, wouldEscalate={}, skipped={}, preBreachWarnings={}, dryRun={}, skipBreakdown={}",
+                scanned, escalated, wouldEscalate, skipped, preBreachWarnings, dryRun, skipBreakdown);
 
         return EscalationTriggerResponse.builder()
                 .tenantId(tenantId)
                 .scanned(scanned)
                 .escalated(escalated)
+                .wouldEscalate(wouldEscalate)
                 .skipped(skipped)
                 .dryRun(dryRun)
                 .preBreachWarnings(preBreachWarnings)
@@ -463,7 +475,7 @@ public class EscalationScheduler {
         if (crsEscalationPolicy != null && crsEscalationPolicy.get("maxDepth") instanceof Number) {
             return ((Number) crsEscalationPolicy.get("maxDepth")).intValue();
         }
-        if (escalationConfig != null && escalationConfig.containsKey("maxDepth")) {
+        if (escalationConfig != null && escalationConfig.get("maxDepth") instanceof Number) {
             return ((Number) escalationConfig.get("maxDepth")).intValue();
         }
         return config.getEscalationMaxDepth();

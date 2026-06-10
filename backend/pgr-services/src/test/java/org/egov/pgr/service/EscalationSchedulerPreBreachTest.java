@@ -45,6 +45,14 @@ public class EscalationSchedulerPreBreachTest {
         assertFalse(shouldEmitPreBreach(150_000L, SLA_MS, 75.0, INTERVAL_MS));
     }
 
+    /** Exactly AT the threshold (the >= edge) → emit. */
+    @Test
+    void exactlyAtThreshold_emits() {
+        // threshold = 75% of 100s = 75s; elapsed is exactly 75s and the
+        // previous tick (65s) was below it → this is the crossing tick.
+        assertTrue(shouldEmitPreBreach(75_000L, SLA_MS, 75.0, INTERVAL_MS));
+    }
+
     /** The configured thresholdPercent moves the crossing point. */
     @Test
     void thresholdPercent_honored() {
