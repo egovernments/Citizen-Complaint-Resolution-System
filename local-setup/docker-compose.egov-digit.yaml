@@ -1223,7 +1223,8 @@ services:
   # PGR Services (Public Grievance Redressal)
   # ===========================================================================
   pgr-services:
-    image: registry.preview.egov.theflywheel.in/pgr-services-dev:latest
+    # Pinned: escalation stack (PR #815). :latest predates /escalation/_trigger.
+    image: registry.preview.egov.theflywheel.in/egovio/pgr-services-dev:escalation-prd-042c61758
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -1266,6 +1267,7 @@ services:
       EGOV_LOCALIZATION_HOST: http://egov-localization:8096/
       EGOV_USER_HOST: http://egov-user-proxy:8107/
       EGOV_LOCATION_HOST: http://boundary-service:8081/
+      EGOV_BOUNDARY_HOST: http://boundary-service:8081/
       EGOV_HRMS_HOST: http://egov-hrms:8092/
       EGOV_URL_SHORTNER_HOST: http://egov-url-shortening:8080/
       EGOV_UI_APP_HOST: http://localhost:18080
