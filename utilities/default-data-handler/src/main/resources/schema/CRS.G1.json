@@ -1,0 +1,16 @@
+[
+  {
+    "tenantId": "{tenantid}",
+    "code": "CRS.CategoryTaxonomy",
+    "description": "STUB — reserved by phase G1 (Category Taxonomy editor). Three-level tree (Category → Subcategory L1 → Subcategory L2) consumed by the SLA Matrix combobox, the citizen submission form, and the dashboard 'Distribution by category' indicator. Per-row tag for path (IGE | IGSAE | BOTH). Full property shape, x-unique tuple, and bulk-import semantics will land in the G1 implementation PR — this stub exists ONLY to reserve the schema code so the configurator UI and the future importer can target a stable identifier. Do NOT register/seed against this stub; egov-mdms-v2 rejects definitions with no `properties` map. See docs/g-phases/g1-category-taxonomy.md for the design.",
+    "isActive": false,
+    "definition": {
+      "type": "object",
+      "title": "CRS Category Taxonomy (STUB — see docs/g-phases/g1-category-taxonomy.md)",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "x-unique": [],
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  }
+]

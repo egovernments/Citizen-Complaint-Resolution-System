@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useState, createContext, useContext, useEffect, useCallback } from 'react';
 import Layout from './components/layout/Layout';
 import LoginPage from './pages/LoginPage';
@@ -30,6 +30,7 @@ import {
   AdvancedPage,
 } from '@/resources';
 import PgrDashboard from './pages/PgrDashboard';
+import { CategorySlaMatrixPage } from './resources/crs/sla-matrix/CategorySlaMatrixPage';
 import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, digitClient, resetProviders, i18nProvider } from '@/providers/bridge';
 import { ThemeProvider } from '@/providers/ThemeProvider';
 import HelpModal from './components/ui/HelpModal';
@@ -143,6 +144,11 @@ function ManagementAdmin() {
           <Route path="/departments/bulk" element={<DepartmentBulkImport />} />
           <Route path="/designations/bulk" element={<DesignationBulkImport />} />
           <Route path="/localization/bulk" element={<LocalizationBulkImport />} />
+          {/* ESCALATION — escalation-SLA scope. Owns the CRS.CategorySLA + CRS.StateSLA
+              editing surface (a single-page matrix), bulk import, and the trace-back tool.
+              Not wired as a <Resource> because the page manages MDMS records directly
+              instead of going through react-admin's list→edit pipeline. */}
+          <Route path="/crs-sla-matrix" element={<CategorySlaMatrixPage />} />
         </CustomRoutes>
       </CoreAdminUI>
     </CoreAdminContext>
@@ -206,6 +212,28 @@ function restoreApiClientFromStorage(): { isAuthenticated: boolean; user: AppSta
     // Invalid stored data
   }
   return null;
+}
+
+/**
+ * Stashes the attempted /manage/* path in sessionStorage before redirecting
+ * away from a management URL the user can't reach (because they're still in
+ * onboarding mode). Phase1Page picks up the flag and surfaces a one-line
+ * toast explaining what happened — previously the redirect was silent and
+ * operators who pasted a /manage/* URL just landed on Phase 1 with no
+ * indication of why.
+ *
+ * `sessionStorage` (not local) so the hint is naturally scoped to the tab
+ * and disappears when the window closes. Read+cleared in Phase1Page.
+ */
+const WRONG_MODE_FLAG = 'flash:wrong-mode';
+function ManagementRedirectFlash() {
+  const location = useLocation();
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(WRONG_MODE_FLAG, location.pathname + (location.search || ''));
+    } catch { /* sessionStorage unavailable — silently drop */ }
+  }, [location.pathname, location.search]);
+  return <Navigate to="/phase/1" replace />;
 }
 
 function App() {
@@ -444,11 +472,14 @@ function App() {
             <Route path="complete" element={<CompletePage />} />
           </Route>
 
-          {/* Management Mode Routes — react-admin powered */}
+          {/* Management Mode Routes — react-admin powered.
+              When authenticated in onboarding mode, ManagementRedirectFlash
+              stashes the attempted path in sessionStorage so Phase1Page can
+              show the operator why they got bounced. */}
           <Route path="/manage/*" element={
             state.isAuthenticated && state.mode === 'management'
               ? <ManagementAdmin />
-              : state.isAuthenticated ? <Navigate to="/phase/1" /> : <Navigate to="/login" />
+              : state.isAuthenticated ? <ManagementRedirectFlash /> : <Navigate to="/login" />
           } />
         </Routes>
 
