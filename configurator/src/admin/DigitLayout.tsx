@@ -63,6 +63,7 @@ const navGroups = [
     labelKey: 'app.nav.escalation',
     items: [
       { id: 'crs-sla-matrix', nameKey: 'app.nav.sla_matrix', path: '/manage/crs-sla-matrix', icon: TableProperties },
+      { id: 'escalation-settings', nameKey: 'app.nav.escalation_settings', path: '/manage/escalation-settings', icon: Settings },
       { id: 'escalation-config', nameKey: 'app.nav.escalation_config_legacy', path: '/manage/escalation-config', icon: AlertTriangle },
     ],
   },

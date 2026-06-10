@@ -48,6 +48,7 @@ const customEnglishMessages: TranslationMessages = {
       escalation_config: 'Escalation Rules',
       escalation: 'Escalation',
       sla_matrix: 'SLA Matrix',
+      escalation_settings: 'Escalation Settings',
       escalation_config_legacy: 'Legacy SLA (v0)',
       people: 'People',
       employees: 'Employees',

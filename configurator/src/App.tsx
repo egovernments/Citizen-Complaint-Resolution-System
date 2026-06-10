@@ -31,6 +31,7 @@ import {
 } from '@/resources';
 import PgrDashboard from './pages/PgrDashboard';
 import { CategorySlaMatrixPage } from './resources/crs/sla-matrix/CategorySlaMatrixPage';
+import { EscalationSettingsPage } from './resources/crs/escalation-settings/EscalationSettingsPage';
 import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, digitClient, resetProviders, i18nProvider } from '@/providers/bridge';
 import { ThemeProvider } from '@/providers/ThemeProvider';
 import HelpModal from './components/ui/HelpModal';
@@ -149,6 +150,9 @@ function ManagementAdmin() {
               Not wired as a <Resource> because the page manages MDMS records directly
               instead of going through react-admin's list→edit pipeline. */}
           <Route path="/crs-sla-matrix" element={<CategorySlaMatrixPage />} />
+          {/* Deployment-wide escalation behaviour + complaint-status mapping
+              (CRS.EscalationPolicy + CRS.WorkflowStateMapping singletons). */}
+          <Route path="/escalation-settings" element={<EscalationSettingsPage />} />
         </CustomRoutes>
       </CoreAdminUI>
     </CoreAdminContext>
