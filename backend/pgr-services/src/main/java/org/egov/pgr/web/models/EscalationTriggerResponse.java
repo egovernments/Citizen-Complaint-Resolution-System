@@ -38,6 +38,14 @@ public class EscalationTriggerResponse {
     @JsonProperty("skipped")
     private int skipped;
 
+    /** Echo of the request's dryRun flag — true means nothing was mutated. */
+    @JsonProperty("dryRun")
+    private boolean dryRun;
+
+    /** Pre-breach warnings emitted during this scan. */
+    @JsonProperty("preBreachWarnings")
+    private int preBreachWarnings;
+
     /** Histogram of skip reason → count (keys are {@link org.egov.pgr.util.EscalationSkipReason} names). */
     @JsonProperty("skipBreakdown")
     private Map<String, Integer> skipBreakdown;
@@ -56,7 +64,7 @@ public class EscalationTriggerResponse {
         @JsonProperty("serviceRequestId")
         private String serviceRequestId;
 
-        /** Either "ESCALATED" or "SKIPPED". */
+        /** "ESCALATED", "SKIPPED" or (dry-run only) "WOULD_ESCALATE". */
         @JsonProperty("action")
         private String action;
 

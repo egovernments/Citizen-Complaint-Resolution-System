@@ -3,6 +3,7 @@ package org.egov.pgr.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.common.utils.MultiStateInstanceUtil;
 import org.egov.pgr.config.PGRConfiguration;
+import org.egov.pgr.producer.Producer;
 import org.egov.pgr.repository.PGRRepository;
 import org.egov.pgr.repository.ServiceRequestRepository;
 import org.egov.pgr.util.MDMSUtils;
@@ -48,6 +49,7 @@ public class EscalationSchedulerStateMappingTest {
     @Mock private ServiceRequestRepository serviceRequestRepository;
     @Mock private MDMSUtils mdmsUtils;
     @Mock private MultiStateInstanceUtil multiStateInstanceUtil;
+    @Mock private Producer producer;
 
     private EscalationScheduler scheduler;
 
@@ -55,7 +57,7 @@ public class EscalationSchedulerStateMappingTest {
     void setup() {
         scheduler = new EscalationScheduler(
                 config, repository, escalationService, serviceRequestRepository,
-                mdmsUtils, new ObjectMapper(), multiStateInstanceUtil);
+                mdmsUtils, new ObjectMapper(), multiStateInstanceUtil, producer);
     }
 
     /**
@@ -79,6 +81,7 @@ public class EscalationSchedulerStateMappingTest {
                 stateDefaults(),                 // StateSLA: forwarded=48h
                 mapping,                         // PENDINGATLME → forwarded
                 Collections.emptyMap(),          // no serviceCode mapping
+                Collections.emptyMap(),          // no EscalationPolicy
                 0,
                 Collections.singletonList(1L),
                 Collections.emptyMap());
@@ -108,6 +111,7 @@ public class EscalationSchedulerStateMappingTest {
                 Collections.emptyMap(),          // StateSLA empty too
                 Collections.emptyMap(),          // mapping empty — the case under test
                 Collections.emptyMap(),
+                Collections.emptyMap(),          // no EscalationPolicy
                 0,
                 Collections.singletonList(60_000L),
                 Collections.emptyMap());
@@ -145,6 +149,7 @@ public class EscalationSchedulerStateMappingTest {
                 stateDefaults(),                 // has "forwarded" but not "forwaded"
                 mapping,
                 Collections.emptyMap(),
+                Collections.emptyMap(),          // no EscalationPolicy
                 0,
                 Collections.singletonList(60_000L),
                 Collections.emptyMap());

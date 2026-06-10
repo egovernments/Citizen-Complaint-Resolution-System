@@ -3,6 +3,7 @@ package org.egov.pgr.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.common.utils.MultiStateInstanceUtil;
 import org.egov.pgr.config.PGRConfiguration;
+import org.egov.pgr.producer.Producer;
 import org.egov.pgr.repository.PGRRepository;
 import org.egov.pgr.repository.ServiceRequestRepository;
 import org.egov.pgr.util.MDMSUtils;
@@ -39,6 +40,7 @@ public class EscalationSchedulerSlaResolutionTest {
     @Mock private ServiceRequestRepository serviceRequestRepository;
     @Mock private MDMSUtils mdmsUtils;
     @Mock private MultiStateInstanceUtil multiStateInstanceUtil;
+    @Mock private Producer producer;
 
     private EscalationScheduler scheduler;
     private ObjectMapper objectMapper;
@@ -48,7 +50,7 @@ public class EscalationSchedulerSlaResolutionTest {
         objectMapper = new ObjectMapper();
         scheduler = new EscalationScheduler(
                 config, repository, escalationService, serviceRequestRepository,
-                mdmsUtils, objectMapper, multiStateInstanceUtil);
+                mdmsUtils, objectMapper, multiStateInstanceUtil, producer);
     }
 
     /** CategorySLA hit: the (path, category, subcategoryL1) row exists and the
@@ -62,7 +64,7 @@ public class EscalationSchedulerSlaResolutionTest {
 
         EscalationScheduler.SlaResolution result = scheduler.resolveSlaHours(
                 complaint, "PENDINGATLME", rows, brdDefaults(), pgrMapping(), Collections.emptyMap(),
-                0, Collections.singletonList(1L), Collections.emptyMap());
+                Collections.emptyMap(), 0, Collections.singletonList(1L), Collections.emptyMap());
 
         assertEquals(24L * 60 * 60 * 1000, result.slaMs);
         assertEquals(PGRConstants.SLA_SOURCE_CATEGORY, result.source);
@@ -79,7 +81,7 @@ public class EscalationSchedulerSlaResolutionTest {
 
         EscalationScheduler.SlaResolution result = scheduler.resolveSlaHours(
                 complaint, "PENDINGATLME", rows, brdDefaults(), pgrMapping(), Collections.emptyMap(),
-                0, Collections.singletonList(1L), Collections.emptyMap());
+                Collections.emptyMap(), 0, Collections.singletonList(1L), Collections.emptyMap());
 
         // MAX of the range — 120h, not 24h.
         assertEquals(120L * 60 * 60 * 1000, result.slaMs);
@@ -103,7 +105,7 @@ public class EscalationSchedulerSlaResolutionTest {
 
         EscalationScheduler.SlaResolution result = scheduler.resolveSlaHours(
                 complaint, "PENDINGATLME", Collections.singletonList(r), brdDefaults(),
-                pgrMapping(), Collections.emptyMap(),
+                pgrMapping(), Collections.emptyMap(), Collections.emptyMap(),
                 0, Collections.singletonList(1L), Collections.emptyMap());
 
         // BRD default for "forwarded" = 48h.
@@ -122,13 +124,84 @@ public class EscalationSchedulerSlaResolutionTest {
 
         EscalationScheduler.SlaResolution result = scheduler.resolveSlaHours(
                 complaint, "PENDINGATLME", Collections.emptyList(), Collections.emptyMap(),
-                pgrMapping(), Collections.emptyMap(),
+                pgrMapping(), Collections.emptyMap(), Collections.emptyMap(),
                 0, Collections.singletonList(60_000L), Collections.emptyMap());
 
         assertEquals(60_000L, result.slaMs);
         assertEquals(PGRConstants.SLA_SOURCE_V0, result.source);
         // Unmapped tuple is the actionable warning even when v0 answers.
         assertTrue(result.unmappedCategory);
+    }
+
+    /** Per-level cell on the matched CategorySLA row (PRD complaint-type x
+     *  level model) wins over the per-state cell on the same row. */
+    @Test
+    void resolveSlaHours_rowLevel_beats_state_cell() {
+        Service complaint = serviceWithCategoryTuple("IGSAE", "Business", "Establishment");
+        Map<String, Object> r = row("IGSAE", "Business", "Establishment", "forwarded", 24.0);
+        r.put("slaHoursByLevel", Arrays.asList(8.0, 16.0));
+
+        EscalationScheduler.SlaResolution result = scheduler.resolveSlaHours(
+                complaint, "PENDINGATLME", Collections.singletonList(r), brdDefaults(),
+                pgrMapping(), Collections.emptyMap(), Collections.emptyMap(),
+                0, Collections.singletonList(1L), Collections.emptyMap());
+
+        // L0 cell (8h) answers, not the state cell (24h).
+        assertEquals(8L * 60 * 60 * 1000, result.slaMs);
+        assertEquals(PGRConstants.SLA_SOURCE_CATEGORY_LEVEL, result.source);
+    }
+
+    /** Precedence ordering 1-5: with no CategorySLA row, the policy's
+     *  per-level default (3) must answer BEFORE the StateSLA default (4),
+     *  even though StateSLA has a cell for the mapped state. */
+    @Test
+    void resolveSlaHours_policyLevel_beats_stateSla_default() {
+        Service complaint = serviceWithCategoryTuple("IGE", "Complaint", "Health");
+        Map<String, Object> policy = new HashMap<>();
+        policy.put("defaultSlaHoursByLevel", Arrays.asList(12.0, 36.0));
+
+        EscalationScheduler.SlaResolution result = scheduler.resolveSlaHours(
+                complaint, "PENDINGATLME", Collections.emptyList(), brdDefaults(),
+                pgrMapping(), Collections.emptyMap(), policy,
+                1, Collections.singletonList(1L), Collections.emptyMap());
+
+        // L1 policy default (36h), not StateSLA's forwarded=48h.
+        assertEquals(36L * 60 * 60 * 1000, result.slaMs);
+        assertEquals(PGRConstants.SLA_SOURCE_POLICY_LEVEL, result.source);
+    }
+
+    /** slaHoursByLevel shorter than the current level → silent fall-through
+     *  to the row's per-state cell. */
+    @Test
+    void resolveSlaHours_outOfBounds_level_falls_through_to_state_cell() {
+        Service complaint = serviceWithCategoryTuple("IGSAE", "Business", "Establishment");
+        Map<String, Object> r = row("IGSAE", "Business", "Establishment", "forwarded", 24.0);
+        r.put("slaHoursByLevel", Collections.singletonList(8.0)); // only L0
+
+        EscalationScheduler.SlaResolution result = scheduler.resolveSlaHours(
+                complaint, "PENDINGATLME", Collections.singletonList(r), brdDefaults(),
+                pgrMapping(), Collections.emptyMap(), Collections.emptyMap(),
+                1, Collections.singletonList(1L), Collections.emptyMap());
+
+        assertEquals(24L * 60 * 60 * 1000, result.slaMs);
+        assertEquals(PGRConstants.SLA_SOURCE_CATEGORY, result.source);
+    }
+
+    /** Null entry at the current level index → silent fall-through to the
+     *  row's per-state cell. */
+    @Test
+    void resolveSlaHours_null_level_entry_falls_through_to_state_cell() {
+        Service complaint = serviceWithCategoryTuple("IGSAE", "Business", "Establishment");
+        Map<String, Object> r = row("IGSAE", "Business", "Establishment", "forwarded", 24.0);
+        r.put("slaHoursByLevel", Arrays.asList(null, 16.0)); // L0 deliberately null
+
+        EscalationScheduler.SlaResolution result = scheduler.resolveSlaHours(
+                complaint, "PENDINGATLME", Collections.singletonList(r), brdDefaults(),
+                pgrMapping(), Collections.emptyMap(), Collections.emptyMap(),
+                0, Collections.singletonList(1L), Collections.emptyMap());
+
+        assertEquals(24L * 60 * 60 * 1000, result.slaMs);
+        assertEquals(PGRConstants.SLA_SOURCE_CATEGORY, result.source);
     }
 
     // ---------------------------------------------------------------------

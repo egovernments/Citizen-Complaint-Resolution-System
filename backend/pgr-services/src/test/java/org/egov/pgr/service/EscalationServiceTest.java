@@ -9,10 +9,12 @@ import org.egov.pgr.repository.ServiceRequestRepository;
 import org.egov.pgr.util.EscalationSkipReason;
 import org.egov.pgr.util.HRMSUtil;
 import org.egov.pgr.web.models.Service;
+import org.egov.pgr.web.models.ServiceRequest;
 import org.egov.pgr.web.models.Workflow;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -20,6 +22,8 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -83,7 +87,8 @@ public class EscalationServiceTest {
                 .thenReturn("supervisor-uuid");
 
         EscalationService.EscalationResult result =
-                escalationService.escalateComplaintWithReason(complaint, currentWorkflow, systemRequestInfo);
+                escalationService.escalateComplaintWithReason(complaint, currentWorkflow, systemRequestInfo,
+                        3, 7_200_000L, 3_600_000L);
 
         assertTrue(result.isSuccess(), "expected success result");
         assertEquals(EscalationSkipReason.SUCCESS, result.getReason());
@@ -101,7 +106,8 @@ public class EscalationServiceTest {
         when(hrmsUtil.getSupervisorUuid(anyString(), any(), anyString())).thenReturn(null);
 
         EscalationService.EscalationResult result =
-                escalationService.escalateComplaintWithReason(complaint, currentWorkflow, systemRequestInfo);
+                escalationService.escalateComplaintWithReason(complaint, currentWorkflow, systemRequestInfo,
+                        3, 7_200_000L, 3_600_000L);
 
         assertFalse(result.isSuccess());
         assertEquals(EscalationSkipReason.NO_SUPERVISOR_IN_HRMS, result.getReason());
@@ -117,7 +123,8 @@ public class EscalationServiceTest {
         doThrow(new RuntimeException("workflow says no")).when(workflowService).updateWorkflowStatus(any());
 
         EscalationService.EscalationResult result =
-                escalationService.escalateComplaintWithReason(complaint, currentWorkflow, systemRequestInfo);
+                escalationService.escalateComplaintWithReason(complaint, currentWorkflow, systemRequestInfo,
+                        3, 7_200_000L, 3_600_000L);
 
         assertFalse(result.isSuccess());
         assertEquals(EscalationSkipReason.WORKFLOW_TRANSITION_FAILED, result.getReason());
@@ -134,11 +141,53 @@ public class EscalationServiceTest {
         Workflow empty = Workflow.builder().assignes(Collections.emptyList()).build();
 
         EscalationService.EscalationResult result =
-                escalationService.escalateComplaintWithReason(complaint, empty, systemRequestInfo);
+                escalationService.escalateComplaintWithReason(complaint, empty, systemRequestInfo,
+                        3, 7_200_000L, 3_600_000L);
 
         assertFalse(result.isSuccess());
         assertEquals(EscalationSkipReason.NO_ASSIGNEES, result.getReason());
         verify(workflowService, times(0)).updateWorkflowStatus(any());
+    }
+
+    @Test
+    void previewEscalation_zeroMutations_returnsSupervisorUuid() {
+        when(hrmsUtil.getSupervisorUuid(eq("emp-1-uuid"), any(), eq("ke.bomet")))
+                .thenReturn("supervisor-uuid");
+
+        EscalationService.EscalationResult result =
+                escalationService.previewEscalation(complaint, currentWorkflow, systemRequestInfo,
+                        3, 7_200_000L, 3_600_000L);
+
+        assertTrue(result.isSuccess());
+        assertEquals("supervisor-uuid", result.getNewAssigneeUuid());
+        assertEquals(Integer.valueOf(1), result.getNewLevel());
+        assertNotNull(result.getDetail());
+        assertTrue(result.getDetail().contains("would escalate to supervisor-uuid"));
+
+        // Dry-run must not mutate anything: no workflow transition, no Kafka.
+        verify(workflowService, times(0)).updateWorkflowStatus(any());
+        verify(producer, times(0)).push(anyString(), anyString(), any());
+    }
+
+    @Test
+    void commentEnrichment_includesNameAndDesignation_whenHrmsSummaryResolves() {
+        when(hrmsUtil.getSupervisorUuid(eq("emp-1-uuid"), any(), eq("ke.bomet")))
+                .thenReturn("supervisor-uuid");
+        Map<String, String> summary = new HashMap<>();
+        summary.put("name", "Jane Wanjiku");
+        summary.put("designation", "DEPT_HEAD");
+        when(hrmsUtil.getEmployeeSummary(eq("supervisor-uuid"), any(), eq("ke.bomet")))
+                .thenReturn(summary);
+
+        EscalationService.EscalationResult result =
+                escalationService.escalateComplaintWithReason(complaint, currentWorkflow, systemRequestInfo,
+                        3, 36_000_000L, 14_400_000L); // elapsed 10h, SLA 4h
+
+        assertTrue(result.isSuccess());
+        ArgumentCaptor<ServiceRequest> captor = ArgumentCaptor.forClass(ServiceRequest.class);
+        verify(workflowService).updateWorkflowStatus(captor.capture());
+        assertEquals("Auto-escalated to Jane Wanjiku (DEPT_HEAD): SLA breached at level 0 (elapsed 10h > SLA 4h)",
+                captor.getValue().getWorkflow().getComments());
     }
 
     @Test

@@ -91,14 +91,16 @@ public class EscalationController {
             requestInfo.getUserInfo().setRoles(mutableRoles);
         }
 
-        log.info("Manual escalation trigger: tenantId={}, scope={}",
+        log.info("Manual escalation trigger: tenantId={}, scope={}, dryRun={}",
                 request.getTenantId(),
-                request.getServiceRequestIds() == null ? "all" : request.getServiceRequestIds());
+                request.getServiceRequestIds() == null ? "all" : request.getServiceRequestIds(),
+                Boolean.TRUE.equals(request.getDryRun()));
 
         EscalationTriggerResponse response = escalationScheduler.scanAndEscalateOnce(
                 request.getTenantId(),
                 request.getServiceRequestIds(),
-                requestInfo
+                requestInfo,
+                Boolean.TRUE.equals(request.getDryRun())
         );
 
         ResponseInfo responseInfo = responseInfoFactory.createResponseInfoFromRequestInfo(requestInfo, true);

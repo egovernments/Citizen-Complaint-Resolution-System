@@ -10,6 +10,7 @@ import org.egov.common.contract.request.User;
 import org.egov.common.utils.MultiStateInstanceUtil;
 import org.egov.mdms.model.*;
 import org.egov.pgr.config.PGRConfiguration;
+import org.egov.pgr.producer.Producer;
 import org.egov.pgr.repository.PGRRepository;
 import org.egov.pgr.repository.ServiceRequestRepository;
 import org.egov.pgr.util.EscalationSkipReason;
@@ -39,6 +40,7 @@ public class EscalationScheduler {
     private final MDMSUtils mdmsUtils;
     private final ObjectMapper mapper;
     private final MultiStateInstanceUtil multiStateInstanceUtil;
+    private final Producer producer;
 
     @Value("${egov.state.level.tenant.id:ke}")
     private String stateLevelTenantId;
@@ -48,7 +50,8 @@ public class EscalationScheduler {
                                EscalationService escalationService,
                                ServiceRequestRepository serviceRequestRepository,
                                MDMSUtils mdmsUtils, ObjectMapper mapper,
-                               MultiStateInstanceUtil multiStateInstanceUtil) {
+                               MultiStateInstanceUtil multiStateInstanceUtil,
+                               Producer producer) {
         this.config = config;
         this.repository = repository;
         this.escalationService = escalationService;
@@ -56,6 +59,7 @@ public class EscalationScheduler {
         this.mdmsUtils = mdmsUtils;
         this.mapper = mapper;
         this.multiStateInstanceUtil = multiStateInstanceUtil;
+        this.producer = producer;
     }
 
     /**
@@ -93,12 +97,24 @@ public class EscalationScheduler {
     public EscalationTriggerResponse scanAndEscalateOnce(String tenantId,
                                                          List<String> serviceRequestIds,
                                                          RequestInfo requestInfo) {
+        return scanAndEscalateOnce(tenantId, serviceRequestIds, requestInfo, false);
+    }
+
+    /**
+     * Same as {@link #scanAndEscalateOnce(String, List, RequestInfo)} with an
+     * explicit dry-run flag: when {@code dryRun=true}, breached complaints get
+     * a {@code WOULD_ESCALATE} outcome (max-depth check + HRMS supervisor
+     * lookup, zero mutations) and pre-breach warning emission is suppressed.
+     */
+    public EscalationTriggerResponse scanAndEscalateOnce(String tenantId,
+                                                         List<String> serviceRequestIds,
+                                                         RequestInfo requestInfo,
+                                                         boolean dryRun) {
 
         Span span = Span.current();
         span.setAttribute("escalation.tenantId", tenantId == null ? "" : tenantId);
 
         Map<String, Object> escalationConfig = fetchEscalationConfig(requestInfo, tenantId);
-        int maxDepth = getMaxDepth(escalationConfig);
         List<Long> defaultSlaByLevel = getDefaultSlaByLevel(escalationConfig);
         Map<String, List<Long>> overrides = getOverrides(escalationConfig);
 
@@ -112,6 +128,10 @@ public class EscalationScheduler {
         // Replaces the old hardcoded PGR-state switch. Operator-defined per tenant.
         Map<String, String> crsWorkflowStateMapping = fetchCrsWorkflowStateMapping(requestInfo, tenantId);
         Map<String, Map<String, Object>> serviceCodeToCategory = buildServiceCodeMapping(requestInfo, tenantId);
+        // Tenant-wide escalation policy (PRD): maxDepth, per-level SLA defaults,
+        // pre-breach warning config.
+        Map<String, Object> crsEscalationPolicy = fetchCrsEscalationPolicy(requestInfo, tenantId);
+        int maxDepth = getMaxDepth(crsEscalationPolicy, escalationConfig);
 
         Set<String> statuses = new HashSet<>(Arrays.asList(PENDINGATLME, PENDINGFORASSIGNMENT));
 
@@ -122,6 +142,7 @@ public class EscalationScheduler {
         int scanned = 0;
         int escalated = 0;
         int skipped = 0;
+        int preBreachWarnings = 0;
         Map<EscalationSkipReason, Integer> skipMap = new EnumMap<>(EscalationSkipReason.class);
         List<EscalationOutcome> details = new ArrayList<>();
 
@@ -154,7 +175,7 @@ public class EscalationScheduler {
                     // which layer answered the lookup.
                     SlaResolution slaRes = resolveSlaHours(
                             complaint, status, crsCategorySla, crsStateSlaDefaults,
-                            crsWorkflowStateMapping, serviceCodeToCategory,
+                            crsWorkflowStateMapping, serviceCodeToCategory, crsEscalationPolicy,
                             currentLevel, defaultSlaByLevel, overrides);
                     long sla = slaRes.slaMs;
                     span.setAttribute("escalation.slaSource", slaRes.source);
@@ -192,10 +213,40 @@ public class EscalationScheduler {
                     }
 
                     long elapsed = System.currentTimeMillis() - lastModified;
+
+                    // PRD: configurable pre-breach warning at thresholdPercent of SLA elapsed.
+                    // Stateless crossing detection: emit only when the threshold was crossed
+                    // since the previous scheduler tick, so each complaint warns once per level
+                    // without persisted state. A missed tick misses the warning (accepted).
+                    boolean preBreachEmitted = false;
+                    Map<String, Object> preBreach = getPreBreachWarning(crsEscalationPolicy);
+                    if (!dryRun && preBreach != null && Boolean.TRUE.equals(preBreach.get("enabled"))) {
+                        double thresholdPercent = preBreach.get("thresholdPercent") instanceof Number
+                                ? ((Number) preBreach.get("thresholdPercent")).doubleValue()
+                                : 75.0;
+                        if (shouldEmitPreBreach(elapsed, sla, thresholdPercent, config.getEscalationIntervalMs())) {
+                            log.info("Escalation pre-breach warning — srid={}, tenantId={}, level={}, elapsedMs={}, slaMs={}, thresholdPercent={}",
+                                    srid, complaint.getTenantId(), currentLevel, elapsed, sla, thresholdPercent);
+                            Map<String, Object> event = new HashMap<>();
+                            event.put("serviceRequestId", srid);
+                            event.put("tenantId", complaint.getTenantId());
+                            event.put("escalationLevel", currentLevel);
+                            event.put("workflowState", status);
+                            event.put("elapsedMs", elapsed);
+                            event.put("slaMs", sla);
+                            event.put("thresholdPercent", thresholdPercent);
+                            event.put("timestamp", System.currentTimeMillis());
+                            producer.push(tenantId, config.getEscalationPreBreachTopic(), event);
+                            preBreachWarnings++;
+                            preBreachEmitted = true;
+                        }
+                    }
+
                     if (elapsed < sla) {
                         recordSkip(skipMap, details, srid, status, currentLevel,
                                 EscalationSkipReason.SLA_NOT_BREACHED,
-                                "elapsed=" + elapsed + "ms, sla=" + sla + "ms");
+                                "elapsed=" + elapsed + "ms, sla=" + sla + "ms"
+                                        + (preBreachEmitted ? "; prebreach warning emitted" : ""));
                         skipped++;
                         continue;
                     }
@@ -212,19 +263,22 @@ public class EscalationScheduler {
 
                     Workflow currentWorkflow = Workflow.builder().assignes(assignees).build();
 
-                    EscalationService.EscalationResult result =
-                            escalationService.escalateComplaintWithReason(complaint, currentWorkflow, requestInfo);
+                    EscalationService.EscalationResult result = dryRun
+                            ? escalationService.previewEscalation(complaint, currentWorkflow, requestInfo, maxDepth, elapsed, sla)
+                            : escalationService.escalateComplaintWithReason(complaint, currentWorkflow, requestInfo, maxDepth, elapsed, sla);
 
                     if (result.isSuccess()) {
                         escalated++;
                         details.add(EscalationOutcome.builder()
                                 .serviceRequestId(srid)
-                                .action("ESCALATED")
+                                .action(dryRun ? "WOULD_ESCALATE" : "ESCALATED")
                                 .reason(EscalationSkipReason.SUCCESS.name())
-                                .detail("fromLevel=" + currentLevel + " toLevel=" + (currentLevel + 1))
+                                .detail(dryRun
+                                        ? result.getDetail()
+                                        : "fromLevel=" + currentLevel + " toLevel=" + (currentLevel + 1))
                                 .build());
-                        log.info("Escalation success — srid={}, status={}, fromLevel={}, toLevel={}",
-                                srid, status, currentLevel, currentLevel + 1);
+                        log.info("Escalation {} — srid={}, status={}, fromLevel={}, toLevel={}",
+                                dryRun ? "dry-run hit" : "success", srid, status, currentLevel, currentLevel + 1);
                     } else {
                         EscalationSkipReason reason = result.getReason() != null
                                 ? result.getReason()
@@ -241,6 +295,10 @@ public class EscalationScheduler {
         span.setAttribute("escalation.scanned", scanned);
         span.setAttribute("escalation.escalated", escalated);
         span.setAttribute("escalation.skipped", skipped);
+        span.setAttribute("escalation.preBreachWarnings", preBreachWarnings);
+        if (dryRun) {
+            span.setAttribute("escalation.dryRun", true);
+        }
         // OTEL attribute names are dotted-snake-case by convention
         skipMap.forEach((reason, count) ->
                 span.setAttribute("escalation.skipped." + reason.name().toLowerCase(), count));
@@ -248,17 +306,38 @@ public class EscalationScheduler {
         Map<String, Integer> skipBreakdown = new LinkedHashMap<>();
         skipMap.forEach((reason, count) -> skipBreakdown.put(reason.name(), count));
 
-        log.info("Escalation scan complete: scanned={}, escalated={}, skipped={}, skipBreakdown={}",
-                scanned, escalated, skipped, skipBreakdown);
+        log.info("Escalation scan complete: scanned={}, escalated={}, skipped={}, preBreachWarnings={}, dryRun={}, skipBreakdown={}",
+                scanned, escalated, skipped, preBreachWarnings, dryRun, skipBreakdown);
 
         return EscalationTriggerResponse.builder()
                 .tenantId(tenantId)
                 .scanned(scanned)
                 .escalated(escalated)
                 .skipped(skipped)
+                .dryRun(dryRun)
+                .preBreachWarnings(preBreachWarnings)
                 .skipBreakdown(skipBreakdown)
                 .details(details)
                 .build();
+    }
+
+    /**
+     * Pure crossing-detection predicate for the pre-breach warning. True only
+     * on the first tick at/after thresholdMs and strictly before the SLA
+     * itself breaches. Visible for testing.
+     */
+    static boolean shouldEmitPreBreach(long elapsedMs, long slaMs, double thresholdPercent, long intervalMs) {
+        double thresholdMs = slaMs * thresholdPercent / 100.0;
+        return elapsedMs < slaMs
+                && elapsedMs >= thresholdMs
+                && (elapsedMs - intervalMs) < thresholdMs;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> getPreBreachWarning(Map<String, Object> crsEscalationPolicy) {
+        if (crsEscalationPolicy == null) return null;
+        Object pb = crsEscalationPolicy.get("preBreachWarning");
+        return pb instanceof Map ? (Map<String, Object>) pb : null;
     }
 
     private void recordSkip(Map<EscalationSkipReason, Integer> skipMap,
@@ -373,7 +452,17 @@ public class EscalationScheduler {
         return stateLevelTenantId;
     }
 
-    private int getMaxDepth(Map<String, Object> escalationConfig) {
+    /**
+     * Max-depth precedence: CRS.EscalationPolicy.maxDepth → v0
+     * EscalationConfig.maxDepth → static config. The resolved value is also
+     * passed into {@link EscalationService#escalateComplaintWithReason} so the
+     * service no longer re-derives the depth from static config only (the
+     * old scheduler/service divergence).
+     */
+    private int getMaxDepth(Map<String, Object> crsEscalationPolicy, Map<String, Object> escalationConfig) {
+        if (crsEscalationPolicy != null && crsEscalationPolicy.get("maxDepth") instanceof Number) {
+            return ((Number) crsEscalationPolicy.get("maxDepth")).intValue();
+        }
         if (escalationConfig != null && escalationConfig.containsKey("maxDepth")) {
             return ((Number) escalationConfig.get("maxDepth")).intValue();
         }
@@ -490,6 +579,8 @@ public class EscalationScheduler {
 
     /**
      * Resolve the SLA (in MS) for the given complaint + workflow state.
+     * Precedence: CategorySLA per-level cell → CategorySLA per-state cell →
+     * EscalationPolicy per-level default → StateSLA → v0 EscalationConfig.
      * Visible for testing.
      */
     @SuppressWarnings("unchecked")
@@ -499,6 +590,7 @@ public class EscalationScheduler {
                                    Map<String, Number> crsStateSlaDefaults,
                                    Map<String, String> crsWorkflowStateMapping,
                                    Map<String, Map<String, Object>> serviceCodeToCategory,
+                                   Map<String, Object> crsEscalationPolicy,
                                    int currentLevel,
                                    List<Long> defaultSlaByLevel,
                                    Map<String, List<Long>> overrides) {
@@ -507,17 +599,22 @@ public class EscalationScheduler {
         String stateKey = mapWorkflowStateToKey(workflowState, crsWorkflowStateMapping);
         boolean unmapped = false;
 
-        // 1) CategorySLA hit
-        if (categoryTuple != null && stateKey != null && crsCategorySla != null) {
+        // 1+2) CategorySLA hit — the per-level cell (PRD complaint-type x
+        // level model) wins over the per-state cell on the same row.
+        if (categoryTuple != null && crsCategorySla != null) {
             for (Map<String, Object> row : crsCategorySla) {
                 Object active = row.get("isActive");
                 if (active instanceof Boolean && !(Boolean) active) continue;
                 if (!Objects.equals(row.get("path"), categoryTuple.get("path"))) continue;
                 if (!Objects.equals(row.get("category"), categoryTuple.get("category"))) continue;
                 if (!Objects.equals(row.get("subcategoryL1"), categoryTuple.get("subcategoryL1"))) continue;
+                Long levelMs = levelCellToMillis(row.get("slaHoursByLevel"), currentLevel);
+                if (levelMs != null) {
+                    return new SlaResolution(levelMs, PGRConstants.SLA_SOURCE_CATEGORY_LEVEL, false, false);
+                }
                 Object by = row.get("slaHoursByState");
                 if (!(by instanceof Map)) continue;
-                Object cell = ((Map<String, Object>) by).get(stateKey);
+                Object cell = stateKey == null ? null : ((Map<String, Object>) by).get(stateKey);
                 Long cellMs = cellToMillis(cell);
                 if (cellMs != null) {
                     return new SlaResolution(cellMs, PGRConstants.SLA_SOURCE_CATEGORY, false, false);
@@ -528,7 +625,15 @@ public class EscalationScheduler {
             unmapped = true;
         }
 
-        // 2) StateSLA fallback
+        // 3) EscalationPolicy per-level default
+        if (crsEscalationPolicy != null) {
+            Long policyMs = levelCellToMillis(crsEscalationPolicy.get("defaultSlaHoursByLevel"), currentLevel);
+            if (policyMs != null) {
+                return new SlaResolution(policyMs, PGRConstants.SLA_SOURCE_POLICY_LEVEL, unmapped, false);
+            }
+        }
+
+        // 4) StateSLA fallback
         if (stateKey != null && crsStateSlaDefaults != null) {
             Number defHrs = crsStateSlaDefaults.get(stateKey);
             if (defHrs != null) {
@@ -541,7 +646,7 @@ public class EscalationScheduler {
         // answer but the situation is actionable.
         boolean stateMappingMissing = (stateKey == null);
 
-        // 3) v0 EscalationConfig fallback (existing behaviour).
+        // 5) v0 EscalationConfig fallback (existing behaviour).
         log.info("Escalation SLA falling back to v0 EscalationConfig for srid={} stateKey={}",
                 complaint.getServiceRequestId(), stateKey);
         long v0 = resolveSla(complaint.getServiceCode(), currentLevel, defaultSlaByLevel, overrides);
@@ -563,6 +668,17 @@ public class EscalationScheduler {
             }
         }
         return null;
+    }
+
+    /** Per-level cell: out-of-bounds index, null entry, non-Number or non-positive ⇒ null (fall through silently). */
+    private static Long levelCellToMillis(Object byLevel, int level) {
+        if (!(byLevel instanceof List)) return null;
+        List<?> levels = (List<?>) byLevel;
+        if (level < 0 || level >= levels.size()) return null;
+        Object cell = levels.get(level);
+        if (!(cell instanceof Number)) return null;
+        double h = ((Number) cell).doubleValue();
+        return h > 0 ? hoursToMillis(h) : null;
     }
 
     private static long hoursToMillis(double h) {
@@ -671,6 +787,26 @@ public class EscalationScheduler {
             if (mappings instanceof Map) return (Map<String, String>) mappings;
         } catch (Exception e) {
             log.debug("CRS.WorkflowStateMapping fetch failed (probably not seeded yet): {}", e.getMessage());
+        }
+        return Collections.emptyMap();
+    }
+
+    /**
+     * Fetch the CRS.EscalationPolicy singleton (tenant-wide escalation
+     * policy: maxDepth, per-level SLA defaults, pre-breach warning config,
+     * manual-ESCALATE comment requirement). Returns an empty map when the
+     * schema isn't seeded yet so callers can probe keys without null guards.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> fetchCrsEscalationPolicy(RequestInfo requestInfo, String tenantId) {
+        try {
+            Object res = fetchMdmsModule(requestInfo, tenantId, "CRS", "EscalationPolicy");
+            if (res == null) return Collections.emptyMap();
+            List<Map<String, Object>> rows = JsonPath.read(res, "$.MdmsRes.CRS.EscalationPolicy");
+            if (rows == null || rows.isEmpty()) return Collections.emptyMap();
+            return rows.get(0);
+        } catch (Exception e) {
+            log.debug("CRS.EscalationPolicy fetch failed (probably not seeded yet): {}", e.getMessage());
         }
         return Collections.emptyMap();
     }

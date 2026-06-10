@@ -4,10 +4,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jayway.jsonpath.JsonPath;
 import jakarta.validation.Valid;
 import org.egov.common.contract.request.RequestInfo;
+import org.egov.mdms.model.MasterDetail;
+import org.egov.mdms.model.MdmsCriteria;
+import org.egov.mdms.model.MdmsCriteriaReq;
+import org.egov.mdms.model.ModuleDetail;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.repository.PGRRepository;
 import org.egov.pgr.repository.ServiceRequestRepository;
 import org.egov.pgr.util.HRMSUtil;
+import org.egov.pgr.util.MDMSUtils;
 import org.egov.pgr.web.models.*;
 import org.egov.pgr.web.models.boundary.Boundary;
 import org.egov.pgr.web.models.boundary.BoundaryResponse;
@@ -35,14 +40,18 @@ public class ServiceRequestValidator {
 
     private ObjectMapper objectMapper;
 
+    private MDMSUtils mdmsUtils;
+
     @Autowired
     public ServiceRequestValidator(PGRConfiguration config, PGRRepository repository, HRMSUtil hrmsUtil,
-                                   ServiceRequestRepository serviceRequestRepository, ObjectMapper objectMapper) {
+                                   ServiceRequestRepository serviceRequestRepository, ObjectMapper objectMapper,
+                                   MDMSUtils mdmsUtils) {
         this.config = config;
         this.repository = repository;
         this.hrmsUtil = hrmsUtil;
         this.serviceRequestRepository = serviceRequestRepository;
         this.objectMapper = objectMapper;
+        this.mdmsUtils = mdmsUtils;
     }
 
 
@@ -97,6 +106,12 @@ public class ServiceRequestValidator {
      * {@code AUTO_ESCALATE} role — for those, we skip the check because the
      * scheduler injects its own boilerplate comment ("Auto-escalated: SLA
      * breach at level N").
+     *
+     * <p>The requirement is tenant-configurable via the CRS.EscalationPolicy
+     * singleton ({@code escalateCommentRequired=false} allows blank comments).
+     * The policy is fetched lazily — only on the path that would otherwise
+     * throw — so normal requests cost zero MDMS calls. Missing policy row or
+     * fetch failure defaults to required (today's behaviour).</p>
      */
     private void validateEscalateComment(ServiceRequest request) {
         if (request.getWorkflow() == null) return;
@@ -108,9 +123,39 @@ public class ServiceRequestValidator {
 
         String comments = request.getWorkflow().getComments();
         if (comments == null || comments.trim().isEmpty()) {
+            if (Boolean.FALSE.equals(fetchEscalateCommentRequired(request))) {
+                return;
+            }
             throw new CustomException("ESCALATE_COMMENT_REQUIRED",
                     "A comment is required for manual ESCALATE actions");
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Boolean fetchEscalateCommentRequired(ServiceRequest request) {
+        try {
+            ModuleDetail moduleDetail = ModuleDetail.builder()
+                    .masterDetails(Collections.singletonList(MasterDetail.builder().name("EscalationPolicy").build()))
+                    .moduleName("CRS")
+                    .build();
+            MdmsCriteria mdmsCriteria = MdmsCriteria.builder()
+                    .moduleDetails(Collections.singletonList(moduleDetail))
+                    .tenantId(request.getService().getTenantId())
+                    .build();
+            MdmsCriteriaReq mdmsCriteriaReq = MdmsCriteriaReq.builder()
+                    .mdmsCriteria(mdmsCriteria)
+                    .requestInfo(request.getRequestInfo())
+                    .build();
+            Object res = serviceRequestRepository.fetchResult(mdmsUtils.getMdmsSearchUrl(), mdmsCriteriaReq);
+            List<Map<String, Object>> rows = JsonPath.read(res, "$.MdmsRes.CRS.EscalationPolicy");
+            if (!CollectionUtils.isEmpty(rows)) {
+                Object required = rows.get(0).get("escalateCommentRequired");
+                if (required instanceof Boolean) return (Boolean) required;
+            }
+        } catch (Exception e) {
+            // fetch failure ⇒ keep today's behaviour: comment required
+        }
+        return null;
     }
 
     private boolean isAutoEscalateSystemCaller(RequestInfo requestInfo) {

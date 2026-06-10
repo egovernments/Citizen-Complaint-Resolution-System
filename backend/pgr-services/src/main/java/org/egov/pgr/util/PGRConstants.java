@@ -179,6 +179,8 @@ public class PGRConstants {
 
     /** Source-of-SLA labels written to the OTEL escalation span as {@code escalation.slaSource}. */
     public static final String SLA_SOURCE_CATEGORY = "CRS.CategorySLA";
+    public static final String SLA_SOURCE_CATEGORY_LEVEL = "CRS.CategorySLA.level";
+    public static final String SLA_SOURCE_POLICY_LEVEL = "CRS.EscalationPolicy.level";
     public static final String SLA_SOURCE_STATE = "CRS.StateSLA";
     public static final String SLA_SOURCE_V0 = "v0.EscalationConfig";
 

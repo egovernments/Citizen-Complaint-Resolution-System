@@ -31,4 +31,8 @@ public class EscalationTriggerRequest {
     /** Optional: scope the scan to these serviceRequestIds. Null/empty = scan all candidates. */
     @JsonProperty("serviceRequestIds")
     private List<String> serviceRequestIds;
+
+    /** Optional: when true, report would-be escalations without mutating anything. */
+    @JsonProperty("dryRun")
+    private Boolean dryRun;
 }

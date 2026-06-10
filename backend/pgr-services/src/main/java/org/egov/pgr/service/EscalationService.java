@@ -59,16 +59,28 @@ public class EscalationService {
      * @return true if escalation was performed, false if skipped
      */
     public boolean escalateComplaint(Service complaint, Workflow currentWorkflow, RequestInfo requestInfo) {
-        return escalateComplaintWithReason(complaint, currentWorkflow, requestInfo).isSuccess();
+        return escalateComplaintWithReason(complaint, currentWorkflow, requestInfo,
+                config.getEscalationMaxDepth(), 0L, 0L).isSuccess();
     }
 
     /**
      * Same as {@link #escalateComplaint} but returns the reason it skipped (or SUCCESS),
      * so the caller (scheduler / /escalation/_trigger) can aggregate diagnostics.
+     *
+     * <p>{@code maxDepth} is resolved by the scheduler (CRS.EscalationPolicy →
+     * v0 EscalationConfig → static config) and passed in so the service no
+     * longer re-derives it from static config only — that divergence let the
+     * two sides disagree on the depth check. {@code elapsedMs}/{@code slaMs}
+     * feed the audit-trail comment; the HRMS summary lookup for that comment
+     * is one extra HRMS call per actual escalation — escalations are rare;
+     * acceptable.</p>
      */
     public EscalationResult escalateComplaintWithReason(Service complaint,
                                                         Workflow currentWorkflow,
-                                                        RequestInfo requestInfo) {
+                                                        RequestInfo requestInfo,
+                                                        int maxDepth,
+                                                        long elapsedMs,
+                                                        long slaMs) {
 
         String serviceRequestId = complaint.getServiceRequestId();
         String tenantId = complaint.getTenantId();
@@ -87,11 +99,11 @@ public class EscalationService {
         span.setAttribute("escalation.fromAssignee", currentAssigneeUuid != null ? currentAssigneeUuid : "");
 
         // 1. Max depth
-        if (currentLevel >= config.getEscalationMaxDepth()) {
+        if (currentLevel >= maxDepth) {
             log.info("Complaint {} already at max escalation depth {}, skipping", serviceRequestId, currentLevel);
             span.setAttribute("escalation.skipReason", EscalationSkipReason.MAX_DEPTH_REACHED.name());
             return EscalationResult.skip(EscalationSkipReason.MAX_DEPTH_REACHED,
-                    "currentLevel=" + currentLevel + ", maxDepth=" + config.getEscalationMaxDepth());
+                    "currentLevel=" + currentLevel + ", maxDepth=" + maxDepth);
         }
 
         // 2. Current assignees
@@ -102,13 +114,7 @@ public class EscalationService {
         }
 
         // 3. Find supervisor for the first assignee that has one
-        String supervisorUuid = null;
-        for (String assigneeUuid : currentAssignees) {
-            supervisorUuid = hrmsUtil.getSupervisorUuid(assigneeUuid, requestInfo, tenantId);
-            if (supervisorUuid != null) {
-                break;
-            }
-        }
+        String supervisorUuid = findSupervisorUuid(currentAssignees, requestInfo, tenantId);
 
         if (supervisorUuid == null) {
             log.warn("No supervisor found for any assignee of complaint {}, skipping escalation", serviceRequestId);
@@ -117,11 +123,13 @@ public class EscalationService {
                     "HRMS returned no reportingTo for assignees=" + currentAssignees);
         }
 
-        // 4. Build the escalation workflow
+        // 4. Build the escalation workflow with a PRD audit-trail comment
+        //    (who it went to + the numbers that justified the breach).
+        Map<String, String> supervisorSummary = hrmsUtil.getEmployeeSummary(supervisorUuid, requestInfo, tenantId);
         Workflow escalationWorkflow = Workflow.builder()
                 .action(ESCALATE)
                 .assignes(Collections.singletonList(supervisorUuid))
-                .comments("Auto-escalated: SLA breach at level " + currentLevel)
+                .comments(buildEscalateComment(supervisorUuid, supervisorSummary, currentLevel, elapsedMs, slaMs))
                 .build();
 
         // 5. Update additionalDetails with escalation metadata
@@ -157,6 +165,10 @@ public class EscalationService {
         escalationEvent.put("escalationLevel", currentLevel + 1);
         escalationEvent.put("previousAssignees", currentAssignees);
         escalationEvent.put("newAssignee", supervisorUuid);
+        escalationEvent.put("newAssigneeName", supervisorSummary.get("name"));
+        escalationEvent.put("newAssigneeDesignation", supervisorSummary.get("designation"));
+        escalationEvent.put("elapsedMs", elapsedMs);
+        escalationEvent.put("slaMs", slaMs);
         escalationEvent.put("timestamp", System.currentTimeMillis());
         producer.push(tenantId, config.getEscalationKafkaTopic(), escalationEvent);
 
@@ -167,6 +179,80 @@ public class EscalationService {
                 serviceRequestId, currentLevel, currentLevel + 1, currentAssignees, supervisorUuid);
 
         return EscalationResult.success(supervisorUuid, currentLevel + 1);
+    }
+
+    /**
+     * Dry-run twin of {@link #escalateComplaintWithReason}: same max-depth
+     * check and HRMS supervisor lookup, but ZERO mutations — no
+     * additionalDetail write, no workflow transition, no Kafka publish.
+     * Used by {@code POST /escalation/_trigger} with {@code dryRun=true}.
+     */
+    public EscalationResult previewEscalation(Service complaint,
+                                              Workflow currentWorkflow,
+                                              RequestInfo requestInfo,
+                                              int maxDepth,
+                                              long elapsedMs,
+                                              long slaMs) {
+
+        String serviceRequestId = complaint.getServiceRequestId();
+        String tenantId = complaint.getTenantId();
+        int currentLevel = getEscalationLevel(complaint);
+
+        Span span = Span.current();
+        span.setAttribute("complaint.serviceRequestId", serviceRequestId == null ? "" : serviceRequestId);
+        span.setAttribute("complaint.tenantId", tenantId == null ? "" : tenantId);
+        span.setAttribute("escalation.fromLevel", currentLevel);
+        span.setAttribute("escalation.dryRun", true);
+
+        if (currentLevel >= maxDepth) {
+            span.setAttribute("escalation.skipReason", EscalationSkipReason.MAX_DEPTH_REACHED.name());
+            return EscalationResult.skip(EscalationSkipReason.MAX_DEPTH_REACHED,
+                    "currentLevel=" + currentLevel + ", maxDepth=" + maxDepth);
+        }
+
+        List<String> currentAssignees = currentWorkflow.getAssignes();
+        if (CollectionUtils.isEmpty(currentAssignees)) {
+            span.setAttribute("escalation.skipReason", EscalationSkipReason.NO_ASSIGNEES.name());
+            return EscalationResult.skip(EscalationSkipReason.NO_ASSIGNEES, "workflow returned 0 assignees");
+        }
+
+        String supervisorUuid = findSupervisorUuid(currentAssignees, requestInfo, tenantId);
+        if (supervisorUuid == null) {
+            span.setAttribute("escalation.skipReason", EscalationSkipReason.NO_SUPERVISOR_IN_HRMS.name());
+            return EscalationResult.skip(EscalationSkipReason.NO_SUPERVISOR_IN_HRMS,
+                    "HRMS returned no reportingTo for assignees=" + currentAssignees);
+        }
+
+        return EscalationResult.builder()
+                .success(true)
+                .reason(EscalationSkipReason.SUCCESS)
+                .detail("would escalate to " + supervisorUuid + " (level " + currentLevel + "→" + (currentLevel + 1)
+                        + "), elapsed=" + elapsedMs + "ms, sla=" + slaMs + "ms")
+                .newAssigneeUuid(supervisorUuid)
+                .newLevel(currentLevel + 1)
+                .build();
+    }
+
+    private String findSupervisorUuid(List<String> currentAssignees, RequestInfo requestInfo, String tenantId) {
+        for (String assigneeUuid : currentAssignees) {
+            String supervisorUuid = hrmsUtil.getSupervisorUuid(assigneeUuid, requestInfo, tenantId);
+            if (supervisorUuid != null) {
+                return supervisorUuid;
+            }
+        }
+        return null;
+    }
+
+    private static String buildEscalateComment(String supervisorUuid, Map<String, String> summary,
+                                               int currentLevel, long elapsedMs, long slaMs) {
+        long elapsedH = elapsedMs / (60L * 60L * 1000L);
+        long slaH = slaMs / (60L * 60L * 1000L);
+        if (summary.containsKey("name") && summary.containsKey("designation")) {
+            return String.format("Auto-escalated to %s (%s): SLA breached at level %d (elapsed %dh > SLA %dh)",
+                    summary.get("name"), summary.get("designation"), currentLevel, elapsedH, slaH);
+        }
+        return String.format("Auto-escalated to %s: SLA breached at level %d (elapsed %dh > SLA %dh)",
+                supervisorUuid, currentLevel, elapsedH, slaH);
     }
 
     /**

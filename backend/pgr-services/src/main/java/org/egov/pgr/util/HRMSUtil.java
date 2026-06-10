@@ -14,7 +14,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.egov.pgr.util.PGRConstants.HRMS_DEPARTMENT_JSONPATH;
 import static org.egov.pgr.util.PGRConstants.HRMS_REPORTING_TO_JSONPATH;
@@ -94,6 +96,40 @@ public class HRMSUtil {
             log.warn("Failed to parse HRMS reportingTo for employee UUID: {}", employeeUuid, e);
             return null;
         }
+    }
+
+    /**
+     * Fetches the HRMS employee by uuid and returns a summary map with keys
+     * {@code name} (Employee user.name) and {@code designation} (current
+     * assignment's designation code) for audit-trail comments. Null-safe:
+     * returns an empty map on any failure.
+     */
+    public Map<String, String> getEmployeeSummary(String uuid, RequestInfo requestInfo, String tenantId) {
+
+        StringBuilder url = getHRMSURI(Collections.singletonList(uuid), tenantId);
+
+        RequestInfoWrapper requestInfoWrapper = RequestInfoWrapper.builder().requestInfo(requestInfo).build();
+
+        Map<String, String> summary = new HashMap<>();
+        try {
+            Object res = serviceRequestRepository.fetchResult(url, requestInfoWrapper);
+            if (res == null) {
+                log.warn("HRMS returned null for employee UUID: {}", uuid);
+                return summary;
+            }
+            String name = JsonPath.read(res, "$.Employees[0].user.name");
+            List<String> designations = JsonPath.read(res, "$.Employees[0].assignments[?(@.isCurrentAssignment==true)].designation");
+            if (name != null) {
+                summary.put("name", name);
+            }
+            if (!CollectionUtils.isEmpty(designations) && designations.get(0) != null) {
+                summary.put("designation", designations.get(0));
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch HRMS employee summary for UUID: {}", uuid, e);
+            return new HashMap<>();
+        }
+        return summary;
     }
 
     /**

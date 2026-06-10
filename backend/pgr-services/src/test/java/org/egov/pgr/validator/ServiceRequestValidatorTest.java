@@ -5,6 +5,7 @@ import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.repository.PGRRepository;
 import org.egov.pgr.repository.ServiceRequestRepository;
 import org.egov.pgr.util.HRMSUtil;
+import org.egov.pgr.util.MDMSUtils;
 import org.egov.pgr.web.models.*;
 import org.egov.pgr.web.models.boundary.BoundaryResponse;
 import org.egov.tracer.model.CustomException;
@@ -33,6 +34,7 @@ public class ServiceRequestValidatorTest {
     @Mock private HRMSUtil hrmsUtil;
     @Mock private ServiceRequestRepository serviceRequestRepository;
     @Mock private ObjectMapper objectMapper;
+    @Mock private MDMSUtils mdmsUtils;
 
     @InjectMocks
     private ServiceRequestValidator validator;
@@ -145,6 +147,33 @@ public class ServiceRequestValidatorTest {
         ServiceRequest req = buildEscalateRequest(null, /*autoEscalate*/ true);
         stubPersistedComplaintExists(req);
         assertDoesNotThrow(() -> validator.validateUpdate(req, buildMdmsData("POTHOLE")));
+    }
+
+    @Test
+    void update_escalateActionWithoutComment_passesWhenPolicyDisablesRequirement() {
+        ServiceRequest req = buildEscalateRequest(null, false);
+        stubPersistedComplaintExists(req);
+        stubEscalationPolicy(false);
+        assertDoesNotThrow(() -> validator.validateUpdate(req, buildMdmsData("POTHOLE")));
+    }
+
+    /** Stubs the lazy CRS.EscalationPolicy MDMS fetch the validator makes on the throw path. */
+    private void stubEscalationPolicy(boolean escalateCommentRequired) {
+        Map<String, Object> policy = new HashMap<>();
+        policy.put("singletonKey", "default");
+        policy.put("escalateCommentRequired", escalateCommentRequired);
+
+        Map<String, Object> crs = new HashMap<>();
+        crs.put("EscalationPolicy", Collections.singletonList(policy));
+
+        Map<String, Object> mdmsRes = new HashMap<>();
+        mdmsRes.put("CRS", crs);
+
+        Map<String, Object> root = new HashMap<>();
+        root.put("MdmsRes", mdmsRes);
+
+        when(mdmsUtils.getMdmsSearchUrl()).thenReturn(new StringBuilder("http://mdms/_search"));
+        when(serviceRequestRepository.fetchResult(any(), any())).thenReturn(root);
     }
 
     private static ServiceRequest buildEscalateRequest(String comments, boolean autoEscalateRole) {
