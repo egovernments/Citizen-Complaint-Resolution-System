@@ -115,7 +115,7 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   // These get the same generic CRUD as the entries above; richer per-field widgets
   // are layered on later via src/admin/schemaDescriptors/ (Stage 1+).
   'theme-config':           { type: 'mdms', label: 'Theme Config',             schema: 'common-masters.ThemeConfig',               idField: 'code',              nameField: 'name' },
-  'user-validation':        { type: 'mdms', label: 'User Field Validation',    schema: 'common-masters.UserValidation',            idField: 'fieldType',         nameField: 'fieldType' },
+  'user-validation':        { type: 'mdms', label: 'User Field Validation',    schema: 'common-masters.UserValidation',            idField: 'zone',              nameField: 'zone' },
   'mobile-validation':      { type: 'mdms', label: 'Mobile Number Validation', schema: 'ValidationConfigs.mobileNumberValidation', idField: 'validationName',    nameField: 'validationName' },
   'tenant-boundary':        { type: 'mdms', label: 'Tenant Boundary (HRMS)',   schema: 'egov-location.TenantBoundary',             idField: 'hierarchyType.code', nameField: 'hierarchyType.code' },
   'auto-escalation-ignore': { type: 'mdms', label: 'Auto-Escalation Ignored',  schema: 'Workflow.AutoEscalationStatesToIgnore',    idField: 'businessService',   nameField: 'businessService' },

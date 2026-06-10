@@ -15,3 +15,5 @@ report.json
 catalog.json
 history.json
 .git-sha
+lifecycle-fixtures.json
+test-results/

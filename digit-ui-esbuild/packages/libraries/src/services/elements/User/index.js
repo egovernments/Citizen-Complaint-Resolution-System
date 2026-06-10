@@ -2,10 +2,11 @@ import Urls from "../../atoms/urls";
 import { Request, ServiceRequest } from "../../atoms/Utils/Request";
 import { Storage } from "../../atoms/Utils/Storage";
 import { getAuthAdapter } from "../../auth/index";
+import { isKeycloakAuth } from "../../auth/authSurface";
 
 export const UserService = {
   authenticate: async (details) => {
-    if (window?.globalConfigs?.getConfig("AUTH_PROVIDER") === "keycloak") {
+    if (isKeycloakAuth()) {
       const adapter = getAuthAdapter();
       const result = await adapter.login({
         email: details.username,
@@ -62,7 +63,7 @@ export const UserService = {
     return Digit.SessionStorage.get("User");
   },
   logout: async () => {
-    if (window?.globalConfigs?.getConfig("AUTH_PROVIDER") === "keycloak") {
+    if (isKeycloakAuth()) {
       const adapter = getAuthAdapter();
       return adapter.logout();
     }

@@ -3,8 +3,7 @@
 // the same payload shape we're checking here.
 import { test, expect } from '@playwright/test';
 import { loginEmployee, mdmsCreate, mdmsSearch, mdmsUpdate } from '../utils/launch-fixes/api.js';
-
-const T = 'ke.nairobi';
+import { TENANT, ROOT_TENANT, BASE_URL } from '../utils/env';
 
 test.describe('01-configurator-mdms: Department CRUD (#472 + follow-ups)', () => {
   test('Department create REJECTS the legacy `description` field', {
@@ -26,7 +25,7 @@ If the assertion fails because the schema started accepting the field, the confi
     const auth = await loginEmployee();
     const uid = `DEPT_PW_DESC_${Date.now()}`;
     const r = await mdmsCreate(auth, 'common-masters.Department', {
-      tenantId: T,
+      tenantId: TENANT,
       schemaCode: 'common-masters.Department',
       uniqueIdentifier: uid,
       isActive: true,
@@ -53,7 +52,7 @@ Teardown is API-only because there's no UI flow inside this spec — it's pure M
     const auth = await loginEmployee();
     const uid = `DEPT_PW_OK_${Date.now()}`;
     const r = await mdmsCreate(auth, 'common-masters.Department', {
-      tenantId: T,
+      tenantId: TENANT,
       schemaCode: 'common-masters.Department',
       uniqueIdentifier: uid,
       isActive: true,
@@ -87,7 +86,7 @@ Test relies on at least one active Department existing on the deployment — ass
     // re-introduces the leak (or a future change to the configurator's
     // form payload that includes new `_*` fields).
     const auth = await loginEmployee();
-    const search = await mdmsSearch(auth, T, 'common-masters.Department');
+    const search = await mdmsSearch(auth, TENANT, 'common-masters.Department');
     const existing = search.mdms?.find((r: any) => r.isActive);
     expect(existing).toBeTruthy();
     const polluted = {
@@ -126,12 +125,12 @@ Note menuPath specifically — the schema rejects 'menuPathName' but accepts 'me
     // Verified post-explorer: the schema does include all three. This
     // test guards against schema drift removing them.
     const auth = await loginEmployee();
-    const r = await fetch(`${process.env.NAIPEPEA_BASE ?? 'https://naipepea.digit.org'}/mdms-v2/schema/v1/_search`, {
+    const r = await fetch(`${BASE_URL}/mdms-v2/schema/v1/_search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         RequestInfo: { authToken: auth.token, apiId: 'Rainmaker' },
-        SchemaDefCriteria: { tenantId: 'ke', codes: ['RAINMAKER-PGR.ServiceDefs'] },
+        SchemaDefCriteria: { tenantId: ROOT_TENANT, codes: ['RAINMAKER-PGR.ServiceDefs'] },
       }),
     }).then(r => r.json());
     const props = Object.keys(r.SchemaDefinitions?.[0]?.definition?.properties ?? {});
@@ -160,7 +159,7 @@ Open follow-up: the create path on the client should also strip these fields. Un
     const auth = await loginEmployee();
     const uid = `DEPT_PW_CREATE_LEAK_${Date.now()}`;
     const r = await mdmsCreate(auth, 'common-masters.Department', {
-      tenantId: T,
+      tenantId: TENANT,
       schemaCode: 'common-masters.Department',
       uniqueIdentifier: uid,
       isActive: true,

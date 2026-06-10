@@ -19,6 +19,10 @@ import { test, expect } from '@playwright/test';
 
 import { BASE_URL } from '../utils/env';
 
+// Country dial-code rendered in the Edit Profile mobile-number prefix
+// block. Defaults to Kenya (+254) for naipepea; override per deployment.
+const MOBILE_PREFIX = process.env.MOBILE_PREFIX || '+254';
+
 test.describe('employee profile — country prefix #444', () => {
   test('mobile prefix renders +254 on Kenya tenant (not +91)', {
     annotation: {
@@ -56,7 +60,11 @@ Deliberately stops short of submitting the form — ADMIN is a shared principal 
     await expect(prefix).toBeVisible({ timeout: 10_000 });
 
     const prefixText = (await prefix.innerText()).trim();
-    expect(prefixText).toBe('+254');
-    expect(prefixText).not.toBe('+91');
+    expect(prefixText).toBe(MOBILE_PREFIX);
+    // Guard against the historical +91 regression regardless of which
+    // country the deployment is configured for.
+    if (MOBILE_PREFIX !== '+91') {
+      expect(prefixText).not.toBe('+91');
+    }
   });
 });
