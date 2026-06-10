@@ -351,3 +351,462 @@ Lifted from Discussion #773's "Open questions and deferred work" table (design d
 - **Upstream `egov-workflow-v2` ASSIGN-assignee bug** → raise against [`egovernments/egov-workflow-v2`](https://github.com/egovernments/egov-workflow-v2) (not yet filed at time of writing).
 - **Upstream `egov-mdms` `oneOf` validator bug** → raise against the `egov-mdms` (mdms-v2) repo. Not yet filed.
 - **Operator / deployment questions for Bomet** → read [`docs/escalation-feature-bomet.md`](./escalation-feature-bomet.md) first, then PR [#794 ops gotchas](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/794) for symptoms + fixes, then PR [#796 deployment runbook](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/796) for new-tenant onboarding.
+
+---
+
+## 14. Drift between docs and live state
+
+This section is the **drift dossier** — every place where the rest of this handoff, the design doc, or PR #770's body **implies** something that is not actually true on disk, in the live deployment, or in the repo today. A new agent picking this up must read this section first and not trust the rosy bits above without re-verifying them with the commands embedded below.
+
+Captured 2026-06-10 against `feat/escalation-otel-configurator-designer @ cdceadb24`.
+
+### 14.1 Live Bomet `pgr-services` is NOT running the new scheduler
+
+The live container on Bomet (`bometfeedbackhub.digit.org`) is running an **older** pgr-services build that predates the CRS-SLA scheduler and the `/escalation/_trigger` controller. The demo URLs in §3 and §4 of this doc DO NOT WORK against that image. This contradicts the impression the handoff gives that the live tenant exercises the new code.
+
+**Verify the deployed image:**
+
+```bash
+ssh egov-bomet "docker inspect digit-pgr-services-1 --format='{{.Config.Image}}'"
+# → registry.preview.egov.theflywheel.in/pgr-services-dev:latest
+
+ssh egov-bomet "docker inspect digit-pgr-services-1 --format='{{.Image}}'"
+# → sha256:e9dc6af98e88...  (the *old* :latest, retagged from pgr-services-analytics:local)
+
+ssh egov-bomet "docker images | grep -E 'pgr-services-dev|pgr-services-analytics' | head -10"
+# Shows the new tag exists on the box but is NOT what the container is running:
+#   registry.preview.egov.theflywheel.in/egovio/pgr-services-dev:escalation-otel-amd64-crs-sla-7326e9ce1   955c602120b7
+#   registry.preview.egov.theflywheel.in/pgr-services-dev:latest                                            e9dc6af98e88  ← container runs this
+```
+
+**Symptom 1 — `/escalation/_trigger` returns 404 (rendered by Spring as `NoResourceFoundException`):**
+
+```bash
+ssh egov-bomet "curl -sf -X POST http://localhost:18000/pgr-services/escalation/_trigger \
+  -H 'Content-Type: application/json' \
+  -d '{\"RequestInfo\":{},\"tenantId\":\"ke.bomet\"}' -w 'HTTP:%{http_code}\n'"
+# → HTTP:400 (because Spring's default error mapper turns NoResourceFoundException into 400 here)
+
+ssh egov-bomet "docker logs --tail 200 digit-pgr-services-1 2>&1 | grep -E 'escalation/_trigger|NoResourceFound' | tail -3"
+# → org.springframework.web.servlet.resource.NoResourceFoundException: No static resource escalation/_trigger.
+```
+
+The `EscalationController` class is not in the deployed jar.
+
+**Symptom 2 — only aggregate `scanned/escalated/skipped` is logged per scan; per-complaint skip-reason logging is NOT firing:**
+
+```bash
+ssh egov-bomet "docker logs --tail 200 digit-pgr-services-1 2>&1 | grep 'EscalationScheduler' | tail -5"
+# → ... EscalationScheduler -- Escalation scan started
+# → ... EscalationScheduler -- Escalation scan complete: scanned=57, escalated=0, skipped=57
+```
+
+You see two lines per scan, never any of the 9 structured `EscalationSkipReason` values (no `MISSING_REPORTING_HIERARCHY`, no `NO_CATEGORY_SLA_MATCH`, etc.). The structured skip-reason instrumentation introduced in `a43e4adfc` is not in this jar.
+
+**Symptom 3 — the deployed scheduler is the OLD level-based version.** It reads `defaultSlaByLevel` from `RAINMAKER-PGR.EscalationConfig`, not the new CategorySLA-then-StateSLA chain. There is no way to confirm this from logs alone (the new version does not print which schema it queried unless OTEL is captured), but it is consistent with both Symptom 1 (no `_trigger` endpoint) and Symptom 2 (no skip-reason emission).
+
+**Root cause hypotheses (any of these is enough):**
+1. PR #774 — which pins pgr-services to `escalation-otel-amd64-crs-sla-7326e9ce1` — has not been merged.
+2. The Bomet compose file (`/opt/digit/docker-compose.egov-digit.yaml`) still has `image: registry.preview.egov.theflywheel.in/pgr-services-dev:latest`. Mutable `:latest` resolves to whatever was pushed last under that tag, which is the older `pgr-services-analytics:local` retag (`e9dc6af98e88`), NOT the CRS-SLA build (`955c602120b7`).
+3. Whoever last redeployed pulled `:latest`, not the SHA-tagged image.
+
+**Recovery (in order):**
+
+1. Build pgr-services from `feat/escalation-otel-configurator-designer @ 673005c02` (or `refactor/scheduler-state-name-mdms @ 1c8fe91f1` if you want `WorkflowStateMapping` support — see §14.2):
+   ```bash
+   cd /root/code/Citizen-Complaint-Resolution-System/backend/pgr-services
+   mvn clean package -DskipTests
+   docker build -t registry.preview.egov.theflywheel.in/egovio/pgr-services-dev:escalation-otel-amd64-<short-sha> .
+   docker push registry.preview.egov.theflywheel.in/egovio/pgr-services-dev:escalation-otel-amd64-<short-sha>
+   ```
+2. Update PR #774's pinned tag to the new short-sha and merge it (or land an equivalent compose patch directly on `develop`).
+3. On Bomet:
+   ```bash
+   ssh egov-bomet "cd /opt/digit && docker compose pull pgr-services && docker compose up -d pgr-services"
+   ```
+4. Re-verify with the curl in Symptom 1 — should return 200 with a real `details` array, not 400.
+
+### 14.2 `CRS.WorkflowStateMapping` is described in the design doc as the 4th schema but only lives on PR #775
+
+The design doc (`docs/escalation-feature-design.md`) and §6 of this handoff describe **four** CRS MDMS schemas: CategorySLA, StateSLA, SLAAuditLog, **WorkflowStateMapping**. The handoff terminology cheatsheet (§12) even has an entry for it.
+
+**Reality on PR #770 head:**
+
+```bash
+cd /root/code/Citizen-Complaint-Resolution-System
+python3 -c "import json; d=json.load(open('utilities/default-data-handler/src/main/resources/schema/CRS.json')); print([s['code'] for s in d])"
+# → ['CRS.CategorySLA', 'CRS.StateSLA', 'CRS.SLAAuditLog']
+```
+
+Only THREE schemas. WorkflowStateMapping is **not** in PR #770.
+
+**Where the 4th schema actually lives:**
+
+```bash
+git log --oneline refactor/scheduler-state-name-mdms -5
+# 1c8fe91f1 test(pgr): unit tests for state-mapping resolution
+# cd3567518 refactor(pgr): scheduler reads CRS.WorkflowStateMapping; drops hardcoded PGR-state switch
+# 5bf57f4cd feat(mdms): CRS.WorkflowStateMapping schema (state-name → canonical SLA key)   ← here
+# 7f7b48652 docs(escalation): add Configurator UI section ...
+```
+
+So `CRS.WorkflowStateMapping` is added by commit **`5bf57f4cd`** on branch `refactor/scheduler-state-name-mdms`, which is **PR #775** — not PR #770.
+
+**Why this matters for a new agent:** if you read the design doc, then open `CRS.json` on PR #770 head, the mismatch is jarring. Any test that assumes the schema exists will fail against PR #770 in isolation (it only passes if #775 is on top).
+
+**Two ways to reconcile (pick one before merging the foundation):**
+
+a) **Rebase the schema-creation commit (`5bf57f4cd`) into PR #770 directly** so the design doc and the foundation PR agree on having 4 schemas. The scheduler-refactor commits (`cd3567518`, `1c8fe91f1`) stay on #775 because they touch live code paths.
+
+b) **Reword the design doc to say "CRS.WorkflowStateMapping is introduced in stacked PR #775 — see §1 (Stack at a glance) for context."** PR #770 stays the 3-schema foundation; #775 cleanly adds the 4th.
+
+**Recommendation: option (b).** PR #770 is already large (10K+ lines, see §14.3) and should stay a self-contained foundation. PR #775 is a clean refactor PR whose first commit is naturally the schema. The design doc forward-referencing #775 is the smaller change.
+
+### 14.3 All 14 PRs target `develop` directly — the "stack" is NOT a git-level stack
+
+The handoff §1 calls this "the stack." It is not. Every PR has `base = develop`:
+
+```bash
+gh pr list --repo egovernments/Citizen-Complaint-Resolution-System --state open \
+  --json number,baseRefName,headRefName | python3 -c "
+import json,sys
+prs=json.load(sys.stdin)
+target=[770,774,775,776,777,779,780,782,783,786,789,791,794,796,797]
+for p in prs:
+    if p['number'] in target:
+        print(f\"#{p['number']:4} base={p['baseRefName']:50} head={p['headRefName']}\")"
+# All 14 show: base=develop
+```
+
+**Consequence:** GitHub's diff view shows each stacked PR's diff as `develop...HEAD`, which includes the ~10K lines from PR #770 in every single one of them. Reviewers cannot see what each stacked PR *adds on top of its parent*. Review tooling is effectively blind.
+
+**Fix per PR:** `gh pr edit <number> --base <parent-head-branch>`.
+
+The full re-base map for the existing stack:
+
+| PR | Current base | Should target (head branch) |
+|---|---|---|
+| #770 | develop | develop (foundation — correct) |
+| #774 | develop | `feat/escalation-otel-configurator-designer` (PR #770's head) — see §14.4 below |
+| #775 | develop | `feat/escalation-otel-configurator-designer` |
+| #776 | develop | `refactor/scheduler-state-name-mdms` (PR #775's head) |
+| #794 | develop | `feat/escalation-otel-configurator-designer` |
+| #796 | develop | `feat/escalation-otel-configurator-designer` |
+| #797 | develop | `refactor/scheduler-state-name-mdms` |
+| #777 (G5) | develop | `docs/categorysla-wiring-strategies` (PR #776's head) |
+| #779 (G6) | develop | `docs/categorysla-wiring-strategies` |
+| #780 (G7) | develop | `docs/categorysla-wiring-strategies` |
+| #782 (G8) | develop | `docs/categorysla-wiring-strategies` |
+| #783 (G2) | develop | `docs/categorysla-wiring-strategies` |
+| #786 (G4) | develop | `docs/categorysla-wiring-strategies` |
+| #789 (G1) | develop | `docs/categorysla-wiring-strategies` |
+| #791 (G3) | develop | `docs/categorysla-wiring-strategies` |
+
+**Do all 14 in one bash loop:**
+
+```bash
+for n in 774 775 776 794 796; do gh pr edit $n --repo egovernments/Citizen-Complaint-Resolution-System --base feat/escalation-otel-configurator-designer; done
+for n in 797; do gh pr edit $n --repo egovernments/Citizen-Complaint-Resolution-System --base refactor/scheduler-state-name-mdms; done
+for n in 777 779 780 782 783 786 789 791; do gh pr edit $n --repo egovernments/Citizen-Complaint-Resolution-System --base docs/categorysla-wiring-strategies; done
+
+# Confirm:
+for n in 770 774 775 776 777 779 780 782 783 786 789 791 794 796 797; do
+  echo -n "#$n base=" ; gh pr view $n --repo egovernments/Citizen-Complaint-Resolution-System --json baseRefName --jq '.baseRefName'
+done
+```
+
+After re-pointing, each PR's diff view will only show the commits unique to that PR on top of its parent.
+
+### 14.4 PR #774 (pgr-services image pin) was outside the canonical 13-PR list
+
+`#774 — fix/pgr-services-pin-crs-sla — fix(pgr-services): pin to escalation-otel-amd64-crs-sla-7326e9ce1, drop :latest` opened 2026-06-09 by the same author. State: **open**. The earlier handoff §8 lists #774 in the table but the framing across the conversation+doc treated the canonical stack as 13 PRs and #774 was sometimes omitted.
+
+What #774 actually does:
+
+```diff
+-    image: registry.preview.egov.theflywheel.in/pgr-services-dev:latest
++    image: registry.preview.egov.theflywheel.in/egovio/pgr-services-dev:escalation-otel-amd64-crs-sla-7326e9ce1
+```
+
+(In `local-setup/docker-compose.egov-digit.yaml`.)
+
+**A new agent should triage one of two paths:**
+
+a) **Rebuild a fresh image** off whatever HEAD lands (PR #770 + #775 rebased + any later commits), tag it `escalation-otel-amd64-<new-short-sha>`, push it to the VPC registry, and update PR #774 to pin that new tag. Then merge #774 alongside #770/#775.
+
+b) **Close #774 as obsolete** and instead include the image-pin diff inside whichever PR finally bumps the base compose for the escalation stack (could be #794, the ops-gotchas PR, or a dedicated infra PR).
+
+Option (a) is cleaner — keeps the source-→-image traceability that #774 was set up to make explicit.
+
+Note: the currently-pinned tag `escalation-otel-amd64-crs-sla-7326e9ce1` is built off commit `7326e9ce1`, which predates the latest doc commits on PR #770 (`cdceadb24`, `673005c02`) — so even if #774 were merged as-is, the deployed jar would lag the source HEAD by a couple of commits.
+
+### 14.5 Stale base — all PRs need rebase before merge
+
+The merge base of `feat/escalation-otel-configurator-designer` against **upstream develop** (where PRs land) is far behind:
+
+```bash
+git fetch upstream develop
+# upstream/develop tip: e8cba53f1 (Merge pull request #805 ...)
+# merge base with feat/escalation-otel-configurator-designer: 72ecf830c
+git rev-list --count 72ecf830c..e8cba53f1
+# → 1158
+```
+
+**Upstream develop is 1158 commits ahead of where this branch was cut.** Includes:
+- `egov-hrms` image bumps (`#804: hrms-pin-800-preview` — clears user-enrichment regression)
+- Configurator boundary multi-hierarchy work (`#801/#802`)
+- UserValidation MDMS identity refactor (`#799`)
+- A long parameterization sweep across the entire E2E suite (`Refs #685`)
+
+The fork's `develop` (`origin/develop` on `ChakshuGautam/Citizen-Complaint-Resolution-System`) is **also stale** — its tip `72ecf830c` matches the branch point exactly, so it has none of these 1158 commits either.
+
+**Recommended rebase order** (after #14.1 / #14.2 / #14.3 / #14.4 are resolved):
+
+1. `git fetch upstream develop && git rebase upstream/develop` on `feat/escalation-otel-configurator-designer`
+2. Then chain: `refactor/scheduler-state-name-mdms` ← rebase onto new `feat/escalation-otel-configurator-designer`
+3. Then: `docs/categorysla-wiring-strategies` ← rebase onto new `refactor/scheduler-state-name-mdms`
+4. Then: `docs/escalation-ops-gotchas-recipes` (#794), `docs/deploying-escalation-to-new-tenant` (#796) ← rebase onto new `feat/escalation-otel-configurator-designer`
+5. Then: `test/escalation-state-mapping-edge-cases` (#797) ← rebase onto new `refactor/scheduler-state-name-mdms`
+6. Then: the 8 G-phase drafts ← rebase onto new `docs/categorysla-wiring-strategies`
+
+**Expected conflict zones:**
+- `utilities/default-data-handler/src/main/resources/schema/CRS.json` — when #775 merges its WorkflowStateMapping schema on top, you'll get a 3→4-element JSON array merge.
+- `backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationScheduler.java` — multiple refactors touched the resolution chain. Resolve by accepting the newest (PR #775's `mapWorkflowStateToKey` MDMS lookup).
+- `docs/escalation-feature-design.md` — mostly additive; should merge cleanly.
+- `configurator/packages/data-provider/src/providers/resourceRegistry.ts` — resource-registration order may conflict with G-phase drafts; accept the union.
+
+If `upstream/develop`'s HRMS or workflow-v2 changes have moved the API surface, also check:
+- `backend/pgr-services/src/main/java/org/egov/pgr/service/notification/NotificationService.java` (HRMS lookup)
+- `backend/pgr-services/src/main/java/org/egov/pgr/util/HRMSUtil.java`
+
+### 14.6 Two upstream bugs have no tracking issue yet
+
+Two upstream bugs are referenced repeatedly in the design doc, Discussion #773 (prompts 2 + 8), and the §13 "Where to ask for help" table — but neither has a GitHub issue filed.
+
+| # | Bug | Where mentioned | Tracking issue |
+|---|---|---|---|
+| 1 | `egov-workflow-v2 ASSIGN` action does not persist assignees to `eg_wf_assignee_v2`. The workflow record updates the `assignee` column on the parent row but does not insert the row on the join table that `nextActionsForRole` reads from. | design doc §"Upstream gaps"; Discussion #773 prompt 2 | **NONE — not filed** |
+| 2 | `mdms-v2` schema validator rejects valid `oneOf` constructs (treats them as the catch-all "schema mismatch" error). Forces tenants to flatten polymorphic schemas into plain objects + client-side validation. | design doc §"Upstream gaps"; Discussion #773 prompt 8 | **NONE — not filed** |
+
+Both bugs **block reachable cleanup**:
+- Bug 1 → escalation chain never completes end-to-end against a vanilla upstream workflow-v2; demo requires a patched build or manual SQL fixup.
+- Bug 2 → CategorySLA's `slaHoursByState` cannot use the natural `oneOf` (object | array of overrides) shape; we ship a flat object + custom validation in the configurator.
+
+**A new agent picking this up should file both as the first action** (see §15.6 below) so future contributors can find them by ticket search.
+
+---
+
+## 15. Recommended next actions (for the new agent picking this up)
+
+Ordered checklist — what to do FIRST. Each action includes a verification command. Do not skip ahead; later actions depend on earlier ones being verified green.
+
+### 15.1 Rebuild + redeploy pgr-services on Bomet
+
+So the demo URLs in §3 / §4 of this doc actually work. Until this is done, every link to `https://bometfeedbackhub.digit.org/pgr-services/escalation/_trigger` is a broken demo.
+
+```bash
+# Build off current HEAD of feat/escalation-otel-configurator-designer (or stack tip after #15.5 rebases land)
+cd /root/code/Citizen-Complaint-Resolution-System/backend/pgr-services
+mvn clean package -DskipTests
+SHORT_SHA=$(git rev-parse --short HEAD)
+docker build -t registry.preview.egov.theflywheel.in/egovio/pgr-services-dev:escalation-otel-amd64-${SHORT_SHA} .
+docker push registry.preview.egov.theflywheel.in/egovio/pgr-services-dev:escalation-otel-amd64-${SHORT_SHA}
+
+# Update PR #774 pin to the new tag, OR patch /opt/digit/docker-compose.egov-digit.yaml on Bomet directly:
+ssh egov-bomet "sed -i 's|pgr-services-dev:latest|egovio/pgr-services-dev:escalation-otel-amd64-${SHORT_SHA}|' /opt/digit/docker-compose.egov-digit.yaml \
+  && cd /opt/digit && docker compose pull pgr-services && docker compose up -d pgr-services"
+
+# VERIFY:
+ssh egov-bomet "curl -sf -X POST http://localhost:18000/pgr-services/escalation/_trigger \
+  -H 'Content-Type: application/json' \
+  -d '{\"RequestInfo\":{\"authToken\":\"<get-from-employee-login>\"},\"tenantId\":\"ke.bomet\"}' \
+  | python3 -m json.tool | head -20"
+# Should return 200 with a JSON body containing scanned/escalated/skipped + a `details` array of per-complaint skip reasons.
+```
+
+Refs: §14.1.
+
+### 15.2 Decide the `WorkflowStateMapping` story
+
+The handoff terminology cheatsheet (§12), design doc, and §6 all assume 4 schemas. PR #770 has 3. Pick one and act on it before any reviewer opens the foundation PR.
+
+```bash
+# Option (a): rebase the schema commit into #770 directly
+cd /root/code/Citizen-Complaint-Resolution-System
+git checkout feat/escalation-otel-configurator-designer
+git cherry-pick 5bf57f4cd        # the schema commit from refactor/scheduler-state-name-mdms
+# then on #775, drop that commit (interactive rebase or git rebase --onto)
+
+# Option (b — recommended): forward-reference in design doc + handoff
+# Edit docs/escalation-feature-design.md to note WorkflowStateMapping is introduced in PR #775.
+# Edit §6 + §12 here to mark "introduced in #775, used by #775+".
+```
+
+Refs: §14.2.
+
+### 15.3 Re-point all 14 PR bases
+
+Until this is done, GitHub PR review is effectively unusable on the stack (every diff drowns in PR #770's 10K lines).
+
+```bash
+for n in 774 775 776 794 796; do
+  gh pr edit $n --repo egovernments/Citizen-Complaint-Resolution-System --base feat/escalation-otel-configurator-designer
+done
+for n in 797; do
+  gh pr edit $n --repo egovernments/Citizen-Complaint-Resolution-System --base refactor/scheduler-state-name-mdms
+done
+for n in 777 779 780 782 783 786 789 791; do
+  gh pr edit $n --repo egovernments/Citizen-Complaint-Resolution-System --base docs/categorysla-wiring-strategies
+done
+
+# Confirm:
+for n in 770 774 775 776 777 779 780 782 783 786 789 791 794 796 797; do
+  printf "#%-4s base=" "$n"
+  gh pr view $n --repo egovernments/Citizen-Complaint-Resolution-System --json baseRefName --jq '.baseRefName'
+done
+```
+
+Refs: §14.3.
+
+### 15.4 Triage PR #774
+
+Either rebase its image-pin onto the new SHA from §15.1 (recommended), or close it as obsolete:
+
+```bash
+# If keeping: update PR #774 head branch's compose patch to the new SHA-tag
+git fetch origin fix/pgr-services-pin-crs-sla
+git checkout fix/pgr-services-pin-crs-sla
+# edit local-setup/docker-compose.egov-digit.yaml to new tag from §15.1
+git commit -am "fix(pgr-services): rebump pin to <new-short-sha>"
+git push origin fix/pgr-services-pin-crs-sla
+
+# If closing:
+gh pr close 774 --repo egovernments/Citizen-Complaint-Resolution-System --comment "Obsolete — image-pin folded into <PR-number> after rebuild"
+```
+
+Refs: §14.4.
+
+### 15.5 Rebase the stack onto `upstream/develop` tip
+
+After §15.1–§15.4, in this exact order:
+
+```bash
+cd /root/code/Citizen-Complaint-Resolution-System
+git fetch upstream develop
+
+# 1. Foundation
+git checkout feat/escalation-otel-configurator-designer
+git rebase upstream/develop
+# Resolve conflicts (expect: configurator resourceRegistry.ts, pgr-services pom for HRMS bump)
+git push --force-with-lease origin feat/escalation-otel-configurator-designer
+
+# 2. Schema + scheduler refactor
+git checkout refactor/scheduler-state-name-mdms
+git rebase feat/escalation-otel-configurator-designer
+# Expect conflict in CRS.json (3→4 array merge), EscalationScheduler.java
+git push --force-with-lease origin refactor/scheduler-state-name-mdms
+
+# 3. Wiring-strategies doc
+git checkout docs/categorysla-wiring-strategies
+git rebase refactor/scheduler-state-name-mdms
+git push --force-with-lease origin docs/categorysla-wiring-strategies
+
+# 4. Ops docs + new-tenant runbook
+for br in docs/escalation-ops-gotchas-recipes docs/deploying-escalation-to-new-tenant; do
+  git checkout $br
+  git rebase feat/escalation-otel-configurator-designer
+  git push --force-with-lease origin $br
+done
+
+# 5. Edge-case tests
+git checkout test/escalation-state-mapping-edge-cases
+git rebase refactor/scheduler-state-name-mdms
+git push --force-with-lease origin test/escalation-state-mapping-edge-cases
+
+# 6. The 8 G-phase drafts
+for br in feat/g1-category-taxonomy-draft feat/g2-path-routing-rules-draft \
+          feat/g3-entity-directory-draft feat/g4-permission-matrix-draft \
+          feat/g5-notification-templates-draft feat/g6-territorial-hierarchy-draft \
+          feat/g7-dashboard-config-draft feat/g8-submission-forms-draft; do
+  git checkout $br
+  git rebase docs/categorysla-wiring-strategies
+  git push --force-with-lease origin $br
+done
+
+# VERIFY each branch builds + tests pass (next step picks this up)
+```
+
+Refs: §14.5.
+
+### 15.6 File the two upstream bugs
+
+Open issues against the repos that own the affected services, then link the issue URLs back into Discussion #773 (prompts 2 and 8) and into §13 of this doc.
+
+```bash
+# Bug 1: egov-workflow-v2 ASSIGN does not persist to eg_wf_assignee_v2
+gh issue create --repo egovernments/egov-workflow-v2 \
+  --title "ASSIGN action: assignee written to parent row, NOT inserted into eg_wf_assignee_v2" \
+  --body "Symptom: after a workflow ProcessInstance with action=ASSIGN, the parent row's \`assignee\` column updates but no row appears in \`eg_wf_assignee_v2\`. \`nextActionsForRole\` then can't find the assignee, breaking re-assignment / escalation chains.
+
+Repro: see CRS escalation design doc §'Upstream gaps' — https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/feat/escalation-otel-configurator-designer/docs/escalation-feature-design.md
+
+Workaround in CCRS: scheduler issues a direct INSERT into eg_wf_assignee_v2 on escalation.
+
+Originally surfaced in Discussion https://github.com/egovernments/Citizen-Complaint-Resolution-System/discussions/773 prompt 2."
+
+# Bug 2: mdms-v2 oneOf validator
+gh issue create --repo egovernments/egov-services \
+  --title "mdms-v2 schema validator rejects valid oneOf constructs" \
+  --body "Symptom: schemas using \`oneOf: [{type:object}, {type:array}]\` are flagged as schema-mismatch on create/update through mdms-v2.
+
+Forces tenants to flatten polymorphic shapes (CategorySLA.slaHoursByState was forced from a oneOf into a plain object with client-side validation).
+
+Refs:
+- CRS escalation design doc §'Upstream gaps'
+- Discussion https://github.com/egovernments/Citizen-Complaint-Resolution-System/discussions/773 prompt 8"
+
+# After both are filed, update §13 of this doc + Discussion #773 prompts 2 and 8 with the issue URLs.
+```
+
+(If `egovernments/egov-services` is not the right repo for the mdms-v2 service, file against `egovernments/egov-mdms-service` instead — check `gh repo list egovernments` first.)
+
+Refs: §14.6.
+
+### 15.7 Run the e2e suites once the stack is rebased + Bomet is current
+
+Don't request review until all three are green:
+
+```bash
+# 1. Configurator SLA matrix UI test
+cd /root/code/Citizen-Complaint-Resolution-System/configurator
+npx playwright test e2e/crs-sla-matrix.spec.ts
+
+# 2. pgr-services backend unit tests
+cd /root/code/Citizen-Complaint-Resolution-System/backend/pgr-services
+mvn test -Dtest="Escalation*"
+
+# 3. End-to-end against live Bomet (depends on §15.1 redeploy)
+cd /root/code/Citizen-Complaint-Resolution-System/tests/integration
+BASE_URL=https://bometfeedbackhub.digit.org DIGIT_TENANT=ke.bomet \
+  npx playwright test tests/lifecycle/pgr-escalation-trigger-bomet.spec.ts
+```
+
+If any are red, fix before moving to §15.8.
+
+### 15.8 Land task #66 (csvParser case-sensitivity bug)
+
+2-line fix on PR #770 that has been documented and tracked but never landed:
+
+```bash
+# The bug: CSV header is lowercased then compared to camelCase 'subcategoryL1' → never matches.
+# File: configurator/src/resources/crs/sla-matrix/csvParser.ts (approximate path; grep for "subcategoryL1")
+cd /root/code/Citizen-Complaint-Resolution-System
+grep -rn "subcategoryL1" configurator/src/resources/crs/sla-matrix/ | head -5
+# Fix: don't lowercase the header, OR lowercase both sides of the comparison. Add a unit test.
+git commit -am "fix(crs-sla): csvParser case-sensitivity bug on subcategoryL1 header"
+git push origin feat/escalation-otel-configurator-designer
+```
+
+### After §15.1 – §15.8 are complete
+
+Then — and only then — the system's docs, code, and live state are aligned. Request reviewers on PR #770 first (the foundation), then walk reviewers up the rebased stack in dependency order: #775 → #776 → #794/#796 → #797 → G-phase drafts.
