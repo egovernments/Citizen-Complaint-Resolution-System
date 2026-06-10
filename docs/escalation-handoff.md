@@ -3,12 +3,17 @@
 > Canonical pickup guide. If you're inheriting this work cold, start here.
 > Last updated: 2026-06-10. Owner at time of writing: @ChakshuGautam.
 
+> **Warning**: §3–§4 describe the INTENDED state; live Bomet currently diverges — read §14 (the drift dossier) before trusting any live-state claim in this doc.
+
 Linked artifacts:
 - **Design doc**: [`docs/escalation-feature-design.md`](./escalation-feature-design.md) — full architecture, schemas, algorithm, UI specs
 - **Roadmap doc**: [`docs/crs-configurator-roadmap.md`](./crs-configurator-roadmap.md) — G1-G8 phases
 - **Bomet operational notes**: [`docs/escalation-feature-bomet.md`](./escalation-feature-bomet.md)
 - **Design hub**: [Discussion #773](https://github.com/egovernments/Citizen-Complaint-Resolution-System/discussions/773)
 - **Foundation PR**: [#770](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/770)
+- **Requirements PDFs** (NOT committed to the public repo — they live at `/escalation/` on the dev server):
+  - CMS Escalation PRD, Draft v3.0, April 2026 — `/escalation/CMS_Escalation_PRD-latest.pdf`
+  - Mozambique BRD "Complaints and Reports Portal", v4.0, June 2026 — `/escalation/BRD_ Plataforma de Reclamacoes e Denuncias V4.0 ENG.docx.pdf`
 
 ---
 
@@ -32,8 +37,12 @@ develop (egov, e8cba53f, current)
    │       │       │     Adds 4th schema CRS.WorkflowStateMapping; drops hardcoded PGR
    │       │       │     state-name switch in EscalationScheduler.
    │       │       │
-   │       │       └── PR #797 [OPEN]  test/escalation-state-mapping-edge-cases
-   │       │              JUnit + Vitest for STATE_MAPPING_MISSING cascade + CSV parser.
+   │       │       ├── PR #797 [OPEN]  test/escalation-state-mapping-edge-cases
+   │       │       │      JUnit + Vitest for STATE_MAPPING_MISSING cascade + CSV parser.
+   │       │       │
+   │       │       └── feat/escalation-prd-alignment — PRD alignment: EscalationPolicy
+   │       │              schema, level SLAs, dryRun, pre-breach detection, enriched
+   │       │              audit comment, csvParser fix (PR #TBD-PRD)
    │       │
    │       ├── PR #776  [OPEN]  docs/categorysla-wiring-strategies
    │       │       │     Strategy A (rich intake) vs Strategy B (ServiceDefs extension).
@@ -63,6 +72,7 @@ Design hub: Discussion #773 (74k-char body, 0 comments).
 
 **Status snapshot (2026-06-10):**
 - 5 PRs ready-for-review on top of #770: #775, #776, #794, #796, #797
+- `feat/escalation-prd-alignment` — PRD alignment: EscalationPolicy schema, level SLAs, dryRun, pre-breach detection, enriched audit comment, csvParser fix (PR #TBD-PRD; stacked on #775)
 - 8 G-phase drafts: design-only scaffolds, paired Discussions for architectural feedback
 - All 14 escalation PRs target `develop` but sit on stale tips
 - Discussion #773 has received no external comments yet
@@ -98,11 +108,11 @@ Not yet deployed. To deploy: see PR [#796](https://github.com/egovernments/Citiz
 
 **Five-bullet TL;DR:**
 
-1. **Scheduler-driven** — `EscalationScheduler.scanAndEscalate` runs on cron (or manually via `POST /escalation/_trigger`); scans open PGR complaints; per complaint resolves an SLA and escalates to supervisor if breached.
-2. **Three-layer SLA cascade** — `CRS.CategorySLA` (most specific) → `CRS.StateSLA` (singleton defaults) → `v0.EscalationConfig` (legacy `RAINMAKER-PGR.EscalationConfig` per-service-code overrides). First non-null wins. Layer that answered is recorded as `slaSource` OTEL attribute.
+1. **Scheduler-driven** — `EscalationScheduler.scanAndEscalate` is the cron wrapper; the manual `POST /escalation/_trigger` path calls `scanAndEscalateOnce` directly (and, from `feat/escalation-prd-alignment`, accepts `dryRun: true` — full decision path, zero mutations, breached complaints reported as `WOULD_ESCALATE`); scans open PGR complaints; per complaint resolves an SLA and escalates to supervisor if breached.
+2. **Three-layer SLA cascade** — `CRS.CategorySLA` (most specific) → `CRS.StateSLA` (singleton defaults) → `v0.EscalationConfig` (legacy `RAINMAKER-PGR.EscalationConfig` per-service-code overrides). First non-null wins. Layer that answered is recorded as `slaSource` OTEL attribute. From `feat/escalation-prd-alignment` two per-level steps join the cascade: `CategorySLA.slaHoursByLevel[level]` beats the per-state cell, and `EscalationPolicy.defaultSlaHoursByLevel[level]` slots between CategorySLA and StateSLA.
 3. **Supporting layer: `CRS.WorkflowStateMapping`** (singleton `default`) — translates the complaint's `applicationStatus` (e.g. `PENDINGATLME`) into one of six canonical SLA-column keys (`new`, `triage`, `forwarded`, `investigation`, `awaiting`, `resolved`). Read once per scan, threaded into `resolveSlaHours`. *Not* an SLA source itself — purely a name translator.
-4. **Skip is a first-class outcome** — `EscalationSkipReason` enum has 9 values (`MAX_DEPTH_REACHED`, `NO_LAST_MODIFIED_TIME`, `SLA_NOT_BREACHED`, `NO_ASSIGNEES`, `NO_SUPERVISOR_IN_HRMS`, `WORKFLOW_TRANSITION_FAILED`, `UNMAPPED_CATEGORY`, `STATE_MAPPING_MISSING`, `SUCCESS`). Each emitted as structured log + OTEL skip-breakdown counter. Operators read these to diagnose why escalation isn't firing.
-5. **Configurator-driven, not code-driven** — operators edit SLAs in `CategorySlaMatrixPage` (a 2D grid of category rows × state columns), import via CSV, debug via `TraceBackDialog` (re-runs `resolveSlaHours` with full layer trace shown in a drawer). All four schemas are versioned in MDMS; no code redeploy needed to change SLAs.
+4. **Skip is a first-class outcome** — `EscalationSkipReason` enum has 9 values from PR #775 onward (`MAX_DEPTH_REACHED`, `NO_LAST_MODIFIED_TIME`, `SLA_NOT_BREACHED`, `NO_ASSIGNEES`, `NO_SUPERVISOR_IN_HRMS`, `WORKFLOW_TRANSITION_FAILED`, `UNMAPPED_CATEGORY`, `STATE_MAPPING_MISSING`, `SUCCESS`); PR #770 ships 8 — `STATE_MAPPING_MISSING` is added by #775. Each emitted as structured log + OTEL skip-breakdown counter. Operators read these to diagnose why escalation isn't firing.
+5. **Configurator-driven, not code-driven** — operators edit SLAs in `CategorySlaMatrixPage` (a 2D grid of category rows × state columns), import via CSV, debug via `TraceBackDialog` (re-runs `resolveSlaHours` with full layer trace shown in a drawer). All five schemas (four before `feat/escalation-prd-alignment` adds `CRS.EscalationPolicy`) are versioned in MDMS; no code redeploy needed to change SLAs.
 
 **If you read nothing else, read this paragraph**: a complaint that breaches its SLA without progressing gets auto-assigned to the current assignee's supervisor (per HRMS `reportingTo`). The SLA value comes from a 3-layer MDMS cascade keyed on `(path, category, subcategoryL1, workflowState)`. State names get translated via a 4th MDMS layer. Skip reasons are logged + spanned, so when escalation doesn't fire you can tell exactly why. The configurator UI lets operators edit all of this through a matrix view + bulk CSV import, with a trace-back tool to debug a specific complaint's resolution. Full depth: [`docs/escalation-feature-design.md`](./escalation-feature-design.md).
 
@@ -120,8 +130,9 @@ Not yet deployed. To deploy: see PR [#796](https://github.com/egovernments/Citiz
 | Admin endpoint | `src/main/java/org/egov/pgr/web/controllers/EscalationController.java` | `POST /escalation/_trigger` — synchronous scheduler invocation for tests + configurator |
 | SLA-source constants | `src/main/java/org/egov/pgr/util/PGRConstants.java` | `SLA_SOURCE_CATEGORY`, `SLA_SOURCE_STATE`, `SLA_SOURCE_V0` — used as `slaSource` OTEL attribute values |
 | Manual-ESCALATE validator | `src/main/java/org/egov/pgr/validator/ServiceRequestValidator.java` | `ESCALATE_COMMENT_REQUIRED` — HTTP 400 if comment missing on manual ESCALATE |
-| Backend unit tests | `src/test/java/org/egov/pgr/service/EscalationSchedulerSlaResolutionTest.java` | 6 cases covering layer cascade |
-| Validator tests | `src/test/java/org/egov/pgr/validator/ServiceRequestValidatorTest.java` | 4 cases covering ESCALATE comment validation |
+| Backend unit tests | `src/test/java/org/egov/pgr/service/EscalationSchedulerSlaResolutionTest.java` | 4 cases covering layer cascade; 8 on `feat/escalation-prd-alignment` (adds per-level precedence cases) |
+| Pre-breach unit tests | `src/test/java/org/egov/pgr/service/EscalationSchedulerPreBreachTest.java` | 5 cases on the `shouldEmitPreBreach` threshold-crossing function — *added by `feat/escalation-prd-alignment`* |
+| Validator tests | `src/test/java/org/egov/pgr/validator/ServiceRequestValidatorTest.java` | 14 cases, 4 escalate-specific; 15/5 on `feat/escalation-prd-alignment` (adds `escalateCommentRequired=false` policy case) |
 
 ### MDMS schemas (`utilities/default-data-handler/src/main/resources/schema/`)
 
@@ -130,7 +141,8 @@ Not yet deployed. To deploy: see PR [#796](https://github.com/egovernments/Citiz
 | `CRS.CategorySLA` | `CRS.json` (entry 1) | Per `(path, category, subcategoryL1)` row with per-state SLA map |
 | `CRS.StateSLA` | `CRS.json` (entry 2) | Singleton (`singletonKey="default"`) — per-state default hours |
 | `CRS.SLAAuditLog` | `CRS.json` (entry 3) | Append-only audit of CategorySLA edits |
-| `CRS.WorkflowStateMapping` | *added by PR [#775](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/775)* | Singleton — translates `applicationStatus` → SLA column key |
+| `CRS.WorkflowStateMapping` | `CRS.json` (entry 4) — *added by PR [#775](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/775)* | Singleton — translates `applicationStatus` → SLA column key |
+| `CRS.EscalationPolicy` | `CRS.json` (entry 5) — *added by `feat/escalation-prd-alignment`* | Singleton — `maxDepth`, `defaultSlaHoursByLevel`, `preBreachWarning` config, `escalateCommentRequired` |
 
 ### Configurator (`configurator/src/`)
 
@@ -141,6 +153,7 @@ Not yet deployed. To deploy: see PR [#796](https://github.com/egovernments/Citiz
 | Trace-back drawer | `resources/crs/sla-matrix/TraceBackDialog.tsx` | Re-runs `resolveSlaHours` for a specific complaint, shows 4-layer trace |
 | Bulk import | `resources/crs/sla-matrix/BulkImportDialog.tsx` | CSV upload — uses csvParser, validates, batches MDMS upserts |
 | CSV parser | `resources/crs/sla-matrix/csvParser.ts` | Header → tuple-+-cell mapping; range-cell collapse to MAX |
+| CSV parser tests | `resources/crs/sla-matrix/csvParser.test.ts` | Vitest — header-case canonicalization, export→import round-trip, range cells, missing-column error — *added by `feat/escalation-prd-alignment`* |
 | SLA service layer | `resources/crs/sla-matrix/slaService.ts` | MDMS-v2 search/create/update wrappers |
 | Types | `resources/crs/sla-matrix/types.ts` | TypeScript view of CRS.CategorySLA / StateSLA / SLAAuditLog |
 | v0 EscalationConfig editor | `admin/themeEditor/EscalationConfigEditor.tsx` | Legacy v0 schema editor (kept for fallback tenants) |
@@ -152,6 +165,7 @@ Not yet deployed. To deploy: see PR [#796](https://github.com/egovernments/Citiz
 | Docs pane | `components/layout/DocsPane.tsx` | Inline help panel showing relevant design-doc anchors |
 | i18n strings | `providers/i18nProvider.ts` | Locale keys for matrix + drawer |
 | Seed/recovery scripts | `resources/crs/sla-matrix/_seed/fix-xref-schema.sql`, `example.csv` | Reset cross-ref schema; example CSV row |
+| SLA-by-level schema patch | `resources/crs/sla-matrix/_seed/add-sla-by-level.sql` | Idempotent `jsonb_set` patch adding `slaHoursByLevel` to already-registered `CRS.CategorySLA` schemas (mdms-v2 has no schema `_update`) — *added by `feat/escalation-prd-alignment`* |
 
 ### Workflow designer (`workflow-designer/`)
 
@@ -191,13 +205,13 @@ PostMessage bridge: `designer-ready` / `load-workflow` / `save-workflow`. Embedd
 Five layers (matches §"Testing strategy" in [`docs/escalation-feature-design.md`](./escalation-feature-design.md#testing-strategy)).
 
 ### Layer 1 — Backend unit tests
-- **What**: `EscalationSchedulerSlaResolutionTest` (6 cases on layer cascade) + `ServiceRequestValidatorTest` (4 cases on ESCALATE comment validator) + existing tests.
+- **What**: `EscalationSchedulerSlaResolutionTest` (4 cases on layer cascade; 8 on `feat/escalation-prd-alignment`) + `EscalationSchedulerPreBreachTest` (5 cases on threshold-crossing, `feat/escalation-prd-alignment`) + `ServiceRequestValidatorTest` (14 cases, 4 escalate-specific; 15/5 on `feat/escalation-prd-alignment`) + existing tests.
 - **Run**: `cd backend/pgr-services && mvn test`
-- **Expected**: 20/20 pass.
+- **Expected**: all escalation + validator suites green (run: `mvn test -Dtest='Escalation*Test,ServiceRequestValidatorTest'`).
 - **Edge cases follow-up**: PR [#797](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/797) adds 7 more JUnit cases for `STATE_MAPPING_MISSING` cascade.
 
 ### Layer 2 — MDMS shape validation
-- **What**: Schema validation against the 4 registered schemas. Catches regressions like a bad slaHoursByState `oneOf` (see §9 issue 5).
+- **What**: Schema validation against the registered schemas (4 through PR #775; 5 with `CRS.EscalationPolicy` on `feat/escalation-prd-alignment`). Catches regressions like a bad slaHoursByState `oneOf` (see §9 issue 5).
 - **Run**: `curl -X POST '<mdms-v2>/schema/v1/_validate' ...` (see design doc §"Layer 2").
 - **Expected**: every schema validates clean; data rows validate or surface a specific path-error.
 
@@ -205,6 +219,7 @@ Five layers (matches §"Testing strategy" in [`docs/escalation-feature-design.md
 - **What**: `configurator/e2e/crs-sla-matrix.spec.ts` — render, edit, save, trace-back, CSV import.
 - **Run**: `cd configurator && npx playwright test e2e/crs-sla-matrix.spec.ts`
 - **Expected**: all green; trace-back drawer shows 4-layer cascade; import handles range cells.
+- **CSV parser unit tests** (`feat/escalation-prd-alignment`): `cd configurator && npx vitest run src/resources/crs/sla-matrix/csvParser.test.ts` — header-case canonicalization, export→import round-trip, range cells, missing-column error.
 - **Edge cases follow-up**: PR [#797](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/797) adds Vitest cases for CSV parser (range-cell MAX collapse, partial cascade fallbacks).
 
 ### Layer 4 — Integration tests (live against Bomet)
@@ -226,7 +241,7 @@ Five layers (matches §"Testing strategy" in [`docs/escalation-feature-design.md
 
 **Two paragraphs + link to PR [#796](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/796) for the full runbook.**
 
-Deployment is image + 4 MDMS schemas + 4 seed rows + nginx routing. The pgr-services image (`escalation-otel-amd64-fallback-<sha>`) is tenant-agnostic; pull it from the VPC registry (`10.0.0.4:5000`) into the target server's compose. The configurator bundle is built once and rsynced to `/var/www/configurator/` on every tenant — also tenant-agnostic. The four MDMS schemas (`CRS.WorkflowStateMapping`, `CRS.StateSLA`, `CRS.CategorySLA`, `CRS.SLAAuditLog`) must be registered **in this exact order** because StateSLA + CategorySLA both consume the state-name vocabulary that WorkflowStateMapping defines. Each tenant then seeds its own data: one WorkflowStateMapping row (operator-defined state→column map), one StateSLA row (per-state defaults), N CategorySLA rows (one per `(path, category, subcategoryL1)` tuple), and zero or more v0 EscalationConfig rows (legacy fallback).
+Deployment is image + 5 MDMS schemas + seed rows + nginx routing. The pgr-services image (`escalation-otel-amd64-fallback-<sha>`) is tenant-agnostic; pull it from the VPC registry (`10.0.0.4:5000`) into the target server's compose. The configurator bundle is built once and rsynced to `/var/www/configurator/` on every tenant — also tenant-agnostic. The five MDMS schemas (`CRS.WorkflowStateMapping`, `CRS.StateSLA`, `CRS.CategorySLA`, `CRS.SLAAuditLog`, `CRS.EscalationPolicy`) can be registered in **any order** — nothing enforces a registration order (every schema's `x-ref-schema` is empty; an earlier revision of this doc claimed otherwise). What matters operationally is the **data** seed order: seed the WorkflowStateMapping row first, so the scheduler can translate states before any StateSLA/CategorySLA row is consulted. Each tenant then seeds its own data: one WorkflowStateMapping row (operator-defined state→column map), one StateSLA row (per-state defaults), N CategorySLA rows (one per `(path, category, subcategoryL1)` tuple), optionally one EscalationPolicy singleton (maxDepth, per-level default SLAs, pre-breach config, `escalateCommentRequired`), and zero or more v0 EscalationConfig rows (legacy fallback).
 
 After seeding, verify with the three smoke commands in §3: `/escalation/_trigger` returns HTTP 200 with a non-zero `scanned` count, OTEL spans appear in Tempo with `slaSource` set to one of the 3 layers, and the configurator SLA Matrix page renders the seeded rows. Common pitfalls (full list in PR #794): the x-ref-schema regression after MDMS recreate (`fix-xref-schema.sql` recovery), persister-async means a 202 response doesn't mean the row is queryable yet (`time.sleep(3)` between schema register + data create), and the mdms-v2 `oneOf` validator quirk on `slaHoursByState` (see §9 issue 5). Full operator-facing runbook: [PR #796 — `docs/deploying-escalation-to-new-tenant.md`](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/796).
 
@@ -253,13 +268,14 @@ G-phase roadmap (`docs/crs-configurator-roadmap.md`). Each phase has a draft PR 
 
 ## 9. Known issues + outstanding work
 
-1. **CSV parser case bug** *(minor)* — `configurator/src/resources/crs/sla-matrix/csvParser.ts` lowercases the CSV header then compares to the camelCase literal `'subcategoryL1'`. Result: header `SubcategoryL1` works, `subcategoryl1` (lowercased) doesn't match the literal. Tracked: task #66 in the team task list; no PR yet. Fix is a one-liner.
+1. **CSV parser case bug** *(FIXED on `feat/escalation-prd-alignment`)* — `configurator/src/resources/crs/sla-matrix/csvParser.ts` lowercased the CSV header then compared against the camelCase literal `'subcategoryL1'`. Earlier revisions of this doc undersold it as a lowercased-headers-only problem; in fact the `REQUIRED_COLS` lookup never matched after header lowercasing, so the bug broke **ALL imports** regardless of header casing. Fixed by canonicalizing `subcategoryl1` → `subcategoryL1` after lowercasing, with Vitest coverage in `csvParser.test.ts`. History: tracked as task #66 in the team task list since PR #770; landed on `feat/escalation-prd-alignment` (see §15.8).
 2. **Upstream `egov-workflow-v2` ASSIGN-assignee persistence bug** *(blocker for downstream auto-escalation)* — workflow service silently drops `assignees` on the `ASSIGN` action; `eg_wf_assignee_v2` table stays empty. As a result the scheduler returns `NO_ASSIGNEES` for every complaint on Bomet. Tracked: noted in PR #770 body, design doc §"Assignee-persistence upstream bug", and Discussion #773. To be raised against upstream `egov-workflow-v2` repo separately. No tracking issue yet.
 3. **mdms-v2 `oneOf` validator quirk on `slaHoursByState`** *(minor, upstream)* — the validator rejects `slaHoursByState` cells when shape is declared with `oneOf`. Workaround documented in design doc §"`egov-mdms-v2` validator and `oneOf` on `slaHoursByState`". Upstream `egov-mdms` fix needed. No tracking issue.
 4. **`mapWorkflowStateToKey` has no configurator UI** *(minor)* — `CRS.WorkflowStateMapping` is editable only via curl / Python today. Operators write the MDMS singleton row directly. Tracked: design doc open-question #1; will be absorbed by G1 (Category Taxonomy editor) — see [PR #789](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/789) — or a small standalone editor lands later.
 5. **PR #770 + stack are on stale base** *(merge-blocker, not severity)* — `develop` has moved ~12+ commits since the stack was opened (PR #770 on `1e28bfb7`, follow-ups on `cdd87a84`, current `develop` at `e8cba53f`). Rebase needed before merge. No tracking issue.
 6. **v0 EscalationConfig deletion (post-migration)** *(deferred)* — once all tenants migrate to CategorySLA + StateSLA, the legacy `RAINMAKER-PGR.EscalationConfig` schema + scheduler-side fallback can be removed. Tracked: design doc open-question #7. No PR yet.
 7. **PR #774** is in the escalation-related set but was not in the originally listed 13-PR stack — flagged for review. It pins pgr-services image to an escalation-otel SHA. Probably intentional but worth confirming inclusion in the merge plan.
+8. **Role-level (unassigned / role-inbox) escalation not implemented** *(PRD gap)* — the CMS Escalation PRD's primary user journey escalates complaints sitting unassigned in a role inbox, not only complaints held by a named assignee. The scheduler today only escalates assignee-held complaints; unassigned ones fall out as `NO_ASSIGNEES` skips. Open product decision: who is the escalation target when no assignee exists (role hierarchy? department head?). Tracked: §10 row 9; no PR yet.
 
 ---
 
@@ -277,14 +293,20 @@ Lifted from Discussion #773's "Open questions and deferred work" table (design d
 | 6 | Generic `CRS.ConfigAuditLog` supersedes escalation-specific `CRS.SLAAuditLog`. Migrate existing SLAAuditLog rows or keep both? | Roadmap **G4** ([PR #786](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/786) / Discussion [#788](https://github.com/egovernments/Citizen-Complaint-Resolution-System/discussions/788)) |
 | 7 | v0 EscalationConfig deletion (post-migration) — when is "all tenants migrated" declared? | Follow-up PR, no task yet |
 | 8 | mdms-v2 `oneOf` validator fix — would allow declarative `slaHoursByState` cell-shape validation. Upstream fix or downstream workaround? | Upstream, no task |
+| 9 | Role-level (unassigned / role-inbox) escalation — the PRD's primary user journey. Today unassigned complaints fall out as `NO_ASSIGNEES` skips. Who is the escalation target when no assignee exists? | PRD requirement, no PR — see §9 issue 8 |
+| 10 | Inbox ownership / visibility semantics after escalation (does the original assignee retain visibility? does the complaint leave their inbox?) — PRD requirement; depends on upstream inbox/workflow behaviour | PRD requirement, upstream-dependent, no task |
+| 11 | Business SLA clock (working hours / holidays) vs the current wall-clock elapsed-time model | PRD requirement, no PR |
+| 12 | Per-stage pre-breach disable — pre-breach warning is a single tenant-wide toggle in `CRS.EscalationPolicy` today; the PRD model wants per-stage control | Follow-up on `feat/escalation-prd-alignment`, no task yet |
+
+The canonical PRD-requirement → implementation mapping lives in the design doc's §"Requirements traceability" section ([`docs/escalation-feature-design.md`](./escalation-feature-design.md)); this table only tracks the open ends.
 
 ---
 
 ## 11. Common operations cookbook
 
-- **Register a new tenant for escalation** — see [PR #796 runbook](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/796): register 4 schemas in order (WorkflowStateMapping → StateSLA → CategorySLA → SLAAuditLog), seed singletons, optional v0 fallback rows. Verify via `/escalation/_trigger` + Tempo span check.
+- **Register a new tenant for escalation** — see [PR #796 runbook](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/796): register the 5 schemas (any order — registration order is unenforced, see §7; seed the WorkflowStateMapping **data** row first), seed singletons (incl. the optional EscalationPolicy), optional v0 fallback rows. Verify via `/escalation/_trigger` + Tempo span check.
 - **Recover from x-ref-schema regression** — run `configurator/src/resources/crs/sla-matrix/_seed/fix-xref-schema.sql` against the mdms-v2 Postgres. Symptom: cross-reference validation errors after a schema recreate. Full recipe in PR [#794](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/794).
-- **Rebuild pgr-services after a code change** — `cd backend/pgr-services && mvn clean package -DskipTests && docker build -t 10.0.0.4:5000/egovio/pgr-services-dev:<tag> . && docker push 10.0.0.4:5000/egovio/pgr-services-dev:<tag>`, then update the target server's compose to pin the new tag and `docker compose up -d pgr-services`.
+- **Rebuild pgr-services after a code change** (canonical recipe — §15.1 uses the same one) — `cd backend/pgr-services && mvn clean package -DskipTests && docker build -t 10.0.0.4:5000/egovio/pgr-services-dev:<tag> -t registry.preview.egov.theflywheel.in/egovio/pgr-services-dev:<tag> . && docker push 10.0.0.4:5000/egovio/pgr-services-dev:<tag> && docker push registry.preview.egov.theflywheel.in/egovio/pgr-services-dev:<tag>`, then update the target server's compose to pin the new tag and `docker compose up -d pgr-services`. The two names are the SAME backing registry exposed two ways — VPC-direct on `10.0.0.4:5000` and nginx HTTPS on `registry.preview.egov.theflywheel.in` — push BOTH tags so compose files pinned to either name resolve the same image.
 - **Redeploy configurator** — `cd configurator && npm run build`, then `cd local-setup/ansible && ./deploy.sh <tenant>` (the playbook rsyncs `dist/` to `/var/www/configurator/`).
 - **Take a debug screenshot of the SLA Matrix** — `cd tests/integration-tests && BASE_URL=https://bometfeedbackhub.digit.org DIGIT_TENANT=ke.bomet npx playwright test tests/admin/escalation-configurator-bomet.spec.ts --headed` — the spec already calls `page.screenshot()` on the matrix page.
 - **Query a complaint's SLA-resolution path via /escalation/_trigger** — `curl -s -X POST 'https://bometfeedbackhub.digit.org/pgr-services/escalation/_trigger' -H 'Content-Type: application/json' -d '{"RequestInfo":{"authToken":"<admin-token>"},"tenantId":"ke.bomet","serviceRequestIds":["<SRID>"]}' | jq '.details[]'`. The response's `details[]` includes `slaSource`, `slaMs`, `elapsedMs`, `skipReason`, `workflowState`, `stateKey`.
@@ -308,9 +330,11 @@ Lifted from Discussion #773's "Open questions and deferred work" table (design d
 | **CategorySLA** | Row in `CRS.CategorySLA` keyed on `(path, category, subcategoryL1)` with per-state SLA map. |
 | **StateSLA** | Singleton `CRS.StateSLA` row — per-state default SLA hours. |
 | **WorkflowStateMapping** | Singleton `CRS.WorkflowStateMapping` — translates `applicationStatus` → SLA column key. |
+| **EscalationPolicy** | Singleton `CRS.EscalationPolicy` (`singletonKey="default"`) — tenant-wide `maxDepth`, per-level default SLA hours, pre-breach warning config, `escalateCommentRequired`. Added by `feat/escalation-prd-alignment`. |
 | **v0 EscalationConfig** | Legacy `RAINMAKER-PGR.EscalationConfig` schema (per-level SLAs + per-serviceCode overrides). Kept as fallback. |
 | **slaSource** | OTEL span attribute: `CRS.CategorySLA` / `CRS.StateSLA` / `v0.EscalationConfig`. Which layer answered. |
 | **skipReason** | One of 9 `EscalationSkipReason` values. Emitted as log + OTEL counter. |
+| **dryRun** | `POST /escalation/_trigger` flag (`"dryRun": true`) — runs the full scan/decision path with zero mutations; breached complaints record `WOULD_ESCALATE` instead of escalating. Added by `feat/escalation-prd-alignment`. |
 | **Tuple** | `(path, category, subcategoryL1)` — join key of CategorySLA. |
 | **Strategy A / B** | Two wirings: A = rich intake (tuple on `additionalDetail`); B = ServiceDefs extension (`serviceCode → tuple` map). |
 | **OTEL** | OpenTelemetry. CCRS uses agent + Tempo backend at `localhost:13200`. |
@@ -331,6 +355,8 @@ Lifted from Discussion #773's "Open questions and deferred work" table (design d
 | Repo (upstream) | https://github.com/egovernments/Citizen-Complaint-Resolution-System |
 | Repo (fork) | https://github.com/ChakshuGautam/Citizen-Complaint-Resolution-System |
 | Design doc | `docs/escalation-feature-design.md` |
+| CMS Escalation PRD (Draft v3.0, April 2026) | `/escalation/CMS_Escalation_PRD-latest.pdf` on the dev server — **NOT committed to the public repo** |
+| Mozambique BRD "Complaints and Reports Portal" (v4.0, June 2026) | `/escalation/BRD_ Plataforma de Reclamacoes e Denuncias V4.0 ENG.docx.pdf` on the dev server — **NOT committed to the public repo** |
 | Roadmap doc | `docs/crs-configurator-roadmap.md` |
 | Bomet ops notes | `docs/escalation-feature-bomet.md` |
 | Backend scheduler | `backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationScheduler.java` |
@@ -401,7 +427,7 @@ ssh egov-bomet "docker logs --tail 200 digit-pgr-services-1 2>&1 | grep 'Escalat
 # → ... EscalationScheduler -- Escalation scan complete: scanned=57, escalated=0, skipped=57
 ```
 
-You see two lines per scan, never any of the 9 structured `EscalationSkipReason` values (no `MISSING_REPORTING_HIERARCHY`, no `NO_CATEGORY_SLA_MATCH`, etc.). The structured skip-reason instrumentation introduced in `a43e4adfc` is not in this jar.
+You see two lines per scan, never any of the 9 structured `EscalationSkipReason` values (no `NO_SUPERVISOR_IN_HRMS`, no `UNMAPPED_CATEGORY`, etc.). The structured skip-reason instrumentation introduced in `a43e4adfc` is not in this jar.
 
 **Symptom 3 — the deployed scheduler is the OLD level-based version.** It reads `defaultSlaByLevel` from `RAINMAKER-PGR.EscalationConfig`, not the new CategorySLA-then-StateSLA chain. There is no way to confirm this from logs alone (the new version does not print which schema it queried unless OTEL is captured), but it is consistent with both Symptom 1 (no `_trigger` endpoint) and Symptom 2 (no skip-reason emission).
 
@@ -462,6 +488,8 @@ b) **Reword the design doc to say "CRS.WorkflowStateMapping is introduced in sta
 
 **Recommendation: option (b).** PR #770 is already large (10K+ lines, see §14.3) and should stay a self-contained foundation. PR #775 is a clean refactor PR whose first commit is naturally the schema. The design doc forward-referencing #775 is the smaller change.
 
+**Closing note (2026-06-10)**: resolved via option (b) on branch `feat/escalation-prd-alignment` — the design doc now carries a per-schema "Introduced in" inventory. While fixing it we found the same #775-vs-#770 drift applied to two more artifacts this handoff used to attribute to #770: the `STATE_MAPPING_MISSING` enum value (8 skip reasons in #770; the 9th lands with #775) and the `mapWorkflowStateToKey` MDMS refactor. Both are now documented as introduced by #775 (see §4 bullet 4 and the §5 schema table).
+
 ### 14.3 All 14 PRs target `develop` directly — the "stack" is NOT a git-level stack
 
 The handoff §1 calls this "the stack." It is not. Every PR has `base = develop`:
@@ -493,6 +521,7 @@ The full re-base map for the existing stack:
 | #794 | develop | `feat/escalation-otel-configurator-designer` |
 | #796 | develop | `feat/escalation-otel-configurator-designer` |
 | #797 | develop | `refactor/scheduler-state-name-mdms` |
+| #TBD-PRD (`feat/escalation-prd-alignment`) | — (PR not yet opened) | `refactor/scheduler-state-name-mdms` (PR #775's head) |
 | #777 (G5) | develop | `docs/categorysla-wiring-strategies` (PR #776's head) |
 | #779 (G6) | develop | `docs/categorysla-wiring-strategies` |
 | #780 (G7) | develop | `docs/categorysla-wiring-strategies` |
@@ -507,6 +536,8 @@ The full re-base map for the existing stack:
 ```bash
 for n in 774 775 776 794 796; do gh pr edit $n --repo egovernments/Citizen-Complaint-Resolution-System --base feat/escalation-otel-configurator-designer; done
 for n in 797; do gh pr edit $n --repo egovernments/Citizen-Complaint-Resolution-System --base refactor/scheduler-state-name-mdms; done
+# feat/escalation-prd-alignment: when its PR (#TBD-PRD) opens, point it at PR #775's head too:
+# gh pr edit <TBD-PRD> --repo egovernments/Citizen-Complaint-Resolution-System --base refactor/scheduler-state-name-mdms
 for n in 777 779 780 782 783 786 789 791; do gh pr edit $n --repo egovernments/Citizen-Complaint-Resolution-System --base docs/categorysla-wiring-strategies; done
 
 # Confirm:
@@ -564,13 +595,14 @@ The fork's `develop` (`origin/develop` on `ChakshuGautam/Citizen-Complaint-Resol
 
 1. `git fetch upstream develop && git rebase upstream/develop` on `feat/escalation-otel-configurator-designer`
 2. Then chain: `refactor/scheduler-state-name-mdms` ← rebase onto new `feat/escalation-otel-configurator-designer`
-3. Then: `docs/categorysla-wiring-strategies` ← rebase onto new `refactor/scheduler-state-name-mdms`
-4. Then: `docs/escalation-ops-gotchas-recipes` (#794), `docs/deploying-escalation-to-new-tenant` (#796) ← rebase onto new `feat/escalation-otel-configurator-designer`
-5. Then: `test/escalation-state-mapping-edge-cases` (#797) ← rebase onto new `refactor/scheduler-state-name-mdms`
-6. Then: the 8 G-phase drafts ← rebase onto new `docs/categorysla-wiring-strategies`
+3. Then: `feat/escalation-prd-alignment` (#TBD-PRD) ← rebase onto new `refactor/scheduler-state-name-mdms`
+4. Then: `docs/categorysla-wiring-strategies` ← rebase onto new `refactor/scheduler-state-name-mdms`
+5. Then: `docs/escalation-ops-gotchas-recipes` (#794), `docs/deploying-escalation-to-new-tenant` (#796) ← rebase onto new `feat/escalation-otel-configurator-designer`
+6. Then: `test/escalation-state-mapping-edge-cases` (#797) ← rebase onto new `refactor/scheduler-state-name-mdms`
+7. Then: the 8 G-phase drafts ← rebase onto new `docs/categorysla-wiring-strategies`
 
 **Expected conflict zones:**
-- `utilities/default-data-handler/src/main/resources/schema/CRS.json` — when #775 merges its WorkflowStateMapping schema on top, you'll get a 3→4-element JSON array merge.
+- `utilities/default-data-handler/src/main/resources/schema/CRS.json` — when #775 merges its WorkflowStateMapping schema on top, you'll get a 3→4-element JSON array merge (and a 4→5 merge when `feat/escalation-prd-alignment` adds `CRS.EscalationPolicy`).
 - `backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationScheduler.java` — multiple refactors touched the resolution chain. Resolve by accepting the newest (PR #775's `mapWorkflowStateToKey` MDMS lookup).
 - `docs/escalation-feature-design.md` — mostly additive; should merge cleanly.
 - `configurator/packages/data-provider/src/providers/resourceRegistry.ts` — resource-registration order may conflict with G-phase drafts; accept the union.
@@ -609,7 +641,14 @@ So the demo URLs in §3 / §4 of this doc actually work. Until this is done, eve
 cd /root/code/Citizen-Complaint-Resolution-System/backend/pgr-services
 mvn clean package -DskipTests
 SHORT_SHA=$(git rev-parse --short HEAD)
-docker build -t registry.preview.egov.theflywheel.in/egovio/pgr-services-dev:escalation-otel-amd64-${SHORT_SHA} .
+# Build + push BOTH tags. These are the SAME backing registry exposed two ways —
+# VPC-direct on 10.0.0.4:5000, nginx HTTPS on registry.preview.egov.theflywheel.in —
+# push both so compose files pinned to either name resolve the same image.
+# (Same canonical recipe as the §11 cookbook entry.)
+docker build \
+  -t 10.0.0.4:5000/egovio/pgr-services-dev:escalation-otel-amd64-${SHORT_SHA} \
+  -t registry.preview.egov.theflywheel.in/egovio/pgr-services-dev:escalation-otel-amd64-${SHORT_SHA} .
+docker push 10.0.0.4:5000/egovio/pgr-services-dev:escalation-otel-amd64-${SHORT_SHA}
 docker push registry.preview.egov.theflywheel.in/egovio/pgr-services-dev:escalation-otel-amd64-${SHORT_SHA}
 
 # Update PR #774 pin to the new tag, OR patch /opt/digit/docker-compose.egov-digit.yaml on Bomet directly:
@@ -655,6 +694,8 @@ done
 for n in 797; do
   gh pr edit $n --repo egovernments/Citizen-Complaint-Resolution-System --base refactor/scheduler-state-name-mdms
 done
+# feat/escalation-prd-alignment: when its PR (#TBD-PRD) opens, point it at PR #775's head too:
+# gh pr edit <TBD-PRD> --repo egovernments/Citizen-Complaint-Resolution-System --base refactor/scheduler-state-name-mdms
 for n in 777 779 780 782 783 786 789 791; do
   gh pr edit $n --repo egovernments/Citizen-Complaint-Resolution-System --base docs/categorysla-wiring-strategies
 done
@@ -706,24 +747,30 @@ git rebase feat/escalation-otel-configurator-designer
 # Expect conflict in CRS.json (3→4 array merge), EscalationScheduler.java
 git push --force-with-lease origin refactor/scheduler-state-name-mdms
 
-# 3. Wiring-strategies doc
+# 3. PRD alignment (stacked on #775)
+git checkout feat/escalation-prd-alignment
+git rebase refactor/scheduler-state-name-mdms
+# Expect conflict in CRS.json (4→5 array merge), EscalationScheduler.java
+git push --force-with-lease origin feat/escalation-prd-alignment
+
+# 4. Wiring-strategies doc
 git checkout docs/categorysla-wiring-strategies
 git rebase refactor/scheduler-state-name-mdms
 git push --force-with-lease origin docs/categorysla-wiring-strategies
 
-# 4. Ops docs + new-tenant runbook
+# 5. Ops docs + new-tenant runbook
 for br in docs/escalation-ops-gotchas-recipes docs/deploying-escalation-to-new-tenant; do
   git checkout $br
   git rebase feat/escalation-otel-configurator-designer
   git push --force-with-lease origin $br
 done
 
-# 5. Edge-case tests
+# 6. Edge-case tests
 git checkout test/escalation-state-mapping-edge-cases
 git rebase refactor/scheduler-state-name-mdms
 git push --force-with-lease origin test/escalation-state-mapping-edge-cases
 
-# 6. The 8 G-phase drafts
+# 7. The 8 G-phase drafts
 for br in feat/g1-category-taxonomy-draft feat/g2-path-routing-rules-draft \
           feat/g3-entity-directory-draft feat/g4-permission-matrix-draft \
           feat/g5-notification-templates-draft feat/g6-territorial-hierarchy-draft \
@@ -786,25 +833,21 @@ cd /root/code/Citizen-Complaint-Resolution-System/backend/pgr-services
 mvn test -Dtest="Escalation*"
 
 # 3. End-to-end against live Bomet (depends on §15.1 redeploy)
-cd /root/code/Citizen-Complaint-Resolution-System/tests/integration
+cd /root/code/Citizen-Complaint-Resolution-System/tests/integration-tests
 BASE_URL=https://bometfeedbackhub.digit.org DIGIT_TENANT=ke.bomet \
   npx playwright test tests/lifecycle/pgr-escalation-trigger-bomet.spec.ts
 ```
 
 If any are red, fix before moving to §15.8.
 
-### 15.8 Land task #66 (csvParser case-sensitivity bug)
+### 15.8 Land task #66 (csvParser case-sensitivity bug) — DONE on `feat/escalation-prd-alignment`
 
-2-line fix on PR #770 that has been documented and tracked but never landed:
+Landed on `feat/escalation-prd-alignment` (not on PR #770 as originally planned). The header parser now canonicalizes `subcategoryl1` → `subcategoryL1` after lowercasing, and `csvParser.test.ts` (Vitest) covers all header casings plus an export→import round-trip, range cells, and the missing-column error path. Note the original framing here undersold the bug — the lowercased `REQUIRED_COLS` lookup never matched, so ALL imports were broken, not just lowercased headers (see §9 issue 1).
 
 ```bash
-# The bug: CSV header is lowercased then compared to camelCase 'subcategoryL1' → never matches.
-# File: configurator/src/resources/crs/sla-matrix/csvParser.ts (approximate path; grep for "subcategoryL1")
-cd /root/code/Citizen-Complaint-Resolution-System
-grep -rn "subcategoryL1" configurator/src/resources/crs/sla-matrix/ | head -5
-# Fix: don't lowercase the header, OR lowercase both sides of the comparison. Add a unit test.
-git commit -am "fix(crs-sla): csvParser case-sensitivity bug on subcategoryL1 header"
-git push origin feat/escalation-otel-configurator-designer
+# Verify:
+cd /root/code/Citizen-Complaint-Resolution-System/configurator
+npx vitest run src/resources/crs/sla-matrix/csvParser.test.ts
 ```
 
 ### After §15.1 – §15.8 are complete
