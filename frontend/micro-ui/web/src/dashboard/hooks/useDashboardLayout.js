@@ -5,8 +5,8 @@ import {
   DEFAULT_KPI_LAYOUT_ITEM,
   DEFAULT_LAYOUT,
   GRID_COLS,
-  RANKED_LIST_WIDGET_ID,
   TOP_ROW_CHART_IDS,
+  RANKED_LIST_WIDGET_ID,
   WIDGETS,
   isChartWidget,
   isKpiWidget,
@@ -236,35 +236,61 @@ function normalizeChartItem(item) {
   const defaults = DEFAULT_CHART_LAYOUT[item.i];
   if (!defaults) return item;
   return {
-    ...defaults,
     ...item,
-    minW: item.minW ?? defaults.minW,
-    minH: item.minH ?? defaults.minH,
-    maxW: item.maxW ?? defaults.maxW,
-    maxH: item.maxH ?? defaults.maxH,
+    minW: defaults.minW,
+    minH: defaults.minH,
+    maxW: defaults.maxW ?? item.maxW,
+    maxH: defaults.maxH ?? item.maxH,
   };
+}
+
+const LEGACY_LAYOUT_VERSIONS = ["v12", "v11", "v10", "v9"];
+
+function readSavedLayoutRaw() {
+  const currentKey = getLayoutStorageKey();
+  const tenantPrefix = currentKey.replace(/-supervisor-dashboard-layout-v\d+$/, "");
+  const keys = [
+    currentKey,
+    ...LEGACY_LAYOUT_VERSIONS.map((v) => `${tenantPrefix}-supervisor-dashboard-layout-${v}`),
+  ];
+
+  for (const key of keys) {
+    const saved = localStorage.getItem(key);
+    if (saved) return { key, saved };
+  }
+
+  return null;
+}
+
+function parseStoredLayout(saved) {
+  const parsed = JSON.parse(saved);
+  if (!Array.isArray(parsed) || parsed.length === 0) return null;
+
+  const valid = parsed
+    .filter((item) => WIDGETS[item.i])
+    .map((item) => {
+      if (isKpiWidget(item.i)) return normalizeKpiItem(item);
+      if (isChartWidget(item.i)) return normalizeChartItem(item);
+      return item;
+    });
+
+  if (valid.length === 0 || hasOverlaps(valid)) return null;
+  return valid;
 }
 
 function loadLayout() {
   try {
-    const saved = localStorage.getItem(getLayoutStorageKey());
-    if (!saved) return DEFAULT_LAYOUT;
+    const stored = readSavedLayoutRaw();
+    if (!stored) return DEFAULT_LAYOUT;
 
-    const parsed = JSON.parse(saved);
-    if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_LAYOUT;
+    const valid = parseStoredLayout(stored.saved);
+    if (!valid) return DEFAULT_LAYOUT;
 
-    const valid = parsed
-      .filter((item) => WIDGETS[item.i])
-      .map((item) => {
-        if (isKpiWidget(item.i)) return normalizeKpiItem(item);
-        if (isChartWidget(item.i)) return normalizeChartItem(item);
-        return item;
-      });
+    if (stored.key !== getLayoutStorageKey()) {
+      persistLayout(valid);
+    }
 
-    if (valid.length === 0) return DEFAULT_LAYOUT;
-
-    const fixed = normalizeLayout(valid);
-    return hasOverlaps(fixed) ? DEFAULT_LAYOUT : fixed;
+    return valid;
   } catch {
     return DEFAULT_LAYOUT;
   }
@@ -294,7 +320,7 @@ function nextKpiPosition(layout) {
 export function useDashboardLayout() {
   const [layout, setLayout] = useState(loadLayout);
 
-  /** During drag: pass through as-is. During resize: push overlapping neighbors. */
+  /** During drag: pass through in memory only. Persist on drag/resize stop. */
   const onLayoutChange = useCallback((newLayout, pinnedId = null, options = {}) => {
     if (options.passThrough) {
       setLayout(newLayout);
@@ -308,8 +334,9 @@ export function useDashboardLayout() {
       return;
     }
 
-    setLayout(newLayout);
-    persistLayout(newLayout);
+    if (options.mode === "resize") {
+      setLayout(newLayout);
+    }
   }, []);
 
   const onLayoutStop = useCallback((newLayout, mode = "drag", activeId = null) => {
@@ -339,12 +366,12 @@ export function useDashboardLayout() {
     const targetH = resolveRankedListGridHeight(itemCount);
     setLayout((prev) => {
       const listItem = prev.find((item) => item.i === RANKED_LIST_WIDGET_ID);
-      if (!listItem || listItem.h === targetH) return prev;
+      if (!listItem || listItem.h <= targetH) return prev;
 
-      const next = reflowCharts(
-        prev.map((item) =>
-          item.i === RANKED_LIST_WIDGET_ID ? { ...item, h: targetH } : item
-        )
+      const next = prev.map((item) =>
+        item.i === RANKED_LIST_WIDGET_ID
+          ? { ...item, h: targetH, minH: DEFAULT_CHART_LAYOUT[RANKED_LIST_WIDGET_ID]?.minH ?? 2 }
+          : item
       );
       persistLayout(next);
       return next;

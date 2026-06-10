@@ -255,13 +255,8 @@ const DashboardGrid = ({
               );
             }
 
-            const isRankedList = item.i === RANKED_LIST_WIDGET_ID;
-
             return (
-              <div
-                key={item.i}
-                className={`tw-group tw-relative ${isRankedList ? "tw-h-auto" : "tw-h-full"}`}
-              >
+              <div key={item.i} className="tw-group tw-relative tw-h-full">
                 <button
                   type="button"
                   title="Remove from dashboard"
@@ -271,17 +266,11 @@ const DashboardGrid = ({
                 >
                   ×
                 </button>
-                <div
-                  className={`dashboard-widget ${
-                    isRankedList ? "dashboard-list-widget" : "dashboard-chart-widget"
-                  } tw-flex tw-min-h-0 tw-w-full tw-flex-col ${
-                    isRankedList ? "tw-h-auto tw-self-start" : "tw-h-full"
-                  }`}
-                >
+                <div className="dashboard-widget dashboard-chart-widget tw-flex tw-h-full tw-min-h-0 tw-w-full tw-flex-col">
                   {meta && <WidgetHeader metric={meta.metric} subMetric={meta.subMetric} />}
                   <div
-                    className={`tw-flex tw-min-h-0 tw-shrink-0 tw-flex-col tw-justify-start tw-overflow-visible ${WIDGET_PADDING} ${
-                      isRankedList ? "" : "tw-flex-1"
+                    className={`tw-flex tw-min-h-0 tw-flex-col tw-justify-start tw-overflow-visible ${WIDGET_PADDING} ${
+                      item.i === RANKED_LIST_WIDGET_ID ? "tw-shrink-0" : "tw-flex-1"
                     }`}
                   >
                     {renderWidget(item.i)}

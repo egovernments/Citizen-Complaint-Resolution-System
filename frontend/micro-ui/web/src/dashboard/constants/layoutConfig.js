@@ -59,7 +59,7 @@ export const DEFAULT_KPI_LAYOUT_ITEM = {
 export const DEFAULT_CHART_LAYOUT = {
   "cl-chart-categories": { x: 0, w: 3, h: 5, minW: 2, minH: 4, maxW: 6 },
   "cl-chart-wards": { x: 3, w: 3, h: 5, minW: 3, minH: 4, maxW: 6 },
-  "cl-list-categories": { x: 6, w: 3, h: 4, minW: 3, minH: 4, maxW: 8, maxH: 6 },
+  "cl-list-categories": { x: 6, w: 3, h: 3, minW: 3, minH: 2, maxW: 8, maxH: 6 },
   "cl-chart-dow": { x: 0, w: 6, h: 6, minW: 6, minH: 3, maxW: 10 },
 };
 
@@ -174,12 +174,12 @@ export const DEFAULT_LAYOUT = [
   },
   {
     w: 3,
-    h: 4,
+    h: 3,
     x: 6,
     y: 2,
     i: "cl-list-categories",
     minW: 3,
-    minH: 4,
+    minH: 2,
     moved: false,
     static: false,
     resizeHandles: ["se"],
