@@ -1,0 +1,24 @@
+[
+  {
+    "tenantId": "{tenantid}",
+    "code": "CRS.BoundaryLabelOverride",
+    "description": "Reserved schema code for the G6 Territorial Hierarchy editor. Per-locale display label + abbreviation overrides for boundary nodes managed by the DIGIT egov-location / boundary-service. The 4-level tree itself (Region/District/Sub-district/Locality) lives in the boundary service; this overlay is the CRS-side editor surface for translated labels. THIS IS A DESIGN-ONLY STUB — properties block intentionally minimal; full schema lands when phase G6 is implemented. See docs/g-phases/g6-territorial-hierarchy.md.",
+    "isActive": false,
+    "definition": {
+      "type": "object",
+      "title": "CRS Boundary Label Override (G6 — stub)",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": ["boundaryCode"],
+      "x-unique": ["boundaryCode"],
+      "x-ref-schema": [],
+      "properties": {
+        "boundaryCode": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Foreign key into egov-location boundary tree. Schema for the rest of the row is reserved by the G6 design doc."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+]
