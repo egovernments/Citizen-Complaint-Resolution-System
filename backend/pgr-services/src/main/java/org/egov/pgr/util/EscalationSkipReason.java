@@ -42,6 +42,30 @@ public enum EscalationSkipReason {
      */
     STATE_MAPPING_MISSING("Workflow state has no mapping in CRS.WorkflowStateMapping and no CRS.StateSLA fallback"),
 
+    /**
+     * Role escalation is enabled but the unattended complaint's workflow state
+     * has no entry in roleEscalation.actingRoleByState — the scheduler cannot
+     * tell which role "owes action" in that state. Operators add the mapping
+     * under Escalation behaviour in Settings.
+     */
+    ROLE_NOT_MAPPED("Unattended complaint's workflow state has no acting-role mapping"),
+
+    /**
+     * The role-target resolution (pin / ladder / reportingTo consensus) found
+     * two or more candidates and refuses to guess — the misroute would be
+     * invisible and unexplainable. Operators pin a CRS.RoleSupervisors row or
+     * fix the HRMS data.
+     */
+    ROLE_SUPERVISOR_AMBIGUOUS("Two or more candidates matched for the role's escalation target"),
+
+    /**
+     * The role-target resolution exhausted every strategy (pin, ladder,
+     * reportingTo consensus — including the tenant-wide department fallback)
+     * without finding a single candidate. Operators create/activate the
+     * supervisor in HRMS or pin a CRS.RoleSupervisors row.
+     */
+    NO_ROLE_SUPERVISOR("No candidate found anywhere for the role's escalation target"),
+
     /** Sentinel: escalation completed successfully (used in span attrs / response payloads). */
     SUCCESS("Escalation performed successfully");
 

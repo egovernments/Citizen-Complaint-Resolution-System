@@ -101,5 +101,31 @@ public class EscalationTriggerResponse {
          */
         @JsonProperty("slaSource")
         private String slaSource;
+
+        /**
+         * Role-escalation provenance (PRD primary journey): which strategy
+         * picked the target — "R1_PIN" (CRS.RoleSupervisors), "R2_LADDER"
+         * (supervisorRoleByRole) or "R3_REPORTING" (reportingTo consensus).
+         * Set on every role-path outcome (escalated, would-escalate and role
+         * skips); null on the named-assignee path.
+         */
+        @JsonProperty("resolutionStrategy")
+        private String resolutionStrategy;
+
+        /** Role that owed action in the complaint's workflow state. Null on the named-assignee path. */
+        @JsonProperty("actingRole")
+        private String actingRole;
+
+        /** How many candidates the winning/failing resolution strategy matched. Null on the named-assignee path. */
+        @JsonProperty("candidateCount")
+        private Integer candidateCount;
+
+        /**
+         * Whether the candidate search was restricted to the complaint's
+         * ServiceDefs department — false when the tenant-wide retry fired (or
+         * no department existed). Null on the named-assignee path.
+         */
+        @JsonProperty("departmentFiltered")
+        private Boolean departmentFiltered;
     }
 }

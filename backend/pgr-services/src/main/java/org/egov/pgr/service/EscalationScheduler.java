@@ -18,6 +18,7 @@ import org.egov.pgr.util.MDMSUtils;
 import org.egov.pgr.util.PGRConstants;
 import org.egov.pgr.web.models.*;
 import org.egov.pgr.web.models.EscalationTriggerResponse.EscalationOutcome;
+import org.egov.tracer.model.CustomException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -25,6 +26,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import static org.egov.pgr.util.PGRConstants.*;
@@ -41,6 +43,15 @@ public class EscalationScheduler {
     private final ObjectMapper mapper;
     private final MultiStateInstanceUtil multiStateInstanceUtil;
     private final Producer producer;
+
+    /**
+     * Single-replica scan-overlap guard. {@code @Scheduled(fixedDelay)} never
+     * overlaps itself, but {@code POST /escalation/_trigger} can race the
+     * cron — two concurrent MUTATING scans could double-escalate the same
+     * complaint. Dry runs are read-only and bypass the guard entirely.
+     * Multi-replica deployments would need a shared lock; out of scope.
+     */
+    private static final AtomicBoolean SCAN_ACTIVE = new AtomicBoolean(false);
 
     @Value("${egov.state.level.tenant.id:ke}")
     private String stateLevelTenantId;
@@ -80,7 +91,16 @@ public class EscalationScheduler {
             return;
         }
 
-        scanAndEscalateOnce(tenantId, null, buildSystemRequestInfo());
+        try {
+            scanAndEscalateOnce(tenantId, null, buildSystemRequestInfo());
+        } catch (CustomException e) {
+            // A manual /escalation/_trigger scan is mid-flight — skip this
+            // tick; fixedDelay will come back around.
+            if (!"SCAN_IN_PROGRESS".equals(e.getCode())) {
+                throw e;
+            }
+            log.info("Escalation scan already in progress — skipping this cron tick");
+        }
     }
 
     /**
@@ -107,11 +127,35 @@ public class EscalationScheduler {
      * lookup, zero mutations) and pre-breach warning emission is suppressed —
      * {@code preBreachWarnings} instead counts complaints currently inside the
      * warning window (see {@link #isInPreBreachWindow}).
+     *
+     * <p>Mutating scans ({@code dryRun=false}) are guarded against overlap:
+     * a second concurrent mutating scan throws
+     * {@code CustomException("SCAN_IN_PROGRESS", ...)} — the controller path
+     * surfaces it, the cron catches and skips the tick. Dry runs bypass the
+     * guard entirely.</p>
      */
     public EscalationTriggerResponse scanAndEscalateOnce(String tenantId,
                                                          List<String> serviceRequestIds,
                                                          RequestInfo requestInfo,
                                                          boolean dryRun) {
+        if (dryRun) {
+            return doScanAndEscalate(tenantId, serviceRequestIds, requestInfo, true);
+        }
+        if (!SCAN_ACTIVE.compareAndSet(false, true)) {
+            throw new CustomException("SCAN_IN_PROGRESS",
+                    "An escalation scan is already running — retry shortly");
+        }
+        try {
+            return doScanAndEscalate(tenantId, serviceRequestIds, requestInfo, false);
+        } finally {
+            SCAN_ACTIVE.set(false);
+        }
+    }
+
+    private EscalationTriggerResponse doScanAndEscalate(String tenantId,
+                                                        List<String> serviceRequestIds,
+                                                        RequestInfo requestInfo,
+                                                        boolean dryRun) {
 
         Span span = Span.current();
         span.setAttribute("escalation.tenantId", tenantId == null ? "" : tenantId);
@@ -134,6 +178,19 @@ public class EscalationScheduler {
         // pre-breach warning config.
         Map<String, Object> crsEscalationPolicy = fetchCrsEscalationPolicy(requestInfo, tenantId);
         int maxDepth = getMaxDepth(crsEscalationPolicy, escalationConfig);
+
+        // Role escalation (opt-in, PRD primary journey): the pins are only
+        // fetched when the policy enables the feature, so disabled tenants
+        // issue zero extra MDMS/HRMS calls and stay byte-identical to today.
+        boolean roleEscalationEnabled = roleEscalationEnabled(crsEscalationPolicy);
+        List<Map<String, Object>> crsRoleSupervisors = roleEscalationEnabled
+                ? fetchCrsRoleSupervisors(requestInfo, tenantId)
+                : Collections.emptyList();
+        int roleMaxPerScan = roleMaxPerScan(crsEscalationPolicy);
+        // Per-scan memo for resolveRoleTarget — resolution depends only on
+        // (actingRole, department), not the complaint.
+        Map<String, EscalationService.RoleResolution> roleResolutionCache = new HashMap<>();
+        int roleEscalated = 0;
 
         Set<String> statuses = new HashSet<>(Arrays.asList(PENDINGATLME, PENDINGFORASSIGNMENT));
 
@@ -268,9 +325,94 @@ public class EscalationScheduler {
                             srid, complaint.getTenantId(), requestInfo);
 
                     if (CollectionUtils.isEmpty(assignees)) {
-                        recordSkip(skipMap, details, srid, status, currentLevel,
-                                EscalationSkipReason.NO_ASSIGNEES, "workflow returned 0 assignees", slaRes.source);
-                        skipped++;
+                        if (!roleEscalationEnabled) {
+                            recordSkip(skipMap, details, srid, status, currentLevel,
+                                    EscalationSkipReason.NO_ASSIGNEES, "workflow returned 0 assignees", slaRes.source);
+                            skipped++;
+                            continue;
+                        }
+
+                        // Role path: resolve the role that owes action in this
+                        // state to exactly one person (or a structured skip).
+                        String actingRole = actingRoleFor(crsEscalationPolicy, complaint.getApplicationStatus());
+                        if (actingRole == null) {
+                            recordSkip(skipMap, details, srid, status, currentLevel,
+                                    EscalationSkipReason.ROLE_NOT_MAPPED,
+                                    "state=" + complaint.getApplicationStatus()
+                                            + " has no actingRoleByState entry", slaRes.source);
+                            skipped++;
+                            continue;
+                        }
+
+                        Map<String, Object> svcMapping = complaint.getServiceCode() == null
+                                ? null : serviceCodeToCategory.get(complaint.getServiceCode());
+                        String department = svcMapping != null && svcMapping.get("department") instanceof String
+                                ? (String) svcMapping.get("department") : null;
+
+                        EscalationService.RoleResolution resolution = escalationService.resolveRoleTarget(
+                                actingRole, department, crsRoleSupervisors, crsEscalationPolicy,
+                                requestInfo, complaint.getTenantId(), roleResolutionCache);
+
+                        if (resolution.getSkipReason() != null) {
+                            recordRoleSkip(skipMap, details, srid, status, currentLevel,
+                                    resolution.getSkipReason(),
+                                    resolution.getDetail()
+                                            + " [strategy=" + resolution.getStrategy()
+                                            + ", candidates=" + resolution.getCandidateCount()
+                                            + ", departmentFiltered=" + resolution.getDepartmentFiltered() + "]",
+                                    slaRes.source, resolution);
+                            skipped++;
+                            continue;
+                        }
+
+                        // Blast-radius cap: deferred complaints drain in later
+                        // scans (escalated ones acquire a named assignee and
+                        // leave the unattended pool). No new enum value.
+                        if (roleEscalated >= roleMaxPerScan) {
+                            recordRoleSkip(skipMap, details, srid, status, currentLevel,
+                                    EscalationSkipReason.NO_ASSIGNEES,
+                                    "role escalation deferred — maxPerScan reached", slaRes.source, resolution);
+                            skipped++;
+                            continue;
+                        }
+
+                        EscalationService.EscalationResult roleResult = dryRun
+                                ? escalationService.previewRoleEscalation(complaint, resolution.getTargetUuid(),
+                                        requestInfo, maxDepth, elapsed, sla, resolution)
+                                : escalationService.escalateToRoleTarget(complaint, resolution.getTargetUuid(),
+                                        requestInfo, maxDepth, elapsed, sla, resolution);
+
+                        if (roleResult.isSuccess()) {
+                            if (dryRun) {
+                                wouldEscalate++;
+                            } else {
+                                escalated++;
+                            }
+                            roleEscalated++;
+                            details.add(EscalationOutcome.builder()
+                                    .serviceRequestId(srid)
+                                    .action(dryRun ? "WOULD_ESCALATE" : "ESCALATED")
+                                    .reason(EscalationSkipReason.SUCCESS.name())
+                                    .detail(dryRun
+                                            ? roleResult.getDetail()
+                                            : "fromLevel=" + currentLevel + " toLevel=" + (currentLevel + 1))
+                                    .slaSource(slaRes.source)
+                                    .resolutionStrategy(resolution.getStrategy())
+                                    .actingRole(resolution.getActingRole())
+                                    .candidateCount(resolution.getCandidateCount())
+                                    .departmentFiltered(resolution.getDepartmentFiltered())
+                                    .build());
+                            log.info("Escalation {} (role path) — srid={}, status={}, actingRole={}, strategy={}, target={}",
+                                    dryRun ? "dry-run hit" : "success", srid, status, actingRole,
+                                    resolution.getStrategy(), resolution.getTargetUuid());
+                        } else {
+                            EscalationSkipReason reason = roleResult.getReason() != null
+                                    ? roleResult.getReason()
+                                    : EscalationSkipReason.WORKFLOW_TRANSITION_FAILED;
+                            recordRoleSkip(skipMap, details, srid, status, currentLevel,
+                                    reason, roleResult.getDetail(), slaRes.source, resolution);
+                            skipped++;
+                        }
                         continue;
                     }
 
@@ -314,6 +456,7 @@ public class EscalationScheduler {
 
         span.setAttribute("escalation.scanned", scanned);
         span.setAttribute("escalation.escalated", escalated);
+        span.setAttribute("escalation.roleEscalated", roleEscalated);
         span.setAttribute("escalation.wouldEscalate", wouldEscalate);
         span.setAttribute("escalation.skipped", skipped);
         span.setAttribute("escalation.preBreachWarnings", preBreachWarnings);
@@ -374,6 +517,56 @@ public class EscalationScheduler {
         return pb instanceof Map ? (Map<String, Object>) pb : null;
     }
 
+    // ----------------------------------------------------------------------
+    // CRS.EscalationPolicy.roleEscalation accessors (null-safe, type-guarded
+    // like getMaxDepth). Static so EscalationService's role-target resolver
+    // can reuse ladderRoleFor without re-deriving the policy shape.
+    // ----------------------------------------------------------------------
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> getRoleEscalation(Map<String, Object> crsEscalationPolicy) {
+        if (crsEscalationPolicy == null) return null;
+        Object re = crsEscalationPolicy.get("roleEscalation");
+        return re instanceof Map ? (Map<String, Object>) re : null;
+    }
+
+    /** Opt-in gate: roleEscalation absent or enabled != true ⇒ today's behavior. */
+    static boolean roleEscalationEnabled(Map<String, Object> crsEscalationPolicy) {
+        Map<String, Object> re = getRoleEscalation(crsEscalationPolicy);
+        return re != null && Boolean.TRUE.equals(re.get("enabled"));
+    }
+
+    /** Role that owes action in the given workflow state (actingRoleByState), or null. */
+    @SuppressWarnings("unchecked")
+    static String actingRoleFor(Map<String, Object> crsEscalationPolicy, String state) {
+        Map<String, Object> re = getRoleEscalation(crsEscalationPolicy);
+        if (re == null || state == null) return null;
+        Object byState = re.get("actingRoleByState");
+        if (!(byState instanceof Map)) return null;
+        Object role = ((Map<String, Object>) byState).get(state);
+        return role instanceof String ? (String) role : null;
+    }
+
+    /** Supervisor role for the acting role (supervisorRoleByRole ladder), or null. */
+    @SuppressWarnings("unchecked")
+    static String ladderRoleFor(Map<String, Object> crsEscalationPolicy, String actingRole) {
+        Map<String, Object> re = getRoleEscalation(crsEscalationPolicy);
+        if (re == null || actingRole == null) return null;
+        Object byRole = re.get("supervisorRoleByRole");
+        if (!(byRole instanceof Map)) return null;
+        Object role = ((Map<String, Object>) byRole).get(actingRole);
+        return role instanceof String ? (String) role : null;
+    }
+
+    /** Blast-radius cap on role-escalations per scan; default 10 when absent. */
+    static int roleMaxPerScan(Map<String, Object> crsEscalationPolicy) {
+        Map<String, Object> re = getRoleEscalation(crsEscalationPolicy);
+        if (re != null && re.get("maxPerScan") instanceof Number) {
+            return ((Number) re.get("maxPerScan")).intValue();
+        }
+        return 10;
+    }
+
     /**
      * Records a skip outcome. {@code slaSource} is the winning
      * {@link SlaResolution#source} layer; null for MAX_DEPTH_REACHED (decided
@@ -393,6 +586,32 @@ public class EscalationScheduler {
                 .reason(reason.name())
                 .detail(detail)
                 .slaSource(slaSource)
+                .build());
+    }
+
+    /**
+     * Role-path twin of {@link #recordSkip}: same counting + logging, plus the
+     * resolution provenance (strategy/candidateCount/departmentFiltered) on
+     * the structured outcome so operators can reconstruct the decision.
+     */
+    private void recordRoleSkip(Map<EscalationSkipReason, Integer> skipMap,
+                                List<EscalationOutcome> details,
+                                String srid, String status, int currentLevel,
+                                EscalationSkipReason reason, String detail, String slaSource,
+                                EscalationService.RoleResolution resolution) {
+        log.info("Escalation skip — srid={}, status={}, level={}, reason={}, detail={}",
+                srid, status, currentLevel, reason, detail);
+        skipMap.merge(reason, 1, Integer::sum);
+        details.add(EscalationOutcome.builder()
+                .serviceRequestId(srid)
+                .action("SKIPPED")
+                .reason(reason.name())
+                .detail(detail)
+                .slaSource(slaSource)
+                .resolutionStrategy(resolution.getStrategy())
+                .actingRole(resolution.getActingRole())
+                .candidateCount(resolution.getCandidateCount())
+                .departmentFiltered(resolution.getDepartmentFiltered())
                 .build());
     }
 
@@ -795,6 +1014,28 @@ public class EscalationScheduler {
         return Collections.emptyList();
     }
 
+    /**
+     * Fetch all active CRS.RoleSupervisors rows (explicit per-role escalation
+     * pins) for the tenant. Mirrors {@link #fetchCrsCategorySla}: empty list
+     * on miss, inactive rows dropped here so the resolver never re-checks.
+     */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> fetchCrsRoleSupervisors(RequestInfo requestInfo, String tenantId) {
+        try {
+            Object res = fetchMdmsModule(requestInfo, tenantId, "CRS", "RoleSupervisors");
+            if (res == null) return Collections.emptyList();
+            Object rows = JsonPath.read(res, "$.MdmsRes.CRS.RoleSupervisors");
+            if (rows instanceof List) {
+                return ((List<Map<String, Object>>) rows).stream()
+                        .filter(row -> !(row.get("isActive") instanceof Boolean) || (Boolean) row.get("isActive"))
+                        .collect(Collectors.toList());
+            }
+        } catch (Exception e) {
+            log.debug("CRS.RoleSupervisors fetch failed (probably not seeded yet): {}", e.getMessage());
+        }
+        return Collections.emptyList();
+    }
+
     /** Fetch CRS.StateSLA singleton's stateDefaults map. */
     @SuppressWarnings("unchecked")
     private Map<String, Number> fetchCrsStateSlaDefaults(RequestInfo requestInfo, String tenantId) {
@@ -877,6 +1118,13 @@ public class EscalationScheduler {
                     v.put("path", path);
                     v.put("category", category);
                     v.put("subcategoryL1", subcategoryL1);
+                    // Role escalation: ServiceDefs.department feeds the
+                    // supervisor-candidate filter. Optional — only ever a
+                    // filter, never required.
+                    Object department = d.get("department");
+                    if (department instanceof String) {
+                        v.put("department", department);
+                    }
                     out.put(code, v);
                 }
             }

@@ -245,6 +245,392 @@ public class EscalationService {
                 .build();
     }
 
+    // ----------------------------------------------------------------------
+    // Role-level escalation (opt-in, PRD primary journey)
+    //
+    // Runs only when CRS.EscalationPolicy.roleEscalation is enabled and the
+    // complaint has NO recorded assignee. The target is resolved through three
+    // strategies — first hit wins, ambiguity skips rather than guesses:
+    //   R1 — explicit CRS.RoleSupervisors pin (validated against HRMS);
+    //   R2 — supervisorRoleByRole ladder (authoritative once configured);
+    //   R3 — reportingTo consensus over holders of the acting role itself.
+    // Resolution is memoized per scan keyed on (actingRole, department) — it
+    // never depends on the complaint, so a scan costs a handful of HRMS
+    // lookups, not one per complaint.
+    // ----------------------------------------------------------------------
+
+    static final String STRATEGY_R1_PIN = "R1_PIN";
+    static final String STRATEGY_R2_LADDER = "R2_LADDER";
+    static final String STRATEGY_R3_REPORTING = "R3_REPORTING";
+
+    /**
+     * Outcome of a single role-target resolution: either a target uuid plus
+     * the provenance that picked it, or a structured skip reason. The
+     * provenance fields (strategy/candidateCount/departmentFiltered) flow
+     * into the trigger response, the Kafka event and the OTEL span so "why
+     * did X get this?" stays answerable after HRMS data changes.
+     */
+    @Getter
+    @Builder
+    public static class RoleResolution {
+        private final String targetUuid;
+        /** {@link #STRATEGY_R1_PIN} | {@link #STRATEGY_R2_LADDER} | {@link #STRATEGY_R3_REPORTING}. */
+        private final String strategy;
+        private final String actingRole;
+        /** The ServiceDefs department the resolution started from; null when none existed. */
+        private final String department;
+        private final Integer candidateCount;
+        /** False when the tenant-wide (unfiltered) retry answered, or no department existed. */
+        private final Boolean departmentFiltered;
+        /** Null on success; ROLE_SUPERVISOR_AMBIGUOUS / NO_ROLE_SUPERVISOR otherwise. */
+        private final EscalationSkipReason skipReason;
+        private final String detail;
+    }
+
+    /**
+     * Resolves the escalation target for an unattended complaint's acting
+     * role. Memoized per scan: the caller owns the cache map (created in
+     * {@code scanAndEscalateOnce}) keyed on {@code actingRole + "|" + department}.
+     */
+    RoleResolution resolveRoleTarget(String actingRole, String department,
+                                     List<Map<String, Object>> roleSupervisorRows,
+                                     Map<String, Object> policy,
+                                     RequestInfo requestInfo, String tenantId,
+                                     Map<String, RoleResolution> cache) {
+        String cacheKey = actingRole + "|" + (department == null ? "" : department);
+        RoleResolution cached = cache.get(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+        RoleResolution resolved = doResolveRoleTarget(actingRole, department, roleSupervisorRows,
+                policy, requestInfo, tenantId);
+        cache.put(cacheKey, resolved);
+        return resolved;
+    }
+
+    private RoleResolution doResolveRoleTarget(String actingRole, String department,
+                                               List<Map<String, Object>> roleSupervisorRows,
+                                               Map<String, Object> policy,
+                                               RequestInfo requestInfo, String tenantId) {
+
+        String pinNote = "";
+
+        // R1 — explicit pin: (role, department) row first, then (role, "ALL").
+        // Pins go stale (transfer, deactivation), so the target is validated
+        // against HRMS at escalation time; a stale pin falls through.
+        Map<String, Object> pin = findPinRow(roleSupervisorRows, actingRole, department);
+        if (pin != null) {
+            String pinnedUuid = pin.get("assigneeUuid") instanceof String ? (String) pin.get("assigneeUuid") : null;
+            if (pinnedUuid != null && hrmsUtil.isActiveEmployee(pinnedUuid, tenantId, requestInfo)) {
+                boolean exactDepartment = department != null && department.equals(pin.get("department"));
+                return RoleResolution.builder()
+                        .targetUuid(pinnedUuid)
+                        .strategy(STRATEGY_R1_PIN)
+                        .actingRole(actingRole)
+                        .department(department)
+                        .candidateCount(1)
+                        .departmentFiltered(exactDepartment)
+                        .detail("pinned via CRS.RoleSupervisors (" + actingRole + ", " + pin.get("department") + ")")
+                        .build();
+            }
+            log.warn("Stale CRS.RoleSupervisors pin ({}, {}) — assigneeUuid {} is not an active HRMS employee, falling through",
+                    actingRole, pin.get("department"), pinnedUuid);
+            pinNote = "stale pin " + pinnedUuid + " ignored; ";
+        }
+
+        // R2 — ladder: authoritative once configured for the acting role.
+        // Exhaustion here NEVER falls through to R3.
+        String ladderRole = EscalationScheduler.ladderRoleFor(policy, actingRole);
+        if (ladderRole != null) {
+            boolean filtered = department != null;
+            List<Map<String, String>> candidates =
+                    hrmsUtil.searchEmployeesByRole(ladderRole, department, tenantId, requestInfo);
+            if (candidates.isEmpty() && filtered) {
+                filtered = false;
+                candidates = hrmsUtil.searchEmployeesByRole(ladderRole, null, tenantId, requestInfo);
+            }
+            if (candidates.size() == 1) {
+                return RoleResolution.builder()
+                        .targetUuid(candidates.get(0).get("uuid"))
+                        .strategy(STRATEGY_R2_LADDER)
+                        .actingRole(actingRole)
+                        .department(department)
+                        .candidateCount(1)
+                        .departmentFiltered(filtered)
+                        .detail(pinNote + "single holder of ladder role " + ladderRole)
+                        .build();
+            }
+            if (candidates.size() > 1) {
+                return RoleResolution.builder()
+                        .strategy(STRATEGY_R2_LADDER)
+                        .actingRole(actingRole)
+                        .department(department)
+                        .candidateCount(candidates.size())
+                        .departmentFiltered(filtered)
+                        .skipReason(EscalationSkipReason.ROLE_SUPERVISOR_AMBIGUOUS)
+                        .detail(pinNote + candidates.size() + " holders of ladder role " + ladderRole)
+                        .build();
+            }
+            return RoleResolution.builder()
+                    .strategy(STRATEGY_R2_LADDER)
+                    .actingRole(actingRole)
+                    .department(department)
+                    .candidateCount(0)
+                    .departmentFiltered(filtered)
+                    .skipReason(EscalationSkipReason.NO_ROLE_SUPERVISOR)
+                    .detail(pinNote + "no active holder of ladder role " + ladderRole)
+                    .build();
+        }
+
+        // R3 — reportingTo consensus over holders of the acting role itself
+        // (only when no ladder entry exists).
+        boolean filtered = department != null;
+        List<Map<String, String>> holders =
+                hrmsUtil.searchEmployeesByRole(actingRole, department, tenantId, requestInfo);
+        if (holders.isEmpty() && filtered) {
+            filtered = false;
+            holders = hrmsUtil.searchEmployeesByRole(actingRole, null, tenantId, requestInfo);
+        }
+        Set<String> supervisors = holders.stream()
+                .map(h -> h.get("reportingTo"))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (supervisors.size() == 1) {
+            return RoleResolution.builder()
+                    .targetUuid(supervisors.iterator().next())
+                    .strategy(STRATEGY_R3_REPORTING)
+                    .actingRole(actingRole)
+                    .department(department)
+                    .candidateCount(1)
+                    .departmentFiltered(filtered)
+                    .detail(pinNote + holders.size() + " holders of " + actingRole + " report to a single supervisor")
+                    .build();
+        }
+        if (supervisors.size() > 1) {
+            return RoleResolution.builder()
+                    .strategy(STRATEGY_R3_REPORTING)
+                    .actingRole(actingRole)
+                    .department(department)
+                    .candidateCount(supervisors.size())
+                    .departmentFiltered(filtered)
+                    .skipReason(EscalationSkipReason.ROLE_SUPERVISOR_AMBIGUOUS)
+                    .detail(pinNote + supervisors.size() + " distinct reportingTo across holders of " + actingRole)
+                    .build();
+        }
+        return RoleResolution.builder()
+                .strategy(STRATEGY_R3_REPORTING)
+                .actingRole(actingRole)
+                .department(department)
+                .candidateCount(0)
+                .departmentFiltered(filtered)
+                .skipReason(EscalationSkipReason.NO_ROLE_SUPERVISOR)
+                .detail(pinNote + "no reportingTo found across holders of " + actingRole)
+                .build();
+    }
+
+    /** Active pin row for (role, department), falling back to (role, "ALL"). Rows are pre-filtered to active. */
+    private static Map<String, Object> findPinRow(List<Map<String, Object>> rows, String role, String department) {
+        if (CollectionUtils.isEmpty(rows)) return null;
+        if (department != null) {
+            for (Map<String, Object> row : rows) {
+                if (role.equals(row.get("role")) && department.equals(row.get("department"))) {
+                    return row;
+                }
+            }
+        }
+        for (Map<String, Object> row : rows) {
+            if (role.equals(row.get("role")) && "ALL".equals(row.get("department"))) {
+                return row;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Role-path twin of {@link #escalateComplaintWithReason}: same machinery
+     * (max-depth check, ESCALATE self-loop, escalationLevel++, audit refresh,
+     * update + event pushes) but NO reportingTo hop — the resolved target IS
+     * the person — and the comment is hedged to what the system actually
+     * knows ("no recorded assignee", not "nobody picked this up"). After this
+     * the complaint HAS a named assignee, so subsequent levels reuse the
+     * existing reportingTo path unchanged.
+     */
+    public EscalationResult escalateToRoleTarget(Service complaint,
+                                                 String targetUuid,
+                                                 RequestInfo requestInfo,
+                                                 int maxDepth,
+                                                 long elapsedMs,
+                                                 long slaMs,
+                                                 RoleResolution resolution) {
+
+        String serviceRequestId = complaint.getServiceRequestId();
+        String tenantId = complaint.getTenantId();
+        int currentLevel = getEscalationLevel(complaint);
+
+        Span span = Span.current();
+        span.setAttribute("complaint.serviceRequestId", serviceRequestId == null ? "" : serviceRequestId);
+        span.setAttribute("complaint.tenantId", tenantId == null ? "" : tenantId);
+        span.setAttribute("escalation.fromLevel", currentLevel);
+        setRoleSpanAttributes(span, resolution);
+
+        if (currentLevel >= maxDepth) {
+            log.info("Complaint {} already at max escalation depth {}, skipping", serviceRequestId, currentLevel);
+            span.setAttribute("escalation.skipReason", EscalationSkipReason.MAX_DEPTH_REACHED.name());
+            return EscalationResult.skip(EscalationSkipReason.MAX_DEPTH_REACHED,
+                    "currentLevel=" + currentLevel + ", maxDepth=" + maxDepth);
+        }
+
+        Map<String, String> targetSummary = hrmsUtil.getEmployeeSummary(targetUuid, requestInfo, tenantId);
+        Workflow escalationWorkflow = Workflow.builder()
+                .action(ESCALATE)
+                .assignes(Collections.singletonList(targetUuid))
+                .comments(buildRoleEscalateComment(targetUuid, targetSummary, resolution, elapsedMs, slaMs))
+                .build();
+
+        Map<String, Object> additionalDetails = getAdditionalDetailsMap(complaint);
+        additionalDetails.put("escalationLevel", currentLevel + 1);
+        additionalDetails.put("lastEscalatedAt", System.currentTimeMillis());
+        additionalDetails.put("escalatedFrom", Collections.emptyList());
+        complaint.setAdditionalDetail(additionalDetails);
+
+        ServiceRequest serviceRequest = ServiceRequest.builder()
+                .requestInfo(requestInfo)
+                .service(complaint)
+                .workflow(escalationWorkflow)
+                .build();
+
+        try {
+            workflowService.updateWorkflowStatus(serviceRequest);
+        } catch (Exception e) {
+            log.error("Failed to transition workflow for complaint {} during role escalation", serviceRequestId, e);
+            span.setAttribute("escalation.skipReason", EscalationSkipReason.WORKFLOW_TRANSITION_FAILED.name());
+            return EscalationResult.skip(EscalationSkipReason.WORKFLOW_TRANSITION_FAILED,
+                    "workflow-v2 rejected ESCALATE: " + e.getMessage());
+        }
+
+        // Same clock reset as the named-assignee path (PRD P6: each level gets
+        // a fresh window) — must happen BEFORE the update-topic push.
+        if (complaint.getAuditDetails() != null) {
+            complaint.getAuditDetails().setLastModifiedTime(System.currentTimeMillis());
+            if (requestInfo.getUserInfo() != null && requestInfo.getUserInfo().getUuid() != null) {
+                complaint.getAuditDetails().setLastModifiedBy(requestInfo.getUserInfo().getUuid());
+            }
+        }
+
+        producer.push(tenantId, config.getUpdateTopic(), serviceRequest);
+
+        Map<String, Object> escalationEvent = new HashMap<>();
+        escalationEvent.put("serviceRequestId", serviceRequestId);
+        escalationEvent.put("tenantId", tenantId);
+        escalationEvent.put("escalationLevel", currentLevel + 1);
+        escalationEvent.put("previousAssignees", Collections.emptyList());
+        escalationEvent.put("newAssignee", targetUuid);
+        escalationEvent.put("newAssigneeName", targetSummary.get("name"));
+        escalationEvent.put("newAssigneeDesignation", targetSummary.get("designation"));
+        escalationEvent.put("elapsedMs", elapsedMs);
+        escalationEvent.put("slaMs", slaMs);
+        escalationEvent.put("roleEscalation", true);
+        escalationEvent.put("actingRole", resolution.getActingRole());
+        escalationEvent.put("resolutionStrategy", resolution.getStrategy());
+        escalationEvent.put("candidateCount", resolution.getCandidateCount());
+        escalationEvent.put("departmentFiltered", resolution.getDepartmentFiltered());
+        escalationEvent.put("timestamp", System.currentTimeMillis());
+        producer.push(tenantId, config.getEscalationKafkaTopic(), escalationEvent);
+
+        span.setAttribute("escalation.toAssignee", targetUuid);
+        span.setAttribute("escalation.toLevel", currentLevel + 1);
+
+        log.info("Role-escalated complaint {} from level {} to {} (acting role {} → {} via {})",
+                serviceRequestId, currentLevel, currentLevel + 1,
+                resolution.getActingRole(), targetUuid, resolution.getStrategy());
+
+        return EscalationResult.success(targetUuid, currentLevel + 1);
+    }
+
+    /**
+     * Dry-run twin of {@link #escalateToRoleTarget}: same max-depth check and
+     * span attributes, ZERO mutations — the resolution already happened, so no
+     * HRMS call is needed either. Mirrors {@link #previewEscalation}.
+     */
+    public EscalationResult previewRoleEscalation(Service complaint,
+                                                  String targetUuid,
+                                                  RequestInfo requestInfo,
+                                                  int maxDepth,
+                                                  long elapsedMs,
+                                                  long slaMs,
+                                                  RoleResolution resolution) {
+
+        String serviceRequestId = complaint.getServiceRequestId();
+        String tenantId = complaint.getTenantId();
+        int currentLevel = getEscalationLevel(complaint);
+
+        Span span = Span.current();
+        span.setAttribute("complaint.serviceRequestId", serviceRequestId == null ? "" : serviceRequestId);
+        span.setAttribute("complaint.tenantId", tenantId == null ? "" : tenantId);
+        span.setAttribute("escalation.fromLevel", currentLevel);
+        span.setAttribute("escalation.dryRun", true);
+        setRoleSpanAttributes(span, resolution);
+
+        if (currentLevel >= maxDepth) {
+            span.setAttribute("escalation.skipReason", EscalationSkipReason.MAX_DEPTH_REACHED.name());
+            return EscalationResult.skip(EscalationSkipReason.MAX_DEPTH_REACHED,
+                    "currentLevel=" + currentLevel + ", maxDepth=" + maxDepth);
+        }
+
+        return EscalationResult.builder()
+                .success(true)
+                .reason(EscalationSkipReason.SUCCESS)
+                .detail("would escalate to " + targetUuid + " (level " + currentLevel + "→" + (currentLevel + 1)
+                        + ", acting role " + resolution.getActingRole() + " via " + resolution.getStrategy()
+                        + "), elapsed=" + elapsedMs + "ms, sla=" + slaMs + "ms")
+                .newAssigneeUuid(targetUuid)
+                .newLevel(currentLevel + 1)
+                .build();
+    }
+
+    private static void setRoleSpanAttributes(Span span, RoleResolution resolution) {
+        span.setAttribute("escalation.roleEscalation", true);
+        if (resolution.getActingRole() != null) {
+            span.setAttribute("escalation.actingRole", resolution.getActingRole());
+        }
+        if (resolution.getStrategy() != null) {
+            span.setAttribute("escalation.resolutionStrategy", resolution.getStrategy());
+        }
+        if (resolution.getCandidateCount() != null) {
+            span.setAttribute("escalation.candidateCount", resolution.getCandidateCount());
+        }
+        if (resolution.getDepartmentFiltered() != null) {
+            span.setAttribute("escalation.departmentFiltered", resolution.getDepartmentFiltered());
+        }
+    }
+
+    /**
+     * Role-path audit comment, hedged to "no recorded assignee" (see the
+     * upstream ASSIGN bug note in the design doc). Same 3-tier
+     * name/designation fallback as {@link #buildEscalateComment}; the
+     * tenant-wide department fallback is noted when it fired.
+     */
+    private static String buildRoleEscalateComment(String targetUuid, Map<String, String> summary,
+                                                   RoleResolution resolution, long elapsedMs, long slaMs) {
+        long elapsedH = elapsedMs / (60L * 60L * 1000L);
+        long slaH = slaMs / (60L * 60L * 1000L);
+        String who;
+        if (summary.containsKey("name") && summary.containsKey("designation")) {
+            who = summary.get("name") + " (" + summary.get("designation") + ")";
+        } else if (summary.containsKey("name")) {
+            who = summary.get("name");
+        } else {
+            who = targetUuid;
+        }
+        String comment = String.format(
+                "Auto-escalated (no recorded assignee): assigned to %s — acting role %s (elapsed %dh > SLA %dh)",
+                who, resolution.getActingRole(), elapsedH, slaH);
+        if (Boolean.FALSE.equals(resolution.getDepartmentFiltered()) && resolution.getDepartment() != null) {
+            comment += ", department fallback";
+        }
+        return comment;
+    }
+
     private String findSupervisorUuid(List<String> currentAssignees, RequestInfo requestInfo, String tenantId) {
         for (String assigneeUuid : currentAssignees) {
             String supervisorUuid = hrmsUtil.getSupervisorUuid(assigneeUuid, requestInfo, tenantId);
