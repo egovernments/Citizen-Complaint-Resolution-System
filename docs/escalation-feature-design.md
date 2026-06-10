@@ -74,8 +74,10 @@ The fourth schema, **`CRS.WorkflowStateMapping`**, is not itself an SLA layer
 (`new | triage | forwarded | investigation | awaiting | resolved`). Without
 it, the scheduler cannot resolve which cell of the SLA layers above to read.
 
-The selected layer is surfaced on each OTEL span as `escalation.slaSource`, so an
-operator can tell from a single trace which configuration answered the lookup.
+The selected layer is surfaced on each OTEL span as `escalation.slaSource` and,
+since `feat/escalation-prd-alignment`, as a `slaSource` field on each
+`/escalation/_trigger` `details[]` entry — so an operator can tell from a single
+trace or trigger response which configuration answered the lookup.
 
 **What landed in PR #770**: three MDMS schemas — `CRS.CategorySLA`, `CRS.StateSLA`,
 `CRS.SLAAuditLog` — in
@@ -101,6 +103,11 @@ emitted on the `pgr-escalation-prebreach` Kafka topic); an enriched
 `ESCALATE` workflow comment carrying the PRD audit-trail fields (supervisor
 name, designation, elapsed-vs-SLA); and a configurable manual-`ESCALATE`
 comment requirement (`EscalationPolicy.escalateCommentRequired`).
+The same branch ships the operator UI for the new knobs: an **Escalation
+Settings** configurator page (policy form, complaint-status-mapping editor,
+configuration test scan — see [Escalation Settings page](#escalation-settings-page)),
+a **Levels** column on the SLA Matrix for per-row `slaHoursByLevel`, and a
+per-complaint `slaSource` field on the `/escalation/_trigger` response.
 **What is deferred**: the constrained category taxonomy editor (free-text categories
 remain until then), path-routing rules, entity directory, role-permission matrix,
 notification templates, territorial hierarchy, dashboard editor and submission-form
@@ -129,16 +136,16 @@ the numbering is this doc's, not the PRD's.
 
 | Requirement | Source | Status | Where |
 |---|---|---|---|
-| **P1** — SLAs configurable per complaint type × escalation level (L0/L1/L2 table, e.g. Pothole 5d/2d/1d), not hardcoded | PRD v3.0 | **Closed** (this branch) | `CategorySLA.slaHoursByLevel` per row + `CRS.EscalationPolicy.defaultSlaHoursByLevel` tenant-wide; precedence documented in [Scheduler resolution algorithm](#scheduler-resolution-algorithm). Note: the state-based matrix (BRD shape) and the level-based model (PRD shape) now **coexist**; per-row level config takes precedence. Product sign-off on the combined model is still pending — see [Open questions](#open-questions-and-deferred-work). |
-| **P2** — pre-breach warning at configurable threshold (default 75% of SLA), per workflow per tenant, sent to current owner AND supervisor, per-complaint (not bundled), suppressed if manually escalated, can be disabled per stage | PRD v3.0 | **Detection closed** (this branch); **delivery deferred (G5)** | Stateless threshold-crossing detection in the scheduler — OTEL attrs + Kafka event on `pgr-escalation-prebreach` (see [Pre-breach warnings](#pre-breach-warnings)). Delivery (WhatsApp/SMS/email to owner + supervisor) is roadmap **G5**; the PRD's "to owner AND supervisor" routing is a G5 consumer concern. Suppressed-if-manually-escalated is **approximated**, not strictly implemented: a manual ESCALATE resets `lastModified` via the normal update flow but does **not** bump `escalationLevel` (only the scheduler's auto path writes that), so the clock restarts and a fresh warning at the same level can fire later in the new window — by design. **Residual gap**: per-stage disable is not implemented — only the global `preBreachWarning.enabled`. |
+| **P1** — SLAs configurable per complaint type × escalation level (L0/L1/L2 table, e.g. Pothole 5d/2d/1d), not hardcoded | PRD v3.0 | **Closed** (this branch) | `CategorySLA.slaHoursByLevel` per row + `CRS.EscalationPolicy.defaultSlaHoursByLevel` tenant-wide; precedence documented in [Scheduler resolution algorithm](#scheduler-resolution-algorithm). Both editable in the configurator on this branch: SLA Matrix → **Levels** column (per row) and the [Escalation Settings page](#escalation-settings-page) (deployment-wide level SLAs). Note: the state-based matrix (BRD shape) and the level-based model (PRD shape) now **coexist**; per-row level config takes precedence. Product sign-off on the combined model is still pending — see [Open questions](#open-questions-and-deferred-work). |
+| **P2** — pre-breach warning at configurable threshold (default 75% of SLA), per workflow per tenant, sent to current owner AND supervisor, per-complaint (not bundled), suppressed if manually escalated, can be disabled per stage | PRD v3.0 | **Detection closed** (this branch); **delivery deferred (G5)** | Stateless threshold-crossing detection in the scheduler — OTEL attrs + Kafka event on `pgr-escalation-prebreach` (see [Pre-breach warnings](#pre-breach-warnings)). Enable flag + threshold are editable on the [Escalation Settings page](#escalation-settings-page) (this branch closed the previously config-API-only gap). Delivery (WhatsApp/SMS/email to owner + supervisor) is roadmap **G5**; the PRD's "to owner AND supervisor" routing is a G5 consumer concern. Suppressed-if-manually-escalated is **approximated**, not strictly implemented: a manual ESCALATE resets `lastModified` via the normal update flow but does **not** bump `escalationLevel` (only the scheduler's auto path writes that), so the clock restarts and a fresh warning at the same level can fire later in the new window — by design. **Residual gap**: per-stage disable is not implemented — only the global `preBreachWarning.enabled`. |
 | **P3** — auto-escalate on breach to the HRMS-mapped supervisor; single individual only | PRD v3.0 | **Shipped** (#770, state mapping in #775) | [`EscalationService#escalateComplaintWithReason`](../backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationService.java) — HRMS `reportingTo` lookup + workflow ESCALATE transition. |
 | **P4** — role-level escalation: complaint sitting in a role inbox (all GROs/LMEs) with no named assignee escalates to the role's direct supervisor when all members are same-department; multi-department case explicitly TBD in the PRD | PRD v3.0 | **Open product decision** — not implemented | The `NO_ASSIGNEES` skip currently covers this case, which makes that skip partially a **requirements gap** (the PRD's primary journey for role-held complaints), not purely the upstream ASSIGN bug. See [Open questions](#open-questions-and-deferred-work). |
 | **P5** — on escalation: removed from subordinate inbox (all role inboxes if role-assigned), appears in supervisor inbox, supervisor becomes owner, subordinate keeps search access | PRD v3.0 | **Not addressed** | Inbox semantics live in `egov-workflow-v2` / the inbox service — upstream + open decision. |
 | **P6** — state SLA clock resets on escalation; business SLA clock continues uninterrupted | PRD v3.0 | **Partial** | State clock reset works — auto-escalation refreshes `auditDetails.lastModifiedTime` on every escalation, so each level genuinely gets a fresh SLA window; a manual ESCALATE resets the clock too (via the normal update flow) but does not bump `escalationLevel` — only the scheduler's auto path writes the level. The business SLA clock is **not modeled** — open decision. |
 | **P7** — escalation visible in audit trail (recipient name, designation, timestamp, comments); citizen notified + escalation entry in complaint timeline visible to citizen and employee | PRD v3.0 | **Closed** (this branch) for audit-trail fields; **notification deferred (G5)** | Enriched ESCALATE workflow comment carries supervisor name + designation + elapsed/SLA; timeline = the existing PGR workflow timeline, visible to citizen and employee — see [Escalation timeline and audit trail](#escalation-timeline-and-audit-trail). The citizen *push notification* on escalation is roadmap **G5**. |
-| **P8** — manual Escalate action with mandatory comment, configurable | PRD v3.0 | **Shipped** (#770); configurability **closed** (this branch) | Manual ESCALATE + mandatory-comment validator in #770; `CRS.EscalationPolicy.escalateCommentRequired` makes the rule configurable (default required). |
+| **P8** — manual Escalate action with mandatory comment, configurable | PRD v3.0 | **Shipped** (#770); configurability **closed** (this branch) | Manual ESCALATE + mandatory-comment validator in #770; `CRS.EscalationPolicy.escalateCommentRequired` makes the rule configurable (default required), editable via the [Escalation Settings page](#escalation-settings-page) checkbox (this branch). |
 | **P9** — supervisor permitted actions configurable per level (Reassign / Reject / Send back / Send back to citizen / Forward / Comment / Escalate) | PRD v3.0 | **Deferred** | Roadmap **G4** (role-permission matrix) + the workflow designer. |
-| **P10** — escalation depth ceiling configurable (max 5 for now); top of chain: complaint stays with last reachable person | PRD v3.0 | **Closed** (this branch); top-of-chain already shipped | `CRS.EscalationPolicy.maxDepth` (falls back to v0 `EscalationConfig.maxDepth`, then the static property). Top-of-chain behaviour shipped in #770: `NO_SUPERVISOR_IN_HRMS` leaves the complaint with the last reachable person. |
+| **P10** — escalation depth ceiling configurable (max 5 for now); top of chain: complaint stays with last reachable person | PRD v3.0 | **Closed** (this branch); top-of-chain already shipped | `CRS.EscalationPolicy.maxDepth` (falls back to v0 `EscalationConfig.maxDepth`, then the static property), editable on the [Escalation Settings page](#escalation-settings-page) (this branch). Top-of-chain behaviour shipped in #770: `NO_SUPERVISOR_IN_HRMS` leaves the complaint with the last reachable person. |
 | **P11** — visibility: N+1 sees direct reports' complaints from filing; N+2 and above must search | PRD v3.0 | **Not addressed** | Upstream inbox concern — open decision. |
 | **P12** — notifications multi-channel configurable per role (supervisor email, GRO SMS, LME WhatsApp) | PRD v3.0 | **Deferred** | Roadmap **G5** (notification templates). |
 | **BRD lifecycle + catalog** — case lifecycle NEW / IN TRIAGE (24h) / FORWARDED (48h) / UNDER INVESTIGATION / AWAITING INFORMATION / RESOLVED / REJECTED (no SLA); Appendix A catalog rows (Category, SubcategoryL1, SubcategoryL2, single SLA(h) column, values 24–360 incl. ranges like 24-120); paths IGE/IGSAE; unidirectional flow; SLA matrix by case type controls all deadlines | BRD v4.0 §5.2 + Appendix A | **Shipped** (#770/#775) | The six-state matrix (`CRS.CategorySLA` + `CRS.StateSLA`) + `CRS.WorkflowStateMapping`. **Note**: Appendix A carries a *single* SLA(h) column per catalog row while the matrix has six state cells — the column-to-cell mapping is ambiguous. Recommendation: seed the catalog SLA into the UNDER INVESTIGATION column and cover the rest via `CRS.StateSLA` defaults; flagged for the PR #796 runbook. |
@@ -778,6 +785,14 @@ gains a `preBreachWarnings` int, and the complaint's
 
 Emission is **suppressed entirely in `dryRun` mode** (see [Trace-back
 tool](#trace-back-tool)) — a diagnostic call must not flood the topic.
+Suppression applies to *emission only*: a dry-run scan still counts
+complaints currently **inside the warning window**
+(`elapsed ∈ [thresholdMs, slaMs)`, no crossing-window condition) in the
+response's `preBreachWarnings`, so the Escalation Settings test scan can
+show an "in warning window" count without having to land on the exact
+crossing tick. The two meanings of the field: **live scan** = warnings
+actually emitted this tick (crossing detection); **dry run** =
+complaints currently inside the warning window.
 
 **Delivery is deferred to roadmap G5.** The topic has no consumer yet;
 routing to the current owner AND the supervisor over the per-role
@@ -806,9 +821,15 @@ in the configurator is a dry-run diagnostic drawer. The operator pastes a
    without mutating anything.
 2. `POST /pgr-services/v2/request/_search` with the same SR id — pulls
    `applicationStatus`, `serviceCode`, the additionalDetail tuple.
-3. Resolves the SLA from the in-memory matrix (CategorySLA → StateSLA) using
-   the **same precedence as the backend scheduler** so the preview agrees with
-   the verdict for unbreached complaints.
+3. Resolves a client-side SLA preview via the shared resolver
+   ([`resolveSlaPreview.ts`](../configurator/src/resources/crs/sla-matrix/resolveSlaPreview.ts)),
+   which mirrors the backend's five-step precedence **exactly** (first
+   matching active row only, level cell → state cell → policy level
+   default → state default → legacy; range cells collapse to MAX;
+   null/zero/negative/out-of-bounds level entries fall through). The
+   preview supplies per-source value annotations; the server's
+   `slaSource` field on the verdict is the truth signal for which
+   source actually won.
 
 The drawer renders:
 
@@ -816,7 +837,7 @@ The drawer renders:
 |---|---|---|
 | Scheduler verdict | `/escalation/_trigger` `details[0]` | `action` (incl. `WOULD_ESCALATE` on breached complaints), `reason` (e.g. `SLA_NOT_BREACHED`), `detail` (e.g. `elapsed=512908ms, sla=3600000ms`, or `would escalate to <uuid> (level N→N+1), ...`) |
 | Complaint | `/v2/request/_search` | SR id, status, serviceCode, path, category, subcategoryL1 |
-| Resolved SLA | local computation from `rows` + `stateDefaults` | source (CategorySLA / StateSLA), value, raw cell |
+| Resolution path | server `slaSource` on `details[0]` + [`resolveSlaPreview.ts`](../configurator/src/resources/crs/sla-matrix/resolveSlaPreview.ts) | the six-row path (complaint-status-mapping gate + five SLA sources); the winner row highlighted from the **server's** `slaSource`, client-side value annotations labelled "estimated" wherever the client disagrees with the server winner |
 
 > **Warning — `/escalation/_trigger` mutates unless told otherwise.** The
 > endpoint executes **real escalations** (workflow ESCALATE transition,
@@ -853,7 +874,9 @@ full annotations.
 
 **Who writes them.** **Client-side, from the configurator only** — there
 is no server-side audit hook on the MDMS write path. Every write to
-`CRS.CategorySLA` or `CRS.StateSLA` from the SLA Matrix page is followed
+`CRS.CategorySLA` or `CRS.StateSLA` from the SLA Matrix page — and, since
+`feat/escalation-prd-alignment`, every write to `CRS.EscalationPolicy` or
+`CRS.WorkflowStateMapping` from the Escalation Settings page — is followed
 by a call to
 [`slaService#writeAuditEntry`](../configurator/src/resources/crs/sla-matrix/slaService.ts).
 Operators who write to MDMS directly (curl, python, dataloader) bypass
@@ -874,6 +897,8 @@ not rolled back.
 | State-defaults edit | after the StateSLA singleton save returns | `create` or `update` | one entry | `saveStateSla` → `writeAuditEntry` |
 | Soft-delete row | after the deactivation toggle returns | `delete` | one entry, reason `soft-delete via deactivation` | `deactivateCategoryRow` → `writeAuditEntry` |
 | Bulk import | after the import-fan-out finishes | `bulk-import` | **one summary entry per import** plus one per-row entry per successfully-imported row, reason `<imported> rows imported, <failed> failed` | bulk-import handler → `writeAuditEntry` (summary) + `saveCategoryRow` per row |
+| Escalation Settings — policy save | after the `CRS.EscalationPolicy` singleton save returns | `create` or `update` | one entry, recordIdentifier `policy` | `saveEscalationPolicy` → `writeAuditEntry` |
+| Escalation Settings — status-mapping save | after the `CRS.WorkflowStateMapping` singleton save returns | `create` or `update` | one entry, recordIdentifier `state-mapping` | `saveWorkflowStateMapping` → `writeAuditEntry` |
 
 This is escalation-specific scope today; a generic `CRS.ConfigAuditLog`
 supersedes it in roadmap phase **G4** (see
@@ -930,11 +955,16 @@ and there is no per-row identifier worth surfacing in the URL.
 
 ### Information architecture
 
-The sidebar gets a new top-level group called **ESCALATION** with two
+The sidebar gets a new top-level group called **ESCALATION** with three
 siblings under it:
 
-- **SLA Matrix** (`/manage/crs-sla-matrix`) — the new editor described
+- **SLA Matrix** (`/manage/crs-sla-matrix`) — the matrix editor described
   in the rest of this section.
+- **Escalation Settings** (`/manage/escalation-settings`) — the
+  deployment-wide policy + complaint-status-mapping + test-scan page
+  added on `feat/escalation-prd-alignment`, placed between SLA Matrix
+  and Legacy SLA (nav key `app.nav.escalation_settings`). See
+  [Escalation Settings page](#escalation-settings-page).
 - **Legacy SLA (v0)** (`/manage/escalation-config`) — the v0
   `EscalationConfig` page, kept visible as a transition aid. It renders
   a deprecation banner pointing at SLA Matrix and is removed in the
@@ -968,12 +998,24 @@ The page is structured top-to-bottom as:
 - **Defaults (StateSLA) strip** — a single row showing the per-state
   default SLA hours. When `CRS.StateSLA` is empty, this strip renders
   a "Not configured — set defaults" prompt instead of cell values
-  (clicking opens the same defaults editor inline).
+  (clicking opens the same defaults editor inline). When the policy
+  singleton has deployment-wide level SLAs set, the strip renders an
+  inline notice — "Deployment-wide level SLAs are set and take priority
+  at levels L0–Ln for categories without their own levels — edit on the
+  Escalation Settings page." (with a link) — so the cross-page
+  precedence is visible exactly where the state defaults are edited.
 - **Matrix grid** — sticky-left columns (`Path`, `Category`,
-  `Subcategory L1`, `Active`) followed by six state columns:
-  `NEW`, `TRIAGE`, `FORWARDED`, `INVESTIGATION`, `AWAITING`,
-  `RESOLVED`. Cells render either a number, a range, or a muted dash
-  for "use default" (see [Cell semantics](#cell-semantics)).
+  `Subcategory L1`, `Active`) followed by a regular (non-sticky)
+  **Levels** column and then six state columns: `NEW`, `TRIAGE`,
+  `FORWARDED`, `INVESTIGATION`, `AWAITING`, `RESOLVED`. The Levels
+  cell shows a compact per-escalation-level badge
+  (`L0 120 · L1 48 · L2 24`, holes rendered as `—`, e.g.
+  `L0 120 · L1 — · L2 24`) or, when unset/all-null, a muted `—` with a
+  "+ levels" hover affordance; the column header carries the tooltip
+  "hours per escalation level" and clicking a cell opens the shared
+  level editor in a dialog. State cells render either a number, a
+  range, or a muted dash for "use default" (see
+  [Cell semantics](#cell-semantics)).
 - **Empty state** — when no rows exist, the grid area is replaced by
   a full-bleed centered CTA (described below).
 
@@ -1055,6 +1097,7 @@ distinguishes "explicitly set" from "falls through to default":
 | `[min, max]` range | `24–120h` solid | Scheduler uses MAX for math; UI shows the range so operators see the spread | Click → number + range checkbox + min/max inputs |
 | `null` | `—` muted, faint "default: 48h" hint on hover | Falls through to `CRS.StateSLA[state]` | Click → number input (creating a value here promotes the cell to "explicitly set") |
 | (no row at all) | n/a | Falls through to `CRS.StateSLA[state]`; if that is also empty, falls through to v0 hardcoded fallback | Add the row via the toolbar's **Add row** |
+| `slaHoursByLevel` badge (Levels column) | compact `L0 120 · L1 — · L2 24` badge (holes as `—`); muted `—` with a "+ levels" hover affordance when unset/all-null | Levels with a number set here take priority over this row's state cells at that escalation level; blank (null) levels use the state cell — the badge's tooltip says exactly that | Click → Dialog with the shared level editor (holes allowed); each non-null entry validated `0 < n ≤ 8760` on Save changes, and the pending/revert flow deep-clones the array like any other cell edit |
 | CSV encoding | n/a | empty=`null`, bare number=scalar (`120`), `"min-max"` single dash no spaces=range (`24-120`). Inclusive bounds `0 < n < 8760` for scalars and `0 < lo < hi < 8760` for ranges. | See [`csvParser#parseCell`](../configurator/src/resources/crs/sla-matrix/csvParser.ts) |
 
 The "muted dash + default hint" treatment is deliberate: operators
@@ -1063,10 +1106,11 @@ policy-overridden versus inherited from the per-state default.
 
 > **Note — per-level cells are not in the CSV.** The optional
 > `slaHoursByLevel` array on a CategorySLA row is **not** carried in the
-> CSV import/export format — the columns above are state-indexed only.
-> Level SLAs are out of scope for the importer; a matrix-UI surface for
-> editing them is future work. Until then, operators write
-> `slaHoursByLevel` through the MDMS API directly.
+> CSV import/export format — the columns above are state-indexed only,
+> and the Export CSV button's tooltip says so ("Level SLAs are not
+> included in the CSV."). Level SLAs are edited through the matrix's
+> **Levels** column (dialog editor, since `feat/escalation-prd-alignment`);
+> the MDMS API remains available for scripted writes.
 
 ### Empty-state UX
 
@@ -1126,13 +1170,39 @@ Operator flow:
 3. Drawer calls `POST /escalation/_trigger` **with `dryRun: true`** (see
    [`EscalationController`](../backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/EscalationController.java))
    and renders the per-complaint outcome: `serviceRequestId`, `action`,
-   `reason`, `detail`. Note: `slaSource`, `fromAssignee` and
-   `toAssignee` are **not** response fields — they are OTEL span
-   attributes, visible on the trigger's trace in Tempo. A breached
-   complaint comes back as `WOULD_ESCALATE`, rendered with the same
-   success variant as `ESCALATED` and labelled "Would escalate"; in
-   dry-run those are counted in the response's `wouldEscalate` field
-   while `escalated` stays `0`.
+   `reason`, `detail`, and `slaSource`. Note: since
+   `feat/escalation-prd-alignment`, `slaSource` **is a response field**
+   on every `details[]` entry (populated from the resolution that ran;
+   `null` for `MAX_DEPTH_REACHED` / `NO_LAST_MODIFIED_TIME`, which skip
+   before resolution) — an earlier revision of this doc said it was
+   OTEL-only, which is no longer true. `fromAssignee` and `toAssignee`
+   **remain** OTEL-only span attributes, visible on the trigger's trace
+   in Tempo. A breached complaint comes back as `WOULD_ESCALATE`,
+   rendered with the same success variant as `ESCALATED` and labelled
+   "Would escalate"; in dry-run those are counted in the response's
+   `wouldEscalate` field while `escalated` stays `0`.
+
+**Resolution path.** Since `feat/escalation-prd-alignment` the dialog
+renders the full six-row resolution path: the complaint-status-mapping
+gate plus the five SLA sources, in precedence order. The **winner row is
+highlighted from the server's `slaSource`** field whenever the trigger
+call succeeded — server truth, never a client guess. The shared
+client-side resolver
+([`resolveSlaPreview.ts`](../configurator/src/resources/crs/sla-matrix/resolveSlaPreview.ts))
+supplies the per-source value annotations, and any row where the client
+disagrees with the server winner is labelled "estimated". The known
+divergence case is Strategy-B tenants: the client mirrors tuple
+extraction from `additionalDetail` only and cannot see the ServiceDefs
+mapping, so when `additionalDetail` carries no tuple but the server says
+a category source won, the dialog renders a note explaining the
+discrepancy. On open the dialog loads the tenant status mapping, policy
+and state defaults via `slaService`; when no tenant mapping exists it
+shows a muted note — "using built-in status mapping — none configured" —
+and falls back to the shared canonical table in
+[`standardStateMappings.ts`](../configurator/src/resources/crs/sla-matrix/standardStateMappings.ts)
+(the dialog's former local `STATE_TO_KEY` copy is deleted; the Settings
+page's "Add standard complaint statuses" merge uses the same table).
+The existing verdict and complaint panes are unchanged.
 
 The endpoint **does mutate state when called without `dryRun`** — it runs
 the full scheduler code path, real escalations included. The drawer
@@ -1184,6 +1254,169 @@ spaces) is a range. `Export CSV` round-trips the same format (minus
 `subcategoryL2`) via
 [`csvParser#recordsToCsv`](../configurator/src/resources/crs/sla-matrix/csvParser.ts).
 
+### Escalation Settings page
+
+Added on `feat/escalation-prd-alignment`: a single-page editor at
+`/manage/escalation-settings` for everything escalation-wide that is not
+a matrix cell — the `CRS.EscalationPolicy` singleton, the
+`CRS.WorkflowStateMapping` singleton, and a verification surface over
+the dry-run trigger. Like the matrix, it is built only from the existing
+UI primitives (Dialog, native checkbox, the local `useToast` hook — no
+new dependencies).
+
+**Tenant scope.** All reads and saves — and the test scan — use the
+**state-level tenant** (`stateTenant = tenant.split('.')[0]`), because
+the scheduler and validator read the singletons at state level; a
+city-tenant save would be a silent split-brain. The page header says so
+in operator terms: "These settings apply to the whole deployment
+(tenant: ke)."
+
+**Setup banner.** When the status mapping is empty, a page-level warning
+renders above the cards — "Complaint statuses aren't mapped yet —
+per-state SLAs (the SLA Matrix) have no effect until you map them
+below." — anchored to Card 3.
+
+#### Card 1 — "How the SLA for a complaint is chosen"
+
+A read-only rendering of the resolution precedence, opened by the
+literal rule line: **"Checked top to bottom — the first source with a
+value wins."** Six rows follow, each with a live chip computed from the
+loaded data:
+
+0. **Gate row** (distinct style) — "Complaint-status mapping", chip
+   "N statuses mapped" or "not set — sources marked ⚠ below are
+   inactive".
+1. "Per-category level SLAs (SLA Matrix → Levels)" — chip "N rows",
+   counting active rows with ≥1 entry > 0; links to the matrix.
+2. "Per-category state SLAs (SLA Matrix cells)" — chip "N rows",
+   counting active rows with ≥1 non-null state cell; when the mapping is
+   empty the chip reads "⚠ blocked — statuses not mapped".
+3. "Deployment-wide level SLAs (Card below)" — "set (L0–Ln)" / "not set".
+4. "Deployment-wide state SLAs (SLA Matrix → Defaults row)" — "set" /
+   "not configured"; same ⚠ blocked treatment when the mapping is empty.
+5. "Previous SLA settings (Legacy page)" — "in use as final fallback";
+   the chip shows the legacy level values when present (read from
+   `RAINMAKER-PGR.EscalationConfig` via the existing escalation-config
+   resource). Because the legacy layer always answers, it is **never
+   rendered as a miss**.
+
+*Gate-row rationale.* The status mapping is not an SLA source — but with
+it empty, the two state-indexed sources are dead weight. Rendering the
+mapping as row 0 with distinct styling makes that dependency visible
+exactly where the operator reads the precedence, instead of leaving "my
+matrix cells do nothing" to be discovered in production.
+
+#### Card 2 — "Escalation behaviour" (the policy form)
+
+- **Max escalation depth** (1–10). When unset, the helper reads "Not
+  set — using the previous setting (N levels)", with N resolved from the
+  legacy config's maxDepth, else 3.
+- **Deployment-wide level SLAs** — the shared level editor inline, in
+  policy mode (no blank levels; the MDMS schema types the entries as
+  numbers, so holes are rejected at save). Helper: "Used when a
+  complaint's category has no level SLAs of its own. Note: a category's
+  state cells (SLA Matrix) also take priority over these for that
+  category."
+- **Pre-breach warning** — checkbox plus "Warn at __% of the SLA time"
+  (1–99; placeholder 75, never eagerly written into the record). The
+  helper states: "Warnings are recorded and visible in the test scan
+  below. Notification delivery (SMS/WhatsApp/email) is not yet
+  available."
+- **Manual escalation** — checkbox "Require a comment when staff
+  escalate manually", default checked (the backend default).
+- **Save / Revert**, with read-after-write verification and a
+  `CRS.SLAAuditLog` entry (recordIdentifier `policy`).
+
+#### Card 3 — "Complaint-status mapping"
+
+The `CRS.WorkflowStateMapping` editor. Table rows: a status-name text
+input → an SLA-column select over the six keys, shown with operator
+labels (New / Triage / Forwarded / Investigation / Awaiting info /
+Resolved), plus a remove button. Status names get inline unique-name
+validation — duplicates would otherwise collapse silently in the object
+map. "Add a status" appends a row; "Add standard complaint statuses"
+does a **non-destructive merge** from the canonical built-in table in
+[`standardStateMappings.ts`](../configurator/src/resources/crs/sla-matrix/standardStateMappings.ts)
+(existing entries are never overwritten). A help line notes: "The
+escalation scan currently watches statuses PENDINGATLME and
+PENDINGFORASSIGNMENT; other mappings are used by the complaint checker."
+The empty state explains the consequence in operator terms — "Without
+this mapping, per-state SLAs (matrix cells and the defaults row) are
+ignored. Level SLAs still apply; complaints with neither use the
+previous settings." — with `STATE_MAPPING_MISSING` as a muted code
+badge. Save / Revert + read-after-write + audit entry (recordIdentifier
+`state-mapping`).
+
+#### Card 4 — "Check your configuration" (the verify card)
+
+One button — **"Run a test scan (changes nothing)"** — POSTs
+`/pgr-services/escalation/_trigger` with `{dryRun: true, tenantId:
+stateTenant}` and renders **only the aggregate fields** (`scanned`,
+`wouldEscalate`, `preBreachWarnings`, `skipped`, `skipBreakdown`);
+`details[]` is deliberately ignored, since it can carry thousands of
+entries. Five tiles:
+
+- "Open complaints scanned" (`scanned`)
+- "Would escalate now" (`wouldEscalate`)
+- "In warning window" (`preBreachWarnings`)
+- "Not due yet" (the `SLA_NOT_BREACHED` count)
+- "Needs attention" (all other skip reasons summed)
+
+Under "Needs attention", per-reason rows render the reason as a muted
+code badge plus its count and a plain-language explanation from a static
+dictionary; `UNMAPPED_CATEGORY` and `STATE_MAPPING_MISSING` are labelled
+"advisory — complaint still processed".
+
+**Tile overlap caveat.** The tile counts overlap — a complaint can be
+both "not due yet" and "in warning window" — so the tiles do not sum to
+`scanned`; the card's caption says so.
+
+**Dry-run vs live `preBreachWarnings`.** On a live scan the field counts
+warnings actually emitted this tick (stateless crossing detection); on a
+dry run it counts complaints currently **inside** the warning window
+(elapsed between threshold and SLA, no crossing condition). The dry-run
+semantics are what make the "In warning window" tile meaningful in a
+test scan that never emits anything (see
+[Pre-breach warnings](#pre-breach-warnings)).
+
+Error states are distinguished: a 403/UNAUTHORIZED response renders
+"Your account needs the SUPERUSER role to run test scans."; a network
+error or 404 renders "The scan service is unavailable." A "Check a
+single complaint…" button opens the upgraded trace-back dialog
+(imported), and the card shows the last-run timestamp.
+
+#### Recent changes
+
+A collapsible audit list at the bottom of the page, fed by the same
+`CRS.SLAAuditLog` entries as the matrix drawer (via `loadAuditEntries`)
+but filtered to `schemaCode ∈ (CRS.EscalationPolicy,
+CRS.WorkflowStateMapping)`. The matrix page's audit dialog description
+was updated to mention that settings changes appear there too.
+
+#### Copy principles (binding for all operator-facing escalation copy)
+
+- Operator copy **never** uses implementation jargon: no "singleton", no
+  schema codes (`CRS.*`), no "fall through", no "v0", and no "dry-run" —
+  the operator phrase is **"test scan (changes nothing)"**.
+- Raw enum names (`STATE_MAPPING_MISSING`, `UNMAPPED_CATEGORY`, …)
+  appear only as **muted code badges** next to a plain-language
+  explanation — never inline in prose.
+- The legacy layer is called "Previous SLA settings" and, because it
+  always answers, is rendered as "in use as final fallback" — never as a
+  miss or failure.
+- These rules bind the matrix's Levels-column copy and the trace-back
+  dialog equally, not just this page.
+
+#### Read-after-write verification
+
+Every singleton save re-fetches after ~1.5s and shows "Saved ✓ verified"
+— or the warning "Saved but not yet visible — the data pipeline may be
+delayed; reload in a few seconds." when the re-read does not yet reflect
+the write. The persister-async 202 trap (see
+[Operational gotchas](#persister-is-async-http-202)) has produced silent
+config-write failures before; surfacing the verification result is a
+hard requirement here.
+
 ### Sidebar grouping rationale
 
 Escalation lives in its own ESCALATION sidebar group rather than under
@@ -1199,8 +1432,9 @@ Escalation lives in its own ESCALATION sidebar group rather than under
   related sibling already waiting in the sidebar.
 
 When the v0 page is removed, the ESCALATION group still makes sense as
-the home for trace-back tooling, future per-tenant escalation policies
-(e.g. holiday calendars), and any cross-category SLA reporting.
+the home for the Escalation Settings policy surface, trace-back tooling,
+future policy extensions (e.g. holiday calendars), and any
+cross-category SLA reporting.
 
 ### Accessibility and responsiveness
 
@@ -1527,6 +1761,12 @@ validator is opaque and tightly coupled to a live Postgres. What we do have:
     npx playwright test --config e2e/playwright.config.ts e2e/crs-sla-matrix.spec.ts
   ```
 
+- **Escalation Settings e2e** (`feat/escalation-prd-alignment`):
+  [`configurator/e2e/escalation-settings.spec.ts`](../configurator/e2e/escalation-settings.spec.ts)
+  — read-only against a live deployment: the page renders its setup
+  banner or cards, Card 1 shows the six cascade rows, the Card 3
+  status-mapping table renders, and the test-scan button is visible.
+  The matrix spec is extended with a Levels-column-header assertion.
 - **Unit (vitest).**
   [`configurator/src/resources/crs/sla-matrix/csvParser.test.ts`](../configurator/src/resources/crs/sla-matrix/csvParser.test.ts)
   covers the CSV parser in isolation (picked up by the standard
@@ -1535,6 +1775,15 @@ validator is opaque and tightly coupled to a live Postgres. What we do have:
   header-canonicalisation fix), an export → import round-trip via
   `recordsToCsv` → `parseCsv`, range cells (`"24-120"` → `[24,120]`),
   empty cell → `null`, and a missing required column still erroring.
+  `feat/escalation-prd-alignment` adds
+  [`resolveSlaPreview.test.ts`](../configurator/src/resources/crs/sla-matrix/resolveSlaPreview.test.ts),
+  mirroring the backend's resolution test vectors against the shared
+  client resolver (row-level beats row-state; policy level beats state
+  default; null/0/out-of-bounds level entries fall through; range
+  collapse uses MAX including reversed pairs like `[120,24]`;
+  first-matching-row break; no mapping → state sources skipped, level
+  sources still hit), plus value-logic tests for the shared level
+  editor's pure helpers and a shape test for `standardStateMappings`.
 - **Why this layer.** The configurator is the only operator-facing entry
   point; if the page can't render or the deprecation banner doesn't show,
   no amount of correct backend behaviour helps.
@@ -1606,20 +1855,28 @@ curl -X POST \
 #   "escalated": <int>,        # always 0 on a dry run
 #   "wouldEscalate": <int>,    # dry-run counter: breached complaints that WOULD escalate
 #   "skipped":   <int>,
-#   "preBreachWarnings": <int>,
+#   "preBreachWarnings": <int>, # live scan: warnings emitted this tick (crossing
+#                               # detection); dry run: complaints currently inside
+#                               # the warning window
 #   "dryRun":    true|false,
 #   "skipBreakdown": { "NO_ASSIGNEES": ..., "SLA_NOT_BREACHED": ... },
 #   "details": [
 #     { "serviceRequestId": "...", "action": "SKIPPED|ESCALATED|WOULD_ESCALATE",
-#       "reason": "...", "detail": "elapsed=... sla=..." },
-#     ...
+#       "reason": "...", "detail": "elapsed=... sla=...",
+#       "slaSource": "CRS.CategorySLA.level|CRS.CategorySLA|CRS.EscalationPolicy.level|CRS.StateSLA|v0.EscalationConfig" },
+#     ...                       # slaSource is null for MAX_DEPTH_REACHED /
+#                               # NO_LAST_MODIFIED_TIME (skip before resolution runs)
 #   ]
 # }
 ```
 
-To confirm which SLA layer fired, pull the corresponding trace from Tempo
-and look for the `escalation.slaSource` attribute on the
-`POST /pgr-services/escalation/_trigger` span. Values:
+To confirm which SLA layer fired, read the `slaSource` field on the
+corresponding `details[]` entry — since `feat/escalation-prd-alignment`
+it is a response field, no Tempo round-trip required (`null` only for
+`MAX_DEPTH_REACHED` / `NO_LAST_MODIFIED_TIME`, which skip before
+resolution runs). The same value also lands on the
+`POST /pgr-services/escalation/_trigger` span as the
+`escalation.slaSource` OTEL attribute. Values:
 `CRS.CategorySLA.level` | `CRS.CategorySLA` | `CRS.EscalationPolicy.level` |
 `CRS.StateSLA` | `v0.EscalationConfig`.
 
@@ -1632,7 +1889,7 @@ For the Bomet operator runbook (Tempo curl + log greps), see
 
 | # | Item | Tracking |
 |---|---|---|
-| 1 | No configurator UI yet for editing the `CRS.WorkflowStateMapping` singleton — operators write the MDMS row directly via curl / python today | Roadmap phase **G1** may absorb this if the Taxonomy editor surface fits, otherwise a small standalone editor lands later |
+| 1 | ~~No configurator UI yet for editing the `CRS.WorkflowStateMapping` singleton~~ — **Closed (this branch)**: the [Escalation Settings page](#escalation-settings-page) (Card 3, "Complaint-status mapping") edits the singleton, with unique-name validation and a non-destructive standard-set merge; curl / python remain alternatives for scripted seeding | Closed by `feat/escalation-prd-alignment` ([PR #815](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/815)) — no longer routed via G1 |
 | 2 | Upstream DIGIT workflow ASSIGN-assignee persistence bug — blocks end-to-end escalation testing on Bomet | upstream `egov-workflow-v2`, to be raised against the workflow-v2 repo separately |
 | 3 | Category Taxonomy editor (constrained picker) — replaces the free-text category/subcategoryL1 inputs in the SLA Matrix | Roadmap phase **G1** ([`docs/crs-configurator-roadmap.md`](./crs-configurator-roadmap.md)) |
 | 4 | Path Routing Rules — `(category, subcategoryL1) → path` editable rules | Roadmap phase **G2** |
@@ -1660,7 +1917,7 @@ For the Bomet operator runbook (Tempo curl + log greps), see
 | **CategorySLA** | A row in `CRS.CategorySLA` keyed on `(path, category, subcategoryL1)` with a per-state SLA map. |
 | **StateSLA** | A singleton record in `CRS.StateSLA` holding per-state default SLA hours. Used when the matching CategorySLA cell is null. |
 | **v0 EscalationConfig** | The pre-existing `RAINMAKER-PGR.EscalationConfig` schema with per-level SLAs + per-`serviceCode` overrides. Kept as a fallback for not-yet-migrated tenants. |
-| **slaSource** | OTEL span attribute set by the scheduler indicating which layer answered the SLA lookup. One of `CRS.CategorySLA.level`, `CRS.CategorySLA`, `CRS.EscalationPolicy.level`, `CRS.StateSLA`, `v0.EscalationConfig`. |
+| **slaSource** | Which layer answered the SLA lookup. Since `feat/escalation-prd-alignment` it is both a response field on every `/escalation/_trigger` `details[]` entry (`null` for outcomes that skip before resolution — `MAX_DEPTH_REACHED`, `NO_LAST_MODIFIED_TIME`) and the OTEL span attribute `escalation.slaSource`. One of `CRS.CategorySLA.level`, `CRS.CategorySLA`, `CRS.EscalationPolicy.level`, `CRS.StateSLA`, `v0.EscalationConfig`. |
 | **skipReason** | One of the nine values in [`EscalationSkipReason`](../backend/pgr-services/src/main/java/org/egov/pgr/util/EscalationSkipReason.java): `MAX_DEPTH_REACHED`, `NO_LAST_MODIFIED_TIME`, `SLA_NOT_BREACHED`, `NO_ASSIGNEES`, `NO_SUPERVISOR_IN_HRMS`, `WORKFLOW_TRANSITION_FAILED`, `UNMAPPED_CATEGORY`, `STATE_MAPPING_MISSING`, `SUCCESS`. `STATE_MAPPING_MISSING` is emitted when `CRS.WorkflowStateMapping` has no entry for the complaint's current workflow state; resolution falls back to v0 EscalationConfig. |
 | **BRD** | Business Requirements Document. The Mozambique PRD/CRS v4.0 PDF is referenced throughout this codebase only as an industry source for the *shape* of generic CRS configuration. No BRD-specific data is seeded by PR #770. |
 | **IGE / IGSAE** | BRD-specific path names — IGE (Inspecção-Geral do Estado, public-service complaints) and IGSAE (Inspecção-Geral das Actividades Económicas, economic-agent complaints). Used here only as **examples** of what a tenant might populate as their `path` value; the schema accepts any string. |
@@ -1695,13 +1952,18 @@ For the Bomet operator runbook (Tempo curl + log greps), see
 | SLA-source constants | [`PGRConstants#SLA_SOURCE_CATEGORY/STATE/V0`](../backend/pgr-services/src/main/java/org/egov/pgr/util/PGRConstants.java) |
 | MDMS schemas (incl. `CRS.EscalationPolicy`) | [`utilities/default-data-handler/src/main/resources/schema/CRS.json`](../utilities/default-data-handler/src/main/resources/schema/CRS.json) |
 | Configurator page | [`configurator/src/resources/crs/sla-matrix/CategorySlaMatrixPage.tsx`](../configurator/src/resources/crs/sla-matrix/CategorySlaMatrixPage.tsx) |
+| Escalation Settings page | [`configurator/src/resources/crs/sla-matrix/EscalationSettingsPage.tsx`](../configurator/src/resources/crs/sla-matrix/EscalationSettingsPage.tsx) |
+| Shared client SLA resolver | [`configurator/src/resources/crs/sla-matrix/resolveSlaPreview.ts`](../configurator/src/resources/crs/sla-matrix/resolveSlaPreview.ts) |
+| Built-in status-mapping table | [`configurator/src/resources/crs/sla-matrix/standardStateMappings.ts`](../configurator/src/resources/crs/sla-matrix/standardStateMappings.ts) |
+| Shared level-SLA editor | [`configurator/src/resources/crs/sla-matrix/LevelSlaEditor.tsx`](../configurator/src/resources/crs/sla-matrix/LevelSlaEditor.tsx) |
 | Configurator types | [`configurator/src/resources/crs/sla-matrix/types.ts`](../configurator/src/resources/crs/sla-matrix/types.ts) |
 | Configurator service layer | [`configurator/src/resources/crs/sla-matrix/slaService.ts`](../configurator/src/resources/crs/sla-matrix/slaService.ts) |
 | Trace-back drawer | [`configurator/src/resources/crs/sla-matrix/TraceBackDialog.tsx`](../configurator/src/resources/crs/sla-matrix/TraceBackDialog.tsx) |
 | Bulk import dialog | [`configurator/src/resources/crs/sla-matrix/BulkImportDialog.tsx`](../configurator/src/resources/crs/sla-matrix/BulkImportDialog.tsx) |
 | CSV parser | [`configurator/src/resources/crs/sla-matrix/csvParser.ts`](../configurator/src/resources/crs/sla-matrix/csvParser.ts) |
 | CSV parser unit tests (vitest) | [`configurator/src/resources/crs/sla-matrix/csvParser.test.ts`](../configurator/src/resources/crs/sla-matrix/csvParser.test.ts) |
+| Client resolver unit tests (vitest) | [`configurator/src/resources/crs/sla-matrix/resolveSlaPreview.test.ts`](../configurator/src/resources/crs/sla-matrix/resolveSlaPreview.test.ts) |
 | `slaHoursByLevel` schema backfill SQL | [`configurator/src/resources/crs/sla-matrix/_seed/add-sla-by-level.sql`](../configurator/src/resources/crs/sla-matrix/_seed/add-sla-by-level.sql) |
 | Backend unit tests | [`backend/pgr-services/src/test/java/org/egov/pgr/service/EscalationSchedulerSlaResolutionTest.java`](../backend/pgr-services/src/test/java/org/egov/pgr/service/EscalationSchedulerSlaResolutionTest.java) and siblings (see [Layer 1](#layer-1--backend-unit-tests)) |
-| Configurator e2e tests | [`configurator/e2e/crs-sla-matrix.spec.ts`](../configurator/e2e/crs-sla-matrix.spec.ts) |
+| Configurator e2e tests | [`configurator/e2e/crs-sla-matrix.spec.ts`](../configurator/e2e/crs-sla-matrix.spec.ts), [`configurator/e2e/escalation-settings.spec.ts`](../configurator/e2e/escalation-settings.spec.ts) |
 | Integration tests | [`tests/integration-tests/tests/lifecycle/pgr-escalation-trigger-bomet.spec.ts`](../tests/integration-tests/tests/lifecycle/pgr-escalation-trigger-bomet.spec.ts), [`pgr-manual-escalate-comment.spec.ts`](../tests/integration-tests/tests/lifecycle/pgr-manual-escalate-comment.spec.ts), [`escalation-configurator-bomet.spec.ts`](../tests/integration-tests/tests/admin/escalation-configurator-bomet.spec.ts) |
