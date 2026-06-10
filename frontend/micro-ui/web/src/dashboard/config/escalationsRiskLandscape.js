@@ -1,0 +1,210 @@
+/**
+ * Escalations & risk landscape — one KPI card per metric; sub-metrics selectable in-card.
+ * @see kpis for configurable dashboard - supervisor metrics.csv
+ */
+
+export const ESCALATIONS_RISK_SECTION = "Escalations & risk";
+
+/** @type {Array<{id:string, metric:string, accent:string, defaultSubMetricId:string, subMetrics:object[]}>} */
+export const ESCALATIONS_RISK_METRICS = [
+  {
+    id: "er-metric-aging-bucket",
+    metric: "Open complaints by aging bucket",
+    accent: "amber",
+    defaultSubMetricId: "safe",
+    subMetrics: [
+      {
+        id: "safe",
+        label: "% safe (<50% elapsed)",
+        outputFormat: "% (round to nearest integer; 4 sum to 100)",
+        format: "percentInteger",
+        measureKey: "pct",
+        queryKey: "er_aging_safe",
+      },
+      {
+        id: "approaching",
+        label: "% approaching (50–100%)",
+        outputFormat: "% (round to nearest integer; 4 sum to 100)",
+        format: "percentInteger",
+        measureKey: "pct",
+        queryKey: "er_aging_approaching",
+      },
+      {
+        id: "breached",
+        label: "% breached (>100%, ≤7d)",
+        outputFormat: "% (round to nearest integer; 4 sum to 100)",
+        format: "percentInteger",
+        measureKey: "pct",
+        queryKey: "er_aging_breached",
+      },
+      {
+        id: "critical",
+        label: "% critical (breached >7d)",
+        outputFormat: "% (round to nearest integer; 4 sum to 100)",
+        format: "percentInteger",
+        measureKey: "pct",
+        queryKey: "er_aging_critical",
+      },
+    ],
+  },
+  {
+    id: "er-metric-approaching-sla",
+    metric: "Approaching-SLA early-warning count",
+    accent: "red",
+    defaultSubMetricId: "breach_4h",
+    subMetrics: [
+      {
+        id: "breach_4h",
+        label: "Complaints breaching in <4 hrs",
+        outputFormat: "Whole number",
+        format: "integer",
+        measureKey: "total",
+        queryKey: null,
+      },
+      {
+        id: "breach_24h",
+        label: "Complaints breaching in <24 hrs",
+        outputFormat: "Whole number",
+        format: "integer",
+        measureKey: "total",
+        queryKey: null,
+      },
+    ],
+  },
+  {
+    id: "er-metric-overnight-escalations",
+    metric: "Overnight escalations",
+    accent: "red",
+    defaultSubMetricId: "total",
+    subMetrics: [
+      {
+        id: "total",
+        label: "Total overnight escalation count",
+        outputFormat: "Whole number",
+        format: "integer",
+        measureKey: "total",
+        queryKey: "er_overnight_escalations",
+      },
+      {
+        id: "delta_24h",
+        label: "Δ vs. previous 24 hrs",
+        outputFormat: "Whole number with ↑/↓",
+        format: "signedInteger",
+        measureKey: "net",
+        queryKey: null,
+      },
+      {
+        id: "pct_auto",
+        label: "% from in-system auto-trigger",
+        outputFormat: "% (3 sub-values sum to 100)",
+        format: "percentInteger",
+        measureKey: "pct",
+        queryKey: "er_overnight_auto_pct",
+      },
+      {
+        id: "pct_manual",
+        label: "% from manual officer flag",
+        outputFormat: "% (3 sub-values sum to 100)",
+        format: "percentInteger",
+        measureKey: "pct",
+        queryKey: "er_overnight_manual_pct",
+      },
+      {
+        id: "pct_offline",
+        label: "% from offline (MLA / councillor)",
+        outputFormat: "% (3 sub-values sum to 100)",
+        format: "percentInteger",
+        measureKey: "pct",
+        queryKey: null,
+      },
+      {
+        id: "risk_score",
+        label: "Zone avg. risk score",
+        outputFormat: "Decimal (2 places, 0–1)",
+        format: "decimalTwo",
+        measureKey: "avg",
+        queryKey: null,
+      },
+    ],
+  },
+  {
+    id: "er-metric-stale-complaints",
+    metric: "Stale complaints",
+    accent: "amber",
+    defaultSubMetricId: "stale_3d",
+    subMetrics: [
+      {
+        id: "stale_3d",
+        label: "Stale >3 days (no action)",
+        outputFormat: "Whole number",
+        format: "integer",
+        measureKey: "total",
+        queryKey: null,
+      },
+      {
+        id: "stale_7d",
+        label: "Stale >7 days (no action)",
+        outputFormat: "Whole number",
+        format: "integer",
+        measureKey: "total",
+        queryKey: null,
+      },
+    ],
+  },
+  {
+    id: "er-metric-critical-breach",
+    metric: "Critical breach count",
+    accent: "red",
+    defaultSubMetricId: "critical_count",
+    subMetrics: [
+      {
+        id: "critical_count",
+        label: "Critical breach count",
+        outputFormat: "Whole number",
+        format: "integer",
+        measureKey: "total",
+        queryKey: "er_critical_breach",
+      },
+      {
+        id: "critical_per_officer",
+        label: "Critical count per officer",
+        outputFormat: "Whole number per officer row",
+        format: "integer",
+        measureKey: "total",
+        queryKey: "er_critical_by_officer",
+      },
+    ],
+  },
+  {
+    id: "er-metric-escalation-source-mix",
+    metric: "Escalation source mix",
+    accent: "slate",
+    defaultSubMetricId: "pct_auto",
+    subMetrics: [
+      {
+        id: "pct_auto",
+        label: "% in-system auto-trigger",
+        outputFormat: "% (round to nearest integer; 3 sum to 100)",
+        format: "percentInteger",
+        measureKey: "pct",
+        queryKey: "er_escalation_auto_pct",
+      },
+      {
+        id: "pct_manual",
+        label: "% manual officer flag",
+        outputFormat: "% (round to nearest integer; 3 sum to 100)",
+        format: "percentInteger",
+        measureKey: "pct",
+        queryKey: "er_escalation_manual_pct",
+      },
+      {
+        id: "pct_offline",
+        label: "% offline / political",
+        outputFormat: "% (round to nearest integer; 3 sum to 100)",
+        format: "percentInteger",
+        measureKey: "pct",
+        queryKey: null,
+      },
+    ],
+  },
+];

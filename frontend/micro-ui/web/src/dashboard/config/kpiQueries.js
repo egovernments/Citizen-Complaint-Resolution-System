@@ -225,6 +225,194 @@ export const BATCH_QUERIES = {
   },
   rs_inflow_daily: filedWindow("last_1d"),
   rs_outflow_daily: resolvedWindow("last_1d"),
+  // Escalations & risk
+  er_aging_safe: {
+    grain: "facts",
+    filters: { is_open: true },
+    measures: [
+      {
+        name: "pct",
+        agg: "ratio",
+        numerator: { agg: "count", filter: { sla_status_bucket: "within" } },
+        denominator: { agg: "count" },
+      },
+    ],
+  },
+  er_aging_approaching: {
+    grain: "facts",
+    filters: { is_open: true },
+    measures: [
+      {
+        name: "pct",
+        agg: "ratio",
+        numerator: { agg: "count", filter: { sla_status_bucket: "approaching" } },
+        denominator: { agg: "count" },
+      },
+    ],
+  },
+  er_aging_breached: {
+    grain: "facts",
+    filters: { is_open: true },
+    measures: [
+      {
+        name: "pct",
+        agg: "ratio",
+        numerator: { agg: "count", filter: { sla_breached: true } },
+        denominator: { agg: "count" },
+      },
+    ],
+  },
+  er_aging_critical: {
+    grain: "facts",
+    filters: { is_open: true },
+    measures: [
+      {
+        name: "pct",
+        agg: "ratio",
+        numerator: { agg: "count", filter: { aging_bucket: ">7d" } },
+        denominator: { agg: "count" },
+      },
+    ],
+  },
+  er_overnight_escalations: {
+    grain: "events",
+    window: { name: "last_1d", timeRole: "event_at" },
+    filters: { is_escalation: true },
+    measures: [{ name: "total", agg: "count" }],
+  },
+  er_overnight_auto_pct: {
+    grain: "events",
+    window: { name: "last_1d", timeRole: "event_at" },
+    filters: { is_escalation: true },
+    measures: [
+      {
+        name: "pct",
+        agg: "ratio",
+        numerator: { agg: "count", filter: { escalation_source: "auto" } },
+        denominator: { agg: "count" },
+      },
+    ],
+  },
+  er_overnight_manual_pct: {
+    grain: "events",
+    window: { name: "last_1d", timeRole: "event_at" },
+    filters: { is_escalation: true },
+    measures: [
+      {
+        name: "pct",
+        agg: "ratio",
+        numerator: { agg: "count", filter: { escalation_source: "manual" } },
+        denominator: { agg: "count" },
+      },
+    ],
+  },
+  er_critical_breach: {
+    grain: "facts",
+    filters: { is_open: true, aging_bucket: ">7d" },
+    measures: [{ name: "total", agg: "count" }],
+  },
+  er_critical_by_officer: officerTopCount({ is_open: true, aging_bucket: ">7d" }),
+  er_escalation_auto_pct: {
+    grain: "events",
+    window: { name: "wtd", timeRole: "event_at" },
+    filters: { is_escalation: true },
+    measures: [
+      {
+        name: "pct",
+        agg: "ratio",
+        numerator: { agg: "count", filter: { escalation_source: "auto" } },
+        denominator: { agg: "count" },
+      },
+    ],
+  },
+  er_escalation_manual_pct: {
+    grain: "events",
+    window: { name: "wtd", timeRole: "event_at" },
+    filters: { is_escalation: true },
+    measures: [
+      {
+        name: "pct",
+        agg: "ratio",
+        numerator: { agg: "count", filter: { escalation_source: "manual" } },
+        denominator: { agg: "count" },
+      },
+    ],
+  },
+  // Citizen experience
+  ce_csat_avg_week: {
+    grain: "facts",
+    window: { name: "wtd", timeRole: "resolved_at" },
+    filters: { is_resolved: true, has_rating: true },
+    measures: [{ name: "avg", agg: "avg", column: "rating" }],
+  },
+  ce_response_rate: {
+    grain: "facts",
+    window: { name: "wtd", timeRole: "resolved_at" },
+    filters: { is_resolved: true },
+    measures: [
+      {
+        name: "pct",
+        agg: "ratio",
+        numerator: { agg: "count", filter: { has_rating: true } },
+        denominator: { agg: "count" },
+      },
+    ],
+  },
+  ce_reopen_7d: {
+    grain: "facts",
+    window: { name: "last_7d", timeRole: "resolved_at" },
+    filters: { is_resolved: true },
+    measures: [
+      {
+        name: "pct",
+        agg: "ratio",
+        numerator: { agg: "count", filter: { is_reopened: true } },
+        denominator: { agg: "count" },
+      },
+    ],
+  },
+  ce_reopen_30d: {
+    grain: "facts",
+    window: { name: "last_30d", timeRole: "resolved_at" },
+    filters: { is_resolved: true },
+    measures: [
+      {
+        name: "pct",
+        agg: "ratio",
+        numerator: { agg: "count", filter: { is_reopened: true } },
+        denominator: { agg: "count" },
+      },
+    ],
+  },
+  ce_repeat_complainants: {
+    grain: "facts",
+    window: { name: "last_30d", timeRole: "filed_at" },
+    filters: { is_first_time_complainant: false },
+    measures: [{ name: "total", agg: "count_distinct", column: "account_id" }],
+  },
+  ce_negative_rate: {
+    grain: "facts",
+    window: { name: "wtd", timeRole: "resolved_at" },
+    filters: { is_resolved: true, has_rating: true },
+    measures: [
+      {
+        name: "pct",
+        agg: "ratio",
+        numerator: { agg: "count", filter: { is_negative_rating: true } },
+        denominator: { agg: "count" },
+      },
+    ],
+  },
+  ce_tfr_avg: {
+    grain: "facts",
+    window: { name: "wtd", timeRole: "filed_at" },
+    measures: [{ name: "avg_ms", agg: "avg", column: "time_to_assign_ms" }],
+  },
+  ce_tfr_median: {
+    grain: "facts",
+    window: { name: "wtd", timeRole: "filed_at" },
+    measures: [{ name: "median_ms", agg: "percentile", column: "time_to_assign_ms", p: 50 }],
+  },
 };
 
 const DOW_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -346,6 +534,10 @@ export function formatSubMetricValue(subMetric, results) {
     case "decimalOne": {
       const n = Number(raw);
       return Number.isFinite(n) ? n.toFixed(1) : UNSUPPORTED_VALUE;
+    }
+    case "decimalTwo": {
+      const n = Number(raw);
+      return Number.isFinite(n) ? n.toFixed(2) : UNSUPPORTED_VALUE;
     }
     case "hoursDays":
       return formatMsAsDays(raw);
