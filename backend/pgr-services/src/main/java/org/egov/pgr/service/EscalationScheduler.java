@@ -2,6 +2,7 @@ package org.egov.pgr.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jayway.jsonpath.JsonPath;
+import io.opentelemetry.api.trace.Span;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.request.Role;
@@ -11,8 +12,11 @@ import org.egov.mdms.model.*;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.repository.PGRRepository;
 import org.egov.pgr.repository.ServiceRequestRepository;
+import org.egov.pgr.util.EscalationSkipReason;
 import org.egov.pgr.util.MDMSUtils;
+import org.egov.pgr.util.PGRConstants;
 import org.egov.pgr.web.models.*;
+import org.egov.pgr.web.models.EscalationTriggerResponse.EscalationOutcome;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -54,6 +58,10 @@ public class EscalationScheduler {
         this.multiStateInstanceUtil = multiStateInstanceUtil;
     }
 
+    /**
+     * Cron entry-point. Wraps {@link #scanAndEscalateOnce(String, java.util.List, RequestInfo)} so the @Scheduled
+     * trigger and the synchronous /escalation/_trigger endpoint share one code path.
+     */
     @Scheduled(fixedDelayString = "${pgr.escalation.interval.ms}")
     public void scanAndEscalate() {
         if (!Boolean.TRUE.equals(config.getEscalationEnabled())) {
@@ -62,48 +70,110 @@ public class EscalationScheduler {
 
         log.info("Escalation scan started");
 
-        RequestInfo systemRequestInfo = buildSystemRequestInfo();
-
-        // Fetch escalation config from MDMS (will use default SLA if MDMS config not found)
-        Map<String, Object> escalationConfig = fetchEscalationConfig(systemRequestInfo);
-
-        int maxDepth = getMaxDepth(escalationConfig);
-        List<Long> defaultSlaByLevel = getDefaultSlaByLevel(escalationConfig);
-        Map<String, List<Long>> overrides = getOverrides(escalationConfig);
-
-        // Search for complaints in PENDINGATLME and PENDINGFORASSIGNMENT
-        Set<String> statuses = new HashSet<>(Arrays.asList(PENDINGATLME, PENDINGFORASSIGNMENT));
-
-        // Get all tenants — for now, use the state-level tenant from config
-        // In a multi-tenant setup, this would iterate over all tenants
-        String stateLevelTenantId = getStateLevelTenantId();
-        if (stateLevelTenantId == null) {
+        String tenantId = getStateLevelTenantId();
+        if (tenantId == null) {
             log.warn("Cannot determine state-level tenant ID, skipping escalation scan");
             return;
         }
 
+        scanAndEscalateOnce(tenantId, null, buildSystemRequestInfo());
+    }
+
+    /**
+     * Single, reusable escalation scan. Called by both the @Scheduled trigger
+     * and the {@code POST /escalation/_trigger} controller. Synchronous: returns
+     * only after every candidate has been processed.
+     *
+     * @param tenantId           state-level tenant to scan (e.g. {@code "ke"})
+     * @param serviceRequestIds  optional scoping; null/empty = scan all candidates in PENDINGATLME / PENDINGFORASSIGNMENT
+     * @param requestInfo        RequestInfo to use for downstream calls (workflow, HRMS). Caller passes
+     *                           either a SYSTEM RequestInfo (cron) or the original SUPERUSER RequestInfo
+     *                           augmented with AUTO_ESCALATE (controller).
+     */
+    public EscalationTriggerResponse scanAndEscalateOnce(String tenantId,
+                                                         List<String> serviceRequestIds,
+                                                         RequestInfo requestInfo) {
+
+        Span span = Span.current();
+        span.setAttribute("escalation.tenantId", tenantId == null ? "" : tenantId);
+
+        Map<String, Object> escalationConfig = fetchEscalationConfig(requestInfo, tenantId);
+        int maxDepth = getMaxDepth(escalationConfig);
+        List<Long> defaultSlaByLevel = getDefaultSlaByLevel(escalationConfig);
+        Map<String, List<Long>> overrides = getOverrides(escalationConfig);
+
+        // CRS escalation-SLA (BRD v4.0) — loaded once per scan so the per-complaint
+        // resolveSlaHours call is a pure local lookup. All reads are best-effort:
+        // a missing/empty CRS namespace falls through to the v0 EscalationConfig
+        // path below.
+        List<Map<String, Object>> crsCategorySla = fetchCrsCategorySla(requestInfo, tenantId);
+        Map<String, Number> crsStateSlaDefaults = fetchCrsStateSlaDefaults(requestInfo, tenantId);
+        // Workflow-state → canonical-SLA-key mapping (CRS.WorkflowStateMapping).
+        // Replaces the old hardcoded PGR-state switch. Operator-defined per tenant.
+        Map<String, String> crsWorkflowStateMapping = fetchCrsWorkflowStateMapping(requestInfo, tenantId);
+        Map<String, Map<String, Object>> serviceCodeToCategory = buildServiceCodeMapping(requestInfo, tenantId);
+
+        Set<String> statuses = new HashSet<>(Arrays.asList(PENDINGATLME, PENDINGFORASSIGNMENT));
+
+        Set<String> idScope = (serviceRequestIds == null || serviceRequestIds.isEmpty())
+                ? null
+                : new HashSet<>(serviceRequestIds);
+
         int scanned = 0;
         int escalated = 0;
         int skipped = 0;
+        Map<EscalationSkipReason, Integer> skipMap = new EnumMap<>(EscalationSkipReason.class);
+        List<EscalationOutcome> details = new ArrayList<>();
 
         for (String status : statuses) {
             try {
-                List<ServiceWrapper> complaints = searchComplaintsByStatus(stateLevelTenantId, status);
+                List<ServiceWrapper> complaints = searchComplaintsByStatus(tenantId, status);
 
                 for (ServiceWrapper wrapper : complaints) {
-                    scanned++;
                     Service complaint = wrapper.getService();
+                    String srid = complaint.getServiceRequestId();
 
-                    // Determine SLA for this complaint's serviceCode + escalation level
+                    if (idScope != null && !idScope.contains(srid)) {
+                        continue;
+                    }
+
+                    scanned++;
+
                     int currentLevel = getEscalationLevel(complaint);
                     if (currentLevel >= maxDepth) {
+                        recordSkip(skipMap, details, srid, status, currentLevel,
+                                EscalationSkipReason.MAX_DEPTH_REACHED,
+                                "currentLevel=" + currentLevel + ", maxDepth=" + maxDepth);
                         skipped++;
                         continue;
                     }
 
-                    long sla = resolveSla(complaint.getServiceCode(), currentLevel, defaultSlaByLevel, overrides);
+                    // Resolve SLA via the new CRS.* model first (CategorySLA → StateSLA),
+                    // then fall through to the v0 EscalationConfig defaults. The per-complaint
+                    // OTEL span gets a `escalation.slaSource` attribute so operators can tell
+                    // which layer answered the lookup.
+                    SlaResolution slaRes = resolveSlaHours(
+                            complaint, status, crsCategorySla, crsStateSlaDefaults,
+                            crsWorkflowStateMapping, serviceCodeToCategory,
+                            currentLevel, defaultSlaByLevel, overrides);
+                    long sla = slaRes.slaMs;
+                    span.setAttribute("escalation.slaSource", slaRes.source);
+                    if (slaRes.unmappedCategory) {
+                        // Log + count once per scan so the warning is actionable without
+                        // skipping the complaint outright — fallback still produced a usable SLA.
+                        log.warn("Escalation SLA UNMAPPED_CATEGORY — srid={} serviceCode={} (fell back to {})",
+                                srid, complaint.getServiceCode(), slaRes.source);
+                        skipMap.merge(EscalationSkipReason.UNMAPPED_CATEGORY, 1, Integer::sum);
+                    }
+                    if (slaRes.stateMappingMissing) {
+                        // The workflow state has no entry in CRS.WorkflowStateMapping AND
+                        // CRS.StateSLA had no fallback either — v0 EscalationConfig answered
+                        // but operators should know this state is unmapped.
+                        log.warn("Escalation SLA STATE_MAPPING_MISSING — srid={} workflowState={} (fell back to {})",
+                                srid, status, slaRes.source);
+                        skipMap.merge(EscalationSkipReason.STATE_MAPPING_MISSING, 1, Integer::sum);
+                    }
 
-                    // Check if SLA is breached based on lastModifiedTime
                     long lastModified = 0L;
                     if (complaint.getAuditDetails() != null) {
                         Long modified = complaint.getAuditDetails().getLastModifiedTime();
@@ -115,40 +185,95 @@ public class EscalationScheduler {
                     }
 
                     if (lastModified == 0L) {
+                        recordSkip(skipMap, details, srid, status, currentLevel,
+                                EscalationSkipReason.NO_LAST_MODIFIED_TIME, "auditDetails missing timestamps");
                         skipped++;
                         continue;
                     }
 
                     long elapsed = System.currentTimeMillis() - lastModified;
                     if (elapsed < sla) {
-                        // SLA not yet breached
+                        recordSkip(skipMap, details, srid, status, currentLevel,
+                                EscalationSkipReason.SLA_NOT_BREACHED,
+                                "elapsed=" + elapsed + "ms, sla=" + sla + "ms");
+                        skipped++;
                         continue;
                     }
 
-                    // SLA breached — get current assignees from workflow
                     List<String> assignees = escalationService.getCurrentAssignees(
-                            complaint.getServiceRequestId(), complaint.getTenantId(), systemRequestInfo);
+                            srid, complaint.getTenantId(), requestInfo);
 
                     if (CollectionUtils.isEmpty(assignees)) {
+                        recordSkip(skipMap, details, srid, status, currentLevel,
+                                EscalationSkipReason.NO_ASSIGNEES, "workflow returned 0 assignees");
                         skipped++;
                         continue;
                     }
 
                     Workflow currentWorkflow = Workflow.builder().assignes(assignees).build();
 
-                    boolean success = escalationService.escalateComplaint(complaint, currentWorkflow, systemRequestInfo);
-                    if (success) {
+                    EscalationService.EscalationResult result =
+                            escalationService.escalateComplaintWithReason(complaint, currentWorkflow, requestInfo);
+
+                    if (result.isSuccess()) {
                         escalated++;
+                        details.add(EscalationOutcome.builder()
+                                .serviceRequestId(srid)
+                                .action("ESCALATED")
+                                .reason(EscalationSkipReason.SUCCESS.name())
+                                .detail("fromLevel=" + currentLevel + " toLevel=" + (currentLevel + 1))
+                                .build());
+                        log.info("Escalation success — srid={}, status={}, fromLevel={}, toLevel={}",
+                                srid, status, currentLevel, currentLevel + 1);
                     } else {
+                        EscalationSkipReason reason = result.getReason() != null
+                                ? result.getReason()
+                                : EscalationSkipReason.WORKFLOW_TRANSITION_FAILED;
+                        recordSkip(skipMap, details, srid, status, currentLevel, reason, result.getDetail());
                         skipped++;
                     }
                 }
             } catch (Exception e) {
-                log.error("Error scanning complaints in status {} for tenant {}", status, stateLevelTenantId, e);
+                log.error("Error scanning complaints in status {} for tenant {}", status, tenantId, e);
             }
         }
 
-        log.info("Escalation scan complete: scanned={}, escalated={}, skipped={}", scanned, escalated, skipped);
+        span.setAttribute("escalation.scanned", scanned);
+        span.setAttribute("escalation.escalated", escalated);
+        span.setAttribute("escalation.skipped", skipped);
+        // OTEL attribute names are dotted-snake-case by convention
+        skipMap.forEach((reason, count) ->
+                span.setAttribute("escalation.skipped." + reason.name().toLowerCase(), count));
+
+        Map<String, Integer> skipBreakdown = new LinkedHashMap<>();
+        skipMap.forEach((reason, count) -> skipBreakdown.put(reason.name(), count));
+
+        log.info("Escalation scan complete: scanned={}, escalated={}, skipped={}, skipBreakdown={}",
+                scanned, escalated, skipped, skipBreakdown);
+
+        return EscalationTriggerResponse.builder()
+                .tenantId(tenantId)
+                .scanned(scanned)
+                .escalated(escalated)
+                .skipped(skipped)
+                .skipBreakdown(skipBreakdown)
+                .details(details)
+                .build();
+    }
+
+    private void recordSkip(Map<EscalationSkipReason, Integer> skipMap,
+                            List<EscalationOutcome> details,
+                            String srid, String status, int currentLevel,
+                            EscalationSkipReason reason, String detail) {
+        log.info("Escalation skip — srid={}, status={}, level={}, reason={}, detail={}",
+                srid, status, currentLevel, reason, detail);
+        skipMap.merge(reason, 1, Integer::sum);
+        details.add(EscalationOutcome.builder()
+                .serviceRequestId(srid)
+                .action("SKIPPED")
+                .reason(reason.name())
+                .detail(detail)
+                .build());
     }
 
     /**
@@ -200,9 +325,8 @@ public class EscalationScheduler {
      * Fetches EscalationConfig from MDMS. Returns null if not found.
      */
     @SuppressWarnings("unchecked")
-    private Map<String, Object> fetchEscalationConfig(RequestInfo requestInfo) {
+    private Map<String, Object> fetchEscalationConfig(RequestInfo requestInfo, String tenantId) {
         try {
-            String tenantId = getStateLevelTenantId();
             if (tenantId == null) return null;
 
             List<MasterDetail> masterDetails = Collections.singletonList(
@@ -246,7 +370,7 @@ public class EscalationScheduler {
         if (hostMap != null && !hostMap.isEmpty()) {
             return hostMap.keySet().iterator().next();
         }
-        return null;
+        return stateLevelTenantId;
     }
 
     private int getMaxDepth(Map<String, Object> escalationConfig) {
@@ -325,5 +449,290 @@ public class EscalationScheduler {
             // ignore
         }
         return 0;
+    }
+
+    // ----------------------------------------------------------------------
+    // CRS escalation-SLA model (BRD v4.0)
+    //
+    // The new SLA pipeline reads two MDMS v2 schemas:
+    //   1. CRS.CategorySLA — per (path, category, subcategoryL1) row whose
+    //      `slaHoursByState` cell for the complaint's current workflow state
+    //      is either null (fall through), a number (hours), or a [min,max]
+    //      range (collapses to MAX for scheduler math; UI shows the range).
+    //   2. CRS.StateSLA — singleton (`uniqueIdentifier=default`) holding the
+    //      6 per-state defaults from BRD §5.2.
+    //
+    // The v0 RAINMAKER-PGR.EscalationConfig path stays as a safety-net
+    // fallback so a tenant that hasn't migrated yet doesn't lose escalation
+    // overnight. The selected layer is surfaced as the OTEL span attribute
+    // `escalation.slaSource`.
+    // ----------------------------------------------------------------------
+
+    /** Result of an SLA resolution — keeps the source (for OTEL) + the value (ms). */
+    static final class SlaResolution {
+        final long slaMs;
+        final String source;
+        final boolean unmappedCategory;
+        /**
+         * True when the workflow state could not be translated via
+         * CRS.WorkflowStateMapping AND CRS.StateSLA had no entry to fall back
+         * to. v0 EscalationConfig answered, but operators should know the
+         * state is unmapped so they can complete the singleton.
+         */
+        final boolean stateMappingMissing;
+        SlaResolution(long slaMs, String source, boolean unmappedCategory, boolean stateMappingMissing) {
+            this.slaMs = slaMs;
+            this.source = source;
+            this.unmappedCategory = unmappedCategory;
+            this.stateMappingMissing = stateMappingMissing;
+        }
+    }
+
+    /**
+     * Resolve the SLA (in MS) for the given complaint + workflow state.
+     * Visible for testing.
+     */
+    @SuppressWarnings("unchecked")
+    SlaResolution resolveSlaHours(Service complaint,
+                                   String workflowState,
+                                   List<Map<String, Object>> crsCategorySla,
+                                   Map<String, Number> crsStateSlaDefaults,
+                                   Map<String, String> crsWorkflowStateMapping,
+                                   Map<String, Map<String, Object>> serviceCodeToCategory,
+                                   int currentLevel,
+                                   List<Long> defaultSlaByLevel,
+                                   Map<String, List<Long>> overrides) {
+
+        Map<String, Object> categoryTuple = extractCategoryTuple(complaint, serviceCodeToCategory);
+        String stateKey = mapWorkflowStateToKey(workflowState, crsWorkflowStateMapping);
+        boolean unmapped = false;
+
+        // 1) CategorySLA hit
+        if (categoryTuple != null && stateKey != null && crsCategorySla != null) {
+            for (Map<String, Object> row : crsCategorySla) {
+                Object active = row.get("isActive");
+                if (active instanceof Boolean && !(Boolean) active) continue;
+                if (!Objects.equals(row.get("path"), categoryTuple.get("path"))) continue;
+                if (!Objects.equals(row.get("category"), categoryTuple.get("category"))) continue;
+                if (!Objects.equals(row.get("subcategoryL1"), categoryTuple.get("subcategoryL1"))) continue;
+                Object by = row.get("slaHoursByState");
+                if (!(by instanceof Map)) continue;
+                Object cell = ((Map<String, Object>) by).get(stateKey);
+                Long cellMs = cellToMillis(cell);
+                if (cellMs != null) {
+                    return new SlaResolution(cellMs, PGRConstants.SLA_SOURCE_CATEGORY, false, false);
+                }
+                break; // matched row, but cell is null/missing → fall through
+            }
+        } else if (categoryTuple == null) {
+            unmapped = true;
+        }
+
+        // 2) StateSLA fallback
+        if (stateKey != null && crsStateSlaDefaults != null) {
+            Number defHrs = crsStateSlaDefaults.get(stateKey);
+            if (defHrs != null) {
+                return new SlaResolution(hoursToMillis(defHrs.doubleValue()), PGRConstants.SLA_SOURCE_STATE, unmapped, false);
+            }
+        }
+
+        // The workflow state was either unmapped (CRS.WorkflowStateMapping miss)
+        // or mapped to a key that StateSLA doesn't know — either way, v0 will
+        // answer but the situation is actionable.
+        boolean stateMappingMissing = (stateKey == null);
+
+        // 3) v0 EscalationConfig fallback (existing behaviour).
+        log.info("Escalation SLA falling back to v0 EscalationConfig for srid={} stateKey={}",
+                complaint.getServiceRequestId(), stateKey);
+        long v0 = resolveSla(complaint.getServiceCode(), currentLevel, defaultSlaByLevel, overrides);
+        return new SlaResolution(v0, PGRConstants.SLA_SOURCE_V0, unmapped, stateMappingMissing);
+    }
+
+    private static Long cellToMillis(Object cell) {
+        if (cell == null) return null;
+        if (cell instanceof Number) {
+            double h = ((Number) cell).doubleValue();
+            return h > 0 ? hoursToMillis(h) : null;
+        }
+        if (cell instanceof List) {
+            List<?> r = (List<?>) cell;
+            if (r.size() == 2 && r.get(0) instanceof Number && r.get(1) instanceof Number) {
+                // scheduler uses MAX for breach detection — UI surfaces the range.
+                double hi = Math.max(((Number) r.get(0)).doubleValue(), ((Number) r.get(1)).doubleValue());
+                return hi > 0 ? hoursToMillis(hi) : null;
+            }
+        }
+        return null;
+    }
+
+    private static long hoursToMillis(double h) {
+        return (long) (h * 60L * 60L * 1000L);
+    }
+
+    /**
+     * Translate a workflow state name (e.g. {@code PENDINGFORASSIGNMENT}) to
+     * the canonical SLA-column key (one of: new, triage, forwarded,
+     * investigation, awaiting, resolved) using the operator-defined
+     * CRS.WorkflowStateMapping singleton.
+     *
+     * <p>If the mapping is null/missing or has no entry for the state, returns
+     * null and the caller falls through to CRS.StateSLA / v0 EscalationConfig.
+     * This is the only place tenant-specific workflow state names are
+     * referenced — everything else in the scheduler is generic.</p>
+     */
+    static String mapWorkflowStateToKey(String workflowState, Map<String, String> mapping) {
+        if (workflowState == null || mapping == null) return null;
+        return mapping.get(workflowState);
+    }
+
+    /**
+     * Pull (path, category, subcategoryL1) from the complaint. Tries the
+     * additionalDetail blob first (the UI tags new complaints there), then
+     * falls back to a serviceCode → tuple lookup we precomputed off
+     * RAINMAKER-PGR.ServiceDefs. Returns null if neither path resolves.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> extractCategoryTuple(Service complaint,
+                                                     Map<String, Map<String, Object>> serviceCodeToCategory) {
+        Object detail = complaint.getAdditionalDetail();
+        if (detail != null) {
+            try {
+                Map<String, Object> details = detail instanceof Map
+                        ? (Map<String, Object>) detail
+                        : mapper.convertValue(detail, Map.class);
+                String path = (String) details.get("path");
+                String category = (String) details.get("category");
+                String subcategoryL1 = (String) details.get("subcategoryL1");
+                if (path != null && category != null && subcategoryL1 != null) {
+                    Map<String, Object> out = new HashMap<>();
+                    out.put("path", path);
+                    out.put("category", category);
+                    out.put("subcategoryL1", subcategoryL1);
+                    return out;
+                }
+            } catch (Exception ignored) { /* fall through */ }
+        }
+        String code = complaint.getServiceCode();
+        if (code != null && serviceCodeToCategory != null) {
+            return serviceCodeToCategory.get(code);
+        }
+        return null;
+    }
+
+    /**
+     * Fetch all CRS.CategorySLA rows for the tenant. Uses MDMS v1 search
+     * with module-name {@code CRS}, which works against the same egov-mdms
+     * v1 endpoint that already serves RAINMAKER-PGR.* — no v2 client is
+     * needed because we're treating CRS rows as plain master records.
+     */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> fetchCrsCategorySla(RequestInfo requestInfo, String tenantId) {
+        try {
+            Object res = fetchMdmsModule(requestInfo, tenantId, "CRS", "CategorySLA");
+            if (res == null) return Collections.emptyList();
+            Object rows = JsonPath.read(res, "$.MdmsRes.CRS.CategorySLA");
+            if (rows instanceof List) return (List<Map<String, Object>>) rows;
+        } catch (Exception e) {
+            log.debug("CRS.CategorySLA fetch failed (probably not seeded yet): {}", e.getMessage());
+        }
+        return Collections.emptyList();
+    }
+
+    /** Fetch CRS.StateSLA singleton's stateDefaults map. */
+    @SuppressWarnings("unchecked")
+    private Map<String, Number> fetchCrsStateSlaDefaults(RequestInfo requestInfo, String tenantId) {
+        try {
+            Object res = fetchMdmsModule(requestInfo, tenantId, "CRS", "StateSLA");
+            if (res == null) return Collections.emptyMap();
+            List<Map<String, Object>> rows = JsonPath.read(res, "$.MdmsRes.CRS.StateSLA");
+            if (rows == null || rows.isEmpty()) return Collections.emptyMap();
+            Object defaults = rows.get(0).get("stateDefaults");
+            if (defaults instanceof Map) return (Map<String, Number>) defaults;
+        } catch (Exception e) {
+            log.debug("CRS.StateSLA fetch failed (probably not seeded yet): {}", e.getMessage());
+        }
+        return Collections.emptyMap();
+    }
+
+    /**
+     * Fetch CRS.WorkflowStateMapping singleton's {@code mappings} object —
+     * workflow state name → canonical SLA-column key. Returns an empty map
+     * (not null) when the schema isn't seeded yet so {@link #resolveSlaHours}
+     * can still call {@code .get(state)} without a null guard at every site.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, String> fetchCrsWorkflowStateMapping(RequestInfo requestInfo, String tenantId) {
+        try {
+            Object res = fetchMdmsModule(requestInfo, tenantId, "CRS", "WorkflowStateMapping");
+            if (res == null) return Collections.emptyMap();
+            List<Map<String, Object>> rows = JsonPath.read(res, "$.MdmsRes.CRS.WorkflowStateMapping");
+            if (rows == null || rows.isEmpty()) return Collections.emptyMap();
+            Object mappings = rows.get(0).get("mappings");
+            if (mappings instanceof Map) return (Map<String, String>) mappings;
+        } catch (Exception e) {
+            log.debug("CRS.WorkflowStateMapping fetch failed (probably not seeded yet): {}", e.getMessage());
+        }
+        return Collections.emptyMap();
+    }
+
+    /**
+     * Build serviceCode → (path, category, subcategoryL1) mapping. We pull
+     * RAINMAKER-PGR.ServiceDefs and read three optional fields the
+     * configurator's complaint-type editor sets when present. ServiceDefs
+     * without those fields silently aren't mapped (the resolver then reads
+     * additionalDetail or falls through to StateSLA).
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Map<String, Object>> buildServiceCodeMapping(RequestInfo requestInfo, String tenantId) {
+        try {
+            Object res = fetchMdmsModule(requestInfo, tenantId, MDMS_MODULE_NAME, "ServiceDefs");
+            if (res == null) return Collections.emptyMap();
+            List<Map<String, Object>> defs = JsonPath.read(res, "$.MdmsRes.RAINMAKER-PGR.ServiceDefs");
+            if (defs == null) return Collections.emptyMap();
+            Map<String, Map<String, Object>> out = new HashMap<>();
+            for (Map<String, Object> d : defs) {
+                String code = (String) d.get("serviceCode");
+                String path = (String) d.get("path");
+                String category = (String) d.get("category");
+                String subcategoryL1 = (String) d.get("subcategoryL1");
+                if (code != null && path != null && category != null && subcategoryL1 != null) {
+                    Map<String, Object> v = new HashMap<>();
+                    v.put("path", path);
+                    v.put("category", category);
+                    v.put("subcategoryL1", subcategoryL1);
+                    out.put(code, v);
+                }
+            }
+            return out;
+        } catch (Exception e) {
+            log.debug("ServiceDefs mapping build failed: {}", e.getMessage());
+            return Collections.emptyMap();
+        }
+    }
+
+    /** Shared MDMS v1 fetch — same shape as fetchEscalationConfig, generalised. */
+    private Object fetchMdmsModule(RequestInfo requestInfo, String tenantId, String moduleName, String masterName) {
+        if (tenantId == null) return null;
+        try {
+            List<MasterDetail> masters = Collections.singletonList(
+                    MasterDetail.builder().name(masterName).build()
+            );
+            ModuleDetail module = ModuleDetail.builder()
+                    .masterDetails(masters)
+                    .moduleName(moduleName)
+                    .build();
+            MdmsCriteria criteria = MdmsCriteria.builder()
+                    .moduleDetails(Collections.singletonList(module))
+                    .tenantId(multiStateInstanceUtil.getStateLevelTenant(tenantId))
+                    .build();
+            MdmsCriteriaReq req = MdmsCriteriaReq.builder()
+                    .mdmsCriteria(criteria)
+                    .requestInfo(requestInfo)
+                    .build();
+            return serviceRequestRepository.fetchResult(mdmsUtils.getMdmsSearchUrl(), req);
+        } catch (Exception e) {
+            log.debug("MDMS fetch failed for {}/{}: {}", moduleName, masterName, e.getMessage());
+            return null;
+        }
     }
 }
