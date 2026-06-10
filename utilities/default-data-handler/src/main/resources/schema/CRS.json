@@ -197,7 +197,39 @@
           },
           "additionalProperties": false
         },
-        "escalateCommentRequired": { "type": "boolean" }
+        "escalateCommentRequired": { "type": "boolean" },
+        "roleEscalation": {
+          "type": "object",
+          "description": "Opt-in role-level escalation (PRD primary journey). enabled gates everything; actingRoleByState maps each watched workflow state to the role that owes action; supervisorRoleByRole is the role ladder for R2 resolution; maxPerScan caps role-escalations per scan (default 10 when absent).",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "actingRoleByState": { "type": "object", "additionalProperties": { "type": "string" } },
+            "supervisorRoleByRole": { "type": "object", "additionalProperties": { "type": "string" } },
+            "maxPerScan": { "type": "integer", "minimum": 1, "maximum": 100 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "CRS.RoleSupervisors",
+    "description": "Explicit per-role escalation target (R1 pin). One row per (role, department); department ALL = tenant-wide default. assigneeUuid must be an active HRMS employee — validated at escalation time, stale pins fall through to the role ladder.",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "CRS Role Supervisors",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": ["role", "department", "assigneeUuid", "isActive"],
+      "x-unique": ["role", "department"],
+      "properties": {
+        "role": { "type": "string", "minLength": 1 },
+        "department": { "type": "string", "minLength": 1 },
+        "assigneeUuid": { "type": "string", "minLength": 1 },
+        "isActive": { "type": "boolean" }
       },
       "x-ref-schema": [],
       "additionalProperties": false
