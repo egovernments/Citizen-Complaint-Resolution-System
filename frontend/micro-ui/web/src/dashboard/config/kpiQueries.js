@@ -181,6 +181,50 @@ export const BATCH_QUERIES = {
       },
     ],
   },
+  // Resolution & SLA
+  rs_sla_compliance_week: {
+    grain: "facts",
+    window: { name: "wtd", timeRole: "resolved_at" },
+    filters: { is_resolved: true },
+    measures: [
+      {
+        name: "pct",
+        agg: "ratio",
+        numerator: { agg: "count", filter: { sla_breached: false } },
+        denominator: { agg: "count" },
+      },
+    ],
+  },
+  rs_breach_total: {
+    grain: "facts",
+    filters: { is_open: true, sla_breached: true },
+    measures: [{ name: "total", agg: "count" }],
+  },
+  rs_zone_ttr_avg: {
+    grain: "facts",
+    window: { name: "wtd", timeRole: "resolved_at" },
+    filters: { is_resolved: true },
+    measures: [{ name: "avg_ms", agg: "avg", column: "resolution_ms" }],
+  },
+  rs_zone_ttr_median: {
+    grain: "facts",
+    window: { name: "wtd", timeRole: "resolved_at" },
+    filters: { is_resolved: true },
+    measures: [{ name: "median_ms", agg: "percentile", column: "resolution_ms", p: 50 }],
+  },
+  rs_closure_rate: {
+    grain: "facts",
+    measures: [
+      {
+        name: "pct",
+        agg: "ratio",
+        numerator: { agg: "count", filter: { is_resolved: true } },
+        denominator: { agg: "count" },
+      },
+    ],
+  },
+  rs_inflow_daily: filedWindow("last_1d"),
+  rs_outflow_daily: resolvedWindow("last_1d"),
 };
 
 const DOW_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -202,6 +246,29 @@ function hoursElapsedToday() {
 
 function formatPercentDelta() {
   return UNSUPPORTED_VALUE;
+}
+
+function formatOpenRateComplement(results) {
+  const raw = results?.rs_closure_rate?.rows?.[0]?.pct;
+  if (raw == null) return UNSUPPORTED_VALUE;
+  const pct = Number(raw) <= 1 ? Number(raw) * 100 : Number(raw);
+  if (!Number.isFinite(pct)) return UNSUPPORTED_VALUE;
+  return `${Math.round(100 - pct)}%`;
+}
+
+function formatNetBacklogDaily(results) {
+  const inflow = results?.rs_inflow_daily?.rows?.[0]?.total;
+  const outflow = results?.rs_outflow_daily?.rows?.[0]?.total;
+  if (inflow == null || outflow == null) return UNSUPPORTED_VALUE;
+  const net = Math.round(Number(inflow) - Number(outflow));
+  if (!Number.isFinite(net)) return UNSUPPORTED_VALUE;
+  return net > 0 ? `+${net}` : String(net);
+}
+
+function formatSignedInteger(value) {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n)) return UNSUPPORTED_VALUE;
+  return n > 0 ? `+${n}` : String(n);
 }
 
 function formatMsAsDays(ms) {
@@ -226,7 +293,7 @@ export function formatSubMetricValue(subMetric, results) {
     return UNSUPPORTED_VALUE;
   }
 
-  if (subMetric.format === "percentDelta" || subMetric.format === "multiplier") {
+  if (subMetric.format === "percentDelta" || subMetric.format === "percentPointDelta" || subMetric.format === "multiplier") {
     return formatPercentDelta();
   }
 
@@ -246,6 +313,14 @@ export function formatSubMetricValue(subMetric, results) {
     if (raw == null) return UNSUPPORTED_VALUE;
     const avg = Number(raw) / hoursElapsedToday();
     return Number.isFinite(avg) ? avg.toFixed(1) : UNSUPPORTED_VALUE;
+  }
+
+  if (subMetric.derived === "openRateComplement") {
+    return formatOpenRateComplement(results);
+  }
+
+  if (subMetric.derived === "netBacklogDaily") {
+    return formatNetBacklogDaily(results);
   }
 
   if (!subMetric.queryKey) return UNSUPPORTED_VALUE;
@@ -276,6 +351,8 @@ export function formatSubMetricValue(subMetric, results) {
       return formatMsAsDays(raw);
     case "hoursDecimal":
       return formatMsAsHours(raw);
+    case "signedInteger":
+      return formatSignedInteger(raw);
     default:
       return String(raw);
   }
