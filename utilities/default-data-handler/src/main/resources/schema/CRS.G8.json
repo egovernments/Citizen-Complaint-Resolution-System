@@ -1,0 +1,18 @@
+[
+  {
+    "tenantId": "{tenantid}",
+    "code": "CRS.SubmissionFormField",
+    "description": "STUB — reserves the schema code for Phase G8 (Submission Form Customization). The full definition (field types, validation rules, applicablePaths, displayOrder, label_ptMZ/label_en, dependent-list semantics) is designed in docs/g-phases/g8-submission-forms.md and will be fleshed out when the G8 implementation PR lands. Registered as an empty-shape object so the schema code is reserved in the registry and downstream tooling can reference `CRS.SubmissionFormField` without colliding. DO NOT seed data against this schema yet — the shape will change before the implementation PR ships.",
+    "isActive": false,
+    "definition": {
+      "type": "object",
+      "title": "Generated schema for Root",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [],
+      "x-unique": [],
+      "properties": {},
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  }
+]
