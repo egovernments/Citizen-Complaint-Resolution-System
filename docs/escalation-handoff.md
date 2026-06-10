@@ -85,11 +85,11 @@ Design hub: Discussion #773 (74k-char body, 0 comments).
 
 | Artifact | Version / value | URL / location | Verification command |
 |---|---|---|---|
-| `pgr-services` image | `10.0.0.4:5000/egovio/pgr-services-dev:escalation-otel-amd64-fallback-a43e4adfc` | private VPC registry | `ssh egov-bomet "docker inspect digit-pgr-services-1 --format '{{.Config.Image}}'"` |
+| `pgr-services` image | `registry.preview.egov.theflywheel.in/egovio/pgr-services-dev:escalation-prd-58db8fbfe` (built from [PR #815](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/815) head, deployed 2026-06-10) | VPC registry (`10.0.0.4:5000`, same store) | `ssh egov-bomet "docker inspect digit-pgr-services-1 --format '{{.Config.Image}}'"` |
 | Configurator bundle | built from PR #770 head `673005c02` | `/var/www/configurator/` on egov-bomet | `ssh egov-bomet "ls -la /var/www/configurator/index.html"` |
 | Workflow designer fork | built from `workflow-designer/` in PR #770 | `https://bometfeedbackhub.digit.org/designer/` | `curl -sI https://bometfeedbackhub.digit.org/designer/ \| head -1` |
 | Configurator SLA Matrix page | live | `https://bometfeedbackhub.digit.org/configurator/#/crs/sla-matrix` | open in browser → matrix renders with category rows × state columns |
-| MDMS schemas registered | 3 in PR #770 + 1 added by PR #775 | mdms-v2 module `CRS` | `curl -s -X POST 'https://bometfeedbackhub.digit.org/mdms-v2/schema/v1/_search' -H 'Content-Type: application/json' -d '{"RequestInfo":{},"SchemaDefCriteria":{"tenantId":"ke","codes":["CRS.CategorySLA","CRS.StateSLA","CRS.SLAAuditLog"]}}' \| jq '.SchemaDefinitions[].code'` |
+| MDMS schemas registered | all 5 (CategorySLA, StateSLA, SLAAuditLog + WorkflowStateMapping & EscalationPolicy seeded 2026-06-10) | mdms-v2 module `CRS` | `curl -s -X POST 'https://bometfeedbackhub.digit.org/mdms-v2/schema/v1/_search' -H 'Content-Type: application/json' -d '{"RequestInfo":{},"SchemaDefCriteria":{"tenantId":"ke","codes":["CRS.CategorySLA","CRS.StateSLA","CRS.SLAAuditLog"]}}' \| jq '.SchemaDefinitions[].code'` |
 | MDMS data rows (CategorySLA) | tenant-seeded; 0 by default | mdms-v2 module `CRS` | `curl -s -X POST 'https://bometfeedbackhub.digit.org/mdms-v2/v2/_search' -H 'Content-Type: application/json' -d '{"RequestInfo":{},"MdmsCriteria":{"tenantId":"ke.bomet","schemaCode":"CRS.CategorySLA"}}' \| jq '.mdms \| length'` |
 | `/escalation/_trigger` smoke | HTTP 200, structured JSON | Kong → pgr-services | `curl -s -X POST 'https://bometfeedbackhub.digit.org/pgr-services/escalation/_trigger' -H 'Content-Type: application/json' -d '{"RequestInfo":{"authToken":"<admin-token>"},"tenantId":"ke.bomet"}' \| jq '.scanned, .escalated, .skipped, .skipBreakdown'` |
 | OTEL spans in Tempo | `escalation.scanned/escalated/skipped/skipBreakdown.<reason>/tenantId/slaSource` | Tempo on egov-bomet | `ssh egov-bomet "curl -s 'http://localhost:13200/api/search?tags=service.name%3Dpgr-services%20span.name%3DEscalationScheduler.scanAndEscalate' \| jq '.traces[0:3]'"` |
@@ -386,7 +386,10 @@ This section is the **drift dossier** — every place where the rest of this han
 
 Captured 2026-06-10 against `feat/escalation-otel-configurator-designer @ cdceadb24`.
 
-### 14.1 Live Bomet `pgr-services` is NOT running the new scheduler
+### 14.1 ~~Live Bomet `pgr-services` is NOT running the new scheduler~~ — RESOLVED 2026-06-10
+
+> **RESOLVED 2026-06-10**: Bomet now runs `registry.preview.egov.theflywheel.in/egovio/pgr-services-dev:escalation-prd-58db8fbfe` (PR #815 head). Verified live: `/escalation/_trigger` returns 200 with per-complaint skip reasons (`dryRun` supported); `CRS.WorkflowStateMapping` + `CRS.EscalationPolicy` schemas registered and seeded (singleton rows at `ke`); the CategorySLA `slaHoursByLevel` SQL patch applied; configurator bundle redeployed. A full end-to-end escalation was demonstrated on a test complaint (with the documented `eg_wf_assignee_v2` manual fixup for the upstream ASSIGN bug): outcome `ESCALATED fromLevel=0 toLevel=1`, status → `PENDINGATSUPERVISOR`, enriched comment "Auto-escalated to Phase0 Supervisor (DESIG_1004): …" on the timeline, and `auditDetails.lastModifiedTime` refreshed (SLA clock reset). **Deploy gotcha discovered**: the compose lacked `EGOV_BOUNDARY_HOST` for pgr-services (the code's `egov.boundary.host` defaulted to the unreachable `boundary-service.egov:8080`), which broke complaint creation until the env was added — now fixed in both `/opt/digit/docker-compose.egov-digit.yaml` on Bomet and the repo compose (PR #815). Historical analysis below kept for reference.
+
 
 The live container on Bomet (`bometfeedbackhub.digit.org`) is running an **older** pgr-services build that predates the CRS-SLA scheduler and the `/escalation/_trigger` controller. The demo URLs in §3 and §4 of this doc DO NOT WORK against that image. This contradicts the impression the handoff gives that the live tenant exercises the new code.
 
