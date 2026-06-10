@@ -7,6 +7,7 @@ import { autoEscalationIgnoreDescriptor } from './auto-escalation-ignore';
 import { workflowBsMasterDescriptor } from './workflow-bs-master';
 import { pgrUiConstantsDescriptor } from './pgr-ui-constants';
 import { stateInfoDescriptor } from './state-info';
+import { escalationConfigDescriptor } from './escalation-config';
 
 /** Map of schema code -> descriptor. Add new entries as we cover more schemas. */
 const DESCRIPTORS: Record<string, SchemaDescriptor> = {
@@ -18,6 +19,7 @@ const DESCRIPTORS: Record<string, SchemaDescriptor> = {
   [workflowBsMasterDescriptor.schema]: workflowBsMasterDescriptor,
   [pgrUiConstantsDescriptor.schema]: pgrUiConstantsDescriptor,
   [stateInfoDescriptor.schema]: stateInfoDescriptor,
+  [escalationConfigDescriptor.schema]: escalationConfigDescriptor,
 };
 
 export function getDescriptor(schemaCode?: string): SchemaDescriptor | undefined {

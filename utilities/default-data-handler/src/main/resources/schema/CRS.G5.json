@@ -1,0 +1,27 @@
+[
+  {
+    "tenantId": "{tenantid}",
+    "code": "CRS.NotificationTemplate",
+    "description": "DESIGN-ONLY STUB (G5 — Notification Templates per workflow state). Reserves the schema code; the property bag and validation rules are intentionally minimal and will be filled in during the implementation PR. The eventual record models a per-(state, channel, locale) outbound notification body with variable substitution tokens such as [SRID], [YEAR], [CITIZEN_NAME]. Consumed at runtime by the Novu bridge to render citizen + officer notifications. See docs/g-phases/g5-notification-templates.md for the full design.",
+    "isActive": false,
+    "definition": {
+      "type": "object",
+      "title": "Generated schema for Root",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "stub"
+      ],
+      "x-unique": [
+        "stub"
+      ],
+      "properties": {
+        "stub": {
+          "type": "string",
+          "description": "Placeholder uniqueness key so the MDMS v2 validator accepts the schema during registration. The implementation PR replaces this with the real (state, channel, locale) tuple."
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  }
+]

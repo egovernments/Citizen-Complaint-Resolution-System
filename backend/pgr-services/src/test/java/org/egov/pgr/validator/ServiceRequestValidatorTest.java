@@ -115,6 +115,64 @@ public class ServiceRequestValidatorTest {
         assertCode("INVALID_SERVICECODE", () -> validator.validateUpdate(request, buildMdmsData("GARBAGE")));
     }
 
+    // ── validateEscalateComment (mandatory comment on manual ESCALATE) ────────
+
+    @Test
+    void update_escalateActionWithoutComment_throwsEscalateCommentRequired() {
+        ServiceRequest req = buildEscalateRequest(/*comments*/ null, /*autoEscalate*/ false);
+        stubPersistedComplaintExists(req);
+        assertCode("ESCALATE_COMMENT_REQUIRED",
+                () -> validator.validateUpdate(req, buildMdmsData("POTHOLE")));
+    }
+
+    @Test
+    void update_escalateActionWithBlankComment_throwsEscalateCommentRequired() {
+        ServiceRequest req = buildEscalateRequest("   ", false);
+        stubPersistedComplaintExists(req);
+        assertCode("ESCALATE_COMMENT_REQUIRED",
+                () -> validator.validateUpdate(req, buildMdmsData("POTHOLE")));
+    }
+
+    @Test
+    void update_escalateActionWithComment_passes() {
+        ServiceRequest req = buildEscalateRequest("Reassigning to ward head", false);
+        stubPersistedComplaintExists(req);
+        assertDoesNotThrow(() -> validator.validateUpdate(req, buildMdmsData("POTHOLE")));
+    }
+
+    @Test
+    void update_escalateActionFromAutoEscalateSystem_passesWithoutComment() {
+        ServiceRequest req = buildEscalateRequest(null, /*autoEscalate*/ true);
+        stubPersistedComplaintExists(req);
+        assertDoesNotThrow(() -> validator.validateUpdate(req, buildMdmsData("POTHOLE")));
+    }
+
+    private static ServiceRequest buildEscalateRequest(String comments, boolean autoEscalateRole) {
+        ServiceRequest req = buildRequest("LOC001", "POTHOLE");
+        // Leave assignes empty so validateDepartment short-circuits without hitting HRMS.
+        Workflow wf = Workflow.builder()
+                .action("ESCALATE")
+                .comments(comments)
+                .assignes(Collections.emptyList())
+                .build();
+        req.setWorkflow(wf);
+        if (autoEscalateRole) {
+            org.egov.common.contract.request.Role role = org.egov.common.contract.request.Role.builder()
+                    .code("AUTO_ESCALATE").name("Auto Escalate").tenantId("ke").build();
+            req.getRequestInfo().getUserInfo().setRoles(Collections.singletonList(role));
+            req.getRequestInfo().getUserInfo().setType("SYSTEM");
+        }
+        return req;
+    }
+
+    private void stubPersistedComplaintExists(ServiceRequest req) {
+        // validateUpdate calls repository.getServiceWrappers AFTER the escalate-comment
+        // check, but only if we get that far. We stub it to be safe so tests that DO
+        // pass the validation can complete without NPEs.
+        ServiceWrapper wrapper = ServiceWrapper.builder().service(req.getService()).build();
+        when(repository.getServiceWrappers(any())).thenReturn(Collections.singletonList(wrapper));
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private void stubBoundaryResponse(String code) {
