@@ -385,8 +385,8 @@ The canonical PRD-requirement → implementation mapping lives in the design doc
 - **Code review / merge questions on the foundation** → comment on [PR #770](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/770).
 - **Code review on a specific follow-up** → comment on the PR directly: [#774](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/774), [#775](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/775), [#776](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/776), [#794](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/794), [#796](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/796), [#797](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/797).
 - **Future-phase architectural feedback (G1-G8)** → comment on the paired Discussion for the phase you care about (see §8 table).
-- **Upstream `egov-workflow-v2` ASSIGN-assignee bug** → raise against [`egovernments/egov-workflow-v2`](https://github.com/egovernments/egov-workflow-v2) (not yet filed at time of writing).
-- **Upstream `egov-mdms` `oneOf` validator bug** → raise against the `egov-mdms` (mdms-v2) repo. Not yet filed.
+- **Upstream `egov-workflow-v2` ASSIGN-assignee bug** → FILED: [eGovStack/core-services#1674](https://github.com/eGovStack/core-services/issues/1674) (the workflow service lives in the `core-services` repo, which redirects from `egovernments/`).
+- **Upstream `egov-mdms` `oneOf` validator bug** → FILED: [eGovStack/core-services#1675](https://github.com/eGovStack/core-services/issues/1675).
 - **Operator / deployment questions for Bomet** → read [`docs/escalation-feature-bomet.md`](./escalation-feature-bomet.md) first, then PR [#794 ops gotchas](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/794) for symptoms + fixes, then PR [#796 deployment runbook](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/796) for new-tenant onboarding.
 
 ---
@@ -522,7 +522,7 @@ for p in prs:
 
 **Consequence:** GitHub's diff view shows each stacked PR's diff as `develop...HEAD`, which includes the ~10K lines from PR #770 in every single one of them. Reviewers cannot see what each stacked PR *adds on top of its parent*. Review tooling is effectively blind.
 
-**Fix per PR:** `gh pr edit <number> --base <parent-head-branch>`.
+**Correction (2026-06-11): re-pointing is NOT possible for this stack.** A PR's base must be a branch of the BASE repository (`egovernments/...`), but every parent head branch lives only on the fork (`ChakshuGautam/...`) — and pushing branches to the upstream repo is off-limits for this project. `gh pr edit --base <fork-branch>` fails. The feasible mitigation (DONE): every stacked PR body now opens with a "STACKED PR" note naming its parent and directing reviewers to the Commits tab. The table below is kept as the logical parent map.
 
 The full re-base map for the existing stack:
 
@@ -631,8 +631,8 @@ Two upstream bugs are referenced repeatedly in the design doc, Discussion #773 (
 
 | # | Bug | Where mentioned | Tracking issue |
 |---|---|---|---|
-| 1 | `egov-workflow-v2 ASSIGN` action does not persist assignees to `eg_wf_assignee_v2`. The workflow record updates the `assignee` column on the parent row but does not insert the row on the join table that `nextActionsForRole` reads from. | design doc §"Upstream gaps"; Discussion #773 prompt 2 | **NONE — not filed** |
-| 2 | `mdms-v2` schema validator rejects valid `oneOf` constructs (treats them as the catch-all "schema mismatch" error). Forces tenants to flatten polymorphic schemas into plain objects + client-side validation. | design doc §"Upstream gaps"; Discussion #773 prompt 8 | **NONE — not filed** |
+| 1 | `egov-workflow-v2 ASSIGN` action does not persist assignees to `eg_wf_assignee_v2`. The workflow record updates the `assignee` column on the parent row but does not insert the row on the join table that `nextActionsForRole` reads from. | design doc §"Upstream gaps"; Discussion #773 prompt 2 | [eGovStack/core-services#1674](https://github.com/eGovStack/core-services/issues/1674) — FILED 2026-06-11 |
+| 2 | `mdms-v2` schema validator rejects valid `oneOf` constructs (treats them as the catch-all "schema mismatch" error). Forces tenants to flatten polymorphic schemas into plain objects + client-side validation. | design doc §"Upstream gaps"; Discussion #773 prompt 8 | [eGovStack/core-services#1675](https://github.com/eGovStack/core-services/issues/1675) — FILED 2026-06-11 |
 
 Both bugs **block reachable cleanup**:
 - Bug 1 → escalation chain never completes end-to-end against a vanilla upstream workflow-v2; demo requires a patched build or manual SQL fixup.
@@ -697,7 +697,9 @@ git cherry-pick 5bf57f4cd        # the schema commit from refactor/scheduler-sta
 
 Refs: §14.2.
 
-### 15.3 Re-point all 14 PR bases
+### 15.3 ~~Re-point all 14 PR bases~~ — DONE the feasible way (2026-06-11)
+
+> **DONE (alternative)**: base re-pointing is impossible for fork-hosted parents (see §14.3 correction). All 13 stacked PRs now carry a "STACKED PR" header note naming their parent and pointing reviewers at the Commits tab. The original (infeasible) commands are kept below for the record.
 
 Until this is done, GitHub PR review is effectively unusable on the stack (every diff drowns in PR #770's 10K lines).
 
@@ -723,7 +725,9 @@ done
 
 Refs: §14.3.
 
-### 15.4 Triage PR #774
+### 15.4 ~~Triage PR #774~~ — DONE: closed as superseded (2026-06-11)
+
+> **DONE**: closed — [PR #815](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/815) commit `40d089cc8` pins the same file to the current build (`escalation-prd-042c61758`) and adds `EGOV_BOUNDARY_HOST`.
 
 Either rebase its image-pin onto the new SHA from §15.1 (recommended), or close it as obsolete:
 
@@ -799,7 +803,9 @@ done
 
 Refs: §14.5.
 
-### 15.6 File the two upstream bugs
+### 15.6 ~~File the two upstream bugs~~ — DONE (2026-06-11)
+
+> **DONE**: [eGovStack/core-services#1674](https://github.com/eGovStack/core-services/issues/1674) (workflow-v2 ASSIGN) and [eGovStack/core-services#1675](https://github.com/eGovStack/core-services/issues/1675) (mdms-v2 `oneOf`). Note: neither service has a standalone repo — both modules live in `core-services` (the `egovernments` org redirects to `eGovStack`). Discussion #773 prompts 2/8 and §13/§14.6 updated with the links.
 
 Open issues against the repos that own the affected services, then link the issue URLs back into Discussion #773 (prompts 2 and 8) and into §13 of this doc.
 
