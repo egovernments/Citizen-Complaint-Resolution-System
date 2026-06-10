@@ -1808,6 +1808,17 @@ validator is opaque and tightly coupled to a live Postgres. What we do have:
 ### Layer 4 — Integration tests
 
 - **Files.**
+  - [`tests/integration-tests/tests/lifecycle/pgr-escalation-full-flow.spec.ts`](../tests/integration-tests/tests/lifecycle/pgr-escalation-full-flow.spec.ts)
+    — the canonical full-flow E2E: seeds a test-scoped `CRS.CategorySLA` row
+    (per-level SLA ≈15s for a dedicated tuple — never touches the global v0
+    config, so it is cron-safe), calibrates the live cron phase with a
+    sentinel complaint, then runs citizen-create (Strategy-A tuple) → ASSIGN
+    (canonical `assignes` key; the #1674 regression read) → 60s elapse →
+    dryRun preview (`WOULD_ESCALATE`, `slaSource=CRS.CategorySLA.level`,
+    zero mutations) → real escalation → post-conditions (status flip,
+    `escalationLevel=1`, SLA-clock reset, supervisor PI + enriched comment),
+    and deactivates the seeded row in cleanup. Generous pacing by design
+    (~3-5 min): determinism over speed.
   - [`tests/integration-tests/tests/lifecycle/pgr-escalation-trigger-bomet.spec.ts`](../tests/integration-tests/tests/lifecycle/pgr-escalation-trigger-bomet.spec.ts)
     — full API chain: create complaint → assign → cap SLA → trigger →
     assert OTEL attributes in Tempo.

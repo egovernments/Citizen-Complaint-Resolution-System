@@ -188,6 +188,7 @@ PostMessage bridge: `designer-ready` / `load-workflow` / `save-workflow`. Embedd
 
 | File | Role |
 |---|---|
+| `integration-tests/tests/lifecycle/pgr-escalation-full-flow.spec.ts` | Canonical full-flow E2E: seeded tuple-scoped 15s SLA → cron-phase sentinel → create → ASSIGN (#1674 regression read) → 60s → dryRun → escalate → post-conditions; cron-safe, self-cleaning — *added by `feat/escalation-prd-alignment`* |
 | `integration-tests/tests/lifecycle/pgr-escalation-trigger-bomet.spec.ts` | API-level + OTEL — asserts span attributes in Tempo |
 | `integration-tests/tests/lifecycle/pgr-manual-escalate-comment.spec.ts` | Validates 400 vs 200 on manual ESCALATE |
 | `integration-tests/tests/admin/escalation-configurator-bomet.spec.ts` | UI drive-it-save-it |
