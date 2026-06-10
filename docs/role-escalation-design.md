@@ -1,11 +1,19 @@
 # Optional role-level escalation — design
 
-> **Status**: design for review (Discussion #773, prompt 9). Not implemented.
-> Closes the PRD's primary-journey gap (traceability **P4**) as an **opt-in** feature:
-> absent/disabled configuration ⇒ behavior byte-identical to today.
-> **Hard prerequisite**: the workflow ASSIGN-persistence fix
+> **Status**: **IMPLEMENTED** (branch `feat/escalation-prd-alignment`, PR #815) and
+> verified live on Bomet — e2e `pgr-escalation-role-flow.spec.ts` (19/19 with the
+> full-flow spec): unassigned complaint → dryRun `WOULD_ESCALATE` with `R1_PIN`
+> provenance → real escalation to the pinned supervisor → OTEL child span asserted
+> from Tempo. Opt-in: absent/disabled config is byte-identical to today (pinned by a
+> serialization test). Review hardening beyond this design: tenant-keyed resolution
+> memoization (one scan can span multiple city tenants), HRMS page-truncation guard
+> (no exactly-one verdict from a truncated page), tri-state HRMS lookups (a transient
+> blip skips-and-retries instead of bypassing an operator pin), HTTP 409 on
+> concurrent mutating scans, and per-complaint OTEL child spans
+> (`escalation.complaint`) so provenance survives multi-complaint scans.
+> The workflow ASSIGN-persistence prerequisite
 > ([eGovStack/core-services#1674](https://github.com/eGovStack/core-services/issues/1674))
-> must be deployed on the tenant first — see §"Interaction with the upstream bug".
+> is deployed on Bomet (`egov-workflow-v2:maven-jdk21-43f925c2`).
 
 ## Problem
 
