@@ -191,6 +191,12 @@ export async function saveEscalationPolicy(
   const saved = existing
     ? await digitClient.mdmsUpdate({ ...existing, data: data as unknown as Record<string, unknown> }, true)
     : await digitClient.mdmsCreate(stateTenant, ESCALATION_POLICY_SCHEMA, STATE_SLA_UID, data as unknown as Record<string, unknown>);
+  // MDMS v2 "phantom 200": a duplicate create returns HTTP 200 with an empty
+  // mdms array. Without this guard we'd log an audit entry for a write that
+  // never landed and tell the operator it "may be delayed" forever.
+  if (!saved) {
+    throw new Error('The save was not accepted (a record may already exist) — reload the page and try again.');
+  }
   await writeAuditEntry(stateTenant, {
     timestamp: Date.now(),
     userUuid: actor.uuid ?? 'unknown',
@@ -239,6 +245,12 @@ export async function saveWorkflowStateMapping(
   const saved = existing
     ? await digitClient.mdmsUpdate({ ...existing, data: data as unknown as Record<string, unknown> }, true)
     : await digitClient.mdmsCreate(stateTenant, WORKFLOW_STATE_MAPPING_SCHEMA, STATE_SLA_UID, data as unknown as Record<string, unknown>);
+  // MDMS v2 "phantom 200": a duplicate create returns HTTP 200 with an empty
+  // mdms array. Without this guard we'd log an audit entry for a write that
+  // never landed and tell the operator it "may be delayed" forever.
+  if (!saved) {
+    throw new Error('The save was not accepted (a record may already exist) — reload the page and try again.');
+  }
   await writeAuditEntry(stateTenant, {
     timestamp: Date.now(),
     userUuid: actor.uuid ?? 'unknown',

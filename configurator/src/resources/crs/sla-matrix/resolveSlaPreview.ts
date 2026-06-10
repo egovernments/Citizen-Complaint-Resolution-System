@@ -164,8 +164,10 @@ export function resolveSlaPreview(
       : null;
 
   // extractCategoryTuple (additionalDetail half only — no ServiceDefs).
+  // Null-check, not truthiness: the backend forms a tuple from empty strings
+  // too (extractCategoryTuple only guards against null).
   const tuple =
-    complaint.path && complaint.category && complaint.subcategoryL1
+    complaint.path != null && complaint.category != null && complaint.subcategoryL1 != null
       ? { path: complaint.path, category: complaint.category, subcategoryL1: complaint.subcategoryL1 }
       : null;
 

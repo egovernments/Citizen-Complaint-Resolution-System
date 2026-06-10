@@ -29,7 +29,7 @@ function DeprecationBanner() {
           as a fallback).
         </span>
         <Button asChild variant="outline" size="sm" className="shrink-0">
-          <Link to="/crs-sla-matrix">
+          <Link to="/manage/crs-sla-matrix">
             Open Category SLA Matrix
             <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
           </Link>

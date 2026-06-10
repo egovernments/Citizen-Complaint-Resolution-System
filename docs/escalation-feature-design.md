@@ -1952,7 +1952,7 @@ For the Bomet operator runbook (Tempo curl + log greps), see
 | SLA-source constants | [`PGRConstants#SLA_SOURCE_CATEGORY/STATE/V0`](../backend/pgr-services/src/main/java/org/egov/pgr/util/PGRConstants.java) |
 | MDMS schemas (incl. `CRS.EscalationPolicy`) | [`utilities/default-data-handler/src/main/resources/schema/CRS.json`](../utilities/default-data-handler/src/main/resources/schema/CRS.json) |
 | Configurator page | [`configurator/src/resources/crs/sla-matrix/CategorySlaMatrixPage.tsx`](../configurator/src/resources/crs/sla-matrix/CategorySlaMatrixPage.tsx) |
-| Escalation Settings page | [`configurator/src/resources/crs/sla-matrix/EscalationSettingsPage.tsx`](../configurator/src/resources/crs/sla-matrix/EscalationSettingsPage.tsx) |
+| Escalation Settings page | [`configurator/src/resources/crs/escalation-settings/EscalationSettingsPage.tsx`](../configurator/src/resources/crs/escalation-settings/EscalationSettingsPage.tsx) |
 | Shared client SLA resolver | [`configurator/src/resources/crs/sla-matrix/resolveSlaPreview.ts`](../configurator/src/resources/crs/sla-matrix/resolveSlaPreview.ts) |
 | Built-in status-mapping table | [`configurator/src/resources/crs/sla-matrix/standardStateMappings.ts`](../configurator/src/resources/crs/sla-matrix/standardStateMappings.ts) |
 | Shared level-SLA editor | [`configurator/src/resources/crs/sla-matrix/LevelSlaEditor.tsx`](../configurator/src/resources/crs/sla-matrix/LevelSlaEditor.tsx) |

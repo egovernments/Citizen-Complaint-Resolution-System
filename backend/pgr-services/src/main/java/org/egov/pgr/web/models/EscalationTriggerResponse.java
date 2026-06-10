@@ -95,8 +95,9 @@ public class EscalationTriggerResponse {
          * {@link org.egov.pgr.util.PGRConstants#SLA_SOURCE_POLICY_LEVEL},
          * {@link org.egov.pgr.util.PGRConstants#SLA_SOURCE_STATE} or
          * {@link org.egov.pgr.util.PGRConstants#SLA_SOURCE_V0}. Null on
-         * MAX_DEPTH_REACHED / NO_LAST_MODIFIED_TIME outcomes, which are
-         * decided before SLA resolution applies.
+         * MAX_DEPTH_REACHED (decided before resolution runs) and
+         * NO_LAST_MODIFIED_TIME (resolution ran, but without a timestamp no
+         * SLA comparison was possible, so the source is not reported).
          */
         @JsonProperty("slaSource")
         private String slaSource;

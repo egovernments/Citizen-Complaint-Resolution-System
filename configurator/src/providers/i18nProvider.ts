@@ -49,7 +49,7 @@ const customEnglishMessages: TranslationMessages = {
       escalation: 'Escalation',
       sla_matrix: 'SLA Matrix',
       escalation_settings: 'Escalation Settings',
-      escalation_config_legacy: 'Legacy SLA (v0)',
+      escalation_config_legacy: 'Previous SLA settings (legacy)',
       people: 'People',
       employees: 'Employees',
       users: 'Users',

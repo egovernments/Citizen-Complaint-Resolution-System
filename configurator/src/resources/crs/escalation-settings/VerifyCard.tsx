@@ -127,7 +127,7 @@ export function VerifyCard({ stateTenant, onOpenTrace }: VerifyCardProps) {
               <Tile label="Needs attention" value={needsAttention} highlight={needsAttention > 0} />
             </div>
             <p className="text-xs text-muted-foreground">
-              Counts can overlap — a complaint can be both "not due yet" and "in warning window".
+              Counts can overlap — a complaint can be both "not due yet" and "in warning window", and advisory rows count complaints that were still processed, so they also appear in the other tiles.
             </p>
             {attentionEntries.length > 0 && (
               <div className="rounded-md border border-border p-3 space-y-1.5">

@@ -376,8 +376,9 @@ public class EscalationScheduler {
 
     /**
      * Records a skip outcome. {@code slaSource} is the winning
-     * {@link SlaResolution#source} layer, or null for skips decided before
-     * SLA resolution applies (MAX_DEPTH_REACHED, NO_LAST_MODIFIED_TIME).
+     * {@link SlaResolution#source} layer; null for MAX_DEPTH_REACHED (decided
+     * before resolution runs) and NO_LAST_MODIFIED_TIME (resolution ran, but
+     * with no timestamp the comparison was impossible, so it is not reported).
      */
     private void recordSkip(Map<EscalationSkipReason, Integer> skipMap,
                             List<EscalationOutcome> details,

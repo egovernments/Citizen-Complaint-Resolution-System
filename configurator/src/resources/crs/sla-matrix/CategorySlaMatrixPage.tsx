@@ -439,7 +439,7 @@ export function CategorySlaMatrixPage() {
           </h1>
           <p className="text-sm text-muted-foreground max-w-2xl">
             Per (Path, Category, Subcategory) SLA targets used by the escalation scheduler.
-            Empty cells fall back to per-state defaults from CRS.StateSLA.
+            Empty cells use the per-state defaults from the Defaults row below.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -919,7 +919,7 @@ function StateDefaultsRow({
       Deployment-wide level SLAs are set and take priority at{' '}
       {policyLevels.length === 1 ? 'level L0' : `levels L0–L${policyLevels.length - 1}`} for
       categories without their own levels —{' '}
-      <Link to="/escalation-settings" className="underline hover:text-foreground">
+      <Link to="/manage/escalation-settings" className="underline hover:text-foreground">
         edit on the Escalation Settings page
       </Link>.
     </p>
