@@ -1,5 +1,6 @@
 package org.egov.pgr.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.utils.MultiStateInstanceUtil;
@@ -26,10 +27,14 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -302,6 +307,20 @@ public class EscalationSchedulerRoleWiringTest {
                 .previewRoleEscalation(any(), any(), any(), anyInt(), anyLong(), anyLong(), any());
         assertFalse(fetchedMasters.contains("RoleSupervisors"),
                 "disabled tenants must not pay the CRS.RoleSupervisors fetch");
+
+        // Wire-format pin: the app ObjectMapper uses default ALWAYS inclusion,
+        // so without field-level NON_NULL the four role-provenance fields would
+        // serialize as null keys on every disabled-path detail row. A
+        // disabled-path response must keep today's EXACT key set — slaSource
+        // stays even when null (ALWAYS inclusion is part of the pinned format),
+        // and no role keys appear.
+        JsonNode detailRow = new ObjectMapper().valueToTree(response).get("details").get(0);
+        Set<String> keys = new LinkedHashSet<>();
+        detailRow.fieldNames().forEachRemaining(keys::add);
+        assertEquals(
+                new HashSet<>(Arrays.asList("serviceRequestId", "action", "reason", "detail", "slaSource")),
+                new HashSet<>(keys),
+                "disabled-path detail rows must serialize the exact pre-role-escalation key set");
     }
 
     private static EscalationOutcome outcomeFor(EscalationTriggerResponse response, String srid) {

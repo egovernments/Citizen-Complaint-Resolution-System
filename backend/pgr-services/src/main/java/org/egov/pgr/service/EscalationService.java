@@ -254,9 +254,12 @@ public class EscalationService {
     //   R1 — explicit CRS.RoleSupervisors pin (validated against HRMS);
     //   R2 — supervisorRoleByRole ladder (authoritative once configured);
     //   R3 — reportingTo consensus over holders of the acting role itself.
-    // Resolution is memoized per scan keyed on (actingRole, department) — it
-    // never depends on the complaint, so a scan costs a handful of HRMS
-    // lookups, not one per complaint.
+    // Resolution is memoized per scan keyed on (tenantId, actingRole,
+    // department) — it never depends on the complaint itself, but one scan
+    // can span multiple city tenants and HRMS answers are tenant-scoped, so
+    // the tenant MUST be part of the key. A scan still costs a handful of
+    // HRMS lookups, not one per complaint. Transient HRMS failures are never
+    // memoized — they retry on the next complaint/scan.
     // ----------------------------------------------------------------------
 
     static final String STRATEGY_R1_PIN = "R1_PIN";
@@ -285,26 +288,39 @@ public class EscalationService {
         /** Null on success; ROLE_SUPERVISOR_AMBIGUOUS / NO_ROLE_SUPERVISOR otherwise. */
         private final EscalationSkipReason skipReason;
         private final String detail;
+        /**
+         * True when the skip was caused by a transient HRMS failure (not a
+         * data condition). Such resolutions are never memoized — the next
+         * complaint/scan retries HRMS instead of locking the failure in.
+         */
+        private final boolean transientFailure;
     }
 
     /**
      * Resolves the escalation target for an unattended complaint's acting
      * role. Memoized per scan: the caller owns the cache map (created in
-     * {@code scanAndEscalateOnce}) keyed on {@code actingRole + "|" + department}.
+     * {@code scanAndEscalateOnce}) keyed on
+     * {@code tenantId + "|" + actingRole + "|" + department} — one scan can
+     * span multiple city tenants and the resolution is tenant-scoped, so a
+     * tenant-less key would poison the cache across tenants. Transient HRMS
+     * failures are returned but NOT memoized, so the next complaint (or scan)
+     * retries instead of replaying the failure.
      */
     RoleResolution resolveRoleTarget(String actingRole, String department,
                                      List<Map<String, Object>> roleSupervisorRows,
                                      Map<String, Object> policy,
                                      RequestInfo requestInfo, String tenantId,
                                      Map<String, RoleResolution> cache) {
-        String cacheKey = actingRole + "|" + (department == null ? "" : department);
+        String cacheKey = tenantId + "|" + actingRole + "|" + (department == null ? "" : department);
         RoleResolution cached = cache.get(cacheKey);
         if (cached != null) {
             return cached;
         }
         RoleResolution resolved = doResolveRoleTarget(actingRole, department, roleSupervisorRows,
                 policy, requestInfo, tenantId);
-        cache.put(cacheKey, resolved);
+        if (!resolved.isTransientFailure()) {
+            cache.put(cacheKey, resolved);
+        }
         return resolved;
     }
 
@@ -317,11 +333,29 @@ public class EscalationService {
 
         // R1 — explicit pin: (role, department) row first, then (role, "ALL").
         // Pins go stale (transfer, deactivation), so the target is validated
-        // against HRMS at escalation time; a stale pin falls through.
+        // against HRMS at escalation time; a stale pin falls through. Only a
+        // definitive FALSE from HRMS is "stale" — a lookup FAILURE must skip
+        // (and retry next scan), or a transient blip would bypass the
+        // operator's pin and misroute via R2/R3.
         Map<String, Object> pin = findPinRow(roleSupervisorRows, actingRole, department);
         if (pin != null) {
             String pinnedUuid = pin.get("assigneeUuid") instanceof String ? (String) pin.get("assigneeUuid") : null;
-            if (pinnedUuid != null && hrmsUtil.isActiveEmployee(pinnedUuid, tenantId, requestInfo)) {
+            Boolean pinnedActive = pinnedUuid == null
+                    ? Boolean.FALSE
+                    : hrmsUtil.isActiveEmployee(pinnedUuid, tenantId, requestInfo);
+            if (pinnedActive == null) {
+                log.warn("HRMS active-employee lookup failed for CRS.RoleSupervisors pin ({}, {}) — skipping, will retry next scan",
+                        actingRole, pin.get("department"));
+                return RoleResolution.builder()
+                        .strategy(STRATEGY_R1_PIN)
+                        .actingRole(actingRole)
+                        .department(department)
+                        .skipReason(EscalationSkipReason.NO_ROLE_SUPERVISOR)
+                        .detail("HRMS lookup failed — will retry next scan")
+                        .transientFailure(true)
+                        .build();
+            }
+            if (pinnedActive) {
                 boolean exactDepartment = department != null && department.equals(pin.get("department"));
                 return RoleResolution.builder()
                         .targetUuid(pinnedUuid)
@@ -342,13 +376,12 @@ public class EscalationService {
         // Exhaustion here NEVER falls through to R3.
         String ladderRole = EscalationScheduler.ladderRoleFor(policy, actingRole);
         if (ladderRole != null) {
-            boolean filtered = department != null;
-            List<Map<String, String>> candidates =
-                    hrmsUtil.searchEmployeesByRole(ladderRole, department, tenantId, requestInfo);
-            if (candidates.isEmpty() && filtered) {
-                filtered = false;
-                candidates = hrmsUtil.searchEmployeesByRole(ladderRole, null, tenantId, requestInfo);
+            CandidateSearch search = searchCandidates(ladderRole, department, tenantId, requestInfo);
+            RoleResolution unusable = unusableSearchSkip(search, STRATEGY_R2_LADDER, actingRole, department, pinNote);
+            if (unusable != null) {
+                return unusable;
             }
+            List<Map<String, String>> candidates = search.employees;
             if (candidates.size() == 1) {
                 return RoleResolution.builder()
                         .targetUuid(candidates.get(0).get("uuid"))
@@ -356,7 +389,7 @@ public class EscalationService {
                         .actingRole(actingRole)
                         .department(department)
                         .candidateCount(1)
-                        .departmentFiltered(filtered)
+                        .departmentFiltered(search.filtered)
                         .detail(pinNote + "single holder of ladder role " + ladderRole)
                         .build();
             }
@@ -366,7 +399,7 @@ public class EscalationService {
                         .actingRole(actingRole)
                         .department(department)
                         .candidateCount(candidates.size())
-                        .departmentFiltered(filtered)
+                        .departmentFiltered(search.filtered)
                         .skipReason(EscalationSkipReason.ROLE_SUPERVISOR_AMBIGUOUS)
                         .detail(pinNote + candidates.size() + " holders of ladder role " + ladderRole)
                         .build();
@@ -376,7 +409,7 @@ public class EscalationService {
                     .actingRole(actingRole)
                     .department(department)
                     .candidateCount(0)
-                    .departmentFiltered(filtered)
+                    .departmentFiltered(search.filtered)
                     .skipReason(EscalationSkipReason.NO_ROLE_SUPERVISOR)
                     .detail(pinNote + "no active holder of ladder role " + ladderRole)
                     .build();
@@ -384,13 +417,13 @@ public class EscalationService {
 
         // R3 — reportingTo consensus over holders of the acting role itself
         // (only when no ladder entry exists).
-        boolean filtered = department != null;
-        List<Map<String, String>> holders =
-                hrmsUtil.searchEmployeesByRole(actingRole, department, tenantId, requestInfo);
-        if (holders.isEmpty() && filtered) {
-            filtered = false;
-            holders = hrmsUtil.searchEmployeesByRole(actingRole, null, tenantId, requestInfo);
+        CandidateSearch search = searchCandidates(actingRole, department, tenantId, requestInfo);
+        RoleResolution unusable = unusableSearchSkip(search, STRATEGY_R3_REPORTING, actingRole, department, pinNote);
+        if (unusable != null) {
+            return unusable;
         }
+        List<Map<String, String>> holders = search.employees;
+        boolean filtered = search.filtered;
         Set<String> supervisors = holders.stream()
                 .map(h -> h.get("reportingTo"))
                 .filter(Objects::nonNull)
@@ -426,6 +459,79 @@ public class EscalationService {
                 .skipReason(EscalationSkipReason.NO_ROLE_SUPERVISOR)
                 .detail(pinNote + "no reportingTo found across holders of " + actingRole)
                 .build();
+    }
+
+    /**
+     * Shared R2/R3 candidate search with the tenant-wide retry: when the
+     * department filter found nobody (and the page is trustworthy), retry
+     * unfiltered. Truncated or failed pages are returned as-is — retrying a
+     * truncated page is pointless (the department filter is client-side, so
+     * the unfiltered retry would replay the same truncated HRMS query).
+     */
+    private CandidateSearch searchCandidates(String role, String department,
+                                             String tenantId, RequestInfo requestInfo) {
+        boolean filtered = department != null;
+        HRMSUtil.RoleSearchResult result = hrmsUtil.searchEmployeesByRole(role, department, tenantId, requestInfo);
+        if (!result.isFailed() && !result.isTruncated() && result.getEmployees().isEmpty() && filtered) {
+            filtered = false;
+            result = hrmsUtil.searchEmployeesByRole(role, null, tenantId, requestInfo);
+        }
+        return new CandidateSearch(result.getEmployees(), filtered, result.isTruncated(), result.isFailed());
+    }
+
+    /** A role-search outcome plus whether the department filter survived the retry. */
+    private static final class CandidateSearch {
+        final List<Map<String, String>> employees;
+        final boolean filtered;
+        final boolean truncated;
+        final boolean failed;
+
+        CandidateSearch(List<Map<String, String>> employees, boolean filtered, boolean truncated, boolean failed) {
+            this.employees = employees;
+            this.filtered = filtered;
+            this.truncated = truncated;
+            this.failed = failed;
+        }
+    }
+
+    /**
+     * Maps an untrustworthy candidate search to its structured skip, or null
+     * when the search can be trusted. Two cases, applied identically to R2
+     * and R3, filtered or not:
+     * <ul>
+     *   <li>FAILED — transient HRMS error: skip as NO_ROLE_SUPERVISOR and
+     *       mark transient so the resolution is never memoized;</li>
+     *   <li>TRUNCATED — the raw page hit the search limit, so a 150-holder
+     *       role could filter down to a false exactly-one verdict (silent
+     *       misroute — the exact failure skip-don't-guess exists to
+     *       prevent): skip as ROLE_SUPERVISOR_AMBIGUOUS.</li>
+     * </ul>
+     */
+    private static RoleResolution unusableSearchSkip(CandidateSearch search, String strategy,
+                                                     String actingRole, String department, String pinNote) {
+        if (search.failed) {
+            return RoleResolution.builder()
+                    .strategy(strategy)
+                    .actingRole(actingRole)
+                    .department(department)
+                    .departmentFiltered(search.filtered)
+                    .skipReason(EscalationSkipReason.NO_ROLE_SUPERVISOR)
+                    .detail(pinNote + "HRMS lookup failed — will retry next scan")
+                    .transientFailure(true)
+                    .build();
+        }
+        if (search.truncated) {
+            return RoleResolution.builder()
+                    .strategy(strategy)
+                    .actingRole(actingRole)
+                    .department(department)
+                    .departmentFiltered(search.filtered)
+                    .skipReason(EscalationSkipReason.ROLE_SUPERVISOR_AMBIGUOUS)
+                    .detail(pinNote + "candidate list truncated at " + HRMSUtil.ROLE_SEARCH_LIMIT
+                            + " — narrow with a department pin or pin a person")
+                    .build();
+        }
+        return null;
     }
 
     /** Active pin row for (role, department), falling back to (role, "ALL"). Rows are pre-filtered to active. */

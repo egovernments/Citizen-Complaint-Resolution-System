@@ -2,7 +2,10 @@ package org.egov.pgr.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jayway.jsonpath.JsonPath;
+import io.opentelemetry.api.GlobalOpenTelemetry;
 import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.request.Role;
@@ -159,6 +162,9 @@ public class EscalationScheduler {
 
         Span span = Span.current();
         span.setAttribute("escalation.tenantId", tenantId == null ? "" : tenantId);
+        // Noop in unit tests (no SDK registered); the real tracer comes from
+        // the OTEL javaagent in deployments. Used for per-complaint child spans.
+        Tracer tracer = GlobalOpenTelemetry.getTracer("pgr-services");
 
         Map<String, Object> escalationConfig = fetchEscalationConfig(requestInfo, tenantId);
         List<Long> defaultSlaByLevel = getDefaultSlaByLevel(escalationConfig);
@@ -188,7 +194,8 @@ public class EscalationScheduler {
                 : Collections.emptyList();
         int roleMaxPerScan = roleMaxPerScan(crsEscalationPolicy);
         // Per-scan memo for resolveRoleTarget — resolution depends only on
-        // (actingRole, department), not the complaint.
+        // (tenantId, actingRole, department), not the complaint itself; the
+        // tenant matters because one scan can span multiple city tenants.
         Map<String, EscalationService.RoleResolution> roleResolutionCache = new HashMap<>();
         int roleEscalated = 0;
 
@@ -220,233 +227,245 @@ public class EscalationScheduler {
 
                     scanned++;
 
-                    int currentLevel = getEscalationLevel(complaint);
-                    if (currentLevel >= maxDepth) {
-                        recordSkip(skipMap, details, srid, status, currentLevel,
-                                EscalationSkipReason.MAX_DEPTH_REACHED,
-                                "currentLevel=" + currentLevel + ", maxDepth=" + maxDepth, null);
-                        skipped++;
-                        continue;
-                    }
-
-                    // Resolve SLA via the new CRS.* model first (CategorySLA → StateSLA),
-                    // then fall through to the v0 EscalationConfig defaults. The per-complaint
-                    // OTEL span gets a `escalation.slaSource` attribute so operators can tell
-                    // which layer answered the lookup.
-                    SlaResolution slaRes = resolveSlaHours(
-                            complaint, status, crsCategorySla, crsStateSlaDefaults,
-                            crsWorkflowStateMapping, serviceCodeToCategory, crsEscalationPolicy,
-                            currentLevel, defaultSlaByLevel, overrides);
-                    long sla = slaRes.slaMs;
-                    span.setAttribute("escalation.slaSource", slaRes.source);
-                    if (slaRes.unmappedCategory) {
-                        // Log + count once per scan so the warning is actionable without
-                        // skipping the complaint outright — fallback still produced a usable SLA.
-                        log.warn("Escalation SLA UNMAPPED_CATEGORY — srid={} serviceCode={} (fell back to {})",
-                                srid, complaint.getServiceCode(), slaRes.source);
-                        skipMap.merge(EscalationSkipReason.UNMAPPED_CATEGORY, 1, Integer::sum);
-                    }
-                    if (slaRes.stateMappingMissing) {
-                        // The workflow state has no entry in CRS.WorkflowStateMapping AND
-                        // CRS.StateSLA had no fallback either — v0 EscalationConfig answered
-                        // but operators should know this state is unmapped.
-                        log.warn("Escalation SLA STATE_MAPPING_MISSING — srid={} workflowState={} (fell back to {})",
-                                srid, status, slaRes.source);
-                        skipMap.merge(EscalationSkipReason.STATE_MAPPING_MISSING, 1, Integer::sum);
-                    }
-
-                    long lastModified = 0L;
-                    if (complaint.getAuditDetails() != null) {
-                        Long modified = complaint.getAuditDetails().getLastModifiedTime();
-                        if (modified != null && modified > 0) {
-                            lastModified = modified;
-                        } else if (complaint.getAuditDetails().getCreatedTime() != null) {
-                            lastModified = complaint.getAuditDetails().getCreatedTime();
+                    // Per-complaint CHILD span: every per-complaint attribute set
+                    // via Span.current() — here (escalation.slaSource) and inside
+                    // EscalationService (complaint.serviceRequestId, fromLevel,
+                    // skipReason, toAssignee, role*, ...) — lands on this child
+                    // instead of last-writer-winning on the single scan span.
+                    // Scan-level aggregates stay on the parent span.
+                    Span complaintSpan = tracer.spanBuilder("escalation.complaint").startSpan();
+                    complaintSpan.setAttribute("complaint.serviceRequestId", srid == null ? "" : srid);
+                    try (Scope ignored = complaintSpan.makeCurrent()) {
+                        int currentLevel = getEscalationLevel(complaint);
+                        if (currentLevel >= maxDepth) {
+                            recordSkip(skipMap, details, srid, status, currentLevel,
+                                    EscalationSkipReason.MAX_DEPTH_REACHED,
+                                    "currentLevel=" + currentLevel + ", maxDepth=" + maxDepth, null);
+                            skipped++;
+                            continue;
                         }
-                    }
 
-                    if (lastModified == 0L) {
-                        recordSkip(skipMap, details, srid, status, currentLevel,
-                                EscalationSkipReason.NO_LAST_MODIFIED_TIME, "auditDetails missing timestamps", null);
-                        skipped++;
-                        continue;
-                    }
+                        // Resolve SLA via the new CRS.* model first (CategorySLA → StateSLA),
+                        // then fall through to the v0 EscalationConfig defaults. The per-complaint
+                        // OTEL span gets a `escalation.slaSource` attribute so operators can tell
+                        // which layer answered the lookup.
+                        SlaResolution slaRes = resolveSlaHours(
+                                complaint, status, crsCategorySla, crsStateSlaDefaults,
+                                crsWorkflowStateMapping, serviceCodeToCategory, crsEscalationPolicy,
+                                currentLevel, defaultSlaByLevel, overrides);
+                        long sla = slaRes.slaMs;
+                        complaintSpan.setAttribute("escalation.slaSource", slaRes.source);
+                        if (slaRes.unmappedCategory) {
+                            // Log + count once per scan so the warning is actionable without
+                            // skipping the complaint outright — fallback still produced a usable SLA.
+                            log.warn("Escalation SLA UNMAPPED_CATEGORY — srid={} serviceCode={} (fell back to {})",
+                                    srid, complaint.getServiceCode(), slaRes.source);
+                            skipMap.merge(EscalationSkipReason.UNMAPPED_CATEGORY, 1, Integer::sum);
+                        }
+                        if (slaRes.stateMappingMissing) {
+                            // The workflow state has no entry in CRS.WorkflowStateMapping AND
+                            // CRS.StateSLA had no fallback either — v0 EscalationConfig answered
+                            // but operators should know this state is unmapped.
+                            log.warn("Escalation SLA STATE_MAPPING_MISSING — srid={} workflowState={} (fell back to {})",
+                                    srid, status, slaRes.source);
+                            skipMap.merge(EscalationSkipReason.STATE_MAPPING_MISSING, 1, Integer::sum);
+                        }
 
-                    long elapsed = System.currentTimeMillis() - lastModified;
-
-                    // PRD: configurable pre-breach warning at thresholdPercent of SLA elapsed.
-                    // Live scans use stateless crossing detection: emit only when the threshold
-                    // was crossed since the previous scheduler tick, so each complaint warns once
-                    // per level without persisted state. A missed tick misses the warning
-                    // (accepted). Dry runs never emit; they count every complaint currently
-                    // inside the warning window instead, so a test scan shows what's at risk now.
-                    boolean preBreachEmitted = false;
-                    Map<String, Object> preBreach = getPreBreachWarning(crsEscalationPolicy);
-                    if (preBreach != null && Boolean.TRUE.equals(preBreach.get("enabled"))) {
-                        double thresholdPercent = preBreach.get("thresholdPercent") instanceof Number
-                                ? ((Number) preBreach.get("thresholdPercent")).doubleValue()
-                                : 75.0;
-                        if (dryRun) {
-                            if (isInPreBreachWindow(elapsed, sla, thresholdPercent)) {
-                                preBreachWarnings++;
+                        long lastModified = 0L;
+                        if (complaint.getAuditDetails() != null) {
+                            Long modified = complaint.getAuditDetails().getLastModifiedTime();
+                            if (modified != null && modified > 0) {
+                                lastModified = modified;
+                            } else if (complaint.getAuditDetails().getCreatedTime() != null) {
+                                lastModified = complaint.getAuditDetails().getCreatedTime();
                             }
-                        } else if (shouldEmitPreBreach(elapsed, sla, thresholdPercent, config.getEscalationIntervalMs())) {
-                            log.info("Escalation pre-breach warning — srid={}, tenantId={}, level={}, elapsedMs={}, slaMs={}, thresholdPercent={}",
-                                    srid, complaint.getTenantId(), currentLevel, elapsed, sla, thresholdPercent);
-                            Map<String, Object> event = new HashMap<>();
-                            event.put("serviceRequestId", srid);
-                            event.put("tenantId", complaint.getTenantId());
-                            event.put("escalationLevel", currentLevel);
-                            event.put("workflowState", status);
-                            event.put("elapsedMs", elapsed);
-                            event.put("slaMs", sla);
-                            event.put("thresholdPercent", thresholdPercent);
-                            event.put("timestamp", System.currentTimeMillis());
-                            // Route by the complaint's own tenant (not the scan-scope
-                            // tenant) so topic prefixing matches the escalation event
-                            // and the event payload's own tenantId.
-                            producer.push(complaint.getTenantId(), config.getEscalationPreBreachTopic(), event);
-                            preBreachWarnings++;
-                            preBreachEmitted = true;
                         }
-                    }
 
-                    if (elapsed < sla) {
-                        recordSkip(skipMap, details, srid, status, currentLevel,
-                                EscalationSkipReason.SLA_NOT_BREACHED,
-                                "elapsed=" + elapsed + "ms, sla=" + sla + "ms"
-                                        + (preBreachEmitted ? "; prebreach warning emitted" : ""),
-                                slaRes.source);
-                        skipped++;
-                        continue;
-                    }
-
-                    List<String> assignees = escalationService.getCurrentAssignees(
-                            srid, complaint.getTenantId(), requestInfo);
-
-                    if (CollectionUtils.isEmpty(assignees)) {
-                        if (!roleEscalationEnabled) {
+                        if (lastModified == 0L) {
                             recordSkip(skipMap, details, srid, status, currentLevel,
-                                    EscalationSkipReason.NO_ASSIGNEES, "workflow returned 0 assignees", slaRes.source);
+                                    EscalationSkipReason.NO_LAST_MODIFIED_TIME, "auditDetails missing timestamps", null);
                             skipped++;
                             continue;
                         }
 
-                        // Role path: resolve the role that owes action in this
-                        // state to exactly one person (or a structured skip).
-                        String actingRole = actingRoleFor(crsEscalationPolicy, complaint.getApplicationStatus());
-                        if (actingRole == null) {
+                        long elapsed = System.currentTimeMillis() - lastModified;
+
+                        // PRD: configurable pre-breach warning at thresholdPercent of SLA elapsed.
+                        // Live scans use stateless crossing detection: emit only when the threshold
+                        // was crossed since the previous scheduler tick, so each complaint warns once
+                        // per level without persisted state. A missed tick misses the warning
+                        // (accepted). Dry runs never emit; they count every complaint currently
+                        // inside the warning window instead, so a test scan shows what's at risk now.
+                        boolean preBreachEmitted = false;
+                        Map<String, Object> preBreach = getPreBreachWarning(crsEscalationPolicy);
+                        if (preBreach != null && Boolean.TRUE.equals(preBreach.get("enabled"))) {
+                            double thresholdPercent = preBreach.get("thresholdPercent") instanceof Number
+                                    ? ((Number) preBreach.get("thresholdPercent")).doubleValue()
+                                    : 75.0;
+                            if (dryRun) {
+                                if (isInPreBreachWindow(elapsed, sla, thresholdPercent)) {
+                                    preBreachWarnings++;
+                                }
+                            } else if (shouldEmitPreBreach(elapsed, sla, thresholdPercent, config.getEscalationIntervalMs())) {
+                                log.info("Escalation pre-breach warning — srid={}, tenantId={}, level={}, elapsedMs={}, slaMs={}, thresholdPercent={}",
+                                        srid, complaint.getTenantId(), currentLevel, elapsed, sla, thresholdPercent);
+                                Map<String, Object> event = new HashMap<>();
+                                event.put("serviceRequestId", srid);
+                                event.put("tenantId", complaint.getTenantId());
+                                event.put("escalationLevel", currentLevel);
+                                event.put("workflowState", status);
+                                event.put("elapsedMs", elapsed);
+                                event.put("slaMs", sla);
+                                event.put("thresholdPercent", thresholdPercent);
+                                event.put("timestamp", System.currentTimeMillis());
+                                // Route by the complaint's own tenant (not the scan-scope
+                                // tenant) so topic prefixing matches the escalation event
+                                // and the event payload's own tenantId.
+                                producer.push(complaint.getTenantId(), config.getEscalationPreBreachTopic(), event);
+                                preBreachWarnings++;
+                                preBreachEmitted = true;
+                            }
+                        }
+
+                        if (elapsed < sla) {
                             recordSkip(skipMap, details, srid, status, currentLevel,
-                                    EscalationSkipReason.ROLE_NOT_MAPPED,
-                                    "state=" + complaint.getApplicationStatus()
-                                            + " has no actingRoleByState entry", slaRes.source);
+                                    EscalationSkipReason.SLA_NOT_BREACHED,
+                                    "elapsed=" + elapsed + "ms, sla=" + sla + "ms"
+                                            + (preBreachEmitted ? "; prebreach warning emitted" : ""),
+                                    slaRes.source);
                             skipped++;
                             continue;
                         }
 
-                        Map<String, Object> svcMapping = complaint.getServiceCode() == null
-                                ? null : serviceCodeToCategory.get(complaint.getServiceCode());
-                        String department = svcMapping != null && svcMapping.get("department") instanceof String
-                                ? (String) svcMapping.get("department") : null;
+                        List<String> assignees = escalationService.getCurrentAssignees(
+                                srid, complaint.getTenantId(), requestInfo);
 
-                        EscalationService.RoleResolution resolution = escalationService.resolveRoleTarget(
-                                actingRole, department, crsRoleSupervisors, crsEscalationPolicy,
-                                requestInfo, complaint.getTenantId(), roleResolutionCache);
+                        if (CollectionUtils.isEmpty(assignees)) {
+                            if (!roleEscalationEnabled) {
+                                recordSkip(skipMap, details, srid, status, currentLevel,
+                                        EscalationSkipReason.NO_ASSIGNEES, "workflow returned 0 assignees", slaRes.source);
+                                skipped++;
+                                continue;
+                            }
 
-                        if (resolution.getSkipReason() != null) {
-                            recordRoleSkip(skipMap, details, srid, status, currentLevel,
-                                    resolution.getSkipReason(),
-                                    resolution.getDetail()
-                                            + " [strategy=" + resolution.getStrategy()
-                                            + ", candidates=" + resolution.getCandidateCount()
-                                            + ", departmentFiltered=" + resolution.getDepartmentFiltered() + "]",
-                                    slaRes.source, resolution);
-                            skipped++;
+                            // Role path: resolve the role that owes action in this
+                            // state to exactly one person (or a structured skip).
+                            String actingRole = actingRoleFor(crsEscalationPolicy, complaint.getApplicationStatus());
+                            if (actingRole == null) {
+                                recordSkip(skipMap, details, srid, status, currentLevel,
+                                        EscalationSkipReason.ROLE_NOT_MAPPED,
+                                        "state=" + complaint.getApplicationStatus()
+                                                + " has no actingRoleByState entry", slaRes.source);
+                                skipped++;
+                                continue;
+                            }
+
+                            Map<String, Object> svcMapping = complaint.getServiceCode() == null
+                                    ? null : serviceCodeToCategory.get(complaint.getServiceCode());
+                            String department = svcMapping != null && svcMapping.get("department") instanceof String
+                                    ? (String) svcMapping.get("department") : null;
+
+                            EscalationService.RoleResolution resolution = escalationService.resolveRoleTarget(
+                                    actingRole, department, crsRoleSupervisors, crsEscalationPolicy,
+                                    requestInfo, complaint.getTenantId(), roleResolutionCache);
+
+                            if (resolution.getSkipReason() != null) {
+                                recordRoleSkip(skipMap, details, srid, status, currentLevel,
+                                        resolution.getSkipReason(),
+                                        resolution.getDetail()
+                                                + " [strategy=" + resolution.getStrategy()
+                                                + ", candidates=" + resolution.getCandidateCount()
+                                                + ", departmentFiltered=" + resolution.getDepartmentFiltered() + "]",
+                                        slaRes.source, resolution);
+                                skipped++;
+                                continue;
+                            }
+
+                            // Blast-radius cap: deferred complaints drain in later
+                            // scans (escalated ones acquire a named assignee and
+                            // leave the unattended pool). No new enum value.
+                            if (roleEscalated >= roleMaxPerScan) {
+                                recordRoleSkip(skipMap, details, srid, status, currentLevel,
+                                        EscalationSkipReason.NO_ASSIGNEES,
+                                        "role escalation deferred — maxPerScan reached", slaRes.source, resolution);
+                                skipped++;
+                                continue;
+                            }
+
+                            EscalationService.EscalationResult roleResult = dryRun
+                                    ? escalationService.previewRoleEscalation(complaint, resolution.getTargetUuid(),
+                                            requestInfo, maxDepth, elapsed, sla, resolution)
+                                    : escalationService.escalateToRoleTarget(complaint, resolution.getTargetUuid(),
+                                            requestInfo, maxDepth, elapsed, sla, resolution);
+
+                            if (roleResult.isSuccess()) {
+                                if (dryRun) {
+                                    wouldEscalate++;
+                                } else {
+                                    escalated++;
+                                }
+                                roleEscalated++;
+                                details.add(EscalationOutcome.builder()
+                                        .serviceRequestId(srid)
+                                        .action(dryRun ? "WOULD_ESCALATE" : "ESCALATED")
+                                        .reason(EscalationSkipReason.SUCCESS.name())
+                                        .detail(dryRun
+                                                ? roleResult.getDetail()
+                                                : "fromLevel=" + currentLevel + " toLevel=" + (currentLevel + 1))
+                                        .slaSource(slaRes.source)
+                                        .resolutionStrategy(resolution.getStrategy())
+                                        .actingRole(resolution.getActingRole())
+                                        .candidateCount(resolution.getCandidateCount())
+                                        .departmentFiltered(resolution.getDepartmentFiltered())
+                                        .build());
+                                log.info("Escalation {} (role path) — srid={}, status={}, actingRole={}, strategy={}, target={}",
+                                        dryRun ? "dry-run hit" : "success", srid, status, actingRole,
+                                        resolution.getStrategy(), resolution.getTargetUuid());
+                            } else {
+                                EscalationSkipReason reason = roleResult.getReason() != null
+                                        ? roleResult.getReason()
+                                        : EscalationSkipReason.WORKFLOW_TRANSITION_FAILED;
+                                recordRoleSkip(skipMap, details, srid, status, currentLevel,
+                                        reason, roleResult.getDetail(), slaRes.source, resolution);
+                                skipped++;
+                            }
                             continue;
                         }
 
-                        // Blast-radius cap: deferred complaints drain in later
-                        // scans (escalated ones acquire a named assignee and
-                        // leave the unattended pool). No new enum value.
-                        if (roleEscalated >= roleMaxPerScan) {
-                            recordRoleSkip(skipMap, details, srid, status, currentLevel,
-                                    EscalationSkipReason.NO_ASSIGNEES,
-                                    "role escalation deferred — maxPerScan reached", slaRes.source, resolution);
-                            skipped++;
-                            continue;
-                        }
+                        Workflow currentWorkflow = Workflow.builder().assignes(assignees).build();
 
-                        EscalationService.EscalationResult roleResult = dryRun
-                                ? escalationService.previewRoleEscalation(complaint, resolution.getTargetUuid(),
-                                        requestInfo, maxDepth, elapsed, sla, resolution)
-                                : escalationService.escalateToRoleTarget(complaint, resolution.getTargetUuid(),
-                                        requestInfo, maxDepth, elapsed, sla, resolution);
+                        EscalationService.EscalationResult result = dryRun
+                                ? escalationService.previewEscalation(complaint, currentWorkflow, requestInfo, maxDepth, elapsed, sla)
+                                : escalationService.escalateComplaintWithReason(complaint, currentWorkflow, requestInfo, maxDepth, elapsed, sla);
 
-                        if (roleResult.isSuccess()) {
+                        if (result.isSuccess()) {
+                            // Dry runs report would-be escalations separately — `escalated`
+                            // only ever counts real, mutating escalations.
                             if (dryRun) {
                                 wouldEscalate++;
                             } else {
                                 escalated++;
                             }
-                            roleEscalated++;
                             details.add(EscalationOutcome.builder()
                                     .serviceRequestId(srid)
                                     .action(dryRun ? "WOULD_ESCALATE" : "ESCALATED")
                                     .reason(EscalationSkipReason.SUCCESS.name())
                                     .detail(dryRun
-                                            ? roleResult.getDetail()
+                                            ? result.getDetail()
                                             : "fromLevel=" + currentLevel + " toLevel=" + (currentLevel + 1))
                                     .slaSource(slaRes.source)
-                                    .resolutionStrategy(resolution.getStrategy())
-                                    .actingRole(resolution.getActingRole())
-                                    .candidateCount(resolution.getCandidateCount())
-                                    .departmentFiltered(resolution.getDepartmentFiltered())
                                     .build());
-                            log.info("Escalation {} (role path) — srid={}, status={}, actingRole={}, strategy={}, target={}",
-                                    dryRun ? "dry-run hit" : "success", srid, status, actingRole,
-                                    resolution.getStrategy(), resolution.getTargetUuid());
+                            log.info("Escalation {} — srid={}, status={}, fromLevel={}, toLevel={}",
+                                    dryRun ? "dry-run hit" : "success", srid, status, currentLevel, currentLevel + 1);
                         } else {
-                            EscalationSkipReason reason = roleResult.getReason() != null
-                                    ? roleResult.getReason()
+                            EscalationSkipReason reason = result.getReason() != null
+                                    ? result.getReason()
                                     : EscalationSkipReason.WORKFLOW_TRANSITION_FAILED;
-                            recordRoleSkip(skipMap, details, srid, status, currentLevel,
-                                    reason, roleResult.getDetail(), slaRes.source, resolution);
+                            recordSkip(skipMap, details, srid, status, currentLevel, reason, result.getDetail(), slaRes.source);
                             skipped++;
                         }
-                        continue;
-                    }
-
-                    Workflow currentWorkflow = Workflow.builder().assignes(assignees).build();
-
-                    EscalationService.EscalationResult result = dryRun
-                            ? escalationService.previewEscalation(complaint, currentWorkflow, requestInfo, maxDepth, elapsed, sla)
-                            : escalationService.escalateComplaintWithReason(complaint, currentWorkflow, requestInfo, maxDepth, elapsed, sla);
-
-                    if (result.isSuccess()) {
-                        // Dry runs report would-be escalations separately — `escalated`
-                        // only ever counts real, mutating escalations.
-                        if (dryRun) {
-                            wouldEscalate++;
-                        } else {
-                            escalated++;
-                        }
-                        details.add(EscalationOutcome.builder()
-                                .serviceRequestId(srid)
-                                .action(dryRun ? "WOULD_ESCALATE" : "ESCALATED")
-                                .reason(EscalationSkipReason.SUCCESS.name())
-                                .detail(dryRun
-                                        ? result.getDetail()
-                                        : "fromLevel=" + currentLevel + " toLevel=" + (currentLevel + 1))
-                                .slaSource(slaRes.source)
-                                .build());
-                        log.info("Escalation {} — srid={}, status={}, fromLevel={}, toLevel={}",
-                                dryRun ? "dry-run hit" : "success", srid, status, currentLevel, currentLevel + 1);
-                    } else {
-                        EscalationSkipReason reason = result.getReason() != null
-                                ? result.getReason()
-                                : EscalationSkipReason.WORKFLOW_TRANSITION_FAILED;
-                        recordSkip(skipMap, details, srid, status, currentLevel, reason, result.getDetail(), slaRes.source);
-                        skipped++;
+                    } finally {
+                        complaintSpan.end();
                     }
                 }
             } catch (Exception e) {

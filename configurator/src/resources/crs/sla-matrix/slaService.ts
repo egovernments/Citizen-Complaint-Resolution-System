@@ -292,6 +292,10 @@ export function makeRoleSupervisorUid(row: { role: string; department: string })
  * without losing them.
  */
 export async function loadRoleSupervisors(tenantId: string): Promise<RoleSupervisorPin[]> {
+  // 200 is a safe upper bound for the pin count we expect from typical
+  // tenants (a handful of roles × a handful of departments). If a tenant
+  // outgrows this we switch to paginated load — callers take a single
+  // RoleSupervisorPin[] so swapping the data source is local.
   const records = await digitClient.mdmsSearch(toStateTenant(tenantId), ROLE_SUPERVISORS_SCHEMA, { limit: 200 });
   const active = records.filter((r) => r.isActive !== false);
   return active.map((rec) => {

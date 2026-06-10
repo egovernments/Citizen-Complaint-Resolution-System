@@ -515,7 +515,7 @@ export function PolicyCard({ tenantId, actor, policy, record, legacy, onSaved }:
                                 value={row.state}
                                 onChange={(e) => patchActingRow(row.id, { state: e.target.value })}
                                 className="h-7 text-xs font-mono"
-                                placeholder="e.g. PENDINGATCEO"
+                                placeholder="Workflow status name"
                                 aria-label="Complaint status name"
                                 aria-invalid={err !== null}
                                 disabled={saving}
@@ -558,8 +558,9 @@ export function PolicyCard({ tenantId, actor, policy, record, legacy, onSaved }:
                   Add a status
                 </Button>
                 <p className="text-xs text-muted-foreground">
-                  The first two statuses are the ones the escalation scan watches. A status with no
-                  acting role is skipped (the test scan reports it).
+                  The first two statuses are the ones the escalation scan watches. Statuses you add
+                  beyond the first two take effect only if a future release extends the scan to
+                  watch them. A status with no acting role is skipped (the test scan reports it).
                 </p>
               </div>
 

@@ -17,6 +17,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 
 import javax.validation.Valid;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Admin/test endpoint that lets a SUPERUSER kick the escalation scheduler
@@ -47,7 +49,7 @@ public class EscalationController {
     }
 
     @PostMapping("/_trigger")
-    public ResponseEntity<EscalationTriggerResponse> trigger(@Valid @RequestBody EscalationTriggerRequest request) {
+    public ResponseEntity<?> trigger(@Valid @RequestBody EscalationTriggerRequest request) {
 
         RequestInfo requestInfo = request.getRequestInfo();
         if (requestInfo == null || requestInfo.getUserInfo() == null) {
@@ -96,12 +98,26 @@ public class EscalationController {
                 request.getServiceRequestIds() == null ? "all" : request.getServiceRequestIds(),
                 Boolean.TRUE.equals(request.getDryRun()));
 
-        EscalationTriggerResponse response = escalationScheduler.scanAndEscalateOnce(
-                request.getTenantId(),
-                request.getServiceRequestIds(),
-                requestInfo,
-                Boolean.TRUE.equals(request.getDryRun())
-        );
+        EscalationTriggerResponse response;
+        try {
+            response = escalationScheduler.scanAndEscalateOnce(
+                    request.getTenantId(),
+                    request.getServiceRequestIds(),
+                    requestInfo,
+                    Boolean.TRUE.equals(request.getDryRun())
+            );
+        } catch (CustomException e) {
+            // The design doc promises HTTP 409 for a scan already in flight,
+            // but the tracer's default CustomException mapping is 400 — so
+            // this one code is translated here. Everything else propagates.
+            if ("SCAN_IN_PROGRESS".equals(e.getCode())) {
+                Map<String, String> error = new HashMap<>();
+                error.put("code", e.getCode());
+                error.put("message", e.getMessage());
+                return new ResponseEntity<>(error, HttpStatus.CONFLICT);
+            }
+            throw e;
+        }
 
         ResponseInfo responseInfo = responseInfoFactory.createResponseInfoFromRequestInfo(requestInfo, true);
         response.setResponseInfo(responseInfo);

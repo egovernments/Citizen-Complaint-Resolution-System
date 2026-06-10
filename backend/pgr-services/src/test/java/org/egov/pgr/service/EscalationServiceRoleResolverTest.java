@@ -100,7 +100,7 @@ public class EscalationServiceRoleResolverTest {
         List<Map<String, Object>> pins = Collections.singletonList(pinRow("GRO", "ALL", "stale-uuid"));
         when(hrmsUtil.isActiveEmployee(eq("stale-uuid"), anyString(), any())).thenReturn(false);
         when(hrmsUtil.searchEmployeesByRole(eq("PGR_SUPERVISOR"), isNull(), eq("ke.bomet"), any()))
-                .thenReturn(Collections.singletonList(employee("sup-uuid", null)));
+                .thenReturn(found(employee("sup-uuid", null)));
 
         EscalationService.RoleResolution res = escalationService.resolveRoleTarget(
                 "GRO", null, pins, ladderPolicy("GRO", "PGR_SUPERVISOR"), requestInfo, "ke.bomet", cache);
@@ -116,7 +116,7 @@ public class EscalationServiceRoleResolverTest {
     @Test
     void r2Ladder_exactlyOne_departmentFiltered() {
         when(hrmsUtil.searchEmployeesByRole(eq("PGR_SUPERVISOR"), eq("DEPT_18"), eq("ke.bomet"), any()))
-                .thenReturn(Collections.singletonList(employee("sup-uuid", null)));
+                .thenReturn(found(employee("sup-uuid", null)));
 
         EscalationService.RoleResolution res = escalationService.resolveRoleTarget(
                 "GRO", "DEPT_18", Collections.emptyList(), ladderPolicy("GRO", "PGR_SUPERVISOR"),
@@ -133,7 +133,7 @@ public class EscalationServiceRoleResolverTest {
     @Test
     void r2Ladder_twoCandidates_ambiguous() {
         when(hrmsUtil.searchEmployeesByRole(eq("PGR_SUPERVISOR"), eq("DEPT_18"), eq("ke.bomet"), any()))
-                .thenReturn(Arrays.asList(employee("sup-1", null), employee("sup-2", null)));
+                .thenReturn(found(employee("sup-1", null), employee("sup-2", null)));
 
         EscalationService.RoleResolution res = escalationService.resolveRoleTarget(
                 "GRO", "DEPT_18", Collections.emptyList(), ladderPolicy("GRO", "PGR_SUPERVISOR"),
@@ -149,9 +149,9 @@ public class EscalationServiceRoleResolverTest {
     @Test
     void r2Ladder_zeroFiltered_unfilteredRetryHit() {
         when(hrmsUtil.searchEmployeesByRole(eq("PGR_SUPERVISOR"), eq("DEPT_18"), eq("ke.bomet"), any()))
-                .thenReturn(Collections.emptyList());
+                .thenReturn(found());
         when(hrmsUtil.searchEmployeesByRole(eq("PGR_SUPERVISOR"), isNull(), eq("ke.bomet"), any()))
-                .thenReturn(Collections.singletonList(employee("sup-uuid", null)));
+                .thenReturn(found(employee("sup-uuid", null)));
 
         EscalationService.RoleResolution res = escalationService.resolveRoleTarget(
                 "GRO", "DEPT_18", Collections.emptyList(), ladderPolicy("GRO", "PGR_SUPERVISOR"),
@@ -166,7 +166,7 @@ public class EscalationServiceRoleResolverTest {
     @Test
     void r2Ladder_zeroThenZero_noRoleSupervisor() {
         when(hrmsUtil.searchEmployeesByRole(eq("PGR_SUPERVISOR"), any(), eq("ke.bomet"), any()))
-                .thenReturn(Collections.emptyList());
+                .thenReturn(found());
 
         EscalationService.RoleResolution res = escalationService.resolveRoleTarget(
                 "GRO", "DEPT_18", Collections.emptyList(), ladderPolicy("GRO", "PGR_SUPERVISOR"),
@@ -180,7 +180,7 @@ public class EscalationServiceRoleResolverTest {
     @Test
     void r2Ladder_exhaustion_neverFallsThroughToR3() {
         when(hrmsUtil.searchEmployeesByRole(eq("PGR_SUPERVISOR"), any(), eq("ke.bomet"), any()))
-                .thenReturn(Collections.emptyList());
+                .thenReturn(found());
 
         EscalationService.RoleResolution res = escalationService.resolveRoleTarget(
                 "GRO", "DEPT_18", Collections.emptyList(), ladderPolicy("GRO", "PGR_SUPERVISOR"),
@@ -196,7 +196,7 @@ public class EscalationServiceRoleResolverTest {
     @Test
     void r3Reporting_consensusHit() {
         when(hrmsUtil.searchEmployeesByRole(eq("GRO"), isNull(), eq("ke.bomet"), any()))
-                .thenReturn(Arrays.asList(employee("lme-1", "boss-uuid"), employee("lme-2", "boss-uuid")));
+                .thenReturn(found(employee("lme-1", "boss-uuid"), employee("lme-2", "boss-uuid")));
 
         EscalationService.RoleResolution res = escalationService.resolveRoleTarget(
                 "GRO", null, Collections.emptyList(), ladderPolicy("OTHER_ROLE", "PGR_SUPERVISOR"),
@@ -212,7 +212,7 @@ public class EscalationServiceRoleResolverTest {
     @Test
     void r3Reporting_split_ambiguous() {
         when(hrmsUtil.searchEmployeesByRole(eq("GRO"), isNull(), eq("ke.bomet"), any()))
-                .thenReturn(Arrays.asList(employee("lme-1", "boss-1"), employee("lme-2", "boss-2")));
+                .thenReturn(found(employee("lme-1", "boss-1"), employee("lme-2", "boss-2")));
 
         EscalationService.RoleResolution res = escalationService.resolveRoleTarget(
                 "GRO", null, Collections.emptyList(), ladderPolicy("OTHER_ROLE", "PGR_SUPERVISOR"),
@@ -227,7 +227,7 @@ public class EscalationServiceRoleResolverTest {
     @Test
     void r3Reporting_noReportingTo_noRoleSupervisor() {
         when(hrmsUtil.searchEmployeesByRole(eq("GRO"), isNull(), eq("ke.bomet"), any()))
-                .thenReturn(Collections.singletonList(employee("lme-1", null)));
+                .thenReturn(found(employee("lme-1", null)));
 
         EscalationService.RoleResolution res = escalationService.resolveRoleTarget(
                 "GRO", null, Collections.emptyList(), ladderPolicy("OTHER_ROLE", "PGR_SUPERVISOR"),
@@ -241,7 +241,7 @@ public class EscalationServiceRoleResolverTest {
     @Test
     void memoization_secondCallSameKey_hitsHrmsOnce() {
         when(hrmsUtil.searchEmployeesByRole(eq("PGR_SUPERVISOR"), eq("DEPT_18"), eq("ke.bomet"), any()))
-                .thenReturn(Collections.singletonList(employee("sup-uuid", null)));
+                .thenReturn(found(employee("sup-uuid", null)));
         Map<String, Object> policy = ladderPolicy("GRO", "PGR_SUPERVISOR");
 
         EscalationService.RoleResolution first = escalationService.resolveRoleTarget(
@@ -253,9 +253,148 @@ public class EscalationServiceRoleResolverTest {
         verify(hrmsUtil, times(1)).searchEmployeesByRole(anyString(), any(), anyString(), any());
     }
 
+    /**
+     * The memo key MUST include the tenant: one scan spans multiple city
+     * tenants and HRMS answers are tenant-scoped, so two tenants sharing
+     * (actingRole, department) must each hit HRMS and get their own target —
+     * no cross-tenant reuse.
+     */
+    @Test
+    void memoization_keyIncludesTenant_noCrossTenantReuse() {
+        when(hrmsUtil.searchEmployeesByRole(eq("PGR_SUPERVISOR"), eq("DEPT_18"), eq("ke.bomet"), any()))
+                .thenReturn(found(employee("bomet-sup", null)));
+        when(hrmsUtil.searchEmployeesByRole(eq("PGR_SUPERVISOR"), eq("DEPT_18"), eq("ke.nairobi"), any()))
+                .thenReturn(found(employee("nairobi-sup", null)));
+        Map<String, Object> policy = ladderPolicy("GRO", "PGR_SUPERVISOR");
+
+        EscalationService.RoleResolution bomet = escalationService.resolveRoleTarget(
+                "GRO", "DEPT_18", Collections.emptyList(), policy, requestInfo, "ke.bomet", cache);
+        EscalationService.RoleResolution nairobi = escalationService.resolveRoleTarget(
+                "GRO", "DEPT_18", Collections.emptyList(), policy, requestInfo, "ke.nairobi", cache);
+
+        assertEquals("bomet-sup", bomet.getTargetUuid());
+        assertEquals("nairobi-sup", nairobi.getTargetUuid());
+        verify(hrmsUtil, times(1)).searchEmployeesByRole(anyString(), any(), eq("ke.bomet"), any());
+        verify(hrmsUtil, times(1)).searchEmployeesByRole(anyString(), any(), eq("ke.nairobi"), any());
+    }
+
+    /**
+     * R2: a raw page at the HRMS limit filtered down to exactly one must NOT
+     * read as an exactly-one verdict — that would be a silent misroute on any
+     * role with more holders than the page. Skip as AMBIGUOUS with the
+     * operator guidance in the detail.
+     */
+    @Test
+    void r2Ladder_truncatedPage_ambiguousNotExactlyOne() {
+        when(hrmsUtil.searchEmployeesByRole(eq("PGR_SUPERVISOR"), eq("DEPT_18"), eq("ke.bomet"), any()))
+                .thenReturn(HRMSUtil.RoleSearchResult.of(
+                        Collections.singletonList(employee("sup-uuid", null)), true));
+
+        EscalationService.RoleResolution res = escalationService.resolveRoleTarget(
+                "GRO", "DEPT_18", Collections.emptyList(), ladderPolicy("GRO", "PGR_SUPERVISOR"),
+                requestInfo, "ke.bomet", cache);
+
+        assertEquals(EscalationSkipReason.ROLE_SUPERVISOR_AMBIGUOUS, res.getSkipReason());
+        assertNull(res.getTargetUuid());
+        assertEquals(EscalationService.STRATEGY_R2_LADDER, res.getStrategy());
+        assertTrue(res.getDetail().contains("candidate list truncated at 100"));
+        assertTrue(res.getDetail().contains("narrow with a department pin or pin a person"));
+    }
+
+    /** R2: a truncated page that filtered to ZERO must skip too — never the tenant-wide retry (same truncated query). */
+    @Test
+    void r2Ladder_truncatedEmptyAfterFilter_skipsWithoutUnfilteredRetry() {
+        when(hrmsUtil.searchEmployeesByRole(eq("PGR_SUPERVISOR"), eq("DEPT_18"), eq("ke.bomet"), any()))
+                .thenReturn(HRMSUtil.RoleSearchResult.of(Collections.emptyList(), true));
+
+        EscalationService.RoleResolution res = escalationService.resolveRoleTarget(
+                "GRO", "DEPT_18", Collections.emptyList(), ladderPolicy("GRO", "PGR_SUPERVISOR"),
+                requestInfo, "ke.bomet", cache);
+
+        assertEquals(EscalationSkipReason.ROLE_SUPERVISOR_AMBIGUOUS, res.getSkipReason());
+        assertTrue(res.getDetail().contains("candidate list truncated at 100"));
+        verify(hrmsUtil, never()).searchEmployeesByRole(eq("PGR_SUPERVISOR"), isNull(), anyString(), any());
+    }
+
+    /** R3: a truncated page must skip as AMBIGUOUS even when the visible holders agree on one supervisor. */
+    @Test
+    void r3Reporting_truncatedPage_ambiguousDespiteVisibleConsensus() {
+        when(hrmsUtil.searchEmployeesByRole(eq("GRO"), isNull(), eq("ke.bomet"), any()))
+                .thenReturn(HRMSUtil.RoleSearchResult.of(
+                        Arrays.asList(employee("lme-1", "boss-uuid"), employee("lme-2", "boss-uuid")), true));
+
+        EscalationService.RoleResolution res = escalationService.resolveRoleTarget(
+                "GRO", null, Collections.emptyList(), ladderPolicy("OTHER_ROLE", "PGR_SUPERVISOR"),
+                requestInfo, "ke.bomet", cache);
+
+        assertEquals(EscalationSkipReason.ROLE_SUPERVISOR_AMBIGUOUS, res.getSkipReason());
+        assertNull(res.getTargetUuid());
+        assertEquals(EscalationService.STRATEGY_R3_REPORTING, res.getStrategy());
+        assertTrue(res.getDetail().contains("candidate list truncated at 100"));
+    }
+
+    /**
+     * R1 + HRMS lookup FAILURE (tri-state null): the pin must NOT be treated
+     * as stale — skip without falling through to R2/R3, and do NOT memoize,
+     * so the next resolution retries HRMS.
+     */
+    @Test
+    void r1Pin_hrmsFailure_skipsNotFallsThrough_andRetriesNextCall() {
+        List<Map<String, Object>> pins = Collections.singletonList(pinRow("GRO", "ALL", "pin-uuid"));
+        when(hrmsUtil.isActiveEmployee(eq("pin-uuid"), eq("ke.bomet"), any())).thenReturn(null);
+
+        EscalationService.RoleResolution first = escalationService.resolveRoleTarget(
+                "GRO", null, pins, ladderPolicy("GRO", "PGR_SUPERVISOR"), requestInfo, "ke.bomet", cache);
+
+        assertEquals(EscalationSkipReason.NO_ROLE_SUPERVISOR, first.getSkipReason());
+        assertEquals("HRMS lookup failed — will retry next scan", first.getDetail());
+        assertNull(first.getTargetUuid());
+        // Skip, not fallthrough: a blip must never re-route past the pin.
+        verify(hrmsUtil, never()).searchEmployeesByRole(anyString(), any(), anyString(), any());
+
+        // Not memoized: HRMS recovers, the second resolution retries and resolves the pin.
+        when(hrmsUtil.isActiveEmployee(eq("pin-uuid"), eq("ke.bomet"), any())).thenReturn(true);
+        EscalationService.RoleResolution second = escalationService.resolveRoleTarget(
+                "GRO", null, pins, ladderPolicy("GRO", "PGR_SUPERVISOR"), requestInfo, "ke.bomet", cache);
+        assertEquals("pin-uuid", second.getTargetUuid());
+        assertEquals(EscalationService.STRATEGY_R1_PIN, second.getStrategy());
+        verify(hrmsUtil, times(2)).isActiveEmployee(eq("pin-uuid"), eq("ke.bomet"), any());
+    }
+
+    /** A transport-level role-search failure skips transiently — never memoized as "no supervisor". */
+    @Test
+    void r2Ladder_searchFailure_skipsTransient_notMemoized() {
+        when(hrmsUtil.searchEmployeesByRole(eq("PGR_SUPERVISOR"), eq("DEPT_18"), eq("ke.bomet"), any()))
+                .thenReturn(HRMSUtil.RoleSearchResult.failure());
+
+        EscalationService.RoleResolution first = escalationService.resolveRoleTarget(
+                "GRO", "DEPT_18", Collections.emptyList(), ladderPolicy("GRO", "PGR_SUPERVISOR"),
+                requestInfo, "ke.bomet", cache);
+
+        assertEquals(EscalationSkipReason.NO_ROLE_SUPERVISOR, first.getSkipReason());
+        assertTrue(first.getDetail().contains("HRMS lookup failed — will retry next scan"));
+        // No tenant-wide retry on a failed call — fail fast, retry next scan.
+        verify(hrmsUtil, never()).searchEmployeesByRole(eq("PGR_SUPERVISOR"), isNull(), anyString(), any());
+
+        // Not memoized: HRMS recovers, the next resolution succeeds.
+        when(hrmsUtil.searchEmployeesByRole(eq("PGR_SUPERVISOR"), eq("DEPT_18"), eq("ke.bomet"), any()))
+                .thenReturn(found(employee("sup-uuid", null)));
+        EscalationService.RoleResolution second = escalationService.resolveRoleTarget(
+                "GRO", "DEPT_18", Collections.emptyList(), ladderPolicy("GRO", "PGR_SUPERVISOR"),
+                requestInfo, "ke.bomet", cache);
+        assertEquals("sup-uuid", second.getTargetUuid());
+        verify(hrmsUtil, times(2)).searchEmployeesByRole(eq("PGR_SUPERVISOR"), eq("DEPT_18"), eq("ke.bomet"), any());
+    }
+
     // ---------------------------------------------------------------------
     // helpers
     // ---------------------------------------------------------------------
+
+    /** Successful, non-truncated HRMS role-search result. */
+    @SafeVarargs
+    private static HRMSUtil.RoleSearchResult found(Map<String, String>... employees) {
+        return HRMSUtil.RoleSearchResult.of(Arrays.asList(employees), false);
+    }
 
     private static Map<String, Object> ladderPolicy(String actingRole, String ladderRole) {
         Map<String, Object> ladder = new HashMap<>();

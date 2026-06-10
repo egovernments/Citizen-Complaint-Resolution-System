@@ -100,6 +100,19 @@ export function RoleSupervisorsTable({ tenantId, actor, roleListId }: RoleSuperv
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }
 
+  /**
+   * Patch a row only while its ID input still holds `uuid` (captured when
+   * "Look up" was clicked). Editing the ID mid-flight resets the row to
+   * 'idle'; without this guard the late resolve would paint "✓ name" over
+   * the edited ID — the save gate (verifiedUuid === current uuid) already
+   * refuses to save, but the feedback would mislead.
+   */
+  function patchRowForUuid(id: number, uuid: string, patch: Partial<PinDraft>) {
+    setRows((prev) =>
+      prev.map((r) => (r.id === id && r.assigneeUuid.trim() === uuid ? { ...r, ...patch } : r)),
+    );
+  }
+
   function addRow() {
     setRows((prev) => [
       ...prev,
@@ -130,14 +143,14 @@ export function RoleSupervisorsTable({ tenantId, actor, roleListId }: RoleSuperv
       const employees = await digitClient.employeeSearch(tenantId, { uuids: [uuid], limit: 5 });
       const active = employees.filter((e) => e.isActive !== false);
       if (active.length === 0) {
-        patchRow(row.id, { lookup: 'not-found' });
+        patchRowForUuid(row.id, uuid, { lookup: 'not-found' });
         return;
       }
       const user = active[0].user as Record<string, unknown> | undefined;
       const name = String(user?.name ?? active[0].code ?? uuid);
-      patchRow(row.id, { lookup: 'found', lookupName: name, verifiedUuid: uuid });
+      patchRowForUuid(row.id, uuid, { lookup: 'found', lookupName: name, verifiedUuid: uuid });
     } catch {
-      patchRow(row.id, { lookup: 'error' });
+      patchRowForUuid(row.id, uuid, { lookup: 'error' });
     }
   }
 

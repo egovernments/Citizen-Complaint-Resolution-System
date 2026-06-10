@@ -1,5 +1,6 @@
 package org.egov.pgr.web.models;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -108,15 +109,25 @@ public class EscalationTriggerResponse {
          * (supervisorRoleByRole) or "R3_REPORTING" (reportingTo consensus).
          * Set on every role-path outcome (escalated, would-escalate and role
          * skips); null on the named-assignee path.
+         *
+         * <p>The four role-provenance fields are {@code NON_NULL} at the
+         * FIELD level (the app ObjectMapper defaults to ALWAYS inclusion) so
+         * named-assignee/disabled-path detail rows keep the exact pre-change
+         * wire format — including today's null-serialized {@code detail} /
+         * {@code slaSource} keys, which a class-level annotation would
+         * drop.</p>
          */
+        @JsonInclude(JsonInclude.Include.NON_NULL)
         @JsonProperty("resolutionStrategy")
         private String resolutionStrategy;
 
         /** Role that owed action in the complaint's workflow state. Null on the named-assignee path. */
+        @JsonInclude(JsonInclude.Include.NON_NULL)
         @JsonProperty("actingRole")
         private String actingRole;
 
         /** How many candidates the winning/failing resolution strategy matched. Null on the named-assignee path. */
+        @JsonInclude(JsonInclude.Include.NON_NULL)
         @JsonProperty("candidateCount")
         private Integer candidateCount;
 
@@ -125,6 +136,7 @@ public class EscalationTriggerResponse {
          * ServiceDefs department — false when the tenant-wide retry fired (or
          * no department existed). Null on the named-assignee path.
          */
+        @JsonInclude(JsonInclude.Include.NON_NULL)
         @JsonProperty("departmentFiltered")
         private Boolean departmentFiltered;
     }
