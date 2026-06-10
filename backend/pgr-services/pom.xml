@@ -123,6 +123,17 @@
             <version>4.13.2</version>
             <scope>test</scope>
         </dependency>
+        <!--
+            opentelemetry-api only (NOT the SDK). The javaagent we attach at
+            runtime supplies the SDK + GlobalOpenTelemetry, so we just need the
+            API surface to record custom span attributes from app code. Version
+            pinned to 1.45.0 to match the agent shipped in local-setup/otel/.
+        -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-api</artifactId>
+            <version>1.45.0</version>
+        </dependency>
     </dependencies>
     <repositories>
      		<repository>
