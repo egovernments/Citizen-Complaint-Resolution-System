@@ -42,7 +42,7 @@ develop (egov, e8cba53f, current)
    │       │       │
    │       │       └── feat/escalation-prd-alignment — PRD alignment: EscalationPolicy
    │       │              schema, level SLAs, dryRun, pre-breach detection, enriched
-   │       │              audit comment, csvParser fix (PR #TBD-PRD)
+   │       │              audit comment, csvParser fix ([PR #815](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/815))
    │       │
    │       ├── PR #776  [OPEN]  docs/categorysla-wiring-strategies
    │       │       │     Strategy A (rich intake) vs Strategy B (ServiceDefs extension).
@@ -72,7 +72,7 @@ Design hub: Discussion #773 (74k-char body, 0 comments).
 
 **Status snapshot (2026-06-10):**
 - 5 PRs ready-for-review on top of #770: #775, #776, #794, #796, #797
-- `feat/escalation-prd-alignment` — PRD alignment: EscalationPolicy schema, level SLAs, dryRun, pre-breach detection, enriched audit comment, csvParser fix (PR #TBD-PRD; stacked on #775)
+- `feat/escalation-prd-alignment` — PRD alignment: EscalationPolicy schema, level SLAs, dryRun, pre-breach detection, enriched audit comment, csvParser fix ([PR #815](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/815); stacked on #775)
 - 8 G-phase drafts: design-only scaffolds, paired Discussions for architectural feedback
 - All 14 escalation PRs target `develop` but sit on stale tips
 - Discussion #773 has received no external comments yet
@@ -521,7 +521,7 @@ The full re-base map for the existing stack:
 | #794 | develop | `feat/escalation-otel-configurator-designer` |
 | #796 | develop | `feat/escalation-otel-configurator-designer` |
 | #797 | develop | `refactor/scheduler-state-name-mdms` |
-| #TBD-PRD (`feat/escalation-prd-alignment`) | — (PR not yet opened) | `refactor/scheduler-state-name-mdms` (PR #775's head) |
+| #815 (`feat/escalation-prd-alignment`) | — (PR not yet opened) | `refactor/scheduler-state-name-mdms` (PR #775's head) |
 | #777 (G5) | develop | `docs/categorysla-wiring-strategies` (PR #776's head) |
 | #779 (G6) | develop | `docs/categorysla-wiring-strategies` |
 | #780 (G7) | develop | `docs/categorysla-wiring-strategies` |
@@ -536,7 +536,7 @@ The full re-base map for the existing stack:
 ```bash
 for n in 774 775 776 794 796; do gh pr edit $n --repo egovernments/Citizen-Complaint-Resolution-System --base feat/escalation-otel-configurator-designer; done
 for n in 797; do gh pr edit $n --repo egovernments/Citizen-Complaint-Resolution-System --base refactor/scheduler-state-name-mdms; done
-# feat/escalation-prd-alignment: when its PR (#TBD-PRD) opens, point it at PR #775's head too:
+# feat/escalation-prd-alignment: when its PR (#815) opens, point it at PR #775's head too:
 # gh pr edit <TBD-PRD> --repo egovernments/Citizen-Complaint-Resolution-System --base refactor/scheduler-state-name-mdms
 for n in 777 779 780 782 783 786 789 791; do gh pr edit $n --repo egovernments/Citizen-Complaint-Resolution-System --base docs/categorysla-wiring-strategies; done
 
@@ -595,7 +595,7 @@ The fork's `develop` (`origin/develop` on `ChakshuGautam/Citizen-Complaint-Resol
 
 1. `git fetch upstream develop && git rebase upstream/develop` on `feat/escalation-otel-configurator-designer`
 2. Then chain: `refactor/scheduler-state-name-mdms` ← rebase onto new `feat/escalation-otel-configurator-designer`
-3. Then: `feat/escalation-prd-alignment` (#TBD-PRD) ← rebase onto new `refactor/scheduler-state-name-mdms`
+3. Then: `feat/escalation-prd-alignment` (#815) ← rebase onto new `refactor/scheduler-state-name-mdms`
 4. Then: `docs/categorysla-wiring-strategies` ← rebase onto new `refactor/scheduler-state-name-mdms`
 5. Then: `docs/escalation-ops-gotchas-recipes` (#794), `docs/deploying-escalation-to-new-tenant` (#796) ← rebase onto new `feat/escalation-otel-configurator-designer`
 6. Then: `test/escalation-state-mapping-edge-cases` (#797) ← rebase onto new `refactor/scheduler-state-name-mdms`
@@ -694,7 +694,7 @@ done
 for n in 797; do
   gh pr edit $n --repo egovernments/Citizen-Complaint-Resolution-System --base refactor/scheduler-state-name-mdms
 done
-# feat/escalation-prd-alignment: when its PR (#TBD-PRD) opens, point it at PR #775's head too:
+# feat/escalation-prd-alignment: when its PR (#815) opens, point it at PR #775's head too:
 # gh pr edit <TBD-PRD> --repo egovernments/Citizen-Complaint-Resolution-System --base refactor/scheduler-state-name-mdms
 for n in 777 779 780 782 783 786 789 791; do
   gh pr edit $n --repo egovernments/Citizen-Complaint-Resolution-System --base docs/categorysla-wiring-strategies

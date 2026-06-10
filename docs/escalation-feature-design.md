@@ -4,7 +4,7 @@
 > on branch `feat/escalation-otel-configurator-designer`, and the stacked work
 > on top of it: [PR #775](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/775)
 > (MDMS-driven workflow-state mapping) and branch `feat/escalation-prd-alignment`
-> (PRD alignment, PR #TBD-PRD).
+> (PRD alignment, [PR #815](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/815)).
 > **Audience**: platform engineers, configurator developers, deployment operators.
 > **Related**: [`docs/crs-configurator-roadmap.md`](./crs-configurator-roadmap.md) (sibling
 > roadmap for non-escalation work), [`docs/escalation-feature-bomet.md`](./escalation-feature-bomet.md)
@@ -87,7 +87,7 @@ skip-reason logging, OTEL span attributes, the mandatory-comment validator on ma
 **What landed in PR #775** (stacked on #770): the fourth schema,
 `CRS.WorkflowStateMapping`, and the scheduler refactor that replaced the
 hardcoded PGR-state switch with the operator-defined MDMS lookup.
-**What lands on `feat/escalation-prd-alignment` (PR #TBD-PRD)**: the fifth
+**What lands on `feat/escalation-prd-alignment` ([PR #815](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/815))**: the fifth
 schema, `CRS.EscalationPolicy`, plus the PRD-alignment capabilities below.
 
 The PRD-alignment branch extends the resolution to a five-step precedence
@@ -281,7 +281,7 @@ All five schemas live in
 | `CRS.StateSLA` | PR #770 | Per-state default SLA hours (singleton per tenant) |
 | `CRS.SLAAuditLog` | PR #770 | Config-edit audit entries written by the configurator |
 | `CRS.WorkflowStateMapping` | PR #775 | Workflow-state-name → canonical SLA-column-key dictionary (singleton) |
-| `CRS.EscalationPolicy` | `feat/escalation-prd-alignment` (PR #TBD-PRD) | Tenant-wide escalation policy: max depth, per-level default SLAs, pre-breach warning config, comment rule (singleton) |
+| `CRS.EscalationPolicy` | `feat/escalation-prd-alignment` ([PR #815](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/815)) | Tenant-wide escalation policy: max depth, per-level default SLAs, pre-breach warning config, comment rule (singleton) |
 
 Verbatim definitions with annotations:
 
@@ -1673,7 +1673,7 @@ For the Bomet operator runbook (Tempo curl + log greps), see
 
 - **Implementation PRs**: [`#770 feat/escalation-otel-configurator-designer`](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/770),
   [`#775`](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/775) (state mapping, stacked),
-  `feat/escalation-prd-alignment` (PRD alignment, PR #TBD-PRD, stacked)
+  `feat/escalation-prd-alignment` (PRD alignment, [PR #815](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/815), stacked)
 - **Requirements sources** (deliberately **not committed** to this public
   repo — client documents; paths are their location on the working machine):
   - CMS Escalation PRD, Draft v3.0, April 2026 — `/escalation/CMS_Escalation_PRD-latest.pdf`
