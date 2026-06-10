@@ -254,6 +254,16 @@ enable_keycloak: false
 # verified a successful test login via /auth/realms/<realm>/account.
 auth_provider: ""
 
+# Per-surface override (digit-ui-esbuild resolves these post-#793):
+#   citizen surface  -> citizen_auth_provider  || auth_provider || 'digit'
+#   employee surface -> employee_auth_provider || 'digit'  (never inherits auth_provider)
+# Use these when Keycloak SSO ("Continue with Google") should live ONLY on the
+# separate digit-ui-v2 (/citizen) surface while the legacy esbuild citizen login
+# stays on OTP — e.g. bomet sets `citizen_auth_provider: digit` with
+# `auth_provider: keycloak` (issue #809). Leave unset to inherit the defaults above.
+# citizen_auth_provider: ""
+# employee_auth_provider: ""
+
 # OIDC public client id in the per-tenant realm. The realm template
 # ships `digit-ui`; only change this if you've forked the template
 # and added a different client.
