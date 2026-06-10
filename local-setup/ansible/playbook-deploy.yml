@@ -1314,7 +1314,7 @@
       ansible.builtin.command: >-
         bash {{ playbook_dir }}/files/integration-tests-build.sh
         "{{ integration_tests_src | default(playbook_dir ~ '/../../tests/integration-tests') }}"
-        "{{ integration_tests_dashboard_base | default('/integration-tests-v2/') }}"
+        "{{ integration_tests_dashboard_base | default('/tests-v2/') }}"
       register: it_build
       changed_when: true
       when: enable_integration_tests | default(false)
@@ -1411,7 +1411,7 @@
 
     # ---- RUN button: on-box test-runner daemon (opt-in: enable_integration_tests_runner) ----
     # Backs the "Run tests" button on the v2 dashboard. Loopback-only Node
-    # service; nginx (/integration-tests/api/, nginx_features.integration_tests_runner)
+    # service; nginx (/tests/api/, nginx_features.integration_tests_runner)
     # is the auth front. Requires the dashboards block above (needs
     # integration_tests_dir). A run is heavy and shares the box with the live
     # stack, so this stays opt-in and nice'd. Linux only.

@@ -11,8 +11,8 @@ client against the live API — no in-place changes to bomet's containers.
 
 ```
 /opt/integration-tests/
-├── dist/          # vanilla dashboard + catalog.json + history.json + runs/   → /integration-tests/
-└── dist-v2/       # react-admin build; catalog.json/history.json/runs symlinked to ../dist/ → /integration-tests-v2/
+├── dist/          # vanilla dashboard + catalog.json + history.json + runs/   → /tests/
+└── dist-v2/       # react-admin build; catalog.json/history.json/runs symlinked to ../dist/ → /tests-v2/
 ```
 
 ## One-time box setup
@@ -50,8 +50,8 @@ ssh bomet '
 | `LOCALITY_CODE` | NAIROBI_CITY_VIWANDANI | BOMET_BOMET_CENTRAL_CHESOEN | `bomet.env` |
 | `SERVICE_CODE` | IllegalConstruction | RudeBehavior (exists on bomet) | `bomet.env` |
 | `HOST_DIR` | /var/www/tests | /opt/integration-tests/dist | `bomet.env` |
-| `DASHBOARD_BASE` | /tests-v2/ | /integration-tests-v2/ | `bomet.env` |
-| nginx path | /tests/, /tests-v2/ | /integration-tests/, /integration-tests-v2/ | `nginx-integration-tests.conf` |
+| `DASHBOARD_BASE` | /tests-v2/ | **same** (/tests-v2/) | `bomet.env` |
+| nginx path | /tests/, /tests-v2/ | **same** (/tests/, /tests-v2/) | `nginx-integration-tests.conf` |
 | persona users | BOMET_LME etc. | **same** | already default in `tests/utils/env.ts` |
 
 Specs `enc-key-drift-622` (skipped), `boundary-jurisdiction-496`, and the
