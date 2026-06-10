@@ -38,23 +38,32 @@ export async function extractTraceIdFromBometLogs(
 ): Promise<string | null> {
   const since = sinceISO || new Date(Date.now() - 10 * 60_000).toISOString();
   // Compose a single shell pipeline that runs on the remote host. We use
-  // grep -aoE to ignore embedded NULs in container logs and PCRE-style
-  // alternation. `head -1` short-circuits after the first match. `|| true`
-  // suppresses the non-zero exit if no line matched — we want a quiet empty
-  // string in that case, not a thrown error.
+  // grep -a everywhere to ignore embedded NULs in container logs (without it
+  // grep prints "Binary file matches" instead of the line). `head -1`
+  // short-circuits after the first match. `|| true` suppresses the non-zero
+  // exit if no line matched — we want a quiet empty string in that case, not
+  // a thrown error. NB: it is appended AFTER the join — `|| true` must never
+  // be a join element, or the pipeline ends in `| || true`, a bash syntax
+  // error that silently empties every lookup.
   const remoteCmd = [
     `docker logs --since='${since}' ${PGR_CONTAINER} 2>&1`,
-    `grep -F ${shellQuote(substring)}`,
+    `grep -aF ${shellQuote(substring)}`,
     `grep -aoE 'trace_id=[a-f0-9]{32}'`,
     `head -1`,
     `sed 's/trace_id=//'`,
-    `|| true`,
-  ].join(' | ');
+  ].join(' | ') + ' || true';
 
   try {
+    // ssh concatenates its command arguments with spaces WITHOUT re-quoting
+    // before handing them to the remote login shell — passing
+    // ['bash', '-lc', remoteCmd] therefore makes the remote shell parse
+    // `bash -lc docker logs ... | grep ...`, where `bash -c` receives only
+    // the first word ('docker') and the greps run against docker's usage
+    // text, silently returning no trace_id ever. The whole pipeline must be
+    // ONE shell-quoted argument.
     const { stdout } = await execFileAsync(
       'ssh',
-      [BOMET_SSH_HOST, 'bash', '-lc', remoteCmd],
+      [BOMET_SSH_HOST, `bash -lc ${shellQuote(remoteCmd)}`],
       { timeout: 30_000, maxBuffer: 8 * 1024 * 1024 },
     );
     const tid = stdout.trim();

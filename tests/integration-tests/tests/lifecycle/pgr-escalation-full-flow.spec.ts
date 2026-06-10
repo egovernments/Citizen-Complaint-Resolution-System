@@ -21,7 +21,9 @@
  *   7. Real /escalation/_trigger: ESCALATED / SUCCESS / same slaSource
  *   8. Post-conditions: PENDINGATSUPERVISOR, escalationLevel 1, SLA clock
  *      reset, ESCALATE ProcessInstance assigned to the HRMS supervisor
- *   9. afterAll: deactivate the seeded CategorySLA row (tuple-scoped cleanup)
+ *   9. OTEL: the real trigger's trace carries the scan-span aggregates plus
+ *      an 'escalation.complaint' CHILD span for our srid with its slaSource
+ *  10. afterAll: deactivate the seeded CategorySLA row (tuple-scoped cleanup)
  *
  * Required env (defaults in ../utils/env.ts):
  *   BASE_URL       e.g. https://bometfeedbackhub.digit.org
@@ -49,6 +51,12 @@ import {
   SERVICE_CODE, LOCALITY_CODE,
   generateCitizenPhone,
 } from '../utils/env';
+import {
+  extractTraceIdFromBometLogs,
+  getTempoTrace,
+  findSpansByAttribute,
+  getAttr,
+} from '../utils/tempo';
 
 const CITIZEN_PHONE = generateCitizenPhone();
 const CITIZEN_NAME = 'E2E Escalation Full-Flow Citizen';
@@ -777,5 +785,59 @@ Asserts the verdict: scanned 1, wouldEscalate 1, escalated 0, details[0].action 
     expect(piAssignees, 'escalation must target the HRMS reportingTo supervisor').toContain(supervisorUuid);
     expect(String(latestPi.comment ?? '')).toMatch(/Auto-escalated to .+ \(.+\): SLA breached at level 0/);
     console.log(`[${serviceRequestId}] escalated to ${supervisorUuid} — comment: "${latestPi.comment}"`);
+  });
+
+  test('9 — OTEL: trigger trace has scan aggregates + escalation.complaint child span', {
+    annotation: {
+      type: 'description',
+      description: `Closes the observability loop on the named-assignee path. The scheduler runs each complaint's escalation inside a CHILD span named 'escalation.complaint' (created under tracer 'pgr-services') so per-complaint attributes — complaint.serviceRequestId, escalation.slaSource, from/to levels — never last-writer-win on the scan span; the scan-level aggregates (escalation.scanned / escalation.escalated) stay on the parent.
+
+Transport mirrors the sibling trigger spec's OTEL test: (1) SSH-grep the pgr-services container logs for "Escalated complaint <srid>" — that exact line is emitted ONCE, by the real (mutating) escalation in step 7; the step-6 dryRun preview never logs it, so the token uniquely identifies the mutating trigger's trace and the helper's default 10-minute --since window comfortably covers steps 7→9. (2) getTempoTrace with retries (ingest is async: javaagent batching → collector → Tempo flush). Then asserts: the parent scan span carries escalation.scanned >= 1 AND escalation.escalated >= 1; a CHILD span named 'escalation.complaint' exists with complaint.serviceRequestId === our srid and escalation.slaSource === '${SLA_SOURCE_CATEGORY_LEVEL}' (the same winning cascade layer the trigger response reported); and the child's parentSpanId === the scan span's spanId, proving the parent/child topology.`,
+    },
+    tag: ['@area:pgr', '@area:escalation', '@area:otel', '@kind:lifecycle', '@kind:e2e', '@layer:api', '@persona:admin'] }, async () => {
+    test.skip(chainMissing, chainMissingMsg);
+    test.setTimeout(120_000);
+
+    // "Escalated complaint <srid> from level ..." is logged only by the real
+    // escalation (EscalationService.escalateComplaintWithReason) — inside the
+    // child span's scope, so its MDC trace_id is the trigger's trace.
+    const grepToken = `Escalated complaint ${serviceRequestId}`;
+    const traceId = await extractTraceIdFromBometLogs(grepToken);
+    if (!traceId) {
+      throw new Error(
+        `No trace_id found in pgr-services logs for "${grepToken}". Either the OTEL javaagent is not ` +
+        'attached, the MDC trace_id is missing from the log pattern, or step 7 never actually escalated.',
+      );
+    }
+    console.log(`OTEL trace_id for ${serviceRequestId}: ${traceId}`);
+
+    const trace = await getTempoTrace(traceId, 6, 2_500);
+
+    // Parent scan span — the per-scan aggregates.
+    const scanSpans = findSpansByAttribute(trace, 'escalation.scanned');
+    expect(scanSpans.length, 'expected a span carrying escalation.scanned (the scan aggregates)').toBeGreaterThan(0);
+    const scan = scanSpans[0];
+    const scanned = getAttr(scan, 'escalation.scanned');
+    const escalated = getAttr(scan, 'escalation.escalated');
+    console.log(`scan span "${scan.name}": scanned=${scanned}, escalated=${escalated}`);
+    expect(typeof scanned === 'number' && scanned >= 1, `escalation.scanned should be >= 1 (got ${scanned})`).toBe(true);
+    expect(typeof escalated === 'number' && escalated >= 1, `escalation.escalated should be >= 1 (got ${escalated})`).toBe(true);
+
+    // Per-complaint CHILD span — our srid, with the winning SLA source.
+    const childSpans = findSpansByAttribute(trace, 'complaint.serviceRequestId')
+      .filter((s) => s.name === 'escalation.complaint' && getAttr(s, 'complaint.serviceRequestId') === serviceRequestId);
+    expect(
+      childSpans.length,
+      `expected an 'escalation.complaint' child span for ${serviceRequestId}; srid-bearing spans seen: ${JSON.stringify(
+        findSpansByAttribute(trace, 'complaint.serviceRequestId').map((s) => `${s.name}=${getAttr(s, 'complaint.serviceRequestId')}`),
+      )}`,
+    ).toBeGreaterThan(0);
+    const child = childSpans[0];
+    expect(getAttr(child, 'escalation.slaSource'), 'child span must carry the winning SLA source').toBe(SLA_SOURCE_CATEGORY_LEVEL);
+    expect(
+      !!child.parentSpanId && child.parentSpanId === scan.spanId,
+      `escalation.complaint must be a DIRECT CHILD of the scan span (child.parentSpanId=${child.parentSpanId}, scan.spanId=${scan.spanId})`,
+    ).toBe(true);
+    console.log(`[${serviceRequestId}] OTEL parent/child escalation span topology verified`);
   });
 });
