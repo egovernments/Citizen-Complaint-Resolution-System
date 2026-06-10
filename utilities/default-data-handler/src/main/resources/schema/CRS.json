@@ -39,6 +39,11 @@
           "description": "Per-workflow-state SLA values. Each cell is normally a number (hours) but may also be a 2-element [min,max] tuple when the row models a range. NOTE: validation of the cell shape (number | [min,max] | null) is enforced application-side because the egov-mdms-v2 validator throws ClassCastException on JSON-Schema `oneOf` variants mixing number/array. Bounds (0 < n < 8760) likewise enforced client-side.",
           "additionalProperties": true
         },
+        "slaHoursByLevel": {
+          "type": "array",
+          "description": "Optional per-escalation-level SLA hours; index = escalation level ([L0, L1, L2, ...]). Each cell is a number (hours) or null (fall through to the next SLA source). NOTE: items is deliberately {} because the egov-mdms-v2 validator throws ClassCastException on JSON-Schema oneOf unions mixing number/null; cell shape and bounds (0 <= n <= 8760) are enforced application-side, same precedent as slaHoursByState additionalProperties: true.",
+          "items": {}
+        },
         "isActive": {
           "type": "boolean"
         }
@@ -161,6 +166,38 @@
           "description": "Map of workflow state name → canonical SLA key (one of: new, triage, forwarded, investigation, awaiting, resolved). Operator-defined.",
           "additionalProperties": { "type": "string", "enum": ["new","triage","forwarded","investigation","awaiting","resolved"] }
         }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "CRS.EscalationPolicy",
+    "description": "Tenant-wide escalation policy: max depth, per-level default SLAs (PRD complaint-type x level model), pre-breach warning config, manual-ESCALATE comment requirement. Singleton per tenant (uniqueIdentifier 'default'). All fields optional except singletonKey so tenants adopt incrementally; scheduler falls back to v0 RAINMAKER-PGR.EscalationConfig then static config when absent.",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "CRS Escalation Policy",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": ["singletonKey"],
+      "x-unique": ["singletonKey"],
+      "properties": {
+        "singletonKey": { "type": "string", "enum": ["default"] },
+        "maxDepth": { "type": "integer", "minimum": 1, "maximum": 10 },
+        "defaultSlaHoursByLevel": {
+          "type": "array",
+          "items": { "type": "number", "minimum": 0, "maximum": 8760 }
+        },
+        "preBreachWarning": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "thresholdPercent": { "type": "number", "minimum": 1, "maximum": 99 }
+          },
+          "additionalProperties": false
+        },
+        "escalateCommentRequired": { "type": "boolean" }
       },
       "x-ref-schema": [],
       "additionalProperties": false
