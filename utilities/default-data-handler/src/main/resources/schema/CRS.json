@@ -1,0 +1,169 @@
+[
+  {
+    "tenantId": "{tenantid}",
+    "code": "CRS.CategorySLA",
+    "description": "Per (path, category, subcategoryL1) SLA table consumed by the PGR escalation scheduler. `slaHoursByState` keys map 1:1 to the 6 PGR/CRS workflow states. A cell can be null (fall back to CRS.StateSLA), a single number (hours), or a [min,max] array. When ranged, the scheduler uses MAX for breach detection; the UI displays the range. uniqueIdentifier convention: `<path>:<category>:<subcategoryL1>`. Operators populate rows via the configurator UI or the CSV importer; nothing is auto-seeded.",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Generated schema for Root",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "path",
+        "category",
+        "subcategoryL1",
+        "slaHoursByState",
+        "isActive"
+      ],
+      "x-unique": [
+        "path",
+        "category",
+        "subcategoryL1"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Tenant-defined routing path (e.g. an institutional silo, a geographic region, or any tenant-meaningful grouping). The scheduler treats it as an opaque key."
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subcategoryL1": {
+          "type": "string",
+          "minLength": 1
+        },
+        "slaHoursByState": {
+          "type": "object",
+          "description": "Per-workflow-state SLA values. Each cell is normally a number (hours) but may also be a 2-element [min,max] tuple when the row models a range. NOTE: validation of the cell shape (number | [min,max] | null) is enforced application-side because the egov-mdms-v2 validator throws ClassCastException on JSON-Schema `oneOf` variants mixing number/array. Bounds (0 < n < 8760) likewise enforced client-side.",
+          "additionalProperties": true
+        },
+        "isActive": {
+          "type": "boolean"
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "CRS.StateSLA",
+    "description": "Singleton: per-tenant default SLA (in hours) per workflow state. Used by the escalation scheduler whenever the matching CRS.CategorySLA cell is null. Operators populate this via the configurator before relying on the CategorySLA layer; nothing is auto-seeded. uniqueIdentifier is always `default`.",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Generated schema for Root",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "singletonKey",
+        "stateDefaults"
+      ],
+      "x-unique": [
+        "singletonKey"
+      ],
+      "properties": {
+        "singletonKey": {
+          "type": "string",
+          "description": "Always 'default' — uniqueness key so the MDMS v2 validator can find a non-empty x-unique. Singleton record per tenant.",
+          "enum": ["default"]
+        },
+        "stateDefaults": {
+          "type": "object",
+          "required": ["new", "triage", "forwarded", "investigation", "awaiting", "resolved"],
+          "properties": {
+            "new": { "type": "number", "minimum": 0, "maximum": 8760 },
+            "triage": { "type": "number", "minimum": 0, "maximum": 8760 },
+            "forwarded": { "type": "number", "minimum": 0, "maximum": 8760 },
+            "investigation": { "type": "number", "minimum": 0, "maximum": 8760 },
+            "awaiting": { "type": "number", "minimum": 0, "maximum": 8760 },
+            "resolved": { "type": "number", "minimum": 0, "maximum": 8760 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "CRS.SLAAuditLog",
+    "description": "Append-only audit trail for changes to CRS.CategorySLA and CRS.StateSLA. One entry per save (per row for inline edits, one summary entry per bulk-import). uniqueIdentifier convention: `<timestamp>:<userUuid>:<recordIdentifier>` so concurrent writes don't collide on the same identifier. `beforeJson` / `afterJson` are serialized snapshots of the affected record.",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Generated schema for Root",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "timestamp",
+        "userUuid",
+        "userName",
+        "action",
+        "schemaCode",
+        "recordIdentifier"
+      ],
+      "x-unique": [
+        "timestamp",
+        "userUuid",
+        "recordIdentifier"
+      ],
+      "properties": {
+        "timestamp": {
+          "type": "number"
+        },
+        "userUuid": {
+          "type": "string"
+        },
+        "userName": {
+          "type": "string"
+        },
+        "action": {
+          "type": "string",
+          "enum": ["create", "update", "delete", "bulk-import"]
+        },
+        "schemaCode": {
+          "type": "string"
+        },
+        "recordIdentifier": {
+          "type": "string"
+        },
+        "beforeJson": {
+          "type": "string"
+        },
+        "afterJson": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "CRS.WorkflowStateMapping",
+    "description": "Maps a tenant's workflow state names (e.g. PENDINGFORASSIGNMENT, PENDINGATLME for PGR; or BRD §5.2 names for CRS) onto the canonical SLA-column keys the scheduler uses (new, triage, forwarded, investigation, awaiting, resolved). Without this mapping, the scheduler cannot resolve which SLA cell applies to a complaint in a given state. Singleton-shaped: one record per tenant; uniqueIdentifier always \"default\".",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "CRS Workflow State Mapping",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": ["singletonKey", "mappings"],
+      "x-unique": ["singletonKey"],
+      "properties": {
+        "singletonKey": { "type": "string", "enum": ["default"] },
+        "mappings": {
+          "type": "object",
+          "description": "Map of workflow state name → canonical SLA key (one of: new, triage, forwarded, investigation, awaiting, resolved). Operator-defined.",
+          "additionalProperties": { "type": "string", "enum": ["new","triage","forwarded","investigation","awaiting","resolved"] }
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  }
+]
