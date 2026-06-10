@@ -26,7 +26,7 @@ import {
   History,
   FileCode,
   Workflow,
-  Palette,
+  TableProperties,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -53,6 +53,17 @@ const navGroups = [
       { id: 'complaint-types', nameKey: 'app.nav.complaint_types', path: '/manage/complaint-types', icon: AlertTriangle },
       { id: 'complaints', nameKey: 'app.nav.complaints', path: '/manage/complaints', icon: MessageSquare },
       { id: 'localization', nameKey: 'app.nav.localization', path: '/manage/localization', icon: Globe },
+    ],
+  },
+  {
+    // ESCALATION — group for the escalation-SLA scope. The v1 SLA Matrix is the
+    // primary surface; the v0 PGR EscalationConfig editor stays in the group
+    // (renamed "Legacy SLA (v0)") so operators with existing config can read it
+    // through the deprecation banner.
+    labelKey: 'app.nav.escalation',
+    items: [
+      { id: 'crs-sla-matrix', nameKey: 'app.nav.sla_matrix', path: '/manage/crs-sla-matrix', icon: TableProperties },
+      { id: 'escalation-config', nameKey: 'app.nav.escalation_config_legacy', path: '/manage/escalation-config', icon: AlertTriangle },
     ],
   },
   {
