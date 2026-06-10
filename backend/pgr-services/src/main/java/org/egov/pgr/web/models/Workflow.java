@@ -1,5 +1,6 @@
 package org.egov.pgr.web.models;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.annotations.ApiModel;
 
@@ -33,7 +34,10 @@ public class Workflow   {
         @JsonProperty("action")
         private String action = null;
 
+        // Accept the natural-English spelling too — clients sending "assignees" were
+        // silently dropped by lenient deserialization (eGovStack/core-services#1674).
         @JsonProperty("assignes")
+        @JsonAlias("assignees")
         @Valid
         private List<String> assignes = null;
 

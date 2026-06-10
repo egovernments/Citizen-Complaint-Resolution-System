@@ -1627,6 +1627,23 @@ re-reading. If the read still returns the old value:
 
 ### Assignee-persistence upstream bug
 
+> **ROOT CAUSE FOUND + FIXED (2026-06-11).** The workflow service persists
+> assignees correctly — *when it receives them*. The API contract binds the
+> field as `@JsonProperty("assignes")` (misspelled), and Spring's lenient
+> deserialization silently drops the correctly-spelled `"assignees"` key that
+> real clients (including our own E2E spec) send. Fix: `@JsonAlias("assignees")`
+> on the field — deployed on Bomet as `egov-workflow-v2:maven-jdk21-43f925c2`
+> (branch `fix/wf-assign-assignee-persistence`, based on the exact production
+> commit). Verified live: ASSIGN with the `assignees` spelling now writes
+> `eg_wf_assignee_v2` rows, and the escalation chain runs end-to-end with no
+> manual SQL fixup. Upstream: corrected analysis posted on
+> [eGovStack/core-services#1674](https://github.com/eGovStack/core-services/issues/1674).
+> Sibling fixes in this repo: the E2E spec now sends the canonical `assignes`
+> key; `pgr-services` `Workflow` accepts both spellings inbound. Remaining
+> sibling (separate repo): the digit-ui-esbuild employee assign flow sends
+> `assignes: null` when no employee is picked — picker fix tracked separately.
+> The symptom text below is kept for historical context.
+
 **Symptom.** On Bomet, `/escalation/_trigger` returns
 `skipBreakdown: { NO_ASSIGNEES: 55 }` even though complaints have been
 ASSIGNed. `SELECT * FROM eg_wf_assignee_v2 WHERE processinstanceid IN (...)`

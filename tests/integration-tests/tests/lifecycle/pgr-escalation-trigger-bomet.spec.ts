@@ -282,7 +282,9 @@ Stashes serviceRequestId for the trigger + trace assertions.`,
         service: fullService,
         workflow: {
           action: 'ASSIGN',
-          assignees: [PHASE0_SUB2_UUID],
+          // NB: the workflow API key is the misspelled 'assignes' (@JsonProperty). Sending
+          // 'assignees' is silently dropped on stacks without the JsonAlias fix (issue #1674).
+          assignes: [PHASE0_SUB2_UUID],
           comments: 'E2E trigger test — assigning to PHASE0_SUB2 so SLA can breach',
         },
       }),
