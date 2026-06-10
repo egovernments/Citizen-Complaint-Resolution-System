@@ -1489,8 +1489,10 @@ services:
       - egov-network
 
   # ==================== DIGIT MCP Server ====================
-  # The MCP image is built off CCRS and lives in a private VPC registry
-  # (10.0.0.4:5000). Hosts outside the Hetzner egov VPC can't pull it.
+  # The MCP image is built off CCRS. Deploys inside the Hetzner egov VPC
+  # pull it from the private registry (10.0.0.4:5000); standalone/public
+  # boxes fall back to the pinned public build on ghcr.io (see the
+  # digit-mcp `image:` line below).
   # Both services are tagged `mcp` so they only start when the operator
   # explicitly opts in (`COMPOSE_PROFILES=mcp docker compose up`). On a
   # fresh public-internet box, the default deploy skips them entirely —
@@ -1519,10 +1521,11 @@ services:
     # MCP image source resolved at deploy time. The Ansible playbook
     # writes MCP_IMAGE={{ docker_registry }}/digit-mcp:latest into the
     # .env it generates per tenant (so compose picks it up here).
-    # When running compose directly without the playbook, export
-    # MCP_IMAGE yourself — there's no built-in fallback because the
-    # right registry depends on the operator's network.
-    image: ${MCP_IMAGE}
+    # When running compose directly without the playbook, the fallback
+    # below pulls a public, pinned build from ghcr.io — no VPC access or
+    # insecure-registries trust required. Override MCP_IMAGE to use a
+    # different registry/tag.
+    image: ${MCP_IMAGE:-ghcr.io/subhashini-egov/digit-mcp:2026-06-10}
     container_name: digit-mcp
     restart: unless-stopped
     depends_on:
