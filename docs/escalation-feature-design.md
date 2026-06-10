@@ -130,11 +130,11 @@ the numbering is this doc's, not the PRD's.
 | Requirement | Source | Status | Where |
 |---|---|---|---|
 | **P1** — SLAs configurable per complaint type × escalation level (L0/L1/L2 table, e.g. Pothole 5d/2d/1d), not hardcoded | PRD v3.0 | **Closed** (this branch) | `CategorySLA.slaHoursByLevel` per row + `CRS.EscalationPolicy.defaultSlaHoursByLevel` tenant-wide; precedence documented in [Scheduler resolution algorithm](#scheduler-resolution-algorithm). Note: the state-based matrix (BRD shape) and the level-based model (PRD shape) now **coexist**; per-row level config takes precedence. Product sign-off on the combined model is still pending — see [Open questions](#open-questions-and-deferred-work). |
-| **P2** — pre-breach warning at configurable threshold (default 75% of SLA), per workflow per tenant, sent to current owner AND supervisor, per-complaint (not bundled), suppressed if manually escalated, can be disabled per stage | PRD v3.0 | **Detection closed** (this branch); **delivery deferred (G5)** | Stateless threshold-crossing detection in the scheduler — OTEL attrs + Kafka event on `pgr-escalation-prebreach` (see [Pre-breach warnings](#pre-breach-warnings)). Delivery (WhatsApp/SMS/email to owner + supervisor) is roadmap **G5**; the PRD's "to owner AND supervisor" routing is a G5 consumer concern. Suppressed-if-manually-escalated is handled naturally — manual escalation bumps the level and `lastModified`, so the warning never re-fires for the old level. **Residual gap**: per-stage disable is not implemented — only the global `preBreachWarning.enabled`. |
+| **P2** — pre-breach warning at configurable threshold (default 75% of SLA), per workflow per tenant, sent to current owner AND supervisor, per-complaint (not bundled), suppressed if manually escalated, can be disabled per stage | PRD v3.0 | **Detection closed** (this branch); **delivery deferred (G5)** | Stateless threshold-crossing detection in the scheduler — OTEL attrs + Kafka event on `pgr-escalation-prebreach` (see [Pre-breach warnings](#pre-breach-warnings)). Delivery (WhatsApp/SMS/email to owner + supervisor) is roadmap **G5**; the PRD's "to owner AND supervisor" routing is a G5 consumer concern. Suppressed-if-manually-escalated is **approximated**, not strictly implemented: a manual ESCALATE resets `lastModified` via the normal update flow but does **not** bump `escalationLevel` (only the scheduler's auto path writes that), so the clock restarts and a fresh warning at the same level can fire later in the new window — by design. **Residual gap**: per-stage disable is not implemented — only the global `preBreachWarning.enabled`. |
 | **P3** — auto-escalate on breach to the HRMS-mapped supervisor; single individual only | PRD v3.0 | **Shipped** (#770, state mapping in #775) | [`EscalationService#escalateComplaintWithReason`](../backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationService.java) — HRMS `reportingTo` lookup + workflow ESCALATE transition. |
 | **P4** — role-level escalation: complaint sitting in a role inbox (all GROs/LMEs) with no named assignee escalates to the role's direct supervisor when all members are same-department; multi-department case explicitly TBD in the PRD | PRD v3.0 | **Open product decision** — not implemented | The `NO_ASSIGNEES` skip currently covers this case, which makes that skip partially a **requirements gap** (the PRD's primary journey for role-held complaints), not purely the upstream ASSIGN bug. See [Open questions](#open-questions-and-deferred-work). |
 | **P5** — on escalation: removed from subordinate inbox (all role inboxes if role-assigned), appears in supervisor inbox, supervisor becomes owner, subordinate keeps search access | PRD v3.0 | **Not addressed** | Inbox semantics live in `egov-workflow-v2` / the inbox service — upstream + open decision. |
-| **P6** — state SLA clock resets on escalation; business SLA clock continues uninterrupted | PRD v3.0 | **Partial** | State clock reset works — escalation updates `lastModified`, restarting the elapsed computation. The business SLA clock is **not modeled** — open decision. |
+| **P6** — state SLA clock resets on escalation; business SLA clock continues uninterrupted | PRD v3.0 | **Partial** | State clock reset works — auto-escalation refreshes `auditDetails.lastModifiedTime` on every escalation, so each level genuinely gets a fresh SLA window; a manual ESCALATE resets the clock too (via the normal update flow) but does not bump `escalationLevel` — only the scheduler's auto path writes the level. The business SLA clock is **not modeled** — open decision. |
 | **P7** — escalation visible in audit trail (recipient name, designation, timestamp, comments); citizen notified + escalation entry in complaint timeline visible to citizen and employee | PRD v3.0 | **Closed** (this branch) for audit-trail fields; **notification deferred (G5)** | Enriched ESCALATE workflow comment carries supervisor name + designation + elapsed/SLA; timeline = the existing PGR workflow timeline, visible to citizen and employee — see [Escalation timeline and audit trail](#escalation-timeline-and-audit-trail). The citizen *push notification* on escalation is roadmap **G5**. |
 | **P8** — manual Escalate action with mandatory comment, configurable | PRD v3.0 | **Shipped** (#770); configurability **closed** (this branch) | Manual ESCALATE + mandatory-comment validator in #770; `CRS.EscalationPolicy.escalateCommentRequired` makes the rule configurable (default required). |
 | **P9** — supervisor permitted actions configurable per level (Reassign / Reject / Send back / Send back to citizen / Forward / Comment / Escalate) | PRD v3.0 | **Deferred** | Roadmap **G4** (role-permission matrix) + the workflow designer. |
@@ -204,31 +204,40 @@ the numbering is this doc's, not the PRD's.
                        |  PENDINGATLME ...     |       |
                        +-----------------------+       |
                                                        |
-   admin / test caller  ---POST /escalation/_trigger---+ (synchronous, same code path)
+   admin / test caller  ---POST /escalation/_trigger---+ (synchronous, same code path; optional dryRun)
                                                        |
                                                        v
-   +----------------------------------------------------------------+
-   | EscalationScheduler.scanAndEscalateOnce(tenantId, ids, RI)     |
-   |  1. fetch  CRS.CategorySLA          (MDMS v1 search)           |
-   |  2. fetch  CRS.StateSLA             (MDMS v1 search)           |
-   |  3. fetch  ServiceDefs              (build serviceCode -> tuple)|
-   |  4. fetch  EscalationConfig (v0)    (MDMS v1 search, fallback)  |
-   |  for each candidate complaint:                                  |
-   |    a. resolveSlaHours -> SlaResolution(slaMs, source, unmapped) |
-   |    b. compute elapsed = now - lastModified                      |
-   |    c. if elapsed < sla         -> skip SLA_NOT_BREACHED         |
-   |    d. else getCurrentAssignees                                  |
-   |       if empty               -> skip NO_ASSIGNEES               |
-   |    e. escalateComplaintWithReason                               |
-   |       - lookup supervisor (HRMS reportingTo)                    |
-   |       - workflow ESCALATE transition                            |
-   |       - producer.push(updateTopic, escalationTopic)             |
-   |       - OTEL span attrs (fromAssignee, toAssignee, etc.)        |
-   +----------------------------------------------------------------+
+   +-------------------------------------------------------------------+
+   | EscalationScheduler.scanAndEscalateOnce(tenantId, ids, RI,        |
+   |                                         dryRun)                   |
+   |  1. fetch  CRS.CategorySLA          (MDMS v1 search)              |
+   |  2. fetch  CRS.StateSLA             (MDMS v1 search)              |
+   |  3. fetch  CRS.WorkflowStateMapping (MDMS v1 search)              |
+   |  4. fetch  CRS.EscalationPolicy     (MDMS v1 search)              |
+   |  5. fetch  ServiceDefs              (build serviceCode -> tuple)  |
+   |  6. fetch  EscalationConfig (v0)    (MDMS v1 search, fallback)    |
+   |  for each candidate complaint:                                    |
+   |    a. resolveSlaHours -> SlaResolution(slaMs, source, unmapped)   |
+   |    b. compute elapsed = now - lastModified                        |
+   |    c. pre-breach check: threshold crossed since previous tick?    |
+   |       -> push pgr-escalation-prebreach (suppressed in dryRun)     |
+   |    d. if elapsed < sla         -> skip SLA_NOT_BREACHED           |
+   |    e. else getCurrentAssignees                                    |
+   |       if empty               -> skip NO_ASSIGNEES                 |
+   |    f. escalateComplaintWithReason                                 |
+   |       (dryRun -> previewEscalation: same lookups, zero mutations, |
+   |        counted as wouldEscalate, not escalated)                   |
+   |       - lookup supervisor (HRMS reportingTo)                      |
+   |       - workflow ESCALATE transition                              |
+   |       - refresh auditDetails.lastModifiedTime (fresh SLA window)  |
+   |       - producer.push(updateTopic, escalationTopic)               |
+   |       - OTEL span attrs (fromAssignee, toAssignee, etc.)          |
+   +-------------------------------------------------------------------+
                                   |
                                   v
                       EscalationTriggerResponse
-                      { scanned, escalated, skipped,
+                      { scanned, escalated, wouldEscalate, skipped,
+                        preBreachWarnings, dryRun,
                         skipBreakdown, details[] }
                       + OTEL span attrs (escalation.*)
 ```
@@ -328,7 +337,12 @@ Annotations:
   same way it does for `slaHoursByState`, so cell shape and bounds are
   enforced application-side (the property's JSON `description` in `CRS.json`
   says so — same precedent as `slaHoursByState`'s
-  `additionalProperties: true`). Tenants whose `CRS.CategorySLA` schema was
+  `additionalProperties: true`). A **zero or negative** entry is treated
+  like `null` — it falls through silently to the next source. This is
+  typo-safety (a stray `0` must not create an instantly-breached SLA) and
+  matches the `0 < n < 8760` bounds already enforced on the state cells.
+  Contrast: `CRS.StateSLA` defaults still honour an explicit `0` —
+  pre-existing behaviour, unchanged. Tenants whose `CRS.CategorySLA` schema was
   registered before this property existed must apply the SQL patch
   [`_seed/add-sla-by-level.sql`](../configurator/src/resources/crs/sla-matrix/_seed/add-sla-by-level.sql)
   (mdms-v2 schema/v1 has no `_update`; same idempotent `jsonb_set` pattern
@@ -540,7 +554,13 @@ Annotations:
   behaviour).
 - `defaultSlaHoursByLevel` index = escalation level: `[L0, L1, L2, ...]`
   hours. Unlike the CategorySLA cells these are plain numbers, so the
-  schema *can* validate them declaratively (`number`, `0–8760`).
+  schema *can* validate them declaratively (`number`, `0–8760`). At
+  resolution time a **zero or negative** entry is ignored — it falls
+  through silently to the next source, same typo-safety rule as the
+  CategorySLA per-level cells. (The schema's `minimum: 0` admits a `0`,
+  but the scheduler will not honour it; only `CRS.StateSLA`
+  `stateDefaults` still honour an explicit `0` — pre-existing
+  behaviour.)
 - **No `oneOf` anywhere** — the mdms-v2 validator throws
   `ClassCastException` walking `oneOf` unions (see the [operational
   gotcha](#egov-mdms-v2-validator-and-oneof-on-slahoursbystate)); this
@@ -554,7 +574,7 @@ in pseudocode:
 ```
 SlaResolution resolveSlaHours(complaint, workflowState, crsCategorySla,
                               crsStateSlaDefaults, crsWorkflowStateMapping,
-                              crsEscalationPolicy, serviceCodeToCategory,
+                              serviceCodeToCategory, crsEscalationPolicy,
                               currentLevel, defaultSlaByLevel, overrides):
 
     categoryTuple = extractCategoryTuple(complaint, serviceCodeToCategory)
@@ -574,7 +594,8 @@ SlaResolution resolveSlaHours(complaint, workflowState, crsCategorySla,
 
             # Step 1: per-level cell wins over the state cell.
             levelCell = row.slaHoursByLevel[currentLevel]
-            if levelCell is a Number:    # out-of-bounds / null / non-Number -> fall through silently
+            if levelCell is a Number and levelCell > 0:
+                # out-of-bounds / null / non-Number / zero / negative -> fall through silently
                 return SlaResolution(levelCell*3600*1000, "CRS.CategorySLA.level", unmapped=false)
 
             # Step 2: per-state cell (needs a mapped state key).
@@ -588,7 +609,8 @@ SlaResolution resolveSlaHours(complaint, workflowState, crsCategorySla,
     # ---- Step 3: CRS.EscalationPolicy per-level default ----
     if crsEscalationPolicy:
         levelDefault = crsEscalationPolicy.defaultSlaHoursByLevel[currentLevel]
-        if levelDefault is a Number:     # out-of-bounds / null -> fall through silently
+        if levelDefault is a Number and levelDefault > 0:
+            # out-of-bounds / null / zero / negative -> fall through silently
             return SlaResolution(levelDefault*3600*1000, "CRS.EscalationPolicy.level", unmapped)
 
     # ---- Step 4: CRS.StateSLA ----
@@ -604,10 +626,17 @@ SlaResolution resolveSlaHours(complaint, workflowState, crsCategorySla,
 ```
 
 The `unmappedCategory` / `stateMappingMissing` semantics are unchanged
-from PR #770/#775 — an out-of-bounds level index, a null entry or a
-non-Number in either per-level array falls through **silently** to the
-next step; only category- and state-mapping misses are counted and
-surfaced.
+from PR #770/#775 — an out-of-bounds level index, a null entry, a
+non-Number, or a **zero/negative** number in either per-level array
+falls through **silently** to the next step; only category- and
+state-mapping misses are counted and surfaced. Ignoring zero/negative
+cells is typo-safety: a fat-fingered `0` must not produce an
+instantly-breached SLA, and the rule mirrors the application-side
+bounds already enforced on CategorySLA state cells (`0 < n < 8760`).
+One pre-existing asymmetry to be aware of: `CRS.StateSLA`
+`stateDefaults` still honour an explicit `0` (the schema allows
+`minimum: 0` and the lookup only checks for null) — that behaviour
+predates the per-level sources and is unchanged.
 
 **Escalation level and depth.** `currentLevel` is read from the
 complaint's `additionalDetail.escalationLevel` (0-based; a complaint
@@ -712,9 +741,25 @@ clock — and the one-shot — restart at the new level). The accepted
 trade-off: if the scheduler misses the tick that spans the crossing
 window (restart, downtime), that warning is silently lost.
 
+Two further caveats of the stateless design:
+
+- **Duplicate emission via manual trigger.** A manual non-`dryRun`
+  `POST /escalation/_trigger` that lands inside the crossing window
+  evaluates the same condition as the next cron tick — both can emit,
+  so the same warning may go out twice. Consumers (the G5 delivery
+  work) should dedupe on `(serviceRequestId, escalationLevel)`.
+- **Tick drift.** The scheduler runs on `@Scheduled` with `fixedDelay`,
+  so real tick spacing is *interval + scan duration*, not the bare
+  interval. The crossing test assumes ticks exactly `intervalMs` apart;
+  a crossing that falls inside the drift gap is missed the same way a
+  restart/downtime gap misses it — this extends the missed-tick caveat
+  above.
+
 **Event.** On emit, the scheduler pushes to the Kafka topic
 `pgr-escalation-prebreach` (`pgr.escalation.prebreach.topic` in
-`application.properties`, surfaced via `PGRConfiguration`):
+`application.properties`, surfaced via `PGRConfiguration`). The event
+is pushed with the **complaint's (city) tenantId**, so per-tenant topic
+prefixing behaves consistently with the escalation event:
 
 ```json
 {
@@ -739,7 +784,14 @@ routing to the current owner AND the supervisor over the per-role
 channels the PRD asks for (email / SMS / WhatsApp) is the G5
 notification-templates work — the event payload already carries
 everything a consumer needs. Suppression after manual escalation is
-handled naturally (the escalation bumps the level and `lastModified`).
+**approximated** rather than strictly implemented: a manual ESCALATE
+resets `lastModified` through the normal update flow but does not bump
+`escalationLevel` (only the scheduler's auto path writes the level), so
+the clock restarts and the same level may legitimately warn afresh in
+the new window — by design. The PRD's strict
+suppress-after-manual-escalation would need the business SLA clock,
+which remains unmodeled (see P6 in [Requirements
+traceability](#requirements-traceability)).
 **Residual gap**: the PRD also allows disabling the warning per
 workflow stage; only the global `enabled` flag exists today.
 
@@ -776,7 +828,10 @@ The drawer renders:
 > `WOULD_ESCALATE`. Operators scripting `/_trigger` directly (curl,
 > runbooks) must add `"dryRun": true` themselves — a bare call on a
 > breached complaint escalates it for real. Pre-breach warning emission
-> is also suppressed in dry-run.
+> is also suppressed in dry-run. Dry-run would-be escalations are
+> reported in a separate `wouldEscalate` response field (and the
+> `escalation.wouldEscalate` span attribute) — `escalated` stays `0` on
+> a dry run.
 
 Use case: an operator pages a citizen complaint that "should have escalated".
 They paste the SR id into Trace escalation, see
@@ -840,9 +895,12 @@ timeline to both citizen and employee. This is satisfied by the
   (elapsed <X>h > SLA <Y>h)`. Name and designation come from one extra
   HRMS lookup per actual escalation
   ([`HRMSUtil#getEmployeeSummary`](../backend/pgr-services/src/main/java/org/egov/pgr/util/HRMSUtil.java)
-  — escalations are rare, so the extra call is acceptable); when HRMS
-  cannot resolve the employee, the comment falls back to the supervisor
-  uuid with the same elapsed/SLA numbers.
+  — escalations are rare, so the extra call is acceptable). The comment
+  degrades gracefully across **three tiers** when the summary is
+  partial: name + designation when both resolve, name alone when only
+  the designation is missing, and finally the bare supervisor uuid when
+  HRMS cannot resolve the employee at all — always with the same
+  elapsed/SLA numbers.
 - **Timestamp and acting user** come from the workflow `ProcessInstance`
   itself — the standard PGR audit fields; nothing extra is stored.
 - The entry rides the **existing PGR workflow timeline**, rendered by
@@ -1067,10 +1125,14 @@ Operator flow:
 2. Paste a `serviceRequestId` from a stuck complaint, submit.
 3. Drawer calls `POST /escalation/_trigger` **with `dryRun: true`** (see
    [`EscalationController`](../backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/EscalationController.java))
-   and renders the per-complaint outcome: `action`, `reason`, `detail`,
-   `slaSource`, `fromAssignee`, `toAssignee`. A breached complaint comes
-   back as `WOULD_ESCALATE`, rendered with the same success variant as
-   `ESCALATED` and labelled "Would escalate".
+   and renders the per-complaint outcome: `serviceRequestId`, `action`,
+   `reason`, `detail`. Note: `slaSource`, `fromAssignee` and
+   `toAssignee` are **not** response fields — they are OTEL span
+   attributes, visible on the trigger's trace in Tempo. A breached
+   complaint comes back as `WOULD_ESCALATE`, rendered with the same
+   success variant as `ESCALATED` and labelled "Would escalate"; in
+   dry-run those are counted in the response's `wouldEscalate` field
+   while `escalated` stays `0`.
 
 The endpoint **does mutate state when called without `dryRun`** — it runs
 the full scheduler code path, real escalations included. The drawer
@@ -1370,6 +1432,21 @@ the scheduler; `parseCell` + the table-row validator in the configurator)
 enforces shape and bounds. Schema-level validation will return only when
 mdms-v2 stops choking on the union type.
 
+### Trust boundary: `AUTO_ESCALATE` role
+
+The mandatory-comment rule on manual `ESCALATE` is skipped when the
+caller's `RequestInfo.userInfo.roles` on `/v2/request/_update` contains
+`AUTO_ESCALATE` — that is how the scheduler's own transitions bypass it
+(see `ServiceRequestValidator#validateEscalateComment`). The check
+trusts **request-supplied** userInfo, which is safe only as long as the
+gateway overrides caller-supplied `userInfo` with the authenticated
+user's actual roles. Anything that reaches pgr-services directly —
+VPC-internal callers, port-forwards — can self-assert the role and skip
+the comment rule. Scope it correctly: this is an **audit-comment bypass
+only**, not an authorization bypass — the workflow transition itself is
+still permission-checked. The `/escalation/_trigger` endpoint is **not**
+affected: it is gated on `SUPERUSER` before any role injection happens.
+
 ---
 
 ## Testing strategy
@@ -1526,7 +1603,8 @@ curl -X POST \
 # Expected response shape:
 # {
 #   "scanned":   <int>,
-#   "escalated": <int>,
+#   "escalated": <int>,        # always 0 on a dry run
+#   "wouldEscalate": <int>,    # dry-run counter: breached complaints that WOULD escalate
 #   "skipped":   <int>,
 #   "preBreachWarnings": <int>,
 #   "dryRun":    true|false,
