@@ -2,6 +2,7 @@ package org.egov.pgr.service;
 
 import org.junit.jupiter.api.Test;
 
+import static org.egov.pgr.service.EscalationScheduler.isInPreBreachWindow;
 import static org.egov.pgr.service.EscalationScheduler.shouldEmitPreBreach;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -10,7 +11,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Unit coverage for {@link EscalationScheduler#shouldEmitPreBreach} — the
  * stateless crossing-detection predicate behind the PRD pre-breach warning.
  * Emit exactly once: on the first scheduler tick at/after thresholdPercent of
- * the SLA, and never once the SLA itself has breached.
+ * the SLA, and never once the SLA itself has breached. Also covers
+ * {@link EscalationScheduler#isInPreBreachWindow}, the crossing-free window
+ * predicate dry runs use to count complaints currently at risk.
  */
 public class EscalationSchedulerPreBreachTest {
 
@@ -60,5 +63,20 @@ public class EscalationSchedulerPreBreachTest {
         // but is nowhere near a 75% threshold (75s).
         assertTrue(shouldEmitPreBreach(55_000L, SLA_MS, 50.0, INTERVAL_MS));
         assertFalse(shouldEmitPreBreach(55_000L, SLA_MS, 75.0, INTERVAL_MS));
+    }
+
+    /**
+     * The dry-run window predicate is membership-only: true anywhere inside
+     * [threshold, sla) — even ticks after the crossing, where
+     * {@link EscalationScheduler#shouldEmitPreBreach} has gone silent.
+     */
+    @Test
+    void window_membershipNotCrossing() {
+        // threshold = 75% of 100s = 75s.
+        assertTrue(isInPreBreachWindow(75_000L, SLA_MS, 75.0));  // at the threshold (>= edge)
+        assertTrue(isInPreBreachWindow(90_000L, SLA_MS, 75.0));  // deep in the window — crossing long past
+        assertFalse(isInPreBreachWindow(74_999L, SLA_MS, 75.0)); // just below the threshold
+        assertFalse(isInPreBreachWindow(100_000L, SLA_MS, 75.0)); // at the SLA — breach path takes over
+        assertFalse(isInPreBreachWindow(150_000L, SLA_MS, 75.0)); // well past the SLA
     }
 }

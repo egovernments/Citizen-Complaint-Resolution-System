@@ -46,9 +46,12 @@ import static org.mockito.Mockito.when;
  * <ol>
  *   <li>pre-breach warning emission — policy-driven, Kafka push on the
  *       pre-breach topic, counter + outcome-detail tagging;</li>
- *   <li>pre-breach suppression on dry runs;</li>
+ *   <li>pre-breach behaviour on dry runs — emission suppressed, counter
+ *       reports warning-window membership instead;</li>
  *   <li>CRS.EscalationPolicy maxDepth overriding the static config default
- *       in the scheduler's own early max-depth check.</li>
+ *       in the scheduler's own early max-depth check;</li>
+ *   <li>slaSource propagation from {@code SlaResolution} into the
+ *       per-complaint outcome details.</li>
  * </ol>
  *
  * <p>Follows the same mock harness as {@link EscalationSchedulerDryRunTest}:
@@ -120,7 +123,7 @@ public class EscalationSchedulerScanWiringTest {
                 "SLA_NOT_BREACHED outcome detail must record the pre-breach emission");
     }
 
-    /** Same scenario but dryRun=true → zero pushes, zero warnings counted. */
+    /** Same scenario but dryRun=true → zero pushes (dry runs never emit events). */
     @Test
     void preBreach_dryRun_suppressesEmission() {
         Map<String, Object> preBreach = new HashMap<>();
@@ -133,10 +136,35 @@ public class EscalationSchedulerScanWiringTest {
         Service complaint = complaintLastTouched("PGR-PB-2", 80_000L);
         surfaceForPendingAtLme(complaint);
 
+        scheduler.scanAndEscalateOnce("ke", null, RequestInfo.builder().build(), true);
+
+        verify(producer, never()).push(anyString(), anyString(), any());
+    }
+
+    /**
+     * Dry-run window counting: preBreachWarnings reports complaints currently
+     * inside [threshold, sla) — no crossing-tick condition. Elapsed 90s with a
+     * 10s tick crossed the 75s threshold a tick ago, so a LIVE scan would stay
+     * silent; the dry run still counts the complaint (and pushes nothing).
+     */
+    @Test
+    void preBreach_dryRun_countsInWindowComplaint() {
+        Map<String, Object> preBreach = new HashMap<>();
+        preBreach.put("enabled", true);
+        preBreach.put("thresholdPercent", 75);
+        Map<String, Object> policy = new HashMap<>();
+        policy.put("preBreachWarning", preBreach);
+        stubEscalationPolicy(policy);
+
+        // SLA 100s, threshold 75s. Elapsed ~90s: inside [75s, 100s) but the
+        // previous tick (~80s) was already past the threshold.
+        Service complaint = complaintLastTouched("PGR-PB-3", 90_000L);
+        surfaceForPendingAtLme(complaint);
+
         EscalationTriggerResponse response = scheduler.scanAndEscalateOnce(
                 "ke", null, RequestInfo.builder().build(), true);
 
-        assertEquals(0, response.getPreBreachWarnings());
+        assertEquals(1, response.getPreBreachWarnings());
         verify(producer, never()).push(anyString(), anyString(), any());
     }
 
@@ -169,10 +197,37 @@ public class EscalationSchedulerScanWiringTest {
                                 && "SKIPPED".equals(d.getAction())
                                 && EscalationSkipReason.MAX_DEPTH_REACHED.name().equals(d.getReason())
                                 && d.getDetail() != null
-                                && d.getDetail().contains("maxDepth=1")),
+                                && d.getDetail().contains("maxDepth=1")
+                                // MAX_DEPTH_REACHED skips before SLA resolution → no slaSource.
+                                && d.getSlaSource() == null),
                 "expected a MAX_DEPTH_REACHED skip computed against the POLICY maxDepth (1), not the static default (3)");
         verify(escalationService, never())
                 .escalateComplaintWithReason(any(), any(), any(), anyInt(), anyLong(), anyLong());
+    }
+
+    /**
+     * Every outcome that ran SLA resolution carries the winning layer as
+     * {@code slaSource}. Here the policy's defaultSlaHoursByLevel answers
+     * (2h SLA, complaint touched 1 minute ago → SLA_NOT_BREACHED), so the
+     * skip outcome must report {@link PGRConstants#SLA_SOURCE_POLICY_LEVEL}.
+     */
+    @Test
+    void outcomes_carrySlaSourceFromResolution() {
+        Map<String, Object> policy = new HashMap<>();
+        policy.put("defaultSlaHoursByLevel", Collections.singletonList(2)); // 2h at L0
+        stubEscalationPolicy(policy);
+
+        Service complaint = complaintLastTouched("PGR-SRC-1", 60_000L); // 1 min — not breached
+        surfaceForPendingAtLme(complaint);
+
+        EscalationTriggerResponse response = scheduler.scanAndEscalateOnce(
+                "ke", null, RequestInfo.builder().build(), false);
+
+        assertTrue(response.getDetails().stream().anyMatch(d ->
+                        "PGR-SRC-1".equals(d.getServiceRequestId())
+                                && EscalationSkipReason.SLA_NOT_BREACHED.name().equals(d.getReason())
+                                && PGRConstants.SLA_SOURCE_POLICY_LEVEL.equals(d.getSlaSource())),
+                "expected the SLA_NOT_BREACHED outcome to carry slaSource=" + PGRConstants.SLA_SOURCE_POLICY_LEVEL);
     }
 
     // ---------------------------------------------------------------------

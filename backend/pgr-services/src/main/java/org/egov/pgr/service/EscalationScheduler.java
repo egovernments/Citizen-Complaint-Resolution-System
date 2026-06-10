@@ -104,7 +104,9 @@ public class EscalationScheduler {
      * Same as {@link #scanAndEscalateOnce(String, List, RequestInfo)} with an
      * explicit dry-run flag: when {@code dryRun=true}, breached complaints get
      * a {@code WOULD_ESCALATE} outcome (max-depth check + HRMS supervisor
-     * lookup, zero mutations) and pre-breach warning emission is suppressed.
+     * lookup, zero mutations) and pre-breach warning emission is suppressed —
+     * {@code preBreachWarnings} instead counts complaints currently inside the
+     * warning window (see {@link #isInPreBreachWindow}).
      */
     public EscalationTriggerResponse scanAndEscalateOnce(String tenantId,
                                                          List<String> serviceRequestIds,
@@ -165,7 +167,7 @@ public class EscalationScheduler {
                     if (currentLevel >= maxDepth) {
                         recordSkip(skipMap, details, srid, status, currentLevel,
                                 EscalationSkipReason.MAX_DEPTH_REACHED,
-                                "currentLevel=" + currentLevel + ", maxDepth=" + maxDepth);
+                                "currentLevel=" + currentLevel + ", maxDepth=" + maxDepth, null);
                         skipped++;
                         continue;
                     }
@@ -208,7 +210,7 @@ public class EscalationScheduler {
 
                     if (lastModified == 0L) {
                         recordSkip(skipMap, details, srid, status, currentLevel,
-                                EscalationSkipReason.NO_LAST_MODIFIED_TIME, "auditDetails missing timestamps");
+                                EscalationSkipReason.NO_LAST_MODIFIED_TIME, "auditDetails missing timestamps", null);
                         skipped++;
                         continue;
                     }
@@ -216,16 +218,22 @@ public class EscalationScheduler {
                     long elapsed = System.currentTimeMillis() - lastModified;
 
                     // PRD: configurable pre-breach warning at thresholdPercent of SLA elapsed.
-                    // Stateless crossing detection: emit only when the threshold was crossed
-                    // since the previous scheduler tick, so each complaint warns once per level
-                    // without persisted state. A missed tick misses the warning (accepted).
+                    // Live scans use stateless crossing detection: emit only when the threshold
+                    // was crossed since the previous scheduler tick, so each complaint warns once
+                    // per level without persisted state. A missed tick misses the warning
+                    // (accepted). Dry runs never emit; they count every complaint currently
+                    // inside the warning window instead, so a test scan shows what's at risk now.
                     boolean preBreachEmitted = false;
                     Map<String, Object> preBreach = getPreBreachWarning(crsEscalationPolicy);
-                    if (!dryRun && preBreach != null && Boolean.TRUE.equals(preBreach.get("enabled"))) {
+                    if (preBreach != null && Boolean.TRUE.equals(preBreach.get("enabled"))) {
                         double thresholdPercent = preBreach.get("thresholdPercent") instanceof Number
                                 ? ((Number) preBreach.get("thresholdPercent")).doubleValue()
                                 : 75.0;
-                        if (shouldEmitPreBreach(elapsed, sla, thresholdPercent, config.getEscalationIntervalMs())) {
+                        if (dryRun) {
+                            if (isInPreBreachWindow(elapsed, sla, thresholdPercent)) {
+                                preBreachWarnings++;
+                            }
+                        } else if (shouldEmitPreBreach(elapsed, sla, thresholdPercent, config.getEscalationIntervalMs())) {
                             log.info("Escalation pre-breach warning — srid={}, tenantId={}, level={}, elapsedMs={}, slaMs={}, thresholdPercent={}",
                                     srid, complaint.getTenantId(), currentLevel, elapsed, sla, thresholdPercent);
                             Map<String, Object> event = new HashMap<>();
@@ -250,7 +258,8 @@ public class EscalationScheduler {
                         recordSkip(skipMap, details, srid, status, currentLevel,
                                 EscalationSkipReason.SLA_NOT_BREACHED,
                                 "elapsed=" + elapsed + "ms, sla=" + sla + "ms"
-                                        + (preBreachEmitted ? "; prebreach warning emitted" : ""));
+                                        + (preBreachEmitted ? "; prebreach warning emitted" : ""),
+                                slaRes.source);
                         skipped++;
                         continue;
                     }
@@ -260,7 +269,7 @@ public class EscalationScheduler {
 
                     if (CollectionUtils.isEmpty(assignees)) {
                         recordSkip(skipMap, details, srid, status, currentLevel,
-                                EscalationSkipReason.NO_ASSIGNEES, "workflow returned 0 assignees");
+                                EscalationSkipReason.NO_ASSIGNEES, "workflow returned 0 assignees", slaRes.source);
                         skipped++;
                         continue;
                     }
@@ -286,6 +295,7 @@ public class EscalationScheduler {
                                 .detail(dryRun
                                         ? result.getDetail()
                                         : "fromLevel=" + currentLevel + " toLevel=" + (currentLevel + 1))
+                                .slaSource(slaRes.source)
                                 .build());
                         log.info("Escalation {} — srid={}, status={}, fromLevel={}, toLevel={}",
                                 dryRun ? "dry-run hit" : "success", srid, status, currentLevel, currentLevel + 1);
@@ -293,7 +303,7 @@ public class EscalationScheduler {
                         EscalationSkipReason reason = result.getReason() != null
                                 ? result.getReason()
                                 : EscalationSkipReason.WORKFLOW_TRANSITION_FAILED;
-                        recordSkip(skipMap, details, srid, status, currentLevel, reason, result.getDetail());
+                        recordSkip(skipMap, details, srid, status, currentLevel, reason, result.getDetail(), slaRes.source);
                         skipped++;
                     }
                 }
@@ -345,6 +355,18 @@ public class EscalationScheduler {
                 && (elapsedMs - intervalMs) < thresholdMs;
     }
 
+    /**
+     * Window-membership predicate used by dry runs: true while elapsed sits
+     * inside the warning window [thresholdMs, slaMs). Unlike
+     * {@link #shouldEmitPreBreach} there is no crossing-tick condition — a
+     * dry run reports every complaint currently at risk, not just the ones
+     * whose threshold was crossed this tick. Visible for testing.
+     */
+    static boolean isInPreBreachWindow(long elapsedMs, long slaMs, double thresholdPercent) {
+        double thresholdMs = slaMs * thresholdPercent / 100.0;
+        return elapsedMs >= thresholdMs && elapsedMs < slaMs;
+    }
+
     @SuppressWarnings("unchecked")
     private static Map<String, Object> getPreBreachWarning(Map<String, Object> crsEscalationPolicy) {
         if (crsEscalationPolicy == null) return null;
@@ -352,10 +374,15 @@ public class EscalationScheduler {
         return pb instanceof Map ? (Map<String, Object>) pb : null;
     }
 
+    /**
+     * Records a skip outcome. {@code slaSource} is the winning
+     * {@link SlaResolution#source} layer, or null for skips decided before
+     * SLA resolution applies (MAX_DEPTH_REACHED, NO_LAST_MODIFIED_TIME).
+     */
     private void recordSkip(Map<EscalationSkipReason, Integer> skipMap,
                             List<EscalationOutcome> details,
                             String srid, String status, int currentLevel,
-                            EscalationSkipReason reason, String detail) {
+                            EscalationSkipReason reason, String detail, String slaSource) {
         log.info("Escalation skip — srid={}, status={}, level={}, reason={}, detail={}",
                 srid, status, currentLevel, reason, detail);
         skipMap.merge(reason, 1, Integer::sum);
@@ -364,6 +391,7 @@ public class EscalationScheduler {
                 .action("SKIPPED")
                 .reason(reason.name())
                 .detail(detail)
+                .slaSource(slaSource)
                 .build());
     }
 

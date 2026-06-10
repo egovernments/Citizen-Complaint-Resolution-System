@@ -49,7 +49,12 @@ public class EscalationTriggerResponse {
     @JsonProperty("dryRun")
     private boolean dryRun;
 
-    /** Pre-breach warnings emitted during this scan. */
+    /**
+     * Live scans: pre-breach warnings emitted this tick (crossing detection —
+     * each complaint warns once per level, on the tick its elapsed time
+     * crosses the threshold). Dry runs: complaints currently inside the
+     * warning window [threshold, SLA) — nothing is emitted.
+     */
     @JsonProperty("preBreachWarnings")
     private int preBreachWarnings;
 
@@ -82,5 +87,18 @@ public class EscalationTriggerResponse {
         /** Optional free-text diagnostic (e.g. elapsed=12345ms, sla=600000ms). */
         @JsonProperty("detail")
         private String detail;
+
+        /**
+         * Winning SLA-resolution layer for this complaint, one of
+         * {@link org.egov.pgr.util.PGRConstants#SLA_SOURCE_CATEGORY_LEVEL},
+         * {@link org.egov.pgr.util.PGRConstants#SLA_SOURCE_CATEGORY},
+         * {@link org.egov.pgr.util.PGRConstants#SLA_SOURCE_POLICY_LEVEL},
+         * {@link org.egov.pgr.util.PGRConstants#SLA_SOURCE_STATE} or
+         * {@link org.egov.pgr.util.PGRConstants#SLA_SOURCE_V0}. Null on
+         * MAX_DEPTH_REACHED / NO_LAST_MODIFIED_TIME outcomes, which are
+         * decided before SLA resolution applies.
+         */
+        @JsonProperty("slaSource")
+        private String slaSource;
     }
 }
