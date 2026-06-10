@@ -5,6 +5,8 @@ import { ChipArrayInput } from './ChipArrayInput';
 import { DurationMsInput } from './DurationMsInput';
 import { BooleanInput } from './BooleanInput';
 import { LocaleListInput } from './LocaleListInput';
+import { SlaByLevelInput } from '@/components/widgets/SlaByLevelInput';
+import { ServiceOverridesEditor } from '@/components/widgets/ServiceOverridesEditor';
 import type { FieldSpec } from '../schemaDescriptors/types';
 
 interface WidgetDispatchProps {
@@ -31,6 +33,10 @@ export function WidgetForFieldSpec({ spec, source }: WidgetDispatchProps) {
       return <DurationMsInput {...shared} help={spec.help} min={spec.min} max={spec.max} />;
     case 'locale-list':
       return <LocaleListInput {...shared} help={spec.help} />;
+    case 'sla-by-level':
+      return <SlaByLevelInput {...shared} help={spec.help} />;
+    case 'service-overrides':
+      return <ServiceOverridesEditor {...shared} help={spec.help} />;
     case 'boolean':
       return <BooleanInput {...shared} help={spec.help} />;
     case 'integer':
@@ -45,4 +51,4 @@ export function WidgetForFieldSpec({ spec, source }: WidgetDispatchProps) {
   }
 }
 
-export { ColorInput, RegexInput, ChipArrayInput, DurationMsInput, BooleanInput, LocaleListInput };
+export { ColorInput, RegexInput, ChipArrayInput, DurationMsInput, BooleanInput, LocaleListInput, SlaByLevelInput, ServiceOverridesEditor };
