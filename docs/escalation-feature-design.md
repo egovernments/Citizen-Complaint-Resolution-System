@@ -9,6 +9,38 @@
 
 ---
 
+## Terminology cheatsheet
+
+Short glosses of every domain acronym used in the rest of this doc.
+A fuller glossary lives at the end; this strip is the "open at line 1
+and you can read on" version for newcomers.
+
+- **CRS** — Citizen Complaint Resolution System (this codebase).
+  Replaces the older PGR module.
+- **PGR** — Public Grievance Redressal, the legacy DIGIT module CRS
+  evolved from. Bomet and Nairobi deployments still run PGR-style
+  state names.
+- **MDMS** — Master Data Management Service, DIGIT's config store.
+  Has v1 (read) and v2 (write + schema-defined). All `CRS.*` records
+  live in v2.
+- **SLA** — Service-Level Agreement, the time budget before an
+  escalation fires.
+- **OTEL** — OpenTelemetry, the tracing standard. Spans land in Tempo.
+- **Tempo** — Grafana's distributed tracing backend, deployed
+  alongside each tenant.
+- **HRMS** — Human Resource Management Service. Source of the
+  supervisor chain via `assignment.reportingTo`.
+- **BRD** — Business Requirements Document. In this doc, "BRD §5.2"
+  refers to the Mozambique CRS BRD's case-lifecycle table.
+- **srid** — Service Request ID, the canonical complaint identifier
+  (e.g. `PG-PGR-2026-04-13-000356`).
+- **Bomet, Nairobi** — two live Kenya county deployments of CRS.
+- **Tenant** — a CRS deployment unit (a country, a region, a county).
+  Every MDMS record is scoped to a tenant.
+- **Kong** — the API gateway every public request flows through.
+
+---
+
 ## Executive summary
 
 The CRS escalation feature is the per-tenant, per-category SLA pipeline that the
@@ -20,7 +52,10 @@ did not escalate (and tune SLAs in response); and **platform engineers** who nee
 a generic, tenant-agnostic way to wire SLA targets without code changes.
 
 Architecturally the feature is a **three-layer SLA resolution** read by
-[`EscalationScheduler.resolveSlaHours`](../backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationScheduler.java#L476):
+[`EscalationScheduler#resolveSlaHours`](../backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationScheduler.java),
+supported by a fourth MDMS schema (`CRS.WorkflowStateMapping`) that
+translates a tenant's workflow state names into the canonical SLA-column
+keys used by the three resolution layers:
 
 1. **`CRS.CategorySLA`** — per-tuple (path, category, subcategoryL1) SLA rows
    with one cell per workflow state.
@@ -30,10 +65,16 @@ Architecturally the feature is a **three-layer SLA resolution** read by
    table, kept as a safety net so a tenant that has not yet migrated does not
    lose escalation overnight.
 
+The fourth schema, **`CRS.WorkflowStateMapping`**, is not itself an SLA layer
+— it is the operator-defined dictionary that maps each workflow state name
+(e.g. `PENDINGFORASSIGNMENT`) onto one of the six canonical SLA-column keys
+(`new | triage | forwarded | investigation | awaiting | resolved`). Without
+it, the scheduler cannot resolve which cell of the SLA layers above to read.
+
 The selected layer is surfaced on each OTEL span as `escalation.slaSource`, so an
 operator can tell from a single trace which configuration answered the lookup.
 
-**What landed in PR #770**: the three MDMS schemas (`utilities/default-data-handler/src/main/resources/schema/CRS.json`),
+**What landed in PR #770**: the four MDMS schemas (`utilities/default-data-handler/src/main/resources/schema/CRS.json`),
 the scheduler patch that consumes them, the new admin endpoint `POST /pgr-services/escalation/_trigger`,
 the SLA Matrix configurator page with bulk-CSV import + trace-back drawer, structured
 skip-reason logging, OTEL span attributes, the mandatory-comment validator on manual
@@ -135,20 +176,34 @@ G1–G8.
                       + OTEL span attrs (escalation.*)
 ```
 
-### The three SLA layers
+### SLA + supporting layers
+
+Three layers answer "what is the SLA for this complaint?", plus one
+supporting layer (`CRS.WorkflowStateMapping`) that translates the
+workflow state name into the canonical key the other three layers are
+indexed by.
 
 | Layer | MDMS code | Key shape | Cell shape | When used | `escalation.slaSource` attribute |
 |---|---|---|---|---|---|
 | Category-specific | `CRS.CategorySLA` | `(path, category, subcategoryL1)` | `slaHoursByState.{new|triage|forwarded|investigation|awaiting|resolved}` — `number` (hours) \| `[min,max]` (range) \| `null` | tuple maps to a row AND the cell is non-null | `CRS.CategorySLA` |
 | Per-state default | `CRS.StateSLA` (singleton `default`) | `singletonKey="default"` | `stateDefaults.{...} → number` (hours) | category row missing or cell null | `CRS.StateSLA` |
 | Legacy | `RAINMAKER-PGR.EscalationConfig` | singleton | `defaultSlaByLevel[currentLevel]` + per-`serviceCode` overrides | both above empty (backward-compat for not-yet-migrated deployments) | `v0.EscalationConfig` |
+| State-name dictionary (supporting) | `CRS.WorkflowStateMapping` (singleton `default`) | `singletonKey="default"` | `mappings.{<workflowState>} → "new"\|"triage"\|"forwarded"\|"investigation"\|"awaiting"\|"resolved"` | every scan — read once, threaded into `resolveSlaHours` to translate the complaint's `applicationStatus` into the SLA-column key | n/a — not an SLA source |
 
 The literal source-tag strings are defined in
-[`PGRConstants.SLA_SOURCE_CATEGORY/STATE/V0`](../backend/pgr-services/src/main/java/org/egov/pgr/util/PGRConstants.java#L179-L181).
+[`PGRConstants.SLA_SOURCE_CATEGORY/STATE/V0`](../backend/pgr-services/src/main/java/org/egov/pgr/util/PGRConstants.java).
+
+> **Operator callout — seed order matters.** Seed
+> `CRS.WorkflowStateMapping` **before** `CRS.StateSLA` and
+> `CRS.CategorySLA`. Without the mapping, the scheduler cannot
+> translate `applicationStatus` into the SLA-column key, emits
+> `STATE_MAPPING_MISSING` for every candidate complaint, and falls all
+> the way through to the v0 fallback regardless of how well populated
+> the CRS layers are.
 
 ### Schemas
 
-The three schemas live in
+The four schemas live in
 [`utilities/default-data-handler/src/main/resources/schema/CRS.json`](../utilities/default-data-handler/src/main/resources/schema/CRS.json).
 Verbatim definitions with annotations:
 
@@ -231,11 +286,75 @@ Annotations:
 - `singletonKey` is a placeholder string fixed to `"default"`. It exists only
   to give the MDMS v2 validator a non-empty `x-unique` — otherwise the
   validator trips its own `ClassCastException`. See
-  [`slaService.saveStateSla`](../configurator/src/resources/crs/sla-matrix/slaService.ts#L114).
-- The six state keys are the canonical CRS workflow states. Their mapping to
-  the PGR/DIGIT workflow state names is wired in
-  [`EscalationScheduler.mapWorkflowStateToKey`](../backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationScheduler.java#L551)
-  — see the [Tenant agnosticism](#tenant-agnosticism) caveat.
+  [`slaService#saveStateSla`](../configurator/src/resources/crs/sla-matrix/slaService.ts).
+- The six state keys are the canonical CRS workflow states. The translation
+  from a tenant's workflow state names (e.g. `PENDINGFORASSIGNMENT`) onto
+  these six keys is operator-defined via `CRS.WorkflowStateMapping` (next
+  subsection); the scheduler does not hardcode any tenant-specific names.
+
+#### `CRS.WorkflowStateMapping`
+
+```json
+{
+  "tenantId": "{tenantid}",
+  "code": "CRS.WorkflowStateMapping",
+  "isActive": true,
+  "definition": {
+    "type": "object",
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "required": ["singletonKey", "mappings"],
+    "x-unique": ["singletonKey"],
+    "properties": {
+      "singletonKey": { "type": "string", "enum": ["default"] },
+      "mappings": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string",
+          "enum": ["new", "triage", "forwarded", "investigation", "awaiting", "resolved"]
+        }
+      }
+    },
+    "x-ref-schema": [],
+    "additionalProperties": false
+  }
+}
+```
+
+Example payload (Bomet/Nairobi PGR-style states):
+
+```json
+{
+  "singletonKey": "default",
+  "mappings": {
+    "PENDINGFORASSIGNMENT": "new",
+    "PENDINGATLME": "forwarded",
+    "IN_TRIAGE": "triage",
+    "FORWARDED": "forwarded",
+    "UNDER_INVESTIGATION": "investigation",
+    "AWAITING_INFORMATION": "awaiting",
+    "RESOLVED": "resolved"
+  }
+}
+```
+
+Annotations:
+
+- Singleton per tenant (`singletonKey="default"`). Same pattern as
+  `CRS.StateSLA` — the placeholder key exists only to give the MDMS v2
+  validator a non-empty `x-unique`.
+- Values are constrained to the six canonical SLA-column keys
+  (`new | triage | forwarded | investigation | awaiting | resolved`);
+  the validator rejects anything else at write time.
+- Keys are tenant workflow state names — opaque strings, matched
+  case-sensitively against `applicationStatus` on the complaint.
+- A workflow state with no mapping entry resolves to `null` in
+  [`EscalationScheduler#mapWorkflowStateToKey`](../backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationScheduler.java),
+  which then trips the `STATE_MAPPING_MISSING` skip-reason path
+  (scheduler still falls through to `CRS.StateSLA` / v0 EscalationConfig,
+  but the unmapped state is surfaced in logs and on the OTEL span as
+  `escalation.skipped.state_mapping_missing`).
+- **Seed this before** `CRS.StateSLA` or `CRS.CategorySLA` — see the
+  operator callout under "SLA + supporting layers" above.
 
 #### `CRS.SLAAuditLog`
 
@@ -277,16 +396,17 @@ Annotations:
 
 ### Scheduler resolution algorithm
 
-[`EscalationScheduler.resolveSlaHours`](../backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationScheduler.java#L476)
+[`EscalationScheduler#resolveSlaHours`](../backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationScheduler.java)
 in pseudocode:
 
 ```
 SlaResolution resolveSlaHours(complaint, workflowState, crsCategorySla,
-                              crsStateSlaDefaults, serviceCodeToCategory,
+                              crsStateSlaDefaults, crsWorkflowStateMapping,
+                              serviceCodeToCategory,
                               currentLevel, defaultSlaByLevel, overrides):
 
     categoryTuple = extractCategoryTuple(complaint, serviceCodeToCategory)
-    stateKey      = mapWorkflowStateToKey(workflowState)
+    stateKey      = mapWorkflowStateToKey(workflowState, crsWorkflowStateMapping)
     unmapped      = (categoryTuple == null)
 
     # ---- Layer 1: CRS.CategorySLA ----
@@ -314,7 +434,7 @@ SlaResolution resolveSlaHours(complaint, workflowState, crsCategorySla,
     return SlaResolution(v0, "v0.EscalationConfig", unmapped)
 ```
 
-`extractCategoryTuple` (same file, line 575):
+`extractCategoryTuple`:
 
 ```
 extractCategoryTuple(complaint, serviceCodeToCategory):
@@ -327,28 +447,35 @@ extractCategoryTuple(complaint, serviceCodeToCategory):
     return null
 ```
 
-`mapWorkflowStateToKey` (line 551, hardcoded switch — see the caveat below):
+`mapWorkflowStateToKey` — pure dictionary lookup over the operator-defined
+`CRS.WorkflowStateMapping` singleton (no tenant-specific knowledge in code):
 
 ```
-mapWorkflowStateToKey(workflowState):
-    PENDINGFORASSIGNMENT          -> "new"
-    PENDINGATLME                  -> "forwarded"
-    IN_TRIAGE | TRIAGE            -> "triage"
-    FORWARDED                     -> "forwarded"
-    UNDER_INVESTIGATION | INVESTIGATION -> "investigation"
-    AWAITING_INFORMATION | AWAITING     -> "awaiting"
-    RESOLVED                      -> "resolved"
-    default                       -> null      # falls through to v0
+mapWorkflowStateToKey(workflowState, mapping):
+    if workflowState == null or mapping == null:
+        return null
+    return mapping.get(workflowState)   # null if no entry → falls through
 ```
+
+The mapping is fetched once per scan via
+[`EscalationScheduler#fetchCrsWorkflowStateMapping`](../backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationScheduler.java)
+and threaded into `resolveSlaHours`. When a workflow state has no entry,
+the scheduler sets `stateMappingMissing=true` on the `SlaResolution`, falls
+through to `CRS.StateSLA` / v0, and surfaces the unmapped state on the OTEL
+span (`escalation.skipped.state_mapping_missing`) plus the
+`STATE_MAPPING_MISSING` skip-reason counter. The hardcoded PGR-state switch
+that used to live in this method was removed in PR #775.
 
 Why each fallback condition exists:
 
 - **Category miss but state matches.** The configurator allows operators to
   populate StateSLA before the per-category matrix is built out. Falling
   through gives a usable SLA even with zero CategorySLA rows.
-- **No mapped state.** The complaint is in a workflow state the schema does not
-  cover (e.g. a custom tenant state). The scheduler falls all the way through
-  to v0 rather than refusing to escalate.
+- **No mapped state.** `CRS.WorkflowStateMapping` has no entry for the
+  complaint's `applicationStatus` (e.g. a custom tenant state, or the
+  singleton is unseeded). The scheduler falls through to `CRS.StateSLA`
+  and then v0 rather than refusing to escalate, and tags the resolution
+  with `STATE_MAPPING_MISSING` so operators see an actionable warning.
 - **`unmapped` flag.** Bubbled up even when v0 answers. The scheduler counts
   it in `skipBreakdown.UNMAPPED_CATEGORY` and logs a one-liner per scan so the
   operator knows the matrix is incomplete; the complaint is not skipped on
@@ -385,19 +512,39 @@ escalates the complaint.
 
 ### Audit log
 
-Every successful write to `CRS.CategorySLA` or `CRS.StateSLA` is followed by
-a `CRS.SLAAuditLog` entry via
-[`slaService.writeAuditEntry`](../configurator/src/resources/crs/sla-matrix/slaService.ts#L135):
+This is the canonical description of the audit log; the configurator-UI
+section above just renders these entries.
 
-| Operation | When | Action enum | Granularity |
-|---|---|---|---|
-| Inline row edit | after each successful row save in `handleSaveAll` | `create` (new row) or `update` | one entry per row |
-| State-defaults edit | after `saveStateSla` returns | `create` or `update` | one entry |
-| Soft-delete row | after `deactivateCategoryRow` returns | `delete` | one entry, reason `soft-delete via deactivation` |
-| Bulk import | after the import-fan-out finishes | `bulk-import` | **one summary entry per import**, reason `<imported> rows imported, <failed> failed` |
+**Shape.** Each entry is one `CRS.SLAAuditLog` row written through MDMS
+v2. Fields: `timestamp`, `userUuid`, `userName`, `action` (`create` |
+`update` | `delete` | `bulk-import`), `schemaCode`, `recordIdentifier`,
+`beforeJson`, `afterJson`, `reason`. See the schema definition above for
+full annotations.
 
-The audit write is best-effort: if it fails, the MDMS write has already
-landed, so a warning is logged and the data write is not rolled back.
+**Who writes them.** **Client-side, from the configurator only** — there
+is no server-side audit hook on the MDMS write path. Every write to
+`CRS.CategorySLA` or `CRS.StateSLA` from the SLA Matrix page is followed
+by a call to
+[`slaService#writeAuditEntry`](../configurator/src/resources/crs/sla-matrix/slaService.ts).
+Operators who write to MDMS directly (curl, python, dataloader) bypass
+the audit log; the assumption is that direct writes are reviewed via
+git on the seed scripts, not via the audit drawer.
+
+**Write timing.** Always **after** the MDMS data write — never before.
+A half-saved batch still produces a faithful audit trail of what
+actually landed. The audit write is best-effort: if it fails, the MDMS
+write has already landed, so a warning is logged and the data write is
+not rolled back.
+
+**What triggers entries.**
+
+| Operation | When | Action enum | Granularity | slaService function |
+|---|---|---|---|---|
+| Inline row edit | after each successful row save | `create` (new row) or `update` | one entry per row | `saveCategoryRow` → `writeAuditEntry` |
+| State-defaults edit | after the StateSLA singleton save returns | `create` or `update` | one entry | `saveStateSla` → `writeAuditEntry` |
+| Soft-delete row | after the deactivation toggle returns | `delete` | one entry, reason `soft-delete via deactivation` | `deactivateCategoryRow` → `writeAuditEntry` |
+| Bulk import | after the import-fan-out finishes | `bulk-import` | **one summary entry per import** plus one per-row entry per successfully-imported row, reason `<imported> rows imported, <failed> failed` | bulk-import handler → `writeAuditEntry` (summary) + `saveCategoryRow` per row |
+
 This is escalation-specific scope today; a generic `CRS.ConfigAuditLog`
 supersedes it in roadmap phase **G4** (see
 [`docs/crs-configurator-roadmap.md`](./crs-configurator-roadmap.md) Cross-cutting
@@ -539,6 +686,7 @@ distinguishes "explicitly set" from "falls through to default":
 | `[min, max]` range | `24–120h` solid | Scheduler uses MAX for math; UI shows the range so operators see the spread | Click → number + range checkbox + min/max inputs |
 | `null` | `—` muted, faint "default: 48h" hint on hover | Falls through to `CRS.StateSLA[state]` | Click → number input (creating a value here promotes the cell to "explicitly set") |
 | (no row at all) | n/a | Falls through to `CRS.StateSLA[state]`; if that is also empty, falls through to v0 hardcoded fallback | Add the row via the toolbar's **Add row** |
+| CSV encoding | n/a | empty=`null`, bare number=scalar (`120`), `"min-max"` single dash no spaces=range (`24-120`). Inclusive bounds `0 < n < 8760` for scalars and `0 < lo < hi < 8760` for ranges. | See [`csvParser#parseCell`](../configurator/src/resources/crs/sla-matrix/csvParser.ts) |
 
 The "muted dash + default hint" treatment is deliberate: operators
 should be able to scan the grid and instantly see which cells are
@@ -583,23 +731,11 @@ batch (on save).
 
 ### Audit log
 
-Every save produces audit entries:
-
-- **Per-row** writes (create / update / soft-delete) produce one
-  `CRS.SLAAuditLog` row each.
-- **Bulk import** produces a single summary entry with
-  `action = bulk-import` and a reason of the shape
-  `"<imported> rows imported, <failed> failed"`, plus one row entry per
-  successfully-imported row (so per-row provenance is preserved).
-- The drawer renders the last N entries with timestamp, user,
-  `action`, identifier (`<path>/<category>/<subcategoryL1>` or
-  `state-defaults`), and a JSON diff for create/update entries.
-
-Audit is escalation-specific today. The generic `CRS.ConfigAuditLog`
-under roadmap **G4** supersedes this drawer with a cross-feature
-"recent changes" view (see
-[`docs/crs-configurator-roadmap.md`](./crs-configurator-roadmap.md)
-Cross-cutting section).
+See [§Architecture → Audit log](#audit-log) for the canonical shape and
+write semantics. The configurator drawer renders these entries with
+timestamp, user, `action`, identifier
+(`<path>/<category>/<subcategoryL1>` or `state-defaults`), and a JSON
+diff for create/update entries.
 
 ### Trace-back drawer (operator debug surface)
 
@@ -636,8 +772,30 @@ decision and the SLA source that drove it."
 
 A **Download example.csv** link in the modal pulls
 [`configurator/src/resources/crs/sla-matrix/_seed/example.csv`](../configurator/src/resources/crs/sla-matrix/_seed/example.csv)
-as a starter template. The CSV format mirrors the matrix columns
-(`path,category,subcategoryL1,active,new,triage,forwarded,investigation,awaiting,resolved`).
+as a starter template. The actual CSV format (verbatim from
+[`_seed/example.csv`](../configurator/src/resources/crs/sla-matrix/_seed/example.csv)
+and the
+[`csvParser#parseCsv`](../configurator/src/resources/crs/sla-matrix/csvParser.ts)
+column list) is:
+
+```csv
+path,category,subcategoryL1,subcategoryL2,sla_new,sla_triage,sla_forwarded,sla_investigation,sla_awaiting,sla_resolved
+SAMPLE,General,Standard,Default issues,,,,72,,
+SAMPLE,General,Urgent,Critical issues,,,,24,,
+SAMPLE,Other,Misc,Catch-all,,,,168,,
+```
+
+10 columns. `subcategoryL2` is currently descriptive only — the parser
+does not store it on `CategorySlaRecord` (it falls through as an
+ignored column), but it is kept in the file so the seed is
+human-readable and matches the matrix UI columns 1:1. The six
+`sla_*` columns map to the canonical SLA-column keys via
+[`csvParser#SLA_COL_KEYS`](../configurator/src/resources/crs/sla-matrix/csvParser.ts).
+Cell encoding follows [Cell semantics](#cell-semantics) — an empty cell
+is `null`, a bare number is a scalar, `"24-120"` (single dash, no
+spaces) is a range. `Export CSV` round-trips the same format (minus
+`subcategoryL2`) via
+[`csvParser#recordsToCsv`](../configurator/src/resources/crs/sla-matrix/csvParser.ts).
 
 ### Sidebar grouping rationale
 
@@ -683,9 +841,9 @@ out of its way to keep it that way:
 - `path`, `category`, `subcategoryL1` are **opaque strings**. No enum coupling,
   no built-in list. The configurator chip set for the path filter is computed
   from whatever values appear in loaded rows
-  ([`CategorySlaMatrixPage.tsx` line 162-165](../configurator/src/resources/crs/sla-matrix/CategorySlaMatrixPage.tsx#L162)).
+  ([`CategorySlaMatrixPage#distinctPaths`](../configurator/src/resources/crs/sla-matrix/CategorySlaMatrixPage.tsx)).
 - `DEFAULT_STATE_DEFAULTS` is all-null
-  ([`types.ts` line 101-108](../configurator/src/resources/crs/sla-matrix/types.ts#L101)).
+  ([`types.ts#DEFAULT_STATE_DEFAULTS`](../configurator/src/resources/crs/sla-matrix/types.ts)).
   Historically it carried a Mozambique-specific BRD §5.2 set
   (`new:0, triage:24, forwarded:48, investigation:120, awaiting:120, resolved:360`);
   that has been removed so the configurator does not lie about defaults the
@@ -700,16 +858,17 @@ out of its way to keep it that way:
   [`_seed/fix-xref-schema.sql`](../configurator/src/resources/crs/sla-matrix/_seed/fix-xref-schema.sql)
   drops the enum in place for deployments that hit the old shape (mdms-v2
   schema/v1 has no `_update` endpoint, so a DB UPDATE is the only path).
-- **Known wart:**
-  [`mapWorkflowStateToKey`](../backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationScheduler.java#L551)
-  today hardcodes a switch from DIGIT-PGR state names
-  (`PENDINGFORASSIGNMENT`, `PENDINGATLME`, ...) to the CRS canonical keys.
-  This is the one piece of tenant-specific knowledge baked into the scheduler.
-  Future work (see follow-up PR linked from this PR's description) replaces it
-  with a `CRS.WorkflowStateMapping` MDMS record so each tenant can wire their
-  own workflow state names. Until that follow-up lands, a tenant whose
-  workflow uses non-PGR state names falls through to v0 for any complaint not
-  in one of the seven mapped states.
+- **Workflow-state name mapping is operator-defined.** The translation
+  from a tenant's workflow state names onto the six canonical CRS keys
+  is configured via the `CRS.WorkflowStateMapping` MDMS singleton, not
+  hardcoded.
+  [`EscalationScheduler#mapWorkflowStateToKey`](../backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationScheduler.java)
+  is a pure `Map.get(workflowState)` lookup against that singleton — if
+  a state has no entry, the lookup returns null, the scheduler marks
+  the resolution as `stateMappingMissing=true`, and the complaint falls
+  through to `CRS.StateSLA` / v0 EscalationConfig. The hardcoded
+  PGR-state switch that previously lived in this method was removed in
+  PR #775.
 
 The implication: Bomet (Kenya, PGR), Nairobi (Kenya, PGR), and the future
 Mozambique CRS deployment all run **the same code** and **the same schemas**.
@@ -721,7 +880,7 @@ They differ only in the rows they populate.
 
 Two valid strategies for connecting a tenant's existing complaint data to the
 CategorySLA lookup, both supported by
-[`extractCategoryTuple`](../backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationScheduler.java#L575).
+[`EscalationScheduler#extractCategoryTuple`](../backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationScheduler.java).
 
 ### Strategy A — rich intake
 
@@ -741,7 +900,7 @@ the tuple directly; the scheduler reads it on every scan.
 The tenant adds three optional extension fields (`path`, `category`,
 `subcategoryL1`) to their existing MDMS `RAINMAKER-PGR.ServiceDefs` records.
 At scan-time, the scheduler builds a `serviceCode → tuple` map via
-[`buildServiceCodeMapping`](../backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationScheduler.java#L645)
+[`EscalationScheduler#buildServiceCodeMapping`](../backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationScheduler.java)
 and resolves through it. The complaint's `serviceCode` is the join key.
 
 | Property | Value |
@@ -754,7 +913,7 @@ and resolves through it. The complaint's `serviceCode` is the join key.
 ### What happens if neither is wired
 
 `extractCategoryTuple` returns `null` →
-[`resolveSlaHours`](../backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationScheduler.java#L476)
+[`EscalationScheduler#resolveSlaHours`](../backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationScheduler.java)
 marks the resolution as `unmapped=true`, increments the
 `skipBreakdown.UNMAPPED_CATEGORY` counter, and falls through to `CRS.StateSLA`.
 The complaint **still escalates** if the StateSLA layer has a non-null value
@@ -771,7 +930,7 @@ compatibility but is clearly marked deprecated.
 1. **Side-by-side ship**. PR #770 lands the **SLA Matrix** (new) and **Legacy
    SLA** (v0) editors under the `ESCALATION` sidebar group in the configurator,
    with a deprecation banner on the v0 page. The Playwright spec
-   [`crs-sla-matrix.spec.ts` line 127-140](../configurator/e2e/crs-sla-matrix.spec.ts)
+   [`crs-sla-matrix.spec.ts → 'banner is visible on /manage/escalation-config edit'`](../configurator/e2e/crs-sla-matrix.spec.ts)
    asserts the banner is visible.
 2. **Migrate per-tenant**. Operators export their v0 config and either
    (a) re-enter the per-`serviceCode` overrides as CategorySLA rows, or
@@ -850,13 +1009,13 @@ assignees to `eg_wf_assignee_v2` — an upstream egov-workflow-v2 bug to be
 raised against the workflow-v2 repo separately.
 
 **Effect on the scheduler.** Without an assignee,
-[`EscalationScheduler` line 191-199](../backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationScheduler.java#L191)
+[`EscalationScheduler#scanAndEscalateOnce`](../backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationScheduler.java)
 trips at `NO_ASSIGNEES` and never reaches the SLA layer. This is why the
 live Bomet scheduler shows `skipBreakdown.NO_ASSIGNEES` dominating.
 
 **Workaround.** None on the CRS side — this needs an upstream fix in
 `egov-workflow-v2`. The new `history=true` fallback in
-[`EscalationService.getCurrentAssignees`](../backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationService.java#L206)
+[`EscalationService#getCurrentAssignees`](../backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationService.java)
 recovers when the *current* `ProcessInstance` is empty but a historical one
 carries assignees; it does nothing when the assignees were never persisted
 in the first place.
@@ -1025,7 +1184,7 @@ For the Bomet operator runbook (Tempo curl + log greps), see
 
 | # | Item | Tracking |
 |---|---|---|
-| 1 | Hardcoded PGR→CRS state-name mapping in `mapWorkflowStateToKey` — replace with a `CRS.WorkflowStateMapping` MDMS record per tenant | see follow-up PR linked from this PR's description |
+| 1 | No configurator UI yet for editing the `CRS.WorkflowStateMapping` singleton — operators write the MDMS row directly via curl / python today | Roadmap phase **G1** may absorb this if the Taxonomy editor surface fits, otherwise a small standalone editor lands later |
 | 2 | Upstream DIGIT workflow ASSIGN-assignee persistence bug — blocks end-to-end escalation testing on Bomet | upstream `egov-workflow-v2`, to be raised against the workflow-v2 repo separately |
 | 3 | Category Taxonomy editor (constrained picker) — replaces the free-text category/subcategoryL1 inputs in the SLA Matrix | Roadmap phase **G1** ([`docs/crs-configurator-roadmap.md`](./crs-configurator-roadmap.md)) |
 | 4 | Path Routing Rules — `(category, subcategoryL1) → path` editable rules | Roadmap phase **G2** |
@@ -1049,7 +1208,7 @@ For the Bomet operator runbook (Tempo curl + log greps), see
 | **StateSLA** | A singleton record in `CRS.StateSLA` holding per-state default SLA hours. Used when the matching CategorySLA cell is null. |
 | **v0 EscalationConfig** | The pre-existing `RAINMAKER-PGR.EscalationConfig` schema with per-level SLAs + per-`serviceCode` overrides. Kept as a fallback for not-yet-migrated tenants. |
 | **slaSource** | OTEL span attribute set by the scheduler indicating which layer answered the SLA lookup. One of `CRS.CategorySLA`, `CRS.StateSLA`, `v0.EscalationConfig`. |
-| **skipReason** | One of the eight values in [`EscalationSkipReason`](../backend/pgr-services/src/main/java/org/egov/pgr/util/EscalationSkipReason.java): `MAX_DEPTH_REACHED`, `NO_LAST_MODIFIED_TIME`, `SLA_NOT_BREACHED`, `NO_ASSIGNEES`, `NO_SUPERVISOR_IN_HRMS`, `WORKFLOW_TRANSITION_FAILED`, `UNMAPPED_CATEGORY`, `SUCCESS`. |
+| **skipReason** | One of the nine values in [`EscalationSkipReason`](../backend/pgr-services/src/main/java/org/egov/pgr/util/EscalationSkipReason.java): `MAX_DEPTH_REACHED`, `NO_LAST_MODIFIED_TIME`, `SLA_NOT_BREACHED`, `NO_ASSIGNEES`, `NO_SUPERVISOR_IN_HRMS`, `WORKFLOW_TRANSITION_FAILED`, `UNMAPPED_CATEGORY`, `STATE_MAPPING_MISSING`, `SUCCESS`. `STATE_MAPPING_MISSING` is emitted when `CRS.WorkflowStateMapping` has no entry for the complaint's current workflow state; resolution falls back to v0 EscalationConfig. |
 | **BRD** | Business Requirements Document. The Mozambique PRD/CRS v4.0 PDF is referenced throughout this codebase only as an industry source for the *shape* of generic CRS configuration. No BRD-specific data is seeded by PR #770. |
 | **IGE / IGSAE** | BRD-specific path names — IGE (Inspecção-Geral do Estado, public-service complaints) and IGSAE (Inspecção-Geral das Actividades Económicas, economic-agent complaints). Used here only as **examples** of what a tenant might populate as their `path` value; the schema accepts any string. |
 | **Tuple** | Shorthand for `(path, category, subcategoryL1)`, the join key of `CRS.CategorySLA`. |
@@ -1074,7 +1233,7 @@ For the Bomet operator runbook (Tempo curl + log greps), see
 | Per-complaint escalation action | [`backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationService.java`](../backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationService.java) |
 | Skip-reason enum | [`backend/pgr-services/src/main/java/org/egov/pgr/util/EscalationSkipReason.java`](../backend/pgr-services/src/main/java/org/egov/pgr/util/EscalationSkipReason.java) |
 | Admin endpoint | [`backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/EscalationController.java`](../backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/EscalationController.java) |
-| SLA-source constants | [`backend/pgr-services/src/main/java/org/egov/pgr/util/PGRConstants.java`](../backend/pgr-services/src/main/java/org/egov/pgr/util/PGRConstants.java) (lines 179-181) |
+| SLA-source constants | [`PGRConstants#SLA_SOURCE_CATEGORY/STATE/V0`](../backend/pgr-services/src/main/java/org/egov/pgr/util/PGRConstants.java) |
 | MDMS schemas | [`utilities/default-data-handler/src/main/resources/schema/CRS.json`](../utilities/default-data-handler/src/main/resources/schema/CRS.json) |
 | Configurator page | [`configurator/src/resources/crs/sla-matrix/CategorySlaMatrixPage.tsx`](../configurator/src/resources/crs/sla-matrix/CategorySlaMatrixPage.tsx) |
 | Configurator types | [`configurator/src/resources/crs/sla-matrix/types.ts`](../configurator/src/resources/crs/sla-matrix/types.ts) |
