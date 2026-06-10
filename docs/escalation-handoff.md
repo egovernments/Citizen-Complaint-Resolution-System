@@ -85,7 +85,7 @@ Design hub: Discussion #773 (74k-char body, 0 comments).
 
 | Artifact | Version / value | URL / location | Verification command |
 |---|---|---|---|
-| `pgr-services` image | `registry.preview.egov.theflywheel.in/egovio/pgr-services-dev:escalation-prd-58db8fbfe` (built from [PR #815](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/815) head, deployed 2026-06-10) | VPC registry (`10.0.0.4:5000`, same store) | `ssh egov-bomet "docker inspect digit-pgr-services-1 --format '{{.Config.Image}}'"` |
+| `pgr-services` image | `registry.preview.egov.theflywheel.in/egovio/pgr-services-dev:escalation-prd-042c61758` (built from [PR #815](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/815) head, deployed 2026-06-10) | VPC registry (`10.0.0.4:5000`, same store) | `ssh egov-bomet "docker inspect digit-pgr-services-1 --format '{{.Config.Image}}'"` |
 | Configurator bundle | built from PR #770 head `673005c02` | `/var/www/configurator/` on egov-bomet | `ssh egov-bomet "ls -la /var/www/configurator/index.html"` |
 | Workflow designer fork | built from `workflow-designer/` in PR #770 | `https://bometfeedbackhub.digit.org/designer/` | `curl -sI https://bometfeedbackhub.digit.org/designer/ \| head -1` |
 | Configurator SLA Matrix page | live | `https://bometfeedbackhub.digit.org/configurator/#/crs/sla-matrix` | open in browser → matrix renders with category rows × state columns |
