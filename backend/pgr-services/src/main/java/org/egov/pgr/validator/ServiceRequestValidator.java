@@ -73,6 +73,8 @@ public class ServiceRequestValidator {
         String id = request.getService().getId();
         String tenantId = request.getService().getTenantId();
         validateSource(request.getService().getSource());
+        // Cheap, input-only check — fail fast before we hit MDMS/HRMS.
+        validateEscalateComment(request);
         validateMDMS(request, mdmsData);
         validateDepartment(request, mdmsData);
         validateReOpen(request);
@@ -85,6 +87,37 @@ public class ServiceRequestValidator {
 
         // TO DO
 
+    }
+
+    /**
+     * Manual ESCALATE actions (driven by a user from the UI) must carry a
+     * non-blank comment so we always have an audit trail for the supervisor
+     * taking over. The scheduler-driven auto-escalation reuses the same
+     * workflow action but runs as a SYSTEM user tagged with the
+     * {@code AUTO_ESCALATE} role — for those, we skip the check because the
+     * scheduler injects its own boilerplate comment ("Auto-escalated: SLA
+     * breach at level N").
+     */
+    private void validateEscalateComment(ServiceRequest request) {
+        if (request.getWorkflow() == null) return;
+        if (!ESCALATE.equalsIgnoreCase(request.getWorkflow().getAction())) return;
+
+        if (isAutoEscalateSystemCaller(request.getRequestInfo())) {
+            return;
+        }
+
+        String comments = request.getWorkflow().getComments();
+        if (comments == null || comments.trim().isEmpty()) {
+            throw new CustomException("ESCALATE_COMMENT_REQUIRED",
+                    "A comment is required for manual ESCALATE actions");
+        }
+    }
+
+    private boolean isAutoEscalateSystemCaller(RequestInfo requestInfo) {
+        if (requestInfo == null || requestInfo.getUserInfo() == null) return false;
+        if (requestInfo.getUserInfo().getRoles() == null) return false;
+        return requestInfo.getUserInfo().getRoles().stream()
+                .anyMatch(r -> r != null && "AUTO_ESCALATE".equalsIgnoreCase(r.getCode()));
     }
 
     /**

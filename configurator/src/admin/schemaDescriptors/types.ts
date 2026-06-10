@@ -18,7 +18,9 @@ export type WidgetKind =
   | 'regex'      // pattern field + live sample tester
   | 'chip-array' // string[] editor (add on Enter, remove on x)
   | 'duration-ms' // number input alongside d/h/m/s display
-  | 'locale-list'; // table editor for {label, value}[] arrays (e.g. StateInfo.languages)
+  | 'locale-list' // table editor for {label, value}[] arrays (e.g. StateInfo.languages)
+  | 'sla-by-level' // EscalationConfig: number[] of ms, one row per level
+  | 'service-overrides'; // EscalationConfig: Record<serviceCode, number[]>
 
 /** A single field override. `path` is dot-notation into the record (e.g. "rules.pattern"). */
 export interface FieldSpec {

@@ -1,0 +1,61 @@
+[
+  {
+    "tenantId": "{tenantid}",
+    "code": "CRS.Entity",
+    "description": "DESIGN STUB (G3: Entity Directory) — Per-tenant directory of organizational entities (Ministry / CSREP / PEC / Municipality, etc.) each with parent-linkage and boundary references. Backs workflow assignment resolution and the BRD `Related Institution / Public Service` field. NOT YET IMPLEMENTED — this schema reserves the code so future implementation can register data without re-doing the schema envelope. See docs/g-phases/g3-entity-directory.md for the full design; final property shape lands in the implementation PR.",
+    "isActive": false,
+    "definition": {
+      "type": "object",
+      "title": "CRS Entity (G3 — design stub)",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": ["code", "type", "name", "active"],
+      "x-unique": ["code"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "type": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "active": { "type": "boolean" }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": true
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "CRS.EconomicAgent",
+    "description": "DESIGN STUB (G3: Entity Directory) — Lighter registry of Economic Agents for the IGSAE path (BRD §5.2). NOT YET IMPLEMENTED — reserves the schema code. See docs/g-phases/g3-entity-directory.md.",
+    "isActive": false,
+    "definition": {
+      "type": "object",
+      "title": "CRS Economic Agent (G3 — design stub)",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": ["code", "name", "active"],
+      "x-unique": ["code"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "active": { "type": "boolean" }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": true
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "CRS.EntityStaffing",
+    "description": "DESIGN STUB (G3: Entity Directory) — Read-only projection from HRMS keyed by entityCode, listing current Case Manager + Supervisor employee IDs. Editor writes through to HRMS; this projection exists for list-view performance. NOT YET IMPLEMENTED — reserves the schema code. See docs/g-phases/g3-entity-directory.md.",
+    "isActive": false,
+    "definition": {
+      "type": "object",
+      "title": "CRS Entity Staffing (G3 — design stub)",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": ["entityCode"],
+      "x-unique": ["entityCode"],
+      "properties": {
+        "entityCode": { "type": "string", "minLength": 1 }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": true
+    }
+  }
+]
