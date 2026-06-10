@@ -90,6 +90,9 @@ test.describe.serial('Category SLA Matrix', () => {
     // Defaults row — "Defaults (StateSLA)" badge from the inline editor.
     await expect(page.getByText(/Defaults \(StateSLA\)/i)).toBeVisible();
 
+    // Levels column — per-escalation-level SLAs (slaHoursByLevel) header.
+    await expect(page.getByRole('columnheader', { name: /^Levels$/ })).toBeVisible();
+
     // Matrix body: either populated (≥1 data row) or the empty-state
     // tr (which shows "Import from CSV" CTA). Both are acceptable;
     // this spec is tenant-agnostic so a brand-new install passes too.

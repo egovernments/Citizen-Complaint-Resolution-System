@@ -1,18 +1,43 @@
 /**
- * Thin service layer over digitClient for the SLA Matrix page.
+ * Thin service layer over digitClient for the SLA Matrix and Escalation
+ * Settings pages.
  *
  * Centralises the MDMS read/write + audit-log fan-out so the page
- * component (CategorySlaMatrixPage.tsx) can stay declarative.
+ * components (CategorySlaMatrixPage.tsx, EscalationSettingsPage) can
+ * stay declarative.
  */
 import { digitClient } from '@/providers/bridge';
 import type { MdmsRecord } from '@digit-mcp/data-provider';
 import type { CategorySlaRecord, StateDefaults } from './types';
 import { makeCategoryUid, DEFAULT_STATE_DEFAULTS } from './types';
+import type { EscalationPolicy, WorkflowStateMapping } from './escalationTypes';
 
 const CATEGORY_SLA_SCHEMA = 'CRS.CategorySLA';
 const STATE_SLA_SCHEMA = 'CRS.StateSLA';
+const ESCALATION_POLICY_SCHEMA = 'CRS.EscalationPolicy';
+const WORKFLOW_STATE_MAPPING_SCHEMA = 'CRS.WorkflowStateMapping';
 const AUDIT_LOG_SCHEMA = 'CRS.SLAAuditLog';
 const STATE_SLA_UID = 'default';
+
+/**
+ * CRITICAL — the deployment-wide records (CRS.EscalationPolicy,
+ * CRS.WorkflowStateMapping) live at the STATE-LEVEL tenant only. The
+ * scheduler (EscalationScheduler) and the manual-escalate validator
+ * (ServiceRequestValidator) both read them at state level, so a record
+ * saved under a city tenant (`ke.bomet`) is a silent split-brain: the UI
+ * would show settings the backend never sees. Every load/save below
+ * normalises through this helper; pages use it for display ("These
+ * settings apply to the whole deployment") and for the verify scan.
+ */
+export function toStateTenant(tenantId: string): string {
+  return tenantId.split('.')[0];
+}
+
+/** Who performed a change — threaded into the audit-log entry on saves. */
+export interface AuditActor {
+  uuid?: string;
+  name?: string;
+}
 
 export interface MatrixRow extends CategorySlaRecord {
   /** MDMS record id when persisted; absent for unsaved rows. */
@@ -101,6 +126,12 @@ export async function saveCategoryRow(
     slaHoursByState: row.slaHoursByState,
     isActive: row.isActive,
   };
+  // slaHoursByLevel must survive this projection — it used to list only
+  // the five v1 fields, so every save of a row carrying per-level SLAs
+  // silently stripped them from MDMS (live data loss on tenants seeded
+  // via _seed/add-sla-by-level.sql). Omit the key when the row has none
+  // so unset stays unset rather than becoming an explicit empty value.
+  if (row.slaHoursByLevel !== undefined) data.slaHoursByLevel = row.slaHoursByLevel;
   if (row.recordId && row.original) {
     return digitClient.mdmsUpdate(
       { ...row.original, data: data as unknown as Record<string, unknown> },
@@ -124,6 +155,126 @@ export async function saveStateSla(
     return digitClient.mdmsUpdate({ ...existing, data: data as unknown as Record<string, unknown> }, true);
   }
   return digitClient.mdmsCreate(tenantId, STATE_SLA_SCHEMA, STATE_SLA_UID, data as unknown as Record<string, unknown>);
+}
+
+/**
+ * Read the CRS.EscalationPolicy record (always from the STATE tenant);
+ * `policy` is null when the operator has never saved one — callers render
+ * "not set, using the previous setting" helpers instead of fake defaults.
+ */
+export async function loadEscalationPolicy(
+  tenantId: string,
+): Promise<{ policy: EscalationPolicy | null; record?: MdmsRecord }> {
+  const records = await digitClient.mdmsSearch(toStateTenant(tenantId), ESCALATION_POLICY_SCHEMA, { limit: 5 });
+  const active = records.filter((r) => r.isActive !== false);
+  if (active.length === 0) {
+    return { policy: null };
+  }
+  const record = active[0];
+  return { policy: record.data as unknown as EscalationPolicy, record };
+}
+
+/**
+ * Save (create on first save) the CRS.EscalationPolicy record at the
+ * STATE tenant, then append an audit-log entry (recordIdentifier
+ * 'policy') attributed to `actor`. Same create-vs-update shape as
+ * saveStateSla, including the x-unique singletonKey placeholder.
+ */
+export async function saveEscalationPolicy(
+  tenantId: string,
+  policy: EscalationPolicy,
+  existing: MdmsRecord | undefined,
+  actor: AuditActor,
+): Promise<MdmsRecord> {
+  const stateTenant = toStateTenant(tenantId);
+  const data = { ...policy, singletonKey: STATE_SLA_UID };
+  const saved = existing
+    ? await digitClient.mdmsUpdate({ ...existing, data: data as unknown as Record<string, unknown> }, true)
+    : await digitClient.mdmsCreate(stateTenant, ESCALATION_POLICY_SCHEMA, STATE_SLA_UID, data as unknown as Record<string, unknown>);
+  await writeAuditEntry(stateTenant, {
+    timestamp: Date.now(),
+    userUuid: actor.uuid ?? 'unknown',
+    userName: actor.name ?? 'unknown',
+    action: existing ? 'update' : 'create',
+    schemaCode: ESCALATION_POLICY_SCHEMA,
+    recordIdentifier: 'policy',
+    beforeJson: existing ? JSON.stringify(existing.data) : undefined,
+    afterJson: JSON.stringify(data),
+  });
+  return saved;
+}
+
+/**
+ * Read the CRS.WorkflowStateMapping record (always from the STATE
+ * tenant); `mapping` is null when none has been saved — the scheduler
+ * then skips every per-state SLA source, so callers surface the setup
+ * banner rather than inventing a default.
+ */
+export async function loadWorkflowStateMapping(
+  tenantId: string,
+): Promise<{ mapping: WorkflowStateMapping | null; record?: MdmsRecord }> {
+  const records = await digitClient.mdmsSearch(toStateTenant(tenantId), WORKFLOW_STATE_MAPPING_SCHEMA, { limit: 5 });
+  const active = records.filter((r) => r.isActive !== false);
+  if (active.length === 0) {
+    return { mapping: null };
+  }
+  const record = active[0];
+  const data = record.data as unknown as Partial<WorkflowStateMapping>;
+  return { mapping: { singletonKey: 'default', mappings: data.mappings ?? {} }, record };
+}
+
+/**
+ * Save (create on first save) the CRS.WorkflowStateMapping record at the
+ * STATE tenant, then append an audit-log entry (recordIdentifier
+ * 'state-mapping') attributed to `actor`.
+ */
+export async function saveWorkflowStateMapping(
+  tenantId: string,
+  mapping: WorkflowStateMapping,
+  existing: MdmsRecord | undefined,
+  actor: AuditActor,
+): Promise<MdmsRecord> {
+  const stateTenant = toStateTenant(tenantId);
+  const data = { singletonKey: STATE_SLA_UID, mappings: mapping.mappings };
+  const saved = existing
+    ? await digitClient.mdmsUpdate({ ...existing, data: data as unknown as Record<string, unknown> }, true)
+    : await digitClient.mdmsCreate(stateTenant, WORKFLOW_STATE_MAPPING_SCHEMA, STATE_SLA_UID, data as unknown as Record<string, unknown>);
+  await writeAuditEntry(stateTenant, {
+    timestamp: Date.now(),
+    userUuid: actor.uuid ?? 'unknown',
+    userName: actor.name ?? 'unknown',
+    action: existing ? 'update' : 'create',
+    schemaCode: WORKFLOW_STATE_MAPPING_SCHEMA,
+    recordIdentifier: 'state-mapping',
+    beforeJson: existing ? JSON.stringify(existing.data) : undefined,
+    afterJson: JSON.stringify(data),
+  });
+  return saved;
+}
+
+/** Delay before the read-after-write verification re-fetch (~1.5s). */
+export const READ_AFTER_WRITE_DELAY_MS = 1500;
+
+/**
+ * Read-after-write verification. MDMS creates/updates are acknowledged
+ * synchronously but persisted asynchronously (Kafka → egov-persister →
+ * Postgres); a dead persister acks the write and then silently drops it.
+ * Waits ~1.5s, re-fetches via `reload`, and reports whether `matches`
+ * sees the write — callers show "Saved, verified" on true and a "saved
+ * but not yet visible" warning on false. A failed re-fetch counts as
+ * not-verified rather than throwing (the save itself already landed).
+ */
+export async function verifyAfterWrite<T>(
+  reload: () => Promise<T>,
+  matches: (current: T) => boolean,
+  delayMs: number = READ_AFTER_WRITE_DELAY_MS,
+): Promise<boolean> {
+  await new Promise((resolve) => setTimeout(resolve, delayMs));
+  try {
+    return matches(await reload());
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -161,4 +312,10 @@ export async function deactivateCategoryRow(row: MatrixRow): Promise<MdmsRecord 
   return digitClient.mdmsUpdate(row.original, false);
 }
 
-export { CATEGORY_SLA_SCHEMA, STATE_SLA_SCHEMA, AUDIT_LOG_SCHEMA };
+export {
+  CATEGORY_SLA_SCHEMA,
+  STATE_SLA_SCHEMA,
+  ESCALATION_POLICY_SCHEMA,
+  WORKFLOW_STATE_MAPPING_SCHEMA,
+  AUDIT_LOG_SCHEMA,
+};

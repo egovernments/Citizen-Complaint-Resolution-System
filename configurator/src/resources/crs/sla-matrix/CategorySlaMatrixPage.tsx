@@ -18,6 +18,7 @@
  * before), so a half-saved batch still has a faithful audit trail.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useApp } from '../../../App';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -53,6 +54,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import {
   loadCategorySla,
+  loadEscalationPolicy,
   loadStateSla,
   saveCategoryRow,
   saveStateSla,
@@ -78,6 +80,14 @@ import {
 } from './types';
 import { BulkImportDialog } from './BulkImportDialog';
 import { TraceBackDialog } from './TraceBackDialog';
+import { LevelSlaEditor } from './LevelSlaEditor';
+import {
+  MAX_LEVEL_SLA_HOURS,
+  formatLevelSummary,
+  isLevelValuesEmpty,
+  normalizeLevelValues,
+  type LevelValues,
+} from './levelSlaValues';
 import { recordsToCsv } from './csvParser';
 import type { MdmsRecord } from '@digit-mcp/data-provider';
 import type { CategorySlaRecord } from './types';
@@ -104,6 +114,12 @@ export function CategorySlaMatrixPage() {
   const [showAddRow, setShowAddRow] = useState(false);
   const [auditEntries, setAuditEntries] = useState<AuditEntry[] | null>(null);
   const [perRowErrors, setPerRowErrors] = useState<Record<string, string>>({});
+  // Levels editor target — rowKey of the row whose slaHoursByLevel is open.
+  const [levelEditorRowKey, setLevelEditorRowKey] = useState<string | null>(null);
+  // Deployment-wide level SLAs from CRS.EscalationPolicy — only read here to
+  // surface the precedence notice on the Defaults strip; edited on the
+  // Escalation Settings page.
+  const [policyLevels, setPolicyLevels] = useState<number[] | undefined>(undefined);
 
   const initialRowsRef = useRef<MatrixRow[]>([]);
 
@@ -111,14 +127,25 @@ export function CategorySlaMatrixPage() {
     setLoading(true);
     setError(null);
     try {
-      const [matrixRows, sla] = await Promise.all([
+      const [matrixRows, sla, policy] = await Promise.all([
         loadCategorySla(tenantId),
         loadStateSla(tenantId),
+        // Advisory only — the matrix must load even if the policy schema is
+        // missing on this tenant, so swallow the failure into "no notice".
+        loadEscalationPolicy(tenantId).catch(() => ({ policy: null })),
       ]);
       setRows(matrixRows);
-      initialRowsRef.current = matrixRows.map((r) => ({ ...r, slaHoursByState: { ...r.slaHoursByState } }));
+      // Deep-clone the nested structures: rows hold their slaHoursByState
+      // object AND optional slaHoursByLevel array by reference, so a shallow
+      // copy would let edits bleed into the revert baseline.
+      initialRowsRef.current = matrixRows.map((r) => ({
+        ...r,
+        slaHoursByState: { ...r.slaHoursByState },
+        slaHoursByLevel: r.slaHoursByLevel ? [...r.slaHoursByLevel] : undefined,
+      }));
       setStateDefaults(sla.defaults);
       setStateDefaultsRecord(sla.record);
+      setPolicyLevels(policy.policy?.defaultSlaHoursByLevel);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load SLA matrix');
     } finally {
@@ -233,7 +260,13 @@ export function CategorySlaMatrixPage() {
   }
 
   function revertChanges() {
-    setRows(initialRowsRef.current.map((r) => ({ ...r, slaHoursByState: { ...r.slaHoursByState }, modified: false, pending: false })));
+    setRows(initialRowsRef.current.map((r) => ({
+      ...r,
+      slaHoursByState: { ...r.slaHoursByState },
+      slaHoursByLevel: r.slaHoursByLevel ? [...r.slaHoursByLevel] : undefined,
+      modified: false,
+      pending: false,
+    })));
     setPerRowErrors({});
   }
 
@@ -262,6 +295,14 @@ export function CategorySlaMatrixPage() {
           validationErrors[rowKeyOf(r)] = `${k}: must be 0 < n < 8760`;
         }
       }
+      // Per-level SLAs — holes (null) are fine ("use the state cell at this
+      // level"), but any number present must be a sane hour count.
+      (r.slaHoursByLevel ?? []).forEach((v, i) => {
+        if (v === null || v === undefined) return;
+        if (!(v > 0 && v <= MAX_LEVEL_SLA_HOURS)) {
+          validationErrors[rowKeyOf(r)] = `L${i}: must be 0 < n <= ${MAX_LEVEL_SLA_HOURS}`;
+        }
+      });
     }
     setPerRowErrors(validationErrors);
     if (Object.keys(validationErrors).length > 0) {
@@ -444,7 +485,7 @@ export function CategorySlaMatrixPage() {
           <Plus className="w-3.5 h-3.5 mr-1.5" />
           Add row
         </Button>
-        <Button variant="outline" size="sm" onClick={handleExportCsv}>
+        <Button variant="outline" size="sm" onClick={handleExportCsv} title="Level SLAs are not included in the CSV.">
           <Download className="w-3.5 h-3.5 mr-1.5" />
           Export CSV
         </Button>
@@ -484,7 +525,7 @@ export function CategorySlaMatrixPage() {
       )}
 
       {/* Defaults row */}
-      <StateDefaultsRow defaults={stateDefaults} onSave={handleSaveStateDefaults} />
+      <StateDefaultsRow defaults={stateDefaults} policyLevels={policyLevels} onSave={handleSaveStateDefaults} />
 
       {/* Matrix */}
       <div className="rounded-md border border-border bg-card overflow-hidden">
@@ -496,6 +537,7 @@ export function CategorySlaMatrixPage() {
                 <th className="px-2 py-2 text-left border-b border-border sticky left-[80px] bg-muted/50 z-20 min-w-[140px]">Category</th>
                 <th className="px-2 py-2 text-left border-b border-border min-w-[180px]">Subcategory L1</th>
                 <th className="px-2 py-2 text-center border-b border-border w-16">Active</th>
+                <th className="px-2 py-2 text-center border-b border-border min-w-[120px]" title="hours per escalation level">Levels</th>
                 {STATE_KEYS.map((k) => (
                   <th key={k} className="px-2 py-2 text-center border-b border-border min-w-[110px]">
                     {STATE_LABELS[k]}
@@ -507,12 +549,12 @@ export function CategorySlaMatrixPage() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={11} className="px-3 py-8 text-center text-muted-foreground">Loading…</td>
+                  <td colSpan={12} className="px-3 py-8 text-center text-muted-foreground">Loading…</td>
                 </tr>
               )}
               {!loading && filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="px-3 py-12 text-center text-muted-foreground space-y-3">
+                  <td colSpan={12} className="px-3 py-12 text-center text-muted-foreground space-y-3">
                     <p className="text-sm">No SLA rows yet for this tenant.</p>
                     <p className="text-xs">
                       Get started with a CSV import, or add a row manually.
@@ -561,6 +603,9 @@ export function CategorySlaMatrixPage() {
                         checked={r.isActive}
                         onChange={(e) => patchRow(rk, { isActive: e.target.checked })}
                       />
+                    </td>
+                    <td className="px-2 py-1.5 text-center">
+                      <LevelsCell values={r.slaHoursByLevel} onClick={() => setLevelEditorRowKey(rk)} />
                     </td>
                     {STATE_KEYS.map((k) => (
                       <td key={k} className="px-2 py-1.5 text-center">
@@ -618,6 +663,14 @@ export function CategorySlaMatrixPage() {
       <BulkImportDialog open={showBulkImport} onClose={() => setShowBulkImport(false)} onImport={handleBulkImport} />
       <TraceBackDialog open={showTrace} onClose={() => setShowTrace(false)} tenantId={tenantId} rows={rows} stateDefaults={stateDefaults} />
       <AddRowDialog open={showAddRow} onClose={() => setShowAddRow(false)} onAdd={addRow} />
+      <LevelSlaDialog
+        row={rows.find((r) => rowKeyOf(r) === levelEditorRowKey) ?? null}
+        onClose={() => setLevelEditorRowKey(null)}
+        onApply={(values) => {
+          if (levelEditorRowKey) patchRow(levelEditorRowKey, { slaHoursByLevel: values });
+          setLevelEditorRowKey(null);
+        }}
+      />
       <AuditDrawer open={showAudit} onClose={() => setShowAudit(false)} entries={auditEntries} />
     </div>
   );
@@ -745,14 +798,132 @@ function CellEditor({ value, fallback, onChange }: CellEditorProps) {
 }
 
 // ---------------------------------------------------------------------------
+// LevelsCell — compact per-row slaHoursByLevel summary, click to edit
+// ---------------------------------------------------------------------------
+function LevelsCell({ values, onClick }: { values?: LevelValues | null; onClick: () => void }) {
+  const empty = isLevelValuesEmpty(values);
+  return (
+    <button
+      onClick={onClick}
+      className="group w-full text-center hover:bg-muted/50 rounded px-1 py-0.5 transition-colors"
+      title="Levels with a number set here take priority over this row's state cells; blank levels use the state cell."
+    >
+      {empty ? (
+        <>
+          <span className="text-muted-foreground/60 group-hover:hidden">—</span>
+          <span className="hidden group-hover:inline text-[10px] text-muted-foreground">+ levels</span>
+        </>
+      ) : (
+        <span className="font-medium whitespace-nowrap">{formatLevelSummary(values)}</span>
+      )}
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// LevelSlaDialog — per-row slaHoursByLevel editor (LevelSlaEditor, holes
+// allowed). Applies into the pending/dirty flow — nothing persists until
+// the toolbar's "Save changes".
+// ---------------------------------------------------------------------------
+function LevelSlaDialog({
+  row,
+  onClose,
+  onApply,
+}: {
+  row: MatrixRow | null;
+  onClose: () => void;
+  onApply: (values: LevelValues | undefined) => void;
+}) {
+  return (
+    <Dialog open={row !== null} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Level SLAs — {row ? `${row.category} / ${row.subcategoryL1}` : ''}</DialogTitle>
+          <DialogDescription>
+            Hours per escalation level for this row. Levels with a number set
+            here take priority over this row's state cells; blank levels use
+            the state cell.
+          </DialogDescription>
+        </DialogHeader>
+        {row && <LevelSlaDialogBody row={row} onClose={onClose} onApply={onApply} />}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Mounted only while the dialog is open, so the draft seeds from the row at
+ * mount and resets naturally on every reopen — same remount-to-reset
+ * pattern the LevelSlaEditor itself relies on.
+ */
+function LevelSlaDialogBody({
+  row,
+  onClose,
+  onApply,
+}: {
+  row: MatrixRow;
+  onClose: () => void;
+  onApply: (values: LevelValues | undefined) => void;
+}) {
+  // Mirror of the editor's onChange output so Apply can normalize + gate on
+  // validation errors; the editor owns the actual input drafts.
+  const [draftValues, setDraftValues] = useState<LevelValues>(
+    () => (row.slaHoursByLevel ? [...row.slaHoursByLevel] : []),
+  );
+  const [draftErrors, setDraftErrors] = useState<(string | null)[]>([]);
+  const hasErrors = draftErrors.some((e) => e !== null);
+  return (
+    <>
+      <LevelSlaEditor
+        initialValue={row.slaHoursByLevel}
+        allowHoles
+        onChange={(values, errors) => {
+          setDraftValues(values);
+          setDraftErrors(errors);
+        }}
+      />
+      <div className="flex justify-end gap-2 pt-2">
+        <Button variant="outline" onClick={onClose}>Cancel</Button>
+        <Button onClick={() => onApply(normalizeLevelValues(draftValues))} disabled={hasErrors}>
+          Apply
+        </Button>
+      </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // StateDefaultsRow — inline-edit StateSLA singleton
 // ---------------------------------------------------------------------------
-function StateDefaultsRow({ defaults, onSave }: { defaults: StateDefaults; onSave: (next: StateDefaults) => Promise<void> }) {
+function StateDefaultsRow({
+  defaults,
+  policyLevels,
+  onSave,
+}: {
+  defaults: StateDefaults;
+  /** CRS.EscalationPolicy.defaultSlaHoursByLevel, when set — precedence notice only. */
+  policyLevels?: number[];
+  onSave: (next: StateDefaults) => Promise<void>;
+}) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<StateDefaults>(defaults);
   useEffect(() => { setDraft(defaults); }, [defaults]);
 
   const empty = isStateDefaultsEmpty(defaults);
+
+  // Cross-page precedence trap: deployment-wide level SLAs (Escalation
+  // Settings) beat this strip for categories without their own levels, and
+  // an operator editing only this strip would never know. Surface it inline.
+  const policyNotice = policyLevels && policyLevels.length > 0 ? (
+    <p className="basis-full text-xs text-muted-foreground">
+      Deployment-wide level SLAs are set and take priority at{' '}
+      {policyLevels.length === 1 ? 'level L0' : `levels L0–L${policyLevels.length - 1}`} for
+      categories without their own levels —{' '}
+      <Link to="/escalation-settings" className="underline hover:text-foreground">
+        edit on the Escalation Settings page
+      </Link>.
+    </p>
+  ) : null;
 
   // When everything is null AND we're not editing, render an explicit
   // "not configured" prompt instead of fabricating magic numbers.
@@ -766,6 +937,7 @@ function StateDefaultsRow({ defaults, onSave }: { defaults: StateDefaults; onSav
         <div className="ml-auto">
           <Button size="sm" variant="outline" onClick={() => setEditing(true)}>Edit defaults…</Button>
         </div>
+        {policyNotice}
       </div>
     );
   }
@@ -806,6 +978,7 @@ function StateDefaultsRow({ defaults, onSave }: { defaults: StateDefaults; onSav
           <Button size="sm" variant="outline" onClick={() => setEditing(true)}>Edit defaults…</Button>
         )}
       </div>
+      {policyNotice}
     </div>
   );
 }
@@ -870,7 +1043,7 @@ function AuditDrawer({ open, onClose, entries }: { open: boolean; onClose: () =>
       <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>SLA audit log</DialogTitle>
-          <DialogDescription>Last 50 changes to CRS.CategorySLA and CRS.StateSLA.</DialogDescription>
+          <DialogDescription>Last 50 changes to the SLA matrix and its defaults — changes made on the Escalation Settings page appear here too.</DialogDescription>
         </DialogHeader>
         <div className="overflow-auto flex-1">
           {entries === null && <p className="text-sm text-muted-foreground text-center py-8">Loading…</p>}

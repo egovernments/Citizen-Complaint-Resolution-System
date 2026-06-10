@@ -74,6 +74,14 @@ export interface CategorySlaRecord {
   category: string;
   subcategoryL1: string;
   slaHoursByState: SlaHoursByState;
+  /**
+   * Optional per-escalation-level SLA hours; index = escalation level
+   * ([L0, L1, L2, …]). Holes (null) are allowed — a null/zero/negative or
+   * out-of-bounds entry falls through to the row's state cell at that
+   * level (EscalationScheduler.levelCellToMillis). Contrast with
+   * EscalationPolicy.defaultSlaHoursByLevel, which rejects holes.
+   */
+  slaHoursByLevel?: (number | null)[];
   isActive: boolean;
 }
 
@@ -128,9 +136,13 @@ export function formatCell(v: CellValue): string {
  * For scheduler-style breach math, collapse a range to its max bound. This
  * matches what EscalationScheduler.resolveSlaHours does on the backend so
  * the trace-back tool's preview agrees with the scheduler's decision.
+ *
+ * The backend (cellToMillis) takes Math.max of the two bounds — NOT the
+ * second element — so a reversed pair like [120, 24] still resolves to
+ * 120. Returning v[1] here used to diverge on exactly those rows.
  */
 export function effectiveHours(v: CellValue): number | null {
   if (v === null || v === undefined) return null;
-  if (Array.isArray(v)) return v[1];
+  if (Array.isArray(v)) return Math.max(v[0], v[1]);
   return v;
 }
