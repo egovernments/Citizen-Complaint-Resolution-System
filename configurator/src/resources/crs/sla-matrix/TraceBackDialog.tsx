@@ -21,7 +21,7 @@ interface TraceBackDialogProps {
 
 interface EscalationOutcome {
   serviceRequestId: string;
-  action: 'ESCALATED' | 'SKIPPED' | string;
+  action: 'ESCALATED' | 'WOULD_ESCALATE' | 'SKIPPED' | string;
   reason: string;
   detail: string;
 }
@@ -46,6 +46,9 @@ const STATE_TO_KEY: Record<string, StateKey> = {
   // the six states the schema's slaHoursByState keys cover. Anything else
   // falls back to null (and the resolvedSla pane shows "no matching state
   // column").
+  // KNOWN GAP: this table duplicates the CRS.WorkflowStateMapping MDMS
+  // master (which the backend scheduler reads). It should be replaced by
+  // an MDMS fetch so both stay in sync — out of scope here.
   PENDINGFORASSIGNMENT: 'new',
   PENDINGATLME: 'forwarded',
   PENDING_AT_LME: 'forwarded',
@@ -60,11 +63,12 @@ const STATE_TO_KEY: Record<string, StateKey> = {
 };
 
 /**
- * Read-only diagnostic drawer for "why will (or won't) escalation fire on
- * THIS complaint right now?". Fans out:
+ * Diagnostic drawer for "why will (or won't) escalation fire on THIS
+ * complaint right now?". Fans out:
  *
- *   1. POST /pgr-services/escalation/_trigger { serviceRequestIds: [srid] }
- *      to get the scheduler's verdict + reason.
+ *   1. POST /pgr-services/escalation/_trigger { serviceRequestIds: [srid],
+ *      dryRun: true } to get the scheduler's verdict + reason without
+ *      performing the escalation.
  *   2. GET /pgr-services/v2/request/_search?serviceRequestId=... to pull
  *      the current state + assignee.
  *   3. Resolves the matching SLA row from the matrix passed in by the
@@ -72,7 +76,8 @@ const STATE_TO_KEY: Record<string, StateKey> = {
  *      precedence the backend scheduler uses, so the preview agrees with
  *      the scheduler's verdict for unbreached complaints.
  *
- * Does NOT mutate anything; safe to point at production complaints.
+ * Runs the scheduler as a dry-run: decision only, no workflow transition —
+ * safe to point at production complaints, even breached ones.
  */
 export function TraceBackDialog({ open, onClose, tenantId, rows, stateDefaults }: TraceBackDialogProps) {
   const [srid, setSrid] = useState('');
@@ -126,6 +131,8 @@ export function TraceBackDialog({ open, onClose, tenantId, rows, stateDefaults }
             RequestInfo: digitClient.buildRequestInfo(),
             tenantId,
             serviceRequestIds: [trimmed],
+            // dry-run: decision only, no workflow transition — safe on breached complaints
+            dryRun: true,
           },
         );
         outcome = triggerResp.details?.[0];
@@ -177,7 +184,8 @@ export function TraceBackDialog({ open, onClose, tenantId, rows, stateDefaults }
           <DialogDescription>
             Paste a service request ID to see whether the scheduler would
             escalate it right now, the resolved SLA, and the breach math.
-            Read-only — nothing is persisted.
+            Runs the scheduler as a dry-run — decision only, nothing is
+            escalated or persisted.
           </DialogDescription>
         </DialogHeader>
 
@@ -219,22 +227,25 @@ export function TraceBackDialog({ open, onClose, tenantId, rows, stateDefaults }
 }
 
 function OutcomeBlock({ outcome }: { outcome: EscalationOutcome }) {
-  const variant: 'success' | 'warning' | 'info' = outcome.action === 'ESCALATED'
+  // WOULD_ESCALATE is the dry-run analogue of ESCALATED — same success styling.
+  const isEscalation = outcome.action === 'ESCALATED' || outcome.action === 'WOULD_ESCALATE';
+  const variant: 'success' | 'warning' | 'info' = isEscalation
     ? 'success'
     : outcome.reason === 'SLA_NOT_BREACHED' ? 'info' : 'warning';
-  const Icon = outcome.action === 'ESCALATED'
+  const Icon = isEscalation
     ? CheckCircle2
     : outcome.reason === 'NO_ASSIGNEES'
       ? UserX
       : outcome.reason === 'SLA_NOT_BREACHED'
         ? Clock
         : AlertTriangle;
+  const actionLabel = outcome.action === 'WOULD_ESCALATE' ? 'Would escalate' : outcome.action;
   return (
     <Alert variant={variant}>
       <Icon className="w-4 h-4" />
       <AlertTitle className="flex items-center gap-2">
         Scheduler verdict
-        <Badge variant="outline" className="text-[10px] uppercase tracking-wider">{outcome.action}</Badge>
+        <Badge variant="outline" className="text-[10px] uppercase tracking-wider">{actionLabel}</Badge>
         <Badge variant="outline" className="text-[10px]">{outcome.reason}</Badge>
       </AlertTitle>
       <AlertDescription>

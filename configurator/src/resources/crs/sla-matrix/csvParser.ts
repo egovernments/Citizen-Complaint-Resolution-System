@@ -130,7 +130,12 @@ export function parseCsv(text: string): ParseResult {
   if (lines.length === 0) {
     return { rows: [], totalValid: 0, totalInvalid: 0 };
   }
-  const header = splitCsvLine(lines[0]).map((h) => h.toLowerCase());
+  const header = splitCsvLine(lines[0]).map((h) => {
+    const k = h.trim().toLowerCase();
+    // Canonicalize the one camelCase column so `raw.subcategoryL1` lookups
+    // in buildRecord match regardless of header casing in the source file.
+    return k === 'subcategoryl1' ? 'subcategoryL1' : k;
+  });
   const rows: ParsedRow[] = [];
   for (let i = 1; i < lines.length; i++) {
     const cols = splitCsvLine(lines[i]);
