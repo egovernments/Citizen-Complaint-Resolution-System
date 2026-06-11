@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import "./styles/dashboard.css";
 import DashboardLayout from "./components/DashboardLayout";
 import DashboardGrid from "./components/DashboardGrid";
@@ -17,8 +17,17 @@ const AdminDashboard = () => {
     resetLayout,
     removeWidgetFromLayout,
     addKpiToLayout,
+    syncRankedListHeight,
     visibleKpiIds,
   } = useDashboardLayout();
+
+  const rankedListCount = chartData.rankedCategories?.length ?? 0;
+
+  useEffect(() => {
+    if (rankedListCount > 0) {
+      syncRankedListHeight(rankedListCount);
+    }
+  }, [rankedListCount, syncRankedListHeight]);
 
   const handleDragKpiStart = useCallback((kpiId) => {
     setDraggingKpiId(kpiId);
@@ -29,8 +38,8 @@ const AdminDashboard = () => {
   }, []);
 
   const handleDropKpi = useCallback(
-    (widgetId) => {
-      addKpiToLayout(widgetId);
+    (widgetId, position) => {
+      addKpiToLayout(widgetId, position);
       setDraggingKpiId(null);
     },
     [addKpiToLayout]
@@ -43,11 +52,7 @@ const AdminDashboard = () => {
       onAddKpi={addKpiToLayout}
       onDragKpiStart={handleDragKpiStart}
       onDragKpiEnd={handleDragKpiEnd}
-      subMetricValues={subMetricValues}
-      getSubMetricId={getSubMetricId}
       asOf={asOf}
-      error={error}
-      onRetry={refetch}
     >
       {error && (
         <div className="tw-mb-4 tw-flex tw-items-center tw-justify-between tw-rounded-md tw-border tw-border-red-200 tw-bg-red-50 tw-px-4 tw-py-3 tw-text-sm tw-text-red-800">

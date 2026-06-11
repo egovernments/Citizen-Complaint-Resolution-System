@@ -6,9 +6,11 @@ import {
   DEFAULT_LAYOUT,
   GRID_COLS,
   TOP_ROW_CHART_IDS,
+  RANKED_LIST_WIDGET_ID,
   WIDGETS,
   isChartWidget,
   isKpiWidget,
+  resolveRankedListGridHeight,
 } from "../constants/layoutConfig";
 
 function itemsOverlap(a, b) {
@@ -30,6 +32,127 @@ function hasOverlaps(layout) {
   return false;
 }
 
+/** Push overlapping items right or down; pinned item (being resized) stays put. */
+export function pushAdjacentItems(layout, pinnedId = null) {
+  const items = layout.map((item) => ({ ...item }));
+
+  let changed = true;
+  let passes = 0;
+
+  while (changed && passes < 50) {
+    passes += 1;
+    changed = false;
+
+    for (let i = 0; i < items.length; i += 1) {
+      for (let j = i + 1; j < items.length; j += 1) {
+        if (!itemsOverlap(items[i], items[j])) continue;
+
+        let anchorIdx = j;
+        let moveIdx = i;
+
+        if (items[i].i === pinnedId) {
+          anchorIdx = i;
+          moveIdx = j;
+        } else if (items[j].i === pinnedId) {
+          anchorIdx = j;
+          moveIdx = i;
+        } else if (
+          items[i].x > items[j].x ||
+          (items[i].x === items[j].x && items[i].y > items[j].y)
+        ) {
+          anchorIdx = i;
+          moveIdx = j;
+        }
+
+        const anchor = items[anchorIdx];
+        const mover = items[moveIdx];
+
+        let newX = anchor.x + anchor.w;
+        let newY = anchor.y;
+
+        if (newX + mover.w > GRID_COLS) {
+          newX = anchor.x;
+          newY = anchor.y + anchor.h;
+        }
+
+        const candidate = { ...mover, x: newX, y: newY };
+        if (itemsOverlap(candidate, anchor)) {
+          newX = anchor.x;
+          newY = anchor.y + anchor.h;
+        }
+
+        if (mover.x !== newX || mover.y !== newY) {
+          items[moveIdx].x = newX;
+          items[moveIdx].y = newY;
+          changed = true;
+        }
+      }
+    }
+  }
+
+  return items;
+}
+
+/** Only move cards that overlap the active card; active card position is kept. */
+export function resolveOverlapsForItem(layout, activeId) {
+  if (!activeId) return layout;
+
+  const items = layout.map((item) => ({ ...item }));
+  const activeIdx = items.findIndex((item) => item.i === activeId);
+  if (activeIdx === -1) return layout;
+
+  let changed = true;
+  let passes = 0;
+
+  while (changed && passes < 50) {
+    passes += 1;
+    changed = false;
+    const active = items[activeIdx];
+
+    for (let i = 0; i < items.length; i += 1) {
+      if (i === activeIdx || !itemsOverlap(items[i], active)) continue;
+
+      const mover = items[i];
+      let newX = active.x + active.w;
+      let newY = active.y;
+
+      if (newX + mover.w > GRID_COLS) {
+        newX = active.x;
+        newY = active.y + active.h;
+      }
+
+      const candidate = { ...mover, x: newX, y: newY };
+      if (itemsOverlap(candidate, active)) {
+        newX = active.x;
+        newY = active.y + active.h;
+      }
+
+      if (mover.x !== newX || mover.y !== newY) {
+        items[i].x = newX;
+        items[i].y = newY;
+        changed = true;
+      }
+    }
+  }
+
+  return items;
+}
+
+function clampChartBelowKpis(layout, chartId) {
+  if (!isChartWidget(chartId)) return layout;
+
+  const kpis = layout.filter((item) => isKpiWidget(item.i));
+  if (!kpis.length) return layout;
+
+  const kpiBottom = Math.max(...kpis.map((item) => item.y + item.h));
+  const chart = layout.find((item) => item.i === chartId);
+  if (!chart || chart.y >= kpiBottom) return layout;
+
+  return layout.map((item) =>
+    item.i === chartId ? { ...item, y: kpiBottom } : item
+  );
+}
+
 /** Pack KPI cards into tight rows so they never stack on the same column. */
 export function packKpiLayout(layout) {
   const kpis = layout
@@ -47,10 +170,10 @@ export function packKpiLayout(layout) {
       y += DEFAULT_KPI_LAYOUT_ITEM.h;
     }
     packed.push({
+      ...DEFAULT_KPI_LAYOUT_ITEM,
       ...item,
       x,
       y,
-      ...DEFAULT_KPI_LAYOUT_ITEM,
     });
     x += DEFAULT_KPI_LAYOUT_ITEM.w;
   }
@@ -95,47 +218,17 @@ export function reflowCharts(layout) {
   return [...kpis, ...reflowedTop, ...reflowedBottom, ...other];
 }
 
-/** During drag/resize: enforce minimum Y without resetting horizontal placement. */
-export function pushChartsBelowKpis(layout) {
-  const kpis = layout.filter((item) => isKpiWidget(item.i));
-  const charts = layout.filter((item) => isChartWidget(item.i));
-  const other = layout.filter((item) => !isKpiWidget(item.i) && !isChartWidget(item.i));
-
-  if (kpis.length === 0) return layout;
-
-  const kpiBottom = Math.max(...kpis.map((item) => item.y + item.h));
-  const topCharts = charts.filter((c) => TOP_ROW_CHART_IDS.includes(c.i));
-  const bottomCharts = charts.filter((c) => !TOP_ROW_CHART_IDS.includes(c.i));
-
-  const adjustedTop = topCharts.map((c) => ({
-    ...c,
-    y: Math.max(c.y, kpiBottom),
-  }));
-
-  const topRowBottom = adjustedTop.length
-    ? Math.max(...adjustedTop.map((c) => c.y + c.h))
-    : kpiBottom;
-
-  const adjustedBottom = bottomCharts.map((c) => ({
-    ...c,
-    y: Math.max(c.y, topRowBottom),
-  }));
-
-  return [...kpis, ...adjustedTop, ...adjustedBottom, ...other];
-}
-
 export function normalizeLayout(layout) {
   return reflowCharts(packKpiLayout(layout));
 }
 
 function normalizeKpiItem(item) {
   return {
+    ...DEFAULT_KPI_LAYOUT_ITEM,
     ...item,
-    w: DEFAULT_KPI_LAYOUT_ITEM.w,
-    h: DEFAULT_KPI_LAYOUT_ITEM.h,
-    minW: DEFAULT_KPI_LAYOUT_ITEM.minW,
-    minH: DEFAULT_KPI_LAYOUT_ITEM.minH,
-    maxH: DEFAULT_KPI_LAYOUT_ITEM.maxH,
+    minW: item.minW ?? DEFAULT_KPI_LAYOUT_ITEM.minW,
+    minH: item.minH ?? DEFAULT_KPI_LAYOUT_ITEM.minH,
+    maxH: item.maxH ?? DEFAULT_KPI_LAYOUT_ITEM.maxH,
   };
 }
 
@@ -143,33 +236,61 @@ function normalizeChartItem(item) {
   const defaults = DEFAULT_CHART_LAYOUT[item.i];
   if (!defaults) return item;
   return {
-    ...defaults,
     ...item,
-    minW: item.minW ?? defaults.minW,
-    minH: item.minH ?? defaults.minH,
+    minW: defaults.minW,
+    minH: defaults.minH,
+    maxW: defaults.maxW ?? item.maxW,
+    maxH: defaults.maxH ?? item.maxH,
   };
+}
+
+const LEGACY_LAYOUT_VERSIONS = ["v12", "v11", "v10", "v9"];
+
+function readSavedLayoutRaw() {
+  const currentKey = getLayoutStorageKey();
+  const tenantPrefix = currentKey.replace(/-supervisor-dashboard-layout-v\d+$/, "");
+  const keys = [
+    currentKey,
+    ...LEGACY_LAYOUT_VERSIONS.map((v) => `${tenantPrefix}-supervisor-dashboard-layout-${v}`),
+  ];
+
+  for (const key of keys) {
+    const saved = localStorage.getItem(key);
+    if (saved) return { key, saved };
+  }
+
+  return null;
+}
+
+function parseStoredLayout(saved) {
+  const parsed = JSON.parse(saved);
+  if (!Array.isArray(parsed) || parsed.length === 0) return null;
+
+  const valid = parsed
+    .filter((item) => WIDGETS[item.i])
+    .map((item) => {
+      if (isKpiWidget(item.i)) return normalizeKpiItem(item);
+      if (isChartWidget(item.i)) return normalizeChartItem(item);
+      return item;
+    });
+
+  if (valid.length === 0 || hasOverlaps(valid)) return null;
+  return valid;
 }
 
 function loadLayout() {
   try {
-    const saved = localStorage.getItem(getLayoutStorageKey());
-    if (!saved) return DEFAULT_LAYOUT;
+    const stored = readSavedLayoutRaw();
+    if (!stored) return DEFAULT_LAYOUT;
 
-    const parsed = JSON.parse(saved);
-    if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_LAYOUT;
+    const valid = parseStoredLayout(stored.saved);
+    if (!valid) return DEFAULT_LAYOUT;
 
-    const valid = parsed
-      .filter((item) => WIDGETS[item.i])
-      .map((item) => {
-        if (isKpiWidget(item.i)) return normalizeKpiItem(item);
-        if (isChartWidget(item.i)) return normalizeChartItem(item);
-        return item;
-      });
+    if (stored.key !== getLayoutStorageKey()) {
+      persistLayout(valid);
+    }
 
-    if (valid.length === 0) return DEFAULT_LAYOUT;
-
-    const fixed = normalizeLayout(valid);
-    return hasOverlaps(fixed) ? DEFAULT_LAYOUT : fixed;
+    return valid;
   } catch {
     return DEFAULT_LAYOUT;
   }
@@ -199,14 +320,31 @@ function nextKpiPosition(layout) {
 export function useDashboardLayout() {
   const [layout, setLayout] = useState(loadLayout);
 
-  const onLayoutChange = useCallback((newLayout) => {
-    const fixed = pushChartsBelowKpis(newLayout);
-    setLayout(fixed);
-    persistLayout(fixed);
+  /** During drag: pass through in memory only. Persist on drag/resize stop. */
+  const onLayoutChange = useCallback((newLayout, pinnedId = null, options = {}) => {
+    if (options.passThrough) {
+      setLayout(newLayout);
+      return;
+    }
+
+    if (options.mode === "resize" && pinnedId) {
+      const fixed = pushAdjacentItems(newLayout, pinnedId);
+      setLayout(fixed);
+      persistLayout(fixed);
+      return;
+    }
+
+    if (options.mode === "resize") {
+      setLayout(newLayout);
+    }
   }, []);
 
-  const onLayoutStop = useCallback((newLayout) => {
-    const fixed = normalizeLayout(newLayout);
+  const onLayoutStop = useCallback((newLayout, mode = "drag", activeId = null) => {
+    const fixed =
+      mode === "resize" && activeId
+        ? pushAdjacentItems(newLayout, activeId)
+        : newLayout;
+
     setLayout(fixed);
     persistLayout(fixed);
   }, []);
@@ -218,26 +356,42 @@ export function useDashboardLayout() {
 
   const removeWidgetFromLayout = useCallback((widgetId) => {
     setLayout((prev) => {
-      const next = normalizeLayout(prev.filter((item) => item.i !== widgetId));
+      const next = prev.filter((item) => item.i !== widgetId);
       persistLayout(next);
       return next;
     });
   }, []);
 
-  const addKpiToLayout = useCallback((widgetId) => {
+  const syncRankedListHeight = useCallback((itemCount) => {
+    const targetH = resolveRankedListGridHeight(itemCount);
+    setLayout((prev) => {
+      const listItem = prev.find((item) => item.i === RANKED_LIST_WIDGET_ID);
+      if (!listItem || listItem.h <= targetH) return prev;
+
+      const next = prev.map((item) =>
+        item.i === RANKED_LIST_WIDGET_ID
+          ? { ...item, h: targetH, minH: DEFAULT_CHART_LAYOUT[RANKED_LIST_WIDGET_ID]?.minH ?? 2 }
+          : item
+      );
+      persistLayout(next);
+      return next;
+    });
+  }, []);
+
+  const addKpiToLayout = useCallback((widgetId, position) => {
     if (!isKpiWidget(widgetId)) return;
     setLayout((prev) => {
       if (prev.some((item) => item.i === widgetId)) return prev;
-      const { x, y } = nextKpiPosition(prev);
-      const next = normalizeLayout([
-        ...prev,
-        {
-          i: widgetId,
-          x,
-          y,
-          ...DEFAULT_KPI_LAYOUT_ITEM,
-        },
-      ]);
+
+      const fallback = nextKpiPosition(prev);
+      const newItem = {
+        i: widgetId,
+        x: position?.x ?? fallback.x,
+        y: position?.y ?? fallback.y,
+        ...DEFAULT_KPI_LAYOUT_ITEM,
+      };
+
+      let next = [...prev, newItem];
       persistLayout(next);
       return next;
     });
@@ -252,6 +406,7 @@ export function useDashboardLayout() {
     resetLayout,
     removeWidgetFromLayout,
     addKpiToLayout,
+    syncRankedListHeight,
     visibleKpiIds,
   };
 }

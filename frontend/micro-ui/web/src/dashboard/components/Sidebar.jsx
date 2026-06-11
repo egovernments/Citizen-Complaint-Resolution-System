@@ -11,8 +11,6 @@ const Sidebar = ({
   onAddKpi,
   onDragKpiStart,
   onDragKpiEnd,
-  subMetricValues,
-  getSubMetricId,
 }) => {
   const stateLabel = useMemo(() => getStateLabel(), []);
   const productLabel = useMemo(() => getProductLabel(), []);
@@ -45,8 +43,6 @@ const Sidebar = ({
         onAddKpi={onAddKpi}
         onDragKpiStart={onDragKpiStart}
         onDragKpiEnd={onDragKpiEnd}
-        subMetricValues={subMetricValues}
-        getSubMetricId={getSubMetricId}
       />
       <div className="tw-border-t tw-border-teal-800 tw-p-4 tw-text-xs tw-text-teal-300">
         Supervisor

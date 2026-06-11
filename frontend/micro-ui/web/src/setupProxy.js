@@ -41,15 +41,19 @@ const analyticsProxyTarget =
 const analyticsUsesInternalPort = /127\.0\.0\.1:18280|localhost:18280/.test(
   analyticsProxyTarget
 );
-const analyticsPathKey = `^${analyticsBrowserPath}`;
+const analyticsUpstreamBase = analyticsUsesInternalPort
+  ? "/pgr-services/v2/analytics"
+  : "/api/analytics";
 
-const analyticsProxy = createProxyMiddleware({
+// Register context on createProxyMiddleware (not app.use path) so pathRewrite
+// sees the full browser path (/pgr-analytics/_query), not a stripped suffix.
+const analyticsProxy = createProxyMiddleware(analyticsBrowserPath, {
   target: analyticsProxyTarget,
   changeOrigin: !analyticsUsesInternalPort,
   secure: !analyticsUsesInternalPort && !isLocalTunnel,
-  pathRewrite: analyticsUsesInternalPort
-    ? { [analyticsPathKey]: "/pgr-services/v2/analytics" }
-    : { [analyticsPathKey]: "/api/analytics" },
+  pathRewrite: {
+    [`^${analyticsBrowserPath}`]: analyticsUpstreamBase,
+  },
   onProxyReq: (proxyReq) => {
     if (isLocalTunnel && proxyHost) {
       proxyReq.setHeader("host", proxyHost);
@@ -67,7 +71,7 @@ const analyticsProxy = createProxyMiddleware({
 
 module.exports = function (app) {
   if (!/^https?:\/\//i.test(analyticsBrowserPath)) {
-    app.use(analyticsBrowserPath, analyticsProxy);
+    app.use(analyticsProxy);
   }
 
   if (!createProxy) {
