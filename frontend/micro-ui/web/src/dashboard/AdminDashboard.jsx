@@ -1,15 +1,15 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import "./styles/dashboard.css";
 import DashboardLayout from "./components/DashboardLayout";
 import DashboardGrid from "./components/DashboardGrid";
 import { useDashboardLayout } from "./hooks/useDashboardLayout";
 import { useDashboardData } from "./hooks/useDashboardData";
-import { useSubMetricSelection } from "./hooks/useSubMetricSelection";
+import { useDashboardFilters } from "./hooks/useDashboardFilters";
 
 const AdminDashboard = () => {
   const [draggingKpiId, setDraggingKpiId] = useState(null);
   const { subMetricValues, chartData, loading, error, asOf, refetch } = useDashboardData();
-  const { getSubMetricId, setSubMetricId } = useSubMetricSelection();
+  const { filters, setFilter, resolveSubMetricId } = useDashboardFilters();
   const {
     layout,
     onLayoutChange,
@@ -17,17 +17,8 @@ const AdminDashboard = () => {
     resetLayout,
     removeWidgetFromLayout,
     addKpiToLayout,
-    syncRankedListHeight,
     visibleKpiIds,
   } = useDashboardLayout();
-
-  const rankedListCount = chartData.rankedCategories?.length ?? 0;
-
-  useEffect(() => {
-    if (rankedListCount > 0) {
-      syncRankedListHeight(rankedListCount);
-    }
-  }, [rankedListCount, syncRankedListHeight]);
 
   const handleDragKpiStart = useCallback((kpiId) => {
     setDraggingKpiId(kpiId);
@@ -53,6 +44,8 @@ const AdminDashboard = () => {
       onDragKpiStart={handleDragKpiStart}
       onDragKpiEnd={handleDragKpiEnd}
       asOf={asOf}
+      filters={filters}
+      onFilterChange={setFilter}
     >
       {error && (
         <div className="tw-mb-4 tw-flex tw-items-center tw-justify-between tw-rounded-md tw-border tw-border-red-200 tw-bg-red-50 tw-px-4 tw-py-3 tw-text-sm tw-text-red-800">
@@ -74,8 +67,7 @@ const AdminDashboard = () => {
         onDropKpi={handleDropKpi}
         draggingKpiId={draggingKpiId}
         subMetricValues={subMetricValues}
-        getSubMetricId={getSubMetricId}
-        setSubMetricId={setSubMetricId}
+        resolveSubMetricId={resolveSubMetricId}
         chartData={chartData}
         loading={loading}
       />

@@ -51,8 +51,7 @@ const DashboardGrid = ({
   onDropKpi,
   draggingKpiId,
   subMetricValues = {},
-  getSubMetricId,
-  setSubMetricId,
+  resolveSubMetricId,
   chartData = { categories: [], wards: [], dow: [], rankedCategories: [] },
   loading = false,
 }) => {
@@ -75,16 +74,13 @@ const DashboardGrid = ({
     const metric = METRIC_LOOKUP[metricId];
     if (!metric) return null;
 
-    const selectedSubMetricId = getSubMetricId(metricId);
+    const selectedSubMetricId = resolveSubMetricId(metric);
     const sub = getSubMetricDef(metric, selectedSubMetricId);
     const value = subMetricValues[subMetricValueKey(metricId, sub.id)];
 
     return (
       <KpiCard
         metric={metric.metric}
-        subMetrics={metric.subMetrics}
-        selectedSubMetricId={sub.id}
-        onSubMetricChange={(nextId) => setSubMetricId(metricId, nextId)}
         value={value}
         accent={metric.accent}
         loading={loading && value == null}

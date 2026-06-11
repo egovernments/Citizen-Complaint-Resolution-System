@@ -14,7 +14,7 @@ export const INVENTORY_SECTIONS = [
   },
 ];
 
-const COUNT_WINDOWS = [
+export const TIME_WINDOW_OPTIONS = [
   {
     id: "daily",
     label: "Daily count",
@@ -53,7 +53,7 @@ const COUNT_WINDOWS = [
 ];
 
 function countSubMetrics(prefix) {
-  return COUNT_WINDOWS.map((sub) => ({
+  return TIME_WINDOW_OPTIONS.map((sub) => ({
     ...sub,
     queryKey:
       sub.format === "percentDelta"
@@ -68,6 +68,7 @@ export const LANDSCAPE_METRICS = [
     id: "cl-metric-total-registered",
     metric: "Total complaints registered",
     accent: "teal",
+    filterGroup: "timeWindow",
     defaultSubMetricId: "weekly",
     subMetrics: countSubMetrics("cl_reg"),
   },
@@ -75,6 +76,7 @@ export const LANDSCAPE_METRICS = [
     id: "cl-metric-total-open",
     metric: "Total complaints open",
     accent: "amber",
+    filterGroup: "timeWindow",
     defaultSubMetricId: "weekly",
     subMetrics: countSubMetrics("cl_open"),
   },
@@ -82,6 +84,7 @@ export const LANDSCAPE_METRICS = [
     id: "cl-metric-total-resolved",
     metric: "Total complaints resolved",
     accent: "green",
+    filterGroup: "timeWindow",
     defaultSubMetricId: "weekly",
     subMetrics: countSubMetrics("cl_res"),
   },

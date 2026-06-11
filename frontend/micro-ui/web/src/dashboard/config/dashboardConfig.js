@@ -50,3 +50,7 @@ export function getLayoutStorageKey() {
 export function getSubMetricStorageKey() {
   return `${getTenantId()}-supervisor-dashboard-submetrics-v1`;
 }
+
+export function getFiltersStorageKey() {
+  return `${getTenantId()}-supervisor-dashboard-filters-v3`;
+}

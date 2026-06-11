@@ -177,6 +177,17 @@
   height: 100%;
   overflow: hidden;
   min-height: 0;
+  padding-top: 0.75rem;
+  padding-bottom: 0.5rem;
+}
+
+.dashboard-kpi-title {
+  overflow: visible;
+  display: block;
+}
+
+.layout .react-grid-item:has(.dashboard-kpi-widget) {
+  overflow: visible;
 }
 
 /* Bottom-right resize affordance on all resizable widgets */

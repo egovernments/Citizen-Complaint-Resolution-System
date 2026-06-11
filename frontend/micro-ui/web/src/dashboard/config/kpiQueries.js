@@ -572,9 +572,17 @@ export function getDisplayValue(metric, subMetricId, allValues, loading) {
   return allValues[key] ?? UNSUPPORTED_VALUE;
 }
 
+function sortRowsByTotalDesc(rows, labelKey) {
+  return [...rows].sort((a, b) => {
+    const countDiff = (Number(b.total) || 0) - (Number(a.total) || 0);
+    if (countDiff !== 0) return countDiff;
+    return String(a[labelKey] ?? "").localeCompare(String(b[labelKey] ?? ""));
+  });
+}
+
 export function parseBarChart(result, labelKey) {
   if (!result?.rows?.length) return [];
-  return result.rows.map((row) => ({
+  return sortRowsByTotalDesc(result.rows, labelKey).map((row) => ({
     label: String(row[labelKey] ?? "Unknown"),
     count: Number(row.total) || 0,
   }));
@@ -593,9 +601,11 @@ export function parseDowChart(result) {
 
 export function parseRankedList(result, labelKey, limit = 5) {
   if (!result?.rows?.length) return [];
-  return result.rows.slice(0, limit).map((row, index) => ({
-    rank: index + 1,
-    label: String(row[labelKey] ?? "Unknown"),
-    value: Number(row.total) || 0,
-  }));
+  return sortRowsByTotalDesc(result.rows, labelKey)
+    .slice(0, limit)
+    .map((row, index) => ({
+      rank: index + 1,
+      label: String(row[labelKey] ?? "Unknown"),
+      value: Number(row.total) || 0,
+    }));
 }

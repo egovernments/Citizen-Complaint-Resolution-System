@@ -38,8 +38,17 @@
   }
 
   .dashboard-kpi-card.dashboard-widget {
-    @apply tw-h-full tw-overflow-hidden;
+    @apply tw-h-full tw-overflow-hidden tw-pt-3 tw-pb-2;
     min-height: 0;
+  }
+
+  .dashboard-kpi-title {
+    overflow: visible;
+    display: block;
+  }
+
+  .layout .react-grid-item:has(.dashboard-kpi-widget) {
+    overflow: visible;
   }
 
   /* Bottom-right resize affordance on all resizable widgets */

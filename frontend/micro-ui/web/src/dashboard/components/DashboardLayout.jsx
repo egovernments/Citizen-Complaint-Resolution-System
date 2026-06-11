@@ -2,6 +2,7 @@ import React, { useMemo } from "react";
 import { getBrandTheme } from "../config/dashboardConfig";
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
+import DashboardFilters from "./DashboardFilters";
 
 const DashboardLayout = ({
   children,
@@ -11,6 +12,8 @@ const DashboardLayout = ({
   onDragKpiStart,
   onDragKpiEnd,
   asOf,
+  filters,
+  onFilterChange,
 }) => {
   const brandStyle = useMemo(() => {
     const theme = getBrandTheme();
@@ -34,6 +37,7 @@ const DashboardLayout = ({
       />
       <div className="tw-flex tw-min-w-0 tw-flex-1 tw-flex-col">
         <Navbar onResetLayout={onResetLayout} asOf={asOf} />
+        <DashboardFilters filters={filters} onFilterChange={onFilterChange} />
         <main className="tw-flex-1 tw-overflow-auto tw-p-6">{children}</main>
       </div>
     </div>

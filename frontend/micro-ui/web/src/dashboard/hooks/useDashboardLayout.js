@@ -6,11 +6,9 @@ import {
   DEFAULT_LAYOUT,
   GRID_COLS,
   TOP_ROW_CHART_IDS,
-  RANKED_LIST_WIDGET_ID,
   WIDGETS,
   isChartWidget,
   isKpiWidget,
-  resolveRankedListGridHeight,
 } from "../constants/layoutConfig";
 
 function itemsOverlap(a, b) {
@@ -246,15 +244,23 @@ function normalizeChartItem(item) {
 
 const LEGACY_LAYOUT_VERSIONS = ["v12", "v11", "v10", "v9"];
 
-function readSavedLayoutRaw() {
+function getAllLayoutStorageKeys() {
   const currentKey = getLayoutStorageKey();
   const tenantPrefix = currentKey.replace(/-supervisor-dashboard-layout-v\d+$/, "");
-  const keys = [
+  return [
     currentKey,
     ...LEGACY_LAYOUT_VERSIONS.map((v) => `${tenantPrefix}-supervisor-dashboard-layout-${v}`),
   ];
+}
 
-  for (const key of keys) {
+function clearSavedLayout() {
+  for (const key of getAllLayoutStorageKeys()) {
+    localStorage.removeItem(key);
+  }
+}
+
+function readSavedLayoutRaw() {
+  for (const key of getAllLayoutStorageKeys()) {
     const saved = localStorage.getItem(key);
     if (saved) return { key, saved };
   }
@@ -350,31 +356,14 @@ export function useDashboardLayout() {
   }, []);
 
   const resetLayout = useCallback(() => {
+    clearSavedLayout();
     setLayout(DEFAULT_LAYOUT);
-    localStorage.removeItem(getLayoutStorageKey());
+    persistLayout(DEFAULT_LAYOUT);
   }, []);
 
   const removeWidgetFromLayout = useCallback((widgetId) => {
     setLayout((prev) => {
       const next = prev.filter((item) => item.i !== widgetId);
-      persistLayout(next);
-      return next;
-    });
-  }, []);
-
-  const syncRankedListHeight = useCallback((itemCount) => {
-    const targetH = resolveRankedListGridHeight(itemCount);
-    setLayout((prev) => {
-      const listItem = prev.find((item) => item.i === RANKED_LIST_WIDGET_ID);
-      if (!listItem) return prev;
-
-      const minH = targetH;
-      const h = Math.max(listItem.h, targetH);
-      if (listItem.h === h && listItem.minH === minH) return prev;
-
-      const next = prev.map((item) =>
-        item.i === RANKED_LIST_WIDGET_ID ? { ...item, h, minH } : item
-      );
       persistLayout(next);
       return next;
     });
@@ -408,7 +397,6 @@ export function useDashboardLayout() {
     resetLayout,
     removeWidgetFromLayout,
     addKpiToLayout,
-    syncRankedListHeight,
     visibleKpiIds,
   };
 }
