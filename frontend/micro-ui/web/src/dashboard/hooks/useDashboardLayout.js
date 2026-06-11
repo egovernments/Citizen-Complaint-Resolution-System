@@ -228,7 +228,7 @@ function normalizeKpiItem(item) {
     ...item,
     minW: item.minW ?? DEFAULT_KPI_LAYOUT_ITEM.minW,
     minH: item.minH ?? DEFAULT_KPI_LAYOUT_ITEM.minH,
-    maxH: item.maxH ?? DEFAULT_KPI_LAYOUT_ITEM.maxH,
+    maxH: DEFAULT_KPI_LAYOUT_ITEM.maxH,
   };
 }
 
@@ -366,12 +366,14 @@ export function useDashboardLayout() {
     const targetH = resolveRankedListGridHeight(itemCount);
     setLayout((prev) => {
       const listItem = prev.find((item) => item.i === RANKED_LIST_WIDGET_ID);
-      if (!listItem || listItem.h <= targetH) return prev;
+      if (!listItem) return prev;
+
+      const minH = targetH;
+      const h = Math.max(listItem.h, targetH);
+      if (listItem.h === h && listItem.minH === minH) return prev;
 
       const next = prev.map((item) =>
-        item.i === RANKED_LIST_WIDGET_ID
-          ? { ...item, h: targetH, minH: DEFAULT_CHART_LAYOUT[RANKED_LIST_WIDGET_ID]?.minH ?? 2 }
-          : item
+        item.i === RANKED_LIST_WIDGET_ID ? { ...item, h, minH } : item
       );
       persistLayout(next);
       return next;

@@ -42,14 +42,37 @@
     min-height: 0;
   }
 
+  /* Bottom-right resize affordance on all resizable widgets */
+  .dashboard-resize-grip {
+    @apply tw-pointer-events-none tw-absolute tw-z-[2];
+    right: 3px;
+    bottom: 3px;
+    width: 14px;
+    height: 14px;
+    line-height: 0;
+  }
+
+  .dashboard-resize-grip-line {
+    stroke: #94a3b8;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    opacity: 0.65;
+    transition: stroke 150ms ease, opacity 150ms ease;
+  }
+
+  .tw-group:hover .dashboard-resize-grip-line {
+    stroke: var(--brand-teal, #0d9488);
+    opacity: 0.9;
+  }
+
   .dashboard-kpi-widget:hover .dashboard-widget {
     @apply tw-border-brand-teal tw-bg-teal-50/40 tw-shadow-md;
     box-shadow: 0 4px 12px rgb(13 148 136 / 0.12);
   }
 
-  /* Chart widgets: allow content near plot edges */
+  /* Chart widgets: clip to grid cell; list body scrolls when resized smaller */
   .dashboard-chart-widget {
-    overflow: visible;
+    overflow: hidden;
   }
 
   .dashboard-list-widget {
@@ -57,7 +80,11 @@
     height: auto;
   }
 
-  .layout .react-grid-item:has(.dashboard-chart-widget) {
+  .layout .react-grid-item:has(.dashboard-chart-widget:not(:has(.department-bar-chart))) {
+    overflow: hidden;
+  }
+
+  .layout .react-grid-item:has(.department-bar-chart) {
     overflow: visible;
   }
 
@@ -125,9 +152,10 @@
   .layout .react-grid-item > .react-resizable-handle.react-resizable-handle-se {
     bottom: 0;
     right: 0;
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
     cursor: se-resize;
+    z-index: 3;
   }
 
   .layout .react-grid-placeholder {

@@ -9,7 +9,7 @@ export const RANKED_LIST_WIDGET_ID = "cl-list-categories";
 /** Pixel estimates for ranked-list auto height (header + padding + rows). */
 const LIST_HEADER_PX = 52;
 const LIST_PADDING_PX = 24;
-const LIST_ITEM_PX = 32;
+const LIST_ITEM_PX = 38;
 const LIST_ITEM_GAP_PX = 4;
 
 /** Convert ranked-list content to react-grid-layout row units. */
@@ -23,7 +23,7 @@ export function resolveRankedListGridHeight(itemCount, rowHeight = KPI_ROW_HEIGH
   const h = Math.ceil((contentPx + marginY) / (rowHeight + marginY));
   const defaults = DEFAULT_CHART_LAYOUT[RANKED_LIST_WIDGET_ID];
   const minH = defaults?.minH ?? 2;
-  const maxH = defaults?.maxH ?? 6;
+  const maxH = defaults?.maxH ?? 8;
   return Math.min(maxH, Math.max(minH, h));
 }
 
@@ -59,7 +59,7 @@ export const DEFAULT_KPI_LAYOUT_ITEM = {
 export const DEFAULT_CHART_LAYOUT = {
   "cl-chart-categories": { x: 0, w: 3, h: 5, minW: 2, minH: 4, maxW: 6 },
   "cl-chart-wards": { x: 3, w: 3, h: 5, minW: 3, minH: 4, maxW: 6 },
-  "cl-list-categories": { x: 6, w: 3, h: 3, minW: 3, minH: 2, maxW: 8, maxH: 6 },
+  "cl-list-categories": { x: 6, w: 3, h: 3, minW: 3, minH: 3, maxW: 8, maxH: 8 },
   "cl-chart-dow": { x: 0, w: 6, h: 6, minW: 6, minH: 3, maxW: 10 },
 };
 
@@ -78,7 +78,7 @@ export const DEFAULT_LAYOUT = [
     i: "cl-metric-total-registered",
     minW: 2,
     minH: 2,
-    maxH: 2,
+    maxH: 6,
     moved: false,
     static: false,
     resizeHandles: ["se"],
@@ -91,7 +91,7 @@ export const DEFAULT_LAYOUT = [
     i: "cl-metric-total-open",
     minW: 2,
     minH: 2,
-    maxH: 2,
+    maxH: 6,
     moved: false,
     static: false,
     resizeHandles: ["se"],
@@ -104,7 +104,7 @@ export const DEFAULT_LAYOUT = [
     i: "cl-metric-total-resolved",
     minW: 2,
     minH: 2,
-    maxH: 2,
+    maxH: 6,
     moved: false,
     static: false,
     resizeHandles: ["se"],
@@ -117,7 +117,7 @@ export const DEFAULT_LAYOUT = [
     i: "cl-metric-channel-mix",
     minW: 2,
     minH: 2,
-    maxH: 2,
+    maxH: 6,
     moved: false,
     static: false,
     resizeHandles: ["se"],
@@ -130,7 +130,7 @@ export const DEFAULT_LAYOUT = [
     i: "cl-metric-new-vs-repeat",
     minW: 2,
     minH: 2,
-    maxH: 2,
+    maxH: 6,
     moved: false,
     static: false,
     resizeHandles: ["se"],
@@ -143,7 +143,7 @@ export const DEFAULT_LAYOUT = [
     i: "cl-metric-inflow-rate",
     minW: 2,
     minH: 2,
-    maxH: 2,
+    maxH: 6,
     moved: false,
     static: false,
     resizeHandles: ["se"],
@@ -179,7 +179,8 @@ export const DEFAULT_LAYOUT = [
     y: 2,
     i: "cl-list-categories",
     minW: 3,
-    minH: 2,
+    minH: 3,
+    maxH: 8,
     moved: false,
     static: false,
     resizeHandles: ["se"],

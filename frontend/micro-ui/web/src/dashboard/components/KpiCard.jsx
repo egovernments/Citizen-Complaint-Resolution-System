@@ -1,4 +1,5 @@
 import React from "react";
+import ResizeGrip from "./ResizeGrip";
 
 const ACCENT_STYLES = {
   teal: "tw-border-l-4 tw-border-brand-teal",
@@ -22,7 +23,7 @@ const KpiCard = ({
 
   return (
     <div
-      className={`dashboard-widget dashboard-kpi-card tw-flex tw-h-full tw-flex-col tw-overflow-hidden tw-px-3 tw-py-2 ${ACCENT_STYLES[accent] || ACCENT_STYLES.teal}`}
+      className={`dashboard-widget dashboard-kpi-card tw-relative tw-flex tw-h-full tw-flex-col tw-overflow-hidden tw-px-3 tw-py-2 ${ACCENT_STYLES[accent] || ACCENT_STYLES.teal}`}
     >
       <p className="tw-line-clamp-2 tw-pr-5 tw-text-xs tw-font-semibold tw-leading-tight tw-text-slate-800">
         {metric}
@@ -47,6 +48,7 @@ const KpiCard = ({
       >
         {displayValue}
       </p>
+      <ResizeGrip />
     </div>
   );
 };

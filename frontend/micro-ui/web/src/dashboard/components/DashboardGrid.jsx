@@ -18,6 +18,7 @@ import {
 import KpiCard from "./KpiCard";
 import DepartmentBarChart, { WEEKDAY_CHART_ORDER } from "./DepartmentBarChart";
 import RankedList from "./RankedList";
+import ResizeGrip from "./ResizeGrip";
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
@@ -266,15 +267,22 @@ const DashboardGrid = ({
                 >
                   ×
                 </button>
-                <div className="dashboard-widget dashboard-chart-widget tw-flex tw-h-full tw-min-h-0 tw-w-full tw-flex-col">
+                <div className="dashboard-widget dashboard-chart-widget tw-relative tw-flex tw-h-full tw-min-h-0 tw-w-full tw-flex-col tw-overflow-hidden">
                   {meta && <WidgetHeader metric={meta.metric} subMetric={meta.subMetric} />}
                   <div
-                    className={`tw-flex tw-min-h-0 tw-flex-col tw-justify-start tw-overflow-visible ${WIDGET_PADDING} ${
-                      item.i === RANKED_LIST_WIDGET_ID ? "tw-shrink-0" : "tw-flex-1"
+                    className={`tw-flex tw-min-h-0 tw-flex-col tw-justify-start ${
+                      item.i === RANKED_LIST_WIDGET_ID
+                        ? "tw-flex-1 tw-overflow-y-auto"
+                        : `tw-flex-1 tw-overflow-visible ${WIDGET_PADDING}`
                     }`}
                   >
-                    {renderWidget(item.i)}
+                    {item.i === RANKED_LIST_WIDGET_ID ? (
+                      <div className={WIDGET_PADDING}>{renderWidget(item.i)}</div>
+                    ) : (
+                      renderWidget(item.i)
+                    )}
                   </div>
+                  <ResizeGrip />
                 </div>
               </div>
             );
