@@ -1551,6 +1551,8 @@ services:
       SESSION_DB_NAME: mcp_sessions
       SESSION_DB_USER: mcp
       SESSION_DB_PASSWORD: ${MCP_DB_PASSWORD:-mcp123}
+      EGOV_REDIS_HOST: redis
+      EGOV_REDIS_PORT: "6379"
       # DIGIT egov-db read-only pool for the dashboard endpoints
       # (digit-db.ts). Without these, MCP falls back to its in-code
       # defaults (host=docker-postgres, password=egov123) and emits

@@ -670,6 +670,9 @@
       "title": "Mobile Number Validation Configuration",
       "type": "object",
       "properties": {
+        "zone": {
+          "type": "string"
+        },
         "fieldType": {
           "type": "string"
         },
@@ -710,10 +713,11 @@
       },
       "required": [
         "fieldType",
+        "zone",
         "rules"
       ],
       "x-unique": [
-        "fieldType"
+        "zone"
       ]
     }
   }
