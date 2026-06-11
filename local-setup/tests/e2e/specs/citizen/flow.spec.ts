@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { CitizenLanguagePage } from '../pages/citizen-language.page';
+import { CitizenLanguagePage } from '../../pages/citizen-language.page';
 
 test.describe('Citizen Flow', () => {
   test('displays language selection page', async ({ page }) => {
