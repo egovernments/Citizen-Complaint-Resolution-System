@@ -12,7 +12,11 @@ const ComplaintPhotos = ({ serviceWrapper }) => {
     const [images, setImages] = useState(null);
     const [imageZoom, setImageZoom] = useState(null);
     const [currentIndex, setCurrentIndex] = useState(0);
-    const tenantId = serviceWrapper?.service?.tenantId?.split(".")[0];
+    // #555: attachments are uploaded under the complaint's CITY tenant
+    // (e.g. ke.bomet), and /filestore/v1/files/url is tenant-scoped, so
+    // stripping to the state root returned no file and the panel rendered
+    // nothing. Use the full tenant, like PGRDetails.js:289 / useComplaintDetails.js:63.
+    const tenantId = serviceWrapper?.service?.tenantId;
 
     useEffect(() => {
         (async () => {
