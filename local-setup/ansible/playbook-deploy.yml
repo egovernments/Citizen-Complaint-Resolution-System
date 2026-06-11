@@ -631,30 +631,6 @@
       args:
         chdir: "{{ digit_dir }}"
 
-    # keycloak password two-phase sync, phase 1 of 2 (phase 2 lives in the
-    # OpenBao block: "OpenBao — sync keycloak-postgres role password ...").
-    #
-    # Every deploy re-renders .env from digit.env.j2, which WIPES the
-    # OpenBao-appended KC_DB_PASSWORD until the OpenBao block re-adds it
-    # later. So this first `up -d` always (re)creates keycloak with the
-    # compose default password (the ":-keycloak" fallback) — while the
-    # keycloak-postgres VOLUME still holds whatever password the last
-    # deploy's phase-2 sync set (the vault value). keycloak then can't
-    # connect, goes unhealthy, and `depends_on: service_healthy` aborts
-    # the whole stack start. Pre-sync the role to the compose default so
-    # the first up -d converges; phase 2 flips role+container together to
-    # the vault value before the post-secrets recreate.
-    # No-op on the first-ever deploy (container doesn't exist yet — initdb
-    # seeds the default itself) and on keycloak-free tenants.
-    - name: "keycloak — pre-sync DB role to compose-default password before stack start"
-      ansible.builtin.shell: >-
-        if [ -n "$(docker ps -q -f name='^keycloak-postgres$')" ]; then
-          echo "ALTER ROLE keycloak WITH PASSWORD 'keycloak';" |
-          docker exec -i keycloak-postgres psql -U keycloak -d keycloak;
-        else echo "keycloak-postgres not running — skipping (first deploy)"; fi
-      changed_when: true
-      when: enable_keycloak | default(false)
-
     - name: Start DIGIT stack (Linux/Debian)
       shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d
       args:
@@ -1189,23 +1165,6 @@
       no_log: true
       changed_when: true
       when: enable_mcp | default(false)
-
-    # Same drift again, on keycloak-postgres (first-enable of the keycloak
-    # profile): the initial `up -d` runs BEFORE this OpenBao block appends
-    # KC_DB_PASSWORD to .env, so keycloak-postgres initdb's its volume with
-    # the compose default ('keycloak'). The recreate below then hands
-    # keycloak the vault value, which the role doesn't accept → keycloak
-    # unhealthy → `dependency failed to start` aborts the recreate.
-    # (Observed 2026-06-10 on the Bomet-replication local bring-up.)
-    - name: "OpenBao — sync keycloak-postgres role password with vault secret"
-      ansible.builtin.shell: >-
-        printf "ALTER ROLE keycloak WITH PASSWORD '%s';\n" "$NEWPW" |
-        docker exec -i keycloak-postgres psql -U keycloak -d keycloak
-      environment:
-        NEWPW: "{{ bao_secrets.json.data.data.keycloak_db_password | default('') }}"
-      no_log: true
-      changed_when: true
-      when: enable_keycloak | default(false)
 
     - name: "Recreate services with the new env (Linux/Debian)"
       ansible.builtin.shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d
@@ -1949,19 +1908,9 @@
       when: state_root != 'pg'
 
     - name: "post-bootstrap — recreate services (except egov-hrms) to pick up new STATE_LEVEL_TENANT_ID"
-      # WHY recreate (`up -d`) AND NOT `restart` (2026-06-10/11 bring-ups):
-      # the replace: tasks above edit STATE_LEVEL_TENANT_ID /
-      # EGOV_STATE_LEVEL_TENANT_ID in the compose file, but `docker compose
-      # restart` re-uses the EXISTING container config and never re-reads the
-      # file — the env edits silently never reached the JVMs. enc-service then
-      # had no keys for the new root ("<root> : Tenant Id not found"), every
-      # login 500'd ("Unknown error occurred in encryption process"), and the
-      # ui-tenant ADMIN probe failed the play with no_log hiding the evidence.
-      # --force-recreate: deterministic even if compose misses the drift.
-      # --no-deps: don't touch the dependency graph (kafka, db, …) mid-play.
       ansible.builtin.shell: >-
         docker compose {{ compose_files }}
-        up -d --no-deps --force-recreate egov-user egov-workflow-v2 egov-enc-service pgr-services
+        up -d --force-recreate egov-user egov-workflow-v2 egov-enc-service pgr-services
       args:
         chdir: "{{ digit_dir }}"
       when: state_root != 'pg'
@@ -1977,23 +1926,8 @@
       when: state_root != 'pg'
 
     - name: "post-bootstrap — recreate egov-hrms after egov-user is healthy"
-      # Same reasoning as the task above: recreate (not restart) so the
-      # compose-file env edits (STATE_LEVEL_TENANT_ID / EGOV_STATELEVEL_TENANT)
-      # actually reach the container.
-      #
-      # HRMS is deliberately last + gated on egov-user health: its
-      # UserService bean fetches the state-level default user DURING SPRING
-      # INIT, so recreating it before egov-user serves the new tenant (or
-      # before ADMIN@{{ state_root }} exists) crash-loops it with
-      # "Service returned null while fetching user". Note the bootstrap that
-      # provisions ADMIN@{{ state_root }} ran BEFORE this recreate (while
-      # enc-service still had the old env), so on a true first deploy
-      # admin_user_provisioned can be false at this point and HRMS may still
-      # exit(1) here — re-running the deploy (or re-POSTing
-      # /v1/tenant/bootstrap, then recreating egov-hrms) completes the
-      # provisioning once enc-service is on the new tenancy.
       ansible.builtin.shell: >-
-        docker compose {{ compose_files }} up -d --no-deps --force-recreate egov-hrms
+        docker compose {{ compose_files }} up -d --force-recreate egov-hrms
       args:
         chdir: "{{ digit_dir }}"
       when: state_root != 'pg'
