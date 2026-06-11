@@ -265,6 +265,9 @@ public class PGRConfiguration {
     @Value("${pgr.escalation.kafka.topic}")
     private String escalationKafkaTopic;
 
+    @Value("${pgr.escalation.prebreach.topic}")
+    private String escalationPreBreachTopic;
+
     // Dashboard
     @Value("${pgr.dashboard.refresh.enabled:true}")
     private Boolean dashboardRefreshEnabled;

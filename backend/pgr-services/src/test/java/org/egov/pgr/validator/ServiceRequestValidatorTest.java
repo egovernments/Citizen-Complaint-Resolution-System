@@ -1,10 +1,12 @@
 package org.egov.pgr.validator;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.egov.common.utils.MultiStateInstanceUtil;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.repository.PGRRepository;
 import org.egov.pgr.repository.ServiceRequestRepository;
 import org.egov.pgr.util.HRMSUtil;
+import org.egov.pgr.util.MDMSUtils;
 import org.egov.pgr.web.models.*;
 import org.egov.pgr.web.models.boundary.BoundaryResponse;
 import org.egov.tracer.model.CustomException;
@@ -33,6 +35,8 @@ public class ServiceRequestValidatorTest {
     @Mock private HRMSUtil hrmsUtil;
     @Mock private ServiceRequestRepository serviceRequestRepository;
     @Mock private ObjectMapper objectMapper;
+    @Mock private MDMSUtils mdmsUtils;
+    @Mock private MultiStateInstanceUtil multiStateInstanceUtil;
 
     @InjectMocks
     private ServiceRequestValidator validator;
@@ -113,6 +117,93 @@ public class ServiceRequestValidatorTest {
     @Test
     void update_serviceCodeNotInMDMS_throwsInvalidServiceCode() {
         assertCode("INVALID_SERVICECODE", () -> validator.validateUpdate(request, buildMdmsData("GARBAGE")));
+    }
+
+    // ── validateEscalateComment (mandatory comment on manual ESCALATE) ────────
+
+    @Test
+    void update_escalateActionWithoutComment_throwsEscalateCommentRequired() {
+        ServiceRequest req = buildEscalateRequest(/*comments*/ null, /*autoEscalate*/ false);
+        stubPersistedComplaintExists(req);
+        assertCode("ESCALATE_COMMENT_REQUIRED",
+                () -> validator.validateUpdate(req, buildMdmsData("POTHOLE")));
+    }
+
+    @Test
+    void update_escalateActionWithBlankComment_throwsEscalateCommentRequired() {
+        ServiceRequest req = buildEscalateRequest("   ", false);
+        stubPersistedComplaintExists(req);
+        assertCode("ESCALATE_COMMENT_REQUIRED",
+                () -> validator.validateUpdate(req, buildMdmsData("POTHOLE")));
+    }
+
+    @Test
+    void update_escalateActionWithComment_passes() {
+        ServiceRequest req = buildEscalateRequest("Reassigning to ward head", false);
+        stubPersistedComplaintExists(req);
+        assertDoesNotThrow(() -> validator.validateUpdate(req, buildMdmsData("POTHOLE")));
+    }
+
+    @Test
+    void update_escalateActionFromAutoEscalateSystem_passesWithoutComment() {
+        ServiceRequest req = buildEscalateRequest(null, /*autoEscalate*/ true);
+        stubPersistedComplaintExists(req);
+        assertDoesNotThrow(() -> validator.validateUpdate(req, buildMdmsData("POTHOLE")));
+    }
+
+    @Test
+    void update_escalateActionWithoutComment_passesWhenPolicyDisablesRequirement() {
+        ServiceRequest req = buildEscalateRequest(null, false);
+        stubPersistedComplaintExists(req);
+        stubEscalationPolicy(false);
+        assertDoesNotThrow(() -> validator.validateUpdate(req, buildMdmsData("POTHOLE")));
+    }
+
+    /** Stubs the lazy CRS.EscalationPolicy MDMS fetch the validator makes on the throw path. */
+    private void stubEscalationPolicy(boolean escalateCommentRequired) {
+        Map<String, Object> policy = new HashMap<>();
+        policy.put("singletonKey", "default");
+        policy.put("escalateCommentRequired", escalateCommentRequired);
+
+        Map<String, Object> crs = new HashMap<>();
+        crs.put("EscalationPolicy", Collections.singletonList(policy));
+
+        Map<String, Object> mdmsRes = new HashMap<>();
+        mdmsRes.put("CRS", crs);
+
+        Map<String, Object> root = new HashMap<>();
+        root.put("MdmsRes", mdmsRes);
+
+        when(mdmsUtils.getMdmsSearchUrl()).thenReturn(new StringBuilder("http://mdms/_search"));
+        // The validator resolves the policy at the state level, mirroring the scheduler.
+        when(multiStateInstanceUtil.getStateLevelTenant(any())).thenReturn("pg");
+        when(serviceRequestRepository.fetchResult(any(), any())).thenReturn(root);
+    }
+
+    private static ServiceRequest buildEscalateRequest(String comments, boolean autoEscalateRole) {
+        ServiceRequest req = buildRequest("LOC001", "POTHOLE");
+        // Leave assignes empty so validateDepartment short-circuits without hitting HRMS.
+        Workflow wf = Workflow.builder()
+                .action("ESCALATE")
+                .comments(comments)
+                .assignes(Collections.emptyList())
+                .build();
+        req.setWorkflow(wf);
+        if (autoEscalateRole) {
+            org.egov.common.contract.request.Role role = org.egov.common.contract.request.Role.builder()
+                    .code("AUTO_ESCALATE").name("Auto Escalate").tenantId("ke").build();
+            req.getRequestInfo().getUserInfo().setRoles(Collections.singletonList(role));
+            req.getRequestInfo().getUserInfo().setType("SYSTEM");
+        }
+        return req;
+    }
+
+    private void stubPersistedComplaintExists(ServiceRequest req) {
+        // validateUpdate calls repository.getServiceWrappers AFTER the escalate-comment
+        // check, but only if we get that far. We stub it to be safe so tests that DO
+        // pass the validation can complete without NPEs.
+        ServiceWrapper wrapper = ServiceWrapper.builder().service(req.getService()).build();
+        when(repository.getServiceWrappers(any())).thenReturn(Collections.singletonList(wrapper));
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
