@@ -1,6 +1,6 @@
 /**
  * RunButton — triggers an on-box Playwright run via the test-runner daemon and
- * reflects its progress. The daemon sits behind nginx at /integration-tests/api/
+ * reflects its progress. The daemon sits behind nginx at /tests/api/
  * under the SAME basic-auth as the dashboard, so `credentials: 'include'` reuses
  * the creds the browser already has — no separate login.
  *
@@ -16,7 +16,7 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import HourglassTopIcon from '@mui/icons-material/HourglassTop';
 import { refreshCatalog } from './dataProvider';
 
-const API_BASE = (import.meta.env.VITE_RUNNER_API_BASE as string) || '/integration-tests/api';
+const API_BASE = (import.meta.env.VITE_RUNNER_API_BASE as string) || '/tests/api';
 const POLL_MS = 10_000;
 
 type Current =

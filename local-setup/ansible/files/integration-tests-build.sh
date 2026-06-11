@@ -10,12 +10,12 @@
 #
 # Usage: integration-tests-build.sh <integration_tests_dir> <dashboard_base>
 #   <integration_tests_dir>  absolute path to the vendored tests/integration-tests
-#   <dashboard_base>         vite base for the react-admin build (e.g. /integration-tests-v2/)
+#   <dashboard_base>         vite base for the react-admin build (e.g. /tests-v2/)
 #   prints the integration-tests source dir on the last line (playbook captures it).
 set -uo pipefail
 
 IT_DIR="$1"
-DASHBOARD_BASE="${2:-/integration-tests-v2/}"
+DASHBOARD_BASE="${2:-/tests-v2/}"
 NEED_NODE="20.0.0"
 
 command -v npm >/dev/null 2>&1 || { echo "ERROR: npm not on PATH (need Node >= $NEED_NODE)" >&2; exit 1; }
