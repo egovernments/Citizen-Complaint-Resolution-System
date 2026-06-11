@@ -1623,6 +1623,19 @@ preserve `auditDetails` if doing this in production. See
 [`_seed/fix-xref-schema.sql`](../configurator/src/resources/crs/sla-matrix/_seed/fix-xref-schema.sql)
 for the canonical pattern.
 
+### MDMS write redelivery (Kafka → persister)
+
+**Symptom.** A row you updated and read-verified reverts to an EARLIER
+payload ~60–80 seconds later, with `lastmodifiedtime` advancing — an acked
+write was REDELIVERED by the Kafka→`egov-persister` pipeline and re-applied
+over your later write. Observed live during e2e cleanup on the
+`CRS.EscalationPolicy` singleton.
+
+**Implication.** "Write then verify once" is not a safe restore pattern on
+this stack. Anything restoring shared config must re-read until the row is
+stable across several reads spanning the redelivery window (the UI e2e
+suite uses ≥3 consecutive stable reads over ≥120s).
+
 ### Persister is async (HTTP 202)
 
 `POST /mdms-v2/v2/_update` returns 202 on success — the actual DB write
@@ -1781,6 +1794,14 @@ validator is opaque and tightly coupled to a live Postgres. What we do have:
 
 ### Layer 3 — Configurator e2e (Playwright)
 
+> **Mutating sibling**: [`configurator/e2e/escalation-settings-flow.spec.ts`](../configurator/e2e/escalation-settings-flow.spec.ts)
+> drives the REAL operator journey — enable role escalation through the UI
+> (acting role, ladder, max-per-scan), Save with the read-after-write toast,
+> API-assert the exact persisted object, run the test scan from the Verify
+> card, disable, restore. Run it file-scoped (it mutates the shared policy
+> row and must not run concurrently with the lifecycle escalation suites).
+
+
 - **File.** [`configurator/e2e/crs-sla-matrix.spec.ts`](../configurator/e2e/crs-sla-matrix.spec.ts)
 - **Coverage** (5 tests across 2 describes):
   - Header + toolbar + matrix rows render
@@ -1828,6 +1849,17 @@ validator is opaque and tightly coupled to a live Postgres. What we do have:
 ### Layer 4 — Integration tests
 
 - **Files.**
+  - [`tests/integration-tests/tests/lifecycle/pgr-escalation-r2r3-flow.spec.ts`](../tests/integration-tests/tests/lifecycle/pgr-escalation-r2r3-flow.spec.ts)
+    — all five role-resolution scenarios against the persistent
+    multi-holder fixture (built by
+    [`scripts/setup-role-fixture.mjs`](../tests/integration-tests/scripts/setup-role-fixture.mjs)
+    on the fixture tenants `ke.etoeroles`/`ke.etoebeta`): R2 exactly-one
+    (real), R2 ambiguous (dryRun), R3 consensus (real), R3 split (dryRun),
+    and the **cross-tenant memo proof** — one scan over both tenants
+    escalates each complaint to its own tenant's `E2E_SUP1` holder.
+    Pre-flight hard-verifies the safety invariant (zero `E2E_*` holders at
+    production `ke.bomet`) and refuses to run if another suite holds the
+    shared policy row (concurrent-writer guard).
   - [`tests/integration-tests/tests/lifecycle/pgr-escalation-role-flow.spec.ts`](../tests/integration-tests/tests/lifecycle/pgr-escalation-role-flow.spec.ts)
     — the role-escalation full-flow E2E: snapshots the live
     `CRS.EscalationPolicy` row (restores it byte-identically in cleanup,
