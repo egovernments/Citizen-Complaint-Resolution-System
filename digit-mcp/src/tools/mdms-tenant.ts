@@ -103,6 +103,27 @@ export function deriveValidMobile(regex: string, length: number, preferred?: str
 }
 
 /**
+ * Normalize the tenant_bootstrap `pincode_allowlist` arg into the shape
+ * mdms-v2 accepts on tenant.tenants. The schema declares pincode items
+ * as Number, so numeric strings must be coerced or the update is
+ * rejected with "expected type: Number, found: String". Leading zeros
+ * still match in the UI: its serviceability gate strips them from both
+ * sides before comparing. Non-numeric entries pass through unchanged
+ * for deployments with alphanumeric-postcode schemas. Returns null
+ * (meaning "don't touch pincode at all") for non-arrays and for lists
+ * that are empty after trimming — mdms-v2 also rejects pincode: [],
+ * so absence is the only valid off state.
+ */
+export function normalizePincodeAllowlist(input: unknown): Array<string | number> | null {
+  if (!Array.isArray(input)) return null;
+  const cleaned = (input as unknown[])
+    .map((p) => String(p).trim())
+    .filter((p) => p.length > 0)
+    .map((p) => (/^[0-9]+$/.test(p) ? Number(p) : p));
+  return cleaned.length > 0 ? cleaned : null;
+}
+
+/**
  * Search for MDMS records across all state tenants.
  * First queries the default state tenant to discover all root-level tenants,
  * then queries each discovered root to get the complete set.
@@ -2016,19 +2037,8 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       // alternative — seeding pincode: [] — is rejected by mdms-v2 on
       // update ("expected type: JSONArray, found: JSONObject").
       // ────────────────────────────────────────────────────────────────
-      const pincodeAllowlist = Array.isArray(args.pincode_allowlist)
-        ? (args.pincode_allowlist as unknown[])
-            .map((p) => String(p).trim())
-            .filter((p) => p.length > 0)
-            // The tenant.tenants schema declares pincode items as Number —
-            // numeric strings must be coerced or mdms-v2 rejects the update
-            // ("expected type: Number, found: String"). Leading zeros still
-            // match in the UI: its gate strips them from both sides before
-            // comparing. Non-numeric entries pass through for deployments
-            // with alphanumeric-postcode schemas.
-            .map((p) => (/^[0-9]+$/.test(p) ? Number(p) : p))
-        : null;
-      if (pincodeAllowlist && pincodeAllowlist.length > 0) {
+      const pincodeAllowlist = normalizePincodeAllowlist(args.pincode_allowlist);
+      if (pincodeAllowlist) {
         emitProgress({ phase: 'pincode:start', message: `Seeding pincode allowlist (${pincodeAllowlist.length} codes) on tenant.tenants`, pct: 97 });
         try {
           const tenantRecords = await digitApi.mdmsV2SearchRaw(tenantsScope, 'tenant.tenants', { limit: 100 });
