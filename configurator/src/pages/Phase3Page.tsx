@@ -190,6 +190,9 @@ export default function Phase3Page() {
             department: ct.department,
             slaHours: ct.slaHours,
             active: ct.active,
+            // group code derived from the sheet's "Complaint Type*" column —
+            // distinct menuPath values become the citizen UI's complaint menu
+            menuPath: ct.menuPath,
           }))
         );
         complaintsCreated = complaintResults.success.length;
@@ -202,7 +205,8 @@ export default function Phase3Page() {
             serviceCode: ct.serviceCode,
             name: ct.name,
             department: ct.department,
-            menuPath: 'Complaint',
+            menuPath: ct.menuPath,
+            menuName: ct.menuName,
           })),
           'en_IN'
         );
