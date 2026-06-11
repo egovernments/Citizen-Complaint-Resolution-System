@@ -340,14 +340,16 @@
     # Same shape as MCP. When `build_default_data_handler: true`, the build
     # task below produces `default-data-handler:local` from utilities/default-data-handler
     # using build/maven/Dockerfile. Otherwise we pull the published image
-    # carrying the relaxed RAINMAKER-PGR schema (see source-file fix dated
-    # 2026-05-24).
+    # carrying the relaxed RAINMAKER-PGR schema (source-file fix dated
+    # 2026-05-24) and the pincode-free tenant.tenants template (the 0525
+    # build seeded pg's Indian pincodes onto every new tenant's citya,
+    # vetoing citizen submits with CS_COMMON_PINCODE_NOT_SERVICABLE).
     - name: "Resolve default-data-handler image tag"
       ansible.builtin.set_fact:
         ddh_image: >-
           {{ ddh_image
              | default('default-data-handler:local' if (build_default_data_handler | default(false))
-                       else 'ghcr.io/subhashini-egov/default-data-handler:2.12-draft-20260525-034354') }}
+                       else 'ghcr.io/subhashini-egov/default-data-handler:2.12-draft-20260611-111521') }}
 
     # ==================== Compose .env (per-tenant overrides) ====================
     # Templates Grafana's public root URL (so the JVM dashboard / observability
@@ -1824,6 +1826,7 @@
           mobile_allowed_starting_characters: "{{ core_mobile_configs.mobileNumberAllowedStartingCharacters | default(omit) }}"
           mobile_error_message: "{{ core_mobile_configs.mobileNumberErrorMessage | default(omit) }}"
           user_validation: "{{ user_validation | default(omit) }}"
+          pincode_allowlist: "{{ pgr_pincode_allowlist | default(omit) }}"
           auth:
             username: "{{ bootstrap_user | default('ADMIN') }}"
             password: "{{ bootstrap_password | default('eGov@123') }}"
@@ -1850,6 +1853,7 @@
           mobile_allowed_starting_characters: "{{ core_mobile_configs.mobileNumberAllowedStartingCharacters | default(omit) }}"
           mobile_error_message: "{{ core_mobile_configs.mobileNumberErrorMessage | default(omit) }}"
           user_validation: "{{ user_validation | default(omit) }}"
+          pincode_allowlist: "{{ pgr_pincode_allowlist | default(omit) }}"
           auth:
             username: "{{ bootstrap_user | default('ADMIN') }}"
             password: "{{ bootstrap_password | default('eGov@123') }}"

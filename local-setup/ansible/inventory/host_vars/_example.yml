@@ -108,6 +108,17 @@ core_postal_configs:
   postalCodeLength: 5
   postalCodeErrorMessage: "CS_COMPLAINT_POSTALCODE_INVALID_ERROR"
 
+# Postal-code serviceability allowlist, passed to the MCP tenant
+# bootstrap as `pincode_allowlist` and seeded as `pincode` on every
+# tenant.tenants record. When set, a citizen who types a postal code
+# outside this list is blocked at submit with
+# CS_COMMON_PINCODE_NOT_SERVICABLE — unless they picked a ward, which
+# always supersedes the allowlist. Leave UNSET (the default) to accept
+# any postal code; do NOT set it to [] (mdms-v2 rejects empty arrays).
+# pgr_pincode_allowlist:
+#   - "00100"
+#   - "00200"
+
 # S3 bucket name used by egov-filestore as the asset bucket (sees
 # `asset_s3_bucket` in globalConfigs.js).
 asset_s3_bucket: "mytenant-egov-assets"
