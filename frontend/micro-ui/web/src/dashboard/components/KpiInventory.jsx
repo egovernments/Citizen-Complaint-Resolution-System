@@ -1,6 +1,5 @@
-import React, { useMemo } from "react";
-import { KPI_METRICS } from "../config/kpiQueries";
-import { INVENTORY_SECTIONS, getSubMetricDef, subMetricValueKey } from "../config/complaintLandscape";
+import React, { useMemo, useState } from "react";
+import { KPI_METRICS, INVENTORY_SECTIONS } from "../config/supervisorMetrics";
 
 const DRAG_TYPE = "application/x-supervisor-dashboard-kpi";
 
@@ -11,9 +10,9 @@ const KpiInventory = ({
   onAddKpi,
   onDragKpiStart,
   onDragKpiEnd,
-  subMetricValues = {},
-  getSubMetricId,
 }) => {
+  const [expandedSectionId, setExpandedSectionId] = useState(null);
+
   const sections = useMemo(
     () =>
       INVENTORY_SECTIONS.map((section) => ({
@@ -28,17 +27,15 @@ const KpiInventory = ({
 
   const totalAvailable = sections.reduce((sum, section) => sum + section.metrics.length, 0);
 
-  const previewValue = (metric) => {
-    const subId = getSubMetricId?.(metric.id) || metric.defaultSubMetricId;
-    const sub = getSubMetricDef(metric, subId);
-    return subMetricValues[subMetricValueKey(metric.id, sub.id)] ?? "…";
-  };
-
   const handleDragStart = (event, metricId) => {
     event.dataTransfer.setData("text/plain", metricId);
     event.dataTransfer.setData(DRAG_TYPE, metricId);
     event.dataTransfer.effectAllowed = "copy";
     onDragKpiStart?.(metricId);
+  };
+
+  const toggleSection = (sectionId) => {
+    setExpandedSectionId((current) => (current === sectionId ? null : sectionId));
   };
 
   return (
@@ -48,83 +45,83 @@ const KpiInventory = ({
           Metric inventory
         </h3>
         <p className="tw-mt-0.5 tw-text-xs tw-text-teal-300">
-          Drag metrics onto dashboard · {totalAvailable} available
+          Select a category · {totalAvailable} available
         </p>
       </div>
 
       <div className="tw-min-h-0 tw-flex-1 tw-overflow-y-auto tw-p-3 tw-pt-2">
-        {totalAvailable === 0 ? (
-          <div className="tw-space-y-4">
-            {sections.map((section) => (
+        <div className="tw-space-y-1">
+          {sections.map((section) => {
+            const isExpanded = expandedSectionId === section.id;
+
+            return (
               <section key={section.id}>
-                <div className="tw-mb-2">
-                  <h4 className="tw-text-[11px] tw-font-semibold tw-uppercase tw-tracking-wide tw-text-teal-100">
+                <button
+                  type="button"
+                  onClick={() => toggleSection(section.id)}
+                  aria-expanded={isExpanded}
+                  className={`tw-flex tw-w-full tw-items-center tw-justify-between tw-gap-2 tw-rounded-md tw-border-0 tw-px-2.5 tw-py-2 tw-text-left tw-transition-colors ${
+                    isExpanded
+                      ? "tw-bg-white tw-text-slate-900 tw-shadow-sm"
+                      : "tw-bg-slate-100 tw-text-slate-800 hover:tw-bg-white"
+                  }`}
+                >
+                  <span className="tw-text-[11px] tw-font-semibold tw-uppercase tw-tracking-wide">
                     {section.label}
-                  </h4>
-                  {section.description ? (
-                    <p className="tw-mt-0.5 tw-text-[10px] tw-leading-snug tw-text-teal-400">
-                      {section.description}
-                    </p>
-                  ) : null}
-                </div>
-                <p className="tw-text-xs tw-leading-relaxed tw-text-teal-300 tw-opacity-80">
-                  All metrics in this category are on the dashboard.
-                </p>
+                  </span>
+                  <span
+                    className={`tw-flex-shrink-0 tw-text-[10px] tw-text-slate-500 tw-transition-transform ${
+                      isExpanded ? "tw-rotate-180" : ""
+                    }`}
+                    aria-hidden
+                  >
+                    ▾
+                  </span>
+                </button>
+
+                {isExpanded ? (
+                  <div className="tw-mt-1 tw-space-y-2 tw-pl-1 tw-pr-0.5">
+                    {section.description ? (
+                      <p className="tw-px-1 tw-text-[10px] tw-leading-snug tw-text-teal-400">
+                        {section.description}
+                      </p>
+                    ) : null}
+                    {section.metrics.length === 0 ? (
+                      <p className="tw-px-1 tw-text-xs tw-leading-relaxed tw-text-teal-300 tw-opacity-80">
+                        All metrics in this category are on the dashboard.
+                      </p>
+                    ) : (
+                      <ul className="tw-space-y-2">
+                        {section.metrics.map((metric) => (
+                          <li key={metric.id}>
+                            <div
+                              draggable
+                              onDragStart={(event) => handleDragStart(event, metric.id)}
+                              onDragEnd={onDragKpiEnd}
+                              className="kpi-inventory-item tw-flex tw-cursor-grab tw-items-center tw-justify-between tw-gap-2 tw-rounded-md tw-border tw-border-teal-700 tw-bg-teal-900/40 tw-px-3 tw-py-2 active:tw-cursor-grabbing"
+                            >
+                              <p className="tw-min-w-0 tw-flex-1 tw-text-xs tw-font-medium tw-leading-snug tw-text-teal-50">
+                                {metric.metric}
+                              </p>
+                              <button
+                                type="button"
+                                onMouseDown={(event) => event.stopPropagation()}
+                                onClick={() => onAddKpi(metric.id)}
+                                className="tw-flex-shrink-0 tw-rounded tw-bg-teal-700 tw-px-1.5 tw-py-0.5 tw-text-[10px] tw-font-medium tw-text-white hover:tw-bg-teal-600"
+                              >
+                                Add
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ) : null}
               </section>
-            ))}
-          </div>
-        ) : (
-          <div className="tw-space-y-4">
-            {sections.map((section) => (
-              <section key={section.id}>
-                <div className="tw-mb-2">
-                  <h4 className="tw-text-[11px] tw-font-semibold tw-uppercase tw-tracking-wide tw-text-teal-100">
-                    {section.label}
-                  </h4>
-                  {section.description ? (
-                    <p className="tw-mt-0.5 tw-text-[10px] tw-leading-snug tw-text-teal-400">
-                      {section.description}
-                    </p>
-                  ) : null}
-                </div>
-                <ul className="tw-space-y-2">
-                  {section.metrics.map((metric) => (
-                    <li key={metric.id}>
-                      <div
-                        draggable
-                        onDragStart={(event) => handleDragStart(event, metric.id)}
-                        onDragEnd={onDragKpiEnd}
-                        className="kpi-inventory-item tw-cursor-grab tw-rounded-md tw-border tw-border-teal-700 tw-bg-teal-900/40 tw-px-3 tw-py-2 active:tw-cursor-grabbing"
-                      >
-                        <div className="tw-flex tw-items-start tw-justify-between tw-gap-2">
-                          <div className="tw-min-w-0">
-                            <p className="tw-text-xs tw-font-medium tw-leading-snug tw-text-teal-50">
-                              {metric.metric}
-                            </p>
-                            <p className="tw-mt-0.5 tw-text-[10px] tw-text-teal-400">
-                              {metric.subMetrics.length} sub-metrics
-                            </p>
-                            <p className="tw-mt-0.5 tw-text-xs tw-font-semibold tw-text-teal-200">
-                              {previewValue(metric)}
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onMouseDown={(event) => event.stopPropagation()}
-                            onClick={() => onAddKpi(metric.id)}
-                            className="tw-flex-shrink-0 tw-rounded tw-bg-teal-700 tw-px-1.5 tw-py-0.5 tw-text-[10px] tw-font-medium tw-text-white hover:tw-bg-teal-600"
-                          >
-                            Add
-                          </button>
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))}
-          </div>
-        )}
+            );
+          })}
+        </div>
       </div>
     </div>
   );

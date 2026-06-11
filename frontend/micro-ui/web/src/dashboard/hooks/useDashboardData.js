@@ -14,6 +14,9 @@ const LOGIN_MESSAGE =
 const TUNNEL_MESSAGE =
   "Set ANALYTICS_PROXY_URL and SSH-tunnel local port 18280 to your Kong gateway, then restart npm start and refresh.";
 
+const ANALYTICS_NOT_DEPLOYED_MESSAGE =
+  "Analytics API is not available on this pgr-services deployment yet. Redeploy pgr-services with the /v2/analytics endpoints, then refresh.";
+
 function extractAsOf(results) {
   if (!results || typeof results !== "object") return null;
   const first = Object.values(results).find((entry) => entry?.asOf != null);
@@ -73,6 +76,9 @@ export function useDashboardData() {
       if (err?.status === 401) {
         message =
           "Analytics API requires nginx basic auth. Use the SSH tunnel on port 18280 instead.";
+      }
+      if (/No static resource v2\/analytics/i.test(message)) {
+        message = ANALYTICS_NOT_DEPLOYED_MESSAGE;
       }
       if (
         err?.status === 502 ||

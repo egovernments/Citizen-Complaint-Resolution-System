@@ -10,8 +10,6 @@ const DashboardLayout = ({
   onAddKpi,
   onDragKpiStart,
   onDragKpiEnd,
-  subMetricValues,
-  getSubMetricId,
   asOf,
 }) => {
   const brandStyle = useMemo(() => {
@@ -33,8 +31,6 @@ const DashboardLayout = ({
         onAddKpi={onAddKpi}
         onDragKpiStart={onDragKpiStart}
         onDragKpiEnd={onDragKpiEnd}
-        subMetricValues={subMetricValues}
-        getSubMetricId={getSubMetricId}
       />
       <div className="tw-flex tw-min-w-0 tw-flex-1 tw-flex-col">
         <Navbar onResetLayout={onResetLayout} asOf={asOf} />
