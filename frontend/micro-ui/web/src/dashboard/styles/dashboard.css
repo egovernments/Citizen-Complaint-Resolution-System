@@ -369,8 +369,13 @@
   display: block;
 }
 
-.layout .react-grid-item:has(.dashboard-kpi-widget) {
+.layout .react-grid-item.dashboard-grid-item-kpi,
+  .layout .react-grid-item.dashboard-grid-item-chart-visible {
   overflow: visible;
+}
+
+.layout .react-grid-item.dashboard-grid-item-chart-clipped {
+  overflow: hidden;
 }
 
 /* Bottom-right resize affordance on all resizable widgets */
@@ -412,14 +417,6 @@
 
 .dashboard-chart-widget {
   overflow: hidden;
-}
-
-.layout .react-grid-item:has(.dashboard-chart-widget:not(:has(.department-bar-chart))) {
-  overflow: hidden;
-}
-
-.layout .react-grid-item:has(.department-bar-chart) {
-  overflow: visible;
 }
 
 .department-bar-chart {
@@ -727,26 +724,8 @@
   border-bottom-width: 1px;
 }
 
-.tw-border-l-4 {
-  border-left-width: 4px;
-}
-
 .tw-border-t {
   border-top-width: 1px;
-}
-
-.tw-border-amber-500 {
-  --tw-border-opacity: 1;
-  border-color: rgb(245 158 11 / var(--tw-border-opacity, 1));
-}
-
-.tw-border-brand-teal {
-  border-color: var(--brand-teal, #0d9488);
-}
-
-.tw-border-green-500 {
-  --tw-border-opacity: 1;
-  border-color: rgb(34 197 94 / var(--tw-border-opacity, 1));
 }
 
 .tw-border-red-200 {
@@ -757,11 +736,6 @@
 .tw-border-red-300 {
   --tw-border-opacity: 1;
   border-color: rgb(252 165 165 / var(--tw-border-opacity, 1));
-}
-
-.tw-border-red-500 {
-  --tw-border-opacity: 1;
-  border-color: rgb(239 68 68 / var(--tw-border-opacity, 1));
 }
 
 .tw-border-slate-100 {
@@ -777,11 +751,6 @@
 .tw-border-slate-300 {
   --tw-border-opacity: 1;
   border-color: rgb(203 213 225 / var(--tw-border-opacity, 1));
-}
-
-.tw-border-slate-400 {
-  --tw-border-opacity: 1;
-  border-color: rgb(148 163 184 / var(--tw-border-opacity, 1));
 }
 
 .tw-border-teal-700 {

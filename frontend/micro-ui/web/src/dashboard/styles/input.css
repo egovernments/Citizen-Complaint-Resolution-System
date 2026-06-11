@@ -137,8 +137,13 @@
     display: block;
   }
 
-  .layout .react-grid-item:has(.dashboard-kpi-widget) {
+  .layout .react-grid-item.dashboard-grid-item-kpi,
+  .layout .react-grid-item.dashboard-grid-item-chart-visible {
     overflow: visible;
+  }
+
+  .layout .react-grid-item.dashboard-grid-item-chart-clipped {
+    overflow: hidden;
   }
 
   /* Bottom-right resize affordance on all resizable widgets */
@@ -177,14 +182,6 @@
   .dashboard-list-widget {
     overflow: visible;
     height: auto;
-  }
-
-  .layout .react-grid-item:has(.dashboard-chart-widget:not(:has(.department-bar-chart))) {
-    overflow: hidden;
-  }
-
-  .layout .react-grid-item:has(.department-bar-chart) {
-    overflow: visible;
   }
 
   .department-bar-chart {

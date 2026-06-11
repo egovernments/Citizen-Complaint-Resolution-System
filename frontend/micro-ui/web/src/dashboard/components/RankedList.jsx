@@ -4,7 +4,7 @@ const RankedList = ({ items }) => (
   <ol className="tw-m-0 tw-list-none tw-w-full tw-space-y-1 tw-p-0">
     {items.map((item) => (
       <li
-        key={item.label}
+        key={`${item.rank}-${item.label}`}
         className="tw-flex tw-items-center tw-justify-between tw-rounded-md tw-bg-slate-50 tw-py-1.5"
       >
         <div className="tw-flex tw-min-w-0 tw-items-center tw-gap-2">

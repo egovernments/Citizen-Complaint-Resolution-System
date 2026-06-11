@@ -234,9 +234,10 @@ function normalizeChartItem(item) {
   const defaults = DEFAULT_CHART_LAYOUT[item.i];
   if (!defaults) return item;
   return {
+    ...defaults,
     ...item,
-    minW: defaults.minW,
-    minH: defaults.minH,
+    minW: item.minW ?? defaults.minW,
+    minH: item.minH ?? defaults.minH,
     maxW: defaults.maxW ?? item.maxW,
     maxH: defaults.maxH ?? item.maxH,
   };
@@ -375,14 +376,13 @@ export function useDashboardLayout() {
       if (prev.some((item) => item.i === widgetId)) return prev;
 
       const fallback = nextKpiPosition(prev);
-      const newItem = {
+      const newItem = normalizeKpiItem({
         i: widgetId,
         x: position?.x ?? fallback.x,
         y: position?.y ?? fallback.y,
-        ...DEFAULT_KPI_LAYOUT_ITEM,
-      };
+      });
 
-      let next = [...prev, newItem];
+      const next = pushAdjacentItems([...prev, newItem], widgetId);
       persistLayout(next);
       return next;
     });

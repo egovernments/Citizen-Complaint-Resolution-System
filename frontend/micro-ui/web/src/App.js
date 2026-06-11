@@ -57,10 +57,7 @@ const initDigitUI = () => {
 
 function App() {
   window.contextPath = window?.globalConfigs?.getConfig("CONTEXT_PATH");
-  const dashboardMatch = useRouteMatch({
-    path: "/employee/dashboard",
-    exact: true,
-  });
+  const dashboardMatch = useRouteMatch("/employee/dashboard");
   const stateCode =
     window.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID") ||
     process.env.REACT_APP_STATE_LEVEL_TENANT_ID;

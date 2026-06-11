@@ -8,6 +8,7 @@ import {
   KPI_ROW_HEIGHT,
   RANKED_LIST_WIDGET_ID,
   WIDGETS,
+  isChartWidget,
   isKpiWidget,
 } from "../constants/layoutConfig";
 import {
@@ -43,6 +44,13 @@ const GRID_MARGIN = [16, 16];
 const DROP_SIZE = { w: DROPPING_ITEM.w, h: DROPPING_ITEM.h };
 const RESIZE_HANDLES = ["se"];
 
+function gridItemClassName(widgetId) {
+  if (isKpiWidget(widgetId)) return "dashboard-grid-item-kpi";
+  if (widgetId === RANKED_LIST_WIDGET_ID) return "dashboard-grid-item-chart-clipped";
+  if (isChartWidget(widgetId)) return "dashboard-grid-item-chart-visible";
+  return undefined;
+}
+
 const DashboardGrid = ({
   layout,
   onLayoutChange,
@@ -65,6 +73,7 @@ const DashboardGrid = ({
       lg: layout.map((item) => ({
         ...item,
         resizeHandles: RESIZE_HANDLES,
+        className: gridItemClassName(item.i),
       })),
     }),
     [layout]
