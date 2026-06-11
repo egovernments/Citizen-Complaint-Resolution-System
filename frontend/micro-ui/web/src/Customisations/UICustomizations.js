@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import _ from "lodash";
+import { Tag } from "@egovernments/digit-ui-components";
 
 //create functions here based on module name set in mdms(eg->SearchProjectConfig)
 //how to call these -> Digit?.Customizations?.[masterName]?.[moduleName]

@@ -1355,7 +1355,7 @@
       ansible.builtin.command: >-
         bash {{ playbook_dir }}/files/integration-tests-build.sh
         "{{ integration_tests_src | default(playbook_dir ~ '/../../tests/integration-tests') }}"
-        "{{ integration_tests_dashboard_base | default('/integration-tests-v2/') }}"
+        "{{ integration_tests_dashboard_base | default('/tests-v2/') }}"
       register: it_build
       changed_when: true
       when: enable_integration_tests | default(false)
@@ -1452,7 +1452,7 @@
 
     # ---- RUN button: on-box test-runner daemon (opt-in: enable_integration_tests_runner) ----
     # Backs the "Run tests" button on the v2 dashboard. Loopback-only Node
-    # service; nginx (/integration-tests/api/, nginx_features.integration_tests_runner)
+    # service; nginx (/tests/api/, nginx_features.integration_tests_runner)
     # is the auth front. Requires the dashboards block above (needs
     # integration_tests_dir). A run is heavy and shares the box with the live
     # stack, so this stays opt-in and nice'd. Linux only.
@@ -1669,9 +1669,8 @@
         timeout: 15
         validate_certs: "{{ tls_enabled | default(true) }}"
       register: auth_probe
-      retries: 3
+      retries: 6
       delay: 10
-      no_log: true
 
     - name: "validate — auth probe returned an access_token"
       ansible.builtin.assert:
@@ -1697,6 +1696,51 @@
     # /healthz responds. The reachability probe below ALWAYS runs and
     # the bootstrap tasks key off its result.
     # ────────────────────────────────────────────────────────────────
+    # Pre-generate enc-service symmetric keys for the new state root and city
+    # tenant BEFORE MCP bootstrap creates the ADMIN user. egov-enc-service
+    # discovers tenants via MDMS search under STATE_LEVEL_TENANT_ID — at this
+    # point that's still `pg.citya`, so `mz` (a different root) is unknown and
+    # user encrypt/decrypt for `mz` throws "Tenant Id not found". The custom
+    # `:generatekey-endpoint` image exposes POST /crypto/v1/_generatekey which
+    # inserts the key row directly, bypassing MDMS discovery — solving the
+    # chicken-and-egg between bootstrap needing encryption and enc-service not
+    # yet knowing the new tenant. Idempotent (created: false when key exists).
+    - name: "pre-bootstrap — generate enc-service key for state root ({{ state_root }})"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:11234/egov-enc-service/crypto/v1/_generatekey"
+        method: POST
+        body_format: json
+        body:
+          RequestInfo:
+            apiId: Citizen
+            ver: ".01"
+            ts: null
+          tenantId: "{{ state_root }}"
+        status_code: [200]
+        timeout: 10
+      register: enc_key_root
+      failed_when: false
+      changed_when: (enc_key_root.json.created | default(false)) == true
+      when: state_root != 'pg'
+
+    - name: "pre-bootstrap — generate enc-service key for city tenant ({{ tenant_id }})"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:11234/egov-enc-service/crypto/v1/_generatekey"
+        method: POST
+        body_format: json
+        body:
+          RequestInfo:
+            apiId: Citizen
+            ver: ".01"
+            ts: null
+          tenantId: "{{ tenant_id }}"
+        status_code: [200]
+        timeout: 10
+      register: enc_key_city
+      failed_when: false
+      changed_when: (enc_key_city.json.created | default(false)) == true
+      when: state_root != 'pg'
+
     - name: "mcp-bootstrap — probe reachability"
       ansible.builtin.uri:
         url: "http://127.0.0.1:13101/healthz"
@@ -1717,6 +1761,9 @@
           source_tenant: "pg"
           mobile_regex: "{{ core_mobile_configs.mobileNumberPattern | default('^[6-9][0-9]{9}$') }}"
           mobile_length: "{{ core_mobile_configs.mobileNumberLength | default(10) }}"
+          mobile_prefix: "{{ core_mobile_configs.mobilePrefix | default(omit) }}"
+          mobile_allowed_starting_characters: "{{ core_mobile_configs.mobileNumberAllowedStartingCharacters | default(omit) }}"
+          mobile_error_message: "{{ core_mobile_configs.mobileNumberErrorMessage | default(omit) }}"
           user_validation: "{{ user_validation | default(omit) }}"
           auth:
             username: "{{ bootstrap_user | default('ADMIN') }}"
@@ -1740,6 +1787,9 @@
           source_tenant: "pg.citest"
           mobile_regex: "{{ core_mobile_configs.mobileNumberPattern | default('^[6-9][0-9]{9}$') }}"
           mobile_length: "{{ core_mobile_configs.mobileNumberLength | default(10) }}"
+          mobile_prefix: "{{ core_mobile_configs.mobilePrefix | default(omit) }}"
+          mobile_allowed_starting_characters: "{{ core_mobile_configs.mobileNumberAllowedStartingCharacters | default(omit) }}"
+          mobile_error_message: "{{ core_mobile_configs.mobileNumberErrorMessage | default(omit) }}"
           user_validation: "{{ user_validation | default(omit) }}"
           auth:
             username: "{{ bootstrap_user | default('ADMIN') }}"
@@ -1898,34 +1948,20 @@
         replace: '\1STATE_LEVEL_TENANT_ID: {{ state_root }}'
       when: state_root != 'pg'
 
-    - name: "post-bootstrap — restart services (except egov-hrms) to pick up new STATE_LEVEL_TENANT_ID"
-      # WHY `up -d --no-deps` AND NOT `restart` (2026-06-10, maputo/mz bring-up):
-      #
-      # The replace: tasks above edit STATE_LEVEL_TENANT_ID /
-      # EGOV_STATE_LEVEL_TENANT_ID in /opt/digit/docker-compose.egov-digit.yaml
-      # (pg/pg.citya -> {{ state_root }}/{{ tenant_id }}). The old
-      # `docker compose restart` then bounced the containers — but `restart`
-      # only stop/starts the EXISTING container with its ORIGINAL config; it
-      # never re-reads the compose file. Net effect: the env edits silently
-      # never reached the JVMs, every service kept running with the dump's
-      # pg tenancy, and the failure only surfaced much later and indirectly:
-      #   - egov-enc-service booted with EGOV_STATE_LEVEL_TENANT_ID=pg, so it
-      #     never generated encryption keys for the new root tenant
-      #     -> "mz : Tenant Id not found" (CustomException) on first use
-      #   - egov-user -> enc-service then 500s with "Unknown error occurred
-      #     in encryption process" on any login for tenantId={{ state_root }}
-      #   - the "ui-tenant — probe ADMIN login" task below got that 500
-      #     (outside its tolerated [200,400,401]) and failed the whole play,
-      #     with no_log:true hiding the evidence.
-      #
-      # `up -d --no-deps <services>` recreates exactly the containers whose
-      # config drifted from the compose file (so the env edits actually
-      # apply) and is a no-op when nothing changed — still idempotent on
-      # re-runs. --no-deps stops compose from also recreating/starting the
-      # dependency graph (kafka, db, ...) mid-play.
+    - name: "post-bootstrap — recreate services (except egov-hrms) to pick up new STATE_LEVEL_TENANT_ID"
+      # WHY recreate (`up -d`) AND NOT `restart` (2026-06-10/11 bring-ups):
+      # the replace: tasks above edit STATE_LEVEL_TENANT_ID /
+      # EGOV_STATE_LEVEL_TENANT_ID in the compose file, but `docker compose
+      # restart` re-uses the EXISTING container config and never re-reads the
+      # file — the env edits silently never reached the JVMs. enc-service then
+      # had no keys for the new root ("<root> : Tenant Id not found"), every
+      # login 500'd ("Unknown error occurred in encryption process"), and the
+      # ui-tenant ADMIN probe failed the play with no_log hiding the evidence.
+      # --force-recreate: deterministic even if compose misses the drift.
+      # --no-deps: don't touch the dependency graph (kafka, db, …) mid-play.
       ansible.builtin.shell: >-
         docker compose {{ compose_files }}
-        up -d --no-deps egov-user egov-workflow-v2 egov-enc-service pgr-services
+        up -d --no-deps --force-recreate egov-user egov-workflow-v2 egov-enc-service pgr-services
       args:
         chdir: "{{ digit_dir }}"
       when: state_root != 'pg'
@@ -1940,11 +1976,10 @@
       changed_when: false
       when: state_root != 'pg'
 
-    - name: "post-bootstrap — restart egov-hrms after egov-user is healthy"
+    - name: "post-bootstrap — recreate egov-hrms after egov-user is healthy"
       # Same reasoning as the task above: recreate (not restart) so the
       # compose-file env edits (STATE_LEVEL_TENANT_ID / EGOV_STATELEVEL_TENANT)
-      # actually reach the container — `docker compose restart` would bounce
-      # HRMS with its stale pg-tenancy env.
+      # actually reach the container.
       #
       # HRMS is deliberately last + gated on egov-user health: its
       # UserService bean fetches the state-level default user DURING SPRING
@@ -1955,10 +1990,10 @@
       # enc-service still had the old env), so on a true first deploy
       # admin_user_provisioned can be false at this point and HRMS may still
       # exit(1) here — re-running the deploy (or re-POSTing
-      # /v1/tenant/bootstrap, then `up -d --no-deps egov-hrms`) completes the
+      # /v1/tenant/bootstrap, then recreating egov-hrms) completes the
       # provisioning once enc-service is on the new tenancy.
       ansible.builtin.shell: >-
-        docker compose {{ compose_files }} up -d --no-deps egov-hrms
+        docker compose {{ compose_files }} up -d --no-deps --force-recreate egov-hrms
       args:
         chdir: "{{ digit_dir }}"
       when: state_root != 'pg'

@@ -15,6 +15,7 @@ import { initPGRComponents, PGRReducers, } from "@egovernments/digit-ui-module-c
 import { Loader } from "@egovernments/digit-ui-components";
 import { initWorkbenchComponents } from "@egovernments/digit-ui-module-workbench";
 import { initHRMSComponents } from "@egovernments/digit-ui-module-hrms";
+import AdminDashboard from "./dashboard/AdminDashboard";
 
 window.contextPath = window?.globalConfigs?.getConfig("CONTEXT_PATH");
 
@@ -61,6 +62,19 @@ function App() {
   if (!stateCode) {
     return <h1>stateCode is not defined</h1>;
   }
+
+  const isAdminDashboard =
+    typeof window !== "undefined" &&
+    window.location.pathname.includes("/employee/dashboard");
+
+  if (isAdminDashboard) {
+    return (
+      <Suspense fallback={<Loader page={true} variant={"PageLoader"} />}>
+        <AdminDashboard />
+      </Suspense>
+    );
+  }
+
   return (
     <Suspense fallback={<Loader page={true} variant={"PageLoader"} />}>
       <DigitUI
