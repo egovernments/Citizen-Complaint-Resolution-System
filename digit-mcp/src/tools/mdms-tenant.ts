@@ -984,10 +984,17 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           const mob = (uv || []).find(
             (r: any) => (r && r.data && r.data.fieldType === 'mobile') || (r && r.uniqueIdentifier === 'mobile'),
           );
-          if (mob && mob.data && mob.data.rules && mob.data.rules.pattern) {
-            (args as any).mobile_regex = mob.data.rules.pattern;
-            if (!args.mobile_length && mob.data.rules.minLength) {
-              (args as any).mobile_length = mob.data.rules.minLength;
+          // MdmsRecord.data is Record<string, unknown>, so `mob.data.rules`
+          // narrows to `{}` after a truthiness guard and `.pattern` /
+          // `.minLength` fail tsc (TS2339) — which broke the Docker image
+          // build (`npm run build`) during ansible deploys with build_mcp.
+          // Hoist into a scoped `any` like the other untyped MDMS payload
+          // reads in this file; runtime behaviour is unchanged.
+          const rules = mob && mob.data ? (mob.data.rules as any) : undefined;
+          if (rules && rules.pattern) {
+            (args as any).mobile_regex = rules.pattern;
+            if (!args.mobile_length && rules.minLength) {
+              (args as any).mobile_length = rules.minLength;
             }
           }
         } catch (e) {
