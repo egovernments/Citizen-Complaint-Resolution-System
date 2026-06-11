@@ -185,7 +185,7 @@
       - name: Configure Docker insecure-registries for VPC registry
         copy:
           dest: /etc/docker/daemon.json
-          content: "{{ {'insecure-registries': insecure_registries} | to_nice_json }}\n"
+          content: "{{ {'insecure-registries': insecure_registries | default([])} | to_nice_json }}\n"
           mode: '0644'
         register: daemon_json
         when: insecure_registries | default([]) | length > 0
@@ -621,6 +621,8 @@
         "{{ digit_ui_esbuild_repo_dir | default(playbook_dir ~ '/../../digit-ui-esbuild') }}"
         "{{ digit_ui_esbuild_repo | default('-') }}"
         "{{ digit_ui_esbuild_branch | default('') }}"
+      environment:
+        REACT_APP_MAP_TENANT: "{{ city_tenant | default(ui_state_tenant_id | default('')) }}"
       register: digit_ui_build_run
       changed_when: true
       when:

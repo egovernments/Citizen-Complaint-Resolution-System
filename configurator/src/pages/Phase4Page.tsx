@@ -81,32 +81,30 @@ export default function Phase4Page() {
   const [failedCount, setFailedCount] = useState(0);
   const [createdEmployees, setCreatedEmployees] = useState<Employee[]>([]);
 
-  // Fetch reference data on mount
   useEffect(() => {
+    async function fetchReferenceData() {
+      setLoadingRefs(true);
+      try {
+        const [depts, desigs, bounds, fetchedRoles, fetchedMobileRules] = await Promise.all([
+          mdmsService.getDepartments(targetTenant),
+          mdmsService.getDesignations(targetTenant),
+          boundaryService.searchBoundaries(targetTenant),
+          mdmsService.getRoles(targetTenant).catch(() => [] as typeof roles),
+          mdmsService.getMobileValidation(targetTenant).catch(() => null),
+        ]);
+        setDepartments(depts);
+        setDesignations(desigs);
+        setBoundaries(bounds);
+        setRoles(fetchedRoles);
+        setMobileRules(fetchedMobileRules);
+      } catch (err) {
+        console.error('Failed to fetch reference data:', err);
+      } finally {
+        setLoadingRefs(false);
+      }
+    }
     fetchReferenceData();
   }, [targetTenant]);
-
-  const fetchReferenceData = async () => {
-    setLoadingRefs(true);
-    try {
-      const [depts, desigs, bounds, fetchedRoles, fetchedMobileRules] = await Promise.all([
-        mdmsService.getDepartments(targetTenant),
-        mdmsService.getDesignations(targetTenant),
-        boundaryService.searchBoundaries(targetTenant),
-        mdmsService.getRoles(targetTenant).catch(() => [] as typeof roles),
-        mdmsService.getMobileValidation(targetTenant).catch(() => null),
-      ]);
-      setDepartments(depts);
-      setDesignations(desigs);
-      setBoundaries(bounds);
-      setRoles(fetchedRoles);
-      setMobileRules(fetchedMobileRules);
-    } catch (err) {
-      console.error('Failed to fetch reference data:', err);
-    } finally {
-      setLoadingRefs(false);
-    }
-  };
 
   const handleGenerateTemplate = async () => {
     setLoading(true);
@@ -182,7 +180,9 @@ export default function Phase4Page() {
       if (emp.jurisdictions) {
         const empBoundaries = emp.jurisdictions.split(',').map((b) => b.trim());
         for (const boundary of empBoundaries) {
-          if (!boundaryCodes.includes(boundary)) {
+          // Allow matching by code OR name
+          const match = boundaries.find(b => b.code === boundary || b.name.toLowerCase() === boundary.toLowerCase());
+          if (!match) {
             errors.push(`Boundary "${boundary}" not found`);
           }
         }
@@ -248,9 +248,10 @@ export default function Phase4Page() {
           // Parse jurisdictions
           const jurisdictions = emp.jurisdictions
             ? emp.jurisdictions.split(',').map((b) => {
-                const boundary = boundaries.find((bd) => bd.code === b.trim());
+                const bTrimmed = b.trim();
+                const boundary = boundaries.find((bd) => bd.code === bTrimmed || bd.name.toLowerCase() === bTrimmed.toLowerCase());
                 return {
-                  boundary: b.trim(),
+                  boundary: boundary ? boundary.code : bTrimmed,
                   boundaryType: boundary?.boundaryType || 'Ward',
                   hierarchyType: boundary?.hierarchyType || 'ADMIN',
                 };

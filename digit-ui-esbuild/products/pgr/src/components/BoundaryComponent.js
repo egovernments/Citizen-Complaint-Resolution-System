@@ -144,7 +144,8 @@ useEffect(() => {
   useEffect(() => {
     if (!wardHintCode && !wardHintName) return;
     if (!childrenData || childrenData.length === 0) return;
-    const path = findWardPath(childrenData[0]?.boundary, wardHintCode, wardHintName);
+    const targetType = boundaryHierarchy[boundaryHierarchy.length - 1];
+    const path = findWardPath(childrenData[0]?.boundary, wardHintCode, wardHintName, targetType);
     if (!path || path.length === 0) return;
 
     // Rebuild the cascade state in one go: every level's selection +
@@ -298,7 +299,7 @@ const BoundaryDropdown = ({ label, data, onChange, selected, fieldKey, disabled 
   for (const node of data || []) {
     if (seen.has(node.code)) continue;
     seen.add(node.code);
-    options.push({ value: node.code, label: t(node.code) || node.code });
+    options.push({ value: node.code, label: node.name || t(node.code) || node.code });
   }
   return (
     <V2Field label={t(label)} required htmlFor={id}>
@@ -332,19 +333,22 @@ const BoundaryDropdown = ({ label, data, onChange, selected, fieldKey, disabled 
  *      Handles future GeoJSON versions that ship display names but no
  *      code field.
  *
- * Only matches nodes whose `boundaryType === 'Ward'`. Sub-county /
- * county hints aren't useful here because the GeoJSON gives us the
- * leaf ward; the parents are derived by walking up the path.
+ * Only matches nodes whose boundary type matches the deepest level 
+ * (targetType). Sub-county / county hints aren't useful here because 
+ * the GeoJSON gives us the leaf ward; the parents are derived by 
+ * walking up the path.
  */
-function findWardPath(roots, hintCode, hintName) {
+function findWardPath(roots, hintCode, hintName, targetType) {
   const normCode = String(hintCode || '').toUpperCase();
   const normName = String(hintName || '').toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
   if (!normCode && !normName) return null;
   const isMatch = (node) => {
-    if (node.boundaryType !== 'Ward') return false;
+    if (targetType && node.boundaryType !== targetType) return false;
     const code = String(node.code || '').toUpperCase();
+    const nodeName = String(node.name || '').toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
     if (normCode && (code === normCode || code.endsWith('_' + normCode))) return true;
     if (normName && (code === normName || code.endsWith('_' + normName))) return true;
+    if (normName && (nodeName === normName || nodeName.endsWith('_' + normName))) return true;
     return false;
   };
   const walk = (node, trail) => {

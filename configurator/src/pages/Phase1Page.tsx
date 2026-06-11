@@ -95,7 +95,9 @@ export default function Phase1Page() {
   // replaced or the page unmounts.
   const [brandingPreviews, setBrandingPreviews] = useState<Partial<Record<keyof BrandingData, string>>>({});
   const brandingPreviewsRef = useRef(brandingPreviews);
-  brandingPreviewsRef.current = brandingPreviews;
+  useEffect(() => {
+    brandingPreviewsRef.current = brandingPreviews;
+  }, [brandingPreviews]);
   const [previewingKey, setPreviewingKey] = useState<keyof BrandingData | null>(null);
 
   useEffect(() => {

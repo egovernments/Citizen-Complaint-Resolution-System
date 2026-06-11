@@ -6,7 +6,7 @@ import { CardLabel } from "@egovernments/digit-ui-react-components";
 import { useTranslation } from "react-i18next";
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
-import keNairobiWards from "../assets/boundaries/ke_nairobi_wards.json";
+import keNairobiWardsFallback from "../assets/boundaries/ke_nairobi_wards.json";
 import useWardHighlightColor from "../hooks/pgr/useWardHighlightColor";
 
 // Fix default icon issue in React builds
@@ -38,13 +38,55 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
   // in Swahili).
   const nominatimLang = ((i18n?.language || Digit?.StoreData?.getCurrentLanguage?.() || "en") + "").split("_")[0] || "en";
 
+  const [tenantBoundaries, setTenantBoundaries] = useState(null);
+
+  useEffect(() => {
+    const MAP_TENANT = window?.globalConfigs?.getConfig?.("MAP_TENANT") || process.env.REACT_APP_MAP_TENANT;
+    if (!MAP_TENANT) {
+      setTenantBoundaries(keNairobiWardsFallback);
+      return;
+    }
+
+    const fetchBoundaries = async () => {
+      try {
+        const response = await Digit.CustomService.getResponse({
+          url: "/boundary-service/boundary/_search",
+          params: {},
+          body: {
+            Boundary: { tenantId: MAP_TENANT, hierarchyType: "ADMIN" }
+          },
+          method: "POST"
+        });
+
+        if (response?.Boundary && response.Boundary.length > 0) {
+          const geojson = {
+            type: "FeatureCollection",
+            features: response.Boundary.map((b) => ({
+              type: "Feature",
+              geometry: b.geometry,
+              properties: { code: b.code, name: b.name, parent_subcounty: b.parent }
+            }))
+          };
+          setTenantBoundaries(geojson);
+        } else {
+          setTenantBoundaries(keNairobiWardsFallback);
+        }
+      } catch (e) {
+        console.error("Failed to fetch tenant boundaries:", e);
+        setTenantBoundaries(keNairobiWardsFallback);
+      }
+    };
+    fetchBoundaries();
+  }, []);
+
   const matchedWard = useMemo(() => {
-    if (!latitude || !longitude || !keNairobiWards?.features?.length) return null;
+    const wardCollection = tenantBoundaries || keNairobiWardsFallback;
+    if (!latitude || !longitude || !wardCollection?.features?.length) return null;
     const pt = turfPoint([longitude, latitude]);
-    return keNairobiWards.features.find((f) => {
+    return wardCollection.features.find((f) => {
       try { return booleanPointInPolygon(pt, f); } catch { return false; }
     }) || null;
-  }, [latitude, longitude]);
+  }, [latitude, longitude, tenantBoundaries]);
 
   const wardLayerStyle = (feature) => {
     const isMatch = matchedWard && feature?.properties?.code === matchedWard.properties.code;
@@ -168,10 +210,10 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
               attribution='&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
               url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
             />
-            {keNairobiWards?.features?.length > 0 && (
+            {tenantBoundaries?.features?.length > 0 && (
               <GeoJSON
-                key={matchedWard?.properties?.code || "_"}
-                data={keNairobiWards}
+                key={`${matchedWard?.properties?.code || "_"}-${tenantBoundaries.features.length}`}
+                data={tenantBoundaries}
                 style={wardLayerStyle}
               />
             )}
