@@ -66,14 +66,15 @@ cd local-setup/ansible
 ./deploy.sh bomet
 ```
 
-What the fixed playbook now guarantees (fixes in this PR):
+What the current playbook guarantees / known issues:
 
 1. **Post-bootstrap env rewrite actually lands** — `docker compose restart`
-   never re-reads the compose file; the rewrite tasks now use
-   `up -d --no-deps`, so `STATE_LEVEL_TENANT_ID` etc. genuinely reach
-   egov-user / enc-service / workflow / pgr / hrms. (Before: services stayed
-   on `pg`, enc-service had no `ke` keys, every `ke` login 500'd, and the
-   ADMIN probe killed the play with the evidence hidden behind `no_log`.)
+   never re-reads the compose file; the rewrite tasks use
+   `up -d --force-recreate` (landed independently on develop via #830), so
+   `STATE_LEVEL_TENANT_ID` etc. genuinely reach egov-user / enc-service /
+   workflow / pgr / hrms. (Before: services stayed on `pg`, enc-service had
+   no `ke` keys, every `ke` login 500'd, and the ADMIN probe killed the play
+   with the evidence hidden behind `no_log`.)
 2. **Keycloak password ping-pong — KNOWN, not yet fixed in the playbook**
    (only bites when `enable_keycloak: true`): `.env` is re-rendered each
    deploy, wiping `KC_DB_PASSWORD` until the OpenBao block re-appends it
