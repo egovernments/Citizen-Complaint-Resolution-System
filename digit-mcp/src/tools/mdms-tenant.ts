@@ -37,6 +37,37 @@ export function isDuplicateError(msg: string): boolean {
 }
 
 /**
+ * Evict egov-user's Redis-backed ValidationRulesCache entry for a tenant.
+ *
+ * egov-user caches UserValidation rules in a Redis hash:
+ *   key: validationRules   field: validation:<tenantId>
+ *
+ * The default-data-handler seeds India UserValidation for the target tenant
+ * at stack startup (before bootstrap). egov-user's first mz request (from
+ * the data-handler's own MDMS calls which carry mz in the JWT userInfo)
+ * triggers a Cache MISS → reads India from MDMS → caches India in Redis with
+ * TTL=3600s. MCP bootstrap then corrects MDMS to the country pattern but
+ * Redis still holds India. Evicting the key forces egov-user to re-read from
+ * MDMS on the next _createnovalidate call and find the correct pattern.
+ * Non-fatal — bootstrap continues if Redis is unreachable.
+ */
+async function evictValidationCache(tenantId: string): Promise<void> {
+  const host = process.env.EGOV_REDIS_HOST || 'redis';
+  const port = parseInt(process.env.EGOV_REDIS_PORT || '6379', 10);
+  const field = `validation:${tenantId}`;
+  const cmd = `*3\r\n$4\r\nHDEL\r\n$15\r\nvalidationRules\r\n$${field.length}\r\n${field}\r\n`;
+  const { createConnection } = await import('net');
+  return new Promise((resolve) => {
+    const socket = createConnection(port, host);
+    const done = () => { try { socket.destroy(); } catch { /* ignore */ } resolve(); };
+    socket.once('connect', () => socket.write(cmd));
+    socket.once('data', done);
+    socket.once('error', done);
+    setTimeout(done, 2000);
+  });
+}
+
+/**
  * Derive a mobile number that satisfies the TARGET tenant's mobile rule.
  *
  * tenant_bootstrap copies an ADMIN from the source country, but that mobile
@@ -931,9 +962,31 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             'Mobile-number length (min=max) for the back-compat "mobile" UserValidation rule. ' +
             'Default 10 (India). Kenya/Mozambique: 9. Ignored when user_validation is supplied.',
         },
+        mobile_prefix: {
+          type: 'string',
+          description:
+            'Country dialling prefix for the "mobile" UserValidation rule (e.g. "+258" for ' +
+            'Mozambique, "+254" for Kenya). Stored in attributes.prefix so useMobileValidation.js ' +
+            'can read it via mdmsConfig?.attributes?.prefix. Ignored when user_validation is supplied.',
+        },
+        mobile_allowed_starting_characters: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'Allowed leading digit(s) for the mobile field (e.g. ["8"] for Mozambique, ' +
+            '["1","7"] for Kenya). Stored in rules.allowedStartingCharacters on the MDMS record. ' +
+            'Ignored when user_validation is supplied.',
+        },
         mobile_error_message: {
           type: 'string',
           description: 'Error message (or localization key) for the back-compat "mobile" rule.',
+        },
+        mobile_zone: {
+          type: 'string',
+          description:
+            'Zone/country label for the new UserValidation record (e.g. "Mozambique", "Kenya"). ' +
+            'Stored in the "zone" field so the country-specific record coexists with the India ' +
+            'record (pg) without violating x-unique:[\'zone\']. Defaults to the state-level tenant id.',
         },
         admin_mobile: {
           type: 'string',
@@ -953,6 +1006,9 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             type: 'object',
             properties: {
               fieldType: { type: 'string', description: 'e.g. "mobile", "userName", "email", "name"' },
+              zone: { type: 'string', description: 'Country/zone label (e.g. "Mozambique"). Used as x-unique key so records with different zones coexist. Defaults to state-level tenant id.' },
+              prefix: { type: 'string', description: 'Country dialling prefix (e.g. "+258"). Stored in attributes.prefix on the MDMS record.' },
+              allowedStartingCharacters: { type: 'array', items: { type: 'string' }, description: 'Allowed leading digits (e.g. ["8"]). Stored in rules.allowedStartingCharacters.' },
               pattern: { type: 'string', description: 'regex the field value must match' },
               minLength: { type: 'integer' },
               maxLength: { type: 'integer' },
@@ -1203,7 +1259,10 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             const msg = err instanceof Error ? err.message : String(err);
             const isSchemaRace =
               msg.includes('SCHEMA_DEFINITION_NOT_FOUND_ERR') ||
-              msg.includes('Schema definition against which data is being created is not found');
+              msg.includes('Schema definition against which data is being created is not found') ||
+              // Schema was just created via Kafka — uniqueIdentifier computation fails transiently
+              // until the schema definition propagates. Retry with backoff.
+              msg.includes('Values defined against unique fields cannot be empty');
             if (!isSchemaRace || attempt === maxAttempts - 1) throw err;
             await new Promise((res) => setTimeout(res, 500 * (1 << attempt))); // 500ms, 1s, 2s
           }
@@ -1452,137 +1511,105 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         }
       }
 
-      // ── Step 3b: synthesize common-masters.UserValidation (config-driven) ─
-      // Source tenants (pg/statea) ship NO UserValidation. Without a 'mobile'
-      // field rule egov-user falls back to a hardcoded 10-digit regex and
-      // rejects 8/9-digit numbers (Kenya/Mozambique) → citizen register fails
-      // INVALID_MOBILE_LENGTH.
-      //
-      // SHAPE (egov-user >=1.2.8 MobileNumberValidator / ValidationData model):
-      //   one record per field, data = { fieldType, isActive, rules:{
-      //   pattern, minLength, maxLength, errorMessage } }. The validator
-      //   filters by fieldType && isActive. uid via x-unique:['fieldType'].
+      // ── Step 3b: INSERT country-specific common-masters.UserValidation ──────
+      // Schema + India record (zone:'India') are seeded by default-data-handler
+      // at pg and copied to new root tenants via TenantConsumer. MCP only INSERTs
+      // the country-specific record identified by zone. x-unique:['zone'] allows
+      // both records to coexist; egov-user fetches all active mobile rules.
       //
       // FULLY CONFIG-DRIVEN: the caller passes `user_validation` — a list of
-      // { fieldType, pattern, minLength, maxLength, errorMessage } — so a new
-      // country/field is pure config, no code. `mobile_regex`/`mobile_length`
-      // are a back-compat shorthand that builds a single 'mobile' entry when
-      // `user_validation` isn't supplied.
-      const validationRules: Array<{ fieldType: string; pattern: string; minLength?: number; maxLength?: number; errorMessage?: string }> =
+      // { fieldType, zone, pattern, minLength, maxLength, errorMessage } — so a
+      // new country/field is pure config, no code. `mobile_regex`/`mobile_length`/
+      // `mobile_zone` are a back-compat shorthand that builds a single entry.
+      const stateRoot = (target as string).includes('.') ? (target as string).split('.')[0] : (target as string);
+      const mobileZone = (args.mobile_zone as string) || 'mobile';
+      const validationRules: Array<{ fieldType: string; zone: string; prefix?: string; allowedStartingCharacters?: string[]; pattern: string; minLength?: number; maxLength?: number; errorMessage?: string }> =
         Array.isArray(args.user_validation) && (args.user_validation as unknown[]).length > 0
           ? (args.user_validation as typeof validationRules)
           : [{
               fieldType: 'mobile',
+              zone: mobileZone,
+              prefix: (args.mobile_prefix as string) || undefined,
+              allowedStartingCharacters: (args.mobile_allowed_starting_characters as string[]) || undefined,
               pattern: mobileRegex,
               minLength: Number(args.mobile_length) || 10,
               maxLength: Number(args.mobile_length) || 10,
-              errorMessage: (args.mobile_error_message as string) ||
-                `Invalid mobile number (expected ${Number(args.mobile_length) || 10} digits matching ${mobileRegex})`,
+              errorMessage: (args.mobile_error_message as string) || undefined,
             }];
       emitProgress({ phase: 'uservalidation:start', message: `Synthesizing ${validationRules.length} UserValidation rule(s)`, pct: 76 });
       let uvNewlySeeded = false;
       try {
-        try {
-          await digitApi.mdmsSchemaCreate(target, 'common-masters.UserValidation',
-            'Per-field user validation rules (egov-user ValidationData)', {
-              type: 'object',
-              title: 'UserValidation',
-              $schema: 'http://json-schema.org/draft-07/schema#',
-              required: ['fieldType'],
-              'x-unique': ['fieldType'],
-              properties: {
-                fieldType: { type: 'string' },
-                isActive: { type: 'boolean' },
-                rules: {
-                  type: 'object',
-                  properties: {
-                    pattern: { type: 'string' },
-                    minLength: { type: 'integer' },
-                    maxLength: { type: 'integer' },
-                    errorMessage: { type: 'string' },
-                  },
-                },
-              },
-              additionalProperties: true,
-            });
-        } catch (e) {
-          const m = e instanceof Error ? e.message : String(e);
-          if (!isDuplicateError(m)) throw e;
+        // data-handler seeds the schema at pg and TenantConsumer copies it to the
+        // target root tenant. MCP may start before data-handler finishes — poll until
+        // the schema is visible before attempting the INSERT.
+        {
+          const schemaWaitMs = 3000;
+          const schemaMaxAttempts = 20; // up to 60 s
+          let schemaReady = false;
+          for (let i = 0; i < schemaMaxAttempts; i++) {
+            const schemas = await digitApi.mdmsSchemaSearch(target, ['common-masters.UserValidation']).catch(() => []);
+            if (schemas && schemas.length > 0) { schemaReady = true; break; }
+            emitProgress({ phase: 'uservalidation:wait', message: `Waiting for common-masters.UserValidation schema at "${target}" (attempt ${i + 1}/${schemaMaxAttempts})…` });
+            await new Promise(res => setTimeout(res, schemaWaitMs));
+          }
+          if (!schemaReady) {
+            throw new Error(`common-masters.UserValidation schema not found at "${target}" after ${schemaMaxAttempts * schemaWaitMs / 1000}s — default-data-handler may not have seeded it yet`);
+          }
         }
-        // mdms-v2 search is HIERARCHICAL — a city query returns the root's rows
-        // too. egov-user resolves UserValidation by EXACT tenant, so filter the
-        // existence check to exact-tenant rows by fieldType.
+        // mdms-v2 search is HIERARCHICAL — filter to exact-tenant rows only,
+        // keyed by zone (the x-unique field).
         const existingUVraw = await digitApi.mdmsV2SearchRaw(target, 'common-masters.UserValidation', { limit: 50 });
-        const getExistingUV = (ft: string) => existingUVraw.find(
+        const getExistingByZone = (zone: string) => existingUVraw.find(
           (r) => (r as { tenantId?: string }).tenantId === target
-            && ((r as { data?: { fieldType?: string } }).data?.fieldType === ft),
+            && (r as { data?: { zone?: string } }).data?.zone === zone,
         );
         for (const rule of validationRules) {
-          const existing = getExistingUV(rule.fieldType);
-          const existingPattern = (existing as { data?: { rules?: { pattern?: string } } } | undefined)
-            ?.data?.rules?.pattern;
-
-          if (existing && existingPattern === rule.pattern) {
-            // Already correct — no action needed.
-            results.data.skipped.push(`common-masters.UserValidation/${rule.fieldType}`);
+          if (getExistingByZone(rule.zone)) {
+            results.data.skipped.push(`common-masters.UserValidation/${rule.zone}`);
             continue;
           }
-
-          if (existing && existingPattern !== rule.pattern) {
-            // Wrong pattern present — egov-user may have auto-seeded its own
-            // default (India ^[6-9][0-9]{9}$) when it received the first
-            // tenantId=<target> API call before our bootstrap ran Step 3b.
-            // Update in-place so egov-user picks up the correct country pattern.
-            await digitApi.mdmsV2UpdateData(existing, {
+          try {
+            await mdmsCreateWithSchemaWait(target, 'common-masters.UserValidation', rule.zone, {
               fieldType: rule.fieldType,
+              zone: rule.zone,
               isActive: true,
+              default: true,
+              ...(rule.prefix ? { attributes: { prefix: rule.prefix } } : {}),
               rules: {
                 pattern: rule.pattern,
                 minLength: rule.minLength ?? undefined,
                 maxLength: rule.maxLength ?? undefined,
+                ...(rule.allowedStartingCharacters ? { allowedStartingCharacters: rule.allowedStartingCharacters } : {}),
                 errorMessage: rule.errorMessage ?? `Invalid ${rule.fieldType}`,
               },
             });
-            results.data.copied.push(`common-masters.UserValidation/${rule.fieldType} (pattern corrected: ${existingPattern} → ${rule.pattern})`);
-            uvNewlySeeded = true;
-            continue;
+          } catch (e) {
+            const m = e instanceof Error ? e.message : String(e);
+            if (isDuplicateError(m)) {
+              results.data.skipped.push(`common-masters.UserValidation/${rule.zone} (already exists)`);
+              continue;
+            }
+            throw e;
           }
-
-          // No existing record — create fresh.
-          await mdmsCreateWithSchemaWait(target, 'common-masters.UserValidation', rule.fieldType, {
-            fieldType: rule.fieldType,
-            isActive: true,
-            rules: {
-              pattern: rule.pattern,
-              minLength: rule.minLength ?? undefined,
-              maxLength: rule.maxLength ?? undefined,
-              errorMessage: rule.errorMessage ?? `Invalid ${rule.fieldType}`,
-            },
-          });
-          results.data.copied.push(`common-masters.UserValidation/${rule.fieldType} (synthesized, pattern=${rule.pattern})`);
+          results.data.copied.push(`common-masters.UserValidation/${rule.zone} (inserted, pattern=${rule.pattern})`);
           uvNewlySeeded = true;
         }
       } catch (e) {
         results.data.failed.push(`common-masters.UserValidation: ${e instanceof Error ? e.message : String(e)}`);
       }
 
-      // Wait until the CORRECT pattern is readable in MDMS before Step 4 creates
-      // the ADMIN user. Simply checking record existence is not enough — the
-      // data-handler may have already seeded an India record for this tenant, so
-      // "exists" would be true immediately while our UPDATE (published to Kafka)
-      // is still being processed by the persister. We must confirm the target
-      // pattern itself is in MDMS so egov-user's Cache MISS reads the right data.
+      // Poll until the inserted record is readable before Step 4 creates the ADMIN user.
       if (uvNewlySeeded) {
         const pollIntervalMs = 2000;
         const maxAttempts = 15; // up to 30 s
         let uvReady = false;
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
           try {
-            const uvRows = await digitApi.mdmsV2SearchRaw(target, 'common-masters.UserValidation', { limit: 5 });
+            const uvRows = await digitApi.mdmsV2SearchRaw(target, 'common-masters.UserValidation', { limit: 10 });
             const allCorrect = validationRules.every(rule =>
               uvRows.some(r =>
                 (r as { tenantId?: string }).tenantId === target &&
-                (r as { data?: { fieldType?: string } }).data?.fieldType === rule.fieldType &&
+                (r as { data?: { zone?: string } }).data?.zone === rule.zone &&
                 (r as { data?: { rules?: { pattern?: string } } }).data?.rules?.pattern === rule.pattern,
               ),
             );
@@ -1591,7 +1618,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           await new Promise(res => setTimeout(res, pollIntervalMs));
         }
         if (!uvReady) {
-          console.warn(`[tenant_bootstrap] UserValidation correct pattern not yet readable on "${target}" after ${maxAttempts * pollIntervalMs / 1000}s — proceeding anyway`);
+          console.warn(`[tenant_bootstrap] UserValidation not yet readable on "${target}" after ${maxAttempts * pollIntervalMs / 1000}s — proceeding anyway`);
         }
       }
 
@@ -1636,6 +1663,14 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       } catch (e) {
         results.data.failed.push(`ACCESSCONTROL-ACTIONS.actions bridge: ${e instanceof Error ? e.message : String(e)}`);
       }
+
+      // Evict egov-user's Redis cache before creating the ADMIN user.
+      // egov-user derives the state-level tenant by splitting the city tenantId
+      // on '.' (e.g. "mz.maputo" → "mz") and caches under "validation:mz".
+      // We must evict that state-level key — evicting "validation:mz.maputo"
+      // has no effect since egov-user never writes that key.
+      const stateTenantForEviction = target.includes('.') ? target.split('.')[0] : target;
+      await evictValidationCache(stateTenantForEviction);
 
       emitProgress({ phase: 'admin:start', message: 'Provisioning ADMIN user on the new tenant', pct: 80 });
 
