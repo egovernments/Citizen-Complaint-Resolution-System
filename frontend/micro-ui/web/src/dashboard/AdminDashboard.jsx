@@ -30,7 +30,8 @@ const AdminDashboard = () => {
     resetLayout,
     removeWidgetFromLayout,
     addKpiToLayout,
-    visibleKpiIds,
+    addWidgetToLayout,
+    visibleLayoutIds,
   } = useDashboardLayout();
 
   const handleDragKpiStart = useCallback((kpiId) => {
@@ -52,8 +53,8 @@ const AdminDashboard = () => {
   return (
     <DashboardLayout
       onResetLayout={resetLayout}
-      visibleKpiIds={visibleKpiIds}
-      onAddKpi={addKpiToLayout}
+      visibleLayoutIds={visibleLayoutIds}
+      onAddWidget={addWidgetToLayout}
       onDragKpiStart={handleDragKpiStart}
       onDragKpiEnd={handleDragKpiEnd}
       asOf={asOf}

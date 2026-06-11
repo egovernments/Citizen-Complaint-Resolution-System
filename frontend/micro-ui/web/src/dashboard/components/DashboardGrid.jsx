@@ -6,7 +6,6 @@ import {
   DROPPING_ITEM,
   DROPPING_ITEM_ID,
   KPI_ROW_HEIGHT,
-  RANKED_LIST_WIDGET_ID,
   WIDGETS,
   isChartWidget,
   isKpiWidget,
@@ -16,27 +15,38 @@ import {
   getSubMetricDef,
   subMetricValueKey,
 } from "../config/kpiQueries";
+import { TABLE_WIDGET_CONFIG, isTableWidget } from "../config/dashboardTables";
 import KpiCard from "./KpiCard";
+import DashboardTable from "./DashboardTable";
 import DepartmentBarChart, { WEEKDAY_CHART_ORDER } from "./DepartmentBarChart";
-import RankedList from "./RankedList";
 import ResizeGrip from "./ResizeGrip";
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
 const METRIC_LOOKUP = Object.fromEntries(KPI_METRICS.map((m) => [m.id, m]));
 
-const WIDGET_PADDING = "tw-p-3";
-
 const ChartPlaceholder = ({ message }) => (
-  <div className={`tw-flex tw-h-full tw-items-center tw-justify-center tw-text-sm tw-text-slate-500 ${WIDGET_PADDING}`}>
+  <div className="tw-flex tw-h-full tw-items-center tw-justify-center tw-p-3 tw-text-sm tw-text-slate-500">
     {message}
   </div>
 );
 
-const WidgetHeader = ({ metric, subMetric }) => (
-  <div className={`dashboard-drag-handle tw-min-w-0 tw-shrink-0 tw-border-b tw-border-slate-100 tw-px-3 tw-py-2`}>
-    <p className="tw-truncate tw-text-xs tw-font-semibold tw-text-slate-700">{metric}</p>
-    <p className="tw-truncate tw-text-[10px] tw-text-slate-400">{subMetric}</p>
+const WidgetHeader = ({ metric, subMetric, compact = false }) => (
+  <div
+    className={`dashboard-drag-handle tw-min-w-0 tw-shrink-0 tw-border-b tw-border-slate-100 tw-px-3 ${
+      compact ? "tw-py-1.5" : "tw-py-2"
+    }`}
+  >
+    <p
+      className={`tw-truncate tw-font-semibold tw-text-slate-800 ${
+        compact ? "tw-text-[11px] tw-leading-tight" : "tw-text-xs"
+      }`}
+    >
+      {metric}
+    </p>
+    {subMetric ? (
+      <p className="tw-truncate tw-text-[10px] tw-leading-tight tw-text-slate-400">{subMetric}</p>
+    ) : null}
   </div>
 );
 
@@ -46,8 +56,11 @@ const RESIZE_HANDLES = ["se"];
 
 function gridItemClassName(widgetId) {
   if (isKpiWidget(widgetId)) return "dashboard-grid-item-kpi";
-  if (widgetId === RANKED_LIST_WIDGET_ID) return "dashboard-grid-item-chart-clipped";
-  if (isChartWidget(widgetId)) return "dashboard-grid-item-chart-visible";
+  if (isTableWidget(widgetId)) return "dashboard-grid-item-chart-clipped";
+  if (WIDGETS[widgetId]?.type === "bar-chart") {
+    return "dashboard-grid-item-chart-visible";
+  }
+  if (isChartWidget(widgetId)) return "dashboard-grid-item-chart-clipped";
   return undefined;
 }
 
@@ -60,7 +73,7 @@ const DashboardGrid = ({
   draggingKpiId,
   subMetricValues = {},
   resolveSubMetricId,
-  chartData = { categories: [], wards: [], dow: [], rankedCategories: [] },
+  chartData = {},
   loading = false,
 }) => {
   const isExternalDrag = Boolean(draggingKpiId);
@@ -96,22 +109,19 @@ const DashboardGrid = ({
     );
   };
 
-  const renderWidget = (widgetId) => {
-    const meta = WIDGETS[widgetId];
-    if (!meta) return null;
-
-    if (meta.type === "kpi") {
-      return renderKpi(widgetId);
-    }
-
+  const renderBarChart = (widgetId) => {
     if (widgetId === "cl-chart-categories") {
-      if (loading && !chartData.categories?.length) return <ChartPlaceholder message="Loading…" />;
+      if (loading && !chartData.categories?.length) {
+        return <ChartPlaceholder message="Loading…" />;
+      }
       if (!chartData.categories?.length) return <ChartPlaceholder message="No data" />;
       return <DepartmentBarChart data={chartData.categories} />;
     }
 
     if (widgetId === "cl-chart-wards") {
-      if (loading && !chartData.wards?.length) return <ChartPlaceholder message="Loading…" />;
+      if (loading && !chartData.wards?.length) {
+        return <ChartPlaceholder message="Loading…" />;
+      }
       if (!chartData.wards?.length) return <ChartPlaceholder message="No data" />;
       return <DepartmentBarChart data={chartData.wards} />;
     }
@@ -127,12 +137,34 @@ const DashboardGrid = ({
       );
     }
 
-    if (widgetId === "cl-list-categories") {
-      if (loading && !chartData.rankedCategories?.length) {
-        return <ChartPlaceholder message="Loading…" />;
-      }
-      if (!chartData.rankedCategories?.length) return <ChartPlaceholder message="No data" />;
-      return <RankedList items={chartData.rankedCategories} />;
+    return null;
+  };
+
+  const renderTableWidget = (widgetId) => {
+    const config = TABLE_WIDGET_CONFIG[widgetId];
+    if (!config) return null;
+
+    const rows = chartData[config.dataKey] || [];
+    if (loading && !rows.length) return <ChartPlaceholder message="Loading…" />;
+    if (!rows.length) return <ChartPlaceholder message="No data" />;
+
+    return <DashboardTable columns={config.columns} rows={rows} />;
+  };
+
+  const renderWidget = (widgetId) => {
+    const meta = WIDGETS[widgetId];
+    if (!meta) return null;
+
+    if (meta.type === "kpi") {
+      return renderKpi(widgetId);
+    }
+
+    if (isTableWidget(widgetId)) {
+      return renderTableWidget(widgetId);
+    }
+
+    if (meta.type === "bar-chart") {
+      return renderBarChart(widgetId);
     }
 
     return null;
@@ -242,6 +274,8 @@ const DashboardGrid = ({
           {layout.map((item) => {
             const isKpi = isKpiWidget(item.i);
             const meta = WIDGETS[item.i];
+            const isTable = isTableWidget(item.i);
+            const isBarChart = meta?.type === "bar-chart";
 
             if (isKpi) {
               return (
@@ -272,19 +306,23 @@ const DashboardGrid = ({
                   ×
                 </button>
                 <div className="dashboard-widget dashboard-chart-widget tw-relative tw-flex tw-h-full tw-min-h-0 tw-w-full tw-flex-col tw-overflow-hidden">
-                  {meta && <WidgetHeader metric={meta.metric} subMetric={meta.subMetric} />}
+                  {meta && (
+                    <WidgetHeader
+                      metric={meta.metric}
+                      subMetric={meta.subMetric}
+                      compact={isTable}
+                    />
+                  )}
                   <div
-                    className={`tw-flex tw-min-h-0 tw-flex-col tw-justify-start ${
-                      item.i === RANKED_LIST_WIDGET_ID
-                        ? "tw-flex-1 tw-overflow-y-auto"
-                        : `tw-flex-1 tw-overflow-visible ${WIDGET_PADDING}`
-                    }`}
+                    className={
+                      isTable
+                        ? "dashboard-table-body tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-hidden tw-px-2 tw-pb-2 tw-pt-1"
+                        : isBarChart
+                          ? "tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-hidden tw-p-2"
+                          : "tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-hidden tw-p-3"
+                    }
                   >
-                    {item.i === RANKED_LIST_WIDGET_ID ? (
-                      <div className={WIDGET_PADDING}>{renderWidget(item.i)}</div>
-                    ) : (
-                      renderWidget(item.i)
-                    )}
+                    {renderWidget(item.i)}
                   </div>
                   <ResizeGrip />
                 </div>

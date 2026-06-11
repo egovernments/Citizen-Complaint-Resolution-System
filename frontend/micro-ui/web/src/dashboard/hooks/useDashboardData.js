@@ -5,7 +5,10 @@ import {
   parseBarChart,
   parseDowChart,
   parseFilterOptions,
-  parseRankedList,
+  parseLocalityTable,
+  parseResolutionByTypeTable,
+  parseTrendingComplaintsTable,
+  parseWorkflowStageTable,
 } from "../config/kpiQueries";
 import { COMPLAINT_TYPE_OPTIONS, GEOGRAPHY_OPTIONS } from "../config/globalFilterGroups";
 import { hasAuth, runBatchQueries } from "../services/analyticsService";
@@ -19,10 +22,44 @@ const TUNNEL_MESSAGE =
 const ANALYTICS_NOT_DEPLOYED_MESSAGE =
   "Analytics API is not available on this pgr-services deployment yet. Redeploy pgr-services with the /v2/analytics endpoints, then refresh.";
 
+const EMPTY_CHART_DATA = {
+  categories: [],
+  wards: [],
+  dow: [],
+  trendingComplaints: [],
+  resolutionByType: [],
+  locality: [],
+  workflowStages: [],
+};
+
 function extractAsOf(results) {
   if (!results || typeof results !== "object") return null;
   const first = Object.values(results).find((entry) => entry?.asOf != null);
   return first?.asOf ?? null;
+}
+
+function buildChartData(results, filters) {
+  const useWow = !filters?.dateRangeActive;
+  const categoryResult = results?.cl_chart_categories;
+
+  return {
+    categories: parseBarChart(categoryResult, "service_code"),
+    wards: parseBarChart(results?.cl_chart_wards, "ward_code"),
+    dow: parseDowChart(results?.cl_chart_dow),
+    trendingComplaints: parseTrendingComplaintsTable(
+      categoryResult,
+      useWow ? results?.cl_chart_categories_pw : null
+    ),
+    resolutionByType: parseResolutionByTypeTable(
+      results?.rs_table_resolution_by_category
+    ),
+    locality: parseLocalityTable(
+      results?.cl_chart_wards,
+      results?.cl_ward_open,
+      results?.cl_ward_ontime
+    ),
+    workflowStages: parseWorkflowStageTable(results?.ev_table_stage_dwell),
+  };
 }
 
 const DEFAULT_FILTER_OPTIONS = {
@@ -32,12 +69,7 @@ const DEFAULT_FILTER_OPTIONS = {
 
 export function useDashboardData(filters) {
   const [subMetricValues, setSubMetricValues] = useState({});
-  const [chartData, setChartData] = useState({
-    categories: [],
-    wards: [],
-    dow: [],
-    rankedCategories: [],
-  });
+  const [chartData, setChartData] = useState(EMPTY_CHART_DATA);
   const [filterOptions, setFilterOptions] = useState(DEFAULT_FILTER_OPTIONS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -46,7 +78,7 @@ export function useDashboardData(filters) {
   const fetchData = useCallback(async () => {
     if (!hasAuth()) {
       setSubMetricValues(buildAllSubMetricValues(null, false));
-      setChartData({ categories: [], wards: [], dow: [], rankedCategories: [] });
+      setChartData(EMPTY_CHART_DATA);
       setAsOf(null);
       setError(LOGIN_MESSAGE);
       setLoading(false);
@@ -65,15 +97,8 @@ export function useDashboardData(filters) {
         throw new Error("Unexpected analytics response shape");
       }
 
-      const categoryResult = results.cl_chart_categories;
-
       setSubMetricValues(buildAllSubMetricValues(results, false));
-      setChartData({
-        categories: parseBarChart(categoryResult, "service_code"),
-        wards: parseBarChart(results.cl_chart_wards, "ward_code"),
-        dow: parseDowChart(results.cl_chart_dow),
-        rankedCategories: parseRankedList(categoryResult, "service_code", 5),
-      });
+      setChartData(buildChartData(results, filters));
       setFilterOptions(parseFilterOptions(results));
       setAsOf(extractAsOf(results));
     } catch (err) {
@@ -99,7 +124,7 @@ export function useDashboardData(filters) {
 
       setError(message);
       setSubMetricValues(buildAllSubMetricValues(null, false));
-      setChartData({ categories: [], wards: [], dow: [], rankedCategories: [] });
+      setChartData(EMPTY_CHART_DATA);
       setFilterOptions(DEFAULT_FILTER_OPTIONS);
       setAsOf(null);
     } finally {

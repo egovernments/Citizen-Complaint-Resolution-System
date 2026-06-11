@@ -128,6 +128,75 @@ export const BATCH_QUERIES = {
     measures: [{ name: "total", agg: "count" }],
     sort: [{ by: "created_dow", dir: "asc" }],
   },
+  cl_chart_categories_pw: {
+    grain: "facts",
+    dimensions: ["service_code"],
+    measures: [{ name: "total", agg: "count" }],
+    limit: 200,
+  },
+  cl_ward_open: {
+    grain: "facts",
+    dimensions: ["ward_code"],
+    filters: { is_open: true },
+    measures: [{ name: "total", agg: "count" }],
+    sort: [{ by: "total", dir: "desc" }],
+    limit: 15,
+  },
+  cl_ward_ontime: {
+    grain: "facts",
+    window: { name: "wtd", timeRole: "resolved_at" },
+    dimensions: ["ward_code"],
+    filters: { is_resolved: true },
+    measures: [
+      {
+        name: "ontime_pct",
+        agg: "ratio",
+        numerator: { agg: "count", filter: { sla_breached: false } },
+        denominator: { agg: "count" },
+      },
+    ],
+    sort: [{ by: "ontime_pct", dir: "desc" }],
+    limit: 15,
+  },
+  rs_table_resolution_by_category: {
+    grain: "facts",
+    window: { name: "wtd", timeRole: "filed_at" },
+    dimensions: ["service_code"],
+    measures: [
+      {
+        name: "closure_pct",
+        agg: "ratio",
+        numerator: { agg: "count", filter: { is_resolved: true } },
+        denominator: { agg: "count" },
+      },
+      {
+        name: "ontime_pct",
+        agg: "ratio",
+        numerator: { agg: "count", filter: { is_resolved: true, sla_breached: false } },
+        denominator: { agg: "count", filter: { is_resolved: true } },
+      },
+      {
+        name: "avg_ttr_ms",
+        agg: "avg",
+        column: "resolution_ms",
+        filter: { is_resolved: true },
+      },
+    ],
+    sort: [{ by: "closure_pct", dir: "desc" }],
+    limit: 15,
+  },
+  ev_table_stage_dwell: {
+    grain: "events",
+    window: { name: "wtd", timeRole: "event_at" },
+    dimensions: ["status"],
+    measures: [
+      { name: "avg_dwell", agg: "avg", column: "dwell_ms" },
+      { name: "median_dwell", agg: "percentile", column: "dwell_ms", p: 50 },
+      { name: "samples", agg: "count" },
+    ],
+    sort: [{ by: "avg_dwell", dir: "desc" }],
+    limit: 8,
+  },
   // Employee performance
   ep_open_by_officer: officerTopCount({ is_open: true }),
   ep_ttr_avg: {
@@ -511,6 +580,21 @@ function applyDashboardFiltersToQuery(query, apiFilters) {
   return next;
 }
 
+function priorWeekCreatedAtFilter() {
+  const now = new Date();
+  const day = now.getDay();
+  const daysFromMonday = day === 0 ? 6 : day - 1;
+  const thisMonday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() - daysFromMonday
+  );
+  thisMonday.setHours(0, 0, 0, 0);
+  const lastMonday = new Date(thisMonday);
+  lastMonday.setDate(lastMonday.getDate() - 7);
+  return { gte: lastMonday.getTime(), lt: thisMonday.getTime() };
+}
+
 export function buildBatchQueries(dashboardFilters) {
   const apiFilters = buildGlobalApiFilters(dashboardFilters);
   const dimensionOnlyFilters = apiFilters.__dateRange
@@ -525,22 +609,34 @@ export function buildBatchQueries(dashboardFilters) {
     queries[key] = applyDashboardFiltersToQuery(query, apiFilters);
   }
 
+  if (!apiFilters.__dateRange && queries.cl_chart_categories_pw) {
+    const wardTypeFilters = { ...apiFilters };
+    delete wardTypeFilters.__dateRange;
+    queries.cl_chart_categories_pw = {
+      ...queries.cl_chart_categories_pw,
+      filters: mergeQueryFilters(wardTypeFilters, {
+        created_at: priorWeekCreatedAtFilter(),
+      }),
+    };
+  }
+
   return queries;
 }
 
 export function formatDimensionLabel(code) {
-  const wardMatch = code.match(/ward[_\s-]?(\d+)/i);
+  const humanized = String(code).replace(/([a-z])([A-Z])/g, "$1 $2");
+  const wardMatch = humanized.match(/ward[_\s-]?(\d+)/i);
   if (wardMatch) return `Ward ${wardMatch[1]}`;
 
-  const dot = code.lastIndexOf(".");
+  const dot = humanized.lastIndexOf(".");
   if (dot >= 0) {
-    return code
+    return humanized
       .slice(dot + 1)
       .replace(/_/g, " ")
       .replace(/\b\w/g, (c) => c.toUpperCase());
   }
 
-  const parts = code.split("_").filter(Boolean);
+  const parts = humanized.split("_").filter(Boolean);
   if (parts.length > 2) {
     return parts
       .slice(-2)
@@ -548,7 +644,7 @@ export function formatDimensionLabel(code) {
       .replace(/_/g, " ");
   }
 
-  return code.replace(/_/g, " ");
+  return humanized.replace(/_/g, " ");
 }
 
 function parseDimensionOptions(result, key) {
@@ -767,4 +863,128 @@ export function parseRankedList(result, labelKey, limit = 5) {
       label: String(row[labelKey] ?? "Unknown"),
       value: Number(row.total) || 0,
     }));
+}
+
+function formatStatusLabel(status) {
+  return String(status)
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function computeWowPercent(current, prior) {
+  if (prior == null || !Number.isFinite(prior)) return null;
+  if (prior === 0) return current > 0 ? 100 : 0;
+  return ((current - prior) / prior) * 100;
+}
+
+export function parseTrendingComplaintsTable(
+  currentResult,
+  priorResult,
+  labelKey = "service_code",
+  limit = 5
+) {
+  if (!currentResult?.rows?.length) return [];
+
+  const priorByKey = Object.fromEntries(
+    (priorResult?.rows || []).map((row) => [
+      String(row[labelKey]),
+      Number(row.total) || 0,
+    ])
+  );
+
+  return sortRowsByTotalDesc(currentResult.rows, labelKey)
+    .slice(0, limit)
+    .map((row, index) => {
+      const key = String(row[labelKey] ?? "Unknown");
+      const volume = Number(row.total) || 0;
+      const label = formatDimensionLabel(key);
+      return {
+        id: `trend-${index + 1}-${key}`,
+        rank: index + 1,
+        label,
+        volume,
+        wow: priorResult ? computeWowPercent(volume, priorByKey[key]) : null,
+      };
+    });
+}
+
+export function parseResolutionByTypeTable(result, limit = 5) {
+  if (!result?.rows?.length) return [];
+  return result.rows.slice(0, limit).map((row, index) => {
+    const key = String(row.service_code ?? "Unknown");
+    return {
+      id: `resolution-${index}-${key}`,
+      label: formatDimensionLabel(key),
+      closurePct: Number(row.closure_pct),
+      ontimePct: Number(row.ontime_pct),
+      avgTtrMs: Number(row.avg_ttr_ms),
+    };
+  });
+}
+
+export function parseLocalityTable(loggedResult, openResult, ontimeResult, limit = 5) {
+  if (!loggedResult?.rows?.length) return [];
+
+  const openByWard = Object.fromEntries(
+    (openResult?.rows || []).map((row) => [
+      String(row.ward_code),
+      Number(row.total) || 0,
+    ])
+  );
+  const ontimeByWard = Object.fromEntries(
+    (ontimeResult?.rows || []).map((row) => [
+      String(row.ward_code),
+      Number(row.ontime_pct),
+    ])
+  );
+
+  return sortRowsByTotalDesc(loggedResult.rows, "ward_code")
+    .slice(0, limit)
+    .map((row, index) => {
+      const ward = String(row.ward_code ?? "Unknown");
+      return {
+        id: `ward-${index}-${ward}`,
+        label: formatDimensionLabel(ward),
+        logged: Number(row.total) || 0,
+        open: openByWard[ward] ?? 0,
+        ontimePct: ontimeByWard[ward],
+      };
+    });
+}
+
+export function parseWorkflowStageTable(result, limit = 5) {
+  if (!result?.rows?.length) return [];
+
+  const rows = result.rows.slice(0, limit).map((row, index) => {
+    const label = formatStatusLabel(row.status ?? "Unknown");
+    return {
+      id: `stage-${index}-${label}`,
+      label,
+      avgDwellMs: Number(row.avg_dwell),
+      medianDwellMs: Number(row.median_dwell),
+      samples: Number(row.samples) || 0,
+    };
+  });
+
+  const maxAvg = Math.max(...rows.map((r) => r.avgDwellMs).filter(Number.isFinite));
+  return rows.map((row) => ({
+    ...row,
+    highlight: Number.isFinite(maxAvg) && row.avgDwellMs === maxAvg && rows.length > 1,
+    badge: Number.isFinite(maxAvg) && row.avgDwellMs === maxAvg && rows.length > 1
+      ? "BOTTLENECK"
+      : null,
+  }));
+}
+
+export function parseDowTable(result) {
+  if (!result?.rows?.length) return [];
+  return result.rows.map((row, index) => {
+    const dow = Number(row.created_dow);
+    const label = DOW_LABELS[dow] ?? String(row.created_dow);
+    return {
+      id: `dow-${index}-${dow}`,
+      label,
+      count: Number(row.total) || 0,
+    };
+  });
 }

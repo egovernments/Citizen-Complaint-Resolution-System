@@ -7,6 +7,7 @@ import {
   GRID_COLS,
   TOP_ROW_CHART_IDS,
   WIDGETS,
+  getDefaultChartItem,
   isChartWidget,
   isKpiWidget,
 } from "../constants/layoutConfig";
@@ -243,7 +244,7 @@ function normalizeChartItem(item) {
   };
 }
 
-const LEGACY_LAYOUT_VERSIONS = ["v12", "v11", "v10", "v9"];
+const LEGACY_LAYOUT_VERSIONS = ["v14", "v13", "v12", "v11", "v10", "v9"];
 
 function getAllLayoutStorageKeys() {
   const currentKey = getLayoutStorageKey();
@@ -388,6 +389,32 @@ export function useDashboardLayout() {
     });
   }, []);
 
+  const addWidgetToLayout = useCallback((widgetId, position) => {
+    if (!WIDGETS[widgetId]) return;
+
+    if (isKpiWidget(widgetId)) {
+      addKpiToLayout(widgetId, position);
+      return;
+    }
+
+    setLayout((prev) => {
+      if (prev.some((item) => item.i === widgetId)) return prev;
+
+      const defaultItem = getDefaultChartItem(widgetId);
+      if (!defaultItem) return prev;
+
+      const newItem = normalizeChartItem({
+        ...defaultItem,
+        ...(position && { x: position.x, y: position.y }),
+      });
+
+      const next = reflowCharts(pushAdjacentItems([...prev, newItem], widgetId));
+      persistLayout(next);
+      return next;
+    });
+  }, [addKpiToLayout]);
+
+  const visibleLayoutIds = layout.map((item) => item.i);
   const visibleKpiIds = layout.filter((item) => isKpiWidget(item.i)).map((item) => item.i);
 
   return {
@@ -397,6 +424,8 @@ export function useDashboardLayout() {
     resetLayout,
     removeWidgetFromLayout,
     addKpiToLayout,
+    addWidgetToLayout,
+    visibleLayoutIds,
     visibleKpiIds,
   };
 }

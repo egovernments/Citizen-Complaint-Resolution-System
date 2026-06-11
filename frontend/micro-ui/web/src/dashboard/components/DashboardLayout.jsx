@@ -7,8 +7,8 @@ import DashboardFilters from "./DashboardFilters";
 const DashboardLayout = ({
   children,
   onResetLayout,
-  visibleKpiIds,
-  onAddKpi,
+  visibleLayoutIds,
+  onAddWidget,
   onDragKpiStart,
   onDragKpiEnd,
   asOf,
@@ -33,8 +33,8 @@ const DashboardLayout = ({
       style={brandStyle}
     >
       <Sidebar
-        visibleKpiIds={visibleKpiIds}
-        onAddKpi={onAddKpi}
+        visibleLayoutIds={visibleLayoutIds}
+        onAddWidget={onAddWidget}
         onDragKpiStart={onDragKpiStart}
         onDragKpiEnd={onDragKpiEnd}
       />

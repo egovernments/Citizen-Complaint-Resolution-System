@@ -175,6 +175,68 @@
   }
 
   /* Chart widgets: clip to grid cell; list body scrolls when resized smaller */
+  .dashboard-table-body {
+    min-height: 0;
+  }
+
+  .dashboard-table-wrap {
+    @apply tw-h-full tw-w-full tw-min-w-0 tw-overflow-hidden;
+  }
+
+  .dashboard-table {
+    @apply tw-w-full tw-border-collapse tw-text-[10px] tw-leading-tight;
+    table-layout: fixed;
+  }
+
+  .dashboard-table thead th {
+    @apply tw-border-b tw-border-slate-200 tw-pb-1 tw-pt-0 tw-text-left tw-text-[9px] tw-font-normal tw-text-slate-500;
+  }
+
+  .dashboard-table-th-right,
+  .dashboard-table-td-right {
+    @apply tw-text-right;
+  }
+
+  .dashboard-table tbody td {
+    @apply tw-border-b tw-border-slate-100 tw-py-1 tw-text-slate-800;
+  }
+
+  .dashboard-table tbody tr:last-child td {
+    @apply tw-border-b-0;
+  }
+
+  .dashboard-table-primary {
+    @apply tw-flex tw-min-w-0 tw-items-center tw-gap-1;
+  }
+
+  .dashboard-table-label {
+    @apply tw-min-w-0 tw-truncate;
+  }
+
+  .dashboard-table-badge {
+    @apply tw-shrink-0 tw-text-[8px] tw-font-bold tw-uppercase tw-tracking-wide tw-text-red-600;
+  }
+
+  .dashboard-table-row-highlight {
+    @apply tw-bg-red-50;
+  }
+
+  .dashboard-table-trend-up {
+    @apply tw-font-medium tw-text-green-600;
+  }
+
+  .dashboard-table-trend-down {
+    @apply tw-font-medium tw-text-red-600;
+  }
+
+  .dashboard-table-muted {
+    @apply tw-text-slate-400;
+  }
+
+  .dashboard-table-empty {
+    @apply tw-py-4;
+  }
+
   .dashboard-chart-widget {
     overflow: hidden;
   }

@@ -5,12 +5,22 @@
 
 export const COMPLAINT_LANDSCAPE_SECTION = "Complaint landscape";
 
+export const VISUALIZATIONS_SECTION = "Charts & tables";
+
 export const INVENTORY_SECTIONS = [
   {
     id: "complaint-landscape",
     label: COMPLAINT_LANDSCAPE_SECTION,
     description: "Volume, trends, and geographic patterns",
     metricIds: null,
+    widgetIds: null,
+  },
+  {
+    id: "visualizations",
+    label: VISUALIZATIONS_SECTION,
+    description: "Trending lists, breakdown tables, and bar charts",
+    metricIds: null,
+    widgetIds: null,
   },
 ];
 
@@ -240,14 +250,6 @@ export const LANDSCAPE_CHARTS = [
     queryKey: "cl_chart_categories",
   },
   {
-    id: "cl-list-categories",
-    type: "ranked-list",
-    metric: "Top trending categories",
-    subMetric: "Category name (rank 1–5)",
-    outputFormat: "Ranked text list",
-    queryKey: "cl_chart_categories",
-  },
-  {
     id: "cl-chart-wards",
     type: "bar-chart",
     metric: "Category breakdown by ward / locality",
@@ -263,7 +265,41 @@ export const LANDSCAPE_CHARTS = [
     outputFormat: "Bar chart: count per weekday",
     queryKey: "cl_chart_dow",
   },
+  {
+    id: "cl-list-categories",
+    type: "data-table",
+    metric: "Trending complaints (top 5)",
+    subMetric: null,
+    outputFormat: "Ranked table with WoW",
+    queryKey: "cl_chart_categories",
+  },
+  {
+    id: "cl-table-resolution",
+    type: "data-table",
+    metric: "Resolution rate by complaint type",
+    subMetric: null,
+    outputFormat: "% per category row",
+    queryKey: "rs_table_resolution_by_category",
+  },
+  {
+    id: "cl-table-locality",
+    type: "data-table",
+    metric: "By locality",
+    subMetric: null,
+    outputFormat: "Ward table",
+    queryKey: "cl_chart_wards",
+  },
+  {
+    id: "cl-table-workflow-stages",
+    type: "data-table",
+    metric: "Average time per workflow stage",
+    subMetric: null,
+    outputFormat: "Stage dwell table",
+    queryKey: "ev_table_stage_dwell",
+  },
 ];
+
+INVENTORY_SECTIONS[1].widgetIds = LANDSCAPE_CHARTS.map((c) => c.id);
 
 export function getSubMetricDef(metric, subMetricId) {
   return metric.subMetrics.find((s) => s.id === subMetricId) || metric.subMetrics[0];
