@@ -6430,5 +6430,11 @@
         "message": "Dear Citizen, Your complaint for <complaint_type> has been submitted with ID <id> on <date>. You can track your complaint status on the web portal.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMPLAINT_DETAILS_PIN_LOCATION",
+        "message": "Pin Location",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
     }
 ]
