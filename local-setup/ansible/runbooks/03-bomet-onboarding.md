@@ -74,12 +74,17 @@ What the fixed playbook now guarantees (fixes in this PR):
    egov-user / enc-service / workflow / pgr / hrms. (Before: services stayed
    on `pg`, enc-service had no `ke` keys, every `ke` login 500'd, and the
    ADMIN probe killed the play with the evidence hidden behind `no_log`.)
-2. **Keycloak password two-phase sync** (only when `enable_keycloak: true`) —
-   `.env` is re-rendered each deploy, wiping `KC_DB_PASSWORD` until the
-   OpenBao block re-appends it; phase 1 pre-syncs the DB role to the compose
-   default before stack start, phase 2 syncs to the vault value before the
-   post-secrets recreate. Without both, first-enable dies at the recreate and
-   every redeploy dies at stack start.
+2. **Keycloak password ping-pong — KNOWN, not yet fixed in the playbook**
+   (only bites when `enable_keycloak: true`): `.env` is re-rendered each
+   deploy, wiping `KC_DB_PASSWORD` until the OpenBao block re-appends it
+   after the first `up -d` — so keycloak-postgres and the keycloak container
+   disagree on the password in one direction on first enable (dies at the
+   post-secrets recreate) and the other on every redeploy (dies at stack
+   start). Manual recovery:
+   `echo "ALTER ROLE keycloak WITH PASSWORD '<value in .env>';" | docker exec -i keycloak-postgres psql -U keycloak -d keycloak`
+   then restart keycloak. A two-phase sync task (mirroring the existing
+   postgres/mcp-postgres pattern) was prototyped and validated on this box —
+   re-propose it when a keycloak-enabled tenant deploys.
 3. **novu-worker boots** (when `enable_novu: true`) — the worker requires
    `API_ROOT_URL` in production mode; compose now passes the internal
    `http://novu-api:3000`.
