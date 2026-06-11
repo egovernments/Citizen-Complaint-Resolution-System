@@ -1250,7 +1250,9 @@ services:
   # PGR Services (Public Grievance Redressal)
   # ===========================================================================
   pgr-services:
-    image: registry.preview.egov.theflywheel.in/pgr-services-dev:latest
+    # Parameterized so deploys can pin a nightly-develop (or other) build via
+    # PGR_SERVICES_IMAGE in the env; default keeps the prior behaviour.
+    image: ${PGR_SERVICES_IMAGE:-registry.preview.egov.theflywheel.in/pgr-services-dev:latest}
     depends_on:
       pgbouncer:
         condition: service_healthy

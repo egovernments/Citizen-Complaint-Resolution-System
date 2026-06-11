@@ -61,4 +61,22 @@ config:
       - work-dir: frontend/micro-ui/
         dockerfile: frontend/micro-ui/web/docker/Dockerfile
         image-name: digit-ui
+  # --- nightly-develop pipeline: high-churn services built nightly from develop
+  # and pushed to the Flywheel registry, so deploys pull instead of build.
+  # See local-setup/ansible/files/nightly-build-push.sh.
+  - name: "builds/Citizen-Complaint-Resolution-System/digit-mcp"
+    build:
+      - work-dir: "digit-mcp"
+        dockerfile: "digit-mcp/Dockerfile"
+        image-name: "digit-mcp"
+  - name: "builds/Citizen-Complaint-Resolution-System/utilities/otp-publisher"
+    build:
+      - work-dir: "utilities/otp-publisher"
+        dockerfile: "utilities/otp-publisher/Dockerfile"
+        image-name: "otp-publisher"
+  - name: "builds/Citizen-Complaint-Resolution-System/digit-ui-esbuild"
+    build:
+      - work-dir: "digit-ui-esbuild"
+        dockerfile: "digit-ui-esbuild/docker/Dockerfile"
+        image-name: "digit-ui-esbuild"
 
