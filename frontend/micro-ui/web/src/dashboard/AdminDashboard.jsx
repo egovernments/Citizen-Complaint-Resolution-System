@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import "./styles/dashboard.css";
 import DashboardLayout from "./components/DashboardLayout";
 import DashboardGrid from "./components/DashboardGrid";
@@ -8,8 +8,21 @@ import { useDashboardFilters } from "./hooks/useDashboardFilters";
 
 const AdminDashboard = () => {
   const [draggingKpiId, setDraggingKpiId] = useState(null);
-  const { subMetricValues, chartData, loading, error, asOf, refetch } = useDashboardData();
-  const { filters, setFilter, resolveSubMetricId } = useDashboardFilters();
+  const { filters, setFilter, clearFilters, applyFilterOptions, resolveSubMetricId } =
+    useDashboardFilters();
+  const {
+    subMetricValues,
+    chartData,
+    filterOptions,
+    loading,
+    error,
+    asOf,
+    refetch,
+  } = useDashboardData(filters);
+
+  useEffect(() => {
+    applyFilterOptions(filterOptions);
+  }, [filterOptions, applyFilterOptions]);
   const {
     layout,
     onLayoutChange,
@@ -46,6 +59,9 @@ const AdminDashboard = () => {
       asOf={asOf}
       filters={filters}
       onFilterChange={setFilter}
+      onClearFilters={clearFilters}
+      filterOptions={filterOptions}
+      filterOptionsLoading={loading}
     >
       {error && (
         <div className="tw-mb-4 tw-flex tw-items-center tw-justify-between tw-rounded-md tw-border tw-border-red-200 tw-bg-red-50 tw-px-4 tw-py-3 tw-text-sm tw-text-red-800">

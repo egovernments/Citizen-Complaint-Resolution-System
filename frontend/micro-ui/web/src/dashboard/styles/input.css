@@ -8,7 +8,7 @@
   }
 
   .dashboard-drag-handle {
-    @apply tw-cursor-move tw-rounded-t-lg tw-border-b tw-border-slate-100 tw-bg-slate-50 tw-px-3 tw-py-2 tw-text-xs tw-font-medium tw-uppercase tw-tracking-wide tw-text-slate-500;
+    @apply tw-cursor-grab tw-rounded-t-lg tw-border-b tw-border-slate-100 tw-bg-slate-50 tw-px-3 tw-py-2 tw-text-xs tw-font-medium tw-uppercase tw-tracking-wide tw-text-slate-500 active:tw-cursor-grabbing;
   }
 
   .kpi-inventory-item:active {
@@ -31,6 +31,96 @@
 
   .dashboard-kpi-remove {
     @apply tw-opacity-0 tw-transition-opacity group-hover:tw-opacity-100;
+  }
+
+  .dashboard-filters-card {
+    @apply tw-flex tw-flex-wrap tw-items-end tw-gap-x-8 tw-gap-y-4 tw-rounded-lg tw-border tw-border-slate-200 tw-bg-white tw-px-5 tw-py-4;
+  }
+
+  .dashboard-filters-heading {
+    @apply tw-flex tw-items-center tw-gap-2 tw-self-center tw-pr-2;
+  }
+
+  .dashboard-filters-title {
+    @apply tw-text-sm tw-font-semibold tw-text-slate-900;
+  }
+
+  .dashboard-filter-field {
+    @apply tw-flex tw-min-w-[9.5rem] tw-flex-col tw-gap-1;
+  }
+
+  .dashboard-filter-field--geography {
+    @apply tw-min-w-[12rem] tw-flex-[0_0_12rem];
+  }
+
+  .dashboard-filter-field--complaint-type {
+    @apply tw-min-w-[14rem] tw-flex-[0_0_14rem];
+  }
+
+  .dashboard-filter-label {
+    @apply tw-text-[11px] tw-font-normal tw-leading-none tw-text-slate-500;
+  }
+
+  .dashboard-filter-input {
+    @apply tw-h-9 tw-w-full tw-rounded-md tw-border tw-border-slate-200 tw-bg-white tw-px-3 tw-text-sm tw-text-slate-800 focus:tw-border-brand-teal focus:tw-outline-none;
+  }
+
+  .dashboard-filter-date-wrap {
+    @apply tw-relative tw-w-full;
+  }
+
+  .dashboard-filter-date {
+    @apply tw-pr-9 tw-text-slate-500;
+    color-scheme: light;
+  }
+
+  /* Override global digit-ui date indicator positioning (see employee/index.scss). */
+  .dashboard-filter-date-wrap .dashboard-filter-date::-webkit-calendar-picker-indicator {
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 2.25rem;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    cursor: pointer;
+    opacity: 0;
+  }
+
+  .dashboard-filter-date-icon {
+    @apply tw-pointer-events-none tw-absolute tw-right-2 tw-top-1/2 tw--translate-y-1/2 tw-text-slate-600;
+  }
+
+  .dashboard-filters-clear {
+    @apply tw-h-9 tw-shrink-0 tw-self-end tw-rounded-md tw-border tw-border-slate-200 tw-bg-white tw-px-4 tw-text-sm tw-font-medium tw-text-slate-600 hover:tw-bg-slate-50 disabled:tw-cursor-not-allowed disabled:tw-opacity-40;
+  }
+
+  .dashboard-filter-select-wrap {
+    @apply tw-relative tw-w-full;
+  }
+
+  .dashboard-filter-select {
+    @apply tw-appearance-none tw-pr-8;
+  }
+
+  .dashboard-filter-select-wrap::after {
+    content: "⌄";
+    position: absolute;
+    right: 0.65rem;
+    top: 50%;
+    transform: translateY(-58%);
+    pointer-events: none;
+    font-size: 0.85rem;
+    line-height: 1;
+    color: #0f172a;
+  }
+
+  .dashboard-kpi-widget {
+    cursor: grab;
+  }
+
+  .dashboard-kpi-widget:active {
+    cursor: grabbing;
   }
 
   .dashboard-kpi-widget .dashboard-widget {

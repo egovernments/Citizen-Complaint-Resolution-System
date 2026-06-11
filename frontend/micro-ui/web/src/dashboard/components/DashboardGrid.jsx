@@ -82,7 +82,6 @@ const DashboardGrid = ({
       <KpiCard
         metric={metric.metric}
         value={value}
-        accent={metric.accent}
         loading={loading && value == null}
       />
     );

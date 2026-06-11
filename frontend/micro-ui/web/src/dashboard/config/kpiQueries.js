@@ -415,6 +415,165 @@ export const BATCH_QUERIES = {
   },
 };
 
+/** Unfiltered ward/service lists for global filter dropdowns (no self-dimension filter). */
+export const FILTER_DIMENSION_QUERIES = {
+  cl_filter_wards: {
+    grain: "facts",
+    window: { name: "wtd", timeRole: "filed_at" },
+    dimensions: ["ward_code"],
+    measures: [{ name: "total", agg: "count" }],
+    sort: [{ by: "ward_code", dir: "asc" }],
+    limit: 200,
+  },
+  cl_filter_categories: {
+    grain: "facts",
+    window: { name: "wtd", timeRole: "filed_at" },
+    dimensions: ["service_code"],
+    measures: [{ name: "total", agg: "count" }],
+    sort: [{ by: "service_code", dir: "asc" }],
+    limit: 200,
+  },
+};
+
+function isoDateToStartMs(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d).getTime();
+}
+
+function isoDateToEndExclusiveMs(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d + 1).getTime();
+}
+
+function mergeQueryFilters(existingFilters, globalFilters) {
+  const merged = { ...(existingFilters || {}) };
+  for (const [key, value] of Object.entries(globalFilters)) {
+    if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+      merged[key] = { ...(merged[key] || {}), ...value };
+    } else {
+      merged[key] = value;
+    }
+  }
+  return merged;
+}
+
+function dateFilterColumnForQuery(query) {
+  if (query.window?.timeRole === "resolved_at") {
+    return "resolved_at";
+  }
+  return "created_at";
+}
+
+export function buildGlobalApiFilters(dashboardFilters) {
+  const apiFilters = {};
+
+  if (dashboardFilters?.geography && dashboardFilters.geography !== "all") {
+    apiFilters.ward_code = dashboardFilters.geography;
+  }
+  if (dashboardFilters?.complaintType && dashboardFilters.complaintType !== "all") {
+    apiFilters.service_code = dashboardFilters.complaintType;
+  }
+
+  if (
+    dashboardFilters?.dateRangeActive &&
+    dashboardFilters?.dateFrom &&
+    dashboardFilters?.dateTo
+  ) {
+    apiFilters.__dateRange = {
+      fromMs: isoDateToStartMs(dashboardFilters.dateFrom),
+      toMs: isoDateToEndExclusiveMs(dashboardFilters.dateTo),
+    };
+  }
+
+  return apiFilters;
+}
+
+function applyDashboardFiltersToQuery(query, apiFilters) {
+  if (!apiFilters || Object.keys(apiFilters).length === 0) {
+    return query;
+  }
+
+  const { __dateRange, ...dimensionFilters } = apiFilters;
+  const next = { ...query };
+  const filtersToApply = { ...dimensionFilters };
+
+  if (__dateRange) {
+    const dateColumn = dateFilterColumnForQuery(query);
+    filtersToApply[dateColumn] = { gte: __dateRange.fromMs, lt: __dateRange.toMs };
+    delete next.window;
+  }
+
+  if (Object.keys(filtersToApply).length === 0) {
+    return query;
+  }
+
+  next.filters = mergeQueryFilters(query.filters, filtersToApply);
+  return next;
+}
+
+export function buildBatchQueries(dashboardFilters) {
+  const apiFilters = buildGlobalApiFilters(dashboardFilters);
+  const dimensionOnlyFilters = apiFilters.__dateRange
+    ? { __dateRange: apiFilters.__dateRange }
+    : {};
+  const queries = {};
+
+  for (const [key, query] of Object.entries(FILTER_DIMENSION_QUERIES)) {
+    queries[key] = applyDashboardFiltersToQuery(query, dimensionOnlyFilters);
+  }
+  for (const [key, query] of Object.entries(BATCH_QUERIES)) {
+    queries[key] = applyDashboardFiltersToQuery(query, apiFilters);
+  }
+
+  return queries;
+}
+
+export function formatDimensionLabel(code) {
+  const wardMatch = code.match(/ward[_\s-]?(\d+)/i);
+  if (wardMatch) return `Ward ${wardMatch[1]}`;
+
+  const dot = code.lastIndexOf(".");
+  if (dot >= 0) {
+    return code
+      .slice(dot + 1)
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  const parts = code.split("_").filter(Boolean);
+  if (parts.length > 2) {
+    return parts
+      .slice(-2)
+      .join(" ")
+      .replace(/_/g, " ");
+  }
+
+  return code.replace(/_/g, " ");
+}
+
+function parseDimensionOptions(result, key) {
+  if (!result?.rows?.length) return [];
+  return result.rows
+    .filter((row) => row[key] != null && row[key] !== "")
+    .map((row) => ({
+      id: String(row[key]),
+      label: formatDimensionLabel(String(row[key])),
+    }));
+}
+
+export function parseFilterOptions(results) {
+  return {
+    geography: [
+      { id: "all", label: "All wards" },
+      ...parseDimensionOptions(results?.cl_filter_wards, "ward_code"),
+    ],
+    complaintType: [
+      { id: "all", label: "All types" },
+      ...parseDimensionOptions(results?.cl_filter_categories, "service_code"),
+    ],
+  };
+}
+
 const DOW_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export const UNSUPPORTED_VALUE = "—";

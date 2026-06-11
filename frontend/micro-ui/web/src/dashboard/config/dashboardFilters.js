@@ -45,11 +45,28 @@ export function loadDashboardFilters() {
   return { timeWindow: migrateTimeWindowFromLegacy() };
 }
 
-export function persistDashboardFilters(filters) {
+export function clearDashboardFilters() {
+  return buildDefaultFilters();
+}
+
+export function persistDashboardFilters(filters, dynamicOptions) {
   localStorage.setItem(
     getFiltersStorageKey(),
-    JSON.stringify(sanitizeFilters(filters))
+    JSON.stringify(sanitizeFilters(filters, dynamicOptions))
   );
+}
+
+export function reconcileFiltersWithOptions(filters, filterOptions) {
+  if (!filterOptions) return filters;
+
+  const next = sanitizeFilters(filters, filterOptions);
+  const changed =
+    next.geography !== filters.geography ||
+    next.complaintType !== filters.complaintType ||
+    next.dateFrom !== filters.dateFrom ||
+    next.dateTo !== filters.dateTo;
+
+  return changed ? next : filters;
 }
 
 export function resolveSubMetricId(metric, globalFilters) {

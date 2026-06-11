@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  BATCH_QUERIES,
   buildAllSubMetricValues,
+  buildBatchQueries,
   parseBarChart,
   parseDowChart,
+  parseFilterOptions,
   parseRankedList,
 } from "../config/kpiQueries";
+import { COMPLAINT_TYPE_OPTIONS, GEOGRAPHY_OPTIONS } from "../config/globalFilterGroups";
 import { hasAuth, runBatchQueries } from "../services/analyticsService";
 
 const LOGIN_MESSAGE =
@@ -23,7 +25,12 @@ function extractAsOf(results) {
   return first?.asOf ?? null;
 }
 
-export function useDashboardData() {
+const DEFAULT_FILTER_OPTIONS = {
+  geography: GEOGRAPHY_OPTIONS,
+  complaintType: COMPLAINT_TYPE_OPTIONS,
+};
+
+export function useDashboardData(filters) {
   const [subMetricValues, setSubMetricValues] = useState({});
   const [chartData, setChartData] = useState({
     categories: [],
@@ -31,6 +38,7 @@ export function useDashboardData() {
     dow: [],
     rankedCategories: [],
   });
+  const [filterOptions, setFilterOptions] = useState(DEFAULT_FILTER_OPTIONS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [asOf, setAsOf] = useState(null);
@@ -50,7 +58,7 @@ export function useDashboardData() {
     setSubMetricValues(buildAllSubMetricValues(null, true));
 
     try {
-      const response = await runBatchQueries(BATCH_QUERIES);
+      const response = await runBatchQueries(buildBatchQueries(filters));
       const results = response?.results ?? response;
 
       if (!results || typeof results !== "object") {
@@ -66,6 +74,7 @@ export function useDashboardData() {
         dow: parseDowChart(results.cl_chart_dow),
         rankedCategories: parseRankedList(categoryResult, "service_code", 5),
       });
+      setFilterOptions(parseFilterOptions(results));
       setAsOf(extractAsOf(results));
     } catch (err) {
       let message =
@@ -91,11 +100,12 @@ export function useDashboardData() {
       setError(message);
       setSubMetricValues(buildAllSubMetricValues(null, false));
       setChartData({ categories: [], wards: [], dow: [], rankedCategories: [] });
+      setFilterOptions(DEFAULT_FILTER_OPTIONS);
       setAsOf(null);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [filters]);
 
   useEffect(() => {
     fetchData();
@@ -104,6 +114,7 @@ export function useDashboardData() {
   return {
     subMetricValues,
     chartData,
+    filterOptions,
     loading,
     error,
     asOf,
