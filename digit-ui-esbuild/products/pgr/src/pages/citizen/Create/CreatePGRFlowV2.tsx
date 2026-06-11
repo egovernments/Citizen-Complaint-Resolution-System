@@ -616,7 +616,8 @@ const CreatePGRFlowV2: React.FC = () => {
   }, [stepIndex, formData, serviceDefs]);
 
   function pincodeAllowlistOk(): boolean {
-    const wardResolved = !!formData?.GeoLocationsPoint?.ward?.code;
+    const wardResolved =
+      !!formData?.GeoLocationsPoint?.ward?.code || !!formData?.SelectedBoundary?.code;
     if (wardResolved) return true; // ward routing supersedes pincode allowlist (CCRS#469)
     if (!formData.postalCode || String(formData.postalCode).length === 0) return true;
     const norm = (v: unknown) => String(v ?? "").trim().replace(/^0+/, "") || "0";
