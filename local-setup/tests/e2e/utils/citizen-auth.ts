@@ -12,7 +12,12 @@ import { expect, type Page } from '@playwright/test';
 export const CITIZEN_MOBILE = process.env.CITIZEN_MOBILE || '777777777';
 export const CITIZEN_OTP = process.env.CITIZEN_OTP || '123456';
 
-export async function citizenOtpLogin(page: Page) {
+export async function citizenOtpLogin(
+  page: Page,
+  opts: { mobile?: string; otp?: string } = {}
+) {
+  const mobile = opts.mobile ?? CITIZEN_MOBILE;
+  const otp = opts.otp ?? CITIZEN_OTP;
   await page.goto('/digit-ui/citizen');
 
   // Language selection screen (first visit only) — continue past it.
@@ -31,8 +36,8 @@ export async function citizenOtpLogin(page: Page) {
   const mobileInput = page.locator('input[type="tel"]').first();
   await mobileInput.waitFor({ state: 'visible', timeout: 30_000 });
   await mobileInput.click();
-  await mobileInput.fill(CITIZEN_MOBILE);
-  await expect(mobileInput).toHaveValue(CITIZEN_MOBILE);
+  await mobileInput.fill(mobile);
+  await expect(mobileInput).toHaveValue(mobile);
   await page
     .locator('button[type="submit"], button:has-text("Continue")')
     .first()
@@ -50,7 +55,7 @@ export async function citizenOtpLogin(page: Page) {
     );
   });
   await otpBoxes.first().click();
-  await page.keyboard.type(CITIZEN_OTP, { delay: 80 });
+  await page.keyboard.type(otp, { delay: 80 });
   const otpSubmit = page.locator('button[type="submit"], button:has-text("Continue")').first();
   if (await otpSubmit.isVisible({ timeout: 3_000 }).catch(() => false)) {
     await otpSubmit.click().catch(() => {/* may have auto-submitted */});

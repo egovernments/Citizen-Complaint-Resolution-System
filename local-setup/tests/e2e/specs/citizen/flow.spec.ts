@@ -1,33 +1,34 @@
+/**
+ * Citizen entry flow.
+ *
+ * The legacy first-visit language-selection gate ("Continue" screen)
+ * no longer exists: the V2 citizen home renders the All Services page
+ * directly with a language switcher in the header. These tests cover
+ * the same intent against the current UI — the home renders for an
+ * anonymous visitor, and the login route presents the mobile-number
+ * form.
+ */
 import { test, expect } from '@playwright/test';
-import { CitizenLanguagePage } from '../../pages/citizen-language.page';
 
 test.describe('Citizen Flow', () => {
-  test('displays language selection page', async ({ page }) => {
-    const langPage = new CitizenLanguagePage(page);
-    await langPage.goto();
-    await langPage.waitForReady();
+  test('citizen home renders with language switcher and services', async ({ page }) => {
+    await page.goto('/digit-ui/citizen');
 
-    const bodyText = await page.locator('body').innerText();
-    expect(bodyText.toUpperCase()).toContain('ENGLISH');
+    const body = page.locator('body');
+    await expect(body).toContainText(/english/i, { timeout: 30_000 });
+    await expect(body).toContainText(/all services/i);
+
+    // Anonymous visitor: the header offers Login.
+    await expect(page.getByRole('button', { name: /login/i }).first()).toBeVisible();
   });
 
-  test('continue navigates to login page', async ({ page }) => {
-    const langPage = new CitizenLanguagePage(page);
-    await langPage.goto();
-    await langPage.waitForReady();
+  test('login route shows the mobile-number form', async ({ page }) => {
+    await page.goto('/digit-ui/citizen/login');
 
-    // Continue button text varies: "Continue" or "CONTINUE"
-    const continueBtn = page.locator(
-      'button:has-text("Continue"), button:has-text("CONTINUE"), a:has-text("Continue")'
-    );
-
-    if (await continueBtn.first().isVisible({ timeout: 5000 }).catch(() => false)) {
-      await continueBtn.first().click();
-      await page.waitForURL(/\/(user\/login|login)/, { timeout: 15_000 });
-      expect(page.url()).toMatch(/\/(user\/login|login)/);
-    } else {
-      // Some builds auto-redirect or don't show continue button
-      expect(page.url()).toMatch(/\/(citizen|user\/login)/);
-    }
+    const mobileInput = page.locator('input[type="tel"]').first();
+    await mobileInput.waitFor({ state: 'visible', timeout: 30_000 });
+    await expect(
+      page.locator('button[type="submit"], button:has-text("Continue")').first()
+    ).toBeVisible();
   });
 });

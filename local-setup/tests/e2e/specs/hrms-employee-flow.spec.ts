@@ -2,14 +2,15 @@ import { test, expect } from '@playwright/test';
 import { HrmsCreatePage } from '../pages/hrms-create.page';
 import { HrmsInboxPage } from '../pages/hrms-inbox.page';
 import { getDigitToken, loginViaApi } from '../utils/auth';
+import { uniqueMobile } from '../../utils/mobile';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:18080';
 const TENANT = process.env.DIGIT_TENANT || 'uitest.citya';
 const ADMIN_USER = process.env.DIGIT_USERNAME || 'ADMIN';
 const ADMIN_PASS = process.env.DIGIT_PASSWORD || 'eGov@123';
 
-// Generate a unique phone number per run: 9 + last 9 digits of timestamp
-const PHONE = '9' + Date.now().toString().slice(-9);
+// Unique phone per run, shaped by the target tenant's mobile rules
+const PHONE = uniqueMobile();
 const EMPLOYEE_NAME = 'Playwright Test Employee';
 const DEFAULT_PASSWORD = 'eGov@123';
 
