@@ -996,6 +996,17 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             'mobile would fail the target tenant\'s UserValidation, e.g. India 10-digit vs ' +
             'Mozambique ^8[0-9]{8}$). Set it to pin a specific number.',
         },
+        pincode_allowlist: {
+          type: 'array',
+          items: { type: ['string', 'integer'] },
+          description:
+            'Serviceable postal codes, seeded as `pincode` on every active tenant.tenants record ' +
+            'under the target root. The citizen UI vetoes complaint submission when a typed postal ' +
+            'code falls outside a configured allowlist (CS_COMMON_PINCODE_NOT_SERVICABLE), so only ' +
+            'set this with real local postal codes for the deployment\'s country. Omit for no ' +
+            'allowlist — every postal code is then serviceable. Never seed an empty array: mdms-v2 ' +
+            'rejects pincode: [] on update; absence is the off state.',
+        },
         user_validation: {
           type: 'array',
           description:
@@ -1994,6 +2005,59 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         data: { copied: localizationsCopied, failed: localizationsFailed, locales: locales.length },
         pct: 99,
       });
+
+      // ────────────────────────────────────────────────────────────────
+      // Apply the operator-configured pincode allowlist to every active
+      // tenant.tenants record under the root scope. Records come from
+      // multiple writers (the self-record above, default-data-handler's
+      // tenant-create consumer, city_setup) — RMW whatever exists now.
+      // When the arg is omitted nothing is touched: the UI treats an
+      // absent allowlist as "all postal codes serviceable", and the
+      // alternative — seeding pincode: [] — is rejected by mdms-v2 on
+      // update ("expected type: JSONArray, found: JSONObject").
+      // ────────────────────────────────────────────────────────────────
+      const pincodeAllowlist = Array.isArray(args.pincode_allowlist)
+        ? (args.pincode_allowlist as unknown[])
+            .map((p) => String(p).trim())
+            .filter((p) => p.length > 0)
+            // The tenant.tenants schema declares pincode items as Number —
+            // numeric strings must be coerced or mdms-v2 rejects the update
+            // ("expected type: Number, found: String"). Leading zeros still
+            // match in the UI: its gate strips them from both sides before
+            // comparing. Non-numeric entries pass through for deployments
+            // with alphanumeric-postcode schemas.
+            .map((p) => (/^[0-9]+$/.test(p) ? Number(p) : p))
+        : null;
+      if (pincodeAllowlist && pincodeAllowlist.length > 0) {
+        emitProgress({ phase: 'pincode:start', message: `Seeding pincode allowlist (${pincodeAllowlist.length} codes) on tenant.tenants`, pct: 97 });
+        try {
+          const tenantRecords = await digitApi.mdmsV2SearchRaw(tenantsScope, 'tenant.tenants', { limit: 100 });
+          for (const rec of tenantRecords) {
+            if (rec.isActive === false) continue;
+            if ((rec as { tenantId?: string }).tenantId !== tenantsScope) continue;
+            const existing = (rec.data as Record<string, unknown> | undefined)?.pincode;
+            if (Array.isArray(existing)
+              && existing.length === pincodeAllowlist.length
+              && existing.every((p, i) => String(p) === String(pincodeAllowlist[i]))) {
+              results.data.skipped.push(`tenant.tenants/${rec.uniqueIdentifier} (pincode allowlist)`);
+              continue;
+            }
+            try {
+              await digitApi.mdmsV2UpdateData(rec, {
+                ...(rec.data as Record<string, unknown>),
+                pincode: pincodeAllowlist,
+              });
+              results.data.copied.push(`tenant.tenants/${rec.uniqueIdentifier} (pincode allowlist)`);
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              results.data.failed.push(`tenant.tenants/${rec.uniqueIdentifier} (pincode allowlist): ${msg}`);
+            }
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          results.data.failed.push(`tenant.tenants (pincode allowlist search): ${msg}`);
+        }
+      }
 
       // success now factors in workflow + localization failures too —
       // schema/data-only success used to mask broken UI labels.
