@@ -85,6 +85,8 @@
   },
   "scripts": {
     "build:dashboard-css": "tailwindcss -c src/dashboard/tailwind.config.js -i src/dashboard/styles/input.css -o src/dashboard/styles/dashboard.css",
+    "prestart": "npm run build:dashboard-css",
+    "prebuild": "npm run build:dashboard-css",
     "start": "react-scripts start",
     "build": "GENERATE_SOURCEMAP=false SKIP_PREFLIGHT_CHECK=true react-scripts build",
     "build:prepare": "./build.sh",
