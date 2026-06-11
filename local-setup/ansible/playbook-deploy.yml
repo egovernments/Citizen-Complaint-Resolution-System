@@ -1972,6 +1972,19 @@
         replace: '\1STATE_LEVEL_TENANT_ID: {{ state_root }}'
       when: state_root != 'pg'
 
+    # The hrms-prereq-gate one-shot searches egov-user for the
+    # INTERNAL_MICROSERVICE_ROLE user at tenant `pg` before letting HRMS
+    # start. After the tenant rewrite HRMS boots against state_root, so
+    # the gate must check the same tenant — otherwise it passes on the
+    # pg seed user while state_root has no system user at all and HRMS
+    # crash-loops on the very thing the gate exists to prevent.
+    - name: "post-bootstrap — point hrms-prereq-gate at state_root in compose"
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '("tenantId":")pg(","roleCodes":\["INTERNAL_MICROSERVICE_ROLE"\])'
+        replace: '\1{{ state_root }}\2'
+      when: state_root != 'pg'
+
     - name: "post-bootstrap — recreate services (except egov-hrms) to pick up new STATE_LEVEL_TENANT_ID"
       ansible.builtin.shell: >-
         docker compose {{ compose_files }}
@@ -1990,11 +2003,58 @@
       changed_when: false
       when: state_root != 'pg'
 
+    # user-seed.sh only creates INTERNAL_USER on `pg`. HRMS (now pointed
+    # at state_root) tries to self-create it at boot, but egov-user's
+    # tenant-aware mobile validation (enforced even on _createnovalidate
+    # since :1044-preview) rejects HRMS's hardcoded 10-digit mobile on
+    # tenants with a stricter rule (e.g. ethiopia's ^[17][0-9]{8}$) and
+    # HRMS crash-loops with "Service returned null while fetching user".
+    # Seed it here with a mobile derived from the tenant's own rule:
+    # first allowed starting digit, padded with 9s to the rule length.
+    - name: "post-bootstrap — seed INTERNAL_USER system user on state_root for HRMS"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ upstream_kong_port }}/user/users/_createnovalidate"
+        method: POST
+        body_format: json
+        body:
+          RequestInfo: { apiId: digit, ver: "1.0" }
+          User:
+            userName: INTERNAL_USER
+            name: Internal Microservice User
+            mobileNumber: "{{ ((core_mobile_configs.mobileNumberAllowedStartingCharacters | first) ~ ('9' * ((core_mobile_configs.mobileNumberLength | int) - 1))) if core_mobile_configs is defined else '9999999999' }}"
+            gender: MALE
+            active: true
+            type: SYSTEM
+            tenantId: "{{ state_root }}"
+            password: "System@123"
+            roles:
+              - { code: INTERNAL_MICROSERVICE_ROLE, name: Internal Microservice Role, tenantId: "{{ state_root }}" }
+        status_code: [200, 400]
+        return_content: true
+      register: internal_user_seed
+      failed_when: >-
+        internal_user_seed.status != 200 and
+        'DuplicateUserName' not in (internal_user_seed.content | default(''))
+      changed_when: internal_user_seed.status == 200
+      when: state_root != 'pg'
+
     - name: "post-bootstrap — recreate egov-hrms after egov-user is healthy"
       ansible.builtin.shell: >-
         docker compose {{ compose_files }} up -d --force-recreate egov-hrms
       args:
         chdir: "{{ digit_dir }}"
+      when: state_root != 'pg'
+
+    # Without this wait a crash-looping HRMS (e.g. missing system user on
+    # state_root) sails through and the deploy reports success — that is
+    # exactly how the ethiopia HRMS outage went unnoticed on 2026-06-11.
+    - name: "post-bootstrap — wait for egov-hrms healthy after restart"
+      ansible.builtin.shell: docker inspect --format '{{ "{{" }}.State.Health.Status{{ "}}" }}' egov-hrms
+      register: hrms_health_post
+      retries: 30
+      delay: 10
+      until: hrms_health_post.stdout == 'healthy'
+      changed_when: false
       when: state_root != 'pg'
 
     # `docker compose restart egov-user` above does NOT cascade to
