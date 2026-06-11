@@ -149,7 +149,7 @@ the numbering is this doc's, not the PRD's.
 | **P1** — SLAs configurable per complaint type × escalation level (L0/L1/L2 table, e.g. Pothole 5d/2d/1d), not hardcoded | PRD v3.0 | **Closed** (this branch) | `CategorySLA.slaHoursByLevel` per row + `CRS.EscalationPolicy.defaultSlaHoursByLevel` tenant-wide; precedence documented in [Scheduler resolution algorithm](#scheduler-resolution-algorithm). Both editable in the configurator on this branch: SLA Matrix → **Levels** column (per row) and the [Escalation Settings page](#escalation-settings-page) (deployment-wide level SLAs). Note: the state-based matrix (BRD shape) and the level-based model (PRD shape) now **coexist**; per-row level config takes precedence. Product sign-off on the combined model is still pending — see [Open questions](#open-questions-and-deferred-work). |
 | **P2** — pre-breach warning at configurable threshold (default 75% of SLA), per workflow per tenant, sent to current owner AND supervisor, per-complaint (not bundled), suppressed if manually escalated, can be disabled per stage | PRD v3.0 | **Detection closed** (this branch); **delivery deferred (G5)** | Stateless threshold-crossing detection in the scheduler — OTEL attrs + Kafka event on `pgr-escalation-prebreach` (see [Pre-breach warnings](#pre-breach-warnings)). Enable flag + threshold are editable on the [Escalation Settings page](#escalation-settings-page) (this branch closed the previously config-API-only gap). Delivery (WhatsApp/SMS/email to owner + supervisor) is roadmap **G5**; the PRD's "to owner AND supervisor" routing is a G5 consumer concern. Suppressed-if-manually-escalated is **approximated**, not strictly implemented: a manual ESCALATE resets `lastModified` via the normal update flow but does **not** bump `escalationLevel` (only the scheduler's auto path writes that), so the clock restarts and a fresh warning at the same level can fire later in the new window — by design. **Residual gap**: per-stage disable is not implemented — only the global `preBreachWarning.enabled`. |
 | **P3** — auto-escalate on breach to the HRMS-mapped supervisor; single individual only | PRD v3.0 | **Shipped** (#770, state mapping in #775) | [`EscalationService#escalateComplaintWithReason`](../backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationService.java) — HRMS `reportingTo` lookup + workflow ESCALATE transition. |
-| **P4** — role-level escalation: complaint sitting in a role inbox (all GROs/LMEs) with no named assignee escalates to the role's direct supervisor when all members are same-department; multi-department case explicitly TBD in the PRD | PRD v3.0 | **Implemented (opt-in)** — [`docs/role-escalation-design.md`](./role-escalation-design.md), live-verified on Bomet (`pgr-escalation-role-flow.spec.ts`) | Panel-reviewed design: acting-role-per-state map, R1 pin → R2 ladder → R3 reportingTo-consensus resolution (exactly one individual or an actionable skip), per-scan cap, provenance fields. Hard prerequisite: the workflow ASSIGN-persistence fix ([eGovStack/core-services#1674](https://github.com/eGovStack/core-services/issues/1674)) — the eligibility gate reads the same broken table. Until enabled, `NO_ASSIGNEES` continues to cover (and mask) this journey. |
+| **P4** — role-level escalation: complaint sitting in a role inbox (all GROs/LMEs) with no named assignee escalates to the role's direct supervisor when all members are same-department; multi-department case explicitly TBD in the PRD | PRD v3.0 | **Implemented (opt-in)** — [`docs/role-escalation-design.md`](./role-escalation-design.md), live-verified on Bomet across `pgr-escalation-role-flow.spec.ts` (R1 pin), `pgr-escalation-r2r3-flow.spec.ts` (R2/R3 + cross-tenant memo on the fixture tenants), `pgr-escalation-full-flow.spec.ts` (named-assignee baseline), and the UI-driven `configurator/e2e/escalation-settings-flow.spec.ts` | Panel-reviewed design: acting-role-per-state map, R1 pin → R2 ladder → R3 reportingTo-consensus resolution (exactly one individual or an actionable skip), per-scan cap, provenance fields. Hard prerequisite: the workflow ASSIGN-persistence fix ([eGovStack/core-services#1674](https://github.com/eGovStack/core-services/issues/1674)) — the eligibility gate reads the same broken table. Until enabled, `NO_ASSIGNEES` continues to cover (and mask) this journey. |
 | **P5** — on escalation: removed from subordinate inbox (all role inboxes if role-assigned), appears in supervisor inbox, supervisor becomes owner, subordinate keeps search access | PRD v3.0 | **Not addressed** | Inbox semantics live in `egov-workflow-v2` / the inbox service — upstream + open decision. |
 | **P6** — state SLA clock resets on escalation; business SLA clock continues uninterrupted | PRD v3.0 | **Partial** | State clock reset works — auto-escalation refreshes `auditDetails.lastModifiedTime` on every escalation, so each level genuinely gets a fresh SLA window; a manual ESCALATE resets the clock too (via the normal update flow) but does not bump `escalationLevel` — only the scheduler's auto path writes the level. The business SLA clock is **not modeled** — open decision. |
 | **P7** — escalation visible in audit trail (recipient name, designation, timestamp, comments); citizen notified + escalation entry in complaint timeline visible to citizen and employee | PRD v3.0 | **Closed** (this branch) for audit-trail fields; **notification deferred (G5)** | Enriched ESCALATE workflow comment carries supervisor name + designation + elapsed/SLA; timeline = the existing PGR workflow timeline, visible to citizen and employee — see [Escalation timeline and audit trail](#escalation-timeline-and-audit-trail). The citizen *push notification* on escalation is roadmap **G5**. |
@@ -1721,9 +1721,110 @@ only**, not an authorization bypass — the workflow transition itself is
 still permission-checked. The `/escalation/_trigger` endpoint is **not**
 affected: it is gated on `SUPERUSER` before any role injection happens.
 
+### SYSTEM transitions bypass action-role lists
+
+**Symptom.** The escalation cron — which transitions under a `SYSTEM`
+identity — successfully executes `ESCALATE` at workflow states whose
+`actions[].roles` list only `GRO`/`AUTO_ESCALATE`/`PGR_VIEWER`, with no
+`SYSTEM` anywhere. Confirmed live on the fixture tenants: the r2r3 e2e
+suite's sentinel complaint was role-escalated by the background cron on
+current Bomet even though the business-service grants the ESCALATE action
+to none of the cron's roles. The behaviour has flipped across Bomet builds
+(an earlier build rejected the same transition), so the suite measures it
+live instead of assuming a branch.
+
+**Implication.** With `roleEscalation` enabled, the background cron
+autonomously escalates unattended complaints — intended per the PRD's
+primary journey — but it means the workflow's per-state role lists are not
+the gate you might assume for scheduler-driven transitions. Whether
+`egov-workflow-v2` *should* honour SYSTEM transitions the state's role list
+does not grant is an open question to raise upstream; until it is answered,
+treat the role-grant model for cron transitions as build-dependent.
+
 ---
 
 ## Testing strategy
+
+### Testing methodology
+
+The rules below are not aspirations — each one was adopted after a concrete
+failure in this project taught it. New escalation tests must follow them.
+
+1. **Layered evidence, never a single test.** A claim of "working" requires:
+   unit tests pinning the behavioral contract → a live e2e exercising the real
+   stack → independent verification of the e2e's *artifacts* at layers that
+   don't share a failure mode (API read + DB row + OTEL trace). Example: the
+   #1674 fix was proven by the `_search` response, a `eg_wf_assignee_v2` row
+   whose `createdby` showed it was an *organic* write (manual fixup rows are
+   deliberately stamped `demo-fixup` so provenance is checkable), and the
+   downstream escalation consuming it.
+
+2. **A regression test must be shown failing without the fix.** New tests are
+   run once with the fix stashed/reverted; if they pass anyway they prove
+   nothing (the `@JsonAlias` round-trip tests fail 2/4 without the alias; the
+   jargon-ban scanner was calibrated against deliberately seeded violations).
+   The `tempo.ts` helper passed for weeks while returning null on every call —
+   a test that cannot fail is worse than no test.
+
+3. **Determinism over speed.** Test SLAs are ~15s, waits before triggering a
+   full 60s, async-persister settles 10s, and suite timeouts assume 10+
+   minutes. A tight margin (7s SLA, 10s wait) trades flakiness for speed —
+   the wrong trade everywhere, and especially against a live stack.
+
+4. **Surgical test configuration, never global.** SLA overrides are seeded as
+   a dedicated `CRS.CategorySLA` tuple that only the test's complaints carry —
+   never by patching the shared v0 config (a global 60s SLA plus an unlucky
+   cron tick escalates the whole tenant). Same principle for role escalation:
+   fixture role codes (`E2E_*`) have **zero holders in production tenants**,
+   so an enabled test window resolves production complaints to a harmless
+   `NO_ROLE_SUPERVISOR` skip — blast radius limited *by construction*, and the
+   suites assert that invariant before running.
+
+5. **Live interference is measured, not assumed.** The background cron runs
+   the same code path every 300s. Suites anchor its phase with a *sentinel*
+   complaint (observe the cron acting on a sacrificial twin → a quiet window
+   opens for the real scenario) and treat the cron's capability (mutating vs
+   rejected) as a **measured branch**, not a constant — it has flipped across
+   builds on this stack.
+
+6. **Shared-state discipline.** Anything touching the production-shared
+   `CRS.EscalationPolicy` singleton must: snapshot before, restore
+   byte-identically after (even on failure), and verify the restore with
+   **≥3 stable reads spanning ≥120s** — the MDMS pipeline has redelivered an
+   acked write ~60–80s after a verified restore (see Operational gotchas).
+   Escalation suites are serialized; the r2r3 spec re-reads the live policy
+   before every trigger and fails fast with a concurrent-writer diagnostic
+   (two suites once clobbered each other mid-run).
+
+7. **Dry-run before real.** Every mutating scenario is first asserted via
+   `dryRun:true` — including a zero-mutation proof (re-read both state layers
+   after the dry run). Skip scenarios (ambiguity, not-mapped) are asserted
+   *only* via dry runs, since skips are read-only by definition.
+
+8. **Fixtures are reproducible code, not snowflakes.** The role fixture is an
+   idempotent script (`scripts/setup-role-fixture.mjs`): search-first,
+   poll-until-visible, re-run = no-op verify. Specs re-resolve every uuid from
+   HRMS at runtime — nothing hardcoded — and skip with a pointer to the setup
+   script when the fixture has drifted.
+
+9. **Before/after differentials for bug fixes.** A fix's live proof holds the
+   stack constant and changes one variable (the morning run needed a manual
+   SQL fixup; the evening run, same request shape and same stack with only the
+   image changed, needed none).
+
+10. **Honest residue accounting.** Every suite logs SRIDs for traceability,
+    documents what it leaves behind (test complaints persist; workflow history
+    is append-only), and the run report states what was *not* covered rather
+    than letting a green suite imply totality.
+
+Process-level: implementation changes go through adversarial review before
+deploy (independent reviewers attempt to refute each finding; three of the
+role-escalation majors — cross-tenant cache poisoning, HRMS truncation, wire-
+format drift — were caught this way, before production), and agent-reported
+results are independently re-verified before being claimed (re-run the suite,
+or verify its artifacts read-only when re-running would mutate production).
+
+### The five layers
 
 Five layers, top-down.
 
@@ -1847,6 +1948,20 @@ validator is opaque and tightly coupled to a live Postgres. What we do have:
   no amount of correct backend behaviour helps.
 
 ### Layer 4 — Integration tests
+
+> **Test fixture.** The role-resolution scenarios run against two
+> persistent fixture tenants on the Bomet box — `ke.etoeroles` /
+> `ke.etoebeta` (egov-user rejects any digit in a tenantId, hence not
+> `ke.e2e…`) — with fixture-only roles
+> `E2E_SUP1`/`E2E_SUP2`/`E2E_ROLE3`/`E2E_ROLE4` at root `ke` and eight
+> employees laid out to exercise every resolution path. The safety
+> invariant that makes the suites runnable against production: those role
+> codes have **zero holders at `ke.bomet`**, so any production complaint
+> reaching the role path during an enabled window terminates in a
+> read-only `NO_ROLE_SUPERVISOR` skip. The fixture is built
+> (create-or-verify, idempotent) by
+> [`scripts/setup-role-fixture.mjs`](../tests/integration-tests/scripts/setup-role-fixture.mjs)
+> — re-run it for a no-op verify.
 
 - **Files.**
   - [`tests/integration-tests/tests/lifecycle/pgr-escalation-r2r3-flow.spec.ts`](../tests/integration-tests/tests/lifecycle/pgr-escalation-r2r3-flow.spec.ts)

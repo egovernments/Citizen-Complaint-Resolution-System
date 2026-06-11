@@ -1,10 +1,19 @@
 # Optional role-level escalation — design
 
 > **Status**: **IMPLEMENTED** (branch `feat/escalation-prd-alignment`, PR #815) and
-> verified live on Bomet — e2e `pgr-escalation-role-flow.spec.ts` (19/19 with the
-> full-flow spec): unassigned complaint → dryRun `WOULD_ESCALATE` with `R1_PIN`
-> provenance → real escalation to the pinned supervisor → OTEL child span asserted
-> from Tempo. Opt-in: absent/disabled config is byte-identical to today (pinned by a
+> verified live on Bomet across the full resolution matrix —
+> `pgr-escalation-role-flow.spec.ts` (19/19 with the full-flow spec) proves **R1**:
+> unassigned complaint → dryRun `WOULD_ESCALATE` with `R1_PIN` provenance → real
+> escalation to the pinned supervisor → OTEL child span asserted from Tempo;
+> `pgr-escalation-r2r3-flow.spec.ts` (9/9) proves **R2** exactly-one and ambiguous,
+> **R3** consensus and split, plus the cross-tenant memo proof (one scan, two
+> tenants, two different targets) on the persistent fixture tenants
+> `ke.etoeroles`/`ke.etoebeta` built by
+> `tests/integration-tests/scripts/setup-role-fixture.mjs`; and the UI-driven
+> configuration spec `escalation-settings-flow.spec.ts` (6/6) drives
+> enable → save → test scan → disable through the real Settings page with API
+> asserts (see Verification below).
+> Opt-in: absent/disabled config is byte-identical to today (pinned by a
 > serialization test). Review hardening beyond this design: tenant-keyed resolution
 > memoization (one scan can span multiple city tenants), HRMS page-truncation guard
 > (no exactly-one verdict from a truncated page), tri-state HRMS lookups (a transient
@@ -81,9 +90,11 @@ missing-join-row case. Therefore:
   `state.actions[].roles` is not viable — every watched state also carries
   viewer/citizen/system roles, so "who owes action" is underivable without
   fragile role-class heuristics. (Same precedent as `CRS.WorkflowStateMapping`:
-  an explicit operator dictionary replacing inference.) The business-service
-  IS used as a *validator*: the UI warns when a configured acting role does
-  not appear in that state's action roles.
+  an explicit operator dictionary replacing inference.) Using the
+  business-service as a *validator* — a UI warning when a configured acting
+  role does not appear in that state's action roles — was considered but
+  descoped from the locked implementation; it is a noted follow-up, not
+  shipped.
 - `supervisorRoleByRole` — the role ladder, e.g. `{ "GRO": "PGR_SUPERVISOR" }`.
 - `maxPerScan` — blast-radius cap (default **10** when the object is present
   but the field absent): at most N role-escalations per scan; the rest are
@@ -194,14 +205,35 @@ HTTP 409 `SCAN_IN_PROGRESS` (dry runs are unaffected). This is sufficient for
 the single-replica deployments this stack targets; multi-replica would need a
 shared lock and is out of scope.
 
+Two live observations belong here. First, the cron transitions under a
+**SYSTEM identity**, and on current Bomet `egov-workflow-v2` accepts the
+cron's ESCALATE even at states whose action role lists do not include
+`SYSTEM` (ESCALATE at `PENDINGFORASSIGNMENT` carries only
+`GRO`/`AUTO_ESCALATE`/`PGR_VIEWER`) — confirmed MUTATING live by the r2r3
+suite's sentinel; the behaviour has flipped across Bomet builds, so the
+suite measures it instead of assuming a branch. With `roleEscalation`
+enabled the background cron therefore escalates unattended complaints
+autonomously — intended per the PRD — but whether workflow should honour
+SYSTEM transitions the state's role list does not grant is an open upstream
+question. Second, the e2e suites that reconfigure the production-shared
+`CRS.EscalationPolicy` singleton must be **serialized** (the r2r3 spec
+fails fast with a concurrent-writer diagnostic) — see Verification.
+
 ## Operator UI (Escalation Settings)
 
 - **Card 2 opt-in block**: checkbox *"Escalate complaints nobody has picked
   up"* → reveals per-watched-state acting-role selects (role list from
-  ACCESSCONTROL-ROLES, validated against the workflow business-service with a
-  warning on mismatch), the role→supervisor-role rows, max-per-scan, and
-  *"Pin a specific person per role…"* (RoleSupervisors editor: role,
-  department or "All departments", HRMS employee picker).
+  ACCESSCONTROL-ROLES; the business-service mismatch warning is the descoped
+  follow-up noted under Configuration), the role→supervisor-role rows,
+  max-per-scan, and *"Pin a specific person per role…"* (RoleSupervisors
+  editor: role, department or "All departments", HRMS employee picker).
+- **Known limitation — pinning city-tenant employees**: the pin editor's
+  employee look-up searches HRMS at the *page* (state) tenant, so an employee
+  who exists only on a city tenant cannot be looked up — and therefore cannot
+  be pinned — through the UI today. The failure is graceful ("No active
+  employee found…", the Save-pin gate stays closed; asserted in the UI e2e
+  spec). Until a tenant-scoped look-up ships, such pins are seeded via the
+  API/MDMS (`CRS.RoleSupervisors`) directly.
 - **Enable flow guardrails**: enabling prompts *"Run a test scan first"* (the
   dry-run twin `previewEscalation` resolves through the same R1→R3 path, so
   `WOULD_ESCALATE` counts and provenance are exact); and warns when the
@@ -222,6 +254,33 @@ default inbox view (search always works). This is the deferred P5
 check on the target tenant; until P5 lands, supervisors find escalated items
 via search/assigned-to-me views. Citizen notification on escalation remains
 G5, same as named-assignee escalations.
+
+## Verification
+
+> Methodology (pacing, sentinels, snapshot/restore discipline, dry-run-first,
+> fixture rules) is defined centrally in the design doc's
+> [Testing methodology](./escalation-feature-design.md#testing-methodology) —
+> binding for these suites too.
+
+Four live suites cover the matrix end to end on Bomet:
+
+| Suite | What it proves |
+|---|---|
+| [`pgr-escalation-full-flow.spec.ts`](../tests/integration-tests/tests/lifecycle/pgr-escalation-full-flow.spec.ts) | The named-assignee baseline: tuple-scoped 15 s SLA, ASSIGN (#1674 regression read), dryRun → real escalation, OTEL trace from Tempo. |
+| [`pgr-escalation-role-flow.spec.ts`](../tests/integration-tests/tests/lifecycle/pgr-escalation-role-flow.spec.ts) | **R1** end to end: unassigned complaint + `GRO.ALL` pin → dryRun with `R1_PIN` provenance → real escalation to the pinned supervisor → `escalation.complaint` child span. |
+| [`pgr-escalation-r2r3-flow.spec.ts`](../tests/integration-tests/tests/lifecycle/pgr-escalation-r2r3-flow.spec.ts) | **R2** exactly-one (real) and ambiguous (read-only skip), **R3** consensus (real) and split (skip), plus the cross-tenant memo proof — one scan resolving the same acting role to different people on two city tenants. |
+| [`escalation-settings-flow.spec.ts`](../configurator/e2e/escalation-settings-flow.spec.ts) | The operator journey through the real UI: enable → save (read-after-write) → dry-run test scan → pin-lookup limitation UX → disable, with API asserts on the exact persisted `roleEscalation` object. |
+
+**Run cadence: serialize these suites.** All four snapshot/reconfigure the
+production-shared `CRS.EscalationPolicy` singleton; the r2r3 spec fails fast
+with an explicit CONCURRENT WRITER diagnostic when another session touches
+the row mid-run. The R2/R3/cross-tenant scenarios run on the persistent
+fixture tenants `ke.etoeroles` / `ke.etoebeta` (roles
+`E2E_SUP1`/`E2E_SUP2`/`E2E_ROLE3`/`E2E_ROLE4` at root `ke`, eight employees
+across the two tenants; zero `E2E_*` holders at production `ke.bomet` by
+invariant), built create-or-verify-idempotently by
+[`tests/integration-tests/scripts/setup-role-fixture.mjs`](../tests/integration-tests/scripts/setup-role-fixture.mjs)
+— re-run it for a no-op verify.
 
 ## Rollout
 
