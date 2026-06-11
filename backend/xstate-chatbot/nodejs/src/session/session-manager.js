@@ -14,18 +14,45 @@ const emailTenantService = require("../machine/service/email-tenant-service");
 // Format: { mobileNumber: { timestamp: Date, waitingForEmail: boolean } }
 const sandboxOrgCodeTracker = {};
 
+// Prevent memory leak - automatically clean up expired sessions every 5 minutes
+const cleanupInterval = setInterval(() => {
+  try {
+    const now = Date.now();
+    const EXPIRY_TIME = 30 * 60 * 1000; // 30 minutes
+    let cleanedCount = 0;
+    
+    Object.keys(sandboxOrgCodeTracker).forEach(mobileNumber => {
+      const entry = sandboxOrgCodeTracker[mobileNumber];
+      if (entry && (now - entry.timestamp) > EXPIRY_TIME) {
+        delete sandboxOrgCodeTracker[mobileNumber];
+        cleanedCount++;
+      }
+    });
+    
+    if (cleanedCount > 0) {
+      console.log(`Session cleanup: Removed ${cleanedCount} expired sessions. Active sessions: ${Object.keys(sandboxOrgCodeTracker).length}`);
+    }
+  } catch (error) {
+    console.error('Session cleanup error:', error);
+  }
+}, 5 * 60 * 1000); // Run cleanup every 5 minutes
+
+// Clear interval on process termination to prevent memory leaks
+process.on('SIGINT', () => clearInterval(cleanupInterval));
+process.on('SIGTERM', () => clearInterval(cleanupInterval));
+
 async function getAuthenticatedSandboxUser(mobileNumber, tenantId) {
-  const user = await userService.loginUser(mobileNumber, tenantId);
+  const user = await userService.loginOrCreateUser(mobileNumber, tenantId);
   if (!user || !user.userInfo) {
-    throw new Error(`User is not registered in tenant ${tenantId}`);
+    throw new Error(`Failed to authenticate or create user in tenant ${tenantId}`);
   }
 
-  const enrichedUser = await userService.enrichuserDetails(user);
-  enrichedUser.userId = enrichedUser.userInfo.uuid;
-  enrichedUser.mobileNumber = mobileNumber;
-  enrichedUser.name = enrichedUser.userInfo.name;
-  enrichedUser.locale = enrichedUser.userInfo.locale;
-  return enrichedUser;
+  // User is already enriched by loginOrCreateUser
+  user.userId = user.userInfo.uuid;
+  user.mobileNumber = mobileNumber;
+  user.name = user.userInfo.name;
+  user.locale = user.userInfo.locale;
+  return user;
 }
 
 class SessionManager {
@@ -164,6 +191,9 @@ class SessionManager {
           };
           // Now continue to create the session - DON'T RETURN!
         } catch (error) {
+          // Log the actual error for debugging
+          console.error('Error in getAuthenticatedSandboxUser:', error);
+          
           // Validation succeeded but user create/login failed - clear tracker.
           delete sandboxOrgCodeTracker[mobileNumber];
 
@@ -218,6 +248,9 @@ class SessionManager {
           };
           // Continue to create session - DON'T RETURN!
         } catch (error) {
+          // Log the actual error for debugging
+          console.error('Error in getAuthenticatedSandboxUser (org selection):', error);
+          
           // User not registered in selected organization
           delete sandboxOrgCodeTracker[mobileNumber];
 

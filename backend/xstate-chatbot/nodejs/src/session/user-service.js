@@ -21,18 +21,47 @@ class UserService {
 
   async loginOrCreateUser(mobileNumber, tenantId) {
     try {
+      // Validate inputs
+      if (!mobileNumber || !tenantId) {
+        throw new Error('Mobile number and tenant ID are required');
+      }
+
       let user = await this.loginUser(mobileNumber, tenantId);
       if (!user) {
-        let createResult = await this.createUser(mobileNumber, tenantId);
-        if (!createResult) {
-          throw new Error(`Failed to create user for ${mobileNumber}`);
+        // User doesn't exist, try to create
+        try {
+          let createResult = await this.createUser(mobileNumber, tenantId);
+          if (!createResult) {
+            throw new Error(`Failed to create user for ${mobileNumber}`);
+          }
+          
+          // The create response already includes the auth token and user info!
+          // No need to login again - just use the create response directly
+          if (createResult.access_token && createResult.UserRequest) {
+            user = {
+              authToken: createResult.access_token,
+              refreshToken: createResult.refresh_token,
+              userInfo: createResult.UserRequest
+            };
+          } else {
+            // Fallback: try to login after creation if no token in create response
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            user = await this.loginUser(mobileNumber, tenantId);
+          }
+        } catch (createError) {
+          // If creation fails with duplicate user, try login once more
+          // This handles race conditions where user was created between login attempts
+          if (createError.message && createError.message.includes('Duplicate')) {
+            console.log('User already exists, attempting login again...');
+            user = await this.loginUser(mobileNumber, tenantId);
+          } else {
+            throw createError;
+          }
         }
-        // Add a small delay before retry login to allow for database consistency
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        user = await this.loginUser(mobileNumber, tenantId);
       }
+      
       if (!user) {
-        throw new Error(`Unable to login after user creation for ${mobileNumber}`);
+        throw new Error(`Unable to authenticate user ${mobileNumber} for tenant ${tenantId}`);
       }
 
       user = await this.enrichuserDetails(user);
@@ -91,6 +120,7 @@ class UserService {
     };
 
     let url = config.egovServices.userServiceHost + config.egovServices.userServiceOAuthPath;
+    
     let options = {
       method: 'POST',
       headers: headers,
@@ -145,6 +175,7 @@ class UserService {
     };
 
     let url = config.egovServices.userServiceHost + config.egovServices.userServiceCreateCitizenPath;
+    
     let options = {
       method: 'POST',
       headers: {
