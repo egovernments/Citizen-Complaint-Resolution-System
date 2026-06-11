@@ -79,6 +79,16 @@ since `feat/escalation-prd-alignment`, as a `slaSource` field on each
 `/escalation/_trigger` `details[]` entry — so an operator can tell from a single
 trace or trigger response which configuration answered the lookup.
 
+Span structure: the scan span carries the **aggregates**
+(`escalation.scanned/escalated/wouldEscalate/roleEscalated/preBreachWarnings/skipped.*`)
+and every complaint the scan touches gets its own **child span** named
+`escalation.complaint` carrying the per-complaint attributes
+(`complaint.serviceRequestId`, `escalation.fromLevel/toLevel/skipReason/slaSource`,
+plus `escalation.roleEscalation/resolutionStrategy/actingRole/candidateCount/departmentFiltered`
+on the role path). Before the child spans, per-complaint attributes were written
+last-writer-wins onto the single scan span and were only trustworthy for
+single-complaint scans.
+
 **What landed in PR #770**: three MDMS schemas — `CRS.CategorySLA`, `CRS.StateSLA`,
 `CRS.SLAAuditLog` — in
 [`utilities/default-data-handler/src/main/resources/schema/CRS.json`](../utilities/default-data-handler/src/main/resources/schema/CRS.json),
@@ -1717,6 +1727,17 @@ Plain JUnit + Mockito with package-private access, all under
 | [`EscalationServiceTest`](../backend/pgr-services/src/test/java/org/egov/pgr/service/EscalationServiceTest.java) | 8 | 6 existing escalation-action tests + 2 PRD-alignment tests: `previewEscalation` performs zero producer pushes and zero workflow updates (mock-verified) while still returning the supervisor uuid; the enriched comment includes name + designation when the HRMS summary resolves (captured `Workflow` arg). |
 | [`ServiceRequestValidatorTest`](../backend/pgr-services/src/test/java/org/egov/pgr/validator/ServiceRequestValidatorTest.java) | 15 | 14 existing + 1 new; 5 of the 15 cover the escalate-comment rule, including the new one — `escalateCommentRequired=false` policy allows a blank comment (mocked MDMS fetch path). |
 
+Role-level escalation adds six more classes (suite total **96**):
+
+| Test class | Tests | What it pins |
+|---|---|---|
+| [`EscalationServiceRoleResolverTest`](../backend/pgr-services/src/test/java/org/egov/pgr/service/EscalationServiceRoleResolverTest.java) | 18 | The R1→R2→R3 resolution: pin hit, department row beats `ALL`, stale pin falls through, R2 exactly-one / two-→`AMBIGUOUS` / zero-→retry / zero-zero-→`NO_ROLE_SUPERVISOR`, a configured ladder never falls to R3, R3 consensus and split, **tenant-keyed memoization** (two tenants sharing a key get two HRMS searches and distinct targets), **truncation guard** (a 100-row HRMS page can never yield an exactly-one verdict), and **transient-failure semantics** (an HRMS blip skips-and-retries instead of bypassing an operator pin, and is never memoized). |
+| [`EscalationServiceRoleEscalationTest`](../backend/pgr-services/src/test/java/org/egov/pgr/service/EscalationServiceRoleEscalationTest.java) | 8 | `escalateToRoleTarget`: exact comment template, Kafka event provenance, clock reset, department-fallback comment, uuid fallback, workflow rejection, max-depth, `previewRoleEscalation` zero mutations. |
+| [`EscalationSchedulerRoleWiringTest`](../backend/pgr-services/src/test/java/org/egov/pgr/service/EscalationSchedulerRoleWiringTest.java) | 7 | The byte-identical-when-disabled pins (incl. a **serialized-JSON key-set assertion** so the wire format on disabled tenants cannot drift), `ROLE_NOT_MAPPED`, `maxPerScan` deferral, dryRun parity with provenance, real escalation to the resolved uuid. |
+| [`EscalationSchedulerGuardTest`](../backend/pgr-services/src/test/java/org/egov/pgr/service/EscalationSchedulerGuardTest.java) | 2 | The scan-overlap guard: a concurrent mutating scan throws `SCAN_IN_PROGRESS` (and the guard releases); dry runs bypass it. |
+| [`HRMSUtilRoleSearchTest`](../backend/pgr-services/src/test/java/org/egov/pgr/util/HRMSUtilRoleSearchTest.java) | 8 | `searchEmployeesByRole` raw-page truncation detection before filtering, transport-failure vs genuinely-empty distinction, `isActiveEmployee` tri-state. |
+| [`EscalationControllerTest`](../backend/pgr-services/src/test/java/org/egov/pgr/web/controllers/EscalationControllerTest.java) | 3 | `SCAN_IN_PROGRESS` → HTTP 409 with a `{code, message}` body; other `CustomException`s propagate; happy path 200. |
+
 On top of those, the scheduler **dryRun test**
 ([`EscalationSchedulerDryRunTest`](../backend/pgr-services/src/test/java/org/egov/pgr/service/EscalationSchedulerDryRunTest.java))
 pins the trigger contract:
@@ -1727,8 +1748,7 @@ never invoked.
 - **Run.**
 
   ```bash
-  cd backend/pgr-services && mvn test \
-    -Dtest='EscalationScheduler*Test,EscalationServiceTest,ServiceRequestValidatorTest'
+  cd backend/pgr-services && mvn test   # 96 tests — these classes are the module's entire suite
   ```
 
 - **Why these.** They pin every transition in the resolution algorithm
@@ -1808,6 +1828,20 @@ validator is opaque and tightly coupled to a live Postgres. What we do have:
 ### Layer 4 — Integration tests
 
 - **Files.**
+  - [`tests/integration-tests/tests/lifecycle/pgr-escalation-role-flow.spec.ts`](../tests/integration-tests/tests/lifecycle/pgr-escalation-role-flow.spec.ts)
+    — the role-escalation full-flow E2E: snapshots the live
+    `CRS.EscalationPolicy` row (restores it byte-identically in cleanup,
+    verified), seeds a tuple-scoped 15s SLA + `roleEscalation`
+    (acting role `GRO`, `maxPerScan` 10) + a `GRO.ALL` pin, files an
+    **unassigned** complaint, dryRuns (`WOULD_ESCALATE` with `R1_PIN`
+    provenance), escalates for real to the pinned supervisor with the
+    *"Auto-escalated (no recorded assignee)"* comment, and asserts the
+    OTEL trace from Tempo — parent scan span `escalation.roleEscalated`
+    plus the parent-linked `escalation.complaint` child span carrying
+    `roleEscalation`/`resolutionStrategy`/`slaSource`. Both this spec and
+    the full-flow spec end with a Tempo trace assertion (the trace-id
+    extraction helper in `tests/utils/tempo.ts` was repaired in the same
+    change — it had never worked due to a shell-quoting bug).
   - [`tests/integration-tests/tests/lifecycle/pgr-escalation-full-flow.spec.ts`](../tests/integration-tests/tests/lifecycle/pgr-escalation-full-flow.spec.ts)
     — the canonical full-flow E2E: seeds a test-scoped `CRS.CategorySLA` row
     (per-level SLA ≈15s for a dedicated tuple — never touches the global v0
@@ -1946,7 +1980,7 @@ For the Bomet operator runbook (Tempo curl + log greps), see
 | **StateSLA** | A singleton record in `CRS.StateSLA` holding per-state default SLA hours. Used when the matching CategorySLA cell is null. |
 | **v0 EscalationConfig** | The pre-existing `RAINMAKER-PGR.EscalationConfig` schema with per-level SLAs + per-`serviceCode` overrides. Kept as a fallback for not-yet-migrated tenants. |
 | **slaSource** | Which layer answered the SLA lookup. Since `feat/escalation-prd-alignment` it is both a response field on every `/escalation/_trigger` `details[]` entry (`null` for outcomes that skip before resolution — `MAX_DEPTH_REACHED`, `NO_LAST_MODIFIED_TIME`) and the OTEL span attribute `escalation.slaSource`. One of `CRS.CategorySLA.level`, `CRS.CategorySLA`, `CRS.EscalationPolicy.level`, `CRS.StateSLA`, `v0.EscalationConfig`. |
-| **skipReason** | One of the nine values in [`EscalationSkipReason`](../backend/pgr-services/src/main/java/org/egov/pgr/util/EscalationSkipReason.java): `MAX_DEPTH_REACHED`, `NO_LAST_MODIFIED_TIME`, `SLA_NOT_BREACHED`, `NO_ASSIGNEES`, `NO_SUPERVISOR_IN_HRMS`, `WORKFLOW_TRANSITION_FAILED`, `UNMAPPED_CATEGORY`, `STATE_MAPPING_MISSING`, `SUCCESS`. `STATE_MAPPING_MISSING` is emitted when `CRS.WorkflowStateMapping` has no entry for the complaint's current workflow state; resolution falls back to v0 EscalationConfig. |
+| **skipReason** | One of the twelve values in [`EscalationSkipReason`](../backend/pgr-services/src/main/java/org/egov/pgr/util/EscalationSkipReason.java): `MAX_DEPTH_REACHED`, `NO_LAST_MODIFIED_TIME`, `SLA_NOT_BREACHED`, `NO_ASSIGNEES`, `NO_SUPERVISOR_IN_HRMS`, `WORKFLOW_TRANSITION_FAILED`, `UNMAPPED_CATEGORY`, `STATE_MAPPING_MISSING`, the three role-escalation reasons (`ROLE_NOT_MAPPED`, `ROLE_SUPERVISOR_AMBIGUOUS`, `NO_ROLE_SUPERVISOR`), `SUCCESS`. `STATE_MAPPING_MISSING` is emitted when `CRS.WorkflowStateMapping` has no entry for the complaint's current workflow state; resolution falls back to v0 EscalationConfig. |
 | **BRD** | Business Requirements Document. The Mozambique PRD/CRS v4.0 PDF is referenced throughout this codebase only as an industry source for the *shape* of generic CRS configuration. No BRD-specific data is seeded by PR #770. |
 | **IGE / IGSAE** | BRD-specific path names — IGE (Inspecção-Geral do Estado, public-service complaints) and IGSAE (Inspecção-Geral das Actividades Económicas, economic-agent complaints). Used here only as **examples** of what a tenant might populate as their `path` value; the schema accepts any string. |
 | **Tuple** | Shorthand for `(path, category, subcategoryL1)`, the join key of `CRS.CategorySLA`. |
