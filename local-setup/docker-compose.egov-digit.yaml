@@ -2188,6 +2188,14 @@ services:
       # is on the egov-network too, listens on 8107, and forwards to
       # the real egov-user container.
       DIGIT_USER_HOST: http://egov-user-proxy:8107
+      # The DIGIT API gateway that token-exchange-svc forwards authenticated
+      # /kc/* calls to. The keycloak-deploy image defaults DIGIT_GATEWAY_HOST
+      # to the legacy zuul address http://gateway:8080, which does not exist
+      # on a kong-based stack — kong's proxy listens on :8000 and the service
+      # is named `kong`. Without this every /kc/* request 502s with
+      # "getaddrinfo EAI_AGAIN gateway". (CCRS#771-adjacent; the block sets
+      # DIGIT_USER_HOST but historically omitted the gateway host.)
+      DIGIT_GATEWAY_HOST: ${DIGIT_GATEWAY_HOST:-http://kong:8000}
       # Defaults to ADMIN (which user-seed.sh always creates on a
       # fresh DIGIT install). On environments where you have a
       # dedicated INTERNAL_MICROSERVICE_ROLE seeded, override via
