@@ -1750,6 +1750,11 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: ${NOVU_NODE_ENV:-local}
+      # Required when NODE_ENV != local (the worker exits with "Missing
+      # environment variables: API_ROOT_URL" otherwise). Server-side call,
+      # so point at the api service directly — not the nginx-proxied
+      # NOVU_API_ROOT_URL public URL the dashboard uses.
+      API_ROOT_URL: http://novu-api:3000
       MONGO_URL: mongodb://${NOVU_MONGO_USERNAME:-root}:${NOVU_MONGO_PASSWORD:-secret}@novu-mongo:27017/novu-db?authSource=admin
       MONGO_MAX_POOL_SIZE: '500'
       REDIS_HOST: redis
