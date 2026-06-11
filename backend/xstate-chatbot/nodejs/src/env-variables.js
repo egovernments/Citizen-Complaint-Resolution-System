@@ -7,7 +7,7 @@ const envVariables = {
     port: process.env.SERVICE_PORT || 8082,
     contextPath: process.env.CONTEXT_PATH || '/xstate-chatbot',
 
-    whatsAppProvider: process.env.WHATSAPP_PROVIDER || 'ValueFirst',
+    whatsAppProvider: process.env.WHATSAPP_PROVIDER || 'Twilio',
 
     serviceProvider: process.env.SERVICE_PROVIDER || 'eGov',
 
@@ -130,7 +130,7 @@ const envVariables = {
 
     userService: {
         userServiceHardCodedPassword: process.env.USER_SERVICE_HARDCODED_PASSWORD || '123456',
-        userLoginAuthorizationHeader: process.env.USER_LOGIN_AUTHORIZATION_HEADER || '',
+        userLoginAuthorizationHeader: process.env.USER_LOGIN_AUTHORIZATION_HEADER || 'Basic ZWdvdi11c2VyLWNsaWVudDo=',
         systemUserMobile: process.env.SYSTEM_USER_MOBILE || '9999999999',
     },
 
