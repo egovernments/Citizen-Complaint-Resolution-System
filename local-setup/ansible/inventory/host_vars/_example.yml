@@ -132,6 +132,18 @@ footer_bw_logo_url: ""
 # Both modes bind port 18080 internally; only one can be active.
 digit_ui_mode: static
 
+# Optional (static mode only): serve a PREBUILT bundle image instead of
+# cloning + building digit-ui-esbuild from git on the host. The playbook
+# pulls the image and extracts its baked /var/web/digit-ui into
+# /opt/digit-ui-esbuild/build/ (the dir nginx already serves). Build and
+# publish from the monorepo with:
+#   cd digit-ui-esbuild
+#   docker build -f docker/Dockerfile \
+#     -t <registry>/digit-ui-esbuild:<YYYYMMDD-HHMMSS> \
+#     -t <registry>/digit-ui-esbuild:nightly-develop . && docker push --all-tags <registry>/digit-ui-esbuild
+# Leave unset to keep the legacy git-clone + on-host esbuild behavior.
+# digit_ui_bundle_image: "ghcr.io/subhashini-egov/digit-ui-esbuild:nightly-develop"
+
 # ────────── digit-ui-v2 (Vite + React 19 citizen SPA) ──────────
 #
 # New citizen-facing SPA served at /citizen/ (separate from the

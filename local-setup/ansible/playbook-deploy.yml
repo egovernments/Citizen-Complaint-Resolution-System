@@ -77,6 +77,10 @@
       when:
         - digit_ui_mode in ['static', 'hmr']
         - ansible_system != 'Darwin'
+        # When a prebuilt bundle image is pinned (static mode), the git
+        # tree is not the source of what nginx serves — leave it alone so
+        # a deploy can't silently regress build/ to an older checkout.
+        - not (digit_ui_mode == 'static' and (digit_ui_bundle_image | default('')) | length > 0)
 
 
   tasks:
@@ -749,6 +753,32 @@
       changed_when: stop_digit_ui_static.stdout == "stopped"
       when: digit_ui_mode == "static"
 
+    # Prebuilt-bundle path: when `digit_ui_bundle_image` is set (e.g.
+    # ghcr.io/subhashini-egov/digit-ui-esbuild:nightly-develop, published
+    # from the monorepo's digit-ui-esbuild/), pull it and extract the
+    # baked SPA into the same build/ dir host nginx already serves —
+    # no on-host node/npm/esbuild, and no dependence on the upstream
+    # git repo's state. Per-tenant globalConfigs.js still propagates:
+    # nginx serves it from {{ digit_dir }}/nginx/ via a location alias
+    # that shadows the build's baked copy.
+    - name: "digit-ui mode=static — deploy prebuilt bundle from digit_ui_bundle_image"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        docker pull {{ digit_ui_bundle_image }}
+        id=$(docker create {{ digit_ui_bundle_image }})
+        trap 'docker rm -f "$id" >/dev/null' EXIT
+        rm -rf /opt/digit-ui-esbuild/build.new
+        docker cp "$id":/var/web/digit-ui /opt/digit-ui-esbuild/build.new
+        mkdir -p /opt/digit-ui-esbuild/build
+        rsync -a --delete /opt/digit-ui-esbuild/build.new/ /opt/digit-ui-esbuild/build/
+        rm -rf /opt/digit-ui-esbuild/build.new
+      args:
+        executable: /bin/bash
+      changed_when: true
+      when:
+        - digit_ui_mode == "static"
+        - (digit_ui_bundle_image | default('')) | length > 0
+
     - name: "digit-ui mode=static — install Node 20 if missing (esbuild.build.js needs it)"
       ansible.builtin.apt:
         name: nodejs
@@ -756,6 +786,7 @@
       when:
         - digit_ui_mode == "static"
         - ansible_system != "Darwin"
+        - (digit_ui_bundle_image | default('')) | length == 0
 
     - name: "digit-ui mode=static — npm install if package.json is newer than node_modules"
       ansible.builtin.shell: |
@@ -776,7 +807,9 @@
         fi
       register: npm_install
       changed_when: npm_install.stdout == "installed"
-      when: digit_ui_mode == "static"
+      when:
+        - digit_ui_mode == "static"
+        - (digit_ui_bundle_image | default('')) | length == 0
 
     - name: "digit-ui mode=static — run esbuild.build.js (idempotent: skips if build/ index newer than sources)"
       ansible.builtin.shell: |
@@ -799,7 +832,9 @@
         executable: /bin/bash
       register: esbuild_build
       changed_when: "'skipping rebuild' not in esbuild_build.stdout"
-      when: digit_ui_mode == "static"
+      when:
+        - digit_ui_mode == "static"
+        - (digit_ui_bundle_image | default('')) | length == 0
 
     # --- hmr mode ---
     - name: "digit-ui mode=hmr — stop digit-ui container after compose brought it up"
