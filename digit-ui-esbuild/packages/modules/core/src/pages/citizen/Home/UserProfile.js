@@ -781,7 +781,11 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
     const res = await Digit.UploadServices.Filefetch(ids, tenantId);
     if (res.data.fileStoreIds && res.data.fileStoreIds.length !== 0) {
       return {
-        thumbs: res.data.fileStoreIds.map((o) => o.url.split(",")[3]),
+        // #445: the *-profile filestore module generates no resize variants,
+        // so `o.url` is a single URL and split(",")[3] is undefined -> blank
+        // avatar. Fall back to the original URL, matching WorkFlow.js / the
+        // load path at line ~396.
+        thumbs: res.data.fileStoreIds.map((o) => o.url.split(",")[3] || o.url.split(",")[0]),
         images: res.data.fileStoreIds.map((o) => Digit.Utils.getFileUrl(o.url)),
       };
     } else {
