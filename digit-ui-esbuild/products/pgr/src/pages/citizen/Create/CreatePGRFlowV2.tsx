@@ -419,11 +419,12 @@ function Step2Location({ data, patch, t }: StepBodyProps) {
 
   // Pincode is read-only if it came from the map (Nominatim). If the
   // map didn't return one, postalCode is empty / undefined and the
-  // user gets a normal editable field.
+  // user gets a normal editable field. Manual input must NOT feed back
+  // into this flag: gating on data.postalCode disabled the field after
+  // the first typed character.
   const pincodeFromMap = data?.GeoLocationsPoint?.pincode;
   const pincodeKnown =
-    !!(pincodeFromMap != null && String(pincodeFromMap).length > 0) ||
-    !!(data.postalCode && data.postalCode.length > 0);
+    !!(pincodeFromMap != null && String(pincodeFromMap).length > 0);
 
   return (
     <StepShell
