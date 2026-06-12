@@ -46,18 +46,32 @@ So PGR is `…/pgr-services:nightly-develop` and `…/pgr-services:develop-20260
 **In scope — everything in `build-config.yml`** (CCRS-owned): `pgr-services`,
 `novu-bridge`, `digit-config-service`, `digit-user-preferences-service`,
 `xstate-chatbot`, `default-data-handler`, `digit-mcp`, `otp-publisher`,
-`digit-ui` (legacy micro-ui), `digit-ui-esbuild`, and the `*-db` flyway images.
+`digit-ui` (legacy micro-ui), `digit-ui-esbuild`, `configurator`, `digit-ui-v2`,
+and the `*-db` flyway images.
 
 **Out of scope — DIGIT core platform services** (`egov-*`, `kong`,
 `boundary-service`, mdms-v2, etc.). These do **not** live in this repo, so this
 nightly does not build them; they are pulled from the registry as today. This
 pipeline owns only CCRS-repo services.
 
-**Deferred — `digit-ui-v2` / `configurator`.** Their bundles bake tenant
-build-env (`VITE_KEYCLOAK_REALM`, etc.) and neither has a build-arg-parameterized
-Dockerfile yet, so a single nightly image can't serve every tenant. Tracked as a
-follow-up; they are intentionally absent from `build-config.yml`'s buildable set
-until that's solved.
+### Vite SPAs — `configurator` and `digit-ui-v2`
+
+Both now have build-arg-parameterized Dockerfiles and are built nightly. They
+differ in how much they bake:
+
+- **`configurator`** reads no `VITE_*` build-env (only `import.meta.env.MODE`),
+  so **one image serves every tenant** — configuration is runtime (login + tenant
+  pick). Its `nightly-develop` image is fully deployable as-is.
+- **`digit-ui-v2`** (citizen SPA) bakes a tenant env contract — the relative
+  values (`/auth`, `/token-exchange`) are tenant-neutral, but `VITE_KEYCLOAK_REALM`
+  / `VITE_CITIZEN_*` are tenant-specific. The Dockerfile exposes them as
+  build-args (defaults match the playbook contract), so the nightly builds a
+  **tenant-neutral reference image**. A deploy that needs baked Keycloak SSO
+  either rebuilds with the realm/tenant build-args or awaits the runtime-config
+  follow-up (config injected at container start so one image truly serves every
+  tenant). Both Vite builds mirror their proven on-box recipe: file: sub-packages
+  (`data-provider`) built first; configurator uses `vite build` directly (its
+  root `tsc -b` has upstream type errors), v2 uses the package.json build.
 
 ## Build modes (how each entry is built)
 

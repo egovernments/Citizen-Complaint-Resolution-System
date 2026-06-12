@@ -87,4 +87,17 @@ config:
       - work-dir: "digit-ui-esbuild"
         dockerfile: "digit-ui-esbuild/docker/Dockerfile"
         image-name: "digit-ui-esbuild"
+  # Vite SPAs (build-arg-parameterized Dockerfiles). configurator is tenant-
+  # neutral (no VITE_* baked); digit-ui-v2 bakes a tenant env contract — the
+  # nightly builds the neutral-default reference image (see build/NIGHTLY-BUILDS.md).
+  - name: "builds/Citizen-Complaint-Resolution-System/configurator"
+    build:
+      - work-dir: "configurator"
+        dockerfile: "configurator/Dockerfile"
+        image-name: "configurator"
+  - name: "builds/Citizen-Complaint-Resolution-System/digit-ui-v2"
+    build:
+      - work-dir: "digit-ui-v2"
+        dockerfile: "digit-ui-v2/Dockerfile"
+        image-name: "digit-ui-v2"
 
