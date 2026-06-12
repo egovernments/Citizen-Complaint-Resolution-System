@@ -147,10 +147,19 @@ useEffect(() => {
     // boundaryHierarchyOrder may not be seeded yet (usePGRInitialization
     // still in flight / city just switched). Without it the deepest-level
     // targetType is undefined and findWardPath would match the hint at
-    // ANY level — skip; the dropdowns don't render without the hierarchy
-    // anyway and the effect re-runs when childrenData settles.
-    if (boundaryHierarchy.length === 0) return;
-    const targetType = boundaryHierarchy[boundaryHierarchy.length - 1];
+    // ANY level. The `boundaryHierarchy` memo is keyed only on tenantId,
+    // so if this component mounted before init seeded SessionStorage the
+    // memo caches [] for the tenant's lifetime — re-read the session
+    // value directly as a fallback so auto-fill recovers once init
+    // lands. Skip only when BOTH are empty; the effect re-runs when
+    // childrenData settles.
+    let hierarchy = boundaryHierarchy;
+    if (hierarchy.length === 0) {
+      const order = Digit.SessionStorage.get("boundaryHierarchyOrder");
+      hierarchy = Array.isArray(order) ? order.map((item) => item.code) : [];
+    }
+    if (hierarchy.length === 0) return;
+    const targetType = hierarchy[hierarchy.length - 1];
     const path = findWardPath(childrenData[0]?.boundary, wardHintCode, wardHintName, targetType);
     if (!path || path.length === 0) return;
 
@@ -179,7 +188,7 @@ useEffect(() => {
     // be attached, so County-level selections silently passed).
     const deepest = path[path.length - 1];
     const isDeepestLevel =
-      deepest?.boundaryType === boundaryHierarchy[boundaryHierarchy.length - 1];
+      deepest?.boundaryType === hierarchy[hierarchy.length - 1];
     onSelect(config.key, { ...deepest, isLeaf: isDeepestLevel });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wardHintCode, wardHintName, childrenData]);
@@ -305,7 +314,14 @@ const BoundaryDropdown = ({ label, data, onChange, selected, fieldKey, disabled 
   for (const node of data || []) {
     if (seen.has(node.code)) continue;
     seen.add(node.code);
-    options.push({ value: node.code, label: node.name || t(node.code) || node.code });
+    // Localization-first: t(code) is the convention (configurator Phase 2
+    // writes the human name as the message for the code key). Fall back
+    // to a raw `name` only when no translation exists.
+    const translated = t(node.code);
+    options.push({
+      value: node.code,
+      label: translated && translated !== node.code ? translated : node.name || node.code,
+    });
   }
   return (
     <V2Field label={t(label)} required htmlFor={id}>

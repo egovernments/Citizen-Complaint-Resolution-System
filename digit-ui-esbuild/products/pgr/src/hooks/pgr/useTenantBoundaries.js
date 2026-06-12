@@ -40,12 +40,22 @@ const hasRealGeometry = (geometry) => {
   return false;
 };
 
+// /boundary-service/boundary/_search binds its criteria from QUERY params
+// only (tenantId + codes are mandatory) and rows carry just code+geometry,
+// so geometry has to be fetched per-code in chunks small enough to keep
+// the query string sane.
+const GEOMETRY_CHUNK_SIZE = 40;
+
 // Resolves the ward-boundary FeatureCollection the complaint maps render
-// and resolve pins against. Fetches the tenant's ADMIN hierarchy from
-// boundary-service when MAP_TENANT is configured (globalConfigs first,
-// build-time env second); falls back to the bundled static Nairobi wards
-// when MAP_TENANT is absent, the fetch fails, or every returned row is
-// geometry-less / placeholder.
+// and resolve pins against. Two-step fetch (mirrors what the
+// configurator's boundary.ts does):
+//   1. boundary-relationships/_search (query params: tenantId,
+//      hierarchyType, includeChildren) → the hierarchy tree. Nodes carry
+//      code/boundaryType/children — no name, no geometry.
+//   2. boundary/_search (query params: tenantId, codes csv, limit) per
+//      chunk of LEAF codes → geometry, joined back by code.
+// Falls back to the bundled static Nairobi wards when MAP_TENANT is
+// absent, any fetch fails, or every leaf is geometry-less / placeholder.
 //
 // Returns null while the fetch is in flight — consumers already treat
 // null as "use the static fallback for point-in-polygon" and gate the
@@ -55,46 +65,93 @@ const useTenantBoundaries = () => {
   const [tenantBoundaries, setTenantBoundaries] = useState(null);
 
   useEffect(() => {
+    let cancelled = false;
     const MAP_TENANT = window?.globalConfigs?.getConfig?.("MAP_TENANT") || process.env.REACT_APP_MAP_TENANT;
     if (!MAP_TENANT) {
       console.log("No MAP_TENANT configured, falling back to static Nairobi wards.");
       setTenantBoundaries(keNairobiWardsFallback);
-      return;
+      return undefined;
     }
+    const HIERARCHY_TYPE = window?.globalConfigs?.getConfig?.("HIERARCHY_TYPE") || "ADMIN";
 
     const fetchBoundaries = async () => {
       try {
-        const response = await Digit.CustomService.getResponse({
-          url: "/boundary-service/boundary/_search",
-          params: {},
-          body: {
-            Boundary: { tenantId: MAP_TENANT, hierarchyType: "ADMIN" }
-          },
-          method: "POST"
+        // Step 1: full hierarchy tree (codes + parentage only).
+        const relResponse = await Digit.CustomService.getResponse({
+          url: "/boundary-service/boundary-relationships/_search",
+          params: { tenantId: MAP_TENANT, hierarchyType: HIERARCHY_TYPE, includeChildren: true },
+          body: {},
+          method: "POST",
         });
 
-        const features = (response?.Boundary || [])
-          .filter((b) => hasRealGeometry(b.geometry))
-          .map((b) => ({
+        // Flatten to {code, boundaryType, parent, depth}, deduping by
+        // code (the relationships endpoint can repeat children under
+        // their parent in the payload).
+        const nodes = [];
+        const seen = new Set();
+        const walk = (node, parentCode, depth) => {
+          if (!node || !node.code) return;
+          if (!seen.has(node.code)) {
+            seen.add(node.code);
+            nodes.push({ code: node.code, boundaryType: node.boundaryType, parent: parentCode, depth });
+          }
+          (node.children || []).forEach((child) => walk(child, node.code, depth + 1));
+        };
+        (relResponse?.TenantBoundary || []).forEach((tb) => {
+          const roots = Array.isArray(tb?.boundary) ? tb.boundary : tb?.boundary ? [tb.boundary] : [];
+          roots.forEach((root) => walk(root, undefined, 0));
+        });
+
+        // Leaf level = the deepest depth present in the tree (Ward in a
+        // County > Sub-County > Ward hierarchy). Only leaves carry the
+        // polygons the map needs.
+        const maxDepth = nodes.reduce((max, n) => (n.depth > max ? n.depth : max), -1);
+        const leaves = nodes.filter((n) => n.depth === maxDepth);
+
+        // Step 2: geometry per leaf code, chunked.
+        const geometryByCode = {};
+        for (let i = 0; i < leaves.length; i += GEOMETRY_CHUNK_SIZE) {
+          const chunk = leaves.slice(i, i + GEOMETRY_CHUNK_SIZE);
+          const entResponse = await Digit.CustomService.getResponse({
+            url: "/boundary-service/boundary/_search",
+            params: { tenantId: MAP_TENANT, codes: chunk.map((n) => n.code).join(","), limit: 100 },
+            body: {},
+            method: "POST",
+          });
+          for (const row of entResponse?.Boundary || []) {
+            if (row?.code) geometryByCode[row.code] = row.geometry;
+          }
+        }
+
+        // Relationships carry no name field; code doubles as the label
+        // (consumers tooltip on `name`, localization happens at render
+        // via t() where applicable).
+        const features = leaves
+          .filter((n) => hasRealGeometry(geometryByCode[n.code]))
+          .map((n) => ({
             type: "Feature",
-            geometry: b.geometry,
-            properties: { code: b.code, name: b.name, parent_subcounty: b.parent }
+            geometry: geometryByCode[n.code],
+            properties: { code: n.code, name: n.code, parent_subcounty: n.parent },
           }));
 
+        if (cancelled) return;
         if (features.length > 0) {
           setTenantBoundaries({ type: "FeatureCollection", features });
         } else {
-          // Empty result OR all rows placeholder → the tenant has no
+          // Empty tree OR all leaves placeholder → the tenant has no
           // usable geometry; the static fallback at least keeps the
           // Nairobi reference deployment working.
           setTenantBoundaries(keNairobiWardsFallback);
         }
       } catch (e) {
         console.error("Failed to fetch tenant boundaries:", e);
-        setTenantBoundaries(keNairobiWardsFallback);
+        if (!cancelled) setTenantBoundaries(keNairobiWardsFallback);
       }
     };
     fetchBoundaries();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return tenantBoundaries;

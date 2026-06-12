@@ -142,9 +142,9 @@ useEffect(() => {
         {selectedCity && localities && (
           <React.Fragment>
             {localities?.length < 5 ? (
-              <RadioButtons selectedOption={selectedLocality} options={localities} optionsKey="name" onSelect={selectLocality} />
+              <RadioButtons selectedOption={selectedLocality} options={localities} optionsKey="code" onSelect={selectLocality} />
             ) : (
-              <Dropdown isMandatory selected={selectedLocality} optionKey="name" option={localities} select={selectLocality} t={t} />
+              <Dropdown isMandatory selected={selectedLocality} optionKey="code" option={localities} select={selectLocality} t={t} />
             )}
           </React.Fragment>
         )}
