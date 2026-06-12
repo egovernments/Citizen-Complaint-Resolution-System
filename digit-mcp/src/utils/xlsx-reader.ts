@@ -496,6 +496,20 @@ export function readComplaintTypes(
         module: 'rainmaker-pgr',
         locale: 'en_IN',
       });
+      // Department-qualified key: the employee Create-Complaint sub-type
+      // dropdown looks services up as `SERVICEDEFS.<CODE_UPPER>.<DEPT>`
+      // (digit-ui-esbuild useServiceDefs builds the key with the raw,
+      // un-cased department code). Without this the dropdown renders the
+      // raw key. Mirrors the configurator's buildComplaintTypeLocalizations
+      // key #3 — keep both onboarding paths in sync (CCRS#539).
+      if (deptCode) {
+        localizations.push({
+          code: `SERVICEDEFS.${serviceCode.toUpperCase()}.${deptCode}`,
+          message: parentName,
+          module: 'rainmaker-pgr',
+          locale: 'en_IN',
+        });
+      }
     } else if (childName && currentParent) {
       // This is a child row — inherits from current parent
       const serviceCode = nameToPascalCode(`${currentParent.name} ${childName}`);
@@ -519,6 +533,16 @@ export function readComplaintTypes(
         module: 'rainmaker-pgr',
         locale: 'en_IN',
       });
+      // Department-qualified key for the employee sub-type dropdown — see
+      // the parent-row note above. Uses the child's resolved department.
+      if (childDeptCode) {
+        localizations.push({
+          code: `SERVICEDEFS.${serviceCode.toUpperCase()}.${childDeptCode}`,
+          message: childName,
+          module: 'rainmaker-pgr',
+          locale: 'en_IN',
+        });
+      }
     }
   }
 
@@ -596,6 +620,20 @@ function readComplaintTypesFlat(
       module: 'rainmaker-pgr',
       locale: 'en_IN',
     });
+    // Department-qualified key: the employee Create-Complaint sub-type
+    // dropdown looks services up as `SERVICEDEFS.<CODE_UPPER>.<DEPT>`
+    // (digit-ui-esbuild useServiceDefs builds the key with the raw,
+    // un-cased department code). Without this the dropdown renders the
+    // raw key. Mirrors the configurator's buildComplaintTypeLocalizations
+    // key #3 — keep both onboarding paths in sync (CCRS#539).
+    if (deptCode) {
+      localizations.push({
+        code: `SERVICEDEFS.${serviceCode.toUpperCase()}.${deptCode}`,
+        message: name,
+        module: 'rainmaker-pgr',
+        locale: 'en_IN',
+      });
+    }
 
     if (menuName && !seenMenuPaths.has(menuPath)) {
       seenMenuPaths.add(menuPath);
