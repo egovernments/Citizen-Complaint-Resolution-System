@@ -1,0 +1,14 @@
+# Keep the build context lean and prevent COPY . . from clobbering the image's
+# `npm ci` install with a host-arch node_modules (or stale dist/).
+node_modules
+**/node_modules
+dist
+**/dist
+.git
+.gitignore
+*.log
+.env
+.env.*
+playwright-report
+test-results
+coverage
