@@ -175,7 +175,10 @@ export default function Phase4Page() {
   ): { match: Boundary | null; reason?: 'not_found' | 'ambiguous' } => {
     const byCode = boundaries.find((b) => b.code === value);
     if (byCode) return { match: byCode };
-    const byName = boundaries.filter((b) => b.name.toLowerCase() === value.toLowerCase());
+    // Boundary nodes from the relationship search can arrive WITHOUT a name
+    // at runtime (the type lies — see JurisdictionEditor.tsx, which types it
+    // optional). Guard so name matching skips them instead of throwing.
+    const byName = boundaries.filter((b) => (b.name ?? '').toLowerCase() === value.toLowerCase());
     if (byName.length === 1) return { match: byName[0] };
     return { match: null, reason: byName.length > 1 ? 'ambiguous' : 'not_found' };
   };

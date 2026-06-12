@@ -157,6 +157,9 @@ export default function Phase2Page() {
   const [adminLevels, setAdminLevels] = useState<OsmAdminLevel[]>([]);
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  // Full turbopass suggestion the operator picked (null once they edit the
+  // text again) — its countryCode scopes the Overpass query to one country.
+  const [pickedSuggestion, setPickedSuggestion] = useState<any | null>(null);
   const [skippedFeatures, setSkippedFeatures] = useState<SkippedOsmFeature[]>([]);
   const [pendingBoundaries, setPendingBoundaries] = useState<Boundary[]>([]);
 
@@ -203,7 +206,8 @@ export default function Phase2Page() {
         const res = await fetch(`${TURBOPASS_BASE}/search?q=${encodeURIComponent(searchTerm)}&limit=5`);
         if (!res.ok) throw new Error(`Turbopass search returned ${res.status}`);
         const data = await res.json();
-        setSuggestions(data.results || []);
+        // The API ignores `limit` — slice client-side regardless.
+        setSuggestions((data.results || []).slice(0, 5));
       } catch (e) {
         console.debug('Turbopass suggestions unavailable', e);
         setSuggestions([]);
@@ -473,8 +477,32 @@ export default function Phase2Page() {
     setLoading(true);
     setError(null);
     try {
-      const query = `[out:json][timeout:90];
-area["name"="${searchTerm}"]->.searchArea;
+      // Escape quotes/backslashes so a name like `Saint "X"` can't break out
+      // of the Overpass QL string literal.
+      const escaped = searchTerm.trim().replace(/[\\"]/g, '\\$&');
+      const countryCode = typeof pickedSuggestion?.countryCode === 'string'
+        ? pickedSuggestion.countryCode.trim().toUpperCase().replace(/[\\"]/g, '\\$&')
+        : '';
+
+      // When the operator picked a typeahead suggestion with a country code,
+      // scope the lookup to that country and resolve the named relation
+      // itself (included in the output so the root level isn't lost).
+      // Otherwise fall back to the worldwide name match, constrained to
+      // administrative areas.
+      const query = countryCode
+        ? `[out:json][timeout:90];
+area["ISO3166-1"="${countryCode}"][admin_level=2]->.country;
+rel(area.country)["boundary"="administrative"]["name"="${escaped}"]->.target;
+.target map_to_area ->.searchArea;
+(
+  rel(area.searchArea)["boundary"="administrative"];
+  .target;
+);
+out body;
+>;
+out skel qt;`
+        : `[out:json][timeout:90];
+area["name"="${escaped}"]["boundary"="administrative"]->.searchArea;
 (
   rel(area.searchArea)["boundary"="administrative"];
 );
@@ -512,6 +540,12 @@ out skel qt;`;
 
       const levelsMap = new Map<number, any[]>();
       geojson.features.forEach((feature: any) => {
+        // osmtogeojson also emits member WAYS carrying boundary tags as
+        // standalone LineString features — only real areas count, otherwise
+        // level counts inflate, the skip report floods, and unit-square
+        // phantom roots appear.
+        const geomType = feature.geometry?.type;
+        if (geomType !== 'Polygon' && geomType !== 'MultiPolygon') return;
         if (feature.properties?.boundary === 'administrative' && feature.properties?.admin_level) {
           const lvl = parseInt(feature.properties.admin_level, 10);
           if (!isNaN(lvl) && (targetAdminLevel === 0 || lvl >= targetAdminLevel)) {
@@ -563,7 +597,7 @@ out skel qt;`;
     const { boundaries, skipped } = buildOsmBoundaries(sortedLevels, boundaryTenant, OSM_HIERARCHY_TYPE);
 
     if (boundaries.length === 0) {
-      setError("All fetched features were skipped (unnamed or no parent found). Nothing to create.");
+      setError("All fetched features were skipped (unnamed, name not romanizable, or no parent found). Nothing to create.");
       return;
     }
 
@@ -599,31 +633,32 @@ out skel qt;`;
       } catch (e: any) {
         const msg = String(e?.message || e);
         if (msg.toLowerCase().includes('already exist') || msg.includes('DUPLICATE')) {
-          console.log("Hierarchy already exists, proceeding to create boundaries...");
+          // An ADMIN hierarchy already exists. Proceeding blindly is only
+          // safe when its level names match the operator's mapping — if they
+          // differ, every boundary create fails slowly (validation retries)
+          // with a misleading error. Compare order-sensitively and abort
+          // with a clear message when they diverge.
+          const hierarchies = await boundaryService.getHierarchies(boundaryTenant);
+          const existing = hierarchies.find(h => h.hierarchyType === OSM_HIERARCHY_TYPE);
+          const existingLevels = (existing?.boundaryHierarchy ?? []).map(l => l.boundaryType);
+          const sameLevels =
+            existingLevels.length === levelNames.length &&
+            existingLevels.every((lvlName, idx) => lvlName === levelNames[idx]);
+          if (!sameLevels) {
+            setError(
+              `A "${OSM_HIERARCHY_TYPE}" hierarchy already exists on ${boundaryTenant} with levels ` +
+              `[${existingLevels.join(' → ')}], which do not match your mapped levels ` +
+              `[${levelNames.join(' → ')}]. Boundaries cannot be created against mismatched ` +
+              `level names. Either rename your mapped levels to match the existing hierarchy, ` +
+              `or use the Excel path's "use existing hierarchy" option.`
+            );
+            setStep('map-levels');
+            return;
+          }
+          console.log("Hierarchy already exists with matching levels, proceeding to create boundaries...");
         } else {
           throw e;
         }
-      }
-
-      // Save highest admin level config in MDMS (numeric highest = smallest
-      // unit; validLevels is sorted ascending so the last entry is lowest)
-      const lowestBoundaryType = levelNames[levelNames.length - 1];
-
-      try {
-        await apiClient.post('/mdms-v2/v2/_create/tenant.uiConfig', {
-          RequestInfo: apiClient.buildRequestInfo(),
-          Mdms: {
-            tenantId: boundaryTenant,
-            schemaCode: "tenant.uiConfig",
-            uniqueIdentifier: "PGR_BOUNDARY_LOWEST_LEVEL",
-            data: {
-              PGR_BOUNDARY_LOWEST_LEVEL: lowestBoundaryType
-            },
-            isActive: true
-          }
-        });
-      } catch (e) {
-        console.warn('MDMS config store failed (schema may not exist):', e);
       }
 
       // Create boundaries
@@ -1197,6 +1232,7 @@ out skel qt;`;
                   value={searchTerm}
                   onChange={(e) => {
                     setSearchTerm(e.target.value);
+                    setPickedSuggestion(null);
                     setShowSuggestions(true);
                   }}
                   disabled={loading}
@@ -1218,6 +1254,7 @@ out skel qt;`;
                           className="px-3 py-2 cursor-pointer hover:bg-accent hover:text-accent-foreground text-left text-sm flex items-center justify-between"
                           onClick={() => {
                             setSearchTerm(item.name || text.split('/')[0]);
+                            setPickedSuggestion(item);
                             setShowSuggestions(false);
                           }}
                         >
@@ -1419,7 +1456,7 @@ out skel qt;`;
               </div>
               {skippedFeatures.length > 0 && (
                 <p className="text-xs text-muted-foreground mt-4">
-                  {skippedFeatures.length} feature(s) were skipped (unnamed or no parent found) — see the review step report.
+                  {skippedFeatures.length} feature(s) were skipped (unnamed, name not romanizable, or no parent found) — see the review step report.
                 </p>
               )}
             </div>
