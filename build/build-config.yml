@@ -16,6 +16,14 @@
 #       image-name: < Docker image name  >
 # -
 # -
+#
+# This file is the single source of truth for the nightly-develop image build:
+# every entry below is built nightly from develop and pushed to the registry
+# (canonical image-name + nightly-develop / develop-YYYYMMDD tags) so deploys
+# pull pre-built images instead of building on the box. Add a service here and it
+# is enrolled automatically. Governance & naming: build/NIGHTLY-BUILDS.md.
+# Driver: local-setup/ansible/files/nightly-build-push.sh.
+#
 config:
 # Local governance PGR Services
   - name: "builds/Citizen-Complaint-Resolution-System/backend/pgr-services"
@@ -61,9 +69,9 @@ config:
       - work-dir: frontend/micro-ui/
         dockerfile: frontend/micro-ui/web/docker/Dockerfile
         image-name: digit-ui
-  # --- nightly-develop pipeline: high-churn services built nightly from develop
-  # and pushed to the Flywheel registry, so deploys pull instead of build.
-  # See local-setup/ansible/files/nightly-build-push.sh.
+  # --- newer container-served services (runtime-configured, one image per service
+  # serves every tenant). digit-ui-v2 / configurator are intentionally absent:
+  # their bundles bake tenant build-env and need parameterized Dockerfiles first.
   - name: "builds/Citizen-Complaint-Resolution-System/digit-mcp"
     build:
       - work-dir: "digit-mcp"
