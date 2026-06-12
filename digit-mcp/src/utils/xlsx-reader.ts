@@ -149,10 +149,18 @@ export function excelDateToTimestamp(value: unknown): number {
   throw new Error(`Cannot convert "${value}" to date timestamp`);
 }
 
-/** Generate PascalCase code from a name: "Road Pothole" → "RoadPothole" */
+/**
+ * Generate PascalCase code from a name: "Road Pothole" → "RoadPothole".
+ * Punctuation (& / ' ( ) . ,) is stripped first so names like
+ * "Maternal & Neonatal Emergencies" or "Delay / No staff" yield clean
+ * codes — these feed MDMS uniqueIdentifiers and localization keys where
+ * stray symbols break lookups.
+ */
 export function nameToPascalCode(name: string): string {
   return name
+    .replace(/[&/'’().,]+/g, ' ')
     .split(/[\s_-]+/)
+    .filter(Boolean)
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     .join('');
 }
@@ -531,24 +539,50 @@ function readComplaintTypesFlat(
 } {
   const complaintTypes: ComplaintTypeRecord[] = [];
   const localizations: LocalizationMessage[] = [];
+  const seenMenuPaths = new Set<string>();
   let order = 1;
 
   for (const row of sheetToRows(sheet)) {
-    const serviceCode = (row['serviceCode'] || row['ServiceCode'] || row['code'])?.trim();
-    const name = (row['name'] || row['Name'])?.trim();
+    // Operator-friendly headers: the sheet is filled with "Complaint Type"
+    // (the menu group) + "Complaint sub type" (the actual service) — the
+    // same vocabulary as the county tracker sheets. menuPath/serviceCode
+    // are DERIVED here so spreadsheet authors never deal with API field
+    // names. Explicit serviceCode/menuPath/name columns still win when
+    // present (old template files).
+    const groupName = (row['Complaint Type*'] || row['Complaint Type']
+      || row['menuName'] || row['MenuName'] || row['Menu Name'] || '').trim();
+    const name = (row['name'] || row['Name']
+      || row['Complaint sub type*'] || row['Complaint sub type'] || '').trim();
+    const serviceCode = (row['serviceCode'] || row['ServiceCode'] || row['code'])?.trim()
+      || (groupName && name ? nameToPascalCode(`${groupName} ${name}`) : '');
     if (!serviceCode || !name) continue;
 
-    const deptRef = (row['department'] || row['Department'] || '').trim();
+    const deptRef = (row['department'] || row['Department'] || row['Department Name*'] || '').trim();
     const deptCode = deptNameToCode.get(deptRef) || deptRef;
     const slaRaw = row['slaHours'] ?? row['SLA Hours'] ?? row['slaHours*'];
     const slaHours = parseInt(String(slaRaw ?? ''), 10) || 48;
-    const keywords = (row['keywords'] || row['Keywords'] || '').trim();
+    const keywords = (row['keywords'] || row['Keywords'] || row['Search Words (comma separated)'] || '').trim();
     const active = parseBoolish(row['active'] ?? row['Active'], true);
+
+    // menuPath groups complaint types in the citizen UI: ServiceDefinitions.js
+    // builds the type menu from DISTINCT menuPath values (labelled via
+    // localization key SERVICEDEFS.<MENUPATH.toUpperCase()>) and lists the
+    // rows sharing that menuPath as its sub-types. The configurator's
+    // complaint-type form exposes this as "Complaint Type (Menu Path)".
+    // Resolution order: explicit menuPath column → derived from the
+    // "Complaint Type" group → legacy per-row auto value.
+    const menuPath = (row['menuPath'] || row['MenuPath'] || row['Menu Path'] || '').trim()
+      || (groupName ? nameToPascalCode(groupName) : '')
+      || `complaints.categories.${serviceCode}`;
+    // Display name for the menu group (one localization per distinct
+    // menuPath). Without it the citizen UI would render the raw
+    // SERVICEDEFS.<MENUPATH> key as the group label.
+    const menuName = groupName;
 
     complaintTypes.push({
       serviceCode,
       name,
-      menuPath: `complaints.categories.${serviceCode}`,
+      menuPath,
       department: deptCode,
       slaHours,
       keywords,
@@ -562,6 +596,16 @@ function readComplaintTypesFlat(
       module: 'rainmaker-pgr',
       locale: 'en_IN',
     });
+
+    if (menuName && !seenMenuPaths.has(menuPath)) {
+      seenMenuPaths.add(menuPath);
+      localizations.push({
+        code: `SERVICEDEFS.${menuPath.toUpperCase()}`,
+        message: menuName,
+        module: 'rainmaker-pgr',
+        locale: 'en_IN',
+      });
+    }
   }
 
   return { complaintTypes, localizations };

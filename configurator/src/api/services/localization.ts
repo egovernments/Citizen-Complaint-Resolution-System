@@ -169,7 +169,7 @@ export const localizationService = {
     serviceCode: string,
     name: string,
     locale: string = 'en_IN',
-    opts: { department?: string; menuPath?: string } = {}
+    opts: { department?: string; menuPath?: string; menuName?: string } = {}
   ): LocalizationMessage[] {
     const messages: LocalizationMessage[] = [];
     const seen = new Set<string>();
@@ -185,7 +185,10 @@ export const localizationService = {
       push(`SERVICEDEFS.${serviceCode.toUpperCase()}.${opts.department.toUpperCase()}`, name);
     }
     if (opts.menuPath) {
-      push(`SERVICEDEFS.${opts.menuPath.toUpperCase()}`, opts.menuPath);
+      // Prefer the human group label ("Maternal & Neonatal Emergencies")
+      // when the caller carries one; the bare menuPath code is the
+      // legacy fallback for callers without a display name.
+      push(`SERVICEDEFS.${opts.menuPath.toUpperCase()}`, opts.menuName || opts.menuPath);
     }
     return messages;
   },
@@ -304,13 +307,14 @@ export const localizationService = {
   // hardcoded in CreateComplaintConfig.js that no source tenant carries.
   async uploadComplaintTypeLocalizations(
     tenantId: string,
-    types: { serviceCode: string; name: string; department?: string; menuPath?: string }[],
+    types: { serviceCode: string; name: string; department?: string; menuPath?: string; menuName?: string }[],
     locale: string = 'en_IN'
   ): Promise<{ success: number; failed: number }> {
     const raw = types.flatMap((t) =>
       this.buildComplaintTypeLocalizations(tenantId, t.serviceCode, t.name, locale, {
         department: t.department,
         menuPath: t.menuPath,
+        menuName: t.menuName,
       })
     );
     // Dedupe across all types — multiple types sharing the same menuPath

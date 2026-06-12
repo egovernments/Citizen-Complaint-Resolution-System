@@ -597,12 +597,40 @@ export function parseComplaintTypeExcel(workbook: XLSX.WorkBook): {
 
   const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
 
+  // PascalCase code from a display name, punctuation-stripped: codes feed
+  // MDMS uniqueIdentifiers + localization keys where & / ' etc. break
+  // lookups. Mirrors nameToPascalCode in digit-mcp/src/utils/xlsx-reader.ts.
+  const toPascal = (s: string): string =>
+    s
+      .replace(/[&/'’().,]+/g, ' ')
+      .split(/[\s_-]+/)
+      .filter(Boolean)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join('');
+
   jsonData.forEach((row, index) => {
-    const serviceCode = String(row['serviceCode'] || row['ServiceCode'] || row['code'] || '').trim();
-    const name = String(row['name'] || row['Name'] || row['serviceName'] || row['ServiceName'] || '').trim();
-    const keywordsRaw = String(row['keywords'] || row['Keywords'] || '').trim();
+    // Operator-friendly format: "Complaint Type*" (menu group) +
+    // "Complaint sub type*" (the service) — same vocabulary as the county
+    // tracker sheets. serviceCode/menuPath are DERIVED; explicit columns
+    // (legacy template files) still win when present.
+    const groupName = String(
+      row['Complaint Type*'] || row['Complaint Type'] || row['menuName'] || row['MenuName'] || ''
+    ).trim();
+    const subTypeName = String(
+      row['Complaint sub type*'] || row['Complaint sub type'] || ''
+    ).trim();
+    const name =
+      String(row['name'] || row['Name'] || row['serviceName'] || row['ServiceName'] || '').trim() ||
+      subTypeName;
+    const serviceCode =
+      String(row['serviceCode'] || row['ServiceCode'] || row['code'] || '').trim() ||
+      (groupName && name ? toPascal(`${groupName} ${name}`) : '');
+    const menuPath =
+      String(row['menuPath'] || row['MenuPath'] || row['Menu Path'] || '').trim() ||
+      (groupName ? toPascal(groupName) : 'Complaint');
+    const keywordsRaw = String(row['keywords'] || row['Keywords'] || row['Search Words (comma separated)'] || '').trim();
     const keywords = keywordsRaw || name.toLowerCase().replace(/\s+/g, ',');
-    const department = String(row['department'] || row['Department'] || '').trim();
+    const department = String(row['department'] || row['Department'] || row['Department Name*'] || '').trim();
     const slaHours = parseInt(String(row['slaHours'] || row['SlaHours'] || row['sla'] || '24'), 10) || 24;
     // Use ?? — see Department parser note for the FALSE-coalescing bug.
     const rawActive = row['active'] ?? row['Active'] ?? row['isActive'] ?? 'true';
@@ -613,7 +641,8 @@ export function parseComplaintTypeExcel(workbook: XLSX.WorkBook): {
       errors.push({
         row: index + 2,
         field: 'serviceCode',
-        message: 'Service code is required',
+        message:
+          'Could not determine the service code — fill "Complaint Type*" + "Complaint sub type*" (or a legacy serviceCode column)',
         code: 'REQUIRED_FIELD',
       });
       return;
@@ -623,7 +652,7 @@ export function parseComplaintTypeExcel(workbook: XLSX.WorkBook): {
       errors.push({
         row: index + 2,
         field: 'name',
-        message: 'Service name is required',
+        message: '"Complaint sub type*" (the complaint name) is required',
         code: 'REQUIRED_FIELD',
       });
       return;
@@ -639,7 +668,16 @@ export function parseComplaintTypeExcel(workbook: XLSX.WorkBook): {
       return;
     }
 
-    complaintTypes.push({ serviceCode, name, keywords, department, slaHours, active });
+    complaintTypes.push({
+      serviceCode,
+      name,
+      keywords,
+      department,
+      slaHours,
+      active,
+      menuPath,
+      menuName: groupName || undefined,
+    });
   });
 
   return {
@@ -697,7 +735,22 @@ export function parseEmployeeExcel(workbook: XLSX.WorkBook): {
     const designation = String(row['designation'] || row['Designation'] || '').trim();
     const roles = String(row['roles'] || row['Roles'] || row['role'] || 'EMPLOYEE').trim();
     const jurisdictions = String(row['jurisdictions'] || row['Jurisdictions'] || row['boundary'] || '').trim();
-    const dateOfAppointment = String(row['dateOfAppointment'] || row['DateOfAppointment'] || row['doa'] || '').trim() || undefined;
+    // Same three-shape handling as dob below: spreadsheet apps often store
+    // typed dates as Excel serial NUMBERS (e.g. 46023 for 2026-01-01).
+    // Stringifying a serial and feeding it to `new Date("46023")` parses as
+    // the YEAR 46023 → a 16-digit epoch → HRMS rejects with
+    // ERR_HRMS_INVALID_DATE_OF_APPOINTMENT. Normalize to ISO here instead.
+    const doaRaw = row['dateOfAppointment'] ?? row['DateOfAppointment'] ?? row['doa'];
+    let dateOfAppointment: string | undefined;
+    if (doaRaw instanceof Date) {
+      dateOfAppointment = doaRaw.toISOString().slice(0, 10);
+    } else if (typeof doaRaw === 'number') {
+      // Excel epoch adjustment to JS epoch ms: (serial - 25569) * 86400 * 1000.
+      const jsDate = new Date((doaRaw - 25569) * 86400 * 1000);
+      dateOfAppointment = Number.isNaN(jsDate.getTime()) ? undefined : jsDate.toISOString().slice(0, 10);
+    } else {
+      dateOfAppointment = String(doaRaw ?? '').trim() || undefined;
+    }
 
     if (!employeeCode) {
       errors.push({
