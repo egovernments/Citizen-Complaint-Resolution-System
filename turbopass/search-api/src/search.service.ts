@@ -7,7 +7,12 @@ import { Trie, CityPayload } from './trie';
 export class SearchService implements OnModuleInit {
   private readonly logger = new Logger(SearchService.name);
   private trie: Trie;
-  private readonly dataPath = path.join(process.cwd(), '..', 'data'); 
+  private locationsLoaded = 0;
+  // Data dir is configurable for containerized deploys (Dockerfile sets DATA_DIR=/data);
+  // default preserves the original repo layout (search-api/ sibling of data/).
+  private readonly dataPath = process.env.DATA_DIR
+    ? path.resolve(process.env.DATA_DIR)
+    : path.join(process.cwd(), '..', 'data');
 
   constructor() {
     this.trie = new Trie();
@@ -100,7 +105,12 @@ export class SearchService implements OnModuleInit {
         this.logger.error(`Failed to load ${file}: ${e.message}`);
       }
     }
+    this.locationsLoaded = loadedCities;
     this.logger.log(`Successfully loaded ${loadedCities} cities into Trie.`);
+  }
+
+  getLocationsLoaded(): number {
+    return this.locationsLoaded;
   }
 
   private findJsonFiles(dir: string, fileList: string[] = []): string[] {
