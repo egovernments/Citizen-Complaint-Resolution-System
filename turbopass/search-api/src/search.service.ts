@@ -126,12 +126,12 @@ export class SearchService implements OnModuleInit {
     return fileList;
   }
 
-  search(query: string, fuzzy: boolean = true) {
+  search(query: string, fuzzy: boolean = true, limit: number = 20) {
     if (!query) return [];
     if (fuzzy) {
-        return this.trie.fuzzySearch(query, 1, 20); // maxEdits = 1
+        return this.trie.fuzzySearch(query, 1, limit); // maxEdits = 1
     } else {
-        return this.trie.searchPrefix(query, 20);
+        return this.trie.searchPrefix(query, limit);
     }
   }
 }
