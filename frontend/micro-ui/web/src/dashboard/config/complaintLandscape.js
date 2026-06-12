@@ -297,6 +297,14 @@ export const LANDSCAPE_CHARTS = [
     outputFormat: "Stage dwell table",
     queryKey: "ev_table_stage_dwell",
   },
+  {
+    id: "cl-map-complaints",
+    type: "map",
+    metric: "Complaint locations",
+    subMetric: null,
+    outputFormat: "Map (pins)",
+    queryKey: "cl_map_complaints",
+  },
 ];
 
 INVENTORY_SECTIONS[1].widgetIds = LANDSCAPE_CHARTS.map((c) => c.id);

@@ -64,6 +64,7 @@ export const DEFAULT_CHART_LAYOUT = {
   "cl-chart-categories": { x: 0, w: 4, h: 6, minW: 3, minH: 4, maxW: 8, maxH: 10 },
   "cl-chart-wards": { x: 4, w: 4, h: 6, minW: 3, minH: 4, maxW: 8, maxH: 10 },
   "cl-chart-dow": { x: 8, w: 4, h: 6, minW: 3, minH: 4, maxW: 8, maxH: 10 },
+  "cl-map-complaints": { x: 0, w: 8, h: 7, minW: 4, minH: 4, maxW: 12, maxH: 14 },
 };
 
 export const TOP_ROW_CHART_IDS = [
@@ -239,6 +240,19 @@ export const DEFAULT_LAYOUT = [
     minW: 3,
     minH: 4,
     maxH: 10,
+    moved: false,
+    static: false,
+    resizeHandles: ["se"],
+  },
+  {
+    w: 8,
+    h: 7,
+    x: 0,
+    y: 14,
+    i: "cl-map-complaints",
+    minW: 4,
+    minH: 4,
+    maxH: 14,
     moved: false,
     static: false,
     resizeHandles: ["se"],

@@ -834,19 +834,38 @@ async function runEmployeePhase(
   let existsCount = 0;
   let failedCount = 0;
 
+  const dayMs = 86_400_000;
   for (const emp of employees) {
-    const deptCode = deptMap.get(emp.departmentName) || emp.departmentName;
+    // departmentName accepts a comma-separated list. HRMS only allows one
+    // current assignment with non-overlapping windows, so extra departments
+    // become 1-day historical assignments in the past — the same pattern
+    // tenant_bootstrap uses for ADMIN. PGR's department validation accepts
+    // an assignee when ANY assignment matches the complaint's department.
+    const deptCodes = emp.departmentName
+      .split(',')
+      .map((d) => d.trim())
+      .filter(Boolean)
+      .map((d) => deptMap.get(d) || d);
     const desigCode = desigMap.get(emp.designationName) || emp.designationName;
 
-    const assignments = [
-      {
-        department: deptCode,
-        designation: desigCode,
-        fromDate: emp.joiningDate,
-        isCurrentAssignment: true,
-        tenantId,
-      },
-    ];
+    const assignments = deptCodes.map((deptCode, idx) =>
+      idx === 0
+        ? {
+            department: deptCode,
+            designation: desigCode,
+            fromDate: emp.joiningDate,
+            isCurrentAssignment: true,
+            tenantId,
+          }
+        : {
+            department: deptCode,
+            designation: desigCode,
+            fromDate: emp.joiningDate - (idx + 1) * dayMs,
+            toDate: emp.joiningDate - idx * dayMs,
+            isCurrentAssignment: false,
+            tenantId,
+          },
+    );
 
     const jurisdictions = jurisdiction ? [jurisdiction] : [];
 
@@ -875,7 +894,12 @@ async function runEmployeePhase(
           code: emp.code,
           employeeStatus: 'EMPLOYED',
           employeeType: 'PERMANENT',
-          dateOfAppointment: emp.appointmentDate,
+          // Every assignment's fromDate must be >= dateOfAppointment — with
+          // multi-department historical windows, anchor it before the earliest.
+          dateOfAppointment:
+            deptCodes.length > 1
+              ? Math.min(emp.appointmentDate, emp.joiningDate - (deptCodes.length + 1) * dayMs)
+              : emp.appointmentDate,
           user,
           assignments,
           jurisdictions,

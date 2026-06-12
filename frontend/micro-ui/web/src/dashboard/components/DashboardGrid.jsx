@@ -19,6 +19,7 @@ import { TABLE_WIDGET_CONFIG, isTableWidget } from "../config/dashboardTables";
 import KpiCard from "./KpiCard";
 import DashboardTable from "./DashboardTable";
 import DepartmentBarChart, { WEEKDAY_CHART_ORDER } from "./DepartmentBarChart";
+import ComplaintMap from "./ComplaintMap";
 import ResizeGrip from "./ResizeGrip";
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
@@ -151,6 +152,13 @@ const DashboardGrid = ({
     return <DashboardTable columns={config.columns} rows={rows} />;
   };
 
+  const renderMap = () => {
+    const pins = chartData.mapPins || [];
+    if (loading && !pins.length) return <ChartPlaceholder message="Loading…" />;
+    if (!pins.length) return <ChartPlaceholder message="No mapped complaints" />;
+    return <ComplaintMap pins={pins} />;
+  };
+
   const renderWidget = (widgetId) => {
     const meta = WIDGETS[widgetId];
     if (!meta) return null;
@@ -165,6 +173,10 @@ const DashboardGrid = ({
 
     if (meta.type === "bar-chart") {
       return renderBarChart(widgetId);
+    }
+
+    if (meta.type === "map") {
+      return renderMap(widgetId);
     }
 
     return null;

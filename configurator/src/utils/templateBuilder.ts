@@ -48,10 +48,17 @@ export function downloadCommonMastersTemplate() {
   ];
   XLSX.utils.book_append_sheet(wb, buildSheet(desigHeader, desigRows), 'Designation');
 
-  const ctHeader = ['serviceCode', 'name', 'keywords', 'department', 'slaHours', 'active'];
+  // Operator-friendly headers: "Complaint Type*" is the menu group shown in
+  // the citizen UI, "Complaint sub type*" the actual complaint. serviceCode
+  // and menuPath are derived on upload (excelParser/xlsx-reader) — sheet
+  // authors never deal with API field names. Sub-types sharing the same
+  // "Complaint Type*" value land under one menu entry (see the two
+  // Water Pipes sample rows).
+  const ctHeader = ['Complaint Type*', 'Complaint sub type*', 'department', 'slaHours', 'keywords', 'active'];
   const ctRows: Row[] = [
-    ['POTHOLE', 'Pothole Repair', 'pothole,road', 'WORKS', 120, 'true'],
-    ['GARBAGE', 'Garbage Collection', 'garbage,waste', 'ENV', 48, 'true'],
+    ['Water Pipes', 'Pipe leakage or damage', 'WORKS', 48, 'leak, damage', 'true'],
+    ['Water Pipes', 'Low pressure', 'WORKS', 48, 'low pressure', 'true'],
+    ['Garbage', 'Missed garbage collection', 'ENV', 48, 'garbage, waste', 'true'],
   ];
   XLSX.utils.book_append_sheet(wb, buildSheet(ctHeader, ctRows), 'ComplaintType');
 
@@ -73,19 +80,36 @@ export function downloadEmployeeTemplate() {
     'jurisdictions',
     'dateOfAppointment',
   ];
+  // `department` accepts a comma-separated list — each extra department
+  // becomes a historical HRMS assignment (bootstrap-ADMIN pattern), letting
+  // one employee qualify as assignee for complaints in all of them.
   const rows: Row[] = [
     [
       'EMP001',
       'Jane Doe',
       'jane.doe',
-      '9000000001',
+      '777777701',
       'jane@example.com',
       'FEMALE',
       '1990-01-15',
       'ENV',
       'OFFICER',
-      'EMPLOYEE,GRO',
+      'EMPLOYEE,PGR_LME',
       'WARD_001',
+      '2024-06-01',
+    ],
+    [
+      'EMP002',
+      'John Admin',
+      'john.admin',
+      '777777702',
+      'john.admin@example.com',
+      'MALE',
+      '1985-03-10',
+      'ENV,WORKS',
+      'OFFICER',
+      'EMPLOYEE,GRO,DGRO',
+      'COUNTY_001',
       '2024-06-01',
     ],
   ];

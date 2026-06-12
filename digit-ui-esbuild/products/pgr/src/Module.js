@@ -114,6 +114,14 @@ const componentsToRegister = {
   PGRSelectRating: SelectRating,
   PGRResponseCitzen: ResponseCitizen,
   GeoLocations,
+  // Employee create-complaint map field (egovernments/CCRS#447 item 5).
+  // Same leaflet/Nominatim/resolveWard component the citizen flow uses
+  // ("GeoLocations"); aliased under a PGR-prefixed name so the employee
+  // CreateComplaintConfig can reference it as a `type: "component"` field
+  // without colliding with the citizen flow's `getComponent("GeoLocations")`
+  // lookup. It writes the same `GeoLocationsPoint` form key (lat/lng +
+  // resolved `ward`) that PGRBoundaryComponent's auto-cascade watches.
+  PGRComplaintLocationMap: GeoLocations,
   SelectAddress,
   SelectImages,
   CreatePGRFlow: CreatePGRFlow,

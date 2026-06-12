@@ -45,6 +45,14 @@ const officerTopCount = (filters, timeWindow) => ({
 });
 
 export const BATCH_QUERIES = {
+  // Complaint locations for the map widget: one row per pinned (lat,long) location.
+  cl_map_complaints: {
+    grain: "facts",
+    dimensions: ["latitude", "longitude", "service_code", "application_status"],
+    measures: [{ name: "n", agg: "count" }],
+    filters: { has_geo_pin: true },
+    limit: 1000,
+  },
   cl_reg_daily: filedWindow("last_1d"),
   cl_reg_weekly: filedWindow("wtd"),
   cl_reg_monthly: filedWindow("mtd"),
@@ -841,6 +849,19 @@ export function parseBarChart(result, labelKey) {
     label: String(row[labelKey] ?? "Unknown"),
     count: Number(row.total) || 0,
   }));
+}
+
+export function parseMapPins(result) {
+  if (!result?.rows?.length) return [];
+  return result.rows
+    .map((row) => ({
+      lat: Number(row.latitude),
+      lng: Number(row.longitude),
+      count: Number(row.n) || 1,
+      serviceCode: row.service_code,
+      status: row.application_status,
+    }))
+    .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
 }
 
 export function parseDowChart(result) {

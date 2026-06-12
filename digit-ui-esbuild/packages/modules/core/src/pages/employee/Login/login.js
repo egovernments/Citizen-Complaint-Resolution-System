@@ -500,7 +500,12 @@ const Login = ({ config: propsConfig, t, isDisabled, loginOTPBased }) => {
         </div>
       </V2Card>
       {showToast ? (
-        <Toast type="error" label={t(showToast)} onClose={() => setShowToast(null)} />
+        // #443.8: route the toast label through the same key→fallback helper
+        // the labels use (tr), so an unseeded localization key renders a
+        // readable string instead of the raw key. Many toast values here are
+        // already human-readable (e.g. server error_description), so fall back
+        // to the value itself rather than to the key.
+        <Toast type="error" label={tr(showToast, showToast)} onClose={() => setShowToast(null)} />
       ) : null}
     </V2LoginShell>
   );

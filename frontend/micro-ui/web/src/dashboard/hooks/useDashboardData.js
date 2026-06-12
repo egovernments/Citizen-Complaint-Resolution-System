@@ -6,6 +6,7 @@ import {
   parseDowChart,
   parseFilterOptions,
   parseLocalityTable,
+  parseMapPins,
   parseResolutionByTypeTable,
   parseTrendingComplaintsTable,
   parseWorkflowStageTable,
@@ -30,6 +31,7 @@ const EMPTY_CHART_DATA = {
   resolutionByType: [],
   locality: [],
   workflowStages: [],
+  mapPins: [],
 };
 
 function extractAsOf(results) {
@@ -59,6 +61,7 @@ function buildChartData(results, filters) {
       results?.cl_ward_ontime
     ),
     workflowStages: parseWorkflowStageTable(results?.ev_table_stage_dwell),
+    mapPins: parseMapPins(results?.cl_map_complaints),
   };
 }
 

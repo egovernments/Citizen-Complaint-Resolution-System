@@ -397,6 +397,13 @@ export interface ComplaintTypeExcelRow {
   department: string;
   slaHours: number;
   active: boolean;
+  /** Menu group code derived from the sheet's "Complaint Type*" column
+   *  (or an explicit menuPath column in legacy files). Groups sub-types
+   *  in the citizen UI complaint menu. */
+  menuPath: string;
+  /** Human display label for the menu group — the "Complaint Type*"
+   *  value verbatim; used for the SERVICEDEFS.<MENUPATH> localization. */
+  menuName?: string;
 }
 
 export interface EmployeeExcelRow {
