@@ -307,11 +307,12 @@ export default function Phase2Page() {
 
       await localizationService.cacheBust().catch(e => console.warn('cache-bust failed', e));
 
-      // Clear ancestralmaterializedpath so boundary-service includeChildren=true
-      // doesn't combine two overlapping queries and return each node twice in the
-      // citizen create-complaint dropdown. Fire-and-forget: if the MCP REST shim
-      // isn't deployed, Phase 2 still completes and an operator can run
-      // fix_boundary_paths via the MCP tool manually.
+      // Populate ancestralmaterializedpath (the '|'-joined ancestor chain) for the
+      // relationships just created. boundary-service builds the includeChildren=true
+      // nested tree FROM this path, so if it's empty the citizen create-complaint
+      // dropdown shows only the root with no cascade (County/Sub-County/Ward never
+      // appear). Fire-and-forget: if the MCP REST shim isn't deployed, Phase 2 still
+      // completes and an operator can run fix_boundary_paths via the MCP tool manually.
       try {
         const { token } = apiClient.getAuth();
         const ac = new AbortController();
