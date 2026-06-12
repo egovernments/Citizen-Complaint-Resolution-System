@@ -89,19 +89,52 @@ before the converge, so the nightly self-builds what it then deploys. Exit code
 is non-zero if any target failed; the caller decides whether to proceed on the
 prior tags.
 
-## Pinning on a deploy
+## Pinning on a deploy — making the box run the nightly
 
 Each parameterized service reads its image from an env var (set in `host_vars`,
-templated through `digit.env.j2`). Pin the nightly like:
+templated through `digit.env.j2`). Two things are required to actually run the
+nightly — **both**, or the box silently keeps running something else:
 
-```yaml
-# host_vars/<tenant>.yml
-pgr_services_image: "host:5000/egovio/pgr-services:nightly-develop"
-otp_publisher_image: "host:5000/egovio/otp-publisher:nightly-develop"
-mcp_image: "host:5000/egovio/digit-mcp:nightly-develop"
-ddh_image: "host:5000/egovio/default-data-handler:nightly-develop"
-```
+1. **Pin the image** to the `nightly-develop` tag:
+
+   ```yaml
+   # host_vars/<tenant>.yml
+   pgr_services_image:  "host:5000/egovio/pgr-services:nightly-develop"
+   digit_ui_image:      "host:5000/egovio/digit-ui:nightly-develop"
+   otp_publisher_image: "host:5000/egovio/otp-publisher:nightly-develop"
+   mcp_image:           "host:5000/egovio/digit-mcp:nightly-develop"
+   ddh_image:           "host:5000/egovio/default-data-handler:nightly-develop"
+   ```
+
+2. **Turn the matching `build_*` flag OFF.** ⚠️ This is the trap. When
+   `build_digit_ui` / `build_mcp` / `build_default_data_handler` /
+   `build_otp_publisher` is `true`, the deploy builds that service from source
+   on the box and tags it `:local`, **overriding the image pin** — so you get an
+   on-box build, not the nightly. For a pull-the-nightly deploy these must be
+   `false`. (pgr-services has no `build_*` flag; it always pulls its image var.)
 
 Anything left unset keeps the prior compose default — pinning is opt-in, so this
-pipeline changes nothing until a deployment opts a service in. More services get
-an `*_IMAGE` knob as they're cut over to pull-from-registry.
+pipeline changes nothing until a deployment opts a service in.
+
+### Verify what's actually running
+
+```bash
+docker ps --format '{{.Names}}\t{{.Image}}' \
+  | grep -E 'pgr-services|digit-ui|digit-mcp|otp-publisher|default-data-handler'
+```
+
+Every line should show your registry + `:nightly-develop` (or a dated
+`:develop-YYYYMMDD`). A `…preview…:latest`, a hand tag like `:pgr-fixes`, or a
+`:local` means that service is **not** on the nightly — fix its pin and/or
+`build_*` flag.
+
+### Frontend caveat
+
+`digit-ui` above is the **legacy micro-ui** container. The modern UI that
+bomet/naipepea actually serve is the **`digit-ui-esbuild`** static bundle, either
+laid into the container by `build_digit_ui` or served from a host-nginx dir
+(`/opt/digit-ui-esbuild/build`). The nightly builds a `digit-ui-esbuild` *image*,
+but the deploy does not yet pull-and-extract that bundle into the served dir —
+it still rebuilds on the box. Wiring that pull-and-extract path (so the served
+frontend is the nightly too) is the open follow-up; until then the modern
+frontend is **not** guaranteed to be the nightly even with the pins above.
