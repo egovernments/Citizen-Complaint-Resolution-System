@@ -1,4 +1,3 @@
-import React from 'react';
 import type { RaRecord } from 'ra-core';
 import { TableCell } from '../primitives/table';
 import { InlineDelete } from './InlineDelete';
