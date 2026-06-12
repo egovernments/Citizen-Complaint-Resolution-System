@@ -144,6 +144,12 @@ useEffect(() => {
   useEffect(() => {
     if (!wardHintCode && !wardHintName) return;
     if (!childrenData || childrenData.length === 0) return;
+    // boundaryHierarchyOrder may not be seeded yet (usePGRInitialization
+    // still in flight / city just switched). Without it the deepest-level
+    // targetType is undefined and findWardPath would match the hint at
+    // ANY level — skip; the dropdowns don't render without the hierarchy
+    // anyway and the effect re-runs when childrenData settles.
+    if (boundaryHierarchy.length === 0) return;
     const targetType = boundaryHierarchy[boundaryHierarchy.length - 1];
     const path = findWardPath(childrenData[0]?.boundary, wardHintCode, wardHintName, targetType);
     if (!path || path.length === 0) return;

@@ -8,6 +8,7 @@ import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
 import keNairobiWardsFallback from "../assets/boundaries/ke_nairobi_wards.json";
 import useWardHighlightColor from "../hooks/pgr/useWardHighlightColor";
+import useTenantBoundaries from "../hooks/pgr/useTenantBoundaries";
 
 // Fix default icon issue in React builds
 delete L.Icon.Default.prototype._getIconUrl;
@@ -38,46 +39,9 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
   // in Swahili).
   const nominatimLang = ((i18n?.language || Digit?.StoreData?.getCurrentLanguage?.() || "en") + "").split("_")[0] || "en";
 
-  const [tenantBoundaries, setTenantBoundaries] = useState(null);
-
-  useEffect(() => {
-    const MAP_TENANT = window?.globalConfigs?.getConfig?.("MAP_TENANT") || process.env.REACT_APP_MAP_TENANT;
-    if (!MAP_TENANT) {
-      setTenantBoundaries(keNairobiWardsFallback);
-      return;
-    }
-
-    const fetchBoundaries = async () => {
-      try {
-        const response = await Digit.CustomService.getResponse({
-          url: "/boundary-service/boundary/_search",
-          params: {},
-          body: {
-            Boundary: { tenantId: MAP_TENANT, hierarchyType: "ADMIN" }
-          },
-          method: "POST"
-        });
-
-        if (response?.Boundary && response.Boundary.length > 0) {
-          const geojson = {
-            type: "FeatureCollection",
-            features: response.Boundary.map((b) => ({
-              type: "Feature",
-              geometry: b.geometry,
-              properties: { code: b.code, name: b.name, parent_subcounty: b.parent }
-            }))
-          };
-          setTenantBoundaries(geojson);
-        } else {
-          setTenantBoundaries(keNairobiWardsFallback);
-        }
-      } catch (e) {
-        console.error("Failed to fetch tenant boundaries:", e);
-        setTenantBoundaries(keNairobiWardsFallback);
-      }
-    };
-    fetchBoundaries();
-  }, []);
+  // Tenant ward polygons (boundary-service when MAP_TENANT is set, else
+  // the bundled static Nairobi wards). Null while the fetch is in flight.
+  const tenantBoundaries = useTenantBoundaries();
 
   const matchedWard = useMemo(() => {
     const wardCollection = tenantBoundaries || keNairobiWardsFallback;

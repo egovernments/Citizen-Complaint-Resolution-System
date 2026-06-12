@@ -9,6 +9,7 @@ import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
 import keNairobiWardsFallback from "../assets/boundaries/ke_nairobi_wards.json";
 import useWardHighlightColor from "../hooks/pgr/useWardHighlightColor";
+import useTenantBoundaries from "../hooks/pgr/useTenantBoundaries";
 
 // Fix default icon issue in React builds
 delete L.Icon.Default.prototype._getIconUrl;
@@ -107,50 +108,12 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   const [polygonPoints, setPolygonPoints] = useState([]);
   const [hoveredWard, setHoveredWard] = useState(null);
   const [selectedWard, setSelectedWard] = useState(null);
-  const [tenantBoundaries, setTenantBoundaries] = useState(null);
+  // Tenant ward polygons (boundary-service when MAP_TENANT is set, else
+  // the bundled static Nairobi wards). Null while the fetch is in flight.
+  const tenantBoundaries = useTenantBoundaries();
   const mapRef = useRef(null);
   const searchInputRef = useRef(null);
   const hasInitialized = useRef(false);
-
-  useEffect(() => {
-    const MAP_TENANT = window?.globalConfigs?.getConfig?.("MAP_TENANT") || process.env.REACT_APP_MAP_TENANT;
-    if (!MAP_TENANT) {
-      console.log("No MAP_TENANT configured, falling back to static Nairobi wards.");
-      setTenantBoundaries(keNairobiWardsFallback);
-      return;
-    }
-
-    const fetchBoundaries = async () => {
-      try {
-        const response = await Digit.CustomService.getResponse({
-          url: "/boundary-service/boundary/_search",
-          params: {},
-          body: {
-            Boundary: { tenantId: MAP_TENANT, hierarchyType: "ADMIN" }
-          },
-          method: "POST"
-        });
-
-        if (response?.Boundary && response.Boundary.length > 0) {
-          const geojson = {
-            type: "FeatureCollection",
-            features: response.Boundary.map((b) => ({
-              type: "Feature",
-              geometry: b.geometry,
-              properties: { code: b.code, name: b.name, parent_subcounty: b.parent }
-            }))
-          };
-          setTenantBoundaries(geojson);
-        } else {
-          setTenantBoundaries(keNairobiWardsFallback);
-        }
-      } catch (e) {
-        console.error("Failed to fetch tenant boundaries:", e);
-        setTenantBoundaries(keNairobiWardsFallback);
-      }
-    };
-    fetchBoundaries();
-  }, []);
 
   // Leaflet writes the stroke as an SVG DOM attribute, which doesn't resolve
   // CSS `var()`. Read the runtime accent at mount so the user-drawn polygon
