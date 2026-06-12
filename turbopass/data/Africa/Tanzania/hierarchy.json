@@ -1,0 +1,4184 @@
+{
+  "code": "TZ",
+  "name": "Tanzania",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "TZ-09",
+      "parent_code": "TZ",
+      "name": "Kilimanjaro",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-255602805",
+          "parent_code": "TZ-09",
+          "name": "Moshi",
+          "type": "city",
+          "population": "221733",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-255603972",
+          "parent_code": "TZ-09",
+          "name": "Himo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-255611070",
+          "parent_code": "TZ-09",
+          "name": "Same",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-255654749",
+          "parent_code": "TZ-09",
+          "name": "Mwanga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-387793210",
+          "parent_code": "TZ-09",
+          "name": "Marangu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-671589456",
+          "parent_code": "TZ-09",
+          "name": "Sanya Juu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3886079725",
+          "parent_code": "TZ-09",
+          "name": "Holili",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4076925775",
+          "parent_code": "TZ-09",
+          "name": "Maore",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4580952273",
+          "parent_code": "TZ-09",
+          "name": "Mwika",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4580952274",
+          "parent_code": "TZ-09",
+          "name": "Mkuu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TZ-13",
+      "parent_code": "TZ",
+      "name": "Mara Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-258170602",
+          "parent_code": "TZ-13",
+          "name": "Bunda",
+          "type": "city",
+          "population": "182970",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-258513630",
+          "parent_code": "TZ-13",
+          "name": "Tarime",
+          "type": "city",
+          "population": "133043",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-259710135",
+          "parent_code": "TZ-13",
+          "name": "Kukirango",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259711489",
+          "parent_code": "TZ-13",
+          "name": "Musoma",
+          "type": "city",
+          "population": "164172",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-566342259",
+          "parent_code": "TZ-13",
+          "name": "Mugumu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3020717446",
+          "parent_code": "TZ-13",
+          "name": "Nyakiswa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3020991140",
+          "parent_code": "TZ-13",
+          "name": "Mwibagi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3369644036",
+          "parent_code": "TZ-13",
+          "name": "Butiama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3373156435",
+          "parent_code": "TZ-13",
+          "name": "Shirati",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4547457881",
+          "parent_code": "TZ-13",
+          "name": "Kisorya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TZ-26",
+      "parent_code": "TZ",
+      "name": "Manyara Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-259068983",
+          "parent_code": "TZ-26",
+          "name": "Mbulu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259069787",
+          "parent_code": "TZ-26",
+          "name": "Kibaya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262017801",
+          "parent_code": "TZ-26",
+          "name": "Mirerani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2449081680",
+          "parent_code": "TZ-26",
+          "name": "Bonga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3014830337",
+          "parent_code": "TZ-26",
+          "name": "Haydom",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3157807814",
+          "parent_code": "TZ-26",
+          "name": "Endasak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3157807818",
+          "parent_code": "TZ-26",
+          "name": "Nangwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3247454356",
+          "parent_code": "TZ-26",
+          "name": "Babati",
+          "type": "city",
+          "population": "67445",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3604840285",
+          "parent_code": "TZ-26",
+          "name": "Katesh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TZ-01",
+      "parent_code": "TZ",
+      "name": "Arusha",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-255603098",
+          "parent_code": "TZ-01",
+          "name": "Arusha",
+          "type": "city",
+          "population": "617631",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-255619853",
+          "parent_code": "TZ-01",
+          "name": "Makuyuni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-255620128",
+          "parent_code": "TZ-01",
+          "name": "Mto wa Mbu",
+          "type": "city",
+          "population": "11405",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-255653806",
+          "parent_code": "TZ-01",
+          "name": "Karatu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-258922908",
+          "parent_code": "TZ-01",
+          "name": "Longido",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-282575938",
+          "parent_code": "TZ-01",
+          "name": "Usa River",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-910420562",
+          "parent_code": "TZ-01",
+          "name": "Mang'ola Barazani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-910424111",
+          "parent_code": "TZ-01",
+          "name": "Rhotia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5908238999",
+          "parent_code": "TZ-01",
+          "name": "Olkung'wado",
+          "type": "city",
+          "population": "3000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7813570014",
+          "parent_code": "TZ-01",
+          "name": "Loliondo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8252824032",
+          "parent_code": "TZ-01",
+          "name": "Olorieni Government",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        },
+        {
+          "code": "CTY-9491413472",
+          "parent_code": "TZ-01",
+          "name": "Eleng'ata Dapash",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TZ-05",
+      "parent_code": "TZ",
+      "name": "Kagera",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-258165920",
+          "parent_code": "TZ-05",
+          "name": "Bukoba",
+          "type": "city",
+          "population": "144938",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-259704149",
+          "parent_code": "TZ-05",
+          "name": "Rulenge",
+          "type": "city",
+          "population": "11444",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259704375",
+          "parent_code": "TZ-05",
+          "name": "Biharamulo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-965845239",
+          "parent_code": "TZ-05",
+          "name": "Muleba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-965845243",
+          "parent_code": "TZ-05",
+          "name": "Ngara Mjini",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1886332700",
+          "parent_code": "TZ-05",
+          "name": "Bugene",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2619615640",
+          "parent_code": "TZ-05",
+          "name": "Kayanga",
+          "type": "city",
+          "population": "16590",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3103897164",
+          "parent_code": "TZ-05",
+          "name": "Kemondo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TZ-14",
+      "parent_code": "TZ",
+      "name": "Mbeya Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-255594923",
+          "parent_code": "TZ-14",
+          "name": "Mbeya",
+          "type": "city",
+          "population": "541603",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-258501715",
+          "parent_code": "TZ-14",
+          "name": "Igurusi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-258502196",
+          "parent_code": "TZ-14",
+          "name": "Chimala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259071670",
+          "parent_code": "TZ-14",
+          "name": "Makongolosi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262104767",
+          "parent_code": "TZ-14",
+          "name": "Rujewa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262109073",
+          "parent_code": "TZ-14",
+          "name": "Kyela",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331456915",
+          "parent_code": "TZ-14",
+          "name": "Tukuyu",
+          "type": "city",
+          "population": "50000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-965845041",
+          "parent_code": "TZ-14",
+          "name": "Madibira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2460747797",
+          "parent_code": "TZ-14",
+          "name": "Songwe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7816197695",
+          "parent_code": "TZ-14",
+          "name": "Kasumulu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TZ-23",
+      "parent_code": "TZ",
+      "name": "Singida Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-255591716",
+          "parent_code": "TZ-23",
+          "name": "Singida",
+          "type": "city",
+          "population": "165492",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-258309920",
+          "parent_code": "TZ-23",
+          "name": "Itigi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-258507896",
+          "parent_code": "TZ-23",
+          "name": "Iguguno",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-258508024",
+          "parent_code": "TZ-23",
+          "name": "Shelui",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-261975303",
+          "parent_code": "TZ-23",
+          "name": "New Kiomboi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-261979650",
+          "parent_code": "TZ-23",
+          "name": "Mtinko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-938286338",
+          "parent_code": "TZ-23",
+          "name": "Rungwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3157807815",
+          "parent_code": "TZ-23",
+          "name": "Ilongero",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3182899637",
+          "parent_code": "TZ-23",
+          "name": "Mungaa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3184797350",
+          "parent_code": "TZ-23",
+          "name": "Manyoni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4054695961",
+          "parent_code": "TZ-23",
+          "name": "Ikungi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4054770031",
+          "parent_code": "TZ-23",
+          "name": "Puma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TZ-17",
+      "parent_code": "TZ",
+      "name": "Mtwara Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-258162316",
+          "parent_code": "TZ-17",
+          "name": "Mtwara",
+          "type": "city",
+          "population": "140793",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-258502528",
+          "parent_code": "TZ-17",
+          "name": "Masasi",
+          "type": "city",
+          "population": "89700",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259064907",
+          "parent_code": "TZ-17",
+          "name": "Newala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259080003",
+          "parent_code": "TZ-17",
+          "name": "Lukuledi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259080486",
+          "parent_code": "TZ-17",
+          "name": "Nangomba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-484719808",
+          "parent_code": "TZ-17",
+          "name": "Ziwani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-965844594",
+          "parent_code": "TZ-17",
+          "name": "Nanyamba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1866582463",
+          "parent_code": "TZ-17",
+          "name": "Tandahimba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3679709718",
+          "parent_code": "TZ-17",
+          "name": "Mahuta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4699952292",
+          "parent_code": "TZ-17",
+          "name": "Mangaka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10173683517",
+          "parent_code": "TZ-17",
+          "name": "Mbuyuni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TZ-04",
+      "parent_code": "TZ",
+      "name": "Iringa Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-258505599",
+          "parent_code": "TZ-04",
+          "name": "Mafinga",
+          "type": "city",
+          "population": "99305",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1484695769",
+          "parent_code": "TZ-04",
+          "name": "Ilula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1489195792",
+          "parent_code": "TZ-04",
+          "name": "Idodi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1489195813",
+          "parent_code": "TZ-04",
+          "name": "Mapogoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11070723589",
+          "parent_code": "TZ-04",
+          "name": "Iringa",
+          "type": "city",
+          "population": "202490",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "TZ-12",
+      "parent_code": "TZ",
+      "name": "Lindi Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-258162403",
+          "parent_code": "TZ-12",
+          "name": "Lindi",
+          "type": "city",
+          "population": "95096",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-258923620",
+          "parent_code": "TZ-12",
+          "name": "Nachingwea",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-965844811",
+          "parent_code": "TZ-12",
+          "name": "Ruangwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-965844897",
+          "parent_code": "TZ-12",
+          "name": "Kilwa Kivinje",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1136001371",
+          "parent_code": "TZ-12",
+          "name": "Kilwa Masoko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4428190844",
+          "parent_code": "TZ-12",
+          "name": "Mtama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TZ-24",
+      "parent_code": "TZ",
+      "name": "Tabora Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-255588572",
+          "parent_code": "TZ-24",
+          "name": "Kaliua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-255590043",
+          "parent_code": "TZ-24",
+          "name": "Tabora",
+          "type": "city",
+          "population": "221466",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-259067269",
+          "parent_code": "TZ-24",
+          "name": "Igunga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-261973479",
+          "parent_code": "TZ-24",
+          "name": "Sikonge",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-965847968",
+          "parent_code": "TZ-24",
+          "name": "Itaga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3152554072",
+          "parent_code": "TZ-24",
+          "name": "Igurubi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3632360348",
+          "parent_code": "TZ-24",
+          "name": "Bukene",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3737100132",
+          "parent_code": "TZ-24",
+          "name": "Choma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10584822811",
+          "parent_code": "TZ-24",
+          "name": "Urambo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TZ-19",
+      "parent_code": "TZ",
+      "name": "Pwani Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-255615379",
+          "parent_code": "TZ-19",
+          "name": "Chalinze",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-258155223",
+          "parent_code": "TZ-19",
+          "name": "Bagamoyo",
+          "type": "city",
+          "population": "55000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-258168998",
+          "parent_code": "TZ-19",
+          "name": "Kibaha",
+          "type": "city",
+          "population": "265360",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-262088666",
+          "parent_code": "TZ-19",
+          "name": "Mlandizi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262088828",
+          "parent_code": "TZ-19",
+          "name": "Mkuranga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262089551",
+          "parent_code": "TZ-19",
+          "name": "Bungu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-608071188",
+          "parent_code": "TZ-19",
+          "name": "Kilindoni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-965845024",
+          "parent_code": "TZ-19",
+          "name": "Miono",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1038265913",
+          "parent_code": "TZ-19",
+          "name": "Ikwiriri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2177167781",
+          "parent_code": "TZ-19",
+          "name": "Kibiti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5090950185",
+          "parent_code": "TZ-19",
+          "name": "Kisarawe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6121776942",
+          "parent_code": "TZ-19",
+          "name": "Vikindu",
+          "type": "city",
+          "population": "70000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13088984784",
+          "parent_code": "TZ-19",
+          "name": "Gwata",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TZ-21",
+      "parent_code": "TZ",
+      "name": "Ruvuma Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-258160432",
+          "parent_code": "TZ-21",
+          "name": "Songea",
+          "type": "city",
+          "population": "286285",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-258514275",
+          "parent_code": "TZ-21",
+          "name": "Mbinga",
+          "type": "city",
+          "population": "60868",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-258926603",
+          "parent_code": "TZ-21",
+          "name": "Tunduru",
+          "type": "city",
+          "population": "50054",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262110599",
+          "parent_code": "TZ-21",
+          "name": "Namtumbo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-965844157",
+          "parent_code": "TZ-21",
+          "name": "Peramiho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2469799352",
+          "parent_code": "TZ-21",
+          "name": "Likonde",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2469969665",
+          "parent_code": "TZ-21",
+          "name": "Kigonsera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2471745761",
+          "parent_code": "TZ-21",
+          "name": "Mbamba Bay",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TZ-16",
+      "parent_code": "TZ",
+      "name": "Morogoro Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-252592807",
+          "parent_code": "TZ-16",
+          "name": "Morogoro",
+          "type": "city",
+          "population": "471409",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-258135360",
+          "parent_code": "TZ-16",
+          "name": "Ifakara",
+          "type": "city",
+          "population": "205843",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-258144545",
+          "parent_code": "TZ-16",
+          "name": "Kilosa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259074461",
+          "parent_code": "TZ-16",
+          "name": "Gairo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259083992",
+          "parent_code": "TZ-16",
+          "name": "Kimamba A",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262050530",
+          "parent_code": "TZ-16",
+          "name": "Mlimba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262088125",
+          "parent_code": "TZ-16",
+          "name": "Mvomero",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-929222852",
+          "parent_code": "TZ-16",
+          "name": "Mkuyuni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-965844028",
+          "parent_code": "TZ-16",
+          "name": "Mwaya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-965845001",
+          "parent_code": "TZ-16",
+          "name": "Mahenge",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1484695822",
+          "parent_code": "TZ-16",
+          "name": "Mikumi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3394975761",
+          "parent_code": "TZ-16",
+          "name": "Malinyi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TZ-20",
+      "parent_code": "TZ",
+      "name": "Rukwa Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-262091019",
+          "parent_code": "TZ-20",
+          "name": "Namanyere",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262094692",
+          "parent_code": "TZ-20",
+          "name": "Chala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262095995",
+          "parent_code": "TZ-20",
+          "name": "Sumbawanga",
+          "type": "city",
+          "population": "182970",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-262102482",
+          "parent_code": "TZ-20",
+          "name": "Matai",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-435760995",
+          "parent_code": "TZ-20",
+          "name": "Kirando",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-938286125",
+          "parent_code": "TZ-20",
+          "name": "Laela",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-938286357",
+          "parent_code": "TZ-20",
+          "name": "Mwimbi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-938286406",
+          "parent_code": "TZ-20",
+          "name": "Katali",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TZ-08",
+      "parent_code": "TZ",
+      "name": "Kigoma Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-259075705",
+          "parent_code": "TZ-08",
+          "name": "Kibondo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259712678",
+          "parent_code": "TZ-08",
+          "name": "Nguruka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259712892",
+          "parent_code": "TZ-08",
+          "name": "Kakonko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-942563684",
+          "parent_code": "TZ-08",
+          "name": "Uvinza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-965844581",
+          "parent_code": "TZ-08",
+          "name": "Manyovu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-965845175",
+          "parent_code": "TZ-08",
+          "name": "Ujiji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3122797268",
+          "parent_code": "TZ-08",
+          "name": "Rusesa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5525015258",
+          "parent_code": "TZ-08",
+          "name": "Kigadye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7151164325",
+          "parent_code": "TZ-08",
+          "name": "Kasulu",
+          "type": "city",
+          "population": "238321",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-7604112469",
+          "parent_code": "TZ-08",
+          "name": "Bubango",
+          "type": "city",
+          "population": "8261",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12409731581",
+          "parent_code": "TZ-08",
+          "name": "Kigoma",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "TZ-25",
+      "parent_code": "TZ",
+      "name": "Tanga Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-255615843",
+          "parent_code": "TZ-25",
+          "name": "Tanga",
+          "type": "city",
+          "population": "393429",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-255615846",
+          "parent_code": "TZ-25",
+          "name": "Pangani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-255655408",
+          "parent_code": "TZ-25",
+          "name": "Mombo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-255655635",
+          "parent_code": "TZ-25",
+          "name": "Korogwe",
+          "type": "city",
+          "population": "62032",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-257916259",
+          "parent_code": "TZ-25",
+          "name": "Lushoto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262031206",
+          "parent_code": "TZ-25",
+          "name": "Handeni",
+          "type": "city",
+          "population": "108968",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-565453763",
+          "parent_code": "TZ-25",
+          "name": "Pongwe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-565454454",
+          "parent_code": "TZ-25",
+          "name": "Soni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-727003327",
+          "parent_code": "TZ-25",
+          "name": "Mlalo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1389809956",
+          "parent_code": "TZ-25",
+          "name": "Mkata",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5672289211",
+          "parent_code": "TZ-25",
+          "name": "Muheza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7552521980",
+          "parent_code": "TZ-25",
+          "name": "Mafuriko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7924772349",
+          "parent_code": "TZ-25",
+          "name": "Lunguza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12875675248",
+          "parent_code": "TZ-25",
+          "name": "Msente",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TZ-03",
+      "parent_code": "TZ",
+      "name": "Dodoma Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-87841198",
+          "parent_code": "TZ-03",
+          "name": "Dodoma",
+          "type": "city",
+          "population": "765179",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-258589880",
+          "parent_code": "TZ-03",
+          "name": "Kondoa",
+          "type": "city",
+          "population": "80443",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-943235403",
+          "parent_code": "TZ-03",
+          "name": "Kongwa",
+          "type": "city",
+          "population": "309973",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-965844399",
+          "parent_code": "TZ-03",
+          "name": "Kibakwe",
+          "type": "city",
+          "population": "10000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2402547640",
+          "parent_code": "TZ-03",
+          "name": "Mpwapwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4055514921",
+          "parent_code": "TZ-03",
+          "name": "Gulwe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TZ-11",
+      "parent_code": "TZ",
+      "name": "Zanzibar South & Central",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-3607854202",
+          "parent_code": "TZ-11",
+          "name": "Chwaka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5257834936",
+          "parent_code": "TZ-11",
+          "name": "Makunduchi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TZ-06",
+      "parent_code": "TZ",
+      "name": "North Pemba",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-258919720",
+          "parent_code": "TZ-06",
+          "name": "Wete",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TZ-07",
+      "parent_code": "TZ",
+      "name": "Zanzibar North",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27251888",
+          "parent_code": "TZ-07",
+          "name": "Nungwi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-27251989",
+          "parent_code": "TZ-07",
+          "name": "Mahonda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-31553371",
+          "parent_code": "TZ-07",
+          "name": "Kiwengwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-31556298",
+          "parent_code": "TZ-07",
+          "name": "Mkokotoni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TZ-15",
+      "parent_code": "TZ",
+      "name": "Zanzibar Urban-West",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27252328",
+          "parent_code": "TZ-15",
+          "name": "Bububu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3320526612",
+          "parent_code": "TZ-15",
+          "name": "Zanzibar City",
+          "type": "city",
+          "population": "709809",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3609646085",
+          "parent_code": "TZ-15",
+          "name": "Mwera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6771688364",
+          "parent_code": "TZ-15",
+          "name": "Uswazi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6778920858",
+          "parent_code": "TZ-15",
+          "name": "Gordown",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10847083886",
+          "parent_code": "TZ-15",
+          "name": "Kelele Square",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "TZ-10",
+      "parent_code": "TZ",
+      "name": "South Pemba",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-622514835",
+          "parent_code": "TZ-10",
+          "name": "Chake-Chake",
+          "type": "city",
+          "population": "52047",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-622514838",
+          "parent_code": "TZ-10",
+          "name": "Mkoani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-3775035",
+      "parent_code": "TZ",
+      "name": "Zanzibar",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27251888",
+          "parent_code": "ST-3775035",
+          "name": "Nungwi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-27251989",
+          "parent_code": "ST-3775035",
+          "name": "Mahonda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-27252328",
+          "parent_code": "ST-3775035",
+          "name": "Bububu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-31553371",
+          "parent_code": "ST-3775035",
+          "name": "Kiwengwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-31556298",
+          "parent_code": "ST-3775035",
+          "name": "Mkokotoni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-258919720",
+          "parent_code": "ST-3775035",
+          "name": "Wete",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-622514835",
+          "parent_code": "ST-3775035",
+          "name": "Chake-Chake",
+          "type": "city",
+          "population": "52047",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-622514838",
+          "parent_code": "ST-3775035",
+          "name": "Mkoani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3320526612",
+          "parent_code": "ST-3775035",
+          "name": "Zanzibar City",
+          "type": "city",
+          "population": "709809",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3607854202",
+          "parent_code": "ST-3775035",
+          "name": "Chwaka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3609646085",
+          "parent_code": "ST-3775035",
+          "name": "Mwera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5257834936",
+          "parent_code": "ST-3775035",
+          "name": "Makunduchi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6771688364",
+          "parent_code": "ST-3775035",
+          "name": "Uswazi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6778920858",
+          "parent_code": "ST-3775035",
+          "name": "Gordown",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10847083886",
+          "parent_code": "ST-3775035",
+          "name": "Kelele Square",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "ST-3775052",
+      "parent_code": "TZ",
+      "name": "Lake Zone",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-255590322",
+          "parent_code": "ST-3775052",
+          "name": "Mwanza",
+          "type": "city",
+          "population": "1104521",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-255590784",
+          "parent_code": "ST-3775052",
+          "name": "Isaka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-255591375",
+          "parent_code": "ST-3775052",
+          "name": "Shinyanga",
+          "type": "city",
+          "population": "139727",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-258165920",
+          "parent_code": "ST-3775052",
+          "name": "Bukoba",
+          "type": "city",
+          "population": "144938",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-258170602",
+          "parent_code": "ST-3775052",
+          "name": "Bunda",
+          "type": "city",
+          "population": "182970",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-258307668",
+          "parent_code": "ST-3775052",
+          "name": "Geita",
+          "type": "city",
+          "population": "318006",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-258511419",
+          "parent_code": "ST-3775052",
+          "name": "Bariadi",
+          "type": "city",
+          "population": "260927",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-258513630",
+          "parent_code": "ST-3775052",
+          "name": "Tarime",
+          "type": "city",
+          "population": "133043",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-258932063",
+          "parent_code": "ST-3775052",
+          "name": "Katoro",
+          "type": "city",
+          "population": "75000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259066734",
+          "parent_code": "ST-3775052",
+          "name": "Misungwi",
+          "type": "city",
+          "population": "30728",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259073216",
+          "parent_code": "ST-3775052",
+          "name": "Ngudu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259704149",
+          "parent_code": "ST-3775052",
+          "name": "Rulenge",
+          "type": "city",
+          "population": "11444",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259704375",
+          "parent_code": "ST-3775052",
+          "name": "Biharamulo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259706481",
+          "parent_code": "ST-3775052",
+          "name": "Kasamwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259709135",
+          "parent_code": "ST-3775052",
+          "name": "Kisesa 'A'",
+          "type": "city",
+          "population": "21707",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259710135",
+          "parent_code": "ST-3775052",
+          "name": "Kukirango",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259711489",
+          "parent_code": "ST-3775052",
+          "name": "Musoma",
+          "type": "city",
+          "population": "164172",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-259713894",
+          "parent_code": "ST-3775052",
+          "name": "Masumbwe",
+          "type": "city",
+          "population": "50000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-261964012",
+          "parent_code": "ST-3775052",
+          "name": "Kahama",
+          "type": "city",
+          "population": "453654",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-261964629",
+          "parent_code": "ST-3775052",
+          "name": "Tinde",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-566128650",
+          "parent_code": "ST-3775052",
+          "name": "Magu",
+          "type": "city",
+          "population": "23822",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-566128754",
+          "parent_code": "ST-3775052",
+          "name": "Lamadi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-566342259",
+          "parent_code": "ST-3775052",
+          "name": "Mugumu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-965845239",
+          "parent_code": "ST-3775052",
+          "name": "Muleba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-965845243",
+          "parent_code": "ST-3775052",
+          "name": "Ngara Mjini",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1886332700",
+          "parent_code": "ST-3775052",
+          "name": "Bugene",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2619615640",
+          "parent_code": "ST-3775052",
+          "name": "Kayanga",
+          "type": "city",
+          "population": "16590",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3020717446",
+          "parent_code": "ST-3775052",
+          "name": "Nyakiswa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3020991140",
+          "parent_code": "ST-3775052",
+          "name": "Mwibagi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3029361901",
+          "parent_code": "ST-3775052",
+          "name": "Mwanhuzi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3044103583",
+          "parent_code": "ST-3775052",
+          "name": "Maswa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3045117934",
+          "parent_code": "ST-3775052",
+          "name": "Dutwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3103897164",
+          "parent_code": "ST-3775052",
+          "name": "Kemondo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3152554073",
+          "parent_code": "ST-3775052",
+          "name": "Old Shinyanga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3152593100",
+          "parent_code": "ST-3775052",
+          "name": "Didia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3158414464",
+          "parent_code": "ST-3775052",
+          "name": "Segese",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3159185608",
+          "parent_code": "ST-3775052",
+          "name": "Nyarugusu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3221243157",
+          "parent_code": "ST-3775052",
+          "name": "Iparamasa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3221257265",
+          "parent_code": "ST-3775052",
+          "name": "Chato",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3369623227",
+          "parent_code": "ST-3775052",
+          "name": "Nansio",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3369644036",
+          "parent_code": "ST-3775052",
+          "name": "Butiama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3371406243",
+          "parent_code": "ST-3775052",
+          "name": "Usagara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3373156435",
+          "parent_code": "ST-3775052",
+          "name": "Shirati",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3373156436",
+          "parent_code": "ST-3775052",
+          "name": "Mhunze",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3401984226",
+          "parent_code": "ST-3775052",
+          "name": "Muganza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3403706592",
+          "parent_code": "ST-3775052",
+          "name": "Ushirombo",
+          "type": "city",
+          "population": "23428",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3406660864",
+          "parent_code": "ST-3775052",
+          "name": "Buseresere",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3471529571",
+          "parent_code": "ST-3775052",
+          "name": "Lulembela",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3522097232",
+          "parent_code": "ST-3775052",
+          "name": "Kagongwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3652358154",
+          "parent_code": "ST-3775052",
+          "name": "Bukoli",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3728871134",
+          "parent_code": "ST-3775052",
+          "name": "Nkololo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3832490468",
+          "parent_code": "ST-3775052",
+          "name": "Bugarama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4547457881",
+          "parent_code": "ST-3775052",
+          "name": "Kisorya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4959859504",
+          "parent_code": "ST-3775052",
+          "name": "Bujingwa Center",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9623805792",
+          "parent_code": "ST-3775052",
+          "name": "Sengerema",
+          "type": "city",
+          "population": "110000",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "ST-3775058",
+      "parent_code": "TZ",
+      "name": "Northern Zone",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-255602805",
+          "parent_code": "ST-3775058",
+          "name": "Moshi",
+          "type": "city",
+          "population": "221733",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-255603098",
+          "parent_code": "ST-3775058",
+          "name": "Arusha",
+          "type": "city",
+          "population": "617631",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-255603972",
+          "parent_code": "ST-3775058",
+          "name": "Himo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-255611070",
+          "parent_code": "ST-3775058",
+          "name": "Same",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-255615843",
+          "parent_code": "ST-3775058",
+          "name": "Tanga",
+          "type": "city",
+          "population": "393429",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-255615846",
+          "parent_code": "ST-3775058",
+          "name": "Pangani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-255619853",
+          "parent_code": "ST-3775058",
+          "name": "Makuyuni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-255620128",
+          "parent_code": "ST-3775058",
+          "name": "Mto wa Mbu",
+          "type": "city",
+          "population": "11405",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-255653806",
+          "parent_code": "ST-3775058",
+          "name": "Karatu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-255654749",
+          "parent_code": "ST-3775058",
+          "name": "Mwanga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-255655408",
+          "parent_code": "ST-3775058",
+          "name": "Mombo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-255655635",
+          "parent_code": "ST-3775058",
+          "name": "Korogwe",
+          "type": "city",
+          "population": "62032",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-257916259",
+          "parent_code": "ST-3775058",
+          "name": "Lushoto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-258922908",
+          "parent_code": "ST-3775058",
+          "name": "Longido",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259068983",
+          "parent_code": "ST-3775058",
+          "name": "Mbulu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259069787",
+          "parent_code": "ST-3775058",
+          "name": "Kibaya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262017801",
+          "parent_code": "ST-3775058",
+          "name": "Mirerani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262031206",
+          "parent_code": "ST-3775058",
+          "name": "Handeni",
+          "type": "city",
+          "population": "108968",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-282575938",
+          "parent_code": "ST-3775058",
+          "name": "Usa River",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-387793210",
+          "parent_code": "ST-3775058",
+          "name": "Marangu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-565453763",
+          "parent_code": "ST-3775058",
+          "name": "Pongwe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-565454454",
+          "parent_code": "ST-3775058",
+          "name": "Soni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-671589456",
+          "parent_code": "ST-3775058",
+          "name": "Sanya Juu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-727003327",
+          "parent_code": "ST-3775058",
+          "name": "Mlalo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-910420562",
+          "parent_code": "ST-3775058",
+          "name": "Mang'ola Barazani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-910424111",
+          "parent_code": "ST-3775058",
+          "name": "Rhotia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1389809956",
+          "parent_code": "ST-3775058",
+          "name": "Mkata",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2449081680",
+          "parent_code": "ST-3775058",
+          "name": "Bonga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3014830337",
+          "parent_code": "ST-3775058",
+          "name": "Haydom",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3157807814",
+          "parent_code": "ST-3775058",
+          "name": "Endasak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3157807818",
+          "parent_code": "ST-3775058",
+          "name": "Nangwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3247454356",
+          "parent_code": "ST-3775058",
+          "name": "Babati",
+          "type": "city",
+          "population": "67445",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3604840285",
+          "parent_code": "ST-3775058",
+          "name": "Katesh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3886079725",
+          "parent_code": "ST-3775058",
+          "name": "Holili",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4076925775",
+          "parent_code": "ST-3775058",
+          "name": "Maore",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4580952273",
+          "parent_code": "ST-3775058",
+          "name": "Mwika",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4580952274",
+          "parent_code": "ST-3775058",
+          "name": "Mkuu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5672289211",
+          "parent_code": "ST-3775058",
+          "name": "Muheza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5908238999",
+          "parent_code": "ST-3775058",
+          "name": "Olkung'wado",
+          "type": "city",
+          "population": "3000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7552521980",
+          "parent_code": "ST-3775058",
+          "name": "Mafuriko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7813570014",
+          "parent_code": "ST-3775058",
+          "name": "Loliondo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7924772349",
+          "parent_code": "ST-3775058",
+          "name": "Lunguza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8252824032",
+          "parent_code": "ST-3775058",
+          "name": "Olorieni Government",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        },
+        {
+          "code": "CTY-9491413472",
+          "parent_code": "ST-3775058",
+          "name": "Eleng'ata Dapash",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12875675248",
+          "parent_code": "ST-3775058",
+          "name": "Msente",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-3775060",
+      "parent_code": "TZ",
+      "name": "Coastal Zone",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27565027",
+          "parent_code": "ST-3775060",
+          "name": "Dar es Salaam",
+          "type": "city",
+          "population": "5383728",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-252592807",
+          "parent_code": "ST-3775060",
+          "name": "Morogoro",
+          "type": "city",
+          "population": "471409",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-255615379",
+          "parent_code": "ST-3775060",
+          "name": "Chalinze",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-258135360",
+          "parent_code": "ST-3775060",
+          "name": "Ifakara",
+          "type": "city",
+          "population": "205843",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-258144545",
+          "parent_code": "ST-3775060",
+          "name": "Kilosa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-258155223",
+          "parent_code": "ST-3775060",
+          "name": "Bagamoyo",
+          "type": "city",
+          "population": "55000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-258162316",
+          "parent_code": "ST-3775060",
+          "name": "Mtwara",
+          "type": "city",
+          "population": "140793",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-258162403",
+          "parent_code": "ST-3775060",
+          "name": "Lindi",
+          "type": "city",
+          "population": "95096",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-258168998",
+          "parent_code": "ST-3775060",
+          "name": "Kibaha",
+          "type": "city",
+          "population": "265360",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-258502528",
+          "parent_code": "ST-3775060",
+          "name": "Masasi",
+          "type": "city",
+          "population": "89700",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-258923620",
+          "parent_code": "ST-3775060",
+          "name": "Nachingwea",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259064907",
+          "parent_code": "ST-3775060",
+          "name": "Newala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259074461",
+          "parent_code": "ST-3775060",
+          "name": "Gairo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259080003",
+          "parent_code": "ST-3775060",
+          "name": "Lukuledi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259080486",
+          "parent_code": "ST-3775060",
+          "name": "Nangomba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259083992",
+          "parent_code": "ST-3775060",
+          "name": "Kimamba A",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262050530",
+          "parent_code": "ST-3775060",
+          "name": "Mlimba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262088125",
+          "parent_code": "ST-3775060",
+          "name": "Mvomero",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262088666",
+          "parent_code": "ST-3775060",
+          "name": "Mlandizi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262088828",
+          "parent_code": "ST-3775060",
+          "name": "Mkuranga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262089551",
+          "parent_code": "ST-3775060",
+          "name": "Bungu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-484719808",
+          "parent_code": "ST-3775060",
+          "name": "Ziwani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-608071188",
+          "parent_code": "ST-3775060",
+          "name": "Kilindoni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-929222852",
+          "parent_code": "ST-3775060",
+          "name": "Mkuyuni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-965844028",
+          "parent_code": "ST-3775060",
+          "name": "Mwaya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-965844594",
+          "parent_code": "ST-3775060",
+          "name": "Nanyamba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-965844811",
+          "parent_code": "ST-3775060",
+          "name": "Ruangwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-965844897",
+          "parent_code": "ST-3775060",
+          "name": "Kilwa Kivinje",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-965845001",
+          "parent_code": "ST-3775060",
+          "name": "Mahenge",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-965845024",
+          "parent_code": "ST-3775060",
+          "name": "Miono",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1038265913",
+          "parent_code": "ST-3775060",
+          "name": "Ikwiriri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1136001371",
+          "parent_code": "ST-3775060",
+          "name": "Kilwa Masoko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1484695822",
+          "parent_code": "ST-3775060",
+          "name": "Mikumi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1866582463",
+          "parent_code": "ST-3775060",
+          "name": "Tandahimba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2177167781",
+          "parent_code": "ST-3775060",
+          "name": "Kibiti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3394975761",
+          "parent_code": "ST-3775060",
+          "name": "Malinyi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3679709718",
+          "parent_code": "ST-3775060",
+          "name": "Mahuta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4353375371",
+          "parent_code": "ST-3775060",
+          "name": "Dar es Salaam",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4428190844",
+          "parent_code": "ST-3775060",
+          "name": "Mtama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4699952292",
+          "parent_code": "ST-3775060",
+          "name": "Mangaka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5090950185",
+          "parent_code": "ST-3775060",
+          "name": "Kisarawe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6121776942",
+          "parent_code": "ST-3775060",
+          "name": "Vikindu",
+          "type": "city",
+          "population": "70000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10173683517",
+          "parent_code": "ST-3775060",
+          "name": "Mbuyuni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13088984784",
+          "parent_code": "ST-3775060",
+          "name": "Gwata",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-3775063",
+      "parent_code": "TZ",
+      "name": "Central Zone",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-87841198",
+          "parent_code": "ST-3775063",
+          "name": "Dodoma",
+          "type": "city",
+          "population": "765179",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-255588572",
+          "parent_code": "ST-3775063",
+          "name": "Kaliua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-255590043",
+          "parent_code": "ST-3775063",
+          "name": "Tabora",
+          "type": "city",
+          "population": "221466",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-255591716",
+          "parent_code": "ST-3775063",
+          "name": "Singida",
+          "type": "city",
+          "population": "165492",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-258309920",
+          "parent_code": "ST-3775063",
+          "name": "Itigi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-258507896",
+          "parent_code": "ST-3775063",
+          "name": "Iguguno",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-258508024",
+          "parent_code": "ST-3775063",
+          "name": "Shelui",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-258589880",
+          "parent_code": "ST-3775063",
+          "name": "Kondoa",
+          "type": "city",
+          "population": "80443",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259067269",
+          "parent_code": "ST-3775063",
+          "name": "Igunga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-261973479",
+          "parent_code": "ST-3775063",
+          "name": "Sikonge",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-261975303",
+          "parent_code": "ST-3775063",
+          "name": "New Kiomboi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-261979650",
+          "parent_code": "ST-3775063",
+          "name": "Mtinko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-938286338",
+          "parent_code": "ST-3775063",
+          "name": "Rungwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-943235403",
+          "parent_code": "ST-3775063",
+          "name": "Kongwa",
+          "type": "city",
+          "population": "309973",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-965844399",
+          "parent_code": "ST-3775063",
+          "name": "Kibakwe",
+          "type": "city",
+          "population": "10000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-965847968",
+          "parent_code": "ST-3775063",
+          "name": "Itaga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2402547640",
+          "parent_code": "ST-3775063",
+          "name": "Mpwapwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3152554072",
+          "parent_code": "ST-3775063",
+          "name": "Igurubi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3157807815",
+          "parent_code": "ST-3775063",
+          "name": "Ilongero",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3182899637",
+          "parent_code": "ST-3775063",
+          "name": "Mungaa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3184797350",
+          "parent_code": "ST-3775063",
+          "name": "Manyoni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3632360348",
+          "parent_code": "ST-3775063",
+          "name": "Bukene",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3737100132",
+          "parent_code": "ST-3775063",
+          "name": "Choma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4054695961",
+          "parent_code": "ST-3775063",
+          "name": "Ikungi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4054770031",
+          "parent_code": "ST-3775063",
+          "name": "Puma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4055514921",
+          "parent_code": "ST-3775063",
+          "name": "Gulwe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10584822811",
+          "parent_code": "ST-3775063",
+          "name": "Urambo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-3775072",
+      "parent_code": "TZ",
+      "name": "Southern Highlands Zone",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-255594923",
+          "parent_code": "ST-3775072",
+          "name": "Mbeya",
+          "type": "city",
+          "population": "541603",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-258117759",
+          "parent_code": "ST-3775072",
+          "name": "Makambako",
+          "type": "city",
+          "population": "116232",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-258160432",
+          "parent_code": "ST-3775072",
+          "name": "Songea",
+          "type": "city",
+          "population": "286285",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-258501715",
+          "parent_code": "ST-3775072",
+          "name": "Igurusi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-258502196",
+          "parent_code": "ST-3775072",
+          "name": "Chimala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-258505599",
+          "parent_code": "ST-3775072",
+          "name": "Mafinga",
+          "type": "city",
+          "population": "99305",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-258511874",
+          "parent_code": "ST-3775072",
+          "name": "Njombe",
+          "type": "city",
+          "population": "92537",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-258514275",
+          "parent_code": "ST-3775072",
+          "name": "Mbinga",
+          "type": "city",
+          "population": "60868",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-258926603",
+          "parent_code": "ST-3775072",
+          "name": "Tunduru",
+          "type": "city",
+          "population": "50054",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259071670",
+          "parent_code": "ST-3775072",
+          "name": "Makongolosi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262091019",
+          "parent_code": "ST-3775072",
+          "name": "Namanyere",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262094692",
+          "parent_code": "ST-3775072",
+          "name": "Chala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262095995",
+          "parent_code": "ST-3775072",
+          "name": "Sumbawanga",
+          "type": "city",
+          "population": "182970",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-262102482",
+          "parent_code": "ST-3775072",
+          "name": "Matai",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262104767",
+          "parent_code": "ST-3775072",
+          "name": "Rujewa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262107786",
+          "parent_code": "ST-3775072",
+          "name": "Vwawa",
+          "type": "city",
+          "population": "85000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262107914",
+          "parent_code": "ST-3775072",
+          "name": "Tunduma",
+          "type": "city",
+          "population": "219309",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-262109073",
+          "parent_code": "ST-3775072",
+          "name": "Kyela",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262110599",
+          "parent_code": "ST-3775072",
+          "name": "Namtumbo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331456915",
+          "parent_code": "ST-3775072",
+          "name": "Tukuyu",
+          "type": "city",
+          "population": "50000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-435760995",
+          "parent_code": "ST-3775072",
+          "name": "Kirando",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-938286125",
+          "parent_code": "ST-3775072",
+          "name": "Laela",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-938286357",
+          "parent_code": "ST-3775072",
+          "name": "Mwimbi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-938286406",
+          "parent_code": "ST-3775072",
+          "name": "Katali",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-965844157",
+          "parent_code": "ST-3775072",
+          "name": "Peramiho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-965845041",
+          "parent_code": "ST-3775072",
+          "name": "Madibira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1484695769",
+          "parent_code": "ST-3775072",
+          "name": "Ilula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1489195792",
+          "parent_code": "ST-3775072",
+          "name": "Idodi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1489195813",
+          "parent_code": "ST-3775072",
+          "name": "Mapogoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2156340018",
+          "parent_code": "ST-3775072",
+          "name": "Ilembula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2162986927",
+          "parent_code": "ST-3775072",
+          "name": "Ileje",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2460747797",
+          "parent_code": "ST-3775072",
+          "name": "Songwe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2469799352",
+          "parent_code": "ST-3775072",
+          "name": "Likonde",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2469969665",
+          "parent_code": "ST-3775072",
+          "name": "Kigonsera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2471745761",
+          "parent_code": "ST-3775072",
+          "name": "Mbamba Bay",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2548514968",
+          "parent_code": "ST-3775072",
+          "name": "Iwawa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2877242635",
+          "parent_code": "ST-3775072",
+          "name": "Ilunda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2877242638",
+          "parent_code": "ST-3775072",
+          "name": "Wanging’ombe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5055924100",
+          "parent_code": "ST-3775072",
+          "name": "Makambako township",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6383622955",
+          "parent_code": "ST-3775072",
+          "name": "Ikonda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7816197695",
+          "parent_code": "ST-3775072",
+          "name": "Kasumulu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9970253079",
+          "parent_code": "ST-3775072",
+          "name": "Ikondo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11070723589",
+          "parent_code": "ST-3775072",
+          "name": "Iringa",
+          "type": "city",
+          "population": "202490",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "TZ-28",
+      "parent_code": "TZ",
+      "name": "Katavi Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-255589318",
+          "parent_code": "TZ-28",
+          "name": "Mpanda",
+          "type": "city",
+          "population": "204338",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-7693251325",
+          "parent_code": "TZ-28",
+          "name": "Majimoto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TZ-29",
+      "parent_code": "TZ",
+      "name": "Njombe Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-258117759",
+          "parent_code": "TZ-29",
+          "name": "Makambako",
+          "type": "city",
+          "population": "116232",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-258511874",
+          "parent_code": "TZ-29",
+          "name": "Njombe",
+          "type": "city",
+          "population": "92537",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2156340018",
+          "parent_code": "TZ-29",
+          "name": "Ilembula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2548514968",
+          "parent_code": "TZ-29",
+          "name": "Iwawa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2877242635",
+          "parent_code": "TZ-29",
+          "name": "Ilunda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2877242638",
+          "parent_code": "TZ-29",
+          "name": "Wanging’ombe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5055924100",
+          "parent_code": "TZ-29",
+          "name": "Makambako township",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6383622955",
+          "parent_code": "TZ-29",
+          "name": "Ikonda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9970253079",
+          "parent_code": "TZ-29",
+          "name": "Ikondo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TZ-27",
+      "parent_code": "TZ",
+      "name": "Geita",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-258307668",
+          "parent_code": "TZ-27",
+          "name": "Geita",
+          "type": "city",
+          "population": "318006",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-258932063",
+          "parent_code": "TZ-27",
+          "name": "Katoro",
+          "type": "city",
+          "population": "75000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259706481",
+          "parent_code": "TZ-27",
+          "name": "Kasamwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259713894",
+          "parent_code": "TZ-27",
+          "name": "Masumbwe",
+          "type": "city",
+          "population": "50000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3159185608",
+          "parent_code": "TZ-27",
+          "name": "Nyarugusu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3221243157",
+          "parent_code": "TZ-27",
+          "name": "Iparamasa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3221257265",
+          "parent_code": "TZ-27",
+          "name": "Chato",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3401984226",
+          "parent_code": "TZ-27",
+          "name": "Muganza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3403706592",
+          "parent_code": "TZ-27",
+          "name": "Ushirombo",
+          "type": "city",
+          "population": "23428",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3406660864",
+          "parent_code": "TZ-27",
+          "name": "Buseresere",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3471529571",
+          "parent_code": "TZ-27",
+          "name": "Lulembela",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3652358154",
+          "parent_code": "TZ-27",
+          "name": "Bukoli",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TZ-30",
+      "parent_code": "TZ",
+      "name": "Simiyu",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-258511419",
+          "parent_code": "TZ-30",
+          "name": "Bariadi",
+          "type": "city",
+          "population": "260927",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-566128754",
+          "parent_code": "TZ-30",
+          "name": "Lamadi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3029361901",
+          "parent_code": "TZ-30",
+          "name": "Mwanhuzi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3044103583",
+          "parent_code": "TZ-30",
+          "name": "Maswa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3045117934",
+          "parent_code": "TZ-30",
+          "name": "Dutwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3728871134",
+          "parent_code": "TZ-30",
+          "name": "Nkololo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TZ-18",
+      "parent_code": "TZ",
+      "name": "Mwanza Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-255590322",
+          "parent_code": "TZ-18",
+          "name": "Mwanza",
+          "type": "city",
+          "population": "1104521",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-259066734",
+          "parent_code": "TZ-18",
+          "name": "Misungwi",
+          "type": "city",
+          "population": "30728",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259073216",
+          "parent_code": "TZ-18",
+          "name": "Ngudu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259709135",
+          "parent_code": "TZ-18",
+          "name": "Kisesa 'A'",
+          "type": "city",
+          "population": "21707",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-566128650",
+          "parent_code": "TZ-18",
+          "name": "Magu",
+          "type": "city",
+          "population": "23822",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3369623227",
+          "parent_code": "TZ-18",
+          "name": "Nansio",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3371406243",
+          "parent_code": "TZ-18",
+          "name": "Usagara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4959859504",
+          "parent_code": "TZ-18",
+          "name": "Bujingwa Center",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9623805792",
+          "parent_code": "TZ-18",
+          "name": "Sengerema",
+          "type": "city",
+          "population": "110000",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "TZ-22",
+      "parent_code": "TZ",
+      "name": "Shinyanga Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-255590784",
+          "parent_code": "TZ-22",
+          "name": "Isaka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-255591375",
+          "parent_code": "TZ-22",
+          "name": "Shinyanga",
+          "type": "city",
+          "population": "139727",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-261964012",
+          "parent_code": "TZ-22",
+          "name": "Kahama",
+          "type": "city",
+          "population": "453654",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-261964629",
+          "parent_code": "TZ-22",
+          "name": "Tinde",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3152554073",
+          "parent_code": "TZ-22",
+          "name": "Old Shinyanga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3152593100",
+          "parent_code": "TZ-22",
+          "name": "Didia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3158414464",
+          "parent_code": "TZ-22",
+          "name": "Segese",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3373156436",
+          "parent_code": "TZ-22",
+          "name": "Mhunze",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3522097232",
+          "parent_code": "TZ-22",
+          "name": "Kagongwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3832490468",
+          "parent_code": "TZ-22",
+          "name": "Bugarama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TZ-02",
+      "parent_code": "TZ",
+      "name": "Dar es Salaam",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27565027",
+          "parent_code": "TZ-02",
+          "name": "Dar es Salaam",
+          "type": "city",
+          "population": "5383728",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4353375371",
+          "parent_code": "TZ-02",
+          "name": "Dar es Salaam",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "ST-8158565",
+      "parent_code": "TZ",
+      "name": "Western Zone",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-255589318",
+          "parent_code": "ST-8158565",
+          "name": "Mpanda",
+          "type": "city",
+          "population": "204338",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-259075705",
+          "parent_code": "ST-8158565",
+          "name": "Kibondo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259712678",
+          "parent_code": "ST-8158565",
+          "name": "Nguruka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259712892",
+          "parent_code": "ST-8158565",
+          "name": "Kakonko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-942563684",
+          "parent_code": "ST-8158565",
+          "name": "Uvinza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-965844581",
+          "parent_code": "ST-8158565",
+          "name": "Manyovu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-965845175",
+          "parent_code": "ST-8158565",
+          "name": "Ujiji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3122797268",
+          "parent_code": "ST-8158565",
+          "name": "Rusesa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5525015258",
+          "parent_code": "ST-8158565",
+          "name": "Kigadye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7151164325",
+          "parent_code": "ST-8158565",
+          "name": "Kasulu",
+          "type": "city",
+          "population": "238321",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-7604112469",
+          "parent_code": "ST-8158565",
+          "name": "Bubango",
+          "type": "city",
+          "population": "8261",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7693251325",
+          "parent_code": "ST-8158565",
+          "name": "Majimoto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12409731581",
+          "parent_code": "ST-8158565",
+          "name": "Kigoma",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "TZ-31",
+      "parent_code": "TZ",
+      "name": "Songwe Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-262107786",
+          "parent_code": "TZ-31",
+          "name": "Vwawa",
+          "type": "city",
+          "population": "85000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262107914",
+          "parent_code": "TZ-31",
+          "name": "Tunduma",
+          "type": "city",
+          "population": "219309",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2162986927",
+          "parent_code": "TZ-31",
+          "name": "Ileje",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    }
+  ]
+}

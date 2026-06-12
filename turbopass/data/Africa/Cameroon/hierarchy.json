@@ -1,0 +1,3232 @@
+{
+  "code": "CM",
+  "name": "Cameroon",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "CM-EN",
+      "parent_code": "CM",
+      "name": "Far-North",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-250206640",
+          "parent_code": "CM-EN",
+          "name": "Mogodé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-250206870",
+          "parent_code": "CM-EN",
+          "name": "Gazawa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-250206871",
+          "parent_code": "CM-EN",
+          "name": "Roumsiki",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-250206941",
+          "parent_code": "CM-EN",
+          "name": "Mora",
+          "type": "city",
+          "population": "53667",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-250804421",
+          "parent_code": "CM-EN",
+          "name": "Pouss",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-250810233",
+          "parent_code": "CM-EN",
+          "name": "Kousséri",
+          "type": "city",
+          "population": "101246",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-250810588",
+          "parent_code": "CM-EN",
+          "name": "Waza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-250811177",
+          "parent_code": "CM-EN",
+          "name": "Fotokol",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-251774794",
+          "parent_code": "CM-EN",
+          "name": "Bourah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-925364796",
+          "parent_code": "CM-EN",
+          "name": "Moutourwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-925365962",
+          "parent_code": "CM-EN",
+          "name": "Maroua",
+          "type": "city",
+          "population": "3119000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-925366359",
+          "parent_code": "CM-EN",
+          "name": "Limani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2014444189",
+          "parent_code": "CM-EN",
+          "name": "Touloum",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2015910608",
+          "parent_code": "CM-EN",
+          "name": "Hina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2017297574",
+          "parent_code": "CM-EN",
+          "name": "Mindif",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2080485730",
+          "parent_code": "CM-EN",
+          "name": "Doukoula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2080485751",
+          "parent_code": "CM-EN",
+          "name": "Datchéka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2107670862",
+          "parent_code": "CM-EN",
+          "name": "Mokolo",
+          "type": "city",
+          "population": "40168",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2129783338",
+          "parent_code": "CM-EN",
+          "name": "Guidiguis",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2132419985",
+          "parent_code": "CM-EN",
+          "name": "Guirvidig",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2132436741",
+          "parent_code": "CM-EN",
+          "name": "Maga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2135044799",
+          "parent_code": "CM-EN",
+          "name": "Moulvoudaye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2141804691",
+          "parent_code": "CM-EN",
+          "name": "Pétté",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2201869819",
+          "parent_code": "CM-EN",
+          "name": "Makary",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2201890266",
+          "parent_code": "CM-EN",
+          "name": "Hilé-Alifa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2202494525",
+          "parent_code": "CM-EN",
+          "name": "Kala Kafra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2202976011",
+          "parent_code": "CM-EN",
+          "name": "Logone-Birni",
+          "type": "city",
+          "population": "52589",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2203009480",
+          "parent_code": "CM-EN",
+          "name": "Zina",
+          "type": "city",
+          "population": "25572",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2388967411",
+          "parent_code": "CM-EN",
+          "name": "Ndoukoula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2445907767",
+          "parent_code": "CM-EN",
+          "name": "Tokombéré",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2445907821",
+          "parent_code": "CM-EN",
+          "name": "Meri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2447096412",
+          "parent_code": "CM-EN",
+          "name": "Kai-Kai",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2505044506",
+          "parent_code": "CM-EN",
+          "name": "Yagoua",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2712210484",
+          "parent_code": "CM-EN",
+          "name": "Goulfey",
+          "type": "city",
+          "population": "58117",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2854495573",
+          "parent_code": "CM-EN",
+          "name": "Ndaba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2864541620",
+          "parent_code": "CM-EN",
+          "name": "Soulèdé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2865057286",
+          "parent_code": "CM-EN",
+          "name": "Dargala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2877219994",
+          "parent_code": "CM-EN",
+          "name": "Foulou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2877219995",
+          "parent_code": "CM-EN",
+          "name": "Gawel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2877220109",
+          "parent_code": "CM-EN",
+          "name": "Noubou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2877220113",
+          "parent_code": "CM-EN",
+          "name": "Titing",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2933152214",
+          "parent_code": "CM-EN",
+          "name": "Assighassia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2933225714",
+          "parent_code": "CM-EN",
+          "name": "Djondong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2933225749",
+          "parent_code": "CM-EN",
+          "name": "Dziguilao",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2933226124",
+          "parent_code": "CM-EN",
+          "name": "Guémé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2933226126",
+          "parent_code": "CM-EN",
+          "name": "Guere",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2933226163",
+          "parent_code": "CM-EN",
+          "name": "Kalfou",
+          "type": "city",
+          "population": "26223",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2933227155",
+          "parent_code": "CM-EN",
+          "name": "Salak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2933227173",
+          "parent_code": "CM-EN",
+          "name": "Taibong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2933227181",
+          "parent_code": "CM-EN",
+          "name": "Tchatibali",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3001365515",
+          "parent_code": "CM-EN",
+          "name": "Blangoua بلانقوا",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3037427587",
+          "parent_code": "CM-EN",
+          "name": "Roua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3044171471",
+          "parent_code": "CM-EN",
+          "name": "Kolofata",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3958091027",
+          "parent_code": "CM-EN",
+          "name": "Kaélé",
+          "type": "city",
+          "population": "141431",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4142958164",
+          "parent_code": "CM-EN",
+          "name": "Hinalé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5281590301",
+          "parent_code": "CM-EN",
+          "name": "Koza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5288148990",
+          "parent_code": "CM-EN",
+          "name": "Mozogo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6588658521",
+          "parent_code": "CM-EN",
+          "name": "Darak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6986900447",
+          "parent_code": "CM-EN",
+          "name": "Gobo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6987004362",
+          "parent_code": "CM-EN",
+          "name": "Wina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6987004363",
+          "parent_code": "CM-EN",
+          "name": "Kar-Hay",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7037763181",
+          "parent_code": "CM-EN",
+          "name": "Gogoleme",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7118919547",
+          "parent_code": "CM-EN",
+          "name": "Mada",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7137060522",
+          "parent_code": "CM-EN",
+          "name": "Zimado",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7137060579",
+          "parent_code": "CM-EN",
+          "name": "Bourgouma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7138929076",
+          "parent_code": "CM-EN",
+          "name": "Oulouf",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7912828535",
+          "parent_code": "CM-EN",
+          "name": "Gara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9324636793",
+          "parent_code": "CM-EN",
+          "name": "Camp de réfugiés de Minawao",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "CM-NO",
+      "parent_code": "CM",
+      "name": "North",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-248764852",
+          "parent_code": "CM-NO",
+          "name": "Garoua",
+          "type": "city",
+          "population": "1703000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-250288476",
+          "parent_code": "CM-NO",
+          "name": "Boula-Ibi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-250288772",
+          "parent_code": "CM-NO",
+          "name": "Gouna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-250801554",
+          "parent_code": "CM-NO",
+          "name": "Dembo",
+          "type": "city",
+          "population": "2284",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-925366326",
+          "parent_code": "CM-NO",
+          "name": "Figuil",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-930266542",
+          "parent_code": "CM-NO",
+          "name": "Touboro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2017132006",
+          "parent_code": "CM-NO",
+          "name": "Tcholliré",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2017158488",
+          "parent_code": "CM-NO",
+          "name": "Poli",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2136710732",
+          "parent_code": "CM-NO",
+          "name": "Baschéo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2140812000",
+          "parent_code": "CM-NO",
+          "name": "Gashiga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2260644708",
+          "parent_code": "CM-NO",
+          "name": "Mayo-Oulo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2429958606",
+          "parent_code": "CM-NO",
+          "name": "Bibemi",
+          "type": "city",
+          "population": "133191",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2445859314",
+          "parent_code": "CM-NO",
+          "name": "Demsa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2445860205",
+          "parent_code": "CM-NO",
+          "name": "Touroua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2445860393",
+          "parent_code": "CM-NO",
+          "name": "Barndaké",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2445861001",
+          "parent_code": "CM-NO",
+          "name": "Guider",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2875864536",
+          "parent_code": "CM-NO",
+          "name": "Béka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2911281393",
+          "parent_code": "CM-NO",
+          "name": "Mbaiboum",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3017030725",
+          "parent_code": "CM-NO",
+          "name": "Lagdo",
+          "type": "city",
+          "population": "28239",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3037426226",
+          "parent_code": "CM-NO",
+          "name": "Bamenda",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3037426513",
+          "parent_code": "CM-NO",
+          "name": "Dompta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3037426647",
+          "parent_code": "CM-NO",
+          "name": "Gor",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3037426688",
+          "parent_code": "CM-NO",
+          "name": "Guidjiba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3037426961",
+          "parent_code": "CM-NO",
+          "name": "Madingrin_1",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3037427045",
+          "parent_code": "CM-NO",
+          "name": "Mayo Djarendji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3037427113",
+          "parent_code": "CM-NO",
+          "name": "Mbang",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3037427574",
+          "parent_code": "CM-NO",
+          "name": "Rey Bouba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3037427738",
+          "parent_code": "CM-NO",
+          "name": "Sorawel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4509307299",
+          "parent_code": "CM-NO",
+          "name": "Pitoa",
+          "type": "city",
+          "population": "28636",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6503460243",
+          "parent_code": "CM-NO",
+          "name": "Tcheboa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7068157107",
+          "parent_code": "CM-NO",
+          "name": "Ngong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "CM-AD",
+      "parent_code": "CM",
+      "name": "Adamawa",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-250346326",
+          "parent_code": "CM-AD",
+          "name": "Banyo",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-250692572",
+          "parent_code": "CM-AD",
+          "name": "Bindiba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-254304914",
+          "parent_code": "CM-AD",
+          "name": "Doualayel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-254305835",
+          "parent_code": "CM-AD",
+          "name": "Galim-Tignère",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-937668169",
+          "parent_code": "CM-AD",
+          "name": "Meidougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1837099271",
+          "parent_code": "CM-AD",
+          "name": "Kontcha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2114500099",
+          "parent_code": "CM-AD",
+          "name": "Mayo Darlé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2125537706",
+          "parent_code": "CM-AD",
+          "name": "Tignère",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2125801475",
+          "parent_code": "CM-AD",
+          "name": "Martap",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2127454468",
+          "parent_code": "CM-AD",
+          "name": "Mayo-Baléo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2133824531",
+          "parent_code": "CM-AD",
+          "name": "Ngaoundal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2368383166",
+          "parent_code": "CM-AD",
+          "name": "Bankim",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2379887148",
+          "parent_code": "CM-AD",
+          "name": "Meiganga",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2462073103",
+          "parent_code": "CM-AD",
+          "name": "Dir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2462073138",
+          "parent_code": "CM-AD",
+          "name": "Djohong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2462073352",
+          "parent_code": "CM-AD",
+          "name": "Gbatoua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2503869978",
+          "parent_code": "CM-AD",
+          "name": "Bélel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2503925943",
+          "parent_code": "CM-AD",
+          "name": "Mbé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2504084358",
+          "parent_code": "CM-AD",
+          "name": "Nganha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2504142377",
+          "parent_code": "CM-AD",
+          "name": "Ngaoundéré",
+          "type": "city",
+          "population": "903000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2961972728",
+          "parent_code": "CM-AD",
+          "name": "Ngaoui",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2961979938",
+          "parent_code": "CM-AD",
+          "name": "Yamba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2964133259",
+          "parent_code": "CM-AD",
+          "name": "Tibati",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3029482143",
+          "parent_code": "CM-AD",
+          "name": "Yarbang",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5271844545",
+          "parent_code": "CM-AD",
+          "name": "Borgop",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "CM-ES",
+      "parent_code": "CM",
+      "name": "East",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-249621505",
+          "parent_code": "CM-ES",
+          "name": "Mandjou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-250988233",
+          "parent_code": "CM-ES",
+          "name": "Gari-Gombo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-250988292",
+          "parent_code": "CM-ES",
+          "name": "Yola",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-250988434",
+          "parent_code": "CM-ES",
+          "name": "Ndélélé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-566187023",
+          "parent_code": "CM-ES",
+          "name": "Kentzou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-566212334",
+          "parent_code": "CM-ES",
+          "name": "Nguélébok",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-566214166",
+          "parent_code": "CM-ES",
+          "name": "Batouri",
+          "type": "city",
+          "population": "67000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-930261637",
+          "parent_code": "CM-ES",
+          "name": "Garoua-Boulaï",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2146643188",
+          "parent_code": "CM-ES",
+          "name": "Mindourou I",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2153406384",
+          "parent_code": "CM-ES",
+          "name": "Lomié",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2161042167",
+          "parent_code": "CM-ES",
+          "name": "Yokadouma",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2225468551",
+          "parent_code": "CM-ES",
+          "name": "Abong-Mbang",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2225469458",
+          "parent_code": "CM-ES",
+          "name": "Doumé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229605531",
+          "parent_code": "CM-ES",
+          "name": "Mbang",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2250019844",
+          "parent_code": "CM-ES",
+          "name": "Moloundou",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2250109721",
+          "parent_code": "CM-ES",
+          "name": "Bembon",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2250130772",
+          "parent_code": "CM-ES",
+          "name": "Mbol II",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2282618085",
+          "parent_code": "CM-ES",
+          "name": "Mboma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2298615714",
+          "parent_code": "CM-ES",
+          "name": "Kétté",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2364379086",
+          "parent_code": "CM-ES",
+          "name": "Messamena",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2377966604",
+          "parent_code": "CM-ES",
+          "name": "Angossas",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2378823984",
+          "parent_code": "CM-ES",
+          "name": "Mbalam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2402664444",
+          "parent_code": "CM-ES",
+          "name": "Diang",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2402677767",
+          "parent_code": "CM-ES",
+          "name": "Doumaintang",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2402683881",
+          "parent_code": "CM-ES",
+          "name": "Atok",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2461915859",
+          "parent_code": "CM-ES",
+          "name": "Boubara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2461916072",
+          "parent_code": "CM-ES",
+          "name": "Lolo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2461916192",
+          "parent_code": "CM-ES",
+          "name": "Mbilé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2461916267",
+          "parent_code": "CM-ES",
+          "name": "Mindourou II",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2462074288",
+          "parent_code": "CM-ES",
+          "name": "Ndokayo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2462074334",
+          "parent_code": "CM-ES",
+          "name": "Ngoura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2462074512",
+          "parent_code": "CM-ES",
+          "name": "Toktoyo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2525906692",
+          "parent_code": "CM-ES",
+          "name": "Bélabo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2529900814",
+          "parent_code": "CM-ES",
+          "name": "Somalomo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3034360846",
+          "parent_code": "CM-ES",
+          "name": "Ouli",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3037751301",
+          "parent_code": "CM-ES",
+          "name": "Gbitti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3037751520",
+          "parent_code": "CM-ES",
+          "name": "Salapoumbé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3087728367",
+          "parent_code": "CM-ES",
+          "name": "Nguelemendouka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3183393100",
+          "parent_code": "CM-ES",
+          "name": "Bétaré-Oya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3193669604",
+          "parent_code": "CM-ES",
+          "name": "Bertoua",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3201604405",
+          "parent_code": "CM-ES",
+          "name": "Dimako",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3212840904",
+          "parent_code": "CM-ES",
+          "name": "Ngoyla",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3259588651",
+          "parent_code": "CM-ES",
+          "name": "Messock",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5094789230",
+          "parent_code": "CM-ES",
+          "name": "Guiwa Yangamo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5838143406",
+          "parent_code": "CM-ES",
+          "name": "Timangolo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6479369285",
+          "parent_code": "CM-ES",
+          "name": "Colomine",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "CM-CE",
+      "parent_code": "CM",
+      "name": "Centre",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-249658081",
+          "parent_code": "CM-CE",
+          "name": "Mbandjock",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-252925633",
+          "parent_code": "CM-CE",
+          "name": "Ayos",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-252925930",
+          "parent_code": "CM-CE",
+          "name": "Mengang",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331136682",
+          "parent_code": "CM-CE",
+          "name": "Yaoundé",
+          "type": "city",
+          "population": "1817524",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-331136683",
+          "parent_code": "CM-CE",
+          "name": "Obala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-401815609",
+          "parent_code": "CM-CE",
+          "name": "Makenene",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-869939415",
+          "parent_code": "CM-CE",
+          "name": "Ngoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-921136374",
+          "parent_code": "CM-CE",
+          "name": "Nkolmetet",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1012761434",
+          "parent_code": "CM-CE",
+          "name": "Nkolafamba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1047237485",
+          "parent_code": "CM-CE",
+          "name": "Okola",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1365229876",
+          "parent_code": "CM-CE",
+          "name": "Mfou",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1695198257",
+          "parent_code": "CM-CE",
+          "name": "Deuk",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2058639564",
+          "parent_code": "CM-CE",
+          "name": "Soa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2094195659",
+          "parent_code": "CM-CE",
+          "name": "Akono",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2099747940",
+          "parent_code": "CM-CE",
+          "name": "Makak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2101830108",
+          "parent_code": "CM-CE",
+          "name": "Menguémé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2110473498",
+          "parent_code": "CM-CE",
+          "name": "Esse",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2142605912",
+          "parent_code": "CM-CE",
+          "name": "Batchenga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2146606831",
+          "parent_code": "CM-CE",
+          "name": "Akonolinga",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2153352914",
+          "parent_code": "CM-CE",
+          "name": "Mbalmayo",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2154276105",
+          "parent_code": "CM-CE",
+          "name": "Ngomedzap",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2213842283",
+          "parent_code": "CM-CE",
+          "name": "Matomb",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2213842466",
+          "parent_code": "CM-CE",
+          "name": "Lobo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2215338069",
+          "parent_code": "CM-CE",
+          "name": "Bondjock",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2215404212",
+          "parent_code": "CM-CE",
+          "name": "Bikop",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2216885598",
+          "parent_code": "CM-CE",
+          "name": "Elig-Mfomo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2216991195",
+          "parent_code": "CM-CE",
+          "name": "Monatélé",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2218313188",
+          "parent_code": "CM-CE",
+          "name": "Yoko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2218335289",
+          "parent_code": "CM-CE",
+          "name": "Ntui",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2218590206",
+          "parent_code": "CM-CE",
+          "name": "Éséka",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2219667213",
+          "parent_code": "CM-CE",
+          "name": "Messondo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2271161114",
+          "parent_code": "CM-CE",
+          "name": "Ngog-Mapubi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2271161226",
+          "parent_code": "CM-CE",
+          "name": "Dibang",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2272136066",
+          "parent_code": "CM-CE",
+          "name": "Awaé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2272763539",
+          "parent_code": "CM-CE",
+          "name": "Ombessa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2362867050",
+          "parent_code": "CM-CE",
+          "name": "Ngoumou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2366289114",
+          "parent_code": "CM-CE",
+          "name": "Akoéman",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2388686624",
+          "parent_code": "CM-CE",
+          "name": "Sa'a",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2388739368",
+          "parent_code": "CM-CE",
+          "name": "Mbangassina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2389019459",
+          "parent_code": "CM-CE",
+          "name": "Nitoukou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2389025055",
+          "parent_code": "CM-CE",
+          "name": "Bot-Makak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2389822741",
+          "parent_code": "CM-CE",
+          "name": "Dzeng",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2390206140",
+          "parent_code": "CM-CE",
+          "name": "Boumnyébel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2402664169",
+          "parent_code": "CM-CE",
+          "name": "Minta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2402673949",
+          "parent_code": "CM-CE",
+          "name": "Nsem",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2402679334",
+          "parent_code": "CM-CE",
+          "name": "Kobdombo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2434049018",
+          "parent_code": "CM-CE",
+          "name": "Endom",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2440575327",
+          "parent_code": "CM-CE",
+          "name": "Bokito",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2460907091",
+          "parent_code": "CM-CE",
+          "name": "Assié",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2460907427",
+          "parent_code": "CM-CE",
+          "name": "Emvane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2460907794",
+          "parent_code": "CM-CE",
+          "name": "Mbanga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2461016813",
+          "parent_code": "CM-CE",
+          "name": "Ngambé Tikar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2467973247",
+          "parent_code": "CM-CE",
+          "name": "Ebebda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2467973604",
+          "parent_code": "CM-CE",
+          "name": "Ndikoko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2525850481",
+          "parent_code": "CM-CE",
+          "name": "Bibey",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2576475344",
+          "parent_code": "CM-CE",
+          "name": "Air men city",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2911109169",
+          "parent_code": "CM-CE",
+          "name": "Biyouha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2917112209",
+          "parent_code": "CM-CE",
+          "name": "Olanguina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2917581892",
+          "parent_code": "CM-CE",
+          "name": "Nguibassal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3080987093",
+          "parent_code": "CM-CE",
+          "name": "Bikok",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3080987098",
+          "parent_code": "CM-CE",
+          "name": "Ekoudendi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3080987100",
+          "parent_code": "CM-CE",
+          "name": "Evindissi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3177354381",
+          "parent_code": "CM-CE",
+          "name": "Nanga-Eboko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3177354382",
+          "parent_code": "CM-CE",
+          "name": "Nkoteng",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3206075832",
+          "parent_code": "CM-CE",
+          "name": "Evodoula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3421666568",
+          "parent_code": "CM-CE",
+          "name": "Bafia",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3644334590",
+          "parent_code": "CM-CE",
+          "name": "Edzendouan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3754249417",
+          "parent_code": "CM-CE",
+          "name": "Kon-Yambetta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3754730534",
+          "parent_code": "CM-CE",
+          "name": "Kiiki",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3779334362",
+          "parent_code": "CM-CE",
+          "name": "Ndikiniméki",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5009679125",
+          "parent_code": "CM-CE",
+          "name": "Mbankomo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6324288686",
+          "parent_code": "CM-CE",
+          "name": "Otélé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8339238226",
+          "parent_code": "CM-CE",
+          "name": "Afanloum",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8339238227",
+          "parent_code": "CM-CE",
+          "name": "Endom",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9219079818",
+          "parent_code": "CM-CE",
+          "name": "paposy",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        },
+        {
+          "code": "CTY-11006000257",
+          "parent_code": "CM-CE",
+          "name": "Nkô",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11933046715",
+          "parent_code": "CM-CE",
+          "name": "Amphithéâtre 1003",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        }
+      ]
+    },
+    {
+      "code": "CM-SU",
+      "parent_code": "CM",
+      "name": "South",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-251273478",
+          "parent_code": "CM-SU",
+          "name": "Campo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-251375289",
+          "parent_code": "CM-SU",
+          "name": "Bipindi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-251696527",
+          "parent_code": "CM-SU",
+          "name": "Djoum",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-251697783",
+          "parent_code": "CM-SU",
+          "name": "Meyomessi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-252566641",
+          "parent_code": "CM-SU",
+          "name": "Mintom II",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331134393",
+          "parent_code": "CM-SU",
+          "name": "Kribi",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-928414329",
+          "parent_code": "CM-SU",
+          "name": "Ngoulemakong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-928414346",
+          "parent_code": "CM-SU",
+          "name": "Mengong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-928414928",
+          "parent_code": "CM-SU",
+          "name": "Ebolowa",
+          "type": "city",
+          "population": "641000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-943248746",
+          "parent_code": "CM-SU",
+          "name": "Sangmélima",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2101805815",
+          "parent_code": "CM-SU",
+          "name": "Mvengue",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2389528482",
+          "parent_code": "CM-SU",
+          "name": "Oveng",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2389531776",
+          "parent_code": "CM-SU",
+          "name": "Olamzé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2389748185",
+          "parent_code": "CM-SU",
+          "name": "Akom II",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2424738953",
+          "parent_code": "CM-SU",
+          "name": "Ma'an",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2434071764",
+          "parent_code": "CM-SU",
+          "name": "Ngomedzap",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2454064952",
+          "parent_code": "CM-SU",
+          "name": "Biwong-Bulu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2460662928",
+          "parent_code": "CM-SU",
+          "name": "Efoulan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2460662952",
+          "parent_code": "CM-SU",
+          "name": "Fifinda I",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2460662986",
+          "parent_code": "CM-SU",
+          "name": "Londji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2460663067",
+          "parent_code": "CM-SU",
+          "name": "Meyo Biboulou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2460663278",
+          "parent_code": "CM-SU",
+          "name": "Ngovayang I",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2460663501",
+          "parent_code": "CM-SU",
+          "name": "Nyangong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2460663567",
+          "parent_code": "CM-SU",
+          "name": "Ondong Adjap",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2460695635",
+          "parent_code": "CM-SU",
+          "name": "Élogbatindi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2460908478",
+          "parent_code": "CM-SU",
+          "name": "Oveng",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2461069249",
+          "parent_code": "CM-SU",
+          "name": "Lolodorf",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3037751478",
+          "parent_code": "CM-SU",
+          "name": "Mvangan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3037843911",
+          "parent_code": "CM-SU",
+          "name": "Niété",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4402548218",
+          "parent_code": "CM-SU",
+          "name": "Bengbis",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5926170100",
+          "parent_code": "CM-SU",
+          "name": "Meyomessala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5933637899",
+          "parent_code": "CM-SU",
+          "name": "Biwong-Bane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5950413482",
+          "parent_code": "CM-SU",
+          "name": "Zoétélé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5953392168",
+          "parent_code": "CM-SU",
+          "name": "Kyé-Ossi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10581633911",
+          "parent_code": "CM-SU",
+          "name": "Ambam",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "CM-LT",
+      "parent_code": "CM",
+      "name": "Littoral",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-249863453",
+          "parent_code": "CM-LT",
+          "name": "Loum",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-249863738",
+          "parent_code": "CM-LT",
+          "name": "Penja",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331133522",
+          "parent_code": "CM-LT",
+          "name": "Edéa",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-639162004",
+          "parent_code": "CM-LT",
+          "name": "Nkongsamba",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-732125487",
+          "parent_code": "CM-LT",
+          "name": "Douala",
+          "type": "city",
+          "population": "2000000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-923991888",
+          "parent_code": "CM-LT",
+          "name": "Makepe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-923991906",
+          "parent_code": "CM-LT",
+          "name": "Deido",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1595553991",
+          "parent_code": "CM-LT",
+          "name": "Mbanga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1595554030",
+          "parent_code": "CM-LT",
+          "name": "Njombé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2121675849",
+          "parent_code": "CM-LT",
+          "name": "Manjo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2123937944",
+          "parent_code": "CM-LT",
+          "name": "Dizangué",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2145356057",
+          "parent_code": "CM-LT",
+          "name": "Melong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2222805840",
+          "parent_code": "CM-LT",
+          "name": "Pouma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2309876224",
+          "parent_code": "CM-LT",
+          "name": "Yabassi",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2389012697",
+          "parent_code": "CM-LT",
+          "name": "Massok",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2389015584",
+          "parent_code": "CM-LT",
+          "name": "Ngambe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2389018053",
+          "parent_code": "CM-LT",
+          "name": "Nyanon",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2389032630",
+          "parent_code": "CM-LT",
+          "name": "Logbadjek",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2389037213",
+          "parent_code": "CM-LT",
+          "name": "Mouanko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2389041504",
+          "parent_code": "CM-LT",
+          "name": "Yingui",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2460695265",
+          "parent_code": "CM-LT",
+          "name": "Ekité",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2460695332",
+          "parent_code": "CM-LT",
+          "name": "Makondo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2460695346",
+          "parent_code": "CM-LT",
+          "name": "Manoka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2467814033",
+          "parent_code": "CM-LT",
+          "name": "Kompina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2467814315",
+          "parent_code": "CM-LT",
+          "name": "Ndobian ( Nord-Makombé)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2467972981",
+          "parent_code": "CM-LT",
+          "name": "Baréko (Baré-Bakem)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3037843875",
+          "parent_code": "CM-LT",
+          "name": "Dibombari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3037843896",
+          "parent_code": "CM-LT",
+          "name": "Mombo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3292357131",
+          "parent_code": "CM-LT",
+          "name": "Ebone",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8348756661",
+          "parent_code": "CM-LT",
+          "name": "Souza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8348756663",
+          "parent_code": "CM-LT",
+          "name": "Nkondjock",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8348756664",
+          "parent_code": "CM-LT",
+          "name": "Ndom",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "CM-NW",
+      "parent_code": "CM",
+      "name": "Northwest",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-247716907",
+          "parent_code": "CM-NW",
+          "name": "Kumbo",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-247717281",
+          "parent_code": "CM-NW",
+          "name": "Bamenda",
+          "type": "city",
+          "population": "1735000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-248096278",
+          "parent_code": "CM-NW",
+          "name": "Nkambe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-248096285",
+          "parent_code": "CM-NW",
+          "name": "Bali",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-248159609",
+          "parent_code": "CM-NW",
+          "name": "Wum",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-249730690",
+          "parent_code": "CM-NW",
+          "name": "Mbengwi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-929331279",
+          "parent_code": "CM-NW",
+          "name": "Santa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1047196051",
+          "parent_code": "CM-NW",
+          "name": "Ndop",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1989405596",
+          "parent_code": "CM-NW",
+          "name": "Jakiri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2074704995",
+          "parent_code": "CM-NW",
+          "name": "Nkor",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2351567271",
+          "parent_code": "CM-NW",
+          "name": "Benakuma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2373559397",
+          "parent_code": "CM-NW",
+          "name": "Fundong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2461015782",
+          "parent_code": "CM-NW",
+          "name": "Awing",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2461016204",
+          "parent_code": "CM-NW",
+          "name": "Essu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3040034939",
+          "parent_code": "CM-NW",
+          "name": "Furu Awa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3114721731",
+          "parent_code": "CM-NW",
+          "name": "Babessi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3183098963",
+          "parent_code": "CM-NW",
+          "name": "Widekum",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5341390212",
+          "parent_code": "CM-NW",
+          "name": "Batibo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7918499017",
+          "parent_code": "CM-NW",
+          "name": "Kumbo Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10726010965",
+          "parent_code": "CM-NW",
+          "name": "Njinibi",
+          "type": "city",
+          "population": "1000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10726529863",
+          "parent_code": "CM-NW",
+          "name": "Nyen",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "CM-SW",
+      "parent_code": "CM",
+      "name": "Southwest",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-249863730",
+          "parent_code": "CM-SW",
+          "name": "Tombel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331130780",
+          "parent_code": "CM-SW",
+          "name": "Limbe",
+          "type": "city",
+          "population": "118210",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-331130781",
+          "parent_code": "CM-SW",
+          "name": "Mutengene",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331130782",
+          "parent_code": "CM-SW",
+          "name": "Buea",
+          "type": "city",
+          "population": "1325000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-929332296",
+          "parent_code": "CM-SW",
+          "name": "Muyuka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-929334616",
+          "parent_code": "CM-SW",
+          "name": "Kumba",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-929837346",
+          "parent_code": "CM-SW",
+          "name": "Eyumodjock",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2386681089",
+          "parent_code": "CM-SW",
+          "name": "Tiko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2456087259",
+          "parent_code": "CM-SW",
+          "name": "Ombe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2669137473",
+          "parent_code": "CM-SW",
+          "name": "Mundemba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2925675956",
+          "parent_code": "CM-SW",
+          "name": "Mamfe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3037751292",
+          "parent_code": "CM-SW",
+          "name": "Ekondo-Titi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3040028725",
+          "parent_code": "CM-SW",
+          "name": "Akwaya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3823264261",
+          "parent_code": "CM-SW",
+          "name": "Fontem",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11018751757",
+          "parent_code": "CM-SW",
+          "name": "Toko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "CM-OU",
+      "parent_code": "CM",
+      "name": "West",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-248096516",
+          "parent_code": "CM-OU",
+          "name": "Foumban",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-248411873",
+          "parent_code": "CM-OU",
+          "name": "Malentouen",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-249536837",
+          "parent_code": "CM-OU",
+          "name": "Bana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-249672731",
+          "parent_code": "CM-OU",
+          "name": "Bangangté",
+          "type": "city",
+          "population": "63595",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-249672792",
+          "parent_code": "CM-OU",
+          "name": "Tonga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-251480857",
+          "parent_code": "CM-OU",
+          "name": "Bazou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-619207753",
+          "parent_code": "CM-OU",
+          "name": "Babadjou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-619630684",
+          "parent_code": "CM-OU",
+          "name": "Magba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-619713263",
+          "parent_code": "CM-OU",
+          "name": "Batcham",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-907983288",
+          "parent_code": "CM-OU",
+          "name": "Foumbot",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-929329945",
+          "parent_code": "CM-OU",
+          "name": "Dschang",
+          "type": "city",
+          "population": "200000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-929338646",
+          "parent_code": "CM-OU",
+          "name": "Fongo-Tongo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1106177514",
+          "parent_code": "CM-OU",
+          "name": "Baham",
+          "type": "city",
+          "population": "19680",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1227765838",
+          "parent_code": "CM-OU",
+          "name": "Bandenkop",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1809741111",
+          "parent_code": "CM-OU",
+          "name": "Bafoussam",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2126281330",
+          "parent_code": "CM-OU",
+          "name": "Santchou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2189685371",
+          "parent_code": "CM-OU",
+          "name": "Bamendjou",
+          "type": "city",
+          "population": "70000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2196107053",
+          "parent_code": "CM-OU",
+          "name": "Batié",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2196159987",
+          "parent_code": "CM-OU",
+          "name": "Penka-Michel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2212936534",
+          "parent_code": "CM-OU",
+          "name": "Bangam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2216479797",
+          "parent_code": "CM-OU",
+          "name": "Kékem",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2249019106",
+          "parent_code": "CM-OU",
+          "name": "Bandja",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2255031294",
+          "parent_code": "CM-OU",
+          "name": "Bayangam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2273162684",
+          "parent_code": "CM-OU",
+          "name": "Massangam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2329395765",
+          "parent_code": "CM-OU",
+          "name": "Bangou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2340296657",
+          "parent_code": "CM-OU",
+          "name": "Bandjoun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2363034290",
+          "parent_code": "CM-OU",
+          "name": "Baleng",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2389047662",
+          "parent_code": "CM-OU",
+          "name": "Bakou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2461015859",
+          "parent_code": "CM-OU",
+          "name": "Bamougoum",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2461015878",
+          "parent_code": "CM-OU",
+          "name": "Bangourain",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2461016368",
+          "parent_code": "CM-OU",
+          "name": "Kouoptamo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2461016949",
+          "parent_code": "CM-OU",
+          "name": "Njimom",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2461017245",
+          "parent_code": "CM-OU",
+          "name": "Bassamba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2467813771",
+          "parent_code": "CM-OU",
+          "name": "Banwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2521654762",
+          "parent_code": "CM-OU",
+          "name": "Bangou Carrefour",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3029264331",
+          "parent_code": "CM-OU",
+          "name": "Mbouda",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3168386671",
+          "parent_code": "CM-OU",
+          "name": "Fokoué",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3168513622",
+          "parent_code": "CM-OU",
+          "name": "Bafang",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3168513623",
+          "parent_code": "CM-OU",
+          "name": "Banka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3784859942",
+          "parent_code": "CM-OU",
+          "name": "Galim",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3967804456",
+          "parent_code": "CM-OU",
+          "name": "Koutaba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8349592691",
+          "parent_code": "CM-OU",
+          "name": "Nkong-Zem",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8349592692",
+          "parent_code": "CM-OU",
+          "name": "Demdeng (Djebem)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    }
+  ]
+}

@@ -135,5 +135,3 @@ charts/*.tgz
 *.bak
 *.tmp
 *.orig
-
-.antigravitycli/

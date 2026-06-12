@@ -1,0 +1,4922 @@
+{
+  "code": "UG",
+  "name": "Uganda",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "UG-414",
+      "parent_code": "UG",
+      "name": "Kanungu",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-4387180835",
+          "parent_code": "UG-414",
+          "name": "Kanungu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10721603643",
+          "parent_code": "UG-414",
+          "name": "Butogota",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-325",
+      "parent_code": "UG",
+      "name": "Kole",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-4011301193",
+          "parent_code": "UG-325",
+          "name": "Kole",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-321",
+      "parent_code": "UG",
+      "name": "Oyam",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-3983949171",
+          "parent_code": "UG-321",
+          "name": "Oyam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-302",
+      "parent_code": "UG",
+      "name": "Apac",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1656035909",
+          "parent_code": "UG-302",
+          "name": "Apac",
+          "type": "city",
+          "population": "13700",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-317",
+      "parent_code": "UG",
+      "name": "Dokolo",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-3189545156",
+          "parent_code": "UG-317",
+          "name": "Dokolo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-307",
+      "parent_code": "UG",
+      "name": "Lira",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-305377332",
+          "parent_code": "UG-307",
+          "name": "Lira",
+          "type": "city",
+          "population": "99059",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "UG-322",
+      "parent_code": "UG",
+      "name": "Agago",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2912552688",
+          "parent_code": "UG-322",
+          "name": "Agago",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2912552689",
+          "parent_code": "UG-322",
+          "name": "Kalongo",
+          "type": "city",
+          "population": "1500",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4240233977",
+          "parent_code": "UG-322",
+          "name": "Achol-Pii",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-329",
+      "parent_code": "UG",
+      "name": "Otuke",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "UG-312",
+      "parent_code": "UG",
+      "name": "Pader",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2229123931",
+          "parent_code": "UG-312",
+          "name": "Pader",
+          "type": "city",
+          "population": "13500",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5774738806",
+          "parent_code": "UG-312",
+          "name": "Latayi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-304",
+      "parent_code": "UG",
+      "name": "Gulu",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "UG-323",
+      "parent_code": "UG",
+      "name": "Alebtong",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "UG-213",
+      "parent_code": "UG",
+      "name": "Kaberamaido",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-3189524884",
+          "parent_code": "UG-213",
+          "name": "Kaberamaido",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-315",
+      "parent_code": "UG",
+      "name": "Amolatar",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "UG-207",
+      "parent_code": "UG",
+      "name": "Katakwi",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-305385710",
+          "parent_code": "UG-207",
+          "name": "Katakwi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-231",
+      "parent_code": "UG",
+      "name": "Ngora",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-311726804",
+          "parent_code": "UG-231",
+          "name": "Kapir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-311727613",
+          "parent_code": "UG-231",
+          "name": "Ngora",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1655781867",
+          "parent_code": "UG-231",
+          "name": "Koloin",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-232",
+      "parent_code": "UG",
+      "name": "Serere",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-3190512188",
+          "parent_code": "UG-232",
+          "name": "OCAAPA",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8846235253",
+          "parent_code": "UG-232",
+          "name": "Agip Trading Centre",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-211",
+      "parent_code": "UG",
+      "name": "Soroti",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-311726473",
+          "parent_code": "UG-211",
+          "name": "Tiriri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-216",
+      "parent_code": "UG",
+      "name": "Amuria",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-302685419",
+          "parent_code": "UG-216",
+          "name": "Amuria",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-314",
+      "parent_code": "UG",
+      "name": "Abim",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2903312081",
+          "parent_code": "UG-314",
+          "name": "Abim",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-306",
+      "parent_code": "UG",
+      "name": "Kotido",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1818512598",
+          "parent_code": "UG-306",
+          "name": "Akademothy",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2242410078",
+          "parent_code": "UG-306",
+          "name": "Kotido",
+          "type": "city",
+          "population": "22900",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-327",
+      "parent_code": "UG",
+      "name": "Napak",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-3984083145",
+          "parent_code": "UG-327",
+          "name": "Napak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-421",
+      "parent_code": "UG",
+      "name": "Kiryandongo",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1655766715",
+          "parent_code": "UG-421",
+          "name": "Kiryandongo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1655766731",
+          "parent_code": "UG-421",
+          "name": "Bweyale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1655787297",
+          "parent_code": "UG-421",
+          "name": "Kigumba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229119150",
+          "parent_code": "UG-421",
+          "name": "Masindi-Port",
+          "type": "city",
+          "population": "8800",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-328",
+      "parent_code": "UG",
+      "name": "Nwoya",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2229100142",
+          "parent_code": "UG-328",
+          "name": "Anaka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-409",
+      "parent_code": "UG",
+      "name": "Masindi",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1277061228",
+          "parent_code": "UG-409",
+          "name": "Masindi",
+          "type": "city",
+          "population": "94622",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-5758348926",
+          "parent_code": "UG-409",
+          "name": "Kikingura Trading Centre",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-109",
+      "parent_code": "UG",
+      "name": "Nakasongola",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1655924498",
+          "parent_code": "UG-109",
+          "name": "Nakasongola",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229119796",
+          "parent_code": "UG-109",
+          "name": "Migyera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-103",
+      "parent_code": "UG",
+      "name": "Kiboga",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2880935697",
+          "parent_code": "UG-103",
+          "name": "Kiboga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-123",
+      "parent_code": "UG",
+      "name": "Kyankwanzi",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "UG-116",
+      "parent_code": "UG",
+      "name": "Nakaseke",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2229127503",
+          "parent_code": "UG-116",
+          "name": "Semuto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2880951653",
+          "parent_code": "UG-116",
+          "name": "Nakaseke",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-419",
+      "parent_code": "UG",
+      "name": "Kiruhura",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-3233732148",
+          "parent_code": "UG-419",
+          "name": "Kiruhura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-422",
+      "parent_code": "UG",
+      "name": "Kyegegwa",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-3983483025",
+          "parent_code": "UG-422",
+          "name": "Kyegegwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-107",
+      "parent_code": "UG",
+      "name": "Mubende",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2649307992",
+          "parent_code": "UG-107",
+          "name": "Mubende",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-111",
+      "parent_code": "UG",
+      "name": "Sembabule",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-3983739059",
+          "parent_code": "UG-111",
+          "name": "Sembabule",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4062555961",
+          "parent_code": "UG-111",
+          "name": "Lwemiyaga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-405",
+      "parent_code": "UG",
+      "name": "Kabarole",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "UG-407",
+      "parent_code": "UG",
+      "name": "Kibaale",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2229109132",
+          "parent_code": "UG-407",
+          "name": "Kibaale",
+          "type": "city",
+          "population": "7600",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-415",
+      "parent_code": "UG",
+      "name": "Kyenjojo",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2685378594",
+          "parent_code": "UG-415",
+          "name": "Kyenjojo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-424",
+      "parent_code": "UG",
+      "name": "Ntoroko",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2826289418",
+          "parent_code": "UG-424",
+          "name": "Ntoroko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-420",
+      "parent_code": "UG",
+      "name": "Buhweju",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "UG-402",
+      "parent_code": "UG",
+      "name": "Bushenyi",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2229108598",
+          "parent_code": "UG-402",
+          "name": "Ishaka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3328300786",
+          "parent_code": "UG-402",
+          "name": "Omukitaro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7724528513",
+          "parent_code": "UG-402",
+          "name": "Bushenyi",
+          "type": "city",
+          "population": "41063",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-426",
+      "parent_code": "UG",
+      "name": "Sheema",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-3964665260",
+          "parent_code": "UG-426",
+          "name": "Kabwohe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7746494442",
+          "parent_code": "UG-426",
+          "name": "Kibingo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-423",
+      "parent_code": "UG",
+      "name": "Mitooma",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-9903849404",
+          "parent_code": "UG-423",
+          "name": "Katenga town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-410",
+      "parent_code": "UG",
+      "name": "Mbarara",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-5659105236",
+          "parent_code": "UG-410",
+          "name": "Bwizibwera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5659173666",
+          "parent_code": "UG-410",
+          "name": "Rubindi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-118",
+      "parent_code": "UG",
+      "name": "Bukomansimbi",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-3983738355",
+          "parent_code": "UG-118",
+          "name": "Bukomansimbi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-105",
+      "parent_code": "UG",
+      "name": "Masaka",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "UG-119",
+      "parent_code": "UG",
+      "name": "Butambala",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "UG-121",
+      "parent_code": "UG",
+      "name": "Gomba",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-3983937285",
+          "parent_code": "UG-121",
+          "name": "Kanoni",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "UG-115",
+      "parent_code": "UG",
+      "name": "Mityana",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1217463192",
+          "parent_code": "UG-115",
+          "name": "Mityana",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1224486778",
+          "parent_code": "UG-115",
+          "name": "Kakindu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3143989393",
+          "parent_code": "UG-115",
+          "name": "Zigoti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-106",
+      "parent_code": "UG",
+      "name": "Mpigi",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-3734405742",
+          "parent_code": "UG-106",
+          "name": "Jezza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4042798428",
+          "parent_code": "UG-106",
+          "name": "Mpigi",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "UG-117",
+      "parent_code": "UG",
+      "name": "Buikwe",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1656002479",
+          "parent_code": "UG-117",
+          "name": "Lugazi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229121881",
+          "parent_code": "UG-117",
+          "name": "Njeru",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "UG-112",
+      "parent_code": "UG",
+      "name": "Kayunga",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2229110757",
+          "parent_code": "UG-112",
+          "name": "Kangulumira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3333899889",
+          "parent_code": "UG-112",
+          "name": "Kayunga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-104",
+      "parent_code": "UG",
+      "name": "Luweero",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1655924532",
+          "parent_code": "UG-104",
+          "name": "Wobulenzi",
+          "type": "city",
+          "population": "27027",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229100882",
+          "parent_code": "UG-104",
+          "name": "Bamunanika",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229121310",
+          "parent_code": "UG-104",
+          "name": "Ndejje",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229129942",
+          "parent_code": "UG-104",
+          "name": "Zirobwe",
+          "type": "city",
+          "population": "5000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3496962324",
+          "parent_code": "UG-104",
+          "name": "Luweero",
+          "type": "city",
+          "population": "42734",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3533063859",
+          "parent_code": "UG-104",
+          "name": "Bombo",
+          "type": "city",
+          "population": "26370",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-113",
+      "parent_code": "UG",
+      "name": "Wakiso",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2163191058",
+          "parent_code": "UG-113",
+          "name": "Kira",
+          "type": "city",
+          "population": "313761",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2229110955",
+          "parent_code": "UG-113",
+          "name": "Kasangati",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3227589041",
+          "parent_code": "UG-113",
+          "name": "Wakiso",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3257743314",
+          "parent_code": "UG-113",
+          "name": "Kyengera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3500961528",
+          "parent_code": "UG-113",
+          "name": "Nansana",
+          "type": "city",
+          "population": "144441",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3713786985",
+          "parent_code": "UG-113",
+          "name": "Biira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3761892989",
+          "parent_code": "UG-113",
+          "name": "Gayaza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3911468159",
+          "parent_code": "UG-113",
+          "name": "Bunamwaya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3939176312",
+          "parent_code": "UG-113",
+          "name": "Kitemu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4894978820",
+          "parent_code": "UG-113",
+          "name": "Kakiri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9651812333",
+          "parent_code": "UG-113",
+          "name": "Kayunga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12278511680",
+          "parent_code": "UG-113",
+          "name": "Gayaza Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-203",
+      "parent_code": "UG",
+      "name": "Iganga",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-311733271",
+          "parent_code": "UG-203",
+          "name": "Iganga",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-538034344",
+          "parent_code": "UG-203",
+          "name": "Nakalama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-204",
+      "parent_code": "UG",
+      "name": "Jinja",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2229104438",
+          "parent_code": "UG-204",
+          "name": "Buwenge",
+          "type": "city",
+          "population": "22000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229110348",
+          "parent_code": "UG-204",
+          "name": "Kakira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8630416797",
+          "parent_code": "UG-204",
+          "name": "Wairaka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-229",
+      "parent_code": "UG",
+      "name": "Luuka",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "UG-226",
+      "parent_code": "UG",
+      "name": "Buyende",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-3983483023",
+          "parent_code": "UG-226",
+          "name": "Buyende",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-205",
+      "parent_code": "UG",
+      "name": "Kamuli",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2277979854",
+          "parent_code": "UG-205",
+          "name": "Kamuli",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-222",
+      "parent_code": "UG",
+      "name": "Kaliro",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-3983483024",
+          "parent_code": "UG-222",
+          "name": "Kaliro Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-227",
+      "parent_code": "UG",
+      "name": "Kibuku",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-3300131844",
+          "parent_code": "UG-227",
+          "name": "Kibuku",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-224",
+      "parent_code": "UG",
+      "name": "Namutumba",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-311731779",
+          "parent_code": "UG-224",
+          "name": "Namatumba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-210",
+      "parent_code": "UG",
+      "name": "Pallisa",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-311734768",
+          "parent_code": "UG-210",
+          "name": "Pallisa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-201",
+      "parent_code": "UG",
+      "name": "Bugiri",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-311733902",
+          "parent_code": "UG-201",
+          "name": "Bugiri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-221",
+      "parent_code": "UG",
+      "name": "Butaleja",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1937158006",
+          "parent_code": "UG-221",
+          "name": "Busolwe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1937158013",
+          "parent_code": "UG-221",
+          "name": "Butaleja",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-217",
+      "parent_code": "UG",
+      "name": "Budaka",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-311730609",
+          "parent_code": "UG-217",
+          "name": "Kamonkoli",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-311730669",
+          "parent_code": "UG-217",
+          "name": "Naboa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3302462647",
+          "parent_code": "UG-217",
+          "name": "Budaka",
+          "type": "city",
+          "population": "178900",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-209",
+      "parent_code": "UG",
+      "name": "Mbale",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "UG-225",
+      "parent_code": "UG",
+      "name": "Bulambuli",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "UG-215",
+      "parent_code": "UG",
+      "name": "Sironko",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-938641746",
+          "parent_code": "UG-215",
+          "name": "Sironko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-219",
+      "parent_code": "UG",
+      "name": "Bukedea",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-311727206",
+          "parent_code": "UG-219",
+          "name": "Bukedea",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3956651972",
+          "parent_code": "UG-219",
+          "name": "Kabarwa Trading Centre",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3956651975",
+          "parent_code": "UG-219",
+          "name": "Koreng Trading Centre",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3956651977",
+          "parent_code": "UG-219",
+          "name": "Kotiokot Trading Centre",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3978443242",
+          "parent_code": "UG-219",
+          "name": "Kolir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-208",
+      "parent_code": "UG",
+      "name": "Kumi",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1655767165",
+          "parent_code": "UG-208",
+          "name": "Atutur",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229119843",
+          "parent_code": "UG-208",
+          "name": "Mukongoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3784548211",
+          "parent_code": "UG-208",
+          "name": "Akadot Trading Centre",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4534154091",
+          "parent_code": "UG-208",
+          "name": "Kumi",
+          "type": "city",
+          "population": "13000",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-311",
+      "parent_code": "UG",
+      "name": "Nakapiripirit",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "UG-301",
+      "parent_code": "UG",
+      "name": "Adjumani",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1763348001",
+          "parent_code": "UG-301",
+          "name": "Adjumani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-316",
+      "parent_code": "UG",
+      "name": "Amuru",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-304818146",
+          "parent_code": "UG-316",
+          "name": "Atiak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4808889640",
+          "parent_code": "UG-316",
+          "name": "Amuru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5456937672",
+          "parent_code": "UG-316",
+          "name": "Kal Centre",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-3501793",
+      "parent_code": "UG",
+      "name": "Terego",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "UG-416",
+      "parent_code": "UG",
+      "name": "Buliisa",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-3355564477",
+          "parent_code": "UG-416",
+          "name": "Bulisa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-305",
+      "parent_code": "UG",
+      "name": "Kitgum",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-940733344",
+          "parent_code": "UG-305",
+          "name": "Omiya Anyima",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-942775032",
+          "parent_code": "UG-305",
+          "name": "Kitgum",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1818106237",
+          "parent_code": "UG-305",
+          "name": "Orom",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229120413",
+          "parent_code": "UG-305",
+          "name": "Namokora",
+          "type": "city",
+          "population": "19300",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-319",
+      "parent_code": "UG",
+      "name": "Koboko",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1157841131",
+          "parent_code": "UG-319",
+          "name": "Koboko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-326",
+      "parent_code": "UG",
+      "name": "Lamwo",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "UG-320",
+      "parent_code": "UG",
+      "name": "Maracha",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2229123824",
+          "parent_code": "UG-320",
+          "name": "Ovujo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6084177513",
+          "parent_code": "UG-320",
+          "name": "Dubayi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7746488526",
+          "parent_code": "UG-320",
+          "name": "Maracha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-309",
+      "parent_code": "UG",
+      "name": "Moyo",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-3078556157",
+          "parent_code": "UG-309",
+          "name": "Moyo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5425944500",
+          "parent_code": "UG-309",
+          "name": "Laropi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-310",
+      "parent_code": "UG",
+      "name": "Nebbi",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-311736627",
+          "parent_code": "UG-310",
+          "name": "Nebbi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-313",
+      "parent_code": "UG",
+      "name": "Yumbe",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-3984083146",
+          "parent_code": "UG-313",
+          "name": "Yumbe",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-10783834364",
+          "parent_code": "UG-313",
+          "name": "West Yumbe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10783834365",
+          "parent_code": "UG-313",
+          "name": "Oyaru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10783834366",
+          "parent_code": "UG-313",
+          "name": "Oyaru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10783834367",
+          "parent_code": "UG-313",
+          "name": "East Yumbe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10783834368",
+          "parent_code": "UG-313",
+          "name": "Oyaru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10783834372",
+          "parent_code": "UG-313",
+          "name": "African Quarters",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10783898034",
+          "parent_code": "UG-313",
+          "name": "Anafio",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10783898035",
+          "parent_code": "UG-313",
+          "name": "Anafio",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10783948625",
+          "parent_code": "UG-313",
+          "name": "Kebida",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10784023295",
+          "parent_code": "UG-313",
+          "name": "Migoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-330",
+      "parent_code": "UG",
+      "name": "Zombo",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1157859693",
+          "parent_code": "UG-330",
+          "name": "Paidha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3984083147",
+          "parent_code": "UG-330",
+          "name": "Zombo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-318",
+      "parent_code": "UG",
+      "name": "Kaabong",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1818076420",
+          "parent_code": "UG-318",
+          "name": "Kaabong",
+          "type": "city",
+          "population": "23900",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-308",
+      "parent_code": "UG",
+      "name": "Moroto",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1818469748",
+          "parent_code": "UG-308",
+          "name": "Moroto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-324",
+      "parent_code": "UG",
+      "name": "Amudat",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-4000176308",
+          "parent_code": "UG-324",
+          "name": "Amudat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-220",
+      "parent_code": "UG",
+      "name": "Bukwo",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-3984705258",
+          "parent_code": "UG-220",
+          "name": "Bukwo",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4863093415",
+          "parent_code": "UG-220",
+          "name": "Suam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-206",
+      "parent_code": "UG",
+      "name": "Kapchorwa",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1989459400",
+          "parent_code": "UG-206",
+          "name": "Kapchorwa",
+          "type": "city",
+          "population": "66000",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-228",
+      "parent_code": "UG",
+      "name": "Kween",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "UG-202",
+      "parent_code": "UG",
+      "name": "Busia",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1429946815",
+          "parent_code": "UG-202",
+          "name": "Busia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-120",
+      "parent_code": "UG",
+      "name": "Buvuma",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "UG-223",
+      "parent_code": "UG",
+      "name": "Manafwa",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1420813327",
+          "parent_code": "UG-223",
+          "name": "Bugobero",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1420816777",
+          "parent_code": "UG-223",
+          "name": "Bubulo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1504093872",
+          "parent_code": "UG-223",
+          "name": "Bubwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8398071230",
+          "parent_code": "UG-223",
+          "name": "Manafwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-214",
+      "parent_code": "UG",
+      "name": "Mayuge",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "UG-230",
+      "parent_code": "UG",
+      "name": "Namayingo",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-3956360112",
+          "parent_code": "UG-230",
+          "name": "Namayingo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5347579671",
+          "parent_code": "UG-230",
+          "name": "Namayingo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-212",
+      "parent_code": "UG",
+      "name": "Tororo",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-305374567",
+          "parent_code": "UG-212",
+          "name": "Tororo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1430275362",
+          "parent_code": "UG-212",
+          "name": "Kwapa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1430275363",
+          "parent_code": "UG-212",
+          "name": "Malaba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1437525611",
+          "parent_code": "UG-212",
+          "name": "Nagongera B",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-101",
+      "parent_code": "UG",
+      "name": "Kalangala",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1765484011",
+          "parent_code": "UG-101",
+          "name": "Kalangala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229101815",
+          "parent_code": "UG-101",
+          "name": "Bumangi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-122",
+      "parent_code": "UG",
+      "name": "Kalungu",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2097768705",
+          "parent_code": "UG-122",
+          "name": "Kalungu Town Council",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3071968994",
+          "parent_code": "UG-122",
+          "name": "Lukaya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-108",
+      "parent_code": "UG",
+      "name": "Mukono",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-256588128",
+          "parent_code": "UG-108",
+          "name": "Mukono",
+          "type": "city",
+          "population": "161996",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1656002508",
+          "parent_code": "UG-108",
+          "name": "Kayanja",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3333906388",
+          "parent_code": "UG-108",
+          "name": "Kalagi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3333906389",
+          "parent_code": "UG-108",
+          "name": "Nagalama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-110",
+      "parent_code": "UG",
+      "name": "Rakai",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-3983816051",
+          "parent_code": "UG-110",
+          "name": "Rakai",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-401",
+      "parent_code": "UG",
+      "name": "Bundibugyo",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-3338197104",
+          "parent_code": "UG-401",
+          "name": "Bundibugyo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-418",
+      "parent_code": "UG",
+      "name": "Isingiro",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-3233780070",
+          "parent_code": "UG-418",
+          "name": "Isingiro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4416406347",
+          "parent_code": "UG-418",
+          "name": "Endinzi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-404",
+      "parent_code": "UG",
+      "name": "Kabale",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-281721577",
+          "parent_code": "UG-404",
+          "name": "Katuna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-293901231",
+          "parent_code": "UG-404",
+          "name": "Kabale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-406",
+      "parent_code": "UG",
+      "name": "Kasese",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2685125666",
+          "parent_code": "UG-406",
+          "name": "Kasese",
+          "type": "city",
+          "population": "101679",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-5722687647",
+          "parent_code": "UG-406",
+          "name": "Bwera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-425",
+      "parent_code": "UG",
+      "name": "Rubirizi",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-732482044",
+          "parent_code": "UG-425",
+          "name": "Katerera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4052390189",
+          "parent_code": "UG-425",
+          "name": "Rubirizi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-114",
+      "parent_code": "UG",
+      "name": "Lyantonde",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1771221134",
+          "parent_code": "UG-114",
+          "name": "Lyantonde",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-411",
+      "parent_code": "UG",
+      "name": "Ntungamo",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2229126738",
+          "parent_code": "UG-411",
+          "name": "Rwahi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3504042566",
+          "parent_code": "UG-411",
+          "name": "Ntungamo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-412",
+      "parent_code": "UG",
+      "name": "Rukungiri",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2141552511",
+          "parent_code": "UG-412",
+          "name": "Rukungiri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-403",
+      "parent_code": "UG",
+      "name": "Hoima",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "UG-218",
+      "parent_code": "UG",
+      "name": "Bududa",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1504093873",
+          "parent_code": "UG-218",
+          "name": "Bukalasi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-N",
+      "parent_code": "UG",
+      "name": "Northern Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-304816313",
+          "parent_code": "UG-N",
+          "name": "Gulu",
+          "type": "city",
+          "population": "152276",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-304818146",
+          "parent_code": "UG-N",
+          "name": "Atiak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-305377332",
+          "parent_code": "UG-N",
+          "name": "Lira",
+          "type": "city",
+          "population": "99059",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-311736627",
+          "parent_code": "UG-N",
+          "name": "Nebbi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-311737042",
+          "parent_code": "UG-N",
+          "name": "Okollo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-311737373",
+          "parent_code": "UG-N",
+          "name": "Uleppi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-435339521",
+          "parent_code": "UG-N",
+          "name": "Olevu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-940733344",
+          "parent_code": "UG-N",
+          "name": "Omiya Anyima",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-942775032",
+          "parent_code": "UG-N",
+          "name": "Kitgum",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1157841131",
+          "parent_code": "UG-N",
+          "name": "Koboko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1157859693",
+          "parent_code": "UG-N",
+          "name": "Paidha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1656035909",
+          "parent_code": "UG-N",
+          "name": "Apac",
+          "type": "city",
+          "population": "13700",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1763348001",
+          "parent_code": "UG-N",
+          "name": "Adjumani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1816765620",
+          "parent_code": "UG-N",
+          "name": "Kapedo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1818076420",
+          "parent_code": "UG-N",
+          "name": "Kaabong",
+          "type": "city",
+          "population": "23900",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1818106237",
+          "parent_code": "UG-N",
+          "name": "Orom",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1818106249",
+          "parent_code": "UG-N",
+          "name": "Karenga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1818469748",
+          "parent_code": "UG-N",
+          "name": "Moroto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1818512598",
+          "parent_code": "UG-N",
+          "name": "Akademothy",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1999485035",
+          "parent_code": "UG-N",
+          "name": "Arua",
+          "type": "city",
+          "population": "62657",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229100142",
+          "parent_code": "UG-N",
+          "name": "Anaka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229120413",
+          "parent_code": "UG-N",
+          "name": "Namokora",
+          "type": "city",
+          "population": "19300",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229122978",
+          "parent_code": "UG-N",
+          "name": "Obongi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229123824",
+          "parent_code": "UG-N",
+          "name": "Ovujo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229123931",
+          "parent_code": "UG-N",
+          "name": "Pader",
+          "type": "city",
+          "population": "13500",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229128938",
+          "parent_code": "UG-N",
+          "name": "Vura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2242410078",
+          "parent_code": "UG-N",
+          "name": "Kotido",
+          "type": "city",
+          "population": "22900",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2903312081",
+          "parent_code": "UG-N",
+          "name": "Abim",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2912552688",
+          "parent_code": "UG-N",
+          "name": "Agago",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2912552689",
+          "parent_code": "UG-N",
+          "name": "Kalongo",
+          "type": "city",
+          "population": "1500",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3078556157",
+          "parent_code": "UG-N",
+          "name": "Moyo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3189545156",
+          "parent_code": "UG-N",
+          "name": "Dokolo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3983949171",
+          "parent_code": "UG-N",
+          "name": "Oyam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3984083145",
+          "parent_code": "UG-N",
+          "name": "Napak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3984083146",
+          "parent_code": "UG-N",
+          "name": "Yumbe",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3984083147",
+          "parent_code": "UG-N",
+          "name": "Zombo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4000176308",
+          "parent_code": "UG-N",
+          "name": "Amudat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4011301193",
+          "parent_code": "UG-N",
+          "name": "Kole",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4240233977",
+          "parent_code": "UG-N",
+          "name": "Achol-Pii",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4808889640",
+          "parent_code": "UG-N",
+          "name": "Amuru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5425944500",
+          "parent_code": "UG-N",
+          "name": "Laropi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5456937672",
+          "parent_code": "UG-N",
+          "name": "Kal Centre",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5774738806",
+          "parent_code": "UG-N",
+          "name": "Latayi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6084177513",
+          "parent_code": "UG-N",
+          "name": "Dubayi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7746488526",
+          "parent_code": "UG-N",
+          "name": "Maracha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10783834364",
+          "parent_code": "UG-N",
+          "name": "West Yumbe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10783834365",
+          "parent_code": "UG-N",
+          "name": "Oyaru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10783834366",
+          "parent_code": "UG-N",
+          "name": "Oyaru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10783834367",
+          "parent_code": "UG-N",
+          "name": "East Yumbe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10783834368",
+          "parent_code": "UG-N",
+          "name": "Oyaru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10783834372",
+          "parent_code": "UG-N",
+          "name": "African Quarters",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10783898034",
+          "parent_code": "UG-N",
+          "name": "Anafio",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10783898035",
+          "parent_code": "UG-N",
+          "name": "Anafio",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10783948625",
+          "parent_code": "UG-N",
+          "name": "Kebida",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10783978848",
+          "parent_code": "UG-N",
+          "name": "Masaka",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-10784023295",
+          "parent_code": "UG-N",
+          "name": "Migoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-E",
+      "parent_code": "UG",
+      "name": "Eastern Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-87491965",
+          "parent_code": "UG-E",
+          "name": "Soroti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-294001845",
+          "parent_code": "UG-E",
+          "name": "Jinja",
+          "type": "city",
+          "population": "72931",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-302685419",
+          "parent_code": "UG-E",
+          "name": "Amuria",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-304491931",
+          "parent_code": "UG-E",
+          "name": "Mbale City",
+          "type": "city",
+          "population": "96189",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-305374567",
+          "parent_code": "UG-E",
+          "name": "Tororo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-305385710",
+          "parent_code": "UG-E",
+          "name": "Katakwi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-311726473",
+          "parent_code": "UG-E",
+          "name": "Tiriri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-311726804",
+          "parent_code": "UG-E",
+          "name": "Kapir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-311727206",
+          "parent_code": "UG-E",
+          "name": "Bukedea",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-311727613",
+          "parent_code": "UG-E",
+          "name": "Ngora",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-311730609",
+          "parent_code": "UG-E",
+          "name": "Kamonkoli",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-311730669",
+          "parent_code": "UG-E",
+          "name": "Naboa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-311731779",
+          "parent_code": "UG-E",
+          "name": "Namatumba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-311733100",
+          "parent_code": "UG-E",
+          "name": "Busembatia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-311733117",
+          "parent_code": "UG-E",
+          "name": "Busesa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-311733271",
+          "parent_code": "UG-E",
+          "name": "Iganga",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-311733902",
+          "parent_code": "UG-E",
+          "name": "Bugiri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-311734768",
+          "parent_code": "UG-E",
+          "name": "Pallisa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-538026580",
+          "parent_code": "UG-E",
+          "name": "Nakaloke",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-538034344",
+          "parent_code": "UG-E",
+          "name": "Nakalama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-560557033",
+          "parent_code": "UG-E",
+          "name": "Munkaga Center",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-938641746",
+          "parent_code": "UG-E",
+          "name": "Sironko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1420813327",
+          "parent_code": "UG-E",
+          "name": "Bugobero",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1420813332",
+          "parent_code": "UG-E",
+          "name": "Bubutu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1420816777",
+          "parent_code": "UG-E",
+          "name": "Bubulo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1429946815",
+          "parent_code": "UG-E",
+          "name": "Busia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1430275362",
+          "parent_code": "UG-E",
+          "name": "Kwapa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1430275363",
+          "parent_code": "UG-E",
+          "name": "Malaba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1437525611",
+          "parent_code": "UG-E",
+          "name": "Nagongera B",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1504093872",
+          "parent_code": "UG-E",
+          "name": "Bubwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1504093873",
+          "parent_code": "UG-E",
+          "name": "Bukalasi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1504278933",
+          "parent_code": "UG-E",
+          "name": "Lwakhakha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1655767165",
+          "parent_code": "UG-E",
+          "name": "Atutur",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1655781867",
+          "parent_code": "UG-E",
+          "name": "Koloin",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1937158006",
+          "parent_code": "UG-E",
+          "name": "Busolwe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1937158013",
+          "parent_code": "UG-E",
+          "name": "Butaleja",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1989459400",
+          "parent_code": "UG-E",
+          "name": "Kapchorwa",
+          "type": "city",
+          "population": "66000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229101874",
+          "parent_code": "UG-E",
+          "name": "Bumbo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229104438",
+          "parent_code": "UG-E",
+          "name": "Buwenge",
+          "type": "city",
+          "population": "22000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229110348",
+          "parent_code": "UG-E",
+          "name": "Kakira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229110809",
+          "parent_code": "UG-E",
+          "name": "Kapelebyong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229119843",
+          "parent_code": "UG-E",
+          "name": "Mukongoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2277979854",
+          "parent_code": "UG-E",
+          "name": "Kamuli",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3189524884",
+          "parent_code": "UG-E",
+          "name": "Kaberamaido",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3190512188",
+          "parent_code": "UG-E",
+          "name": "OCAAPA",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3300131844",
+          "parent_code": "UG-E",
+          "name": "Kibuku",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3302462647",
+          "parent_code": "UG-E",
+          "name": "Budaka",
+          "type": "city",
+          "population": "178900",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3784548211",
+          "parent_code": "UG-E",
+          "name": "Akadot Trading Centre",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3956360112",
+          "parent_code": "UG-E",
+          "name": "Namayingo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3956651972",
+          "parent_code": "UG-E",
+          "name": "Kabarwa Trading Centre",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3956651975",
+          "parent_code": "UG-E",
+          "name": "Koreng Trading Centre",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3956651977",
+          "parent_code": "UG-E",
+          "name": "Kotiokot Trading Centre",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3978443242",
+          "parent_code": "UG-E",
+          "name": "Kolir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3983483023",
+          "parent_code": "UG-E",
+          "name": "Buyende",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3983483024",
+          "parent_code": "UG-E",
+          "name": "Kaliro Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3984705258",
+          "parent_code": "UG-E",
+          "name": "Bukwo",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4476423584",
+          "parent_code": "UG-E",
+          "name": "Bugema Center",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4534154091",
+          "parent_code": "UG-E",
+          "name": "Kumi",
+          "type": "city",
+          "population": "13000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4863093415",
+          "parent_code": "UG-E",
+          "name": "Suam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5347579671",
+          "parent_code": "UG-E",
+          "name": "Namayingo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5539312514",
+          "parent_code": "UG-E",
+          "name": "Bupoto Town Council",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8398071230",
+          "parent_code": "UG-E",
+          "name": "Manafwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8630416797",
+          "parent_code": "UG-E",
+          "name": "Wairaka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8846235253",
+          "parent_code": "UG-E",
+          "name": "Agip Trading Centre",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10092679973",
+          "parent_code": "UG-E",
+          "name": "Kalaki",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-C",
+      "parent_code": "UG",
+      "name": "Central Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-256588128",
+          "parent_code": "UG-C",
+          "name": "Mukono",
+          "type": "city",
+          "population": "161996",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-292850770",
+          "parent_code": "UG-C",
+          "name": "Kajjansi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-311748711",
+          "parent_code": "UG-C",
+          "name": "Masaka",
+          "type": "city",
+          "population": "103829",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-773119937",
+          "parent_code": "UG-C",
+          "name": "Kampala",
+          "type": "city",
+          "population": "1516210",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1217463192",
+          "parent_code": "UG-C",
+          "name": "Mityana",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1224486778",
+          "parent_code": "UG-C",
+          "name": "Kakindu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1473711355",
+          "parent_code": "UG-C",
+          "name": "Kyetume",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1655924498",
+          "parent_code": "UG-C",
+          "name": "Nakasongola",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1655924532",
+          "parent_code": "UG-C",
+          "name": "Wobulenzi",
+          "type": "city",
+          "population": "27027",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1656002479",
+          "parent_code": "UG-C",
+          "name": "Lugazi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1656002508",
+          "parent_code": "UG-C",
+          "name": "Kayanja",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1765484011",
+          "parent_code": "UG-C",
+          "name": "Kalangala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1771221134",
+          "parent_code": "UG-C",
+          "name": "Lyantonde",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1795750538",
+          "parent_code": "UG-C",
+          "name": "Mbiriizi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1795753995",
+          "parent_code": "UG-C",
+          "name": "Lwengo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1852759003",
+          "parent_code": "UG-C",
+          "name": "Kyazanga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1994438260",
+          "parent_code": "UG-C",
+          "name": "Nkoni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1999452781",
+          "parent_code": "UG-C",
+          "name": "Ndagwe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2097768705",
+          "parent_code": "UG-C",
+          "name": "Kalungu Town Council",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2099387574",
+          "parent_code": "UG-C",
+          "name": "Entebbe",
+          "type": "city",
+          "population": "69958",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2163191058",
+          "parent_code": "UG-C",
+          "name": "Kira",
+          "type": "city",
+          "population": "313761",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2229100882",
+          "parent_code": "UG-C",
+          "name": "Bamunanika",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229101815",
+          "parent_code": "UG-C",
+          "name": "Bumangi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229110603",
+          "parent_code": "UG-C",
+          "name": "Kalisizo",
+          "type": "city",
+          "population": "32700",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229110757",
+          "parent_code": "UG-C",
+          "name": "Kangulumira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229110955",
+          "parent_code": "UG-C",
+          "name": "Kasangati",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229116591",
+          "parent_code": "UG-C",
+          "name": "Kinoni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229119796",
+          "parent_code": "UG-C",
+          "name": "Migyera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229121310",
+          "parent_code": "UG-C",
+          "name": "Ndejje",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229121881",
+          "parent_code": "UG-C",
+          "name": "Njeru",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2229127503",
+          "parent_code": "UG-C",
+          "name": "Semuto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229129942",
+          "parent_code": "UG-C",
+          "name": "Zirobwe",
+          "type": "city",
+          "population": "5000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2649307992",
+          "parent_code": "UG-C",
+          "name": "Mubende",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2880935697",
+          "parent_code": "UG-C",
+          "name": "Kiboga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2880951653",
+          "parent_code": "UG-C",
+          "name": "Nakaseke",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3071968994",
+          "parent_code": "UG-C",
+          "name": "Lukaya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3143989393",
+          "parent_code": "UG-C",
+          "name": "Zigoti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3227589041",
+          "parent_code": "UG-C",
+          "name": "Wakiso",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3257743314",
+          "parent_code": "UG-C",
+          "name": "Kyengera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3333899889",
+          "parent_code": "UG-C",
+          "name": "Kayunga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3333906388",
+          "parent_code": "UG-C",
+          "name": "Kalagi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3333906389",
+          "parent_code": "UG-C",
+          "name": "Nagalama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3496962324",
+          "parent_code": "UG-C",
+          "name": "Luweero",
+          "type": "city",
+          "population": "42734",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3500961528",
+          "parent_code": "UG-C",
+          "name": "Nansana",
+          "type": "city",
+          "population": "144441",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3533063859",
+          "parent_code": "UG-C",
+          "name": "Bombo",
+          "type": "city",
+          "population": "26370",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3713786985",
+          "parent_code": "UG-C",
+          "name": "Biira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3734405742",
+          "parent_code": "UG-C",
+          "name": "Jezza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3761892989",
+          "parent_code": "UG-C",
+          "name": "Gayaza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3857061861",
+          "parent_code": "UG-C",
+          "name": "Mulungu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3911468159",
+          "parent_code": "UG-C",
+          "name": "Bunamwaya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3911665471",
+          "parent_code": "UG-C",
+          "name": "Kitebi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3939176312",
+          "parent_code": "UG-C",
+          "name": "Kitemu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3983738355",
+          "parent_code": "UG-C",
+          "name": "Bukomansimbi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3983739059",
+          "parent_code": "UG-C",
+          "name": "Sembabule",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3983816051",
+          "parent_code": "UG-C",
+          "name": "Rakai",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3983937285",
+          "parent_code": "UG-C",
+          "name": "Kanoni",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4042798428",
+          "parent_code": "UG-C",
+          "name": "Mpigi",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4062555961",
+          "parent_code": "UG-C",
+          "name": "Lwemiyaga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4894978820",
+          "parent_code": "UG-C",
+          "name": "Kakiri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8070881360",
+          "parent_code": "UG-C",
+          "name": "Ndeeba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9396366020",
+          "parent_code": "UG-C",
+          "name": "Kyotera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9651812333",
+          "parent_code": "UG-C",
+          "name": "Kayunga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12278511680",
+          "parent_code": "UG-C",
+          "name": "Gayaza Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-W",
+      "parent_code": "UG",
+      "name": "Western Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-281721577",
+          "parent_code": "UG-W",
+          "name": "Katuna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-293901231",
+          "parent_code": "UG-W",
+          "name": "Kabale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-293918338",
+          "parent_code": "UG-W",
+          "name": "Mbarara",
+          "type": "city",
+          "population": "195013",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-309083090",
+          "parent_code": "UG-W",
+          "name": "Hoima",
+          "type": "city",
+          "population": "100625",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-311747244",
+          "parent_code": "UG-W",
+          "name": "Fort Portal",
+          "type": "city",
+          "population": "54275",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-435662822",
+          "parent_code": "UG-W",
+          "name": "Kisoro",
+          "type": "city",
+          "population": "17561",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-732482044",
+          "parent_code": "UG-W",
+          "name": "Katerera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1277061228",
+          "parent_code": "UG-W",
+          "name": "Masindi",
+          "type": "city",
+          "population": "94622",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1655766715",
+          "parent_code": "UG-W",
+          "name": "Kiryandongo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1655766731",
+          "parent_code": "UG-W",
+          "name": "Bweyale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1655787297",
+          "parent_code": "UG-W",
+          "name": "Kigumba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2141552511",
+          "parent_code": "UG-W",
+          "name": "Rukungiri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229101338",
+          "parent_code": "UG-W",
+          "name": "Buhuka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229108359",
+          "parent_code": "UG-W",
+          "name": "Igorora",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229108598",
+          "parent_code": "UG-W",
+          "name": "Ishaka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229109132",
+          "parent_code": "UG-W",
+          "name": "Kibaale",
+          "type": "city",
+          "population": "7600",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229110510",
+          "parent_code": "UG-W",
+          "name": "Kakumiro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229111808",
+          "parent_code": "UG-W",
+          "name": "Kasonga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229117829",
+          "parent_code": "UG-W",
+          "name": "Kyangwali",
+          "type": "city",
+          "population": "40026",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229119150",
+          "parent_code": "UG-W",
+          "name": "Masindi-Port",
+          "type": "city",
+          "population": "8800",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229126738",
+          "parent_code": "UG-W",
+          "name": "Rwahi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2685125666",
+          "parent_code": "UG-W",
+          "name": "Kasese",
+          "type": "city",
+          "population": "101679",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2685378594",
+          "parent_code": "UG-W",
+          "name": "Kyenjojo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2826289418",
+          "parent_code": "UG-W",
+          "name": "Ntoroko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3233724239",
+          "parent_code": "UG-W",
+          "name": "Ibanda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3233732148",
+          "parent_code": "UG-W",
+          "name": "Kiruhura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3233780070",
+          "parent_code": "UG-W",
+          "name": "Isingiro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3328300786",
+          "parent_code": "UG-W",
+          "name": "Omukitaro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3338197104",
+          "parent_code": "UG-W",
+          "name": "Bundibugyo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3355564477",
+          "parent_code": "UG-W",
+          "name": "Bulisa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3504042566",
+          "parent_code": "UG-W",
+          "name": "Ntungamo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3964665260",
+          "parent_code": "UG-W",
+          "name": "Kabwohe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3983483025",
+          "parent_code": "UG-W",
+          "name": "Kyegegwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4052390189",
+          "parent_code": "UG-W",
+          "name": "Rubirizi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4387180835",
+          "parent_code": "UG-W",
+          "name": "Kanungu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4416406347",
+          "parent_code": "UG-W",
+          "name": "Endinzi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5607296025",
+          "parent_code": "UG-W",
+          "name": "Kagoma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5659105236",
+          "parent_code": "UG-W",
+          "name": "Bwizibwera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5659173666",
+          "parent_code": "UG-W",
+          "name": "Rubindi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5722687647",
+          "parent_code": "UG-W",
+          "name": "Bwera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5758348926",
+          "parent_code": "UG-W",
+          "name": "Kikingura Trading Centre",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7724528513",
+          "parent_code": "UG-W",
+          "name": "Bushenyi",
+          "type": "city",
+          "population": "41063",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7746494442",
+          "parent_code": "UG-W",
+          "name": "Kibingo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9903849404",
+          "parent_code": "UG-W",
+          "name": "Katenga town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10089412005",
+          "parent_code": "UG-W",
+          "name": "Kitagwenda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10089506778",
+          "parent_code": "UG-W",
+          "name": "Kitagwenda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10095911308",
+          "parent_code": "UG-W",
+          "name": "Kagadi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10097651935",
+          "parent_code": "UG-W",
+          "name": "Kikuube",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10100530055",
+          "parent_code": "UG-W",
+          "name": "Rukiga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10721603643",
+          "parent_code": "UG-W",
+          "name": "Butogota",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-124",
+      "parent_code": "UG",
+      "name": "Lwengo",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1473711355",
+          "parent_code": "UG-124",
+          "name": "Kyetume",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1795750538",
+          "parent_code": "UG-124",
+          "name": "Mbiriizi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1795753995",
+          "parent_code": "UG-124",
+          "name": "Lwengo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1852759003",
+          "parent_code": "UG-124",
+          "name": "Kyazanga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1994438260",
+          "parent_code": "UG-124",
+          "name": "Nkoni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1999452781",
+          "parent_code": "UG-124",
+          "name": "Ndagwe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229116591",
+          "parent_code": "UG-124",
+          "name": "Kinoni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8070881360",
+          "parent_code": "UG-124",
+          "name": "Ndeeba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-102",
+      "parent_code": "UG",
+      "name": "Kampala",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-773119937",
+          "parent_code": "UG-102",
+          "name": "Kampala",
+          "type": "city",
+          "population": "1516210",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3857061861",
+          "parent_code": "UG-102",
+          "name": "Mulungu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3911665471",
+          "parent_code": "UG-102",
+          "name": "Kitebi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-417",
+      "parent_code": "UG",
+      "name": "Ibanda",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2229108359",
+          "parent_code": "UG-417",
+          "name": "Igorora",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3233724239",
+          "parent_code": "UG-417",
+          "name": "Ibanda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-408",
+      "parent_code": "UG",
+      "name": "Kisoro",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-435662822",
+          "parent_code": "UG-408",
+          "name": "Kisoro",
+          "type": "city",
+          "population": "17561",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-413",
+      "parent_code": "UG",
+      "name": "Kamwenge",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "UG-126",
+      "parent_code": "UG",
+      "name": "Kassanda",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "UG-236",
+      "parent_code": "UG",
+      "name": "Kapelebyong",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2229110809",
+          "parent_code": "UG-236",
+          "name": "Kapelebyong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-434",
+      "parent_code": "UG",
+      "name": "Kitagwenda",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-10089412005",
+          "parent_code": "UG-434",
+          "name": "Kitagwenda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10089506778",
+          "parent_code": "UG-434",
+          "name": "Kitagwenda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-430",
+      "parent_code": "UG",
+      "name": "Bunyangabu",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "UG-234",
+      "parent_code": "UG",
+      "name": "Namisindwa",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1420813332",
+          "parent_code": "UG-234",
+          "name": "Bubutu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1504278933",
+          "parent_code": "UG-234",
+          "name": "Lwakhakha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229101874",
+          "parent_code": "UG-234",
+          "name": "Bumbo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5539312514",
+          "parent_code": "UG-234",
+          "name": "Bupoto Town Council",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-237",
+      "parent_code": "UG",
+      "name": "Kalaki",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-10092679973",
+          "parent_code": "UG-237",
+          "name": "Kalaki",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-233",
+      "parent_code": "UG",
+      "name": "Butebo",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "UG-334",
+      "parent_code": "UG",
+      "name": "Nabilatuk",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "UG-235",
+      "parent_code": "UG",
+      "name": "Bugweri",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-311733100",
+          "parent_code": "UG-235",
+          "name": "Busembatia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-311733117",
+          "parent_code": "UG-235",
+          "name": "Busesa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-427",
+      "parent_code": "UG",
+      "name": "Kagadi",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-10095911308",
+          "parent_code": "UG-427",
+          "name": "Kagadi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-125",
+      "parent_code": "UG",
+      "name": "Kyotera",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2229110603",
+          "parent_code": "UG-125",
+          "name": "Kalisizo",
+          "type": "city",
+          "population": "32700",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9396366020",
+          "parent_code": "UG-125",
+          "name": "Kyotera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-432",
+      "parent_code": "UG",
+      "name": "Kikuube",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2229101338",
+          "parent_code": "UG-432",
+          "name": "Buhuka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229111808",
+          "parent_code": "UG-432",
+          "name": "Kasonga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229117829",
+          "parent_code": "UG-432",
+          "name": "Kyangwali",
+          "type": "city",
+          "population": "40026",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5607296025",
+          "parent_code": "UG-432",
+          "name": "Kagoma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10097651935",
+          "parent_code": "UG-432",
+          "name": "Kikuube",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-428",
+      "parent_code": "UG",
+      "name": "Kakumiro",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2229110510",
+          "parent_code": "UG-428",
+          "name": "Kakumiro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-331",
+      "parent_code": "UG",
+      "name": "Omoro",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "ST-14693932",
+      "parent_code": "UG",
+      "name": "Fort Portal City",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-311747244",
+          "parent_code": "ST-14693932",
+          "name": "Fort Portal",
+          "type": "city",
+          "population": "54275",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "UG-335",
+      "parent_code": "UG",
+      "name": "Karenga",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1816765620",
+          "parent_code": "UG-335",
+          "name": "Kapedo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1818106249",
+          "parent_code": "UG-335",
+          "name": "Karenga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-431",
+      "parent_code": "UG",
+      "name": "Rukiga",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-10100530055",
+          "parent_code": "UG-431",
+          "name": "Rukiga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-433",
+      "parent_code": "UG",
+      "name": "Kazo",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "ST-14695999",
+      "parent_code": "UG",
+      "name": "Soroti City",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-87491965",
+          "parent_code": "ST-14695999",
+          "name": "Soroti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-14698374",
+      "parent_code": "UG",
+      "name": "Mbale City",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-304491931",
+          "parent_code": "ST-14698374",
+          "name": "Mbale City",
+          "type": "city",
+          "population": "96189",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-538026580",
+          "parent_code": "ST-14698374",
+          "name": "Nakaloke",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-560557033",
+          "parent_code": "ST-14698374",
+          "name": "Munkaga Center",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4476423584",
+          "parent_code": "ST-14698374",
+          "name": "Bugema Center",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-429",
+      "parent_code": "UG",
+      "name": "Rubanda",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "UG-204",
+      "parent_code": "UG",
+      "name": "Jinja City",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-294001845",
+          "parent_code": "UG-204",
+          "name": "Jinja",
+          "type": "city",
+          "population": "72931",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "UG-333",
+      "parent_code": "UG",
+      "name": "Kwania",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "ST-14723415",
+      "parent_code": "UG",
+      "name": "Masaka City",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-311748711",
+          "parent_code": "ST-14723415",
+          "name": "Masaka",
+          "type": "city",
+          "population": "103829",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "UG-337",
+      "parent_code": "UG",
+      "name": "Obongi",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2229122978",
+          "parent_code": "UG-337",
+          "name": "Obongi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10783978848",
+          "parent_code": "UG-337",
+          "name": "Masaka",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "ST-14723588",
+      "parent_code": "UG",
+      "name": "Mbarara City",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-293918338",
+          "parent_code": "ST-14723588",
+          "name": "Mbarara",
+          "type": "city",
+          "population": "195013",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "ST-14723820",
+      "parent_code": "UG",
+      "name": "Entebbe City",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-292850770",
+          "parent_code": "ST-14723820",
+          "name": "Kajjansi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2099387574",
+          "parent_code": "ST-14723820",
+          "name": "Entebbe",
+          "type": "city",
+          "population": "69958",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "UG-435",
+      "parent_code": "UG",
+      "name": "Rwampara",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "UG-332",
+      "parent_code": "UG",
+      "name": "Pakwach",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "UG-336",
+      "parent_code": "UG",
+      "name": "Madi Okollo",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-311737042",
+          "parent_code": "UG-336",
+          "name": "Okollo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-311737373",
+          "parent_code": "UG-336",
+          "name": "Uleppi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "UG-303",
+      "parent_code": "UG",
+      "name": "Arua",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-435339521",
+          "parent_code": "UG-303",
+          "name": "Olevu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2229128938",
+          "parent_code": "UG-303",
+          "name": "Vura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-18488872",
+      "parent_code": "UG",
+      "name": "Arua City",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1999485035",
+          "parent_code": "ST-18488872",
+          "name": "Arua",
+          "type": "city",
+          "population": "62657",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-18488950",
+      "parent_code": "UG",
+      "name": "Hoima City",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-309083090",
+          "parent_code": "ST-18488950",
+          "name": "Hoima",
+          "type": "city",
+          "population": "100625",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "ST-18489006",
+      "parent_code": "UG",
+      "name": "Gulu City",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-304816313",
+          "parent_code": "ST-18489006",
+          "name": "Gulu",
+          "type": "city",
+          "population": "152276",
+          "place_type": "city"
+        }
+      ]
+    }
+  ]
+}

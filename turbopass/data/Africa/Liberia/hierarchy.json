@@ -1,0 +1,487 @@
+{
+  "code": "LR",
+  "name": "Liberia",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "LR-MY",
+      "parent_code": "LR",
+      "name": "Maryland County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-476544399",
+          "parent_code": "LR-MY",
+          "name": "Pleebo",
+          "type": "city",
+          "population": "23000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6343101064",
+          "parent_code": "LR-MY",
+          "name": "Harper",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LR-GK",
+      "parent_code": "LR",
+      "name": "Grand Kru County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-3054906638",
+          "parent_code": "LR-GK",
+          "name": "Barclayville",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3054906658",
+          "parent_code": "LR-GK",
+          "name": "Grand Cess",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LR-SI",
+      "parent_code": "LR",
+      "name": "Sinoe County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2189929542",
+          "parent_code": "LR-SI",
+          "name": "Greenville",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LR-GG",
+      "parent_code": "LR",
+      "name": "Grand Gedeh County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-321350099",
+          "parent_code": "LR-GG",
+          "name": "Zwedru",
+          "type": "city",
+          "population": "23903",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1345759536",
+          "parent_code": "LR-GG",
+          "name": "Toe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1345759540",
+          "parent_code": "LR-GG",
+          "name": "Zleh Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3051811008",
+          "parent_code": "LR-GG",
+          "name": "New Solo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LR-RG",
+      "parent_code": "LR",
+      "name": "River Gee County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-3060725618",
+          "parent_code": "LR-RG",
+          "name": "Fish Town City",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LR-RI",
+      "parent_code": "LR",
+      "name": "Rivercess County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-3198605239",
+          "parent_code": "LR-RI",
+          "name": "River Cess",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LR-NI",
+      "parent_code": "LR",
+      "name": "Nimba County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-321350077",
+          "parent_code": "LR-NI",
+          "name": "Ganta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-321350088",
+          "parent_code": "LR-NI",
+          "name": "Tappita City",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-321543658",
+          "parent_code": "LR-NI",
+          "name": "Yekepa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-476511767",
+          "parent_code": "LR-NI",
+          "name": "Saclepea",
+          "type": "city",
+          "population": "15000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3013768864",
+          "parent_code": "LR-NI",
+          "name": "Camp 4",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3017587212",
+          "parent_code": "LR-NI",
+          "name": "Zayglay",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3023074972",
+          "parent_code": "LR-NI",
+          "name": "Sanniquellie",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LR-BM",
+      "parent_code": "LR",
+      "name": "Bomi County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-476645658",
+          "parent_code": "LR-BM",
+          "name": "Tubmanburg",
+          "type": "city",
+          "population": "13144",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-476658831",
+          "parent_code": "LR-BM",
+          "name": "Klay",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3004596568",
+          "parent_code": "LR-BM",
+          "name": "Gbah Jakeh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LR-BG",
+      "parent_code": "LR",
+      "name": "Bong County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-321350037",
+          "parent_code": "LR-BG",
+          "name": "Nyenyen",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-476624163",
+          "parent_code": "LR-BG",
+          "name": "Gbartala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-476624464",
+          "parent_code": "LR-BG",
+          "name": "Totota",
+          "type": "city",
+          "population": "250",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-476660195",
+          "parent_code": "LR-BG",
+          "name": "Bong Mine Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2189951896",
+          "parent_code": "LR-BG",
+          "name": "Gbarnga",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3015159846",
+          "parent_code": "LR-BG",
+          "name": "Botota",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3015181416",
+          "parent_code": "LR-BG",
+          "name": "Salala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3015270315",
+          "parent_code": "LR-BG",
+          "name": "Volomeni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3020358694",
+          "parent_code": "LR-BG",
+          "name": "Belefanai",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3025531443",
+          "parent_code": "LR-BG",
+          "name": "S.G. Kollie",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3025531444",
+          "parent_code": "LR-BG",
+          "name": "Suacoco",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3027066217",
+          "parent_code": "LR-BG",
+          "name": "Zowieta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LR-GP",
+      "parent_code": "LR",
+      "name": "Gbarpolu County",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "LR-GB",
+      "parent_code": "LR",
+      "name": "Grand Bassa County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2189927054",
+          "parent_code": "LR-GB",
+          "name": "Buchanan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LR-CM",
+      "parent_code": "LR",
+      "name": "Grand Cape Mount County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2924531712",
+          "parent_code": "LR-CM",
+          "name": "Robertsport",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3017208990",
+          "parent_code": "LR-CM",
+          "name": "Sinje",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4529337830",
+          "parent_code": "LR-CM",
+          "name": "Bo Waterside",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4529349196",
+          "parent_code": "LR-CM",
+          "name": "Gbesseh Fahnbulleh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LR-LO",
+      "parent_code": "LR",
+      "name": "Lofa County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2189959219",
+          "parent_code": "LR-LO",
+          "name": "Voinjama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2751280750",
+          "parent_code": "LR-LO",
+          "name": "Foya City",
+          "type": "city",
+          "population": "81,1CR",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LR-MG",
+      "parent_code": "LR",
+      "name": "Margibi County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1848533186",
+          "parent_code": "LR-MG",
+          "name": "Kakata",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2995981044",
+          "parent_code": "LR-MG",
+          "name": "Harbel City",
+          "type": "city",
+          "population": "25000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2995981058",
+          "parent_code": "LR-MG",
+          "name": "Marshall",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3093980550",
+          "parent_code": "LR-MG",
+          "name": "William Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LR-MO",
+      "parent_code": "LR",
+      "name": "Montserrado County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27564980",
+          "parent_code": "LR-MO",
+          "name": "Monrovia",
+          "type": "city",
+          "population": "1010970",
+          "place_type": "city"
+        }
+      ]
+    }
+  ]
+}

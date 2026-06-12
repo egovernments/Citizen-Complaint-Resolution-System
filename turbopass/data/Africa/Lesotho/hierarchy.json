@@ -1,0 +1,312 @@
+{
+  "code": "LS",
+  "name": "Lesotho",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "CTY-30656833",
+      "parent_code": "LS",
+      "name": "Maseru",
+      "type": "city",
+      "population": "227880",
+      "place_type": "city"
+    },
+    {
+      "code": "CTY-243645370",
+      "parent_code": "LS",
+      "name": "Mohale's Hoek",
+      "type": "city",
+      "population": "24992",
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-243645756",
+      "parent_code": "LS",
+      "name": "Quthing",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-317708986",
+      "parent_code": "LS",
+      "name": "Teyateyaneng",
+      "type": "city",
+      "population": "75115",
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-336606932",
+      "parent_code": "LS",
+      "name": "Ramabanta",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-336606936",
+      "parent_code": "LS",
+      "name": "Semonkong",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-702070585",
+      "parent_code": "LS",
+      "name": "Mapholaneng",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-1362724382",
+      "parent_code": "LS",
+      "name": "Roma",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-1369147994",
+      "parent_code": "LS",
+      "name": "Mapoteng",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-1394111689",
+      "parent_code": "LS",
+      "name": "Lejone",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-1394112180",
+      "parent_code": "LS",
+      "name": "Pitseng",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-1394138415",
+      "parent_code": "LS",
+      "name": "Seshote",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-1395204359",
+      "parent_code": "LS",
+      "name": "Old Hoek",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-1400924359",
+      "parent_code": "LS",
+      "name": "Matsieng",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-1401445707",
+      "parent_code": "LS",
+      "name": "Phamong",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-1408960979",
+      "parent_code": "LS",
+      "name": "Alwynskop",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-1673821938",
+      "parent_code": "LS",
+      "name": "Butha-Buthe",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-2954767335",
+      "parent_code": "LS",
+      "name": "Mafeteng",
+      "type": "city",
+      "population": "57059",
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-2976866527",
+      "parent_code": "LS",
+      "name": "Thaba-Tseka",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-2998223340",
+      "parent_code": "LS",
+      "name": "Ha Sekake",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-3131000676",
+      "parent_code": "LS",
+      "name": "Mantsonyane",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-3348032966",
+      "parent_code": "LS",
+      "name": "Ha Maputsoe",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-3666485874",
+      "parent_code": "LS",
+      "name": "Mokhotlong",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-3976969342",
+      "parent_code": "LS",
+      "name": "Morija",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-4221187095",
+      "parent_code": "LS",
+      "name": "Dilli-Dilli",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-4418230668",
+      "parent_code": "LS",
+      "name": "Hlotse",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-4654350286",
+      "parent_code": "LS",
+      "name": "Qacha's Nek",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-5406750820",
+      "parent_code": "LS",
+      "name": "Bela Bela",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-10799818226",
+      "parent_code": "LS",
+      "name": "Ha Lephoi",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-11778433750",
+      "parent_code": "LS",
+      "name": "Mpharane",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-11862282612",
+      "parent_code": "LS",
+      "name": "Sehong-hong",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-11889748134",
+      "parent_code": "LS",
+      "name": "Sehlaba-Thebe",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-11999621219",
+      "parent_code": "LS",
+      "name": "Ha Marakabei",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-12072093137",
+      "parent_code": "LS",
+      "name": "Mphaki",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-12170503771",
+      "parent_code": "LS",
+      "name": "Mount Moorosi",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-12339741102",
+      "parent_code": "LS",
+      "name": "Qomoqomong",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-12358824392",
+      "parent_code": "LS",
+      "name": "Peka",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-12476374869",
+      "parent_code": "LS",
+      "name": "Brakfontein",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    }
+  ]
+}

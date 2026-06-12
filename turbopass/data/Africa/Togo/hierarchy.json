@@ -1,0 +1,488 @@
+{
+  "code": "TG",
+  "name": "Togo",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "TG-S",
+      "parent_code": "TG",
+      "name": "Savanes Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-279670201",
+          "parent_code": "TG-S",
+          "name": "Dapaong",
+          "type": "city",
+          "population": "33000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-279670448",
+          "parent_code": "TG-S",
+          "name": "Mango",
+          "type": "city",
+          "population": "25000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-434425994",
+          "parent_code": "TG-S",
+          "name": "Cinkassé",
+          "type": "city",
+          "population": "10239",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-442205361",
+          "parent_code": "TG-S",
+          "name": "Mandouri",
+          "type": "city",
+          "population": "11000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-620701564",
+          "parent_code": "TG-S",
+          "name": "Bombouaka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-620701864",
+          "parent_code": "TG-S",
+          "name": "Korbongou",
+          "type": "city",
+          "population": "13000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-621893326",
+          "parent_code": "TG-S",
+          "name": "Nano",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1967828499",
+          "parent_code": "TG-S",
+          "name": "Gando Namoni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2110691588",
+          "parent_code": "TG-S",
+          "name": "Takpamba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3772754593",
+          "parent_code": "TG-S",
+          "name": "Naki-Ouest",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9201246516",
+          "parent_code": "TG-S",
+          "name": "Datoudjena",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9241949550",
+          "parent_code": "TG-S",
+          "name": "Gouloungoussi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12311882463",
+          "parent_code": "TG-S",
+          "name": "Mantche",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TG-K",
+      "parent_code": "TG",
+      "name": "Kara Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-442145608",
+          "parent_code": "TG-K",
+          "name": "Kanté",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-442158063",
+          "parent_code": "TG-K",
+          "name": "Bassar",
+          "type": "city",
+          "population": "64888",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-442158567",
+          "parent_code": "TG-K",
+          "name": "Kabou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1786281075",
+          "parent_code": "TG-K",
+          "name": "Guérin-Kouka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1947343028",
+          "parent_code": "TG-K",
+          "name": "Niamtougou",
+          "type": "city",
+          "population": "24000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2516231661",
+          "parent_code": "TG-K",
+          "name": "Kara",
+          "type": "city",
+          "population": "110000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3696495114",
+          "parent_code": "TG-K",
+          "name": "Namon",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TG-C",
+      "parent_code": "TG",
+      "name": "Centrale Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-442133208",
+          "parent_code": "TG-C",
+          "name": "Tchamba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-442134481",
+          "parent_code": "TG-C",
+          "name": "Kambolé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-626101762",
+          "parent_code": "TG-C",
+          "name": "Blitta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-626105071",
+          "parent_code": "TG-C",
+          "name": "Sotouboua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-626110233",
+          "parent_code": "TG-C",
+          "name": "Adjengré",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1947278728",
+          "parent_code": "TG-C",
+          "name": "Blitta-Gare",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1952227085",
+          "parent_code": "TG-C",
+          "name": "Sokodé",
+          "type": "city",
+          "population": "120000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1967828535",
+          "parent_code": "TG-C",
+          "name": "Nyamassila",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2505435386",
+          "parent_code": "TG-C",
+          "name": "Pagala Gare",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2574272167",
+          "parent_code": "TG-C",
+          "name": "Koussountou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TG-P",
+      "parent_code": "TG",
+      "name": "Plateaux Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-434446971",
+          "parent_code": "TG-P",
+          "name": "Badou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-434495913",
+          "parent_code": "TG-P",
+          "name": "Kpété Béna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-434496362",
+          "parent_code": "TG-P",
+          "name": "Amlamé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-434496669",
+          "parent_code": "TG-P",
+          "name": "Agadji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1942410357",
+          "parent_code": "TG-P",
+          "name": "Anié",
+          "type": "city",
+          "population": "37500",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1947278732",
+          "parent_code": "TG-P",
+          "name": "Kpalimé",
+          "type": "city",
+          "population": "75000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1947278734",
+          "parent_code": "TG-P",
+          "name": "Notsé",
+          "type": "city",
+          "population": "22000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1967828637",
+          "parent_code": "TG-P",
+          "name": "Tohoun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2080475990",
+          "parent_code": "TG-P",
+          "name": "Amou Oblo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2574198423",
+          "parent_code": "TG-P",
+          "name": "Tomegbé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2915432533",
+          "parent_code": "TG-P",
+          "name": "Moritan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3088456995",
+          "parent_code": "TG-P",
+          "name": "Konohoué",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3557261475",
+          "parent_code": "TG-P",
+          "name": "Ezimé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3740771636",
+          "parent_code": "TG-P",
+          "name": "Tado",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4409324516",
+          "parent_code": "TG-P",
+          "name": "Atakpamé",
+          "type": "city",
+          "population": "87000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-10570422865",
+          "parent_code": "TG-P",
+          "name": "Kpohe Edrokope",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TG-M",
+      "parent_code": "TG",
+      "name": "Maritime Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-637870927",
+          "parent_code": "TG-M",
+          "name": "Togoville",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-637871771",
+          "parent_code": "TG-M",
+          "name": "Vogan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1919282943",
+          "parent_code": "TG-M",
+          "name": "Tsévié",
+          "type": "city",
+          "population": "55000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1941609423",
+          "parent_code": "TG-M",
+          "name": "Gboto Koissidamé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1941609441",
+          "parent_code": "TG-M",
+          "name": "Kouvé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1941611713",
+          "parent_code": "TG-M",
+          "name": "Tabligbo",
+          "type": "city",
+          "population": "22500",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2195276463",
+          "parent_code": "TG-M",
+          "name": "Lomé",
+          "type": "city",
+          "population": "837437",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3812881421",
+          "parent_code": "TG-M",
+          "name": "Kologon",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4450437999",
+          "parent_code": "TG-M",
+          "name": "Aného",
+          "type": "city",
+          "population": "24891",
+          "place_type": "town"
+        }
+      ]
+    }
+  ]
+}

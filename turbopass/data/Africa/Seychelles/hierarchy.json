@@ -1,0 +1,22 @@
+{
+  "code": "SC",
+  "name": "Seychelles",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "ST-16184682",
+      "parent_code": "SC",
+      "name": "La Digue Group",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "ST-16184684",
+      "parent_code": "SC",
+      "name": "Praslin",
+      "type": "state",
+      "children": []
+    }
+  ]
+}

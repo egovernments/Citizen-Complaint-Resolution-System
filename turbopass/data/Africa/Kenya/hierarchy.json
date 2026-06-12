@@ -1,0 +1,3128 @@
+{
+  "code": "KE",
+  "name": "Kenya",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "KE-16",
+      "parent_code": "KE",
+      "name": "Kisii County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44924234",
+          "parent_code": "KE-16",
+          "name": "Ogembo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44989844",
+          "parent_code": "KE-16",
+          "name": "Kisii",
+          "type": "city",
+          "population": "200000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2857798835",
+          "parent_code": "KE-16",
+          "name": "Suneka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5227686141",
+          "parent_code": "KE-16",
+          "name": "Masimba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11126911438",
+          "parent_code": "KE-16",
+          "name": "Ekona",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-33",
+      "parent_code": "KE",
+      "name": "Narok",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44924616",
+          "parent_code": "KE-33",
+          "name": "Ntulele",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44925462",
+          "parent_code": "KE-33",
+          "name": "Narok",
+          "type": "city",
+          "population": "40000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44992133",
+          "parent_code": "KE-33",
+          "name": "Kilgoris",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1401342017",
+          "parent_code": "KE-33",
+          "name": "Suswa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-08",
+      "parent_code": "KE",
+      "name": "Homa Bay County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44922929",
+          "parent_code": "KE-08",
+          "name": "Oyugis",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44928932",
+          "parent_code": "KE-08",
+          "name": "Mbita",
+          "type": "city",
+          "population": "6100",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44992742",
+          "parent_code": "KE-08",
+          "name": "Kendu Bay",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-45001497",
+          "parent_code": "KE-08",
+          "name": "Homa Bay",
+          "type": "city",
+          "population": "32174",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2520905813",
+          "parent_code": "KE-08",
+          "name": "Kosele",
+          "type": "city",
+          "population": "5000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2520907838",
+          "parent_code": "KE-08",
+          "name": "Omboga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3025608145",
+          "parent_code": "KE-08",
+          "name": "Magina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10632661814",
+          "parent_code": "KE-08",
+          "name": "Sindo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-27",
+      "parent_code": "KE",
+      "name": "Migori County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44927777",
+          "parent_code": "KE-27",
+          "name": "Migori",
+          "type": "city",
+          "population": "31644",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1401379342",
+          "parent_code": "KE-27",
+          "name": "Awendo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1401379406",
+          "parent_code": "KE-27",
+          "name": "Rongo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1401393601",
+          "parent_code": "KE-27",
+          "name": "Isebania",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1533158158",
+          "parent_code": "KE-27",
+          "name": "Kehancha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10677818455",
+          "parent_code": "KE-27",
+          "name": "Sori",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-10",
+      "parent_code": "KE",
+      "name": "Kajiado County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44915265",
+          "parent_code": "KE-10",
+          "name": "Simba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44924787",
+          "parent_code": "KE-10",
+          "name": "Ngong",
+          "type": "city",
+          "population": "107188",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44925089",
+          "parent_code": "KE-10",
+          "name": "Namanga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44930262",
+          "parent_code": "KE-10",
+          "name": "Magadi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44931662",
+          "parent_code": "KE-10",
+          "name": "Ongata Rongai",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44989849",
+          "parent_code": "KE-10",
+          "name": "Kiserian",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44999611",
+          "parent_code": "KE-10",
+          "name": "Kajiado",
+          "type": "city",
+          "population": "8128",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-45006929",
+          "parent_code": "KE-10",
+          "name": "Bisil",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2178131859",
+          "parent_code": "KE-10",
+          "name": "Loitokitok",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2956137647",
+          "parent_code": "KE-10",
+          "name": "Kitengela",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3164382134",
+          "parent_code": "KE-10",
+          "name": "Bissil",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3164382759",
+          "parent_code": "KE-10",
+          "name": "Isinya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4801260340",
+          "parent_code": "KE-10",
+          "name": "Kumpa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4801332127",
+          "parent_code": "KE-10",
+          "name": "Ngatatoek",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5489820079",
+          "parent_code": "KE-10",
+          "name": "Namalok",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12886276418",
+          "parent_code": "KE-10",
+          "name": "Kitengela Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12886276420",
+          "parent_code": "KE-10",
+          "name": "Ngong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12886276421",
+          "parent_code": "KE-10",
+          "name": "Ngong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12886276422",
+          "parent_code": "KE-10",
+          "name": "Kiserian town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12886276423",
+          "parent_code": "KE-10",
+          "name": "Birika town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12886276425",
+          "parent_code": "KE-10",
+          "name": "Isinya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-12",
+      "parent_code": "KE",
+      "name": "Kericho County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44915200",
+          "parent_code": "KE-12",
+          "name": "Sondu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44930426",
+          "parent_code": "KE-12",
+          "name": "Kipkelion",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44931317",
+          "parent_code": "KE-12",
+          "name": "Litein",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44931441",
+          "parent_code": "KE-12",
+          "name": "Londiani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44992704",
+          "parent_code": "KE-12",
+          "name": "Kericho",
+          "type": "city",
+          "population": "150000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44998146",
+          "parent_code": "KE-12",
+          "name": "Kapsoit",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-45004615",
+          "parent_code": "KE-12",
+          "name": "Fort Ternan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1180521915",
+          "parent_code": "KE-12",
+          "name": "Sigowet",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1401393603",
+          "parent_code": "KE-12",
+          "name": "Kapkatet",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9239450618",
+          "parent_code": "KE-12",
+          "name": "Lumbwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9255201754",
+          "parent_code": "KE-12",
+          "name": "Roret",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-17",
+      "parent_code": "KE",
+      "name": "Kisumu County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44927549",
+          "parent_code": "KE-17",
+          "name": "Muhoroni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44931306",
+          "parent_code": "KE-17",
+          "name": "Koru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1180528044",
+          "parent_code": "KE-17",
+          "name": "Pap Onditi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1180612701",
+          "parent_code": "KE-17",
+          "name": "Miwani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1868373176",
+          "parent_code": "KE-17",
+          "name": "Kisumu",
+          "type": "city",
+          "population": "409928",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2987222047",
+          "parent_code": "KE-17",
+          "name": "Chemelil",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3901069801",
+          "parent_code": "KE-17",
+          "name": "Ahero",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3901069802",
+          "parent_code": "KE-17",
+          "name": "Awasi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10240992021",
+          "parent_code": "KE-17",
+          "name": "Maseno",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10636590994",
+          "parent_code": "KE-17",
+          "name": "Kombewa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10651317810",
+          "parent_code": "KE-17",
+          "name": "Katito",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10651322618",
+          "parent_code": "KE-17",
+          "name": "Kibigori",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-34",
+      "parent_code": "KE",
+      "name": "Nyamira County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44995465",
+          "parent_code": "KE-34",
+          "name": "Keroka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2987230799",
+          "parent_code": "KE-34",
+          "name": "Kebirigo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4870252485",
+          "parent_code": "KE-34",
+          "name": "Nyamira",
+          "type": "city",
+          "population": "10000",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-38",
+      "parent_code": "KE",
+      "name": "Siaya County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44910345",
+          "parent_code": "KE-38",
+          "name": "Yala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-45005146",
+          "parent_code": "KE-38",
+          "name": "Siaya",
+          "type": "city",
+          "population": "22586",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-45005152",
+          "parent_code": "KE-38",
+          "name": "Sega",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1854160605",
+          "parent_code": "KE-38",
+          "name": "Ugunja",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1863967788",
+          "parent_code": "KE-38",
+          "name": "Sidindi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2196240933",
+          "parent_code": "KE-38",
+          "name": "Bondo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-04",
+      "parent_code": "KE",
+      "name": "Busia County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-45006138",
+          "parent_code": "KE-04",
+          "name": "Bumala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-45006358",
+          "parent_code": "KE-04",
+          "name": "Busia",
+          "type": "city",
+          "population": "51981",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1437507748",
+          "parent_code": "KE-04",
+          "name": "Amagoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-45",
+      "parent_code": "KE",
+      "name": "Vihiga County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44930396",
+          "parent_code": "KE-45",
+          "name": "Luanda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1180585543",
+          "parent_code": "KE-45",
+          "name": "Emuhaya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1474326887",
+          "parent_code": "KE-45",
+          "name": "Vihiga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1821782084",
+          "parent_code": "KE-45",
+          "name": "Chavakali",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3901069142",
+          "parent_code": "KE-45",
+          "name": "Gambogi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4390992811",
+          "parent_code": "KE-45",
+          "name": "Hamisi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10904862854",
+          "parent_code": "KE-45",
+          "name": "Mbale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10904959023",
+          "parent_code": "KE-45",
+          "name": "Serem",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-22",
+      "parent_code": "KE",
+      "name": "Machakos County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44929938",
+          "parent_code": "KE-22",
+          "name": "Masii",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44930353",
+          "parent_code": "KE-22",
+          "name": "Machakos",
+          "type": "city",
+          "population": "114109",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44931262",
+          "parent_code": "KE-22",
+          "name": "Konza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44997686",
+          "parent_code": "KE-22",
+          "name": "Kangundo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-45005798",
+          "parent_code": "KE-22",
+          "name": "Athi River",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6241302184",
+          "parent_code": "KE-22",
+          "name": "Mutituni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6241403674",
+          "parent_code": "KE-22",
+          "name": "Musini",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11639218911",
+          "parent_code": "KE-22",
+          "name": "Konza Technopolis",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12600610398",
+          "parent_code": "KE-22",
+          "name": "Chaani Market",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12600610399",
+          "parent_code": "KE-22",
+          "name": "KANGUU MARKET",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12886221845",
+          "parent_code": "KE-22",
+          "name": "Masii Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12886221846",
+          "parent_code": "KE-22",
+          "name": "Masii",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12886221848",
+          "parent_code": "KE-22",
+          "name": "Mwala Township",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12886221849",
+          "parent_code": "KE-22",
+          "name": "Mwala Township",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12886221857",
+          "parent_code": "KE-22",
+          "name": "Tala",
+          "type": "city",
+          "population": "218557",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12886221863",
+          "parent_code": "KE-22",
+          "name": "Tala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12886221864",
+          "parent_code": "KE-22",
+          "name": "Tala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12886221866",
+          "parent_code": "KE-22",
+          "name": "Tala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12886221874",
+          "parent_code": "KE-22",
+          "name": "Makadara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12886221875",
+          "parent_code": "KE-22",
+          "name": "Embakasi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12886221881",
+          "parent_code": "KE-22",
+          "name": "Mavoko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12886221900",
+          "parent_code": "KE-22",
+          "name": "Susana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12886243402",
+          "parent_code": "KE-22",
+          "name": "Muthini",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12886276426",
+          "parent_code": "KE-22",
+          "name": "Kiandani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12886276428",
+          "parent_code": "KE-22",
+          "name": "Machakos Montezuma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12886276430",
+          "parent_code": "KE-22",
+          "name": "Machakos Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12886276431",
+          "parent_code": "KE-22",
+          "name": "Kwa Musyoka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-23",
+      "parent_code": "KE",
+      "name": "Makueni",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44910351",
+          "parent_code": "KE-23",
+          "name": "Wote",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44914991",
+          "parent_code": "KE-23",
+          "name": "Sultan Hamud",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44925788",
+          "parent_code": "KE-23",
+          "name": "Mtito Andei",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44930717",
+          "parent_code": "KE-23",
+          "name": "Makindu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44990389",
+          "parent_code": "KE-23",
+          "name": "Kibwezi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44992658",
+          "parent_code": "KE-23",
+          "name": "Kilala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44997303",
+          "parent_code": "KE-23",
+          "name": "Kambu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-297488383",
+          "parent_code": "KE-23",
+          "name": "Salama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-297488385",
+          "parent_code": "KE-23",
+          "name": "Emali",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2134284494",
+          "parent_code": "KE-23",
+          "name": "Kiboko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2645832004",
+          "parent_code": "KE-23",
+          "name": "Machinery",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6232806593",
+          "parent_code": "KE-23",
+          "name": "Kiunduani Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-30",
+      "parent_code": "KE",
+      "name": "Nairobi County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27565105",
+          "parent_code": "KE-30",
+          "name": "Nairobi",
+          "type": "city",
+          "population": "3138295",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-12886276409",
+          "parent_code": "KE-30",
+          "name": "Chogoria",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12886281773",
+          "parent_code": "KE-30",
+          "name": "Lusaka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-01",
+      "parent_code": "KE",
+      "name": "Baringo",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44927086",
+          "parent_code": "KE-01",
+          "name": "Mogotio",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44998738",
+          "parent_code": "KE-01",
+          "name": "Kabarnet",
+          "type": "city",
+          "population": "24661",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-45002967",
+          "parent_code": "KE-01",
+          "name": "Eldama Ravine",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-45006463",
+          "parent_code": "KE-01",
+          "name": "Marigat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1555338177",
+          "parent_code": "KE-01",
+          "name": "Timboroa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1821807027",
+          "parent_code": "KE-01",
+          "name": "Maji Mazuri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-03",
+      "parent_code": "KE",
+      "name": "Bungoma County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44910403",
+          "parent_code": "KE-03",
+          "name": "Webuye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44992289",
+          "parent_code": "KE-03",
+          "name": "Kimilili",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5007479409",
+          "parent_code": "KE-03",
+          "name": "Bungoma",
+          "type": "city",
+          "population": "60000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8645903904",
+          "parent_code": "KE-03",
+          "name": "Chepkube",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10908219833",
+          "parent_code": "KE-03",
+          "name": "Sirisia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10914201858",
+          "parent_code": "KE-03",
+          "name": "Cheptais",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-06",
+      "parent_code": "KE",
+      "name": "Embu",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-560737965",
+          "parent_code": "KE-06",
+          "name": "Karurumo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-560742256",
+          "parent_code": "KE-06",
+          "name": "Kathageri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1416055105",
+          "parent_code": "KE-06",
+          "name": "Runyenjes",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2454265197",
+          "parent_code": "KE-06",
+          "name": "Embu",
+          "type": "city",
+          "population": "41092",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-07",
+      "parent_code": "KE",
+      "name": "Garissa",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-45004027",
+          "parent_code": "KE-07",
+          "name": "Garissa",
+          "type": "city",
+          "population": "119696",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-6346973297",
+          "parent_code": "KE-07",
+          "name": "Dadaab",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7540456192",
+          "parent_code": "KE-07",
+          "name": "Ifo Refugee Camp",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10678422199",
+          "parent_code": "KE-07",
+          "name": "Masalani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10983842229",
+          "parent_code": "KE-07",
+          "name": "Benane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11376050486",
+          "parent_code": "KE-07",
+          "name": "Liboi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-09",
+      "parent_code": "KE",
+      "name": "Isiolo",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44927268",
+          "parent_code": "KE-09",
+          "name": "Mado Gashi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44999000",
+          "parent_code": "KE-09",
+          "name": "Isiolo",
+          "type": "city",
+          "population": "45989",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-45004001",
+          "parent_code": "KE-09",
+          "name": "Garba Tula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-11",
+      "parent_code": "KE",
+      "name": "Kakamega County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44926384",
+          "parent_code": "KE-11",
+          "name": "Mumias",
+          "type": "city",
+          "population": "116358",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44999588",
+          "parent_code": "KE-11",
+          "name": "Kakamega",
+          "type": "city",
+          "population": "91778",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3727281192",
+          "parent_code": "KE-11",
+          "name": "Mayoni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3727281197",
+          "parent_code": "KE-11",
+          "name": "Matungu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3731344077",
+          "parent_code": "KE-11",
+          "name": "Butere",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3731344104",
+          "parent_code": "KE-11",
+          "name": "Sabatia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3901112448",
+          "parent_code": "KE-11",
+          "name": "Mukumu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3901112449",
+          "parent_code": "KE-11",
+          "name": "Sigalagala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4350882441",
+          "parent_code": "KE-11",
+          "name": "Khwisero",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4699498766",
+          "parent_code": "KE-11",
+          "name": "Bukura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6241480645",
+          "parent_code": "KE-11",
+          "name": "Bulimbo/Harambee",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6241761815",
+          "parent_code": "KE-11",
+          "name": "Shianda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9790637175",
+          "parent_code": "KE-11",
+          "name": "Mumias",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10917816811",
+          "parent_code": "KE-11",
+          "name": "Malava",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-13",
+      "parent_code": "KE",
+      "name": "Kiambu",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44917807",
+          "parent_code": "KE-13",
+          "name": "Ruaka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1124781912",
+          "parent_code": "KE-13",
+          "name": "Kiambu",
+          "type": "city",
+          "population": "147870",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1124984763",
+          "parent_code": "KE-13",
+          "name": "Githunguri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1136529973",
+          "parent_code": "KE-13",
+          "name": "Gatundu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1141424596",
+          "parent_code": "KE-13",
+          "name": "Thika",
+          "type": "city",
+          "population": "83000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1523675169",
+          "parent_code": "KE-13",
+          "name": "Limuru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1555537725",
+          "parent_code": "KE-13",
+          "name": "Kijabe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1847281563",
+          "parent_code": "KE-13",
+          "name": "Ruiru",
+          "type": "city",
+          "population": "79741",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2106725662",
+          "parent_code": "KE-13",
+          "name": "Kambaa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2481156656",
+          "parent_code": "KE-13",
+          "name": "Kimende",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5231271731",
+          "parent_code": "KE-13",
+          "name": "Munyu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5422021851",
+          "parent_code": "KE-13",
+          "name": "Turitu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6054455016",
+          "parent_code": "KE-13",
+          "name": "Kangoo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6346928877",
+          "parent_code": "KE-13",
+          "name": "Juja",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6350067090",
+          "parent_code": "KE-13",
+          "name": "Kikuyu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7723607887",
+          "parent_code": "KE-13",
+          "name": "Limuru",
+          "type": "city",
+          "population": "4800",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12886303122",
+          "parent_code": "KE-13",
+          "name": "karuri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-14",
+      "parent_code": "KE",
+      "name": "Kilifi County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44910418",
+          "parent_code": "KE-14",
+          "name": "Watamu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44929291",
+          "parent_code": "KE-14",
+          "name": "Mariakani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44929687",
+          "parent_code": "KE-14",
+          "name": "Malindi",
+          "type": "city",
+          "population": "117735",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44929789",
+          "parent_code": "KE-14",
+          "name": "Mazeras",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44992697",
+          "parent_code": "KE-14",
+          "name": "Kilifi",
+          "type": "city",
+          "population": "122899",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44999234",
+          "parent_code": "KE-14",
+          "name": "Kaloleni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4891385426",
+          "parent_code": "KE-14",
+          "name": "Chakama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4891392038",
+          "parent_code": "KE-14",
+          "name": "Baolala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4891392285",
+          "parent_code": "KE-14",
+          "name": "Matano Manne",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9676564056",
+          "parent_code": "KE-14",
+          "name": "Meraf",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-15",
+      "parent_code": "KE",
+      "name": "Kirinyaga County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44917773",
+          "parent_code": "KE-15",
+          "name": "Sagana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-711491793",
+          "parent_code": "KE-15",
+          "name": "Kibingoti Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1533135851",
+          "parent_code": "KE-15",
+          "name": "Kerugoya",
+          "type": "city",
+          "population": "39441",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1533135858",
+          "parent_code": "KE-15",
+          "name": "Kutus",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3097240725",
+          "parent_code": "KE-15",
+          "name": "Baricho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11166378805",
+          "parent_code": "KE-15",
+          "name": "Mutithi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-18",
+      "parent_code": "KE",
+      "name": "Kitui County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44925243",
+          "parent_code": "KE-18",
+          "name": "Mwingi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44933078",
+          "parent_code": "KE-18",
+          "name": "Kitui",
+          "type": "city",
+          "population": "155896",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2426031585",
+          "parent_code": "KE-18",
+          "name": "Mutitu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3355521271",
+          "parent_code": "KE-18",
+          "name": "Mwingi Central location",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5226754090",
+          "parent_code": "KE-18",
+          "name": "Nguni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-19",
+      "parent_code": "KE",
+      "name": "Kwale",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44914382",
+          "parent_code": "KE-19",
+          "name": "Ukunda",
+          "type": "city",
+          "population": "100000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44914888",
+          "parent_code": "KE-19",
+          "name": "Taru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44917733",
+          "parent_code": "KE-19",
+          "name": "Samburu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44930379",
+          "parent_code": "KE-19",
+          "name": "Mackinnon Road",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1472171851",
+          "parent_code": "KE-19",
+          "name": "Kwale",
+          "type": "city",
+          "population": "4200",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-20",
+      "parent_code": "KE",
+      "name": "Laikipia County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44914613",
+          "parent_code": "KE-20",
+          "name": "Nyahururu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44925466",
+          "parent_code": "KE-20",
+          "name": "Nanyuki",
+          "type": "city",
+          "population": "32000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12412099564",
+          "parent_code": "KE-20",
+          "name": "Rumuruti",
+          "type": "city",
+          "population": "31649",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-21",
+      "parent_code": "KE",
+      "name": "Lamu",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44924405",
+          "parent_code": "KE-21",
+          "name": "Nyambogi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44933434",
+          "parent_code": "KE-21",
+          "name": "Kisingitini",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-45004382",
+          "parent_code": "KE-21",
+          "name": "Faza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-45006888",
+          "parent_code": "KE-21",
+          "name": "Bajumwali",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1927910071",
+          "parent_code": "KE-21",
+          "name": "Tundwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6556990825",
+          "parent_code": "KE-21",
+          "name": "Lamu",
+          "type": "city",
+          "population": "18382",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-24",
+      "parent_code": "KE",
+      "name": "Mandera County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44922199",
+          "parent_code": "KE-24",
+          "name": "Rhamu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44929726",
+          "parent_code": "KE-24",
+          "name": "Mandera",
+          "type": "city",
+          "population": "30433",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-45004341",
+          "parent_code": "KE-24",
+          "name": "El Wak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6948812928",
+          "parent_code": "KE-24",
+          "name": "Takaba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7026922734",
+          "parent_code": "KE-24",
+          "name": "Kotulo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10657170579",
+          "parent_code": "KE-24",
+          "name": "Wargadud",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11284412562",
+          "parent_code": "KE-24",
+          "name": "Bore Hole",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-25",
+      "parent_code": "KE",
+      "name": "Marsabit County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44929360",
+          "parent_code": "KE-25",
+          "name": "Marsabit",
+          "type": "city",
+          "population": "5000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44931682",
+          "parent_code": "KE-25",
+          "name": "Laisamis",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2458361929",
+          "parent_code": "KE-25",
+          "name": "Loiyangalani",
+          "type": "city",
+          "population": "1000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4187431816",
+          "parent_code": "KE-25",
+          "name": "Kalacha",
+          "type": "city",
+          "population": "3000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5609883874",
+          "parent_code": "KE-25",
+          "name": "Dukana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6945904775",
+          "parent_code": "KE-25",
+          "name": "Yaballo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6991044179",
+          "parent_code": "KE-25",
+          "name": "Walda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-26",
+      "parent_code": "KE",
+      "name": "Meru County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44914558",
+          "parent_code": "KE-26",
+          "name": "Timau",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44929227",
+          "parent_code": "KE-26",
+          "name": "Meru",
+          "type": "city",
+          "population": "1833000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-44931657",
+          "parent_code": "KE-26",
+          "name": "Lare",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2127561874",
+          "parent_code": "KE-26",
+          "name": "Mitunguu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2127561875",
+          "parent_code": "KE-26",
+          "name": "Nkubu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-28",
+      "parent_code": "KE",
+      "name": "Mombasa County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44927060",
+          "parent_code": "KE-28",
+          "name": "Mombasa",
+          "type": "city",
+          "population": "1300000",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "KE-32",
+      "parent_code": "KE",
+      "name": "Nandi County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44998138",
+          "parent_code": "KE-32",
+          "name": "Kapsabet",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-35",
+      "parent_code": "KE",
+      "name": "Nyandarua",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1523760309",
+          "parent_code": "KE-35",
+          "name": "Ol Kalou",
+          "type": "city",
+          "population": "47795",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2106755480",
+          "parent_code": "KE-35",
+          "name": "Njabini",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-36",
+      "parent_code": "KE",
+      "name": "Nyeri",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44925455",
+          "parent_code": "KE-36",
+          "name": "Naro Moru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-413630468",
+          "parent_code": "KE-36",
+          "name": "Nyeri",
+          "type": "city",
+          "population": "98908",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-711491817",
+          "parent_code": "KE-36",
+          "name": "Chaka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-711491831",
+          "parent_code": "KE-36",
+          "name": "Karatina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1806467013",
+          "parent_code": "KE-36",
+          "name": "Kĩganjo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3963971089",
+          "parent_code": "KE-36",
+          "name": "Ihithe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3964006477",
+          "parent_code": "KE-36",
+          "name": "Mukarara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3964006479",
+          "parent_code": "KE-36",
+          "name": "Wamagana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3964006480",
+          "parent_code": "KE-36",
+          "name": "Ndugamano",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13641086801",
+          "parent_code": "KE-36",
+          "name": "Mweiga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-37",
+      "parent_code": "KE",
+      "name": "Samburu",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44929495",
+          "parent_code": "KE-37",
+          "name": "Maralal",
+          "type": "city",
+          "population": "16281",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-45005902",
+          "parent_code": "KE-37",
+          "name": "Archers Post",
+          "type": "city",
+          "population": "6300",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-45006536",
+          "parent_code": "KE-37",
+          "name": "Baragoi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-39",
+      "parent_code": "KE",
+      "name": "Taita–Taveta",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44910346",
+          "parent_code": "KE-39",
+          "name": "Wundanyi",
+          "type": "city",
+          "population": "4000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44914176",
+          "parent_code": "KE-39",
+          "name": "Voi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44914874",
+          "parent_code": "KE-39",
+          "name": "Taveta",
+          "type": "city",
+          "population": "11500",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44925183",
+          "parent_code": "KE-39",
+          "name": "Mwatate",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44930678",
+          "parent_code": "KE-39",
+          "name": "Maktau",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-299077704",
+          "parent_code": "KE-39",
+          "name": "Manyani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4889623347",
+          "parent_code": "KE-39",
+          "name": "Maungu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4891768975",
+          "parent_code": "KE-39",
+          "name": "Miasenyi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-40",
+      "parent_code": "KE",
+      "name": "Tana River County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-45004030",
+          "parent_code": "KE-40",
+          "name": "Garsen",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-45006411",
+          "parent_code": "KE-40",
+          "name": "Bura East",
+          "type": "city",
+          "population": "6496",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-408737179",
+          "parent_code": "KE-40",
+          "name": "Hola",
+          "type": "city",
+          "population": "6932",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1166345139",
+          "parent_code": "KE-40",
+          "name": "Bura West",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1166349199",
+          "parent_code": "KE-40",
+          "name": "Bangali",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-41",
+      "parent_code": "KE",
+      "name": "Tharaka-Nithi",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-45003541",
+          "parent_code": "KE-41",
+          "name": "Chuka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8224005082",
+          "parent_code": "KE-41",
+          "name": "Kathwana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-42",
+      "parent_code": "KE",
+      "name": "Trans-Nzoia County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44933158",
+          "parent_code": "KE-42",
+          "name": "Kitale",
+          "type": "city",
+          "population": "107806",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-43",
+      "parent_code": "KE",
+      "name": "Turkana County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44931361",
+          "parent_code": "KE-43",
+          "name": "Lokitaung",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44931366",
+          "parent_code": "KE-43",
+          "name": "Lokichar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44931375",
+          "parent_code": "KE-43",
+          "name": "Lodwar",
+          "type": "city",
+          "population": "82970",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44931399",
+          "parent_code": "KE-43",
+          "name": "Kalokol",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44931411",
+          "parent_code": "KE-43",
+          "name": "Lokichogio",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3069442033",
+          "parent_code": "KE-43",
+          "name": "Kalobeyei Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3070188985",
+          "parent_code": "KE-43",
+          "name": "Nadapal",
+          "type": "city",
+          "population": "3500",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10863666006",
+          "parent_code": "KE-43",
+          "name": "Kakuma Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10864072746",
+          "parent_code": "KE-43",
+          "name": "Turkwel",
+          "type": "city",
+          "population": "49881",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10865216047",
+          "parent_code": "KE-43",
+          "name": "Lorugum",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10865564762",
+          "parent_code": "KE-43",
+          "name": "Katilu",
+          "type": "city",
+          "population": "12548",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10865575535",
+          "parent_code": "KE-43",
+          "name": "Kalemngorok",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-44",
+      "parent_code": "KE",
+      "name": "Uasin Gishu County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-45001493",
+          "parent_code": "KE-44",
+          "name": "Moi's Bridge",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2689551456",
+          "parent_code": "KE-44",
+          "name": "Eldoret",
+          "type": "city",
+          "population": "475716",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "KE-46",
+      "parent_code": "KE",
+      "name": "Wajir County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44914091",
+          "parent_code": "KE-46",
+          "name": "Wajir",
+          "type": "city",
+          "population": "82800",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3680033582",
+          "parent_code": "KE-46",
+          "name": "Abageranso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3680035787",
+          "parent_code": "KE-46",
+          "name": "Khorof Harar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3689569336",
+          "parent_code": "KE-46",
+          "name": "Wagalla",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3693582411",
+          "parent_code": "KE-46",
+          "name": "Eldas",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3695362763",
+          "parent_code": "KE-46",
+          "name": "Korendile",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3696831502",
+          "parent_code": "KE-46",
+          "name": "Gurar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3696859225",
+          "parent_code": "KE-46",
+          "name": "Danaba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3697022301",
+          "parent_code": "KE-46",
+          "name": "Dunto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3702342286",
+          "parent_code": "KE-46",
+          "name": "Sarman",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3702498497",
+          "parent_code": "KE-46",
+          "name": "Kutulo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3702498508",
+          "parent_code": "KE-46",
+          "name": "Mansa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3702721532",
+          "parent_code": "KE-46",
+          "name": "Dambas",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3702721572",
+          "parent_code": "KE-46",
+          "name": "Wargadud",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3713209258",
+          "parent_code": "KE-46",
+          "name": "Machesa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3713230928",
+          "parent_code": "KE-46",
+          "name": "Habswein",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3781927487",
+          "parent_code": "KE-46",
+          "name": "Ibrahim Ure",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11185447267",
+          "parent_code": "KE-46",
+          "name": "Lagboqol",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11196400553",
+          "parent_code": "KE-46",
+          "name": "Sarif",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-29",
+      "parent_code": "KE",
+      "name": "Murang'a County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-711491775",
+          "parent_code": "KE-29",
+          "name": "Kambiti Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1533090769",
+          "parent_code": "KE-29",
+          "name": "Maragua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1533096290",
+          "parent_code": "KE-29",
+          "name": "Murang'a",
+          "type": "city",
+          "population": "11021",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1533121052",
+          "parent_code": "KE-29",
+          "name": "Karuri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6346921339",
+          "parent_code": "KE-29",
+          "name": "Kenol",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11170037141",
+          "parent_code": "KE-29",
+          "name": "Gatura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-9721587",
+      "parent_code": "KE",
+      "name": "Nairobi",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27565105",
+          "parent_code": "ST-9721587",
+          "name": "Nairobi",
+          "type": "city",
+          "population": "3138295",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-12886276409",
+          "parent_code": "ST-9721587",
+          "name": "Chogoria",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12886281773",
+          "parent_code": "ST-9721587",
+          "name": "Lusaka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-47",
+      "parent_code": "KE",
+      "name": "West Pokot",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44997889",
+          "parent_code": "KE-47",
+          "name": "Kapenguria",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-05",
+      "parent_code": "KE",
+      "name": "Elgeyo-Marakwet County",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44915142",
+          "parent_code": "KE-05",
+          "name": "Tambach",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44997942",
+          "parent_code": "KE-05",
+          "name": "Kapsowar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2094085354",
+          "parent_code": "KE-05",
+          "name": "Iten",
+          "type": "city",
+          "population": "42312",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-02",
+      "parent_code": "KE",
+      "name": "Bomet",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44915214",
+          "parent_code": "KE-02",
+          "name": "Sotik",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-45006172",
+          "parent_code": "KE-02",
+          "name": "Bomet",
+          "type": "city",
+          "population": "110963",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3339855094",
+          "parent_code": "KE-02",
+          "name": "Kipkoi Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6374112003",
+          "parent_code": "KE-02",
+          "name": "Mulot",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13669544245",
+          "parent_code": "KE-02",
+          "name": "Silibwet",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13806263153",
+          "parent_code": "KE-02",
+          "name": "Kapsauny",
+          "type": "city",
+          "population": "100",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13806271184",
+          "parent_code": "KE-02",
+          "name": "Balek centre",
+          "type": "city",
+          "population": "1000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13806271186",
+          "parent_code": "KE-02",
+          "name": "Kapletundo",
+          "type": "city",
+          "population": "500",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13806271187",
+          "parent_code": "KE-02",
+          "name": "Kimawit Centre",
+          "type": "city",
+          "population": "500",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KE-31",
+      "parent_code": "KE",
+      "name": "Nakuru",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44917832",
+          "parent_code": "KE-31",
+          "name": "Rongai",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44925060",
+          "parent_code": "KE-31",
+          "name": "Naivasha",
+          "type": "city",
+          "population": "14563",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-44925073",
+          "parent_code": "KE-31",
+          "name": "Nakuru",
+          "type": "city",
+          "population": "307990",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-44927054",
+          "parent_code": "KE-31",
+          "name": "Molo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-297310711",
+          "parent_code": "KE-31",
+          "name": "Mai Mahiu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1634534499",
+          "parent_code": "KE-31",
+          "name": "Kongoni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1999657559",
+          "parent_code": "KE-31",
+          "name": "Njoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2117920157",
+          "parent_code": "KE-31",
+          "name": "Egerton",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3799041204",
+          "parent_code": "KE-31",
+          "name": "Kasarani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3901084305",
+          "parent_code": "KE-31",
+          "name": "Kinungi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5300215021",
+          "parent_code": "KE-31",
+          "name": "Salgaa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6346889578",
+          "parent_code": "KE-31",
+          "name": "Gilgil",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13586165449",
+          "parent_code": "KE-31",
+          "name": "Subukia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13586176493",
+          "parent_code": "KE-31",
+          "name": "Solai",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13586637061",
+          "parent_code": "KE-31",
+          "name": "Mau Summit",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    }
+  ]
+}
