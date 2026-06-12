@@ -10,10 +10,16 @@
  * which is the only kind a tenant without boundary polygons can produce.
  *
  * The test drives the whole wizard as a citizen — complaint type,
- * map-pin confirm, Region→Ward cascade PLUS a typed postal code (the
- * exact input that used to trip the false veto) — through SUBMIT, and
- * asserts the response page confirms submission. One real complaint is
- * created per run, consistent with the other lifecycle suites.
+ * map-pin confirm, the service-driven boundary cascade (whatever shape
+ * the tenant's hierarchy is — ethiopia is Region→Ward, ke is
+ * County→SubCounty→Ward) PLUS a typed postal code (the exact input that
+ * used to trip the false veto) — through SUBMIT, and asserts the
+ * response page confirms submission. At each boundary level it also
+ * asserts the dropdown label and option text are localized, so a
+ * tenant shipping raw localization keys (BOUNDARY.OROMIA,
+ * ADMIN_KE_NAIROBI, …) fails fast instead of submitting a complaint
+ * whose location chip is unreadable. One real complaint is created per
+ * run, consistent with the other lifecycle suites.
  */
 import { test, expect, type Page } from '@playwright/test';
 import { citizenOtpLogin } from '../../utils/citizen-auth';
@@ -73,17 +79,81 @@ test.describe('Citizen complaint submit', () => {
     await expect(nextBtn).toBeEnabled({ timeout: 30_000 });
     await nextBtn.click();
 
-    // ── Step 2: location — Region → Ward cascade + typed postal code ──
+    // ── Step 2: location — service-driven boundary cascade + typed
+    // postal code. The hierarchy is fetched from boundary-service per
+    // tenant, so walk every `[id^="boundary-"]` dropdown in DOM order
+    // rather than hardcoding level names. At each level assert (a) the
+    // dropdown's label is not a raw localization key and (b) no option
+    // text is a raw key — a citizen cannot tell BOUNDARY.OROMIA /
+    // ADMIN_KE_NAIROBI apart from a real area name.
+    //
     // No boundary polygons on this tenant, so the map never auto-fills
     // the cascade; the citizen picks manually. This manual selection is
     // exactly what must supersede the pincode allowlist at submit.
-    const regionCombo = page.locator('#boundary-regions');
-    await regionCombo.waitFor({ state: 'visible', timeout: 30_000 });
-    console.log('REGION:', await pickFirstOption(page, regionCombo));
 
-    const wardCombo = page.locator('#boundary-ward');
-    await wardCombo.waitFor({ state: 'visible', timeout: 15_000 });
-    console.log('WARD:', await pickFirstOption(page, wardCombo));
+    // Raw-key heuristic: uppercase letter/digit run with at least one
+    // `.` or `_` separator. Matches "BOUNDARY.OROMIA",
+    // "ADMIN_KE_NAIROBI", "SERVICEDEFS.DRAINS"; does NOT match real
+    // display names ("Oromia", "Nairobi County", "Bomet").
+    const RAW_KEY_RE = /\b[A-Z][A-Z0-9]*(?:[._][A-Z0-9]+)+\b/g;
+
+    const pickedLevels: string[] = [];
+    for (let level = 0; level < 6; level++) {
+      const combo = page.locator('[id^="boundary-"]').nth(level);
+      try {
+        await combo.waitFor({
+          state: 'visible',
+          timeout: level === 0 ? 30_000 : 15_000,
+        });
+      } catch {
+        break; // cascade exhausted
+      }
+
+      const comboId = (await combo.getAttribute('id')) || `boundary-${level}`;
+
+      // (a) label localized
+      const labelText = await page
+        .locator(`label[for="${comboId}"]`)
+        .innerText()
+        .catch(() => '');
+      const ariaLabel = (await combo.getAttribute('aria-label')) || '';
+      const labelKeys = [
+        ...new Set((labelText + '\n' + ariaLabel).match(RAW_KEY_RE) || []),
+      ];
+      expect(
+        labelKeys,
+        `boundary "${comboId}" label is unlocalized: ${labelKeys.join(
+          ', '
+        )} (label="${labelText.trim()}" aria="${ariaLabel}")`
+      ).toHaveLength(0);
+
+      // (b) options localized
+      await combo.click();
+      const options = page.getByRole('option');
+      await expect
+        .poll(async () => options.count(), { timeout: 20_000 })
+        .toBeGreaterThan(0);
+      const optionLabels = await options.allInnerTexts();
+      const optionKeys = [
+        ...new Set(optionLabels.join('\n').match(RAW_KEY_RE) || []),
+      ];
+      expect(
+        optionKeys,
+        `boundary "${comboId}" options contain raw keys: ${optionKeys
+          .slice(0, 5)
+          .join(', ')} (sample: ${optionLabels.slice(0, 5).join(' | ')})`
+      ).toHaveLength(0);
+
+      const pickedLabel = (await options.first().innerText()).trim();
+      await options.first().click();
+      pickedLevels.push(`${comboId}=${pickedLabel}`);
+      console.log(`BOUNDARY ${comboId}: ${pickedLabel}`);
+    }
+
+    expect(
+      pickedLevels.length,
+      'no boundary cascade dropdowns rendered — boundary hierarchy missing or wizard structure changed'
+    ).toBeGreaterThan(0);
 
     const postal = page.locator('#postal-code');
     await expect(postal).toBeEnabled();
