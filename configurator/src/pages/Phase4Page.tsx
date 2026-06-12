@@ -71,6 +71,12 @@ export default function Phase4Page() {
   const [roles, setRoles] = useState<{ code: string; name: string; description?: string }[]>([]);
   const [mobileRules, setMobileRules] = useState<{ pattern: string; minLength: number; maxLength: number; errorMessage: string } | null>(null);
   const [loadingRefs, setLoadingRefs] = useState(false);
+  // Set when reference data is unavailable (fetch failed, or the boundary
+  // tree came back empty). Distinct from per-row validation errors: without
+  // reference data every jurisdiction would "validate" as not-found, so we
+  // block processing instead of showing a wall of bogus row errors.
+  const [refsError, setRefsError] = useState<string | null>(null);
+  const [refsRetryKey, setRefsRetryKey] = useState(0);
 
   // Parsed employee data
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
@@ -84,6 +90,7 @@ export default function Phase4Page() {
   useEffect(() => {
     async function fetchReferenceData() {
       setLoadingRefs(true);
+      setRefsError(null);
       try {
         const [depts, desigs, bounds, fetchedRoles, fetchedMobileRules] = await Promise.all([
           mdmsService.getDepartments(targetTenant),
@@ -97,14 +104,25 @@ export default function Phase4Page() {
         setBoundaries(bounds);
         setRoles(fetchedRoles);
         setMobileRules(fetchedMobileRules);
+        // Phase 2 is a prerequisite, so an empty boundary tree means the
+        // reference data isn't usable for jurisdiction validation — block
+        // rather than fail every row as "boundary not found".
+        if (bounds.length === 0) {
+          setRefsError(
+            `No boundaries found for tenant "${targetTenant}". Complete Phase 2 (boundaries) first, then retry.`
+          );
+        }
       } catch (err) {
         console.error('Failed to fetch reference data:', err);
+        setRefsError(
+          'Could not load reference data (departments, designations, boundaries) from DIGIT. Employee validation cannot run without it.'
+        );
       } finally {
         setLoadingRefs(false);
       }
     }
     fetchReferenceData();
-  }, [targetTenant]);
+  }, [targetTenant, refsRetryKey]);
 
   const handleGenerateTemplate = async () => {
     setLoading(true);
@@ -147,10 +165,24 @@ export default function Phase4Page() {
     }
   };
 
+  // Resolve a jurisdiction cell (boundary code or name) to a unique boundary.
+  // Codes are authoritative; names match case-insensitively but are rejected
+  // when they collide across levels (e.g. Maputo city vs Maputo province) —
+  // the operator must use the code in that case. Shared by validation and
+  // creation so the two can never disagree on what a cell resolves to.
+  const resolveJurisdiction = (
+    value: string
+  ): { match: Boundary | null; reason?: 'not_found' | 'ambiguous' } => {
+    const byCode = boundaries.find((b) => b.code === value);
+    if (byCode) return { match: byCode };
+    const byName = boundaries.filter((b) => b.name.toLowerCase() === value.toLowerCase());
+    if (byName.length === 1) return { match: byName[0] };
+    return { match: null, reason: byName.length > 1 ? 'ambiguous' : 'not_found' };
+  };
+
   const validateEmployees = (rawEmployees: EmployeeExcelRow[]): ParsedEmployee[] => {
     const deptCodes = departments.map((d) => d.code);
     const desigCodes = designations.map((d) => d.code);
-    const boundaryCodes = boundaries.map((b) => b.code);
     const validRoles = roles.map((r) => r.code);
 
     return rawEmployees.map((emp) => {
@@ -176,14 +208,20 @@ export default function Phase4Page() {
         }
       }
 
-      // Validate jurisdictions (boundaries)
+      // Validate jurisdictions (boundaries) — match by code OR name via the
+      // shared resolver, so validation and creation agree.
       if (emp.jurisdictions) {
         const empBoundaries = emp.jurisdictions.split(',').map((b) => b.trim());
         for (const boundary of empBoundaries) {
-          // Allow matching by code OR name
-          const match = boundaries.find(b => b.code === boundary || b.name.toLowerCase() === boundary.toLowerCase());
-          if (!match) {
-            errors.push(`Boundary "${boundary}" not found`);
+          const resolved = resolveJurisdiction(boundary);
+          if (!resolved.match) {
+            if (resolved.reason === 'ambiguous') {
+              errors.push(
+                `Boundary name "${boundary}" matches multiple boundaries — use the boundary code instead`
+              );
+            } else {
+              errors.push(`Boundary "${boundary}" not found`);
+            }
           }
         }
       }
@@ -245,15 +283,27 @@ export default function Phase4Page() {
               })
             : [{ code: 'EMPLOYEE', name: 'Employee' }];
 
-          // Parse jurisdictions
+          // Parse jurisdictions via the same resolver validation used.
+          // Validation already flags unmatched/ambiguous entries, so a miss
+          // here only happens if something drifted between preview and
+          // create — fail the row instead of silently defaulting to
+          // 'Ward'/'ADMIN' with the raw string as the code, which would
+          // create an employee with a dangling boundary reference.
           const jurisdictions = emp.jurisdictions
             ? emp.jurisdictions.split(',').map((b) => {
                 const bTrimmed = b.trim();
-                const boundary = boundaries.find((bd) => bd.code === bTrimmed || bd.name.toLowerCase() === bTrimmed.toLowerCase());
+                const resolved = resolveJurisdiction(bTrimmed);
+                if (!resolved.match) {
+                  throw new Error(
+                    resolved.reason === 'ambiguous'
+                      ? `Jurisdiction "${bTrimmed}" matches multiple boundaries — use the boundary code`
+                      : `Jurisdiction "${bTrimmed}" does not resolve to a known boundary`
+                  );
+                }
                 return {
-                  boundary: boundary ? boundary.code : bTrimmed,
-                  boundaryType: boundary?.boundaryType || 'Ward',
-                  hierarchyType: boundary?.hierarchyType || 'ADMIN',
+                  boundary: resolved.match.code,
+                  boundaryType: resolved.match.boundaryType,
+                  hierarchyType: resolved.match.hierarchyType,
                 };
               })
             : [];
@@ -355,7 +405,7 @@ export default function Phase4Page() {
         accept=".xlsx,.xls"
         onChange={handleFileUpload}
         className="hidden"
-        disabled={loading}
+        disabled={loading || loadingRefs || !!refsError}
       />
       {/* Header - DIGIT style */}
       <div className="flex items-center gap-2 sm:gap-3">
@@ -369,6 +419,27 @@ export default function Phase4Page() {
           </p>
         </div>
       </div>
+
+      {/* Reference data unavailable — blocking, with retry. Not dismissible:
+          without departments/designations/boundaries, row validation would
+          mark every jurisdiction as not-found. */}
+      {refsError && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription className="flex items-center justify-between gap-3">
+            <span>{refsError}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setRefsRetryKey((k) => k + 1)}
+              disabled={loadingRefs}
+              className="flex-shrink-0"
+            >
+              {loadingRefs ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Retry'}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Error display */}
       {error && (
@@ -435,7 +506,7 @@ export default function Phase4Page() {
             <SubmitBar
               label={loading || loadingRefs ? 'Loading...' : 'Start Phase 4'}
               onSubmit={handleGenerateTemplate}
-              disabled={loading || loadingRefs}
+              disabled={loading || loadingRefs || !!refsError}
               icon={
                 loading || loadingRefs ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
