@@ -194,10 +194,20 @@ export const localizationService = {
   },
 
   // Create localization for a boundary.
-  // Emits two keys per boundary, both in module rainmaker-boundary-{hierarchyType}:
+  // Emits two keys per boundary, both in module rainmaker-boundary-{hierarchyType.toLowerCase()}:
   //   1. Bare code (e.g. "PB_AMR") — used by the PGR create-complaint dropdown via t(boundary.code)
   //   2. Prefixed i18nkey (e.g. "MZ_MAPUTO_maputo_hierarchy_type_PB_AMR") — used by BPr/map components
   // Deduped in case code is already uppercase-prefixed and both forms are identical.
+  //
+  // The module name is LOWER-CASED to match the PGR reader, which is the
+  // established convention on the consuming side: both digit-ui-esbuild
+  // (products/pgr/src/Module.js:39) and frontend/micro-ui
+  // (.../pgr/src/Module.js:57) build the module as
+  // `boundary-${hierarchyType.toLowerCase()}`. Without lower-casing here, a
+  // mixed-case hierarchy ("BOMET-Hierarchy") lands under
+  // `rainmaker-boundary-BOMET-Hierarchy` while the UI requests
+  // `rainmaker-boundary-bomet-hierarchy` → 0 hits → every boundary dropdown
+  // (Country/County/Ward) renders the raw code instead of the name.
   buildBoundaryLocalizations(
     tenantId: string,
     code: string,
@@ -205,7 +215,7 @@ export const localizationService = {
     hierarchyType: string,
     locale: string = 'en_IN'
   ): LocalizationMessage[] {
-    const module = `rainmaker-boundary-${hierarchyType}`;
+    const module = `rainmaker-boundary-${hierarchyType.toLowerCase()}`;
     const tenantPrefix = tenantId.toUpperCase().replace(/\./g, '_');
     const prefixedCode = `${tenantPrefix}_${hierarchyType}_${code}`;
     const messages: LocalizationMessage[] = [{ code, message: name, module, locale }];
