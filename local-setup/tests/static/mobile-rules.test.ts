@@ -9,7 +9,7 @@
  */
 import { mobileRules, uniqueMobile, fixedMobile } from '../utils/mobile';
 
-const ENV_KEYS = ['CITIZEN_MOBILE_LENGTH', 'CITIZEN_MOBILE_PREFIX'] as const;
+const ENV_KEYS = ['CITIZEN_MOBILE_LENGTH', 'CITIZEN_MOBILE_PREFIX', 'CITIZEN_MOBILE_PATTERN'] as const;
 const saved: Record<string, string | undefined> = {};
 
 beforeEach(() => {
@@ -28,13 +28,13 @@ afterEach(() => {
 
 describe('mobileRules', () => {
   test('defaults to the pg/India shape (10 digits starting 9)', () => {
-    expect(mobileRules()).toEqual({ length: 10, prefix: '9' });
+    expect(mobileRules()).toEqual({ length: 10, prefix: '9', pattern: null });
   });
 
   test('reads env overrides lazily (set after import, e.g. by global-setup)', () => {
     process.env.CITIZEN_MOBILE_LENGTH = '9';
     process.env.CITIZEN_MOBILE_PREFIX = '1';
-    expect(mobileRules()).toEqual({ length: 9, prefix: '1' });
+    expect(mobileRules()).toEqual({ length: 9, prefix: '1', pattern: null });
   });
 });
 
@@ -75,5 +75,38 @@ describe('fixedMobile', () => {
 
   test('is deterministic across calls', () => {
     expect(fixedMobile(7)).toBe(fixedMobile(7));
+  });
+});
+
+describe('tenant-rule self-assert (CITIZEN_MOBILE_PATTERN)', () => {
+  test('generation passes when length/prefix agree with the MDMS pattern', () => {
+    process.env.CITIZEN_MOBILE_LENGTH = '9';
+    process.env.CITIZEN_MOBILE_PREFIX = '7';
+    process.env.CITIZEN_MOBILE_PATTERN = '^[17][0-9]{8}$';
+    expect(uniqueMobile()).toMatch(/^[17][0-9]{8}$/);
+    expect(fixedMobile(42)).toBe('700000042');
+  });
+
+  test('fails fast with an actionable message when the projection is wrong', () => {
+    // pg-shaped generation against the ethiopia rule — the drift/lossy
+    // case that used to surface as INVALID_MOBILE_FORMAT mid-spec.
+    process.env.CITIZEN_MOBILE_LENGTH = '10';
+    process.env.CITIZEN_MOBILE_PREFIX = '9';
+    process.env.CITIZEN_MOBILE_PATTERN = '^[17][0-9]{8}$';
+    expect(() => uniqueMobile()).toThrow(/violates the tenant mobile rule/);
+    expect(() => fixedMobile(1)).toThrow(/CITIZEN_MOBILE_LENGTH\/CITIZEN_MOBILE_PREFIX/);
+  });
+
+  test('optional-prefix rules (^0?[17]…) accept both shapes', () => {
+    process.env.CITIZEN_MOBILE_LENGTH = '9';
+    process.env.CITIZEN_MOBILE_PREFIX = '1';
+    process.env.CITIZEN_MOBILE_PATTERN = '^0?[17][0-9]{8}$';
+    expect(uniqueMobile()).toMatch(/^0?[17][0-9]{8}$/);
+  });
+
+  test('no pattern set → no assertion (pg/statea ship no UserValidation)', () => {
+    process.env.CITIZEN_MOBILE_LENGTH = '10';
+    process.env.CITIZEN_MOBILE_PREFIX = '9';
+    expect(() => uniqueMobile()).not.toThrow();
   });
 });
