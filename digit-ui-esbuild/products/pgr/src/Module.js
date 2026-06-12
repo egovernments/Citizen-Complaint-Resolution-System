@@ -7,6 +7,7 @@ import { overrideHooks, updateCustomConfigs } from "./utils";
 import { ProviderContext } from "./utils/context";
 import BoundaryComponent from "./components/BoundaryComponent";
 import ComplaintHierarchyComponent from "./components/ComplaintHierarchyComponent";
+import PGRDatePicker from "./components/PGRDatePicker";
 import PGRDetails from "./pages/employee/PGRDetails";
 import TimelineWrapper from "./components/TimeLineWrapper";
 import AssigneeComponent from "./components/AssigneeComponent";
@@ -104,6 +105,7 @@ const componentsToRegister = {
   PGRCard,
   PGRBoundaryComponent: BoundaryComponent,
   PGRComplaintHierarchyComponent: ComplaintHierarchyComponent,
+  PGRDatePicker,
   PGRComplaintDetails: PGRDetails,
   PGRTimeLineWrapper: TimelineWrapper,
   PGRAssigneeComponent: AssigneeComponent,

@@ -1,0 +1,4 @@
+[
+  { "caseRelatedTo": "IGE",   "active": true, "schemaRef": "IgeComplaintExtendedAttributes",   "allowedDocumentTypes": ["EVIDENCE"], "allowedViewerRoles": ["CONFIDENTIAL_COMPLAINT_VIEWER"] },
+  { "caseRelatedTo": "IGSAE", "active": true, "schemaRef": "IgsaeComplaintExtendedAttributes", "allowedDocumentTypes": ["EVIDENCE"], "allowedViewerRoles": ["CONFIDENTIAL_COMPLAINT_VIEWER"] }
+]

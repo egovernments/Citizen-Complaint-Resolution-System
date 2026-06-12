@@ -5,8 +5,8 @@
 // + FormComposerV2 stack. The same 6-step shape is preserved so:
 //   - the data shape submitted to /pgr/v1/_create is byte-identical
 //   - the boundary, geolocation, and image-upload behaviour stays in the
-//     existing components (PGRBoundaryComponent, GeoLocations, SelectImages),
-//     just rendered inside v2 chrome
+//     existing components (PGRBoundaryComponent, GeoLocations) + the V2
+//     PgrFileUpload, just rendered inside v2 chrome
 //   - server-side, redux, and post-submit response page see no change
 //
 // What changes vs FormExplorer:
@@ -152,7 +152,7 @@ interface BoundaryNode {
 interface GeoPoint {
   lat?: number | null;
   lng?: number | null;
-  ward?: { code?: string } | null;
+  ward?: { code?: string; name?: string } | null;
   pincode?: string | number | null;
 }
 
@@ -165,27 +165,129 @@ interface FormData {
   SelectedBoundary?: BoundaryNode | null;
   description?: string;
   ComplaintImagesPoint?: string[]; // fileStoreIds
+  // Authority dispatcher + dynamic "additional details" (Mozambique IGE/IGSAE).
+  // Populated only when RAINMAKER-PGR.ComplaintRelatedToMap is seeded; absent
+  // otherwise so the legacy flow is byte-identical.
+  caseRelatedTo?: string; // category code (doc discriminator; FK → ComplaintRelatedToMap.code)
+  caseRelatedToName?: string; // display name of the picked category
+  resolvedTenantId?: string; // sub-tenant the complaint files under (ComplaintRelatedToMap.tenantCode)
+  dynamicFields?: Record<string, unknown>;
+  consents?: string[];
+  isConfidential?: boolean; // doc "Keep details confidential" (backend-enforced later)
+  complainantAddress?: string;
+  email?: string;
 }
+
+// RAINMAKER-PGR.ComplaintRelatedToMap — the citizen-facing category lookup. Maps
+// a category `code` → display name + the sub-tenant the complaint is filed under.
+// State-level master.
+interface RelatedToOption {
+  code: string; // category code (e.g. IGE | IGSAE)
+  name: string; // citizen-facing display name
+  shortName?: string;
+  tenantCode: string; // sub-tenant the complaint is filed under
+  tenantId?: string; // parent state tenant
+  displayOrder?: number;
+  active?: boolean;
+}
+
+// A renderable dynamic field, derived from the per-category JSON Schema
+// (RAINMAKER-PGR.ComplaintExtendedAttributeSchema.schema.properties).
+interface TemplateField {
+  fieldKey: string;
+  labelKey?: string; // x-label-key → localization key for the label
+  label: string; // human fallback (prettified fieldKey)
+  dataType?: string; // string | textarea | date | number | boolean
+  mandatory?: boolean; // from schema.required
+  maxLength?: number;
+  order?: number; // from x-order
+  encrypted?: boolean; // from top-level x-security (informational; backend encrypts)
+}
+
+// camelCase fieldKey → "Title Case" fallback label.
+function prettifyKey(k: string): string {
+  const s = k.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").trim();
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+// Build renderable fields from a draft-07 JSON Schema object (properties +
+// required + x-security + the x-order / x-widget / x-label-key UI hints).
+// Control/standard keys are skipped (rendered elsewhere or sent automatically).
+function fieldsFromSchema(schema: any): TemplateField[] {
+  if (!schema || typeof schema !== "object" || !schema.properties) return [];
+  const required: string[] = Array.isArray(schema.required) ? schema.required : [];
+  const security: string[] = Array.isArray(schema["x-security"]) ? schema["x-security"] : [];
+  const CONTROL = new Set([
+    "caseRelatedTo",
+    "isConfidential",
+    "schemaVersion",
+    "hierarchyLevel1",
+    "hierarchyLevel2",
+    "complainantAddress",
+    "email",
+  ]);
+  return Object.keys(schema.properties)
+    .filter((k) => !CONTROL.has(k))
+    .map((k) => {
+      const p = schema.properties[k] || {};
+      const widget = p["x-widget"];
+      const dataType =
+        widget === "textarea"
+          ? "textarea"
+          : p.format === "date"
+          ? "date"
+          : p.type === "number" || p.type === "integer"
+          ? "number"
+          : p.type === "boolean"
+          ? "boolean"
+          : "string";
+      return {
+        fieldKey: k,
+        labelKey: p["x-label-key"],
+        label: prettifyKey(k),
+        dataType,
+        mandatory: required.includes(k),
+        maxLength: typeof p.maxLength === "number" ? p.maxLength : undefined,
+        order: typeof p["x-order"] === "number" ? p["x-order"] : 999,
+        encrypted: security.includes(k),
+      } as TemplateField;
+    })
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+}
+
+// Complaint-level declarations confirmed before submit (BRD).
+const REQUIRED_CONSENTS: ReadonlyArray<{ code: string; label: string }> = [
+  { code: "TRUTHFULNESS", label: "I declare that the information provided is true and accurate." },
+  { code: "DATA_PROCESSING", label: "I consent to my data being processed to handle this complaint." },
+];
+
+// Consistent checkbox styling: fixed-size box with a theme-accent (centered native
+// tick), nudged to align with the first line of the label text.
+const CHECKBOX_STYLE: React.CSSProperties = {
+  width: "1rem",
+  height: "1rem",
+  marginTop: "0.15rem",
+  flexShrink: 0,
+  accentColor: "var(--color-primary-1, var(--color-primary-main, #c84c0e))",
+  cursor: "pointer",
+};
 
 interface StepShellProps {
   title: string;
   description?: string;
+  collapsible?: boolean;
   children: React.ReactNode;
 }
 
+// Consolidated 3-step wizard (was 6 screens). Each step groups what used to be
+// separate screens so the citizen reaches Submit in far fewer taps:
+//   complaint — "what is it about?" (related-to dispatcher) + the complaint type
+//   where     — map pin + ward (auto-cascaded from the pin) + landmark/postal
+//   details   — description + dynamic category fields + photos + consents → submit
 const STEPS = [
-  { id: "type", title: "Complaint" },
-  { id: "map", title: "Pin location" },
-  // Combined location step — replaces the previous separate
-  // "address" (landmark + pincode) and "ward" (County / Sub-County /
-  // Ward dropdowns) steps. Ward + pincode are auto-filled from the
-  // map pin via the existing GeoLocations.resolveWard +
-  // BoundaryComponent auto-cascade pipeline; the user only ever
-  // types the optional landmark unless the auto-fill misses (in
-  // which case the missing dropdown becomes interactive).
-  { id: "location", title: "Location" },
-  { id: "details", title: "Details" },
-  { id: "photos", title: "Photos" },
+  { id: "complaint", title: "Complaint", sub: "Tell us about the issue" },
+  { id: "where", title: "Location", sub: "Where did it happen?" },
+  { id: "details", title: "Details", sub: "Additional information" },
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -224,10 +326,35 @@ function getEffectiveServiceCode(
   return mainType?.serviceCode;
 }
 
-function mapFormDataToRequest(formData: FormData, tenantId: string, user: any) {
+function mapFormDataToRequest(formData: FormData, tenantId: string, user: any, documentType = "EVIDENCE") {
   const timestamp = Date.now();
   const userInfo = user;
-  const additionalDetail = {};
+  // FLAT extendedAttributes (doc §2/§5) ride at the TOP LEVEL of service —
+  // jsonPath $.service.extendedAttributes (a dedicated JSONB column), NOT nested
+  // under additionalDetail. Built only when a category was resolved (legacy flow
+  // unchanged). complainantAddress/email travel here too but the backend strips
+  // them to the User Service (eg_user_address / eg_user.emailaddress) — they are
+  // not stored as category data. NOTE: x-security fields are submitted in clear
+  // text until the backend encryption phase lands.
+  const additionalDetail: Record<string, unknown> = {};
+  let extendedAttributes: Record<string, unknown> | undefined;
+  if (formData?.caseRelatedTo) {
+    const sct: any = formData.SelectComplaintType;
+    const sst: any = formData.SelectSubComplaintType;
+    const lvl1 = sct?.code ?? sct?.name;
+    const lvl2 = sst?.code ?? sst?.name;
+    extendedAttributes = {
+      caseRelatedTo: formData.caseRelatedTo,
+      isConfidential: !!formData.isConfidential,
+      schemaVersion: "1.0",
+      ...(lvl1 ? { hierarchyLevel1: lvl1 } : {}),
+      ...(lvl2 ? { hierarchyLevel2: lvl2 } : {}),
+      ...(formData.complainantAddress ? { complainantAddress: formData.complainantAddress } : {}),
+      ...(formData.email ? { email: formData.email } : {}),
+      consents: formData.consents || [],
+      ...(formData.dynamicFields || {}),
+    };
+  }
   const geoLocation = formData?.GeoLocationsPoint || { lat: null, lng: null };
   return {
     service: {
@@ -259,6 +386,9 @@ function mapFormDataToRequest(formData: FormData, tenantId: string, user: any) {
           longitude: geoLocation.lng ?? null,
         }),
       },
+      // Top-level service.extendedAttributes (doc jsonPath $.service.extendedAttributes).
+      // Attached only when a category resolved; legacy/no-category flow is unchanged.
+      ...(extendedAttributes ? { extendedAttributes } : {}),
       additionalDetail: JSON.stringify(additionalDetail),
       auditDetails: {
         createdBy: user?.uuid,
@@ -271,7 +401,7 @@ function mapFormDataToRequest(formData: FormData, tenantId: string, user: any) {
       action: "APPLY",
       verificationDocuments: Array.isArray(formData?.ComplaintImagesPoint)
         ? formData.ComplaintImagesPoint.map((image) => ({
-            documentType: "PHOTO",
+            documentType,
             fileStoreId: image,
             documentUid: "",
             additionalDetails: {},
@@ -305,39 +435,43 @@ function isFieldValid(data: FormData, fieldKey: keyof FormData | string): boolea
   }
 }
 
-// Mandatory fields per step (zero-indexed).
-const MANDATORY_BY_STEP: ReadonlyArray<ReadonlyArray<keyof FormData>> = [
-  ["SelectComplaintType"], // 0 — type (sub-type is conditionally required, see stepIsValid)
-  ["GeoLocationsPoint"], // 1 — map pin: lat/lng required; auto-seeded on first load so the user just confirms
-  ["SelectedBoundary"], // 2 — combined location step: ward must be selected (map auto-fills it; manual fallback if auto-fill missed)
-  ["description"], // 3 — description
-  [], // 4 — photos (optional)
-];
+// (Per-step mandatory map removed — step validation is keyed by step id in
+// stepIsValid now that steps are consolidated.)
 
 // ---------------------------------------------------------------------------
 // Sub-step bodies
 // ---------------------------------------------------------------------------
 
-function StepShell({ title, description, children }: StepShellProps) {
+function StepShell({ title, description, collapsible, children }: StepShellProps) {
+  const [open, setOpen] = React.useState(true);
+  const showBody = !collapsible || open;
   return (
     <Card className="p-6">
-      <div className="mb-5">
-        <h2
-          className="text-lg font-semibold"
-          // Theme-driven heading color — picks up the tenant's primary brand
-          // hue (kenya-green on naipepea, orange on default) via the same
-          // var chain the legacy headings use.
-          style={{
-            color: "var(--color-primary-1, var(--color-primary-main, #c84c0e))",
-          }}
-        >
-          {title}
-        </h2>
-        {description ? (
-          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+      <div className="flex items-start" style={{ justifyContent: "space-between", gap: "1rem", marginBottom: showBody ? "1.25rem" : 0 }}>
+        <div style={{ minWidth: 0 }}>
+          {/* Theme-driven heading color (PRIMARY var) — same chain the legacy headings use. */}
+          <h2 className="text-lg font-semibold" style={{ margin: 0, color: PRIMARY }}>
+            {title}
+          </h2>
+          {description ? (
+            <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+          ) : null}
+        </div>
+        {collapsible ? (
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            className="text-sm"
+            style={{
+              color: PRIMARY, background: "none", border: "none", cursor: "pointer",
+              whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: "0.25rem", flexShrink: 0,
+            }}
+          >
+            {open ? "Collapse" : "Expand"}<span aria-hidden>{open ? "▲" : "▼"}</span>
+          </button>
         ) : null}
       </div>
-      {children}
+      {showBody ? children : null}
     </Card>
   );
 }
@@ -349,6 +483,17 @@ interface StepBodyProps {
   hierarchyDef?: ComplaintHierarchyDef | null;
   nodes?: ClassificationNode[];
   t: (key: string) => string;
+  // Authority dispatcher + dynamic-detail props (present only in the
+  // ComplaintRelatedToMap-seeded flow).
+  relatedToOptions?: RelatedToOption[];
+  templateFields?: TemplateField[];
+  // The authority-resolved tenant — scopes the boundary cascade (and anything
+  // else tenant-specific) to the picked institution, not the login tenant.
+  resolvedTenant?: string;
+  // Inline loading flags for the consolidated "complaint" step (so we render a
+  // small spinner in-place instead of blanking the whole screen).
+  catalogueLoading?: boolean;
+  dispatcherLoading?: boolean;
 }
 
 /**
@@ -499,6 +644,48 @@ function ComplaintHierarchyPicker({
   );
 }
 
+// ── Authority / "Complaint related to" — dispatcher step ──────────────────
+// Renders only when RAINMAKER-PGR.ComplaintRelatedToMap is seeded. The pick
+// resolves a templateType + the sub-tenant the complaint is filed under (the
+// catalogue is then fetched at that tenant; tenant code is never shown).
+function RelatedToStepBody({ data, patch, relatedToOptions, t }: StepBodyProps) {
+  const options = relatedToOptions || [];
+  return (
+    <StepShell title={tr(t, "CS_COMPLAINT_RELATED_TO", "What is your complaint about?")}>
+      <Field
+        label={tr(t, "CS_COMPLAINT_RELATED_TO_FIELD", "Complaint related to")}
+        required
+        htmlFor="related-to"
+      >
+        <Select
+          id="related-to"
+          value={data.caseRelatedTo}
+          onValueChange={(value: string) => {
+            const o = options.find((x) => x.code === value);
+            if (!o) return;
+            patch({
+              caseRelatedTo: o.code,
+              caseRelatedToName: o.name,
+              resolvedTenantId: o.tenantCode,
+              // Category drives the catalogue + fields — reset downstream.
+              SelectComplaintType: null,
+              SelectSubComplaintType: null,
+              dynamicFields: {},
+            });
+          }}
+          placeholder={tr(t, "CS_COMPLAINT_PICK_ONE", "Select…")}
+          options={options.map((o) => ({ value: o.code, label: o.name }))}
+        />
+        {data.caseRelatedToName ? (
+          <FieldHelp ok>{data.caseRelatedToName}</FieldHelp>
+        ) : (
+          <FieldHelp>{tr(t, "CS_RELATED_TO_HELP", "Choose the organization or entity responsible for the issue.")}</FieldHelp>
+        )}
+      </Field>
+    </StepShell>
+  );
+}
+
 function Step0Type({ data, patch, serviceDefs, hierarchyDef, nodes, t }: StepBodyProps) {
   const hierarchyActive = !!(
     hierarchyDef &&
@@ -532,7 +719,7 @@ function Step0Type({ data, patch, serviceDefs, hierarchyDef, nodes, t }: StepBod
   }, [data.SelectComplaintType?.menuPath, serviceDefs]);
 
   return (
-    <StepShell title={t("CS_COMPLAINT_DETAILS_COMPLAINT_DETAILS")}>
+    <StepShell title={t("CS_COMPLAINT_DETAILS_COMPLAINT_DETAILS")} collapsible>
       <div className="space-y-5">
         {hierarchyActive ? (
           <ComplaintHierarchyPicker
@@ -588,22 +775,21 @@ function Step0Type({ data, patch, serviceDefs, hierarchyDef, nodes, t }: StepBod
         ) : null}
           </>
         )}
+        <TipBox body={tr(t, "CS_COMPLAINT_TYPE_TIP", "Choose the most relevant option that best describes your issue.")} />
       </div>
     </StepShell>
   );
 }
 
-function Step1Map({ data, patch, t }: StepBodyProps) {
-  // Reuse the existing GeoLocations component — it owns the leaflet map +
-  // Nominatim integration. We just pass through formData and a setter.
-  const GeoLocations = Digit?.ComponentRegistryService?.getComponent("GeoLocations");
-  if (!GeoLocations) {
-    return (
-      <StepShell title={t("CS_ADDCOMPLAINT_SELECT_GEOLOCATION_HEADER")}>
-        <p className="text-sm text-destructive">Map component not registered.</p>
-      </StepShell>
-    );
-  }
+// ── Section header (title + subtitle) for the unified "Where" card ──
+const TipBulbIcon = (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9 18h6" />
+    <path d="M10 22h4" />
+    <path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z" />
+  </svg>
+);
+function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
     <StepShell
       title={t("CS_ADDCOMPLAINT_SELECT_GEOLOCATION_HEADER")}
@@ -636,7 +822,35 @@ function Step1Map({ data, patch, t }: StepBodyProps) {
           });
         }}
       />
-    </StepShell>
+      {GeoLocations ? (
+        <GeoLocations
+          t={t}
+          config={{
+            key: "GeoLocationsPoint",
+            populators: { name: "GeoLocationsPoint" },
+            withoutLabel: true,
+            // Map height tuned to balance the Location-details pane once the mz
+            // boundary cascade is expanded (Província → Distrito → Município +
+            // postal + landmark + tip ≈ this tall). Citizen flow only; the shared
+            // component otherwise fills calc(100vh-400px).
+            mapHeight: "520px",
+          }}
+          formData={data}
+          onSelect={(_key: string, value: GeoPoint) => {
+            patch({
+              GeoLocationsPoint: value,
+              // Mirror the pin's pincode onto postalCode (matches FormExplorer).
+              postalCode:
+                value?.pincode != null && String(value.pincode).length > 0
+                  ? String(value.pincode)
+                  : data.postalCode,
+            });
+          }}
+        />
+      ) : (
+        <p className="text-sm text-destructive">Map component not registered.</p>
+      )}
+    </div>
   );
 }
 
@@ -658,7 +872,7 @@ function Step1Map({ data, patch, t }: StepBodyProps) {
  * pincode missing from Nominatim) the affected control becomes
  * interactive so the user can fill the gap manually.
  */
-function Step2Location({ data, patch, t }: StepBodyProps) {
+function Step2Location({ data, patch, resolvedTenant, t }: StepBodyProps) {
   const PGRBoundaryComponent = Digit?.ComponentRegistryService?.getComponent("PGRBoundaryComponent");
 
   // The map's resolveWard writes ward.{code, name} into
@@ -681,24 +895,20 @@ function Step2Location({ data, patch, t }: StepBodyProps) {
   const showPostalError = effectivePincode.length > 0 && !postalValid;
 
   return (
-    <StepShell
-      title={t("CS_COMPLAINT_LOCATION_DETAILS") || "Confirm location"}
-      description={tr(
-        t,
-        "CS_LOCATION_CONFIRM_HINT",
-        "We picked these from your map pin. Add a landmark if it helps the team find the spot."
-      )}
-    >
+    <div>
+      <SectionHeader
+        title={tr(t, "CS_LOCATION_DETAILS_TITLE", "Location details")}
+        subtitle={tr(t, "CS_LOCATION_CONFIRM_HINT", "Add details so our team can quickly find the exact spot.")}
+      />
       <div className="space-y-5">
         {PGRBoundaryComponent ? (
           <PGRBoundaryComponent
             t={t}
             userType="citizen"
-            config={{ key: "SelectedBoundary", populators: { name: "SelectedBoundary" }, label: "" }}
+            config={{ key: "SelectedBoundary", populators: { name: "SelectedBoundary" }, label: "", tenantId: resolvedTenant }}
             formData={data}
-            // Ask the cascade to render its dropdowns as disabled
-            // wherever it has an auto-filled value. Levels left empty
-            // (auto-fill miss) stay interactive so the user can pick.
+            // Disable cascade levels that auto-filled; empty (auto-fill miss)
+            // levels stay interactive so the user can pick manually.
             readOnly={wardFromMap}
             onSelect={(_key: string, value: BoundaryNode) => {
               patch({ SelectedBoundary: value });
@@ -725,21 +935,53 @@ function Step2Location({ data, patch, t }: StepBodyProps) {
           />
         </Field>
 
-        <Field label={t("CS_COMPLAINT_LANDMARK__DETAILS")} htmlFor="landmark">
+        <Field
+          label={tr(t, "CS_COMPLAINT_LANDMARK__DETAILS", "Landmark") + " " + tr(t, "CS_OPTIONAL_SUFFIX", "(Optional)")}
+          htmlFor="landmark"
+        >
           <Input
             id="landmark"
-            placeholder={tr(t, "CS_LANDMARK_PLACEHOLDER", "e.g. Near Jamia Mosque")}
+            placeholder={tr(t, "CS_LANDMARK_PLACEHOLDER", "e.g. Near Jamia Mosque, Next to Central Market")}
             maxLength={64}
             value={data.landmark ?? ""}
             onChange={(e) => patch({ landmark: e.target.value })}
           />
         </Field>
+
+        {/* Tip callout — encourages a landmark for faster routing. */}
+        <div
+          style={{
+            display: "flex",
+            gap: "0.5rem",
+            alignItems: "flex-start",
+            background: "#edf6ef",
+            border: "1px solid #cfe6d6",
+            borderRadius: "0.5rem",
+            padding: "0.75rem 1rem",
+          }}
+        >
+          <span style={{ color: PRIMARY, flexShrink: 0, marginTop: "1px", display: "inline-flex" }}>{TipBulbIcon}</span>
+          <div className="text-sm">
+            <div className="font-medium" style={{ color: PRIMARY }}>{tr(t, "CS_LOCATION_TIP_TITLE", "Tip")}</div>
+            <div className="text-muted-foreground">
+              {tr(t, "CS_LOCATION_TIP_BODY", "A landmark helps our team find the exact spot faster.")}
+            </div>
+          </div>
+        </div>
       </div>
-    </StepShell>
+    </div>
   );
 }
 
-function Step3Description({ data, patch, t }: StepBodyProps) {
+function Step3Description({ data, patch, templateFields, t }: StepBodyProps) {
+  const fields = templateFields || [];
+  const dyn = data.dynamicFields || {};
+  const consents = data.consents || [];
+  const extended = !!data.caseRelatedTo; // dispatcher flow active
+  const setDyn = (key: string, value: unknown) => patch({ dynamicFields: { ...dyn, [key]: value } });
+  const toggleConsent = (code: string, on: boolean) =>
+    patch({ consents: on ? [...consents, code] : consents.filter((c) => c !== code) });
+
   return (
     <StepShell
       title={t("CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS")}
@@ -749,57 +991,735 @@ function Step3Description({ data, patch, t }: StepBodyProps) {
         "What happened? When did it start? Add as much detail as helps."
       )}
     >
-      <Field
-        label={t("CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS_DESCRIPTION")}
-        required
-        htmlFor="complaint-description"
-      >
-        <Textarea
-          id="complaint-description"
-          placeholder={tr(
-            t,
-            "CS_DESCRIBE_THE_ISSUE_PLACEHOLDER",
-            "Describe the issue in your own words…"
-          )}
-          maxLength={1000}
-          value={data.description ?? ""}
-          onChange={(e) => patch({ description: e.target.value })}
-        />
-        <div className="mt-1 text-xs text-muted-foreground text-right">
-          {(data.description ?? "").length} / 1000
-        </div>
-      </Field>
+      <div className="space-y-5">
+        <Field
+          label={t("CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS_DESCRIPTION")}
+          required
+          htmlFor="complaint-description"
+        >
+          <Textarea
+            id="complaint-description"
+            placeholder={tr(t, "CS_DESCRIBE_THE_ISSUE_PLACEHOLDER", "Describe the issue in your own words…")}
+            maxLength={1000}
+            value={data.description ?? ""}
+            onChange={(e) => patch({ description: e.target.value })}
+          />
+          <div className="mt-1 text-xs text-muted-foreground text-right">
+            {(data.description ?? "").length} / 1000
+          </div>
+        </Field>
+
+        {/* Dynamic fields from RAINMAKER-PGR.ComplaintTemplateType[templateType]. */}
+        {fields.map((f) => {
+          const val = (dyn[f.fieldKey] as string) ?? "";
+          return (
+            <Field key={f.fieldKey} label={f.labelKey ? tr(t, f.labelKey, f.label) : f.label} required={!!f.mandatory} htmlFor={`xf-${f.fieldKey}`}>
+              {f.dataType === "textarea" ? (
+                <Textarea
+                  id={`xf-${f.fieldKey}`}
+                  maxLength={f.maxLength}
+                  value={val}
+                  onChange={(e) => setDyn(f.fieldKey, e.target.value)}
+                />
+              ) : (
+                <Input
+                  id={`xf-${f.fieldKey}`}
+                  className={f.dataType === "date" ? "pgr-date-input" : undefined}
+                  type={f.dataType === "date" ? "date" : f.dataType === "number" ? "number" : "text"}
+                  maxLength={f.dataType === "date" || f.dataType === "number" ? undefined : f.maxLength}
+                  value={val}
+                  onChange={(e) => setDyn(f.fieldKey, e.target.value)}
+                />
+              )}
+            </Field>
+          );
+        })}
+
+        {extended ? (
+          <>
+            <Field label={tr(t, "PGR_EXT_COMPLAINANT_ADDRESS_LABEL", "Complainant Address")} htmlFor="xf-complainantAddress">
+              <Input
+                id="xf-complainantAddress"
+                maxLength={300}
+                value={data.complainantAddress ?? ""}
+                onChange={(e) => patch({ complainantAddress: e.target.value })}
+              />
+            </Field>
+            <Field label={tr(t, "PGR_EXT_EMAIL_LABEL", "Email Address")} htmlFor="xf-email">
+              <Input
+                id="xf-email"
+                type="email"
+                value={data.email ?? ""}
+                onChange={(e) => patch({ email: e.target.value })}
+              />
+            </Field>
+          </>
+        ) : null}
+
+        {extended ? (
+          <div className="space-y-2">
+            {REQUIRED_CONSENTS.map((c) => (
+              <label key={c.code} className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  style={CHECKBOX_STYLE}
+                  checked={consents.includes(c.code)}
+                  onChange={(e) => toggleConsent(c.code, e.target.checked)}
+                />
+                <span>{c.label}</span>
+              </label>
+            ))}
+            <label className="flex items-start gap-2 text-sm pt-2 border-t border-border">
+              <input
+                type="checkbox"
+                style={CHECKBOX_STYLE}
+                checked={!!data.isConfidential}
+                onChange={(e) => patch({ isConfidential: e.target.checked })}
+              />
+              <span>
+                {tr(t, "PGR_EXT_IS_CONFIDENTIAL_LABEL", "Keep details confidential.")}{" "}
+                <span className="text-muted-foreground">
+                  {tr(t, "PGR_EXT_IS_CONFIDENTIAL_HINT", "Visibility is enforced once secure handling is enabled; for now this flags the complaint for staff awareness.")}
+                </span>
+              </span>
+            </label>
+          </div>
+        ) : null}
+      </div>
     </StepShell>
   );
 }
 
-function Step4Images({ data, patch, t }: StepBodyProps) {
-  // Reuse SelectImages — the registered component knows how to call the
-  // upload API and write fileStoreIds back. We pass formData + setter the
-  // same way it expects from FormStep.
-  const SelectImages = Digit?.ComponentRegistryService?.getComponent("SelectImages");
-  if (!SelectImages) {
-    return (
-      <StepShell title={t("CS_ADDCOMPLAINT_UPLOAD_PHOTO")}>
-        <p className="text-sm text-destructive">Image-upload component not registered.</p>
-      </StepShell>
-    );
-  }
+// ── Step-4 uploader (build-v2). Self-contained: replaces the legacy
+// SelectImages → FormStep → ImageUploadHandler chain that couldn't render the
+// mockup's filled state. Reuses the SAME upload service the legacy handler used
+//   Digit.UploadServices.Filestorage("property-upload", file, tenantId)
+// and emits the SAME output the submit contract expects — a string[] of
+// fileStoreIds via onSelect → patch({ComplaintImagesPoint}) — which
+// mapFormDataToRequest turns into workflow.verificationDocuments. No new deps.
+const PGR_MAX_FILES = 5; // max files the citizen can attach
+const PGR_MAX_BYTES = 2 * 1024 * 1024; // 2 MB — same per-file size as the legacy uploader
+
+type PgrUploadItem = { id: string; url: string; name: string; size: number };
+
+function pgrFmtSize(bytes: number): string {
+  if (!bytes) return "";
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+const PgrCheckIcon = (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
+const PgrCloudIcon = (
+  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M16 16l-4-4-4 4" />
+    <path d="M12 12v9" />
+    <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" />
+  </svg>
+);
+const PgrXIcon = (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+);
+
+function PgrFileUpload({
+  t,
+  tenantId,
+  value,
+  onSelect,
+  fieldKey,
+}: {
+  t: (k: string) => string;
+  tenantId: string;
+  value: string[];
+  onSelect: (key: string, ids: string[]) => void;
+  fieldKey: string;
+}) {
+  const [items, setItems] = React.useState<PgrUploadItem[]>([]);
+  const [busy, setBusy] = React.useState(false);
+  const [dragOver, setDragOver] = React.useState(false);
+  const [error, setError] = React.useState<string>("");
+  const inputRef = React.useRef<HTMLInputElement | null>(null);
+
+  // Rebuild previews for ids that arrive from outside (e.g. the citizen steps
+  // back into Step 4). Best-effort — the ids are valid for submit regardless.
+  React.useEffect(() => {
+    const have = new Set(items.map((i) => i.id));
+    const missing = (value || []).filter((id) => !have.has(id));
+    if (missing.length === 0) {
+      if (items.some((i) => !(value || []).includes(i.id))) {
+        setItems((prev) => prev.filter((i) => (value || []).includes(i.id)));
+      }
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await Digit.UploadServices.Filefetch(missing, tenantId);
+        if (cancelled) return;
+        const d = res?.data || {};
+        const byId: Record<string, string> = {};
+        (Array.isArray(d.fileStoreIds) ? d.fileStoreIds : []).forEach((o: any) => {
+          if (o && o.id) byId[o.id] = o.url;
+        });
+        const rebuilt: PgrUploadItem[] = missing.map((id) => {
+          const raw = byId[id] != null ? byId[id] : (typeof d[id] === "string" ? d[id] : "");
+          const url = typeof raw === "string" ? raw.split(",").pop() || "" : "";
+          return { id, url, name: tr(t, "CS_UPLOADED_FILE", "Attachment"), size: 0 };
+        });
+        setItems((prev) => [...prev, ...rebuilt]);
+      } catch {
+        /* preview rebuild is best-effort; ids still submit */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, tenantId]);
+
+  const emit = (next: PgrUploadItem[]) => {
+    setItems(next);
+    onSelect(fieldKey, next.map((i) => i.id));
+  };
+
+  const uploadFiles = React.useCallback(
+    async (files: File[]) => {
+      setError("");
+      const room = PGR_MAX_FILES - items.length;
+      if (room <= 0) {
+        setError(tr(t, "CS_UPLOAD_MAX_FILES", "You can upload up to 5 files."));
+        return;
+      }
+      const accepted: File[] = [];
+      for (const f of files.slice(0, room)) {
+        if (f.size > PGR_MAX_BYTES) {
+          setError(tr(t, "CS_FILE_TOO_LARGE", "File is too large (max 2 MB)."));
+          continue;
+        }
+        accepted.push(f);
+      }
+      if (accepted.length === 0) return;
+      setBusy(true);
+      const uploaded: PgrUploadItem[] = [];
+      for (const file of accepted) {
+        try {
+          // SAME service the legacy handler used (module "property-upload").
+          const response = await Digit.UploadServices.Filestorage("property-upload", file, tenantId);
+          const id = response?.data?.files?.[0]?.fileStoreId;
+          if (id) {
+            uploaded.push({
+              id,
+              url: file.type.startsWith("image/") ? URL.createObjectURL(file) : "",
+              name: file.name,
+              size: file.size,
+            });
+          }
+        } catch (err: any) {
+          const apiMessage =
+            err?.response?.data?.Errors?.[0]?.message ||
+            err?.response?.data?.message ||
+            err?.message;
+          setError(apiMessage || tr(t, "CS_FILE_UPLOAD_FAILED", "File upload failed."));
+        }
+      }
+      setBusy(false);
+      if (uploaded.length) emit([...items, ...uploaded]);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [items, tenantId, t]
+  );
+
+  const onInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length) uploadFiles(files);
+    if (inputRef.current) inputRef.current.value = ""; // allow re-picking same file
+  };
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const files = Array.from(e.dataTransfer?.files || []);
+    if (files.length) uploadFiles(files);
+  };
+  const removeAt = (id: string) => {
+    const gone = items.find((i) => i.id === id);
+    if (gone?.url?.startsWith("blob:")) URL.revokeObjectURL(gone.url);
+    emit(items.filter((i) => i.id !== id));
+  };
+  const openPicker = () => inputRef.current?.click();
+  const atMax = items.length >= PGR_MAX_FILES;
+
+  // The cloud + drag-drop + Choose-files affordance — shared by the empty
+  // state and the inline "add more" cell of the filled state.
+  const renderCue = (variant: string) => (
+    <div
+      className={"pgr-upload-zone " + variant + (dragOver ? " is-dragover" : "")}
+      role="button"
+      tabIndex={0}
+      onClick={openPicker}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          openPicker();
+        }
+      }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDragOver(true);
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={onDrop}
+    >
+      <span className="pgr-upload-cloud">{PgrCloudIcon}</span>
+      <div className="pgr-upload-dnd">{tr(t, "CS_UPLOAD_DND", "Drag and drop files here or")}</div>
+      <span className="pgr-upload-choose">
+        {busy ? tr(t, "CS_UPLOADING", "Uploading…") : tr(t, "CS_UPLOAD_CHOOSE", "Choose files")}
+      </span>
+      <p className="pgr-upload-hint">
+        {tr(t, "CS_UPLOAD_HINT", "JPG, PNG up to 2 MB each. You can upload up to 5 files.")}
+      </p>
+    </div>
+  );
+
   return (
-    <StepShell title={t("CS_ADDCOMPLAINT_UPLOAD_PHOTO")}>
-      <SelectImages
+    <div className="pgr-upload">
+      {error ? (
+        <div className="pgr-upload-error" role="alert">
+          {error}
+        </div>
+      ) : null}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={onInputChange}
+        style={{ display: "none" }}
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+      {items.length === 0 ? (
+        renderCue("pgr-upload-zone--empty")
+      ) : (
+        <div className="pgr-upload-row">
+          {items.map((it) => (
+            <div className="pgr-card" key={it.id}>
+              <div className="pgr-card-img">
+                <span className="pgr-badge">{PgrCheckIcon}</span>
+                <button
+                  type="button"
+                  className="pgr-del"
+                  aria-label={tr(t, "CS_REMOVE", "Remove")}
+                  onClick={() => removeAt(it.id)}
+                >
+                  {PgrXIcon}
+                </button>
+                {it.url ? (
+                  <img src={it.url} alt={it.name} />
+                ) : (
+                  <div className="pgr-card-doc">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <path d="M14 2v6h6" />
+                    </svg>
+                  </div>
+                )}
+              </div>
+              <div className="pgr-card-name" title={it.name}>
+                {it.name}
+              </div>
+              <div className="pgr-card-meta">
+                {it.size ? <span>{pgrFmtSize(it.size)}</span> : null}
+                <span className="pgr-card-ok">{PgrCheckIcon}</span>
+              </div>
+            </div>
+          ))}
+          {!atMax ? renderCue("pgr-upload-zone--cell") : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Step4Images({ data, patch, t }: StepBodyProps) {
+  // Same tenant the complaint submits under (resolved from the authority pick),
+  // falling back to the citizen's home city / current ULB — so uploads land on
+  // the tenant whose filestore the submit will reference.
+  const tenantId =
+    (data as any)?.resolvedTenantId ||
+    Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code ||
+    Digit.ULBService.getCurrentTenantId();
+  return (
+    <StepShell title={tr(t, "CS_ADDCOMPLAINT_UPLOAD_PHOTO", "Upload photos / attachments") + " " + tr(t, "CS_OPTIONAL_SUFFIX", "(Optional)")}>
+      <PgrFileUpload
         t={t}
-        formData={data}
+        tenantId={tenantId}
+        fieldKey="ComplaintImagesPoint"
+        value={Array.isArray(data.ComplaintImagesPoint) ? data.ComplaintImagesPoint : []}
         onSelect={(_key: string, value: string[]) => {
           patch({ ComplaintImagesPoint: value });
         }}
-        config={{
-          key: "ComplaintImagesPoint",
-          populators: { name: "ComplaintImagesPoint" },
-          label: "CS_ADDCOMPLAINT_UPLOAD_PHOTO_TEXT",
-        }}
       />
     </StepShell>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Composite steps (3-step wizard) — each groups the sub-bodies above so the
+// citizen completes the flow in 3 screens instead of 6. The sub-bodies keep
+// their own logic untouched; we just render them together.
+// ---------------------------------------------------------------------------
+
+const PRIMARY = "var(--color-primary-1, var(--color-primary-main, #c84c0e))";
+
+// Subtle theme-tinted surfaces for banners/tips (the accent itself stays PRIMARY).
+const HINT_BG = "var(--color-primary-1-bg, #edf6ef)";
+const HINT_BORDER = "var(--color-primary-2-bg, #cfe6d6)";
+
+// Responsive tweaks that DON'T rely on Tailwind md: utilities (the vendored CSS may
+// lack them). Injected once by the orchestrator — keeps the stepper mobile-safe.
+const WIZARD_CSS = `
+.pgr-step-sub { display:block; }
+@media (max-width: 640px) {
+  .pgr-step-sub { display:none; }
+  .pgr-step-title { font-size:0.8rem; }
+}
+/* ---- Step 4 uploader (build-v2, PgrFileUpload). All scoped to .pgr-upload so
+   no other upload flow is affected. ---- */
+.pgr-upload { width: 100%; }
+.pgr-upload-error {
+  margin-bottom: 0.75rem; padding: 0.5rem 0.75rem; border-radius: 0.5rem;
+  background: #fdecea; border: 1px solid #f5c2bc; color: #b3261e;
+  font-size: 0.8rem; text-align: center;
+}
+/* cloud + drag-drop + Choose-files affordance (shared by both states) */
+.pgr-upload-zone {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 0.4rem; padding: 1.5rem 1rem; text-align: center; cursor: pointer;
+  border: 1px dashed var(--color-border, #cbd5e1); border-radius: 0.75rem;
+  background: var(--color-surface-secondary, #f8fafc);
+  transition: border-color .15s ease, background .15s ease;
+}
+.pgr-upload-zone--empty { padding: 2rem 1rem; }
+.pgr-upload-zone--cell { border-radius: 0.5rem; padding: 1rem; }
+.pgr-upload-zone:hover, .pgr-upload-zone:focus-visible, .pgr-upload-zone.is-dragover {
+  outline: none;
+  border-color: var(--color-primary-1, var(--color-primary-main, #c84c0e));
+  background: var(--color-primary-1-bg, #eef6ef);
+}
+.pgr-upload-cloud { color: var(--color-text-secondary, #94a3b8); display: inline-flex; }
+.pgr-upload-dnd { font-size: 0.85rem; color: var(--color-text-secondary, #64748b); }
+.pgr-upload-choose {
+  display: inline-block; border: 1px solid var(--color-border, #cbd5e1); border-radius: 0.375rem;
+  padding: 0.4rem 0.9rem; background: #fff; font-weight: 600; font-size: 0.85rem;
+  color: var(--color-primary-1, var(--color-primary-main, #c84c0e));
+}
+.pgr-upload-hint { margin: 0.25rem 0 0; font-size: 0.72rem; color: var(--color-text-secondary, #94a3b8); }
+/* filled state: thumbnail cards + inline cue */
+/* Uniform grid — every cell (each card AND the Choose-files box) is one equal
+   column, so they're all the same width instead of small-cards + a big box. */
+.pgr-upload-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); gap: 0.75rem; align-items: stretch; }
+.pgr-card {
+  display: flex; flex-direction: column;
+  border: 1px solid var(--color-border, #e2e8f0); border-radius: 0.5rem;
+  padding: 0.5rem; background: #fff;
+}
+/* The image flex-fills the card; the grid stretches every cell to the tallest
+   in the row (the Choose-files box), so cards & box share one height with no
+   empty gap AND the box never overflows. No aspect-ratio (flaky in old webviews). */
+.pgr-card-img {
+  position: relative; flex: 1 1 auto; min-height: 4.5rem; border-radius: 0.375rem; overflow: hidden;
+  background: var(--color-surface-secondary, #f1f5f9);
+}
+.pgr-card-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pgr-card-doc { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: var(--color-text-secondary, #64748b); }
+.pgr-badge {
+  position: absolute; top: 6px; left: 6px; width: 20px; height: 20px; border-radius: 9999px;
+  background: var(--color-primary-1, var(--color-primary-main, #c84c0e)); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+}
+.pgr-del {
+  position: absolute; top: 6px; right: 6px; width: 20px; height: 20px; border: none; border-radius: 9999px;
+  background: #fff; color: #475569; font-size: 15px; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+}
+.pgr-del:hover { background: #b3261e; color: #fff; }
+.pgr-card-name {
+  font-size: 0.78rem; font-weight: 600; margin-top: 0.35rem; color: var(--color-text, #1f2937);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pgr-card-meta { display: flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; color: var(--color-text-secondary, #64748b); }
+.pgr-card-ok { color: var(--color-primary-1, var(--color-primary-main, #c84c0e)); display: inline-flex; }
+@media (max-width: 480px) {
+  .pgr-upload-row { grid-template-columns: repeat(2, 1fr); }
+}
+/* Date input: a global (health-css) rule makes the calendar indicator
+   position:absolute, so without position:relative on the input it escapes to
+   the nearest positioned ancestor (it was showing up near the stepper). Anchor
+   it back inside its own field and centre it vertically. */
+.pgr-date-input { position: relative; }
+.pgr-date-input::-webkit-calendar-picker-indicator { right: 10px !important; top: 50% !important; transform: translateY(-50%) !important; }
+`;
+
+// Contextual hint banner shown at the top of each step (themed, green-tinted).
+function HintBanner({ title, subtitle }: { title: string; subtitle?: string }) {
+  return (
+    <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start", background: HINT_BG, border: "1px solid " + HINT_BORDER, borderRadius: "0.5rem", padding: "0.85rem 1rem" }}>
+      <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "1.75rem", height: "1.75rem", borderRadius: "9999px", background: "var(--color-primary-2-bg, #dcecdf)", color: PRIMARY, flexShrink: 0 }}>{TipBulbIcon}</span>
+      <div style={{ minWidth: 0 }}>
+        <div className="text-sm font-semibold" style={{ color: PRIMARY }}>{title}</div>
+        {subtitle ? <div className="text-sm text-muted-foreground" style={{ marginTop: "0.1rem" }}>{subtitle}</div> : null}
+      </div>
+    </div>
+  );
+}
+
+// Reusable green tip callout.
+function TipBox({ title, body }: { title?: string; body: string }) {
+  return (
+    <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start", background: HINT_BG, border: "1px solid " + HINT_BORDER, borderRadius: "0.5rem", padding: "0.75rem 1rem" }}>
+      <span style={{ color: PRIMARY, flexShrink: 0, marginTop: "1px", display: "inline-flex" }}>{TipBulbIcon}</span>
+      <div className="text-sm">
+        {title ? <div className="font-medium" style={{ color: PRIMARY }}>{title}</div> : null}
+        <div className="text-muted-foreground">{body}</div>
+      </div>
+    </div>
+  );
+}
+
+// Small helper / confirmation line under a field (ⓘ hint, or ✓ when satisfied).
+function FieldHelp({ children, ok }: { children: React.ReactNode; ok?: boolean }) {
+  return (
+    <div className="mt-1 text-xs" style={{ display: "flex", gap: "0.35rem", alignItems: "flex-start", color: ok ? PRIMARY : "var(--color-text-secondary, #64748b)" }}>
+      <span aria-hidden style={{ flexShrink: 0 }}>{ok ? "✓" : "ⓘ"}</span>
+      <span style={{ minWidth: 0 }}>{children}</span>
+    </div>
+  );
+}
+
+// Muted dashed placeholder shown before a category is chosen.
+const HowToTagIcon = (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+    <line x1="7" y1="7" x2="7.01" y2="7" />
+  </svg>
+);
+const HowToPinIcon = (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+    <circle cx="12" cy="10" r="3" />
+  </svg>
+);
+const HowToDocIcon = (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <line x1="16" y1="13" x2="8" y2="13" />
+    <line x1="16" y1="17" x2="8" y2="17" />
+  </svg>
+);
+
+// Shown before a category is picked: a short, friendly "how it works" guide
+// (mirrors the 3 wizard steps) — more useful than an empty placeholder.
+function EmptyStateCard({ t }: { t: (k: string) => string }) {
+  const circle: React.CSSProperties = {
+    display: "inline-flex", alignItems: "center", justifyContent: "center",
+    width: "1.75rem", height: "1.75rem", borderRadius: "9999px",
+    background: "var(--color-primary-2-bg, #dcecdf)", color: PRIMARY, flexShrink: 0,
+  };
+  const steps = [
+    { icon: HowToTagIcon, title: tr(t, "CS_HOWTO_1_TITLE", "Choose a category"), body: tr(t, "CS_HOWTO_1_BODY", "Tell us what your complaint is about — it's routed to the right office automatically.") },
+    { icon: HowToPinIcon, title: tr(t, "CS_HOWTO_2_TITLE", "Mark the location"), body: tr(t, "CS_HOWTO_2_BODY", "Drop a pin on the map where the issue happened.") },
+    { icon: HowToDocIcon, title: tr(t, "CS_HOWTO_3_TITLE", "Add details & submit"), body: tr(t, "CS_HOWTO_3_BODY", "Describe the issue and attach any photos as evidence.") },
+  ];
+  return (
+    <div style={{ border: "1px dashed var(--color-border, #cbd5e1)", borderRadius: "0.75rem", padding: "1.5rem", background: "var(--color-surface-secondary, #f8fafc)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "1.1rem" }}>
+        <span style={circle}>{TipBulbIcon}</span>
+        <div style={{ minWidth: 0 }}>
+          <div className="text-sm font-semibold" style={{ color: PRIMARY }}>{tr(t, "CS_HOWTO_TITLE", "How filing a complaint works")}</div>
+          <div className="text-xs text-muted-foreground">{tr(t, "CS_HOWTO_SUB", "Three quick steps — pick a category above to begin.")}</div>
+        </div>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+        {steps.map((s, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem" }}>
+            <span style={circle}>{s.icon}</span>
+            <div style={{ minWidth: 0 }}>
+              <div className="text-sm font-medium">{s.title}</div>
+              <div className="text-xs text-muted-foreground" style={{ marginTop: "0.1rem" }}>{s.body}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function InlineSpinner() {
+  return (
+    <Card className="p-6">
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem 0" }}>
+        <span
+          aria-label="Loading"
+          style={{
+            display: "inline-block",
+            height: "1.75rem",
+            width: "1.75rem",
+            border: "3px solid currentColor",
+            borderTopColor: "transparent",
+            borderRadius: "9999px",
+            color: PRIMARY,
+            animation: "spin 0.8s linear infinite",
+          }}
+        />
+      </div>
+    </Card>
+  );
+}
+
+// Step 1 — "Your complaint": the related-to dispatcher (when seeded) followed,
+// progressively, by the complaint-type picker for the resolved sub-tenant. The
+// type section appears only once an authority is chosen, and shows an inline
+// spinner while that tenant's catalogue loads (no full-page blank).
+function StepComplaint(props: StepBodyProps) {
+  const { data, relatedToOptions, catalogueLoading, dispatcherLoading, t } = props;
+  const hasDispatcher = (relatedToOptions?.length ?? 0) > 0;
+  if (dispatcherLoading) return <InlineSpinner />;
+  const showType = !hasDispatcher || !!data.caseRelatedTo;
+  return (
+    <div className="space-y-5">
+      <HintBanner
+        title={showType
+          ? tr(t, "CS_HINT_TYPE_TITLE", "Great! Now select the type of complaint.")
+          : tr(t, "CS_HINT_RELATED_TITLE", "Start by selecting what your complaint is about.")}
+        subtitle={showType
+          ? tr(t, "CS_HINT_TYPE_SUB", "This helps us route your complaint to the right team.")
+          : tr(t, "CS_HINT_RELATED_SUB", "Based on your selection, relevant options will appear automatically.")}
+      />
+      {hasDispatcher ? <RelatedToStepBody {...props} /> : null}
+      {showType ? (
+        catalogueLoading ? <InlineSpinner /> : <Step0Type {...props} />
+      ) : (
+        <EmptyStateCard t={t} />
+      )}
+    </div>
+  );
+}
+
+// Step 2 — "Where": ONE unified card with the map (left, larger) and Location
+// details (right). flex-wrap stacks them on mobile (no Tailwind md: needed).
+// align-items:flex-start keeps the form pinned top-right beside the capped map.
+function StepWhere(props: StepBodyProps) {
+  return (
+    <div className="space-y-5">
+      <HintBanner
+        title={tr(props.t, "CS_HINT_LOC_TITLE", "Pin the exact location")}
+        subtitle={tr(props.t, "CS_HINT_LOC_SUB", "Drop a pin on the map or search for the location where the issue occurred.")}
+      />
+      <Card className="p-6">
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "1.5rem", alignItems: "flex-start" }}>
+          <div style={{ flex: "3 1 420px", minWidth: 0 }}>
+            <Step1Map {...props} />
+          </div>
+          <div style={{ flex: "2 1 300px", minWidth: 0 }}>
+            <Step2Location {...props} />
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// Step 3 — "Details": description + dynamic category fields + consents + photos.
+function StepDetails(props: StepBodyProps) {
+  return (
+    <div className="space-y-5">
+      <HintBanner
+        title={tr(props.t, "CS_HINT_DETAILS_TITLE", "Tell us more about the issue")}
+        subtitle={tr(props.t, "CS_HINT_DETAILS_SUB", "Add as much detail as possible to help us take the right action.")}
+      />
+      <Step3Description {...props} />
+      <Step4Images {...props} />
+    </div>
+  );
+}
+
+// Lightweight 3-segment progress indicator (numbered, current highlighted).
+function WizardProgress({
+  steps,
+  current,
+  t,
+}: {
+  steps: ReadonlyArray<{ id: string; title: string; sub?: string }>;
+  current: number;
+  t: (k: string) => string;
+}) {
+  return (
+    <div className="flex items-center" style={{ justifyContent: "space-between", gap: "0.5rem", marginTop: "0.85rem" }}>
+      {steps.map((s, i) => {
+        const done = i < current;
+        const active = i === current;
+        const filled = done || active;
+        return (
+          <React.Fragment key={s.id}>
+            <div className="flex items-center gap-2" style={{ minWidth: 0 }}>
+              <span
+                aria-current={active ? "step" : undefined}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  height: "1.5rem",
+                  width: "1.5rem",
+                  borderRadius: "9999px",
+                  fontSize: "0.8rem",
+                  fontWeight: 700,
+                  flexShrink: 0,
+                  color: filled ? "#fff" : "var(--color-text-secondary, #64748b)",
+                  background: filled ? PRIMARY : "transparent",
+                  border: filled
+                    ? "1px solid " + PRIMARY
+                    : "1px solid var(--color-border, #cbd5e1)",
+                  // Active-step indicator: a secondary-colour ring around the circle.
+                  boxShadow: active ? "0 0 0 2px var(--color-secondary, rgba(16,124,16,0.30))" : "none",
+                }}
+              >
+                {done ? "✓" : i + 1}
+              </span>
+              <div style={{ minWidth: 0 }}>
+                <div
+                  className="pgr-step-title text-sm"
+                  style={{
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    fontWeight: active ? 600 : 500,
+                    color: active ? PRIMARY : "var(--color-text-secondary, #64748b)",
+                  }}
+                >
+                  {tr(t, "CS_CREATE_STEP_" + s.id.toUpperCase(), s.title)}
+                </div>
+                {s.sub ? (
+                  <div
+                    className="pgr-step-sub text-xs text-muted-foreground"
+                    style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                  >
+                    {tr(t, "CS_CREATE_STEP_" + s.id.toUpperCase() + "_SUB", s.sub)}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </React.Fragment>
+        );
+      })}
+    </div>
   );
 }
 
@@ -813,10 +1733,41 @@ const CreatePGRFlowV2: React.FC = () => {
   const dispatch = useDispatch();
   const client = useQueryClient();
 
-  const tenantId =
+  const baseTenant =
     Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code ||
     Digit.ULBService.getCurrentTenantId();
+  const stateTenant =
+    Digit.ULBService.getStateId() ||
+    (baseTenant ? String(baseTenant).split(".")[0] : baseTenant);
   const tenants: any = Digit.Hooks.pgr.useTenants();
+
+  const [stepIndex, setStepIndex] = React.useState(0);
+  const [formData, setFormData] = React.useState<FormData>({});
+  const [submitting, setSubmitting] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  // Authority dispatcher (RAINMAKER-PGR.ComplaintRelatedToMap @ state tenant).
+  // Empty (the default for any tenant that hasn't seeded it) => the legacy flow:
+  // no authority step, catalogue fetched at the base tenant, no extendedAttributes.
+  const { data: relatedToOptions, isLoading: isDispatcherLoading } = Digit.Hooks.useCustomMDMS(
+    stateTenant,
+    "RAINMAKER-PGR",
+    [{ name: "ComplaintRelatedToMap" }],
+    {
+      cacheTime: Infinity,
+      select: (raw: any) =>
+        ((raw?.["RAINMAKER-PGR"]?.ComplaintRelatedToMap || []) as RelatedToOption[])
+          .filter((o) => o?.active !== false && !!o?.code && !!o?.name && !!o?.tenantCode)
+          .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0)),
+    },
+    { schemaCode: "PGR_COMPLAINT_RELATED_TO_MAP", tenantId: stateTenant }
+  );
+  const hasDispatcher = Array.isArray(relatedToOptions) && relatedToOptions.length > 0;
+
+  // Catalogue tenant: the authority-resolved sub-tenant once picked, else the
+  // base tenant (legacy). Changing it re-fetches the hierarchy at that tenant.
+  const resolvedTenant = formData.resolvedTenantId || baseTenant;
+  const caseRelatedTo = formData.caseRelatedTo;
 
   // The single RAINMAKER-PGR.ComplaintHierarchy adjacency list (interior nodes
   // + leaf complaint types) is the only complaint-type master now. We derive:
@@ -824,8 +1775,8 @@ const CreatePGRFlowV2: React.FC = () => {
   //     menuPath=parentCode) so the flat fallback picker keeps working verbatim;
   //   - hierData.nodes: the full row set the N-level cascade picker walks.
   // Absent definition => the flat menuPath (=parentCode) picker is used.
-  const { data: hierAll, isLoading: isMDMSLoading } = Digit.Hooks.useCustomMDMS(
-    tenantId,
+  const { data: hierAll, isLoading: isMDMSLoading, isFetching: isMDMSFetching } = Digit.Hooks.useCustomMDMS(
+    resolvedTenant,
     "RAINMAKER-PGR",
     [{ name: "ComplaintHierarchyDefinition" }, { name: "ComplaintHierarchy" }],
     {
@@ -852,25 +1803,100 @@ const CreatePGRFlowV2: React.FC = () => {
         return { def, nodes, serviceDefs };
       },
     },
-    { schemaCode: "PGR_COMPLAINT_HIERARCHY" }
+    { schemaCode: "PGR_COMPLAINT_HIERARCHY", tenantId: resolvedTenant }
   );
 
   const serviceDefs = hierAll?.serviceDefs;
   const hierData = hierAll ? { def: hierAll.def, nodes: hierAll.nodes } : undefined;
 
-  const { mutate: createMutation } = Digit.Hooks.pgr.useCreateComplaint(tenantId);
+  // Which tenant the currently-held catalogue was fetched for. The shared MDMS
+  // hook forces keepPreviousData, so on an authority switch isLoading stays
+  // false and `serviceDefs` briefly holds the PREVIOUS tenant's rows. Comparing
+  // the resolved tenant to the last-settled one (updated only when a fetch
+  // completes) is frame-accurate — the "complaint" step shows the inline
+  // spinner the instant the tenant changes, never the stale options — and does
+  // NOT trigger on same-tenant background refetches (which would reset the picker).
+  // Track (in STATE, not a ref) the tenant the catalogue last SETTLED for. State
+  // is required so that when the new tenant's fetch completes the component
+  // re-renders and the spinner gives way to the picker — a ref update wouldn't
+  // trigger a render, so the spinner would stick (and now that staleTime is a
+  // day for caching, there's no background refetch to mask it). setState to the
+  // same value is a no-op render, so no loop / no flicker on background refetch.
+  const [catalogueLoadedFor, setCatalogueLoadedFor] = React.useState<string | undefined>(undefined);
+  React.useEffect(() => {
+    if (!isMDMSFetching) setCatalogueLoadedFor(resolvedTenant);
+  }, [isMDMSFetching, resolvedTenant]);
+  const catalogueStale = catalogueLoadedFor !== resolvedTenant;
 
-  const [stepIndex, setStepIndex] = React.useState(0);
-  const [formData, setFormData] = React.useState<FormData>({});
-  const [submitting, setSubmitting] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  // Per-category templates (RAINMAKER-PGR.ComplaintTemplateType @ state tenant),
+  // keyed by caseRelatedTo. Each points at a JSON Schema (schemaRef) + the
+  // allowed evidence document types.
+  const { data: templatesAll } = Digit.Hooks.useCustomMDMS(
+    stateTenant,
+    "RAINMAKER-PGR",
+    [{ name: "ComplaintTemplateType" }],
+    {
+      cacheTime: Infinity,
+      select: (raw: any) =>
+        (raw?.["RAINMAKER-PGR"]?.ComplaintTemplateType || []) as Array<{
+          caseRelatedTo: string;
+          active?: boolean;
+          schemaRef?: string;
+          allowedDocumentTypes?: string[];
+        }>,
+    },
+    { schemaCode: "PGR_COMPLAINT_TEMPLATE_TYPE", tenantId: stateTenant }
+  );
+  // The per-category JSON Schemas (RAINMAKER-PGR.ComplaintExtendedAttributeSchema),
+  // keyed by schemaRef — the FE renders the dynamic fields from these.
+  const { data: schemasAll } = Digit.Hooks.useCustomMDMS(
+    stateTenant,
+    "RAINMAKER-PGR",
+    [{ name: "ComplaintExtendedAttributeSchema" }],
+    {
+      cacheTime: Infinity,
+      select: (raw: any) => {
+        const rows = (raw?.["RAINMAKER-PGR"]?.ComplaintExtendedAttributeSchema || []) as Array<{
+          schemaRef: string;
+          schema?: any;
+        }>;
+        const byRef: Record<string, any> = {};
+        rows.forEach((r) => {
+          if (r?.schemaRef) byRef[r.schemaRef] = r.schema;
+        });
+        return byRef;
+      },
+    },
+    { schemaCode: "PGR_COMPLAINT_EXT_ATTR_SCHEMA", tenantId: stateTenant }
+  );
+  // Resolve the picked category → its template → its JSON Schema → renderable
+  // fields (recomputes on category change without re-fetching). NOTE: every schema
+  // field renders, incl. x-security ones — they are submitted in clear text until
+  // the backend encryption phase lands.
+  const { templateFields, evidenceDocType } = React.useMemo(() => {
+    const entry = (templatesAll || []).find(
+      (x: any) => x?.active !== false && x?.caseRelatedTo === caseRelatedTo
+    );
+    const schema = entry?.schemaRef ? (schemasAll || {})[entry.schemaRef] : null;
+    return {
+      templateFields: fieldsFromSchema(schema),
+      evidenceDocType: (entry?.allowedDocumentTypes && entry.allowedDocumentTypes[0]) || "EVIDENCE",
+    };
+  }, [templatesAll, schemasAll, caseRelatedTo]);
+
+  const { mutate: createMutation } = Digit.Hooks.pgr.useCreateComplaint(resolvedTenant);
 
   const patch = React.useCallback((partial: Partial<FormData>) => {
     setFormData((prev) => ({ ...prev, ...partial }));
     if (error) setError(null);
   }, [error]);
 
-  const isLast = stepIndex === STEPS.length - 1;
+  // Consolidated 3-step wizard. The related-to dispatcher is no longer its own
+  // step — it folds into step "complaint" (rendered above the type picker), so
+  // the step list is constant regardless of whether the dispatcher is seeded.
+  const steps = STEPS;
+  const curId = steps[stepIndex]?.id;
+  const isLast = stepIndex === steps.length - 1;
 
   // Seed postalCode from the map pin's pincode, but ONLY when the pin's pincode
   // actually changes — never on a postalCode edit. The previous version listed
@@ -896,22 +1922,40 @@ const CreatePGRFlowV2: React.FC = () => {
   }, [formData?.GeoLocationsPoint?.pincode]);
 
   const stepIsValid = React.useMemo(() => {
-    const required = MANDATORY_BY_STEP[stepIndex] || [];
-    if (!required.every((field) => isFieldValid(formData, field))) return false;
-    // Sub-type is conditionally mandatory: if the chosen complaint type has
-    // any sub-services in the same menuPath, the user MUST pick one before
-    // continuing. Mirrors the legacy FormExplorer (which surfaced the
-    // dropdown only when sub-types existed and required a selection); the
-    // baseline MANDATORY_BY_STEP can't express this since the requirement
-    // depends on serviceDefs, not on a fixed field list.
-    if (stepIndex === 0) {
-      const mainPath = formData.SelectComplaintType?.menuPath;
-      const subTypeOptions = (Array.isArray(serviceDefs) ? serviceDefs : []).filter(
-        (s: ServiceDef) => s.menuPath === mainPath
-      );
-      if (subTypeOptions.length > 1 && !formData.SelectSubComplaintType) {
-        return false;
+    switch (curId) {
+      case "complaint": {
+        // Dispatcher (if seeded) must be answered, then a leaf complaint type.
+        if (hasDispatcher && !formData.caseRelatedTo) return false;
+        if (!isFieldValid(formData, "SelectComplaintType")) return false;
+        // Sub-type is conditionally mandatory: if the chosen type has sub-services
+        // in the same menuPath, one must be picked (mirrors legacy FormExplorer).
+        const mainPath = formData.SelectComplaintType?.menuPath;
+        const subTypeOptions = (Array.isArray(serviceDefs) ? serviceDefs : []).filter(
+          (s: ServiceDef) => s.menuPath === mainPath
+        );
+        if (subTypeOptions.length > 1 && !formData.SelectSubComplaintType) return false;
+        return true;
       }
+      case "where":
+        // Map pin + a leaf ward (auto-cascaded from the pin; manual fallback).
+        return (
+          isFieldValid(formData, "GeoLocationsPoint") &&
+          isFieldValid(formData, "SelectedBoundary")
+        );
+      case "details": {
+        if (!isFieldValid(formData, "description")) return false;
+        // Mandatory dynamic fields (dispatcher flow).
+        for (const f of templateFields) {
+          if (f.mandatory && !String((formData.dynamicFields || {})[f.fieldKey] ?? "").trim()) return false;
+        }
+        // Both consents are required once an authority/template is in play.
+        if (formData.caseRelatedTo && REQUIRED_CONSENTS.some((c) => !(formData.consents || []).includes(c.code))) {
+          return false;
+        }
+        return true;
+      }
+      default:
+        return true;
     }
     // Location step: don't let the user past a pincode that doesn't match the
     // tenant's configured length (CCRS#722). Empty is allowed (optional); an
@@ -953,7 +1997,7 @@ const CreatePGRFlowV2: React.FC = () => {
       }
       setSubmitting(true);
       const user = Digit.UserService.getUser();
-      const payload = mapFormDataToRequest(formData, tenantId, user?.info ?? user);
+      const payload = mapFormDataToRequest(formData, resolvedTenant, user?.info ?? user, evidenceDocType);
       createMutation(payload, {
         onError: () => {
           dispatch({ type: "CREATE_COMPLAINT", payload: { responseInfo: { status: "failed" } } });
@@ -980,41 +2024,9 @@ const CreatePGRFlowV2: React.FC = () => {
     setStepIndex((i) => i - 1);
   }
 
-  if (isMDMSLoading) {
-    // Spinner is parked dead-centre of the form column. ScreenContainer is
-    // a flex column filling the wrapper; we make the spinner row a flex
-    // child that grows (`flex: 1`) and centres its inline-block spinner
-    // both axes — so loading state covers the same available area the
-    // form occupies (between topbar and page-footer), no off-axis drift.
-    return (
-      <ScreenContainer>
-        <div
-          style={{
-            flex: "1 1 auto",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            minHeight: 0,
-          }}
-        >
-          <span
-            aria-label="Loading"
-            style={{
-              display: "inline-block",
-              height: "2rem",
-              width: "2rem",
-              border: "3px solid currentColor",
-              borderTopColor: "transparent",
-              borderRadius: "9999px",
-              color:
-                "var(--color-primary-1, var(--color-primary-main, #c84c0e))",
-              animation: "spin 0.8s linear infinite",
-            }}
-          />
-        </div>
-      </ScreenContainer>
-    );
-  }
+  // NOTE: catalogue/dispatcher loading is handled INLINE inside the "complaint"
+  // step (StepComplaint) now — we no longer blank the whole screen, so picking
+  // an authority doesn't flash a full-page spinner mid-step.
 
   const stepProps: StepBodyProps = {
     data: formData,
@@ -1023,6 +2035,11 @@ const CreatePGRFlowV2: React.FC = () => {
     hierarchyDef: hierData?.def ?? null,
     nodes: hierData?.nodes ?? [],
     t,
+    relatedToOptions: Array.isArray(relatedToOptions) ? relatedToOptions : [],
+    templateFields,
+    resolvedTenant,
+    catalogueLoading: isMDMSLoading || catalogueStale,
+    dispatcherLoading: isDispatcherLoading,
   };
 
   return (
@@ -1031,6 +2048,11 @@ const CreatePGRFlowV2: React.FC = () => {
         <ScreenHeader
           title={tr(t, "CS_COMMON_FILE_A_COMPLAINT", "File a Complaint")}
         />
+        <p className="text-sm text-muted-foreground">
+          {tr(t, "CS_FILE_COMPLAINT_SUBTITLE", "Provide details about your complaint")}
+        </p>
+        <style>{WIZARD_CSS}</style>
+        <WizardProgress steps={steps} current={stepIndex} t={t} />
       </div>
       {/* Step body — sits between the header and the FormFooter and
           flows at content height. The earlier body-only-scroll
@@ -1052,11 +2074,9 @@ const CreatePGRFlowV2: React.FC = () => {
           padding: "1rem 1.25rem",
         }}
       >
-        {stepIndex === 0 && <Step0Type {...stepProps} />}
-        {stepIndex === 1 && <Step1Map {...stepProps} />}
-        {stepIndex === 2 && <Step2Location {...stepProps} />}
-        {stepIndex === 3 && <Step3Description {...stepProps} />}
-        {stepIndex === 4 && <Step4Images {...stepProps} />}
+        {curId === "complaint" && <StepComplaint {...stepProps} />}
+        {curId === "where" && <StepWhere {...stepProps} />}
+        {curId === "details" && <StepDetails {...stepProps} />}
         {error ? (
           <div
             role="alert"
@@ -1068,7 +2088,7 @@ const CreatePGRFlowV2: React.FC = () => {
       </div>
       <FormFooter>
         <Button variant="outline" onClick={handleBack} type="button">
-          {stepIndex === 0 ? tr(t, "CS_COMMON_CANCEL", "Cancel") : t("BACK")}
+          {stepIndex === 0 ? tr(t, "CS_COMMON_CANCEL", "Cancel") : "← " + t("BACK")}
         </Button>
         <Button
           variant="primary"
@@ -1077,7 +2097,7 @@ const CreatePGRFlowV2: React.FC = () => {
           disabled={!stepIsValid}
           type="button"
         >
-          {isLast ? t("SUBMIT") : t("NEXT")}
+          {isLast ? tr(t, "CS_SUBMIT_COMPLAINT", "Submit Complaint") : t("NEXT") + " →"}
         </Button>
       </FormFooter>
     </ScreenContainer>

@@ -19,6 +19,7 @@ import Login from "./Login";
 import Search from "./SearchApp";
 import StaticDynamicCard from "./StaticDynamicComponent/StaticDynamicCard";
 import ImageComponent from "../../components/ImageComponent";
+import { DIGIT_FOOTER_FALLBACK } from "../../components/digitFooterFallback";
 
 /**
  * v2 module-home page (rendered for /citizen/<module>-home routes, e.g.
@@ -400,6 +401,7 @@ const Home = ({
           alt="Powered by DIGIT"
           style={{ height: "1.2em", cursor: "pointer" }}
           src={window?.globalConfigs?.getConfig?.("DIGIT_FOOTER")}
+          fallbackSrc={DIGIT_FOOTER_FALLBACK}
           onClick={() => {
             window.open(window?.globalConfigs?.getConfig?.("DIGIT_HOME_URL"), "_blank").focus();
           }}

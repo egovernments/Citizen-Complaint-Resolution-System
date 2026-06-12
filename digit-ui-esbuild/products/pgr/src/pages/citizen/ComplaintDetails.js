@@ -22,6 +22,7 @@ import { buildComplaintPath } from "../../utils/complaintHierarchyPath";
 import TimeLine from "../../components/TimeLine";
 import ComplaintPhotos from "../../components/ComplaintPhotos";
 import ComplaintLocationMap from "../../components/ComplaintLocationMap";
+import { buildExtendedAttributeRows } from "../../components/PgrExtendedAttributesView";
 
 const CLOSED_STATUSES = ["RESOLVED", "REJECTED", "CLOSEDAFTERREJECTION", "CLOSEDAFTERRESOLUTION"];
 const REJECTED_STATUSES = ["REJECTED", "CLOSEDAFTERREJECTION"];
@@ -354,6 +355,22 @@ const ComplaintDetailsPage = () => {
                 </div>
               ) : null}
             </Card>
+
+            {(() => {
+              // Read-only "Additional Details" — just fetch service.extendedAttributes
+              // and show it; the backend already returns masked ("****") values.
+              const extAttrRows = buildExtendedAttributeRows(complaintDetails?.service?.extendedAttributes);
+              return extAttrRows.length > 0 ? (
+                <Card style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                  <SectionTitle>{tr("CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS", "Additional Details")}</SectionTitle>
+                  <div>
+                    {extAttrRows.map((r) => (
+                      <DetailRow key={r.fieldKey} label={r.label} value={r.value} />
+                    ))}
+                  </div>
+                </Card>
+              ) : null;
+            })()}
 
             {Number.isFinite(geoLocation?.latitude) && Number.isFinite(geoLocation?.longitude) ? (
               <Card style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: "12px" }}>
