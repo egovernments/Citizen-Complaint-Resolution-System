@@ -89,6 +89,19 @@ if [[ ! -f "inventory/host_vars/${host}.yml" ]]; then
   exit 1
 fi
 
+# Incident-derived config gate — refuses combinations that have actually
+# burned us (data-wipe fastpath, KC half-wired, inconsistent mobile rules,
+# ...). Runs HERE because real host_vars are gitignored: CI can only ever
+# validate fixtures; this is the only spot that sees the operator's config.
+# Each failure prints the incident it encodes. SKIP_PREFLIGHT=1 to bypass.
+if [[ "${SKIP_PREFLIGHT:-0}" != "1" ]]; then
+  if ! python3 ../scripts/preflight.py "inventory/host_vars/${host}.yml"; then
+    echo "" >&2
+    echo "preflight failed — fix the config or re-run with SKIP_PREFLIGHT=1 if you are CERTAIN." >&2
+    exit 1
+  fi
+fi
+
 shift
 ansible-playbook \
   -i inventory/hosts.yml \
