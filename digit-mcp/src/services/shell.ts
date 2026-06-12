@@ -39,6 +39,44 @@ export function rpkDescribeGroup(): ShellResult {
   ]);
 }
 
+// ── Docker introspection (snapshot images/config layers) ──
+// Container names are sourced from `docker ps` output, never user input,
+// but validated anyway as defense in depth.
+
+const VALID_CONTAINER_NAME = /^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/;
+
+// Tab-separated: name, image ref, state, compose service, compose project, compose config files.
+const DOCKER_PS_FORMAT =
+  '{{.Names}}\t{{.Image}}\t{{.State}}\t' +
+  '{{.Label "com.docker.compose.service"}}\t' +
+  '{{.Label "com.docker.compose.project"}}\t' +
+  '{{.Label "com.docker.compose.project.config_files"}}';
+
+export function dockerPs(): ShellResult {
+  return run('docker', ['ps', '-a', '--no-trunc', '--format', DOCKER_PS_FORMAT]);
+}
+
+/** Batched `docker inspect` of containers — one JSON object per line. */
+export function dockerInspectContainers(names: string[]): ShellResult {
+  if (names.length === 0) return { stdout: '', ok: true };
+  const bad = names.find((n) => !VALID_CONTAINER_NAME.test(n));
+  if (bad) return { stdout: '', ok: false, error: `Invalid container name: "${bad}"` };
+  return run('docker', ['inspect', '--type', 'container', '--format', '{{json .}}', ...names]);
+}
+
+// Image refs carry registry host, port, path, tag and/or digest, so they need
+// the extra chars `/ : @`. execFileSync uses no shell, so we only guard against
+// whitespace, control chars and leading dashes (option injection).
+const VALID_IMAGE_REF = /^[a-zA-Z0-9][a-zA-Z0-9_.\-/:@]*$/;
+
+/** Batched `docker inspect` of images — one JSON object per line. Refs from docker ps. */
+export function dockerInspectImages(refs: string[]): ShellResult {
+  if (refs.length === 0) return { stdout: '', ok: true };
+  const bad = refs.find((r) => !VALID_IMAGE_REF.test(r));
+  if (bad) return { stdout: '', ok: false, error: `Invalid image ref: "${bad}"` };
+  return run('docker', ['inspect', '--type', 'image', '--format', '{{json .}}', ...refs]);
+}
+
 // ── Persister container logs ──
 
 const VALID_SINCE = /^[0-9]+[smh]$/;
