@@ -42,6 +42,8 @@ const customEnglishMessages: TranslationMessages = {
       designations: 'Designations',
       hierarchies: 'Hierarchies',
       complaint_management: 'Complaint Management',
+      complaint_hierarchies: 'Complaint Hierarchies',
+      classification_nodes: 'Classification Nodes',
       complaint_types: 'Complaint Types',
       complaints: 'Complaints',
       localization: 'Localization',

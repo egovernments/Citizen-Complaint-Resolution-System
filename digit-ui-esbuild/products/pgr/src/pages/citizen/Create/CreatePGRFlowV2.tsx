@@ -64,6 +64,37 @@ interface ServiceDef {
   name?: string;
   department?: string;
   order?: number;
+  // Optional denormalised hierarchy links (present once a tenant runs the
+  // ServiceDefs backfill). The picker falls back to menuPath when absent.
+  parentCode?: string;
+  sector?: string;
+}
+
+// Configurable complaint hierarchy (RAINMAKER-PGR.ComplaintHierarchyDefinition):
+// the number/identity of levels is pure data, mirroring boundary-service's
+// HierarchyDefinition. Absent => legacy flat menuPath grouping.
+interface HierarchyLevel {
+  levelCode: string;
+  order?: number;
+  parentLevel?: string | null;
+  isFreeText?: boolean;
+  isLeafServiceCode?: boolean;
+  label?: string;
+}
+interface ComplaintHierarchyDef {
+  hierarchyType: string;
+  active?: boolean;
+  levels: HierarchyLevel[];
+}
+interface ClassificationNode {
+  hierarchyType: string;
+  levelCode: string;
+  code: string;
+  parentCode?: string | null;
+  name?: string;
+  order?: number;
+  active?: boolean;
+  path?: string;
 }
 
 interface BoundaryNode {
@@ -269,10 +300,111 @@ interface StepBodyProps {
   data: FormData;
   patch: (partial: Partial<FormData>) => void;
   serviceDefs: ServiceDef[];
+  hierarchyDef?: ComplaintHierarchyDef | null;
+  nodes?: ClassificationNode[];
   t: (key: string) => string;
 }
 
-function Step0Type({ data, patch, serviceDefs, t }: StepBodyProps) {
+/**
+ * Generic, configurable N-level cascading picker driven entirely by a
+ * ComplaintHierarchyDefinition + ClassificationNodes. Renders one dependent
+ * dropdown per level (the count is data, not code — boundary-service style).
+ * Non-leaf options come from ClassificationNode (filtered by levelCode +
+ * parentCode); the single leaf level's options come from ServiceDefs linked to
+ * the parent (by parentCode/sector, falling back to menuPath). Selecting the
+ * leaf hands the chosen ServiceDef up so the existing payload/validation logic
+ * is reused unchanged.
+ */
+function ComplaintHierarchyPicker({
+  def,
+  nodes,
+  serviceDefs,
+  onLeafChange,
+  t,
+}: {
+  def: ComplaintHierarchyDef;
+  nodes: ClassificationNode[];
+  serviceDefs: ServiceDef[];
+  onLeafChange: (leaf: ServiceDef | null) => void;
+  t: (k: string) => string;
+}) {
+  const levels = React.useMemo(
+    () => [...(def.levels || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+    [def]
+  );
+  const [sel, setSel] = React.useState<(string | null)[]>(() => levels.map(() => null));
+  React.useEffect(() => {
+    setSel((prev) => levels.map((_, i) => prev[i] ?? null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [levels.length]);
+
+  const labelFor = (lvl: HierarchyLevel) =>
+    tr(t, (def.hierarchyType + "_" + lvl.levelCode).toUpperCase(), lvl.label || lvl.levelCode);
+
+  const optionsForLevel = (i: number): { value: string; label: string }[] => {
+    const lvl = levels[i];
+    const parentCode = i === 0 ? null : sel[i - 1];
+    if (i > 0 && !parentCode) return [];
+    if (lvl.isLeafServiceCode) {
+      return (serviceDefs || [])
+        .filter((s) => {
+          const link = s.parentCode ?? s.sector ?? s.menuPath;
+          return parentCode ? link === parentCode : true;
+        })
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+        .map((s) => ({ value: s.serviceCode, label: s.name ? t(s.name) : s.serviceCode }));
+    }
+    return (nodes || [])
+      .filter((n) => n.levelCode === lvl.levelCode && n.active !== false)
+      .filter((n) => (i === 0 ? !n.parentCode : n.parentCode === parentCode))
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      .map((n) => ({ value: n.code, label: n.name || n.code }));
+  };
+
+  const handleChange = (i: number, value: string) => {
+    const next = sel.slice();
+    next[i] = value || null;
+    for (let j = i + 1; j < next.length; j++) next[j] = null;
+    setSel(next);
+    if (levels[i].isLeafServiceCode) {
+      onLeafChange((serviceDefs || []).find((s) => s.serviceCode === value) || null);
+    } else {
+      onLeafChange(null);
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      {levels.map((lvl, i) => {
+        const disabled = i > 0 && !sel[i - 1];
+        return (
+          <Field key={lvl.levelCode} label={labelFor(lvl)} required htmlFor={`lvl-${i}`}>
+            <Select
+              id={`lvl-${i}`}
+              value={sel[i] ?? undefined}
+              disabled={disabled}
+              onValueChange={(value: string) => handleChange(i, value)}
+              placeholder={
+                disabled
+                  ? tr(t, "CS_COMPLAINT_PICK_PARENT_FIRST", "Select the level above first")
+                  : tr(t, "CS_COMPLAINT_PICK_ONE", "Select…")
+              }
+              options={optionsForLevel(i)}
+            />
+          </Field>
+        );
+      })}
+    </div>
+  );
+}
+
+function Step0Type({ data, patch, serviceDefs, hierarchyDef, nodes, t }: StepBodyProps) {
+  const hierarchyActive = !!(
+    hierarchyDef &&
+    Array.isArray(hierarchyDef.levels) &&
+    hierarchyDef.levels.length > 0
+  );
+
   // Unique main types by menuPath
   const types = React.useMemo(() => {
     const seen = new Set<string>();
@@ -299,6 +431,18 @@ function Step0Type({ data, patch, serviceDefs, t }: StepBodyProps) {
   return (
     <StepShell title={t("CS_COMPLAINT_DETAILS_COMPLAINT_DETAILS")}>
       <div className="space-y-5">
+        {hierarchyActive ? (
+          <ComplaintHierarchyPicker
+            def={hierarchyDef as ComplaintHierarchyDef}
+            nodes={nodes || []}
+            serviceDefs={serviceDefs}
+            t={t}
+            onLeafChange={(leaf) =>
+              patch({ SelectComplaintType: leaf, SelectSubComplaintType: leaf })
+            }
+          />
+        ) : (
+          <>
         <Field
           label={t("CS_COMPLAINT_DETAILS_COMPLAINT_TYPE")}
           required
@@ -339,6 +483,8 @@ function Step0Type({ data, patch, serviceDefs, t }: StepBodyProps) {
             />
           </Field>
         ) : null}
+          </>
+        )}
       </div>
     </StepShell>
   );
@@ -570,6 +716,36 @@ const CreatePGRFlowV2: React.FC = () => {
     { schemaCode: "SERVICE_DEFS_MASTER_DATA" }
   );
 
+  // Configurable complaint hierarchy for this tenant. If no definition exists
+  // the citizen flow falls back to the legacy flat menuPath picker verbatim.
+  const { data: hierData } = Digit.Hooks.useCustomMDMS(
+    tenantId,
+    "RAINMAKER-PGR",
+    [{ name: "ComplaintHierarchyDefinition" }, { name: "ClassificationNode" }],
+    {
+      cacheTime: Infinity,
+      select: (raw: any) => {
+        const allDefs = (raw?.["RAINMAKER-PGR"]?.ComplaintHierarchyDefinition || []).filter(
+          (d: any) => d?.active !== false
+        );
+        const allNodes = raw?.["RAINMAKER-PGR"]?.ClassificationNode || [];
+        // Prefer a definition that actually HAS classification nodes — guards
+        // against a stray/empty definition (e.g. a half-built test hierarchy)
+        // being picked first and rendering levels with "No options". Then scope
+        // nodes to the chosen hierarchyType so other hierarchies don't leak in.
+        const def =
+          allDefs.find((d: any) => allNodes.some((n: any) => n?.hierarchyType === d?.hierarchyType)) ||
+          allDefs[0] ||
+          null;
+        const nodes = def
+          ? allNodes.filter((n: any) => n?.hierarchyType === def.hierarchyType)
+          : [];
+        return { def, nodes };
+      },
+    },
+    { schemaCode: "PGR_COMPLAINT_HIERARCHY" }
+  );
+
   const { mutate: createMutation } = Digit.Hooks.pgr.useCreateComplaint(tenantId);
 
   const [stepIndex, setStepIndex] = React.useState(0);
@@ -710,6 +886,8 @@ const CreatePGRFlowV2: React.FC = () => {
     data: formData,
     patch,
     serviceDefs: Array.isArray(serviceDefs) ? serviceDefs : [],
+    hierarchyDef: hierData?.def ?? null,
+    nodes: hierData?.nodes ?? [],
     t,
   };
 

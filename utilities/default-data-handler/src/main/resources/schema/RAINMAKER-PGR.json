@@ -46,6 +46,30 @@
         },
         "menuPathName": {
           "type": "string"
+        },
+        "hierarchyType": {
+          "type": "string",
+          "description": "Optional. Links this leaf to a ComplaintHierarchyDefinition. Absent => legacy flat menuPath grouping (unchanged behaviour)."
+        },
+        "authorityType": {
+          "type": "string",
+          "description": "Optional denormalised ancestor (top level). Canonical source is the leaf's ClassificationNode path; recomputed on load, never hand-edited."
+        },
+        "category": {
+          "type": "string",
+          "description": "Optional denormalised ancestor (main category level)."
+        },
+        "sector": {
+          "type": "string",
+          "description": "Optional denormalised ancestor (sector level). Mirrors menuPath for back-compat."
+        },
+        "path": {
+          "type": "string",
+          "description": "Optional dot-delimited materialised path of the leaf's ancestor chain, e.g. IGE.IGE_COMPLAINT.HEALTH."
+        },
+        "parentCode": {
+          "type": "string",
+          "description": "Optional code of the immediate parent ClassificationNode (the sector node)."
         }
       },
       "x-ref-schema": [],
@@ -141,6 +165,197 @@
               }
             ]
           }
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "RAINMAKER-PGR.ComplaintHierarchyDefinition",
+    "description": "Declares the ORDERED, CONFIGURABLE levels of a complaint-type hierarchy for a tenant. Direct analogue of boundary-service's HierarchyDefinition. One record per (tenantId, hierarchyType). The number/identity of levels is pure data in `levels[]` — add/remove an element to change depth, no schema or code change. A tenant with NO record falls back to legacy flat menuPath grouping.",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Complaint Hierarchy Definition",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "hierarchyType",
+        "levels"
+      ],
+      "x-unique": [
+        "hierarchyType"
+      ],
+      "properties": {
+        "hierarchyType": {
+          "type": "string",
+          "description": "Short uppercase identifier for this hierarchy, e.g. PGR."
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "levels": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Ordered top->leaf levels. Exactly one level should set isLeafServiceCode=true (its nodes' codes are ServiceDefs serviceCodes).",
+          "items": {
+            "type": "object",
+            "required": [
+              "levelCode",
+              "order"
+            ],
+            "properties": {
+              "levelCode": {
+                "type": "string"
+              },
+              "order": {
+                "type": "number"
+              },
+              "parentLevel": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "isFreeText": {
+                "type": "boolean"
+              },
+              "isLeafServiceCode": {
+                "type": "boolean"
+              },
+              "label": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "RAINMAKER-PGR.ClassificationNode",
+    "description": "Adjacency-list node for the NON-LEAF levels of a complaint hierarchy (boundary entity + relationship, collapsed into one MDMS row because complaint nodes carry no geometry). `levelCode` matches a levels[].levelCode; `parentCode` points at the parent node's code; `path` is the dot-delimited materialised path computed parent-before-child by the loader. Leaf (serviceCode) nodes are NOT stored here — the leaf is the ServiceDefs record itself.",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Classification Node",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "hierarchyType",
+        "levelCode",
+        "code",
+        "name"
+      ],
+      "x-unique": [
+        "hierarchyType",
+        "code"
+      ],
+      "properties": {
+        "hierarchyType": {
+          "type": "string"
+        },
+        "levelCode": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        },
+        "parentCode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "order": {
+          "type": "number"
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "RAINMAKER-PGR.HierarchySchema",
+    "description": "Per-module visible window into a complaint hierarchy (analogue of CMS-BOUNDARY.HierarchySchema). Bounds the dropdown window by naming the highest and lowest visible levels.",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Hierarchy Schema",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "moduleName",
+        "hierarchyType",
+        "highestLevel",
+        "lowestLevel"
+      ],
+      "x-unique": [
+        "moduleName"
+      ],
+      "properties": {
+        "moduleName": {
+          "type": "string"
+        },
+        "hierarchyType": {
+          "type": "string"
+        },
+        "highestLevel": {
+          "type": "string"
+        },
+        "lowestLevel": {
+          "type": "string"
+        },
+        "active": {
+          "type": "boolean"
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "RAINMAKER-PGR.ComplaintTypeDepartments",
+    "description": "Maps a complaint sub-type (serviceCode) to MANY departments. `primaryDepartment` is the single value that ServiceDefs.department continues to mirror (preserves single-valued backend invariants); `departments[]` is the new many-list consumed only by new assignee-routing code.",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Complaint Type Departments",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "serviceCode",
+        "departments"
+      ],
+      "x-unique": [
+        "serviceCode"
+      ],
+      "properties": {
+        "serviceCode": {
+          "type": "string"
+        },
+        "departments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "primaryDepartment": {
+          "type": "string"
         }
       },
       "x-ref-schema": [],

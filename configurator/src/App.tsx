@@ -27,6 +27,7 @@ import {
   WorkflowProcessList, WorkflowProcessShow,
   MdmsSchemaList, MdmsSchemaShow,
   BoundaryHierarchyList, BoundaryHierarchyShow, BoundaryHierarchyCreate,
+  ComplaintHierarchyList, ComplaintHierarchyShow, ComplaintHierarchyCreate,
   AdvancedPage,
 } from '@/resources';
 import PgrDashboard from './pages/PgrDashboard';
@@ -129,6 +130,7 @@ function ManagementAdmin() {
         <Resource name="workflow-processes" list={WorkflowProcessList} show={WorkflowProcessShow} />
         <Resource name="mdms-schemas" list={MdmsSchemaList} show={MdmsSchemaShow} />
         <Resource name="boundary-hierarchies" list={BoundaryHierarchyList} show={BoundaryHierarchyShow} create={BoundaryHierarchyCreate} />
+        <Resource name="complaint-hierarchies" list={ComplaintHierarchyList} show={ComplaintHierarchyShow} create={ComplaintHierarchyCreate} />
 
         {/* Generic MDMS with Show/Edit/Create (exclude resources with dedicated UI above) */}
         {Object.keys(getGenericMdmsResources()).filter((name) => name !== 'role-actions').map((name) => (
@@ -341,7 +343,7 @@ function App() {
     }));
     trackEvent('phase_complete', { phase, tenant: state.tenant });
 
-    // Track onboarding completion
+    // Track onboarding completion (final phase is Phase 4 — Employees)
     if (phase === 4) {
       trackEvent('onboarding_complete', { tenant: state.tenant });
     }

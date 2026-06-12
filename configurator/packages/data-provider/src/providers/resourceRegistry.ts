@@ -84,8 +84,17 @@ export const REGISTRY: Record<string, ResourceConfig> = {
     type: 'boundary-hierarchy', label: 'Boundary Hierarchies', idField: 'hierarchyType',
     nameField: 'hierarchyType', dedicated: true,
   },
+  // Complaint classification hierarchy (configurable N levels) — dedicated Create
+  // uses a custom level editor; backed by a plain MDMS master.
+  'complaint-hierarchies': {
+    type: 'mdms', label: 'Complaint Hierarchies', schema: 'RAINMAKER-PGR.ComplaintHierarchyDefinition',
+    idField: 'hierarchyType', nameField: 'hierarchyType', dedicated: true,
+  },
 
   // Generic MDMS Resources
+  // Classification nodes for the complaint hierarchy (non-leaf levels). Generic
+  // MDMS CRUD is enough — scalar fields keyed by (hierarchyType, code).
+  'classification-nodes': { type: 'mdms', label: 'Classification Nodes', schema: 'RAINMAKER-PGR.ClassificationNode', idField: 'code', nameField: 'name', descriptionField: 'levelCode' },
   'state-info': { type: 'mdms', label: 'State Info', schema: 'common-masters.StateInfo', idField: 'code', nameField: 'name' },
   'city-modules': { type: 'mdms', label: 'City Modules', schema: 'tenant.citymodule', idField: 'code', nameField: 'module' },
   'id-formats': { type: 'mdms', label: 'ID Formats', schema: 'common-masters.IdFormat', idField: 'idname', nameField: 'idname' },

@@ -917,3 +917,170 @@ export function parseEmployeeExcel(workbook: XLSX.WorkBook): {
     },
   };
 }
+
+// ============================================
+// Complaint Hierarchy (configurable N-level) Parser
+// ============================================
+
+export interface ClassificationNodeRow {
+  hierarchyType: string;
+  levelCode: string;
+  code: string;
+  name: string;
+  parentCode: string | null;
+  order: number;
+  active: boolean;
+  path: string;
+}
+export interface HierarchyServiceDefRow {
+  serviceCode: string;
+  name: string;
+  department: string;
+  slaHours: number;
+  keywords: string;
+  active: boolean;
+  order: number;
+  menuPath: string;
+  parentCode: string;
+  sector?: string;
+  category?: string;
+  authorityType?: string;
+  hierarchyType: string;
+  path: string;
+}
+export interface ComplaintHierarchyParseResult {
+  classificationNodes: ClassificationNodeRow[];
+  serviceDefs: HierarchyServiceDefRow[];
+  validation: ValidationResult;
+}
+
+/**
+ * Parse an uploaded complaint-hierarchy workbook against the operator-defined
+ * levels. One column per level (top→leaf) plus leaf attribute columns. Derives
+ * de-duped ClassificationNodes for the non-leaf cells and one ServiceDef per
+ * leaf row. Codes are PascalCase of the cell text (matching the rest of the
+ * loader stack); the leaf's menuPath/parentCode point at the immediate (sector)
+ * node so the citizen renderer can link leaves to their sector.
+ */
+export function parseComplaintHierarchyExcel(
+  workbook: XLSX.WorkBook,
+  hierarchyType: string,
+  levelCodes: string[]
+): ComplaintHierarchyParseResult {
+  const toPascal = (s: string): string =>
+    s
+      .replace(/[&/'’().,]+/g, ' ')
+      .split(/[\s_-]+/)
+      .filter(Boolean)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join('');
+
+  const levels = levelCodes.filter((l) => l && l.trim());
+  const leafIdx = levels.length - 1;
+  const errors: ValidationError[] = [];
+  const warnings: ValidationWarning[] = [];
+
+  const sheetName =
+    ['ComplaintHierarchy', 'Complaint Hierarchy', 'ComplaintType', 'PGR'].find(
+      (n) => workbook.Sheets[n]
+    ) || workbook.SheetNames[0];
+  const sheet = sheetName ? workbook.Sheets[sheetName] : undefined;
+  if (!sheet) {
+    return {
+      classificationNodes: [],
+      serviceDefs: [],
+      validation: {
+        valid: false,
+        errors: [{ row: 0, field: 'sheet', message: 'No sheet found in workbook', code: 'NO_SHEET' }],
+        warnings,
+      },
+    };
+  }
+  const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
+
+  const cell = (row: Record<string, unknown>, ...keys: string[]): string => {
+    for (const k of keys) {
+      const v = row[k];
+      if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
+    }
+    return '';
+  };
+
+  const nodeMap = new Map<string, ClassificationNodeRow>();
+  const serviceDefs: HierarchyServiceDefRow[] = [];
+  const seen = new Set<string>();
+
+  json.forEach((row, idx) => {
+    const rowNo = idx + 2;
+    const pathVals = levels.map((lc) => cell(row, lc, lc.replace(/_/g, ' ')));
+    if (pathVals.every((v) => !v)) return; // blank row
+    const missing = levels.filter((_, i) => !pathVals[i]);
+    if (missing.length) {
+      errors.push({ row: rowNo, field: missing.join(','), message: `Row ${rowNo}: missing ${missing.join(', ')}`, code: 'MISSING_LEVEL' });
+      return;
+    }
+
+    let parentCode: string | null = null;
+    const codeChain: string[] = [];
+    for (let i = 0; i < leafIdx; i++) {
+      const name = pathVals[i];
+      // Scope each non-leaf code by its parent so the SAME label under
+      // different ancestors (e.g. "Complaint" under both IGE and IGSAE) yields
+      // DISTINCT node codes. Without this they collapse into one node and
+      // collide on MDMS's (hierarchyType, code) uniqueIdentifier, mis-parenting
+      // one authority's subtree under another.
+      const code = parentCode ? `${parentCode}_${toPascal(name)}` : toPascal(name);
+      codeChain.push(code);
+      const key = code; // globally unique within the hierarchy now
+      if (!nodeMap.has(key)) {
+        nodeMap.set(key, {
+          hierarchyType,
+          levelCode: levels[i],
+          code,
+          name,
+          parentCode,
+          order: nodeMap.size + 1,
+          active: true,
+          path: codeChain.join('.'),
+        });
+      }
+      parentCode = code;
+    }
+    const sectorCode = parentCode || '';
+
+    const leafName = pathVals[leafIdx];
+    const serviceCode = toPascal(`${leafIdx > 0 ? pathVals[leafIdx - 1] + ' ' : ''}${leafName}`);
+    if (seen.has(serviceCode)) {
+      warnings.push({ row: rowNo, field: 'serviceCode', message: `Row ${rowNo}: duplicate ${serviceCode} skipped`, code: 'DUP' });
+      return;
+    }
+    seen.add(serviceCode);
+    const department = cell(row, 'Department Name*', 'Department Name', 'department', 'Department');
+    const slaHours = parseInt(cell(row, 'Resolution Time (Hours)*', 'Resolution Time (Hours)', 'slaHours', 'sla') || '24', 10) || 24;
+    const keywords = cell(row, 'Search Words*', 'Search Words (comma separated)*', 'Search Words', 'keywords');
+    if (!department) warnings.push({ row: rowNo, field: 'department', message: `Row ${rowNo}: no department`, code: 'NO_DEPT' });
+
+    serviceDefs.push({
+      serviceCode,
+      name: leafName,
+      department,
+      slaHours,
+      keywords,
+      active: true,
+      order: serviceDefs.length + 1,
+      menuPath: sectorCode,
+      parentCode: sectorCode,
+      sector: sectorCode || undefined,
+      category: codeChain.length >= 2 ? codeChain[1] : undefined,
+      authorityType: codeChain.length >= 1 ? codeChain[0] : undefined,
+      hierarchyType,
+      path: [...codeChain, serviceCode].join('.'),
+    });
+  });
+
+  return {
+    classificationNodes: Array.from(nodeMap.values()),
+    serviceDefs,
+    validation: { valid: errors.length === 0, errors, warnings },
+  };
+}
