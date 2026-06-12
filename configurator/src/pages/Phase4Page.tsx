@@ -158,9 +158,14 @@ export default function Phase4Page() {
     return rawEmployees.map((emp) => {
       const errors: string[] = [];
 
-      // Validate department
-      if (emp.department && !deptCodes.includes(emp.department)) {
-        errors.push(`Department "${emp.department}" not found`);
+      // Validate department(s) — comma-separated list supported; every code
+      // must exist (each becomes an HRMS assignment in buildEmployee)
+      if (emp.department) {
+        for (const dept of emp.department.split(',').map((d) => d.trim()).filter(Boolean)) {
+          if (!deptCodes.includes(dept)) {
+            errors.push(`Department "${dept}" not found`);
+          }
+        }
       }
 
       // Validate designation
