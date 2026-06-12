@@ -50,12 +50,14 @@ RUN npm run build \
 FROM nginx:1.27-alpine
 ARG BASE_PATH
 COPY --from=build /app/dist /usr/share/nginx/html${BASE_PATH}
+# `root` (not `alias`) + try_files: avoids the alias+try_files path-doubling
+# footgun and serves deep-link refreshes under the base path correctly.
 RUN printf 'server {\n\
   listen 80;\n\
+  root /usr/share/nginx/html;\n\
   location = / { return 302 %s; }\n\
   location %s {\n\
-    alias /usr/share/nginx/html%s;\n\
     try_files $uri $uri/ %sindex.html;\n\
   }\n\
-}\n' "${BASE_PATH}" "${BASE_PATH}" "${BASE_PATH}" "${BASE_PATH}" > /etc/nginx/conf.d/default.conf
+}\n' "${BASE_PATH}" "${BASE_PATH}" "${BASE_PATH}" > /etc/nginx/conf.d/default.conf
 EXPOSE 80

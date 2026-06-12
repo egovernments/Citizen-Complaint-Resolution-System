@@ -35,12 +35,16 @@ ARG BASE_PATH
 # Static bundle lives under the base path so absolute asset URLs (/configurator/…)
 # resolve both when run standalone and when extracted into a host-nginx tree.
 COPY --from=build /app/dist /usr/share/nginx/html${BASE_PATH}
+# `root` (not `alias`) + try_files: with the bundle physically under the base
+# path, $uri maps straight to disk and the SPA fallback is the base index.html —
+# avoids the well-known alias+try_files path-doubling footgun and serves
+# deep-link refreshes correctly.
 RUN printf 'server {\n\
   listen 80;\n\
+  root /usr/share/nginx/html;\n\
   location = / { return 302 %s; }\n\
   location %s {\n\
-    alias /usr/share/nginx/html%s;\n\
     try_files $uri $uri/ %sindex.html;\n\
   }\n\
-}\n' "${BASE_PATH}" "${BASE_PATH}" "${BASE_PATH}" "${BASE_PATH}" > /etc/nginx/conf.d/default.conf
+}\n' "${BASE_PATH}" "${BASE_PATH}" "${BASE_PATH}" > /etc/nginx/conf.d/default.conf
 EXPOSE 80

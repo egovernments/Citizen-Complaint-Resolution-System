@@ -42,6 +42,7 @@ NIGHTLY_SKIP="${NIGHTLY_SKIP:-}"
 cd "$REPO_DIR" || { echo "FATAL: cannot cd $REPO_DIR" >&2; exit 2; }
 [ -f "$BUILD_CONFIG" ] || { echo "FATAL: $BUILD_CONFIG not found under $REPO_DIR" >&2; exit 2; }
 command -v python3 >/dev/null || { echo "FATAL: python3 required to parse $BUILD_CONFIG" >&2; exit 2; }
+python3 -c 'import yaml' 2>/dev/null || { echo "FATAL: python3 'yaml' module (PyYAML) required to parse $BUILD_CONFIG" >&2; exit 2; }
 
 log() { echo "[nightly-build $(date -u +%H:%M:%S)] $*"; }
 declare -a OK=() FAIL=() SKIP=()
@@ -101,10 +102,12 @@ build_one() {
 }
 
 # selected <image-name> — honour NIGHTLY_ONLY / NIGHTLY_SKIP allow/deny lists.
+# Exact whitespace-delimited token match (NOT grep -w: a hyphen is a grep word
+# boundary, so `grep -w pgr-services` spuriously matches "pgr-services-db").
 selected() {
   local img="$1"
-  if [ -n "$NIGHTLY_ONLY" ] && ! grep -qw "$img" <<<"$NIGHTLY_ONLY"; then return 1; fi
-  if [ -n "$NIGHTLY_SKIP" ] &&   grep -qw "$img" <<<"$NIGHTLY_SKIP"; then return 1; fi
+  if [ -n "$NIGHTLY_ONLY" ] && [[ " $NIGHTLY_ONLY " != *" $img "* ]]; then return 1; fi
+  if [ -n "$NIGHTLY_SKIP" ] && [[ " $NIGHTLY_SKIP " == *" $img "* ]]; then return 1; fi
   return 0
 }
 
@@ -112,15 +115,32 @@ log "registry=$REGISTRY  tags=$ROLLING,$DATE_TAG  repo=$REPO_DIR"
 [ -n "$NIGHTLY_ONLY" ] && log "ONLY: $NIGHTLY_ONLY"
 [ -n "$NIGHTLY_SKIP" ] && log "SKIP: $NIGHTLY_SKIP"
 
-while IFS=$'\t' read -r img wd df mode; do
+# Parse the manifest up front so a parse error / empty manifest is a hard FATAL,
+# not a silent exit-0-having-built-nothing. Read into an array in THIS shell (a
+# read loop, not `mapfile` — portable to bash 3.2; the build runs the loop here
+# so OK/FAIL survive).
+ROWS=()
+while IFS= read -r row; do ROWS+=("$row"); done < <(read_targets)
+if [ ${#ROWS[@]} -eq 0 ]; then
+  echo "FATAL: no build targets parsed from $BUILD_CONFIG (parse error or empty manifest)" >&2
+  exit 2
+fi
+
+for row in "${ROWS[@]}"; do
+  IFS=$'\t' read -r img wd df mode <<<"$row"
   [ -n "$img" ] || continue
   if selected "$img"; then
     build_one "$img" "$wd" "$df" "$mode"
   else
     SKIP+=("$img")
   fi
-done < <(read_targets)
+done
 
 [ ${#SKIP[@]} -gt 0 ] && log "skipped: ${SKIP[*]}"
+# Guard against a NIGHTLY_ONLY typo (or all-skipped) building nothing yet exiting 0.
+if [ $(( ${#OK[@]} + ${#FAIL[@]} )) -eq 0 ]; then
+  echo "FATAL: nothing was built (NIGHTLY_ONLY/SKIP excluded every target?)" >&2
+  exit 2
+fi
 log "DONE — OK: ${OK[*]:-none} | FAILED: ${FAIL[*]:-none}"
 [ ${#FAIL[@]} -eq 0 ]
