@@ -6,11 +6,10 @@ import {
   DEFAULT_LAYOUT,
   GRID_COLS,
   TOP_ROW_CHART_IDS,
-  RANKED_LIST_WIDGET_ID,
   WIDGETS,
+  getDefaultChartItem,
   isChartWidget,
   isKpiWidget,
-  resolveRankedListGridHeight,
 } from "../constants/layoutConfig";
 
 function itemsOverlap(a, b) {
@@ -228,7 +227,7 @@ function normalizeKpiItem(item) {
     ...item,
     minW: item.minW ?? DEFAULT_KPI_LAYOUT_ITEM.minW,
     minH: item.minH ?? DEFAULT_KPI_LAYOUT_ITEM.minH,
-    maxH: item.maxH ?? DEFAULT_KPI_LAYOUT_ITEM.maxH,
+    maxH: DEFAULT_KPI_LAYOUT_ITEM.maxH,
   };
 }
 
@@ -236,25 +235,34 @@ function normalizeChartItem(item) {
   const defaults = DEFAULT_CHART_LAYOUT[item.i];
   if (!defaults) return item;
   return {
+    ...defaults,
     ...item,
-    minW: defaults.minW,
-    minH: defaults.minH,
+    minW: item.minW ?? defaults.minW,
+    minH: item.minH ?? defaults.minH,
     maxW: defaults.maxW ?? item.maxW,
     maxH: defaults.maxH ?? item.maxH,
   };
 }
 
-const LEGACY_LAYOUT_VERSIONS = ["v12", "v11", "v10", "v9"];
+const LEGACY_LAYOUT_VERSIONS = ["v14", "v13", "v12", "v11", "v10", "v9"];
 
-function readSavedLayoutRaw() {
+function getAllLayoutStorageKeys() {
   const currentKey = getLayoutStorageKey();
   const tenantPrefix = currentKey.replace(/-supervisor-dashboard-layout-v\d+$/, "");
-  const keys = [
+  return [
     currentKey,
     ...LEGACY_LAYOUT_VERSIONS.map((v) => `${tenantPrefix}-supervisor-dashboard-layout-${v}`),
   ];
+}
 
-  for (const key of keys) {
+function clearSavedLayout() {
+  for (const key of getAllLayoutStorageKeys()) {
+    localStorage.removeItem(key);
+  }
+}
+
+function readSavedLayoutRaw() {
+  for (const key of getAllLayoutStorageKeys()) {
     const saved = localStorage.getItem(key);
     if (saved) return { key, saved };
   }
@@ -350,29 +358,14 @@ export function useDashboardLayout() {
   }, []);
 
   const resetLayout = useCallback(() => {
+    clearSavedLayout();
     setLayout(DEFAULT_LAYOUT);
-    localStorage.removeItem(getLayoutStorageKey());
+    persistLayout(DEFAULT_LAYOUT);
   }, []);
 
   const removeWidgetFromLayout = useCallback((widgetId) => {
     setLayout((prev) => {
       const next = prev.filter((item) => item.i !== widgetId);
-      persistLayout(next);
-      return next;
-    });
-  }, []);
-
-  const syncRankedListHeight = useCallback((itemCount) => {
-    const targetH = resolveRankedListGridHeight(itemCount);
-    setLayout((prev) => {
-      const listItem = prev.find((item) => item.i === RANKED_LIST_WIDGET_ID);
-      if (!listItem || listItem.h <= targetH) return prev;
-
-      const next = prev.map((item) =>
-        item.i === RANKED_LIST_WIDGET_ID
-          ? { ...item, h: targetH, minH: DEFAULT_CHART_LAYOUT[RANKED_LIST_WIDGET_ID]?.minH ?? 2 }
-          : item
-      );
       persistLayout(next);
       return next;
     });
@@ -384,19 +377,44 @@ export function useDashboardLayout() {
       if (prev.some((item) => item.i === widgetId)) return prev;
 
       const fallback = nextKpiPosition(prev);
-      const newItem = {
+      const newItem = normalizeKpiItem({
         i: widgetId,
         x: position?.x ?? fallback.x,
         y: position?.y ?? fallback.y,
-        ...DEFAULT_KPI_LAYOUT_ITEM,
-      };
+      });
 
-      let next = [...prev, newItem];
+      const next = pushAdjacentItems([...prev, newItem], widgetId);
       persistLayout(next);
       return next;
     });
   }, []);
 
+  const addWidgetToLayout = useCallback((widgetId, position) => {
+    if (!WIDGETS[widgetId]) return;
+
+    if (isKpiWidget(widgetId)) {
+      addKpiToLayout(widgetId, position);
+      return;
+    }
+
+    setLayout((prev) => {
+      if (prev.some((item) => item.i === widgetId)) return prev;
+
+      const defaultItem = getDefaultChartItem(widgetId);
+      if (!defaultItem) return prev;
+
+      const newItem = normalizeChartItem({
+        ...defaultItem,
+        ...(position && { x: position.x, y: position.y }),
+      });
+
+      const next = reflowCharts(pushAdjacentItems([...prev, newItem], widgetId));
+      persistLayout(next);
+      return next;
+    });
+  }, [addKpiToLayout]);
+
+  const visibleLayoutIds = layout.map((item) => item.i);
   const visibleKpiIds = layout.filter((item) => isKpiWidget(item.i)).map((item) => item.i);
 
   return {
@@ -406,7 +424,8 @@ export function useDashboardLayout() {
     resetLayout,
     removeWidgetFromLayout,
     addKpiToLayout,
-    syncRankedListHeight,
+    addWidgetToLayout,
+    visibleLayoutIds,
     visibleKpiIds,
   };
 }

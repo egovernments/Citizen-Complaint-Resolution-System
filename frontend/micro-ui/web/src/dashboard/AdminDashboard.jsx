@@ -4,12 +4,25 @@ import DashboardLayout from "./components/DashboardLayout";
 import DashboardGrid from "./components/DashboardGrid";
 import { useDashboardLayout } from "./hooks/useDashboardLayout";
 import { useDashboardData } from "./hooks/useDashboardData";
-import { useSubMetricSelection } from "./hooks/useSubMetricSelection";
+import { useDashboardFilters } from "./hooks/useDashboardFilters";
 
 const AdminDashboard = () => {
   const [draggingKpiId, setDraggingKpiId] = useState(null);
-  const { subMetricValues, chartData, loading, error, asOf, refetch } = useDashboardData();
-  const { getSubMetricId, setSubMetricId } = useSubMetricSelection();
+  const { filters, setFilter, clearFilters, applyFilterOptions, resolveSubMetricId } =
+    useDashboardFilters();
+  const {
+    subMetricValues,
+    chartData,
+    filterOptions,
+    loading,
+    error,
+    asOf,
+    refetch,
+  } = useDashboardData(filters);
+
+  useEffect(() => {
+    applyFilterOptions(filterOptions);
+  }, [filterOptions, applyFilterOptions]);
   const {
     layout,
     onLayoutChange,
@@ -17,17 +30,9 @@ const AdminDashboard = () => {
     resetLayout,
     removeWidgetFromLayout,
     addKpiToLayout,
-    syncRankedListHeight,
-    visibleKpiIds,
+    addWidgetToLayout,
+    visibleLayoutIds,
   } = useDashboardLayout();
-
-  const rankedListCount = chartData.rankedCategories?.length ?? 0;
-
-  useEffect(() => {
-    if (rankedListCount > 0) {
-      syncRankedListHeight(rankedListCount);
-    }
-  }, [rankedListCount, syncRankedListHeight]);
 
   const handleDragKpiStart = useCallback((kpiId) => {
     setDraggingKpiId(kpiId);
@@ -48,11 +53,16 @@ const AdminDashboard = () => {
   return (
     <DashboardLayout
       onResetLayout={resetLayout}
-      visibleKpiIds={visibleKpiIds}
-      onAddKpi={addKpiToLayout}
+      visibleLayoutIds={visibleLayoutIds}
+      onAddWidget={addWidgetToLayout}
       onDragKpiStart={handleDragKpiStart}
       onDragKpiEnd={handleDragKpiEnd}
       asOf={asOf}
+      filters={filters}
+      onFilterChange={setFilter}
+      onClearFilters={clearFilters}
+      filterOptions={filterOptions}
+      filterOptionsLoading={loading}
     >
       {error && (
         <div className="tw-mb-4 tw-flex tw-items-center tw-justify-between tw-rounded-md tw-border tw-border-red-200 tw-bg-red-50 tw-px-4 tw-py-3 tw-text-sm tw-text-red-800">
@@ -74,8 +84,7 @@ const AdminDashboard = () => {
         onDropKpi={handleDropKpi}
         draggingKpiId={draggingKpiId}
         subMetricValues={subMetricValues}
-        getSubMetricId={getSubMetricId}
-        setSubMetricId={setSubMetricId}
+        resolveSubMetricId={resolveSubMetricId}
         chartData={chartData}
         loading={loading}
       />

@@ -5,16 +5,26 @@
 
 export const COMPLAINT_LANDSCAPE_SECTION = "Complaint landscape";
 
+export const VISUALIZATIONS_SECTION = "Charts & tables";
+
 export const INVENTORY_SECTIONS = [
   {
     id: "complaint-landscape",
     label: COMPLAINT_LANDSCAPE_SECTION,
     description: "Volume, trends, and geographic patterns",
     metricIds: null,
+    widgetIds: null,
+  },
+  {
+    id: "visualizations",
+    label: VISUALIZATIONS_SECTION,
+    description: "Trending lists, breakdown tables, and bar charts",
+    metricIds: null,
+    widgetIds: null,
   },
 ];
 
-const COUNT_WINDOWS = [
+export const TIME_WINDOW_OPTIONS = [
   {
     id: "daily",
     label: "Daily count",
@@ -53,7 +63,7 @@ const COUNT_WINDOWS = [
 ];
 
 function countSubMetrics(prefix) {
-  return COUNT_WINDOWS.map((sub) => ({
+  return TIME_WINDOW_OPTIONS.map((sub) => ({
     ...sub,
     queryKey:
       sub.format === "percentDelta"
@@ -68,6 +78,7 @@ export const LANDSCAPE_METRICS = [
     id: "cl-metric-total-registered",
     metric: "Total complaints registered",
     accent: "teal",
+    filterGroup: "timeWindow",
     defaultSubMetricId: "weekly",
     subMetrics: countSubMetrics("cl_reg"),
   },
@@ -75,6 +86,7 @@ export const LANDSCAPE_METRICS = [
     id: "cl-metric-total-open",
     metric: "Total complaints open",
     accent: "amber",
+    filterGroup: "timeWindow",
     defaultSubMetricId: "weekly",
     subMetrics: countSubMetrics("cl_open"),
   },
@@ -82,6 +94,7 @@ export const LANDSCAPE_METRICS = [
     id: "cl-metric-total-resolved",
     metric: "Total complaints resolved",
     accent: "green",
+    filterGroup: "timeWindow",
     defaultSubMetricId: "weekly",
     subMetrics: countSubMetrics("cl_res"),
   },
@@ -237,14 +250,6 @@ export const LANDSCAPE_CHARTS = [
     queryKey: "cl_chart_categories",
   },
   {
-    id: "cl-list-categories",
-    type: "ranked-list",
-    metric: "Top trending categories",
-    subMetric: "Category name (rank 1–5)",
-    outputFormat: "Ranked text list",
-    queryKey: "cl_chart_categories",
-  },
-  {
     id: "cl-chart-wards",
     type: "bar-chart",
     metric: "Category breakdown by ward / locality",
@@ -260,7 +265,49 @@ export const LANDSCAPE_CHARTS = [
     outputFormat: "Bar chart: count per weekday",
     queryKey: "cl_chart_dow",
   },
+  {
+    id: "cl-list-categories",
+    type: "data-table",
+    metric: "Trending complaints (top 5)",
+    subMetric: null,
+    outputFormat: "Ranked table with WoW",
+    queryKey: "cl_chart_categories",
+  },
+  {
+    id: "cl-table-resolution",
+    type: "data-table",
+    metric: "Resolution rate by complaint type",
+    subMetric: null,
+    outputFormat: "% per category row",
+    queryKey: "rs_table_resolution_by_category",
+  },
+  {
+    id: "cl-table-locality",
+    type: "data-table",
+    metric: "By locality",
+    subMetric: null,
+    outputFormat: "Ward table",
+    queryKey: "cl_chart_wards",
+  },
+  {
+    id: "cl-table-workflow-stages",
+    type: "data-table",
+    metric: "Average time per workflow stage",
+    subMetric: null,
+    outputFormat: "Stage dwell table",
+    queryKey: "ev_table_stage_dwell",
+  },
+  {
+    id: "cl-map-complaints",
+    type: "map",
+    metric: "Complaint locations",
+    subMetric: null,
+    outputFormat: "Map (pins)",
+    queryKey: "cl_map_complaints",
+  },
 ];
+
+INVENTORY_SECTIONS[1].widgetIds = LANDSCAPE_CHARTS.map((c) => c.id);
 
 export function getSubMetricDef(metric, subMetricId) {
   return metric.subMetrics.find((s) => s.id === subMetricId) || metric.subMetrics[0];

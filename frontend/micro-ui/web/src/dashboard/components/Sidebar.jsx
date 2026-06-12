@@ -7,8 +7,8 @@ const NAV_ITEMS = [
 ];
 
 const Sidebar = ({
-  visibleKpiIds,
-  onAddKpi,
+  visibleLayoutIds,
+  onAddWidget,
   onDragKpiStart,
   onDragKpiEnd,
 }) => {
@@ -39,8 +39,8 @@ const Sidebar = ({
         ))}
       </nav>
       <KpiInventory
-        visibleKpiIds={visibleKpiIds}
-        onAddKpi={onAddKpi}
+        visibleLayoutIds={visibleLayoutIds}
+        onAddWidget={onAddWidget}
         onDragKpiStart={onDragKpiStart}
         onDragKpiEnd={onDragKpiEnd}
       />

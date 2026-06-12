@@ -6,8 +6,8 @@ import {
   DROPPING_ITEM,
   DROPPING_ITEM_ID,
   KPI_ROW_HEIGHT,
-  RANKED_LIST_WIDGET_ID,
   WIDGETS,
+  isChartWidget,
   isKpiWidget,
 } from "../constants/layoutConfig";
 import {
@@ -15,32 +15,55 @@ import {
   getSubMetricDef,
   subMetricValueKey,
 } from "../config/kpiQueries";
+import { TABLE_WIDGET_CONFIG, isTableWidget } from "../config/dashboardTables";
 import KpiCard from "./KpiCard";
+import DashboardTable from "./DashboardTable";
 import DepartmentBarChart, { WEEKDAY_CHART_ORDER } from "./DepartmentBarChart";
-import RankedList from "./RankedList";
+import ComplaintMap from "./ComplaintMap";
+import ResizeGrip from "./ResizeGrip";
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
 const METRIC_LOOKUP = Object.fromEntries(KPI_METRICS.map((m) => [m.id, m]));
 
-const WIDGET_PADDING = "tw-p-3";
-
 const ChartPlaceholder = ({ message }) => (
-  <div className={`tw-flex tw-h-full tw-items-center tw-justify-center tw-text-sm tw-text-slate-500 ${WIDGET_PADDING}`}>
+  <div className="tw-flex tw-h-full tw-items-center tw-justify-center tw-p-3 tw-text-sm tw-text-slate-500">
     {message}
   </div>
 );
 
-const WidgetHeader = ({ metric, subMetric }) => (
-  <div className={`dashboard-drag-handle tw-min-w-0 tw-shrink-0 tw-border-b tw-border-slate-100 tw-px-3 tw-py-2`}>
-    <p className="tw-truncate tw-text-xs tw-font-semibold tw-text-slate-700">{metric}</p>
-    <p className="tw-truncate tw-text-[10px] tw-text-slate-400">{subMetric}</p>
+const WidgetHeader = ({ metric, subMetric, compact = false }) => (
+  <div
+    className={`dashboard-drag-handle tw-min-w-0 tw-shrink-0 tw-border-b tw-border-slate-100 tw-px-3 ${
+      compact ? "tw-py-1.5" : "tw-py-2"
+    }`}
+  >
+    <p
+      className={`tw-truncate tw-font-semibold tw-text-slate-800 ${
+        compact ? "tw-text-[11px] tw-leading-tight" : "tw-text-xs"
+      }`}
+    >
+      {metric}
+    </p>
+    {subMetric ? (
+      <p className="tw-truncate tw-text-[10px] tw-leading-tight tw-text-slate-400">{subMetric}</p>
+    ) : null}
   </div>
 );
 
 const GRID_MARGIN = [16, 16];
 const DROP_SIZE = { w: DROPPING_ITEM.w, h: DROPPING_ITEM.h };
 const RESIZE_HANDLES = ["se"];
+
+function gridItemClassName(widgetId) {
+  if (isKpiWidget(widgetId)) return "dashboard-grid-item-kpi";
+  if (isTableWidget(widgetId)) return "dashboard-grid-item-chart-clipped";
+  if (WIDGETS[widgetId]?.type === "bar-chart") {
+    return "dashboard-grid-item-chart-visible";
+  }
+  if (isChartWidget(widgetId)) return "dashboard-grid-item-chart-clipped";
+  return undefined;
+}
 
 const DashboardGrid = ({
   layout,
@@ -50,9 +73,8 @@ const DashboardGrid = ({
   onDropKpi,
   draggingKpiId,
   subMetricValues = {},
-  getSubMetricId,
-  setSubMetricId,
-  chartData = { categories: [], wards: [], dow: [], rankedCategories: [] },
+  resolveSubMetricId,
+  chartData = {},
   loading = false,
 }) => {
   const isExternalDrag = Boolean(draggingKpiId);
@@ -65,6 +87,7 @@ const DashboardGrid = ({
       lg: layout.map((item) => ({
         ...item,
         resizeHandles: RESIZE_HANDLES,
+        className: gridItemClassName(item.i),
       })),
     }),
     [layout]
@@ -74,39 +97,32 @@ const DashboardGrid = ({
     const metric = METRIC_LOOKUP[metricId];
     if (!metric) return null;
 
-    const selectedSubMetricId = getSubMetricId(metricId);
+    const selectedSubMetricId = resolveSubMetricId(metric);
     const sub = getSubMetricDef(metric, selectedSubMetricId);
     const value = subMetricValues[subMetricValueKey(metricId, sub.id)];
 
     return (
       <KpiCard
         metric={metric.metric}
-        subMetrics={metric.subMetrics}
-        selectedSubMetricId={sub.id}
-        onSubMetricChange={(nextId) => setSubMetricId(metricId, nextId)}
         value={value}
-        accent={metric.accent}
         loading={loading && value == null}
       />
     );
   };
 
-  const renderWidget = (widgetId) => {
-    const meta = WIDGETS[widgetId];
-    if (!meta) return null;
-
-    if (meta.type === "kpi") {
-      return renderKpi(widgetId);
-    }
-
+  const renderBarChart = (widgetId) => {
     if (widgetId === "cl-chart-categories") {
-      if (loading && !chartData.categories?.length) return <ChartPlaceholder message="Loading…" />;
+      if (loading && !chartData.categories?.length) {
+        return <ChartPlaceholder message="Loading…" />;
+      }
       if (!chartData.categories?.length) return <ChartPlaceholder message="No data" />;
       return <DepartmentBarChart data={chartData.categories} />;
     }
 
     if (widgetId === "cl-chart-wards") {
-      if (loading && !chartData.wards?.length) return <ChartPlaceholder message="Loading…" />;
+      if (loading && !chartData.wards?.length) {
+        return <ChartPlaceholder message="Loading…" />;
+      }
       if (!chartData.wards?.length) return <ChartPlaceholder message="No data" />;
       return <DepartmentBarChart data={chartData.wards} />;
     }
@@ -122,12 +138,45 @@ const DashboardGrid = ({
       );
     }
 
-    if (widgetId === "cl-list-categories") {
-      if (loading && !chartData.rankedCategories?.length) {
-        return <ChartPlaceholder message="Loading…" />;
-      }
-      if (!chartData.rankedCategories?.length) return <ChartPlaceholder message="No data" />;
-      return <RankedList items={chartData.rankedCategories} />;
+    return null;
+  };
+
+  const renderTableWidget = (widgetId) => {
+    const config = TABLE_WIDGET_CONFIG[widgetId];
+    if (!config) return null;
+
+    const rows = chartData[config.dataKey] || [];
+    if (loading && !rows.length) return <ChartPlaceholder message="Loading…" />;
+    if (!rows.length) return <ChartPlaceholder message="No data" />;
+
+    return <DashboardTable columns={config.columns} rows={rows} />;
+  };
+
+  const renderMap = () => {
+    const pins = chartData.mapPins || [];
+    if (loading && !pins.length) return <ChartPlaceholder message="Loading…" />;
+    if (!pins.length) return <ChartPlaceholder message="No mapped complaints" />;
+    return <ComplaintMap pins={pins} />;
+  };
+
+  const renderWidget = (widgetId) => {
+    const meta = WIDGETS[widgetId];
+    if (!meta) return null;
+
+    if (meta.type === "kpi") {
+      return renderKpi(widgetId);
+    }
+
+    if (isTableWidget(widgetId)) {
+      return renderTableWidget(widgetId);
+    }
+
+    if (meta.type === "bar-chart") {
+      return renderBarChart(widgetId);
+    }
+
+    if (meta.type === "map") {
+      return renderMap(widgetId);
     }
 
     return null;
@@ -237,6 +286,8 @@ const DashboardGrid = ({
           {layout.map((item) => {
             const isKpi = isKpiWidget(item.i);
             const meta = WIDGETS[item.i];
+            const isTable = isTableWidget(item.i);
+            const isBarChart = meta?.type === "bar-chart";
 
             if (isKpi) {
               return (
@@ -266,15 +317,26 @@ const DashboardGrid = ({
                 >
                   ×
                 </button>
-                <div className="dashboard-widget dashboard-chart-widget tw-flex tw-h-full tw-min-h-0 tw-w-full tw-flex-col">
-                  {meta && <WidgetHeader metric={meta.metric} subMetric={meta.subMetric} />}
+                <div className="dashboard-widget dashboard-chart-widget tw-relative tw-flex tw-h-full tw-min-h-0 tw-w-full tw-flex-col tw-overflow-hidden">
+                  {meta && (
+                    <WidgetHeader
+                      metric={meta.metric}
+                      subMetric={meta.subMetric}
+                      compact={isTable}
+                    />
+                  )}
                   <div
-                    className={`tw-flex tw-min-h-0 tw-flex-col tw-justify-start tw-overflow-visible ${WIDGET_PADDING} ${
-                      item.i === RANKED_LIST_WIDGET_ID ? "tw-shrink-0" : "tw-flex-1"
-                    }`}
+                    className={
+                      isTable
+                        ? "dashboard-table-body tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-hidden tw-px-2 tw-pb-2 tw-pt-1"
+                        : isBarChart
+                          ? "tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-hidden tw-p-2"
+                          : "tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-hidden tw-p-3"
+                    }
                   >
                     {renderWidget(item.i)}
                   </div>
+                  <ResizeGrip />
                 </div>
               </div>
             );

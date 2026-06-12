@@ -45,6 +45,14 @@ const officerTopCount = (filters, timeWindow) => ({
 });
 
 export const BATCH_QUERIES = {
+  // Complaint locations for the map widget: one row per pinned (lat,long) location.
+  cl_map_complaints: {
+    grain: "facts",
+    dimensions: ["latitude", "longitude", "service_code", "application_status"],
+    measures: [{ name: "n", agg: "count" }],
+    filters: { has_geo_pin: true },
+    limit: 1000,
+  },
   cl_reg_daily: filedWindow("last_1d"),
   cl_reg_weekly: filedWindow("wtd"),
   cl_reg_monthly: filedWindow("mtd"),
@@ -127,6 +135,75 @@ export const BATCH_QUERIES = {
     dimensions: ["created_dow"],
     measures: [{ name: "total", agg: "count" }],
     sort: [{ by: "created_dow", dir: "asc" }],
+  },
+  cl_chart_categories_pw: {
+    grain: "facts",
+    dimensions: ["service_code"],
+    measures: [{ name: "total", agg: "count" }],
+    limit: 200,
+  },
+  cl_ward_open: {
+    grain: "facts",
+    dimensions: ["ward_code"],
+    filters: { is_open: true },
+    measures: [{ name: "total", agg: "count" }],
+    sort: [{ by: "total", dir: "desc" }],
+    limit: 15,
+  },
+  cl_ward_ontime: {
+    grain: "facts",
+    window: { name: "wtd", timeRole: "resolved_at" },
+    dimensions: ["ward_code"],
+    filters: { is_resolved: true },
+    measures: [
+      {
+        name: "ontime_pct",
+        agg: "ratio",
+        numerator: { agg: "count", filter: { sla_breached: false } },
+        denominator: { agg: "count" },
+      },
+    ],
+    sort: [{ by: "ontime_pct", dir: "desc" }],
+    limit: 15,
+  },
+  rs_table_resolution_by_category: {
+    grain: "facts",
+    window: { name: "wtd", timeRole: "filed_at" },
+    dimensions: ["service_code"],
+    measures: [
+      {
+        name: "closure_pct",
+        agg: "ratio",
+        numerator: { agg: "count", filter: { is_resolved: true } },
+        denominator: { agg: "count" },
+      },
+      {
+        name: "ontime_pct",
+        agg: "ratio",
+        numerator: { agg: "count", filter: { is_resolved: true, sla_breached: false } },
+        denominator: { agg: "count", filter: { is_resolved: true } },
+      },
+      {
+        name: "avg_ttr_ms",
+        agg: "avg",
+        column: "resolution_ms",
+        filter: { is_resolved: true },
+      },
+    ],
+    sort: [{ by: "closure_pct", dir: "desc" }],
+    limit: 15,
+  },
+  ev_table_stage_dwell: {
+    grain: "events",
+    window: { name: "wtd", timeRole: "event_at" },
+    dimensions: ["status"],
+    measures: [
+      { name: "avg_dwell", agg: "avg", column: "dwell_ms" },
+      { name: "median_dwell", agg: "percentile", column: "dwell_ms", p: 50 },
+      { name: "samples", agg: "count" },
+    ],
+    sort: [{ by: "avg_dwell", dir: "desc" }],
+    limit: 8,
   },
   // Employee performance
   ep_open_by_officer: officerTopCount({ is_open: true }),
@@ -415,6 +492,192 @@ export const BATCH_QUERIES = {
   },
 };
 
+/** Unfiltered ward/service lists for global filter dropdowns (no self-dimension filter). */
+export const FILTER_DIMENSION_QUERIES = {
+  cl_filter_wards: {
+    grain: "facts",
+    window: { name: "wtd", timeRole: "filed_at" },
+    dimensions: ["ward_code"],
+    measures: [{ name: "total", agg: "count" }],
+    sort: [{ by: "ward_code", dir: "asc" }],
+    limit: 200,
+  },
+  cl_filter_categories: {
+    grain: "facts",
+    window: { name: "wtd", timeRole: "filed_at" },
+    dimensions: ["service_code"],
+    measures: [{ name: "total", agg: "count" }],
+    sort: [{ by: "service_code", dir: "asc" }],
+    limit: 200,
+  },
+};
+
+function isoDateToStartMs(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d).getTime();
+}
+
+function isoDateToEndExclusiveMs(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d + 1).getTime();
+}
+
+function mergeQueryFilters(existingFilters, globalFilters) {
+  const merged = { ...(existingFilters || {}) };
+  for (const [key, value] of Object.entries(globalFilters)) {
+    if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+      merged[key] = { ...(merged[key] || {}), ...value };
+    } else {
+      merged[key] = value;
+    }
+  }
+  return merged;
+}
+
+function dateFilterColumnForQuery(query) {
+  if (query.window?.timeRole === "resolved_at") {
+    return "resolved_at";
+  }
+  return "created_at";
+}
+
+export function buildGlobalApiFilters(dashboardFilters) {
+  const apiFilters = {};
+
+  if (dashboardFilters?.geography && dashboardFilters.geography !== "all") {
+    apiFilters.ward_code = dashboardFilters.geography;
+  }
+  if (dashboardFilters?.complaintType && dashboardFilters.complaintType !== "all") {
+    apiFilters.service_code = dashboardFilters.complaintType;
+  }
+
+  if (
+    dashboardFilters?.dateRangeActive &&
+    dashboardFilters?.dateFrom &&
+    dashboardFilters?.dateTo
+  ) {
+    apiFilters.__dateRange = {
+      fromMs: isoDateToStartMs(dashboardFilters.dateFrom),
+      toMs: isoDateToEndExclusiveMs(dashboardFilters.dateTo),
+    };
+  }
+
+  return apiFilters;
+}
+
+function applyDashboardFiltersToQuery(query, apiFilters) {
+  if (!apiFilters || Object.keys(apiFilters).length === 0) {
+    return query;
+  }
+
+  const { __dateRange, ...dimensionFilters } = apiFilters;
+  const next = { ...query };
+  const filtersToApply = { ...dimensionFilters };
+
+  if (__dateRange) {
+    const dateColumn = dateFilterColumnForQuery(query);
+    filtersToApply[dateColumn] = { gte: __dateRange.fromMs, lt: __dateRange.toMs };
+    delete next.window;
+  }
+
+  if (Object.keys(filtersToApply).length === 0) {
+    return query;
+  }
+
+  next.filters = mergeQueryFilters(query.filters, filtersToApply);
+  return next;
+}
+
+function priorWeekCreatedAtFilter() {
+  const now = new Date();
+  const day = now.getDay();
+  const daysFromMonday = day === 0 ? 6 : day - 1;
+  const thisMonday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() - daysFromMonday
+  );
+  thisMonday.setHours(0, 0, 0, 0);
+  const lastMonday = new Date(thisMonday);
+  lastMonday.setDate(lastMonday.getDate() - 7);
+  return { gte: lastMonday.getTime(), lt: thisMonday.getTime() };
+}
+
+export function buildBatchQueries(dashboardFilters) {
+  const apiFilters = buildGlobalApiFilters(dashboardFilters);
+  const dimensionOnlyFilters = apiFilters.__dateRange
+    ? { __dateRange: apiFilters.__dateRange }
+    : {};
+  const queries = {};
+
+  for (const [key, query] of Object.entries(FILTER_DIMENSION_QUERIES)) {
+    queries[key] = applyDashboardFiltersToQuery(query, dimensionOnlyFilters);
+  }
+  for (const [key, query] of Object.entries(BATCH_QUERIES)) {
+    queries[key] = applyDashboardFiltersToQuery(query, apiFilters);
+  }
+
+  if (!apiFilters.__dateRange && queries.cl_chart_categories_pw) {
+    const wardTypeFilters = { ...apiFilters };
+    delete wardTypeFilters.__dateRange;
+    queries.cl_chart_categories_pw = {
+      ...queries.cl_chart_categories_pw,
+      filters: mergeQueryFilters(wardTypeFilters, {
+        created_at: priorWeekCreatedAtFilter(),
+      }),
+    };
+  }
+
+  return queries;
+}
+
+export function formatDimensionLabel(code) {
+  const humanized = String(code).replace(/([a-z])([A-Z])/g, "$1 $2");
+  const wardMatch = humanized.match(/ward[_\s-]?(\d+)/i);
+  if (wardMatch) return `Ward ${wardMatch[1]}`;
+
+  const dot = humanized.lastIndexOf(".");
+  if (dot >= 0) {
+    return humanized
+      .slice(dot + 1)
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  const parts = humanized.split("_").filter(Boolean);
+  if (parts.length > 2) {
+    return parts
+      .slice(-2)
+      .join(" ")
+      .replace(/_/g, " ");
+  }
+
+  return humanized.replace(/_/g, " ");
+}
+
+function parseDimensionOptions(result, key) {
+  if (!result?.rows?.length) return [];
+  return result.rows
+    .filter((row) => row[key] != null && row[key] !== "")
+    .map((row) => ({
+      id: String(row[key]),
+      label: formatDimensionLabel(String(row[key])),
+    }));
+}
+
+export function parseFilterOptions(results) {
+  return {
+    geography: [
+      { id: "all", label: "All wards" },
+      ...parseDimensionOptions(results?.cl_filter_wards, "ward_code"),
+    ],
+    complaintType: [
+      { id: "all", label: "All types" },
+      ...parseDimensionOptions(results?.cl_filter_categories, "service_code"),
+    ],
+  };
+}
+
 const DOW_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export const UNSUPPORTED_VALUE = "—";
@@ -572,12 +835,33 @@ export function getDisplayValue(metric, subMetricId, allValues, loading) {
   return allValues[key] ?? UNSUPPORTED_VALUE;
 }
 
+function sortRowsByTotalDesc(rows, labelKey) {
+  return [...rows].sort((a, b) => {
+    const countDiff = (Number(b.total) || 0) - (Number(a.total) || 0);
+    if (countDiff !== 0) return countDiff;
+    return String(a[labelKey] ?? "").localeCompare(String(b[labelKey] ?? ""));
+  });
+}
+
 export function parseBarChart(result, labelKey) {
   if (!result?.rows?.length) return [];
-  return result.rows.map((row) => ({
+  return sortRowsByTotalDesc(result.rows, labelKey).map((row) => ({
     label: String(row[labelKey] ?? "Unknown"),
     count: Number(row.total) || 0,
   }));
+}
+
+export function parseMapPins(result) {
+  if (!result?.rows?.length) return [];
+  return result.rows
+    .map((row) => ({
+      lat: Number(row.latitude),
+      lng: Number(row.longitude),
+      count: Number(row.n) || 1,
+      serviceCode: row.service_code,
+      status: row.application_status,
+    }))
+    .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
 }
 
 export function parseDowChart(result) {
@@ -593,9 +877,135 @@ export function parseDowChart(result) {
 
 export function parseRankedList(result, labelKey, limit = 5) {
   if (!result?.rows?.length) return [];
-  return result.rows.slice(0, limit).map((row, index) => ({
-    rank: index + 1,
-    label: String(row[labelKey] ?? "Unknown"),
-    value: Number(row.total) || 0,
+  return sortRowsByTotalDesc(result.rows, labelKey)
+    .slice(0, limit)
+    .map((row, index) => ({
+      rank: index + 1,
+      label: String(row[labelKey] ?? "Unknown"),
+      value: Number(row.total) || 0,
+    }));
+}
+
+function formatStatusLabel(status) {
+  return String(status)
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function computeWowPercent(current, prior) {
+  if (prior == null || !Number.isFinite(prior)) return null;
+  if (prior === 0) return current > 0 ? 100 : 0;
+  return ((current - prior) / prior) * 100;
+}
+
+export function parseTrendingComplaintsTable(
+  currentResult,
+  priorResult,
+  labelKey = "service_code",
+  limit = 5
+) {
+  if (!currentResult?.rows?.length) return [];
+
+  const priorByKey = Object.fromEntries(
+    (priorResult?.rows || []).map((row) => [
+      String(row[labelKey]),
+      Number(row.total) || 0,
+    ])
+  );
+
+  return sortRowsByTotalDesc(currentResult.rows, labelKey)
+    .slice(0, limit)
+    .map((row, index) => {
+      const key = String(row[labelKey] ?? "Unknown");
+      const volume = Number(row.total) || 0;
+      const label = formatDimensionLabel(key);
+      return {
+        id: `trend-${index + 1}-${key}`,
+        rank: index + 1,
+        label,
+        volume,
+        wow: priorResult ? computeWowPercent(volume, priorByKey[key]) : null,
+      };
+    });
+}
+
+export function parseResolutionByTypeTable(result, limit = 5) {
+  if (!result?.rows?.length) return [];
+  return result.rows.slice(0, limit).map((row, index) => {
+    const key = String(row.service_code ?? "Unknown");
+    return {
+      id: `resolution-${index}-${key}`,
+      label: formatDimensionLabel(key),
+      closurePct: Number(row.closure_pct),
+      ontimePct: Number(row.ontime_pct),
+      avgTtrMs: Number(row.avg_ttr_ms),
+    };
+  });
+}
+
+export function parseLocalityTable(loggedResult, openResult, ontimeResult, limit = 5) {
+  if (!loggedResult?.rows?.length) return [];
+
+  const openByWard = Object.fromEntries(
+    (openResult?.rows || []).map((row) => [
+      String(row.ward_code),
+      Number(row.total) || 0,
+    ])
+  );
+  const ontimeByWard = Object.fromEntries(
+    (ontimeResult?.rows || []).map((row) => [
+      String(row.ward_code),
+      Number(row.ontime_pct),
+    ])
+  );
+
+  return sortRowsByTotalDesc(loggedResult.rows, "ward_code")
+    .slice(0, limit)
+    .map((row, index) => {
+      const ward = String(row.ward_code ?? "Unknown");
+      return {
+        id: `ward-${index}-${ward}`,
+        label: formatDimensionLabel(ward),
+        logged: Number(row.total) || 0,
+        open: openByWard[ward] ?? 0,
+        ontimePct: ontimeByWard[ward],
+      };
+    });
+}
+
+export function parseWorkflowStageTable(result, limit = 5) {
+  if (!result?.rows?.length) return [];
+
+  const rows = result.rows.slice(0, limit).map((row, index) => {
+    const label = formatStatusLabel(row.status ?? "Unknown");
+    return {
+      id: `stage-${index}-${label}`,
+      label,
+      avgDwellMs: Number(row.avg_dwell),
+      medianDwellMs: Number(row.median_dwell),
+      samples: Number(row.samples) || 0,
+    };
+  });
+
+  const maxAvg = Math.max(...rows.map((r) => r.avgDwellMs).filter(Number.isFinite));
+  return rows.map((row) => ({
+    ...row,
+    highlight: Number.isFinite(maxAvg) && row.avgDwellMs === maxAvg && rows.length > 1,
+    badge: Number.isFinite(maxAvg) && row.avgDwellMs === maxAvg && rows.length > 1
+      ? "BOTTLENECK"
+      : null,
   }));
+}
+
+export function parseDowTable(result) {
+  if (!result?.rows?.length) return [];
+  return result.rows.map((row, index) => {
+    const dow = Number(row.created_dow);
+    const label = DOW_LABELS[dow] ?? String(row.created_dow);
+    return {
+      id: `dow-${index}-${dow}`,
+      label,
+      count: Number(row.total) || 0,
+    };
+  });
 }
