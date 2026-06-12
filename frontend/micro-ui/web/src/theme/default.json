@@ -1,0 +1,29 @@
+{
+  "version": "1",
+  "name": "default",
+  "colors": {
+    "primary": { "light": "#F18F5E", "main": "#c84c0e", "dark": "#C8602B" },
+    "secondary": "#22394D",
+    "text": { "primary": "#0B0C0C", "secondary": "#505A5F" },
+    "link": { "normal": "#1D70B8", "hover": "#003078" },
+    "border": "#D6D5D4",
+    "input-border": "#464646",
+    "error": "#D4351C",
+    "success": "#00703C",
+    "grey": { "dark": "#9E9E9E", "mid": "#EEEEEE", "light": "#FAFAFA", "bg": "#E3E3E3" },
+    "digitv2": {
+      "text-color-disabled": "#B1B4B6",
+      "header-sidenav": "#0B4B66",
+      "primary-bg": "#FEEFE7",
+      "alert-error-bg": "#EFC7C1",
+      "alert-success-bg": "#BAD6C9",
+      "alert-info": "#3498DB",
+      "alert-info-bg": "#C7E0F1",
+      "chart-1": "#048BD0",
+      "chart-2": "#FBC02D",
+      "chart-3": "#8E29BF",
+      "chart-4": "#EA8A3B",
+      "chart-5": "#0BABDE"
+    }
+  }
+}

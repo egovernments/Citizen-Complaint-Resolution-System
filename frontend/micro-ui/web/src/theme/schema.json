@@ -1,0 +1,75 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DIGIT UI Theme Config",
+  "type": "object",
+  "required": ["version", "colors"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "const": "1" },
+    "name": { "type": "string" },
+    "colors": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "primary": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "light": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "default": "#F18F5E" },
+            "main":  { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "default": "#c84c0e" },
+            "dark":  { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "default": "#C8602B" }
+          }
+        },
+        "secondary": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "default": "#22394D" },
+        "text": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "primary":   { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "default": "#0B0C0C" },
+            "secondary": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "default": "#505A5F" }
+          }
+        },
+        "link": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "normal": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "default": "#1D70B8" },
+            "hover":  { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "default": "#003078" }
+          }
+        },
+        "border":       { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "default": "#D6D5D4" },
+        "input-border": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "default": "#464646" },
+        "error":        { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "default": "#D4351C" },
+        "success":      { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "default": "#00703C" },
+        "grey": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "dark":  { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "default": "#9E9E9E" },
+            "mid":   { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "default": "#EEEEEE" },
+            "light": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "default": "#FAFAFA" },
+            "bg":    { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "default": "#E3E3E3" }
+          }
+        },
+        "digitv2": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "text-color-disabled": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "default": "#B1B4B6" },
+            "header-sidenav":      { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "default": "#0B4B66" },
+            "primary-bg":          { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "default": "#FEEFE7" },
+            "alert-error-bg":      { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "default": "#EFC7C1" },
+            "alert-success-bg":    { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "default": "#BAD6C9" },
+            "alert-info":          { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "default": "#3498DB" },
+            "alert-info-bg":       { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "default": "#C7E0F1" },
+            "chart-1":             { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "default": "#048BD0" },
+            "chart-2":             { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "default": "#FBC02D" },
+            "chart-3":             { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "default": "#8E29BF" },
+            "chart-4":             { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "default": "#EA8A3B" },
+            "chart-5":             { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "default": "#0BABDE" }
+          }
+        }
+      }
+    }
+  }
+}

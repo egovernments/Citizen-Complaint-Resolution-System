@@ -3,6 +3,20 @@ import ReactDOM from 'react-dom';
 import { initLibraries } from "@egovernments/digit-ui-libraries";
 import "./index.css";
 import App from './App';
+import { applyTheme } from "./theme/applyTheme";
+import defaultTheme from "./theme/default.json";
+
+// Phase 1: apply the bundled default theme before the libraries init so
+// every component renders against the active palette from first paint.
+// Phase 2 (future): fetch MDMS `common-masters.ThemeConfig` per tenant
+// once the user/tenant is resolved and re-apply on top of these defaults.
+applyTheme(defaultTheme);
+
+if (process.env.NODE_ENV === "development") {
+  // Dev-only: tweak the live palette from the console.
+  //   window.__applyTheme({ version: "1", colors: { primary: { main: "#10cdda" } } })
+  window.__applyTheme = applyTheme;
+}
 
 
 initLibraries();
