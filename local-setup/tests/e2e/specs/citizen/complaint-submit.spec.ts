@@ -31,6 +31,30 @@
 import { test, expect, type Page } from '@playwright/test';
 import { citizenOtpLogin } from '../../utils/citizen-auth';
 
+// Visible text that looks like a raw localization key: uppercase
+// letter/digit run with at least one `.`/`_` separator. Matches
+// BOUNDARY.OROMIA, ADMIN_KE_NAIROBI, SERVICEDEFS.DRAINS,
+// CS_COMMON_COMPLAINT_SUBMITTED. Does NOT match real display names
+// ("Oromia", "Nairobi County", "Bomet") or dashed identifiers
+// (PGR-2026-06-13-004235).
+const RAW_KEY_RE = /\b[A-Z][A-Z0-9]*(?:[._][A-Z0-9]+)+\b/g;
+const rawKeysIn = (text: string) =>
+  [...new Set(text.match(RAW_KEY_RE) || [])];
+
+type LocFetch = { url: string; messageCount: number };
+function captureLoc(page: Page, sink: LocFetch[]) {
+  page.on('response', async (resp) => {
+    if (!resp.url().includes('/localization/messages/v1/_search')) return;
+    try {
+      const body = await resp.json();
+      const msgs = Array.isArray(body?.messages) ? body.messages : [];
+      sink.push({ url: resp.url(), messageCount: msgs.length });
+    } catch {
+      /* aborted/non-JSON */
+    }
+  });
+}
+
 // Addis Ababa central postal code; deliberately NOT in any allowlist a
 // stale bootstrap could have copied.
 const POSTAL_CODE = process.env.CITIZEN_POSTAL_CODE || '1000';
@@ -102,12 +126,6 @@ test.describe.serial('Citizen complaint submit + view', () => {
     // the cascade; the citizen picks manually. This manual selection is
     // exactly what must supersede the pincode allowlist at submit.
 
-    // Raw-key heuristic: uppercase letter/digit run with at least one
-    // `.` or `_` separator. Matches "BOUNDARY.OROMIA",
-    // "ADMIN_KE_NAIROBI", "SERVICEDEFS.DRAINS"; does NOT match real
-    // display names ("Oromia", "Nairobi County", "Bomet").
-    const RAW_KEY_RE = /\b[A-Z][A-Z0-9]*(?:[._][A-Z0-9]+)+\b/g;
-
     const pickedLevels: string[] = [];
     for (let level = 0; level < 6; level++) {
       const combo = page.locator('[id^="boundary-"]').nth(level);
@@ -128,9 +146,7 @@ test.describe.serial('Citizen complaint submit + view', () => {
         .innerText()
         .catch(() => '');
       const ariaLabel = (await combo.getAttribute('aria-label')) || '';
-      const labelKeys = [
-        ...new Set((labelText + '\n' + ariaLabel).match(RAW_KEY_RE) || []),
-      ];
+      const labelKeys = rawKeysIn(labelText + '\n' + ariaLabel);
       expect(
         labelKeys,
         `boundary "${comboId}" label is unlocalized: ${labelKeys.join(
@@ -145,9 +161,7 @@ test.describe.serial('Citizen complaint submit + view', () => {
         .poll(async () => options.count(), { timeout: 20_000 })
         .toBeGreaterThan(0);
       const optionLabels = await options.allInnerTexts();
-      const optionKeys = [
-        ...new Set(optionLabels.join('\n').match(RAW_KEY_RE) || []),
-      ];
+      const optionKeys = rawKeysIn(optionLabels.join('\n'));
       expect(
         optionKeys,
         `boundary "${comboId}" options contain raw keys: ${optionKeys
@@ -217,6 +231,9 @@ test.describe.serial('Citizen complaint submit + view', () => {
     ).toBeTruthy();
     const ref = filedComplaintRef!;
 
+    const locFetches: LocFetch[] = [];
+    captureLoc(page, locFetches);
+
     // Fresh login on a new page context — the inbox is server-driven
     // (tied to the citizen's DIGIT user UUID), so the just-filed
     // reference must be retrievable from a clean session, not just the
@@ -245,7 +262,27 @@ test.describe.serial('Citizen complaint submit + view', () => {
         { timeout: 30_000 }
       )
       .toBe(true);
-
     console.log('VERIFIED COMPLAINT VISIBLE IN MY COMPLAINTS:', ref);
+
+    // The inbox is the citizen's confirmation surface — status labels,
+    // complaint-type names, action buttons must all be localized text,
+    // not raw keys. A row that shows "CS_COMMON_PENDING" /
+    // "SERVICEDEFS.DRAINS" is a regression even if the reference is
+    // present, since the citizen cannot read what state their
+    // complaint is in.
+    const inboxText = await page.locator('body').innerText();
+    const rawKeys = rawKeysIn(inboxText);
+    if (rawKeys.length) {
+      console.log('LOCALIZATION FETCHES:');
+      for (const f of locFetches) {
+        console.log(`  msgs=${f.messageCount} ${f.url}`);
+      }
+    }
+    expect(
+      rawKeys,
+      `"My Complaints" page shows raw localization keys: ${rawKeys
+        .slice(0, 10)
+        .join(', ')}`
+    ).toHaveLength(0);
   });
 });
