@@ -20,6 +20,13 @@
  * ADMIN_KE_NAIROBI, …) fails fast instead of submitting a complaint
  * whose location chip is unreadable. One real complaint is created per
  * run, consistent with the other lifecycle suites.
+ *
+ * A second test in the same describe.serial block re-logs in fresh and
+ * clicks "My Complaints" on the citizen home, verifying that the
+ * complaint we just filed shows up in the list. The citizen-side
+ * inbox is the citizen's only confirmation surface — if filing succeeds
+ * but the inbox doesn't render the new reference, the workflow is
+ * broken from the user's POV even though pgr-services holds the row.
  */
 import { test, expect, type Page } from '@playwright/test';
 import { citizenOtpLogin } from '../../utils/citizen-auth';
@@ -37,8 +44,12 @@ async function pickFirstOption(page: Page, combo: ReturnType<Page['locator']>) {
   return label;
 }
 
-test.describe('Citizen complaint submit', () => {
+test.describe.serial('Citizen complaint submit + view', () => {
   test.slow();
+
+  // Shared across the serial pair — the submit test captures the new
+  // reference; the view test asserts it shows up in "My Complaints".
+  let filedComplaintRef: string | null = null;
 
   test('full wizard with typed postal code submits successfully', async ({ page }) => {
     // Pin the map's reverse-geocode to an answer WITHOUT a postcode.
@@ -193,6 +204,48 @@ test.describe('Citizen complaint submit', () => {
     // Complaint reference chip (serviceRequestId, e.g. PGR-2026-06-11-001234).
     const refMatch = bodyText.match(/PGR[-/][A-Z0-9-/]+/i);
     expect(refMatch, `no complaint reference visible on response page:\n${bodyText.slice(0, 600)}`).toBeTruthy();
-    console.log('COMPLAINT REFERENCE:', refMatch?.[0]);
+    filedComplaintRef = refMatch?.[0] ?? null;
+    console.log('COMPLAINT REFERENCE:', filedComplaintRef);
+  });
+
+  test('filed complaint appears in the citizen "My Complaints" list', async ({
+    page,
+  }) => {
+    expect(
+      filedComplaintRef,
+      'submit step did not capture a complaint reference; nothing to verify in the inbox'
+    ).toBeTruthy();
+    const ref = filedComplaintRef!;
+
+    // Fresh login on a new page context — the inbox is server-driven
+    // (tied to the citizen's DIGIT user UUID), so the just-filed
+    // reference must be retrievable from a clean session, not just the
+    // one that submitted it.
+    await citizenOtpLogin(page);
+    await page.goto('/digit-ui/citizen');
+
+    // "My Complaints" on the V2 citizen home is a card / link / button
+    // depending on the layout — match on accessible name, click
+    // whatever interactive element exposes it.
+    const myComplaints = page
+      .getByRole('link', { name: /my complaints/i })
+      .or(page.getByRole('button', { name: /my complaints/i }))
+      .or(page.getByText(/my complaints/i))
+      .first();
+    await myComplaints.waitFor({ state: 'visible', timeout: 30_000 });
+    await myComplaints.click();
+
+    // Don't pin the route — V2 has used /pgr/inbox and /pgr/complaints
+    // in different revisions; the assertion is that the reference is
+    // visible somewhere on the resulting page within the network +
+    // render budget.
+    await expect
+      .poll(
+        async () => (await page.locator('body').innerText()).includes(ref),
+        { timeout: 30_000 }
+      )
+      .toBe(true);
+
+    console.log('VERIFIED COMPLAINT VISIBLE IN MY COMPLAINTS:', ref);
   });
 });
