@@ -1575,28 +1575,8 @@ class CRSLoader:
         existing = self.uploader.search_workflow(tenant, business_service)
 
         if existing:
-            existing_tenant = existing.get('tenantId')
-            print(f"   Found existing workflow: {existing.get('businessService')} (tenantId={existing_tenant})")
+            print(f"   Found existing workflow: {existing.get('businessService')}")
             print(f"   States: {len(existing.get('states', []))}")
-
-            # egov-workflow-v2's /businessservice/_search is lenient and
-            # falls back to the parent (state) tenant — so a query for
-            # pg.citest can return pg's workflow. But /process/_transition
-            # at runtime is strict-by-tenant: a state-level workflow does
-            # NOT service city-level businessIds, and every transition
-            # fails with "Action X not found in config for businessId Y".
-            # If the search returned a parent's workflow, the city tenant
-            # doesn't actually have one yet — fall through to CREATE.
-            if existing_tenant != tenant:
-                print(f"   (Parent-tenant fallback — {tenant} has no workflow of its own; creating)")
-                result = self.uploader.create_workflow(tenant, workflow_config)
-                if result.get('created'):
-                    states = len(workflow_config.get('states', []))
-                    print(f"\n[3/3] Workflow created for {tenant} ({states} states)")
-                    return {'status': 'created', 'error': None, 'states': states}
-                else:
-                    print(f"   Create failed: {result.get('error')}")
-                    return {'status': 'failed', 'error': result.get('error')}
 
             # Check if we should update
             existing_states = len(existing.get('states', []))
