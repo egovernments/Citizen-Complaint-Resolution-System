@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Responsive, WidthProvider } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
@@ -10,12 +10,7 @@ import {
   isChartWidget,
   isKpiWidget,
 } from "../constants/layoutConfig";
-import {
-  KPI_METRICS,
-  getSubMetricDef,
-  subMetricValueKey,
-} from "../config/kpiQueries";
-import { TABLE_WIDGET_CONFIG, isTableWidget } from "../config/dashboardTables";
+import { isTableWidget, TABLE_WIDGET_CONFIG } from "../config/dashboardTables";
 import KpiCard from "./KpiCard";
 import DashboardTable from "./DashboardTable";
 import DepartmentBarChart, { WEEKDAY_CHART_ORDER } from "./DepartmentBarChart";
@@ -23,8 +18,6 @@ import ComplaintMap from "./ComplaintMap";
 import ResizeGrip from "./ResizeGrip";
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
-
-const METRIC_LOOKUP = Object.fromEntries(KPI_METRICS.map((m) => [m.id, m]));
 
 const ChartPlaceholder = ({ message }) => (
   <div className="tw-flex tw-h-full tw-items-center tw-justify-center tw-p-3 tw-text-sm tw-text-slate-500">
@@ -52,8 +45,41 @@ const WidgetHeader = ({ metric, subMetric, compact = false }) => (
 );
 
 const GRID_MARGIN = [16, 16];
+const GRID_COLS = 12;
 const DROP_SIZE = { w: DROPPING_ITEM.w, h: DROPPING_ITEM.h };
 const RESIZE_HANDLES = ["se"];
+
+function measureGridMetrics(containerWidth) {
+  if (!containerWidth) return null;
+  const [marginX, marginY] = GRID_MARGIN;
+  const colWidth = (containerWidth - marginX * (GRID_COLS + 1)) / GRID_COLS;
+  return {
+    colWidth,
+    rowHeight: KPI_ROW_HEIGHT,
+    marginX,
+    marginY,
+  };
+}
+
+function dragItemTransform(itemId, layout, dragStartRef, draggingItemId, gridMetrics) {
+  if (!draggingItemId || !gridMetrics || !dragStartRef.current?.positions?.[itemId]) {
+    return undefined;
+  }
+
+  const start = dragStartRef.current.positions[itemId];
+  const target = layout.find((entry) => entry.i === itemId);
+  if (!target) return undefined;
+
+  const dx = (target.x - start.x) * (gridMetrics.colWidth + gridMetrics.marginX);
+  const dy = (target.y - start.y) * (gridMetrics.rowHeight + gridMetrics.marginY);
+  if (dx === 0 && dy === 0) return undefined;
+
+  return {
+    transform: `translate(${dx}px, ${dy}px)`,
+    transition: "transform 150ms ease-out",
+    willChange: "transform",
+  };
+}
 
 function gridItemClassName(widgetId) {
   if (isKpiWidget(widgetId)) return "dashboard-grid-item-kpi";
@@ -69,43 +95,60 @@ const DashboardGrid = ({
   layout,
   onLayoutChange,
   onLayoutStop,
+  onDragBegin,
   onRemoveWidget,
   onDropKpi,
   draggingKpiId,
-  subMetricValues = {},
-  resolveSubMetricId,
+  kpiCardData = {},
   chartData = {},
   loading = false,
 }) => {
   const isExternalDrag = Boolean(draggingKpiId);
   const activeItemRef = useRef(null);
+  const dragOriginRef = useRef(null);
   const interactionRef = useRef(null);
-  const [preventCollision, setPreventCollision] = useState(true);
+  const gridWrapRef = useRef(null);
+  const dragStartRef = useRef(null);
+  const [preventCollision, setPreventCollision] = useState(false);
+  const [draggingItemId, setDraggingItemId] = useState(null);
+  const [gridMetrics, setGridMetrics] = useState(null);
 
-  const layouts = useMemo(
-    () => ({
-      lg: layout.map((item) => ({
-        ...item,
-        resizeHandles: RESIZE_HANDLES,
-        className: gridItemClassName(item.i),
-      })),
-    }),
-    [layout]
-  );
+  useEffect(() => {
+    const node = gridWrapRef.current;
+    if (!node) return undefined;
+
+    const update = () => {
+      setGridMetrics(measureGridMetrics(node.offsetWidth));
+    };
+
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  const layouts = useMemo(() => {
+    const lg = layout.map((item) => ({
+      ...item,
+      resizeHandles: RESIZE_HANDLES,
+      className: gridItemClassName(item.i),
+    }));
+    return { lg, md: lg, sm: lg, xs: lg };
+  }, [layout]);
 
   const renderKpi = (metricId) => {
-    const metric = METRIC_LOOKUP[metricId];
-    if (!metric) return null;
-
-    const selectedSubMetricId = resolveSubMetricId(metric);
-    const sub = getSubMetricDef(metric, selectedSubMetricId);
-    const value = subMetricValues[subMetricValueKey(metricId, sub.id)];
+    const card = kpiCardData?.[metricId];
+    if (!card) return null;
 
     return (
       <KpiCard
-        metric={metric.metric}
-        value={value}
-        loading={loading && value == null}
+        title={card.title}
+        value={card.value}
+        context={card.context}
+        status={card.status}
+        listItems={card.listItems}
+        hasList={card.hasList}
+        loading={loading && card.value == null}
       />
     );
   };
@@ -207,17 +250,32 @@ const DashboardGrid = ({
   const handleLayoutChange = useCallback(
     (_, allLayouts) => {
       if (isExternalDrag) return;
+      const mode = interactionRef.current;
+      // Drag swaps are handled in onDrag — skip here to avoid fighting RGL.
+      if (mode === "drag") return;
+
       const next = allLayouts.lg || layout;
       const withoutPlaceholder = next.filter((item) => item.i !== DROPPING_ITEM_ID);
       if (withoutPlaceholder.length !== next.length) return;
 
-      const mode = interactionRef.current;
       onLayoutChange(withoutPlaceholder, activeItemRef.current, {
-        passThrough: mode === "drag",
+        passThrough: false,
         mode,
       });
     },
     [isExternalDrag, layout, onLayoutChange]
+  );
+
+  const handleDrag = useCallback(
+    (gridLayout, _oldItem, newItem) => {
+      if (isExternalDrag || interactionRef.current !== "drag") return;
+
+      onLayoutChange(gridLayout, newItem.i, {
+        passThrough: true,
+        pointerPos: { x: newItem.x, y: newItem.y },
+      });
+    },
+    [isExternalDrag, onLayoutChange]
   );
 
   const handleDragStop = useCallback(
@@ -226,8 +284,11 @@ const DashboardGrid = ({
       const withoutPlaceholder = nextLayout.filter((item) => item.i !== DROPPING_ITEM_ID);
       const activeId = activeItemRef.current;
       activeItemRef.current = null;
+      dragOriginRef.current = null;
       interactionRef.current = null;
-      setPreventCollision(true);
+      setDraggingItemId(null);
+      dragStartRef.current = null;
+      setPreventCollision(false);
       onLayoutStop(withoutPlaceholder, "drag", activeId);
     },
     [isExternalDrag, onLayoutStop]
@@ -246,11 +307,24 @@ const DashboardGrid = ({
     [isExternalDrag, onLayoutStop]
   );
 
-  const handleDragStart = useCallback((_layout, _oldItem, newItem) => {
-    activeItemRef.current = newItem.i;
-    interactionRef.current = "drag";
-    setPreventCollision(true);
-  }, []);
+  const handleDragStart = useCallback(
+    (_layout, oldItem, newItem) => {
+      activeItemRef.current = newItem.i;
+      dragOriginRef.current = { x: oldItem.x, y: oldItem.y };
+      interactionRef.current = "drag";
+      setDraggingItemId(newItem.i);
+      setPreventCollision(false);
+
+      dragStartRef.current = {
+        positions: Object.fromEntries(
+          layout.map((item) => [item.i, { x: item.x, y: item.y }])
+        ),
+      };
+
+      onDragBegin?.(dragOriginRef.current, layout);
+    },
+    [layout, onDragBegin]
+  );
 
   const handleResizeStart = useCallback((_layout, _oldItem, newItem) => {
     activeItemRef.current = newItem.i;
@@ -259,7 +333,7 @@ const DashboardGrid = ({
   }, []);
 
   return (
-    <div>
+    <div ref={gridWrapRef}>
       <div className={isExternalDrag ? "dashboard-external-drag" : undefined}>
         <ResponsiveGridLayout
           className="layout"
@@ -270,6 +344,7 @@ const DashboardGrid = ({
           margin={GRID_MARGIN}
           containerPadding={[0, 0]}
           onLayoutChange={handleLayoutChange}
+          onDrag={handleDrag}
           onDragStart={handleDragStart}
           onResizeStart={handleResizeStart}
           onDragStop={handleDragStop}
@@ -288,10 +363,21 @@ const DashboardGrid = ({
             const meta = WIDGETS[item.i];
             const isTable = isTableWidget(item.i);
             const isBarChart = meta?.type === "bar-chart";
+            const offsetStyle = dragItemTransform(
+              item.i,
+              layout,
+              dragStartRef,
+              draggingItemId,
+              gridMetrics
+            );
 
             if (isKpi) {
               return (
-                <div key={item.i} className="dashboard-kpi-widget tw-group tw-relative tw-h-full">
+                <div
+                  key={item.i}
+                  className="dashboard-kpi-widget tw-group tw-relative tw-h-full"
+                  style={offsetStyle}
+                >
                   <button
                     type="button"
                     title="Remove from dashboard"
@@ -307,7 +393,11 @@ const DashboardGrid = ({
             }
 
             return (
-              <div key={item.i} className="tw-group tw-relative tw-h-full">
+              <div
+                key={item.i}
+                className="tw-group tw-relative tw-h-full"
+                style={offsetStyle}
+              >
                 <button
                   type="button"
                   title="Remove from dashboard"

@@ -44,7 +44,7 @@ export function getSystemTitle() {
 }
 
 export function getLayoutStorageKey() {
-  return `${getTenantId()}-supervisor-dashboard-layout-v15`;
+  return `${getTenantId()}-supervisor-dashboard-layout-v20`;
 }
 
 export function getSubMetricStorageKey() {

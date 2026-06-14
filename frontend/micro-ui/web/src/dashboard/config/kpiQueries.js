@@ -4,6 +4,13 @@ import {
   getSubMetricDef,
   subMetricValueKey,
 } from "./supervisorMetrics";
+import {
+  buildKpiContextText,
+  getKpiDisplayTitle,
+  isKpiListMetric,
+  parseKpiListItems,
+  resolveThresholdStatus,
+} from "./kpiDisplay";
 
 export { KPI_METRICS, CHART_WIDGETS, getSubMetricDef, subMetricValueKey };
 
@@ -207,6 +214,14 @@ export const BATCH_QUERIES = {
   },
   // Employee performance
   ep_open_by_officer: officerTopCount({ is_open: true }),
+  ep_open_list: {
+    grain: "facts",
+    filters: { is_open: true },
+    dimensions: ["current_assignee_uuid"],
+    measures: [{ name: "total", agg: "count" }],
+    sort: [{ by: "total", dir: "desc" }],
+    limit: 5,
+  },
   ep_ttr_avg: {
     grain: "facts",
     window: { name: "wtd", timeRole: "resolved_at" },
@@ -223,6 +238,15 @@ export const BATCH_QUERIES = {
     { is_resolved: true },
     { name: "wtd", timeRole: "resolved_at" }
   ),
+  ep_closed_list: {
+    grain: "facts",
+    window: { name: "wtd", timeRole: "resolved_at" },
+    filters: { is_resolved: true },
+    dimensions: ["current_assignee_uuid"],
+    measures: [{ name: "total", agg: "count" }],
+    sort: [{ by: "total", dir: "desc" }],
+    limit: 5,
+  },
   ep_leaderboard_closed: {
     grain: "facts",
     window: { name: "wtd", timeRole: "resolved_at" },
@@ -466,6 +490,14 @@ export const BATCH_QUERIES = {
     window: { name: "last_30d", timeRole: "filed_at" },
     filters: { is_first_time_complainant: false },
     measures: [{ name: "total", agg: "count_distinct", column: "account_id" }],
+  },
+  ce_top_complainants: {
+    grain: "facts",
+    window: { name: "last_30d", timeRole: "filed_at" },
+    dimensions: ["account_id"],
+    measures: [{ name: "total", agg: "count" }],
+    sort: [{ by: "total", dir: "desc" }],
+    limit: 5,
   },
   ce_negative_rate: {
     grain: "facts",
@@ -833,6 +865,40 @@ export function getDisplayValue(metric, subMetricId, allValues, loading) {
   const key = subMetricValueKey(metric.id, sub.id);
   if (loading) return LOADING_VALUE;
   return allValues[key] ?? UNSUPPORTED_VALUE;
+}
+
+export function buildKpiCardData(metric, subMetricId, results, subMetricValues, loading) {
+  const sub = getSubMetricDef(metric, subMetricId);
+  const value = loading
+    ? LOADING_VALUE
+    : subMetricValues[subMetricValueKey(metric.id, sub.id)] ?? UNSUPPORTED_VALUE;
+
+  const hasList = isKpiListMetric(metric.id);
+  const listItems = hasList && !loading ? parseKpiListItems(results, metric.id, 5) : [];
+
+  return {
+    title: getKpiDisplayTitle(metric),
+    value,
+    context: buildKpiContextText(metric.id, results, sub.label),
+    status: resolveThresholdStatus(metric.id, value),
+    listItems,
+    hasList,
+  };
+}
+
+export function buildAllKpiCardData(results, subMetricValues, resolveSubMetricId, loading) {
+  const data = {};
+  for (const metric of KPI_METRICS) {
+    const subMetricId = resolveSubMetricId(metric);
+    data[metric.id] = buildKpiCardData(
+      metric,
+      subMetricId,
+      results,
+      subMetricValues,
+      loading
+    );
+  }
+  return data;
 }
 
 function sortRowsByTotalDesc(rows, labelKey) {

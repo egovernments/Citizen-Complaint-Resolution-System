@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback } from "react";
 import {
   COMPLAINT_TYPE_OPTIONS,
   GEOGRAPHY_OPTIONS,
@@ -8,35 +8,6 @@ import {
 
 const FunnelIcon = () => (
   <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className="tw-shrink-0 tw-text-slate-800"
-    aria-hidden
-  >
-    <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
-  </svg>
-);
-
-const SELECT_FIELD_CLASS = {
-  geography: "dashboard-filter-field--geography",
-  complaintType: "dashboard-filter-field--complaint-type",
-};
-
-const FilterField = ({ label, className = "", children }) => (
-  <div className={`dashboard-filter-field ${className}`.trim()}>
-    <span className="dashboard-filter-label">{label}</span>
-    {children}
-  </div>
-);
-
-const CalendarIcon = () => (
-  <svg
     width="16"
     height="16"
     viewBox="0 0 24 24"
@@ -45,47 +16,12 @@ const CalendarIcon = () => (
     strokeWidth="2"
     strokeLinecap="round"
     strokeLinejoin="round"
+    className="tw-shrink-0 tw-text-slate-700"
     aria-hidden
   >
-    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-    <line x1="16" y1="2" x2="16" y2="6" />
-    <line x1="8" y1="2" x2="8" y2="6" />
-    <line x1="3" y1="10" x2="21" y2="10" />
+    <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
   </svg>
 );
-
-const FilterDateField = ({ label, value, onChange }) => {
-  const openCalendar = useCallback((input) => {
-    if (!input) return;
-    if (typeof input.showPicker === "function") {
-      try {
-        input.showPicker();
-        return;
-      } catch {
-        /* fall through to focus */
-      }
-    }
-    input.focus();
-  }, []);
-
-  return (
-    <FilterField label={label}>
-      <div className="dashboard-filter-date-wrap">
-        <input
-          type="date"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onClick={(e) => openCalendar(e.currentTarget)}
-          aria-label={label}
-          className="dashboard-filter-input dashboard-filter-date"
-        />
-        <span className="dashboard-filter-date-icon">
-          <CalendarIcon />
-        </span>
-      </div>
-    </FilterField>
-  );
-};
 
 const DashboardFilters = ({
   filters,
@@ -95,86 +31,114 @@ const DashboardFilters = ({
   filterOptionsLoading = false,
 }) => {
   const canClear = hasActiveFilters(filters);
-  const fields = useMemo(() => {
-    const geographyOptions = filterOptions?.geography ?? GEOGRAPHY_OPTIONS;
-    const complaintTypeOptions =
-      filterOptions?.complaintType ?? COMPLAINT_TYPE_OPTIONS;
 
-    return GLOBAL_FILTER_FIELDS.map((field) => {
-      if (field.id === "geography") {
-        return { ...field, options: geographyOptions };
+  const geographyOptions = filterOptions?.geography ?? GEOGRAPHY_OPTIONS;
+  const complaintTypeOptions =
+    filterOptions?.complaintType ?? COMPLAINT_TYPE_OPTIONS;
+
+  const dateFrom = filters?.dateFrom ?? GLOBAL_FILTER_FIELDS.find((f) => f.id === "dateFrom")?.defaultValue;
+  const dateTo = filters?.dateTo ?? GLOBAL_FILTER_FIELDS.find((f) => f.id === "dateTo")?.defaultValue;
+  const geography = filters?.geography ?? "all";
+  const complaintType = filters?.complaintType ?? "all";
+
+  const openCalendar = useCallback((input) => {
+    if (!input) return;
+    if (typeof input.showPicker === "function") {
+      try {
+        input.showPicker();
+        return;
+      } catch {
+        /* fall through */
       }
-      if (field.id === "complaintType") {
-        return { ...field, options: complaintTypeOptions };
-      }
-      return field;
-    });
-  }, [filterOptions]);
+    }
+    input.focus();
+  }, []);
 
   return (
-    <div className="dashboard-filters-bar tw-mb-4">
+    <div className="dashboard-filters-bar tw-px-5 tw-pb-2.5 tw-pt-1">
       <div className="dashboard-filters-card">
+        <div className="dashboard-filters-row">
         <div className="dashboard-filters-heading">
           <FunnelIcon />
           <span className="dashboard-filters-title">Filters</span>
         </div>
 
-        {fields.map((field) => {
-          const value = filters[field.id] ?? field.defaultValue;
+        <div className="dashboard-filters-date-range">
+          <div className="dashboard-filter-inline-date-wrap">
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => onFilterChange("dateFrom", e.target.value)}
+              onClick={(e) => openCalendar(e.currentTarget)}
+              aria-label="From date"
+              className="dashboard-filter-inline-date"
+            />
+          </div>
+          <span className="dashboard-filters-date-arrow" aria-hidden>
+            →
+          </span>
+          <div className="dashboard-filter-inline-date-wrap">
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => onFilterChange("dateTo", e.target.value)}
+              onClick={(e) => openCalendar(e.currentTarget)}
+              aria-label="To date"
+              className="dashboard-filter-inline-date"
+            />
+          </div>
+        </div>
 
-          if (field.type === "date") {
-            return (
-              <FilterDateField
-                key={field.id}
-                label={field.label}
-                value={value}
-                onChange={(nextValue) => onFilterChange(field.id, nextValue)}
-              />
-            );
-          }
+        <div className="dashboard-filter-inline-select-wrap">
+          <select
+            value={filterOptionsLoading && geographyOptions.length <= 1 ? "" : geography}
+            disabled={filterOptionsLoading && geographyOptions.length <= 1}
+            onChange={(e) => onFilterChange("geography", e.target.value)}
+            aria-label="Ward filter"
+            className="dashboard-filter-inline-select"
+          >
+            {filterOptionsLoading && geographyOptions.length <= 1 ? (
+              <option value="">Loading…</option>
+            ) : (
+              geographyOptions.map((opt) => (
+                <option key={opt.id} value={opt.id}>
+                  {opt.label}
+                </option>
+              ))
+            )}
+          </select>
+        </div>
 
-          const optionsLoading =
-            filterOptionsLoading && field.options.length <= 1;
+        <div className="dashboard-filter-inline-select-wrap">
+          <select
+            value={filterOptionsLoading && complaintTypeOptions.length <= 1 ? "" : complaintType}
+            disabled={filterOptionsLoading && complaintTypeOptions.length <= 1}
+            onChange={(e) => onFilterChange("complaintType", e.target.value)}
+            aria-label="Complaint type filter"
+            className="dashboard-filter-inline-select"
+          >
+            {filterOptionsLoading && complaintTypeOptions.length <= 1 ? (
+              <option value="">Loading…</option>
+            ) : (
+              complaintTypeOptions.map((opt) => (
+                <option key={opt.id} value={opt.id}>
+                  {opt.label}
+                </option>
+              ))
+            )}
+          </select>
+        </div>
 
-          return (
-            <FilterField
-              key={field.id}
-              label={field.label}
-              className={SELECT_FIELD_CLASS[field.id] || ""}
-            >
-              <div className="dashboard-filter-select-wrap">
-                <select
-                  value={optionsLoading ? "" : value}
-                  disabled={optionsLoading}
-                  onChange={(e) => onFilterChange(field.id, e.target.value)}
-                  aria-label={field.label}
-                  aria-busy={optionsLoading}
-                  className="dashboard-filter-input dashboard-filter-select"
-                >
-                  {optionsLoading ? (
-                    <option value="">Loading…</option>
-                  ) : (
-                    field.options.map((opt) => (
-                      <option key={opt.id} value={opt.id}>
-                        {opt.label}
-                      </option>
-                    ))
-                  )}
-                </select>
-              </div>
-            </FilterField>
-          );
-        })}
-
-        <button
-          type="button"
-          onClick={onClearFilters}
-          disabled={!canClear}
-          className="dashboard-filters-clear"
-          aria-label="Clear all filters"
-        >
-          Clear
-        </button>
+        {canClear ? (
+          <button
+            type="button"
+            onClick={onClearFilters}
+            className="dashboard-filters-clear-inline"
+          >
+            Clear
+          </button>
+        ) : null}
+        </div>
       </div>
     </div>
   );

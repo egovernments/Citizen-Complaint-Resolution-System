@@ -1,17 +1,11 @@
 import React, { useMemo } from "react";
 import { getProductLabel, getStateLabel } from "../config/dashboardConfig";
-import KpiInventory from "./KpiInventory";
 
 const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", href: "/digit-ui/employee/dashboard", active: true },
 ];
 
-const Sidebar = ({
-  visibleLayoutIds,
-  onAddWidget,
-  onDragKpiStart,
-  onDragKpiEnd,
-}) => {
+const Sidebar = () => {
   const stateLabel = useMemo(() => getStateLabel(), []);
   const productLabel = useMemo(() => getProductLabel(), []);
 
@@ -38,12 +32,7 @@ const Sidebar = ({
           </a>
         ))}
       </nav>
-      <KpiInventory
-        visibleLayoutIds={visibleLayoutIds}
-        onAddWidget={onAddWidget}
-        onDragKpiStart={onDragKpiStart}
-        onDragKpiEnd={onDragKpiEnd}
-      />
+      <div className="tw-flex-1" />
       <div className="tw-border-t tw-border-teal-800 tw-p-4 tw-text-xs tw-text-teal-300">
         Supervisor
       </div>

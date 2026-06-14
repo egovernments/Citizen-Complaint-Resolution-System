@@ -1,4 +1,5 @@
 import { CHART_WIDGETS, KPI_METRICS } from "../config/supervisorMetrics";
+import { isKpiListMetric } from "../config/kpiDisplay";
 
 export const GRID_COLS = 12;
 export const KPI_ROW_HEIGHT = 52;
@@ -11,6 +12,13 @@ const LIST_HEADER_PX = 52;
 const LIST_PADDING_PX = 24;
 const LIST_ITEM_PX = 38;
 const LIST_ITEM_GAP_PX = 4;
+
+/** Pixel estimates for in-card KPI lists (title + value + context + 5 rows). */
+const KPI_LIST_HEADER_PX = 88;
+const KPI_LIST_PADDING_PX = 20;
+const KPI_LIST_ITEM_PX = 28;
+const KPI_LIST_ITEM_GAP_PX = 4;
+const KPI_LIST_VISIBLE_ROWS = 5;
 
 /** Convert ranked-list content to react-grid-layout row units. */
 export function resolveRankedListGridHeight(itemCount, rowHeight = KPI_ROW_HEIGHT, marginY = GRID_MARGIN_Y) {
@@ -26,6 +34,45 @@ export function resolveRankedListGridHeight(itemCount, rowHeight = KPI_ROW_HEIGH
   const maxH = defaults?.maxH ?? 8;
   return Math.min(maxH, Math.max(minH, h));
 }
+
+/** Default grid height for KPI cards that embed a ranked list (5 visible rows). */
+export function resolveKpiListGridHeight(rowHeight = KPI_ROW_HEIGHT, marginY = GRID_MARGIN_Y) {
+  const count = KPI_LIST_VISIBLE_ROWS;
+  const contentPx =
+    KPI_LIST_HEADER_PX +
+    KPI_LIST_PADDING_PX +
+    count * KPI_LIST_ITEM_PX +
+    (count - 1) * KPI_LIST_ITEM_GAP_PX;
+  const h = Math.ceil((contentPx + marginY) / (rowHeight + marginY));
+  return Math.max(5, h);
+}
+
+const KPI_LIST_GRID_H = resolveKpiListGridHeight();
+
+export const DEFAULT_KPI_LAYOUT_ITEM = {
+  w: 2,
+  h: 2,
+  minW: 2,
+  minH: 2,
+  maxH: 6,
+};
+
+export const DEFAULT_KPI_LIST_LAYOUT_ITEM = {
+  w: 2,
+  h: KPI_LIST_GRID_H * 2,
+  minW: 2,
+  minH: KPI_LIST_GRID_H * 2,
+  maxH: 24,
+};
+
+export function getDefaultKpiLayoutItem(metricId) {
+  if (isKpiListMetric(metricId)) {
+    return DEFAULT_KPI_LIST_LAYOUT_ITEM;
+  }
+  return DEFAULT_KPI_LAYOUT_ITEM;
+}
+
+export { isKpiListMetric };
 
 const kpiWidgets = Object.fromEntries(
   KPI_METRICS.map((m) => [m.id, { type: "kpi", metric: m.metric }])
@@ -48,19 +95,11 @@ export const WIDGETS = {
   ...chartWidgets,
 };
 
-export const DEFAULT_KPI_LAYOUT_ITEM = {
-  w: 2,
-  h: 2,
-  minW: 2,
-  minH: 2,
-  maxH: 6,
-};
-
 export const DEFAULT_CHART_LAYOUT = {
-  "cl-list-categories": { x: 0, w: 6, h: 3, minW: 4, minH: 3, maxW: 12, maxH: 6 },
-  "cl-table-resolution": { x: 6, w: 6, h: 3, minW: 4, minH: 3, maxW: 12, maxH: 6 },
-  "cl-table-locality": { x: 0, w: 6, h: 3, minW: 4, minH: 3, maxW: 12, maxH: 6 },
-  "cl-table-workflow-stages": { x: 6, w: 6, h: 3, minW: 4, minH: 3, maxW: 12, maxH: 6 },
+  "cl-list-categories": { x: 0, w: 6, h: 6, minW: 4, minH: 6, maxW: 12, maxH: 12 },
+  "cl-table-resolution": { x: 6, w: 6, h: 6, minW: 4, minH: 6, maxW: 12, maxH: 12 },
+  "cl-table-locality": { x: 0, w: 6, h: 6, minW: 4, minH: 6, maxW: 12, maxH: 12 },
+  "cl-table-workflow-stages": { x: 6, w: 6, h: 6, minW: 4, minH: 6, maxW: 12, maxH: 12 },
   "cl-chart-categories": { x: 0, w: 4, h: 6, minW: 3, minH: 4, maxW: 8, maxH: 10 },
   "cl-chart-wards": { x: 4, w: 4, h: 6, minW: 3, minH: 4, maxW: 8, maxH: 10 },
   "cl-chart-dow": { x: 8, w: 4, h: 6, minW: 3, minH: 4, maxW: 8, maxH: 10 },
@@ -155,52 +194,52 @@ export const DEFAULT_LAYOUT = [
   },
   {
     w: 6,
-    h: 3,
+    h: 6,
     x: 0,
     y: 2,
     i: "cl-list-categories",
     minW: 4,
-    minH: 3,
-    maxH: 6,
+    minH: 6,
+    maxH: 12,
     moved: false,
     static: false,
     resizeHandles: ["se"],
   },
   {
     w: 6,
-    h: 3,
+    h: 6,
     x: 6,
     y: 2,
     i: "cl-table-resolution",
     minW: 4,
-    minH: 3,
-    maxH: 6,
+    minH: 6,
+    maxH: 12,
     moved: false,
     static: false,
     resizeHandles: ["se"],
   },
   {
     w: 6,
-    h: 3,
+    h: 6,
     x: 0,
-    y: 5,
+    y: 8,
     i: "cl-table-locality",
     minW: 4,
-    minH: 3,
-    maxH: 6,
+    minH: 6,
+    maxH: 12,
     moved: false,
     static: false,
     resizeHandles: ["se"],
   },
   {
     w: 6,
-    h: 3,
+    h: 6,
     x: 6,
-    y: 5,
+    y: 8,
     i: "cl-table-workflow-stages",
     minW: 4,
-    minH: 3,
-    maxH: 6,
+    minH: 6,
+    maxH: 12,
     moved: false,
     static: false,
     resizeHandles: ["se"],
@@ -209,7 +248,7 @@ export const DEFAULT_LAYOUT = [
     w: 4,
     h: 6,
     x: 0,
-    y: 8,
+    y: 14,
     i: "cl-chart-categories",
     minW: 3,
     minH: 4,
@@ -222,7 +261,7 @@ export const DEFAULT_LAYOUT = [
     w: 4,
     h: 6,
     x: 4,
-    y: 8,
+    y: 14,
     i: "cl-chart-wards",
     minW: 3,
     minH: 4,
@@ -235,7 +274,7 @@ export const DEFAULT_LAYOUT = [
     w: 4,
     h: 6,
     x: 8,
-    y: 8,
+    y: 14,
     i: "cl-chart-dow",
     minW: 3,
     minH: 4,
@@ -248,7 +287,7 @@ export const DEFAULT_LAYOUT = [
     w: 8,
     h: 7,
     x: 0,
-    y: 14,
+    y: 20,
     i: "cl-map-complaints",
     minW: 4,
     minH: 4,

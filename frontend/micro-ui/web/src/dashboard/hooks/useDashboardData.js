@@ -72,6 +72,7 @@ const DEFAULT_FILTER_OPTIONS = {
 
 export function useDashboardData(filters) {
   const [subMetricValues, setSubMetricValues] = useState({});
+  const [analyticsResults, setAnalyticsResults] = useState(null);
   const [chartData, setChartData] = useState(EMPTY_CHART_DATA);
   const [filterOptions, setFilterOptions] = useState(DEFAULT_FILTER_OPTIONS);
   const [loading, setLoading] = useState(true);
@@ -81,6 +82,7 @@ export function useDashboardData(filters) {
   const fetchData = useCallback(async () => {
     if (!hasAuth()) {
       setSubMetricValues(buildAllSubMetricValues(null, false));
+      setAnalyticsResults(null);
       setChartData(EMPTY_CHART_DATA);
       setAsOf(null);
       setError(LOGIN_MESSAGE);
@@ -101,6 +103,7 @@ export function useDashboardData(filters) {
       }
 
       setSubMetricValues(buildAllSubMetricValues(results, false));
+      setAnalyticsResults(results);
       setChartData(buildChartData(results, filters));
       setFilterOptions(parseFilterOptions(results));
       setAsOf(extractAsOf(results));
@@ -127,6 +130,7 @@ export function useDashboardData(filters) {
 
       setError(message);
       setSubMetricValues(buildAllSubMetricValues(null, false));
+      setAnalyticsResults(null);
       setChartData(EMPTY_CHART_DATA);
       setFilterOptions(DEFAULT_FILTER_OPTIONS);
       setAsOf(null);
@@ -141,6 +145,7 @@ export function useDashboardData(filters) {
 
   return {
     subMetricValues,
+    analyticsResults,
     chartData,
     filterOptions,
     loading,

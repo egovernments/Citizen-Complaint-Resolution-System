@@ -1,24 +1,35 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo } from "react";
 import "./styles/dashboard.css";
 import DashboardLayout from "./components/DashboardLayout";
 import DashboardGrid from "./components/DashboardGrid";
+import { buildAllKpiCardData } from "./config/kpiQueries";
 import { useDashboardLayout } from "./hooks/useDashboardLayout";
 import { useDashboardData } from "./hooks/useDashboardData";
 import { useDashboardFilters } from "./hooks/useDashboardFilters";
 
 const AdminDashboard = () => {
-  const [draggingKpiId, setDraggingKpiId] = useState(null);
   const { filters, setFilter, clearFilters, applyFilterOptions, resolveSubMetricId } =
     useDashboardFilters();
   const {
     subMetricValues,
+    analyticsResults,
     chartData,
     filterOptions,
     loading,
     error,
-    asOf,
     refetch,
   } = useDashboardData(filters);
+
+  const kpiCardData = useMemo(
+    () =>
+      buildAllKpiCardData(
+        analyticsResults,
+        subMetricValues,
+        resolveSubMetricId,
+        loading
+      ),
+    [analyticsResults, subMetricValues, resolveSubMetricId, loading]
+  );
 
   useEffect(() => {
     applyFilterOptions(filterOptions);
@@ -27,6 +38,7 @@ const AdminDashboard = () => {
     layout,
     onLayoutChange,
     onLayoutStop,
+    onDragBegin,
     resetLayout,
     removeWidgetFromLayout,
     addKpiToLayout,
@@ -34,30 +46,18 @@ const AdminDashboard = () => {
     visibleLayoutIds,
   } = useDashboardLayout();
 
-  const handleDragKpiStart = useCallback((kpiId) => {
-    setDraggingKpiId(kpiId);
-  }, []);
-
-  const handleDragKpiEnd = useCallback(() => {
-    setDraggingKpiId(null);
-  }, []);
-
   const handleDropKpi = useCallback(
     (widgetId, position) => {
       addKpiToLayout(widgetId, position);
-      setDraggingKpiId(null);
     },
     [addKpiToLayout]
   );
 
   return (
     <DashboardLayout
-      onResetLayout={resetLayout}
       visibleLayoutIds={visibleLayoutIds}
       onAddWidget={addWidgetToLayout}
-      onDragKpiStart={handleDragKpiStart}
-      onDragKpiEnd={handleDragKpiEnd}
-      asOf={asOf}
+      onResetLayout={resetLayout}
       filters={filters}
       onFilterChange={setFilter}
       onClearFilters={clearFilters}
@@ -76,18 +76,31 @@ const AdminDashboard = () => {
           </button>
         </div>
       )}
-      <DashboardGrid
-        layout={layout}
-        onLayoutChange={onLayoutChange}
-        onLayoutStop={onLayoutStop}
-        onRemoveWidget={removeWidgetFromLayout}
-        onDropKpi={handleDropKpi}
-        draggingKpiId={draggingKpiId}
-        subMetricValues={subMetricValues}
-        resolveSubMetricId={resolveSubMetricId}
-        chartData={chartData}
-        loading={loading}
-      />
+      {layout.length === 0 ? (
+        <div className="tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-3 tw-rounded-lg tw-border tw-border-dashed tw-border-slate-300 tw-bg-white tw-py-16 tw-text-center">
+          <p className="tw-text-sm tw-text-slate-600">No widgets on the dashboard.</p>
+          <button
+            type="button"
+            onClick={resetLayout}
+            className="dashboard-header-btn"
+          >
+            Reset layout
+          </button>
+        </div>
+      ) : (
+        <DashboardGrid
+          layout={layout}
+          onLayoutChange={onLayoutChange}
+          onLayoutStop={onLayoutStop}
+          onDragBegin={onDragBegin}
+          onRemoveWidget={removeWidgetFromLayout}
+          onDropKpi={handleDropKpi}
+          draggingKpiId={null}
+          kpiCardData={kpiCardData}
+          chartData={chartData}
+          loading={loading}
+        />
+      )}
     </DashboardLayout>
   );
 };
