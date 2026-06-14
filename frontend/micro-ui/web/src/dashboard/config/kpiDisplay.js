@@ -128,11 +128,11 @@ export function resolveThresholdStatus(metricId, displayValue) {
 export function getStatusValueClass(status) {
   switch (status) {
     case KPI_STATUS.ON_TRACK:
-      return "tw-text-green-700";
+      return "tw-text-status-resolved";
     case KPI_STATUS.BREACHING:
-      return "tw-text-red-600";
+      return "tw-text-status-breach";
     default:
-      return "tw-text-slate-900";
+      return "tw-text-foreground";
   }
 }
 

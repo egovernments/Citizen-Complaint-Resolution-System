@@ -20,28 +20,52 @@ import ResizeGrip from "./ResizeGrip";
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
 const ChartPlaceholder = ({ message }) => (
-  <div className="tw-flex tw-h-full tw-items-center tw-justify-center tw-p-3 tw-text-sm tw-text-slate-500">
+  <div className="tw-flex tw-h-full tw-items-center tw-justify-center tw-p-4 tw-text-[12px] tw-text-muted-foreground">
     {message}
   </div>
 );
 
-const WidgetHeader = ({ metric, subMetric, compact = false }) => (
-  <div
-    className={`dashboard-drag-handle tw-min-w-0 tw-shrink-0 tw-border-b tw-border-slate-100 tw-px-3 ${
-      compact ? "tw-py-1.5" : "tw-py-2"
-    }`}
+const RemoveIcon = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className="tw-h-3.5 tw-w-3.5"
+    aria-hidden="true"
   >
-    <p
-      className={`tw-truncate tw-font-semibold tw-text-slate-800 ${
-        compact ? "tw-text-[11px] tw-leading-tight" : "tw-text-xs"
-      }`}
-    >
-      {metric}
-    </p>
-    {subMetric ? (
-      <p className="tw-truncate tw-text-[10px] tw-leading-tight tw-text-slate-400">{subMetric}</p>
-    ) : null}
-  </div>
+    <path d="M18 6 6 18" />
+    <path d="m6 6 12 12" />
+  </svg>
+);
+
+const WidgetRemoveButton = ({ label, onClick }) => (
+  <button
+    type="button"
+    title="Remove from dashboard"
+    onMouseDown={(e) => e.stopPropagation()}
+    onClick={onClick}
+    className="dashboard-widget-remove-btn"
+    aria-label={label}
+  >
+    <RemoveIcon />
+  </button>
+);
+
+const WidgetHeader = ({ metric, subMetric }) => (
+  <header className="dashboard-drag-handle tw-min-w-0">
+    <div className="tw-min-w-0 tw-flex-1">
+      <h2 className="dashboard-drag-handle-title">{metric}</h2>
+      {subMetric ? (
+        <p className="dashboard-drag-handle-subtitle">{subMetric}</p>
+      ) : null}
+    </div>
+  </header>
 );
 
 const GRID_MARGIN = [16, 16];
@@ -136,7 +160,7 @@ const DashboardGrid = ({
     return { lg, md: lg, sm: lg, xs: lg };
   }, [layout]);
 
-  const renderKpi = (metricId) => {
+  const renderKpi = (metricId, onRemove) => {
     const card = kpiCardData?.[metricId];
     if (!card) return null;
 
@@ -149,6 +173,7 @@ const DashboardGrid = ({
         listItems={card.listItems}
         hasList={card.hasList}
         loading={loading && card.value == null}
+        onRemove={onRemove}
       />
     );
   };
@@ -375,60 +400,44 @@ const DashboardGrid = ({
               return (
                 <div
                   key={item.i}
-                  className="dashboard-kpi-widget tw-group tw-relative tw-h-full"
+                  className="dashboard-kpi-widget tw-group tw-relative tw-flex tw-h-full tw-flex-col tw-transition-all"
                   style={offsetStyle}
                 >
-                  <button
-                    type="button"
-                    title="Remove from dashboard"
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={(e) => handleRemove(e, item.i)}
-                    className="dashboard-kpi-remove tw-absolute tw-right-2 tw-top-2 tw-z-10 tw-flex tw-h-5 tw-w-5 tw-cursor-pointer tw-items-center tw-justify-center tw-rounded tw-bg-slate-200 tw-text-xs tw-font-bold tw-text-slate-600 hover:tw-bg-red-100 hover:tw-text-red-700"
-                  >
-                    ×
-                  </button>
-                  <div className="tw-h-full tw-overflow-hidden">{renderWidget(item.i)}</div>
+                  {renderKpi(item.i, (e) => handleRemove(e, item.i))}
                 </div>
               );
             }
 
             return (
-              <div
+              <section
                 key={item.i}
-                className="tw-group tw-relative tw-h-full"
+                className="tw-group tw-relative tw-flex tw-h-full tw-min-h-0 tw-flex-col tw-overflow-hidden tw-rounded tw-border tw-border-border tw-bg-surface"
                 style={offsetStyle}
               >
-                <button
-                  type="button"
-                  title="Remove from dashboard"
-                  onMouseDown={(e) => e.stopPropagation()}
+                <WidgetRemoveButton
+                  label={`Remove ${meta?.metric ?? item.i}`}
                   onClick={(e) => handleRemove(e, item.i)}
-                  className="dashboard-kpi-remove tw-absolute tw-right-2 tw-top-2 tw-z-10 tw-flex tw-h-5 tw-w-5 tw-cursor-pointer tw-items-center tw-justify-center tw-rounded tw-bg-slate-200 tw-text-xs tw-font-bold tw-text-slate-600 hover:tw-bg-red-100 hover:tw-text-red-700"
+                />
+                {meta && (
+                  <WidgetHeader metric={meta.metric} subMetric={meta.subMetric} />
+                )}
+                <div
+                  className={
+                    isTable
+                      ? "dashboard-table-body tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-p-4"
+                      : "tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-hidden tw-p-4"
+                  }
                 >
-                  ×
-                </button>
-                <div className="dashboard-widget dashboard-chart-widget tw-relative tw-flex tw-h-full tw-min-h-0 tw-w-full tw-flex-col tw-overflow-hidden">
-                  {meta && (
-                    <WidgetHeader
-                      metric={meta.metric}
-                      subMetric={meta.subMetric}
-                      compact={isTable}
-                    />
+                  {isTable ? (
+                    <div className="dashboard-table-scroll tw-min-h-0 tw-flex-1 tw-overflow-auto">
+                      {renderWidget(item.i)}
+                    </div>
+                  ) : (
+                    renderWidget(item.i)
                   )}
-                  <div
-                    className={
-                      isTable
-                        ? "dashboard-table-body tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-hidden tw-px-2 tw-pb-2 tw-pt-1"
-                        : isBarChart
-                          ? "tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-hidden tw-p-2"
-                          : "tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-hidden tw-p-3"
-                    }
-                  >
-                    {renderWidget(item.i)}
-                  </div>
-                  <ResizeGrip />
                 </div>
-              </div>
+                <ResizeGrip />
+              </section>
             );
           })}
         </ResponsiveGridLayout>

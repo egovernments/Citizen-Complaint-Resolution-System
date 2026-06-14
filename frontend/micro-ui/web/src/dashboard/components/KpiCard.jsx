@@ -2,6 +2,25 @@ import React from "react";
 import { getStatusValueClass } from "../config/kpiDisplay";
 import ResizeGrip from "./ResizeGrip";
 
+const RemoveIcon = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className="tw-h-3.5 tw-w-3.5"
+    aria-hidden="true"
+  >
+    <path d="M18 6 6 18" />
+    <path d="m6 6 12 12" />
+  </svg>
+);
+
 const KpiCard = ({
   title,
   value,
@@ -10,34 +29,51 @@ const KpiCard = ({
   listItems = [],
   hasList = false,
   loading = false,
+  onRemove,
 }) => {
   const isUnavailable = value === "—";
   const displayValue = value ?? (loading ? "…" : "—");
   const valueClass = isUnavailable
-    ? "tw-text-slate-400"
+    ? "tw-text-muted-foreground"
     : getStatusValueClass(status);
 
   return (
-    <div className="dashboard-widget dashboard-kpi-card tw-relative tw-flex tw-h-full tw-min-h-0 tw-flex-col tw-overflow-hidden tw-px-3 tw-py-2.5">
-      <p
-        className="dashboard-kpi-title tw-min-w-0 tw-w-full tw-text-[10px] tw-font-semibold tw-uppercase tw-tracking-wide tw-text-slate-500"
-        title={title}
-      >
-        {title}
-      </p>
+    <div
+      className={`dashboard-kpi-card tw-group${
+        hasList
+          ? " tw-flex tw-h-full tw-min-h-0 tw-flex-col"
+          : " dashboard-kpi-card--metric"
+      }`}
+    >
+      {onRemove ? (
+        <button
+          type="button"
+          title="Remove from dashboard"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={onRemove}
+          className="dashboard-widget-remove-btn"
+          aria-label={`Remove ${title}`}
+        >
+          <RemoveIcon />
+        </button>
+      ) : null}
 
-      <p
-        className={`tw-mt-1.5 tw-shrink-0 tw-text-xl tw-font-bold tw-leading-none ${valueClass} ${
+      <div className="dashboard-kpi-title" title={title}>
+        {title}
+      </div>
+
+      <div
+        className={`dashboard-kpi-value ${valueClass} ${
           loading ? "tw-animate-pulse" : ""
         }`}
       >
         {displayValue}
-      </p>
+      </div>
 
-      {context ? (
-        <p className="dashboard-kpi-context tw-mt-1 tw-shrink-0 tw-text-[11px] tw-leading-snug tw-text-slate-500">
-          {context}
-        </p>
+      {!hasList ? (
+        <div className="dashboard-kpi-context">{context || "\u00A0"}</div>
+      ) : context ? (
+        <div className="dashboard-kpi-context tw-mt-2">{context}</div>
       ) : null}
 
       {hasList ? (
@@ -47,27 +83,27 @@ const KpiCard = ({
               {listItems.map((item) => (
                 <li
                   key={`${item.rank}-${item.label}`}
-                  className="dashboard-kpi-list-item tw-flex tw-items-center tw-justify-between tw-gap-2 tw-rounded tw-bg-slate-50 tw-px-2 tw-py-1"
+                  className="dashboard-kpi-list-item tw-flex tw-items-center tw-justify-between tw-gap-2 tw-rounded-sm tw-bg-muted tw-px-2 tw-py-1.5"
                 >
                   <div className="tw-flex tw-min-w-0 tw-items-center tw-gap-1.5">
-                    <span className="tw-flex tw-h-4 tw-w-4 tw-shrink-0 tw-items-center tw-justify-center tw-rounded-full tw-bg-brand-teal tw-text-[9px] tw-font-bold tw-text-white">
+                    <span className="tw-flex tw-h-4 tw-w-4 tw-shrink-0 tw-items-center tw-justify-center tw-rounded-full tw-bg-primary tw-text-[9px] tw-font-bold tw-text-primary-foreground">
                       {item.rank}
                     </span>
                     <span
-                      className="tw-min-w-0 tw-truncate tw-text-[11px] tw-text-slate-700"
+                      className="tw-min-w-0 tw-truncate tw-text-[12px] tw-text-foreground"
                       title={item.label}
                     >
                       {item.label}
                     </span>
                   </div>
-                  <span className="tw-shrink-0 tw-text-[11px] tw-font-semibold tw-text-slate-800">
+                  <span className="tw-shrink-0 tw-text-[12px] tw-font-semibold tw-tabular-nums tw-text-foreground">
                     {item.value}
                   </span>
                 </li>
               ))}
             </ol>
           ) : (
-            <p className="tw-text-[11px] tw-text-slate-400">
+            <p className="tw-text-[12px] tw-text-muted-foreground">
               {loading ? "Loading…" : "No list data"}
             </p>
           )}

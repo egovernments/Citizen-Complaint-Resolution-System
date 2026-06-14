@@ -30,7 +30,7 @@ function iconKind(item) {
 }
 
 function MetricIcon({ kind }) {
-  const cls = "tw-h-4 tw-w-4 tw-shrink-0 tw-text-slate-500";
+  const cls = "tw-h-3.5 tw-w-3.5 tw-shrink-0 tw-text-muted-foreground";
   if (kind === "alert") {
     return (
       <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -107,15 +107,15 @@ const AddKpiDropdown = ({ visibleLayoutIds, onAddWidget, open, onOpenChange, con
 
   return (
     <div
-      className="dashboard-add-kpi-panel tw-w-72 tw-overflow-hidden tw-rounded-lg tw-border tw-border-slate-200 tw-bg-white tw-shadow-lg"
+      className="dashboard-add-kpi-panel tw-w-72 tw-overflow-hidden tw-rounded tw-border tw-border-border tw-bg-surface tw-shadow-lg"
       role="menu"
     >
-      <p className="tw-border-b tw-border-slate-100 tw-px-3 tw-py-2 tw-text-[10px] tw-font-semibold tw-uppercase tw-tracking-wider tw-text-slate-400">
+      <p className="tw-border-b tw-border-border tw-px-3 tw-py-2 tw-text-[10px] tw-font-semibold tw-uppercase tw-tracking-wider tw-text-muted-foreground">
         Available KPIs
       </p>
       <ul className="dashboard-add-kpi-list tw-max-h-80 tw-overflow-y-auto tw-py-1">
         {availableItems.length === 0 ? (
-          <li className="tw-px-3 tw-py-4 tw-text-center tw-text-xs tw-text-slate-500">
+          <li className="tw-px-3 tw-py-4 tw-text-center tw-text-[12px] tw-text-muted-foreground">
             All KPIs are on the dashboard
           </li>
         ) : (
@@ -128,13 +128,13 @@ const AddKpiDropdown = ({ visibleLayoutIds, onAddWidget, open, onOpenChange, con
                   onAddWidget(item.id);
                   onOpenChange(false);
                 }}
-                className="dashboard-add-kpi-item tw-flex tw-w-full tw-items-center tw-gap-2.5 tw-border-0 tw-bg-transparent tw-px-3 tw-py-2 tw-text-left hover:tw-bg-slate-50"
+                className="dashboard-add-kpi-item tw-flex tw-w-full tw-items-center tw-gap-2.5 tw-border-0 tw-bg-transparent tw-px-3 tw-py-2 tw-text-left"
               >
                 <MetricIcon kind={iconKind(item)} />
-                <span className="tw-min-w-0 tw-flex-1 tw-truncate tw-text-sm tw-text-slate-800">
+                <span className="tw-min-w-0 tw-flex-1 tw-truncate tw-text-[12px] tw-text-foreground">
                   {shortLabel(item)}
                 </span>
-                <span className="tw-shrink-0 tw-text-[10px] tw-font-semibold tw-uppercase tw-tracking-wide tw-text-slate-400">
+                <span className="tw-shrink-0 tw-text-[10px] tw-font-semibold tw-uppercase tw-tracking-wide tw-text-muted-foreground">
                   Stat +
                 </span>
               </button>

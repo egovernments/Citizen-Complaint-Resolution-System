@@ -77,8 +77,8 @@ const AdminDashboard = () => {
         </div>
       )}
       {layout.length === 0 ? (
-        <div className="tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-3 tw-rounded-lg tw-border tw-border-dashed tw-border-slate-300 tw-bg-white tw-py-16 tw-text-center">
-          <p className="tw-text-sm tw-text-slate-600">No widgets on the dashboard.</p>
+        <div className="tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-3 tw-rounded tw-border tw-border-dashed tw-border-border tw-bg-surface tw-py-16 tw-text-center">
+          <p className="tw-text-[12px] tw-text-muted-foreground">No widgets on the dashboard.</p>
           <button
             type="button"
             onClick={resetLayout}

@@ -5,20 +5,20 @@ const RankedList = ({ items }) => (
     {items.map((item) => (
       <li
         key={`${item.rank}-${item.label}`}
-        className="tw-flex tw-items-center tw-justify-between tw-rounded-md tw-bg-slate-50 tw-py-1.5"
+        className="tw-flex tw-items-center tw-justify-between tw-rounded-sm tw-bg-muted tw-py-1.5"
       >
         <div className="tw-flex tw-min-w-0 tw-items-center tw-gap-2">
           <span className="tw-flex tw-h-5 tw-w-5 tw-flex-shrink-0 tw-items-center tw-justify-center tw-rounded-full tw-bg-brand-teal tw-text-[10px] tw-font-bold tw-text-white">
             {item.rank}
           </span>
           <span
-            className="tw-line-clamp-2 tw-text-xs tw-leading-snug tw-text-slate-700"
+            className="tw-line-clamp-2 tw-text-[12px] tw-leading-snug tw-text-foreground"
             title={item.label}
           >
             {item.label}
           </span>
         </div>
-        <span className="tw-ml-2 tw-flex-shrink-0 tw-text-xs tw-font-semibold tw-text-slate-800">
+        <span className="tw-ml-2 tw-flex-shrink-0 tw-text-[12px] tw-font-semibold tw-tabular-nums tw-text-foreground">
           {item.value}
         </span>
       </li>

@@ -7,8 +7,7 @@ const TrendCell = ({ value }) => {
   const up = value >= 0;
   return (
     <span className={up ? "dashboard-table-trend-up" : "dashboard-table-trend-down"}>
-      {up ? "↑" : "↓"}
-      {Math.abs(value).toFixed(1)}%
+      {up ? "↑" : "↓"} {Math.abs(value).toFixed(1)}%
     </span>
   );
 };
@@ -22,7 +21,11 @@ const formatPercent = (value, decimals = 1) => {
 const formatHours = (ms) => {
   if (ms == null || !Number.isFinite(ms)) return "—";
   const hours = ms / 3600000;
-  return `${hours.toFixed(1)}h`;
+  const formatted =
+    Math.abs(hours - Math.round(hours)) < 0.05
+      ? String(Math.round(hours))
+      : hours.toFixed(1);
+  return `${formatted}h`;
 };
 
 const formatInteger = (value) => {
@@ -40,67 +43,75 @@ const CELL_RENDERERS = {
 
 const DashboardTable = ({ columns, rows }) => {
   if (!rows?.length) {
-    return (
-      <p className="dashboard-table-empty tw-text-[10px] tw-text-slate-500">No data</p>
-    );
+    return <p className="dashboard-table-empty">No data</p>;
   }
 
   return (
-    <div className="dashboard-table-wrap">
-      <table className="dashboard-table">
-        <colgroup>
+    <table className="dashboard-table">
+      <colgroup>
+        {columns.map((col) => (
+          <col
+            key={col.id}
+            className={col.width ? "dashboard-table-col-fixed" : undefined}
+            style={col.width ? { width: col.width } : undefined}
+          />
+        ))}
+      </colgroup>
+      <thead>
+        <tr>
           {columns.map((col) => (
-            <col key={col.id} style={col.width ? { width: col.width } : undefined} />
-          ))}
-        </colgroup>
-        <thead>
-          <tr>
-            {columns.map((col) => (
-              <th
-                key={col.id}
-                className={col.align === "right" ? "dashboard-table-th-right" : undefined}
-              >
-                {col.label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, rowIndex) => (
-            <tr
-              key={row.id ?? rowIndex}
-              className={row.highlight ? "dashboard-table-row-highlight" : undefined}
+            <th
+              key={col.id}
+              className={
+                col.align === "right"
+                  ? "dashboard-table-th dashboard-table-th-right"
+                  : "dashboard-table-th"
+              }
             >
-              {columns.map((col) => {
-                const raw = row[col.id];
-                const isLabel = col.id === "label";
-                const render = CELL_RENDERERS[col.type] ?? CELL_RENDERERS.text;
-                const content = col.type === "trend" ? render(raw) : render(raw);
-                const labelText = typeof raw === "string" ? raw : String(raw ?? "");
-
-                return (
-                  <td
-                    key={col.id}
-                    className={col.align === "right" ? "dashboard-table-td-right" : undefined}
-                  >
-                    {isLabel ? (
-                      <span className="dashboard-table-primary" title={labelText}>
-                        <span className="dashboard-table-label">{content}</span>
-                        {row.badge ? (
-                          <span className="dashboard-table-badge">{row.badge}</span>
-                        ) : null}
-                      </span>
-                    ) : (
-                      content
-                    )}
-                  </td>
-                );
-              })}
-            </tr>
+              {col.label}
+            </th>
           ))}
-        </tbody>
-      </table>
-    </div>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, rowIndex) => (
+          <tr
+            key={row.id ?? rowIndex}
+            className={row.highlight ? "dashboard-table-row-highlight" : undefined}
+          >
+            {columns.map((col) => {
+              const raw = row[col.id];
+              const isLabel = col.id === "label";
+              const render = CELL_RENDERERS[col.type] ?? CELL_RENDERERS.text;
+              const content = col.type === "trend" ? render(raw) : render(raw);
+              const labelText = typeof raw === "string" ? raw : String(raw ?? "");
+
+              return (
+                <td
+                  key={col.id}
+                  className={
+                    col.align === "right"
+                      ? "dashboard-table-td dashboard-table-td-right"
+                      : "dashboard-table-td"
+                  }
+                >
+                  {isLabel ? (
+                    <span className="dashboard-table-primary" title={labelText}>
+                      <span className="dashboard-table-label">{content}</span>
+                      {row.badge ? (
+                        <span className="dashboard-table-badge">{row.badge}</span>
+                      ) : null}
+                    </span>
+                  ) : (
+                    content
+                  )}
+                </td>
+              );
+            })}
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 };
 

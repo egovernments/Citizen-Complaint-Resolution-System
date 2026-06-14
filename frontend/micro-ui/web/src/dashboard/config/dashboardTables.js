@@ -6,10 +6,10 @@ export const TRENDING_COMPLAINTS_COLUMNS = [
 ];
 
 export const RESOLUTION_BY_TYPE_COLUMNS = [
-  { id: "label", label: "Type", align: "left", type: "text", width: "36%" },
-  { id: "closurePct", label: "Closed %", align: "right", type: "percent", width: "18%" },
-  { id: "ontimePct", label: "On-time %", align: "right", type: "percent", width: "22%" },
-  { id: "avgTtrMs", label: "Avg TTR", align: "right", type: "hours", width: "24%" },
+  { id: "label", label: "Complaint sub-type", align: "left", type: "text" },
+  { id: "closurePct", label: "Closure", align: "right", type: "percent" },
+  { id: "ontimePct", label: "On-time", align: "right", type: "percent" },
+  { id: "avgTtrMs", label: "Avg. resolution", align: "right", type: "hours" },
 ];
 
 export const LOCALITY_COLUMNS = [

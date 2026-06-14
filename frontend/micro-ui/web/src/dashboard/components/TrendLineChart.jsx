@@ -1,9 +1,15 @@
 import React from "react";
 import Chart from "react-apexcharts";
+import { DASHBOARD_FONT_FAMILY } from "../config/dashboardConfig";
 
 const TrendLineChart = ({ data }) => {
   const options = {
-    chart: { type: "line", toolbar: { show: false }, fontFamily: "inherit", zoom: { enabled: false } },
+    chart: {
+      type: "line",
+      toolbar: { show: false },
+      fontFamily: DASHBOARD_FONT_FAMILY,
+      zoom: { enabled: false },
+    },
     stroke: { curve: "smooth", width: 3 },
     xaxis: { categories: data.months },
     yaxis: { title: { text: "Complaints" } },

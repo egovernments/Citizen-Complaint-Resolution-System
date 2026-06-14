@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Chart from "react-apexcharts";
+import { DASHBOARD_FONT_FAMILY } from "../config/dashboardConfig";
 
 const MAX_BAR_WIDTH_PX = 44;
 const SPARSE_CATEGORY_THRESHOLD = 4;
@@ -159,7 +160,7 @@ const DepartmentBarChart = ({ data, categoryOrder, compact = false }) => {
       chart: {
         type: "bar",
         toolbar: { show: false },
-        fontFamily: "inherit",
+        fontFamily: DASHBOARD_FONT_FAMILY,
         animations: { enabled: true, speed: 300 },
         height: containerHeight,
         events: {

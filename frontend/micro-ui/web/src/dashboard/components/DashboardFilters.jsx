@@ -16,7 +16,7 @@ const FunnelIcon = () => (
     strokeWidth="2"
     strokeLinecap="round"
     strokeLinejoin="round"
-    className="tw-shrink-0 tw-text-slate-700"
+    className="tw-shrink-0 tw-text-muted-foreground"
     aria-hidden
   >
     <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
@@ -55,7 +55,7 @@ const DashboardFilters = ({
   }, []);
 
   return (
-    <div className="dashboard-filters-bar tw-px-5 tw-pb-2.5 tw-pt-1">
+    <div className="dashboard-filters-bar tw-mb-4">
       <div className="dashboard-filters-card">
         <div className="dashboard-filters-row">
         <div className="dashboard-filters-heading">

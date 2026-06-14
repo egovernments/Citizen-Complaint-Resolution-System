@@ -2,7 +2,6 @@ import React, { useMemo, useRef, useState } from "react";
 import { getProductLabel } from "../config/dashboardConfig";
 import { GEOGRAPHY_OPTIONS } from "../config/globalFilterGroups";
 import AddKpiDropdown from "./AddKpiDropdown";
-import DashboardFilters from "./DashboardFilters";
 
 function formatDisplayDate(iso) {
   if (!iso) return "";
@@ -46,10 +45,7 @@ const DashboardHeader = ({
   onAddWidget,
   onResetLayout,
   filters,
-  onFilterChange,
-  onClearFilters,
   filterOptions,
-  filterOptionsLoading,
 }) => {
   const [addKpiOpen, setAddKpiOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -65,19 +61,19 @@ const DashboardHeader = ({
 
   return (
     <header className="dashboard-header tw-flex-shrink-0 tw-bg-slate-100">
-      <div className="dashboard-header-top tw-flex tw-items-center tw-justify-between tw-gap-4 tw-border-b tw-border-slate-200 tw-bg-white tw-px-5 tw-py-3">
+      <div className="dashboard-header-top tw-flex tw-h-12 tw-shrink-0 tw-items-center tw-justify-between tw-gap-4 tw-border-b tw-border-border tw-bg-surface tw-px-4 lg:tw-px-6">
         <div className="tw-min-w-0">
           <div className="tw-flex tw-flex-wrap tw-items-baseline tw-gap-x-3 tw-gap-y-0.5">
-            <h1 className="tw-text-xl tw-font-bold tw-leading-tight tw-text-slate-900">
+            <h1 className="tw-text-[15px] tw-font-semibold tw-leading-tight tw-text-foreground">
               {title}
             </h1>
-            <p className="tw-text-sm tw-text-slate-500">{subtitle}</p>
+            <p className="tw-text-[11px] tw-text-muted-foreground">{subtitle}</p>
           </div>
         </div>
 
         <div className="dashboard-header-controls">
           <label className="dashboard-header-search tw-hidden sm:tw-inline-flex">
-            <span className="tw-pointer-events-none tw-absolute tw-left-2.5 tw-top-1/2 tw--translate-y-1/2 tw-text-slate-400">
+            <span className="tw-pointer-events-none tw-absolute tw-left-2.5 tw-top-1/2 tw--translate-y-1/2 tw-text-muted-foreground">
               <SearchIcon />
             </span>
             <input
@@ -128,14 +124,6 @@ const DashboardHeader = ({
           </button>
         </div>
       </div>
-
-      <DashboardFilters
-        filters={filters}
-        onFilterChange={onFilterChange}
-        onClearFilters={onClearFilters}
-        filterOptions={filterOptions}
-        filterOptionsLoading={filterOptionsLoading}
-      />
     </header>
   );
 };

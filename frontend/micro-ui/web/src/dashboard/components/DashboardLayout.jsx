@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import { getBrandTheme } from "../config/dashboardConfig";
 import DashboardHeader from "./DashboardHeader";
+import DashboardFilters from "./DashboardFilters";
 import Sidebar from "./Sidebar";
 
 const DashboardLayout = ({
@@ -25,7 +26,7 @@ const DashboardLayout = ({
 
   return (
     <div
-      className="tw-flex tw-h-screen tw-overflow-hidden tw-bg-slate-100"
+      className="dashboard-root tw-flex tw-h-screen tw-overflow-hidden tw-bg-slate-100 tw-font-sans tw-text-foreground"
       style={brandStyle}
     >
       <Sidebar />
@@ -35,12 +36,16 @@ const DashboardLayout = ({
           onAddWidget={onAddWidget}
           onResetLayout={onResetLayout}
           filters={filters}
-          onFilterChange={onFilterChange}
-          onClearFilters={onClearFilters}
           filterOptions={filterOptions}
-          filterOptionsLoading={filterOptionsLoading}
         />
-        <main className="tw-flex-1 tw-overflow-auto tw-bg-slate-100 tw-px-5 tw-pb-5 tw-pt-4">
+        <main className="tw-flex-1 tw-overflow-auto tw-bg-slate-100 tw-p-4 lg:tw-p-6">
+          <DashboardFilters
+            filters={filters}
+            onFilterChange={onFilterChange}
+            onClearFilters={onClearFilters}
+            filterOptions={filterOptions}
+            filterOptionsLoading={filterOptionsLoading}
+          />
           {children}
         </main>
       </div>

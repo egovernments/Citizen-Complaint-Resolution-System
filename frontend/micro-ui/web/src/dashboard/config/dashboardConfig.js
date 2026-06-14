@@ -5,6 +5,9 @@ export const DEFAULT_BRAND_THEME = {
   slate: "#334155",
 };
 
+export const DASHBOARD_FONT_FAMILY =
+  "Inter, Roboto, ui-sans-serif, system-ui, sans-serif";
+
 export function getTenantId() {
   return (
     window.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID") ||
