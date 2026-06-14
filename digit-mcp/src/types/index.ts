@@ -5,15 +5,15 @@ export type { ErrorCategory, RequestInfo, UserInfo, Role, MdmsRecord, ApiError, 
 // MCP-specific types
 
 // Tool groups for progressive disclosure
-export type ToolGroup = 'core' | 'mdms' | 'boundary' | 'masters' | 'employees' | 'localization' | 'pgr' | 'admin' | 'idgen' | 'location' | 'encryption' | 'docs' | 'monitoring' | 'tracing';
+export type ToolGroup = 'core' | 'mdms' | 'boundary' | 'masters' | 'employees' | 'localization' | 'pgr' | 'admin' | 'idgen' | 'location' | 'encryption' | 'docs' | 'monitoring' | 'tracing' | 'snapshot';
 
-export const ALL_GROUPS: ToolGroup[] = ['core', 'mdms', 'boundary', 'masters', 'employees', 'localization', 'pgr', 'admin', 'idgen', 'location', 'encryption', 'docs', 'monitoring', 'tracing'];
+export const ALL_GROUPS: ToolGroup[] = ['core', 'mdms', 'boundary', 'masters', 'employees', 'localization', 'pgr', 'admin', 'idgen', 'location', 'encryption', 'docs', 'monitoring', 'tracing', 'snapshot'];
 
 // Tool metadata stored in the registry
 export interface ToolMetadata {
   name: string;
   group: ToolGroup;
-  category: 'discovery' | 'environment' | 'mdms' | 'validation' | 'localization' | 'pgr' | 'workflow' | 'filestore' | 'access-control' | 'idgen' | 'location' | 'encryption' | 'boundary-mgmt' | 'hrms' | 'user' | 'docs' | 'monitoring' | 'tracing' | 'sessions';
+  category: 'discovery' | 'environment' | 'mdms' | 'validation' | 'localization' | 'pgr' | 'workflow' | 'filestore' | 'access-control' | 'idgen' | 'location' | 'encryption' | 'boundary-mgmt' | 'hrms' | 'user' | 'docs' | 'monitoring' | 'tracing' | 'sessions' | 'snapshot';
   risk: 'read' | 'write';
   description: string;
   inputSchema: Record<string, unknown>;

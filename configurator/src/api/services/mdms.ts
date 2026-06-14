@@ -272,7 +272,7 @@ export const mdmsService = {
   },
 
   // ============================================
-  // Validation Rules (ValidationConfigs.mobileNumberValidation)
+  // Mobile validation rule (common-masters.UserValidation, fieldType "mobile")
   // ============================================
 
   async getMobileValidation(tenantId: string): Promise<{
@@ -281,21 +281,43 @@ export const mdmsService = {
     maxLength: number;
     errorMessage: string;
     prefix?: string;
+    allowedStartingCharacters?: string[];
   } | null> {
+    // The mobile rule lives in common-masters.UserValidation — NOT
+    // ValidationConfigs.mobileNumberValidation, which is never seeded in this
+    // stack (so the old query always returned null and Phase 4 fell back to a
+    // lenient ^\d{9,10}$ that accepts any 9-10 digit number). This is the same
+    // master egov-user enforces at create time, so the sheet check now matches
+    // what the backend will actually accept.
+    //
+    // Records are keyed by uniqueIdentifier == data.zone (e.g. "mobile",
+    // "India"); mobile rules carry fieldType:"mobile" and the active one has
+    // default:true. pattern / minLength / maxLength / errorMessage are nested
+    // under data.rules; the dialling prefix under data.attributes.prefix.
     const results = await this.search<Record<string, unknown>>(
       tenantId,
-      'ValidationConfigs.mobileNumberValidation'
+      'common-masters.UserValidation'
     );
+    const mobileRecords = results.filter((r) => r.fieldType === 'mobile');
+    // Pick the rule flagged as the active default — both data.default === true
+    // AND data.isActive === true (the "mobile"/default rule carries both; other
+    // country rules like "India" carry neither). Fall back to any active rule,
+    // then the first mobile rule, so we never silently drop to the lenient path.
     const preferred =
-      results.find((r) => r.validationName === 'defaultMobileValidation') ??
-      results[0];
+      mobileRecords.find((r) => r['default'] === true && r.isActive === true) ??
+      mobileRecords.find((r) => r.isActive === true) ??
+      mobileRecords[0];
     if (!preferred) return null;
     const rules = (preferred.rules as Record<string, unknown> | undefined) ?? {};
+    const attributes = (preferred.attributes as Record<string, unknown> | undefined) ?? {};
     return {
       pattern: typeof rules.pattern === 'string' ? rules.pattern : '^\\d{10}$',
       minLength: typeof rules.minLength === 'number' ? rules.minLength : 10,
       maxLength: typeof rules.maxLength === 'number' ? rules.maxLength : 10,
-      prefix: typeof rules.prefix === 'string' ? rules.prefix : undefined,
+      prefix: typeof attributes.prefix === 'string' ? attributes.prefix : undefined,
+      allowedStartingCharacters: Array.isArray(rules.allowedStartingCharacters)
+        ? (rules.allowedStartingCharacters as string[])
+        : undefined,
       errorMessage:
         typeof rules.errorMessage === 'string' && rules.errorMessage
           ? rules.errorMessage

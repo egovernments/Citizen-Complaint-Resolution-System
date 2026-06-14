@@ -246,6 +246,71 @@ function flatten(obj, prefix, out) {
   }
 }
 
+// ── v2-scope (Tailwind/shadcn) bridge ───────────────────────────────────────
+// The v2 component library (packages/digit-ui-components-v2) paints from
+// `--v2-*` HSL-triplet tokens defined ON the `.v2-scope` element by its
+// bundled tokens.css — e.g. `.bg-primary { background: hsl(var(--v2-primary)/…) }`.
+// Because the scope element carries its own definition, custom properties set
+// inline on <html> never reach those rules: the scope's stylesheet value
+// shadows the inherited one. Net effect before this bridge: MDMS themes
+// painted every legacy `--color-*` surface but v2 surfaces (login page,
+// citizen flows) stayed on the baked-in defaults.
+//
+// Bridge: after applying the palette, inject a `.v2-scope { … }` rule into
+// <head> with HSL triplets derived from the applied hex values. Same
+// specificity as tokens.css, later source order — so it wins, and removing
+// the MDMS record cleanly falls back to defaults on next load.
+const V2_BRIDGE_STYLE_ID = "mdms-theme-v2-bridge";
+
+function hexToHslTriplet(hex) {
+  if (typeof hex !== "string") return null;
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return null;
+  const h6 = m[1].length === 3 ? [...m[1]].map((c) => c + c).join("") : m[1];
+  const r = parseInt(h6.slice(0, 2), 16) / 255;
+  const g = parseInt(h6.slice(2, 4), 16) / 255;
+  const b = parseInt(h6.slice(4, 6), 16) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  let h = 0;
+  let s = 0;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h /= 6;
+  }
+  return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
+}
+
+// vars already encodes record precedence (v3 > v2 > v1), so reading from it
+// keeps the bridge consistent with whatever won for the legacy surfaces.
+function injectV2Bridge(vars) {
+  if (typeof document.createElement !== "function" || !document.head) return 0;
+  const primaryHex =
+    vars["--color-button-primary-bg-default"] || vars["--color-primary-main"];
+  const fgHex = vars["--color-button-primary-text"];
+
+  const decls = [];
+  const primary = hexToHslTriplet(primaryHex);
+  if (primary) decls.push(`--v2-primary: ${primary}`, `--v2-ring: ${primary}`);
+  const fg = hexToHslTriplet(fgHex);
+  if (fg) decls.push(`--v2-primary-foreground: ${fg}`);
+  if (decls.length === 0) return 0;
+
+  let el = document.getElementById(V2_BRIDGE_STYLE_ID);
+  if (!el) {
+    el = document.createElement("style");
+    el.id = V2_BRIDGE_STYLE_ID;
+    document.head.appendChild(el);
+  }
+  el.textContent = `.v2-scope { ${decls.join("; ")}; }`;
+  return decls.length;
+}
+
 function applyTheme(config) {
   if (!config || typeof config !== "object" || Array.isArray(config)) {
     console.warn("[theme] config must be an object, skipping apply");
@@ -302,10 +367,37 @@ function applyTheme(config) {
     }
   }
 
+  // Pass 4: v3 backfill for v1/v2 records. Newer components consume v3
+  // tokens directly (often via inline style, e.g. the login button's
+  // `background: var(--color-button-primary-bg-default, var(--color-primary-2, …))`),
+  // and the vendored :root defaults for those tokens are DIGIT-orange. A
+  // tenant with a v1/v2-shaped record would theme every legacy surface while
+  // v3-consuming components silently stayed on defaults. Derive the v3
+  // basics from the resolved palette so older records paint consistently.
+  // Real v3 records are left untouched.
+  if (!v3Active) {
+    const primaryMain = vars["--color-primary-main"];
+    const primaryDark = vars["--color-primary-dark"];
+    const backfill = {
+      "--color-primary-1": primaryDark || primaryMain,
+      "--color-primary-2": primaryMain,
+      "--color-button-primary-bg-default": primaryMain,
+      "--color-button-primary-bg-hover": primaryDark || primaryMain,
+      "--color-button-primary-bg-pressed": primaryDark || primaryMain,
+    };
+    for (const [name, value] of Object.entries(backfill)) {
+      if (typeof value === "string" && !(name in vars)) vars[name] = value;
+    }
+  }
+
   for (const name of Object.keys(vars)) {
     root.style.setProperty(name, vars[name]);
   }
-  console.log(`[theme] applied ${Object.keys(vars).length} variables`);
+  const bridged = injectV2Bridge(vars);
+  console.log(
+    `[theme] applied ${Object.keys(vars).length} variables` +
+      (bridged ? ` (+${bridged} v2-scope tokens)` : ""),
+  );
 }
 
-module.exports = { applyTheme, SEMANTIC_EXPANSION, V3_EXPANSION };
+module.exports = { applyTheme, SEMANTIC_EXPANSION, V3_EXPANSION, hexToHslTriplet };

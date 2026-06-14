@@ -69,7 +69,7 @@ export default function Phase4Page() {
   const [designations, setDesignations] = useState<Designation[]>([]);
   const [boundaries, setBoundaries] = useState<Boundary[]>([]);
   const [roles, setRoles] = useState<{ code: string; name: string; description?: string }[]>([]);
-  const [mobileRules, setMobileRules] = useState<{ pattern: string; minLength: number; maxLength: number; errorMessage: string } | null>(null);
+  const [mobileRules, setMobileRules] = useState<{ pattern: string; minLength: number; maxLength: number; errorMessage: string; prefix?: string; allowedStartingCharacters?: string[] } | null>(null);
   const [loadingRefs, setLoadingRefs] = useState(false);
 
   // Parsed employee data
@@ -479,7 +479,21 @@ export default function Phase4Page() {
                 • <strong>name</strong> - Employee full name
               </li>
               <li>
-                • <strong>mobileNumber</strong> - 10-digit mobile number
+                • <strong>mobileNumber</strong> -{' '}
+                {mobileRules
+                  ? [
+                      mobileRules.minLength === mobileRules.maxLength
+                        ? `${mobileRules.minLength}-digit`
+                        : `${mobileRules.minLength}-${mobileRules.maxLength} digit`,
+                      'mobile number',
+                      mobileRules.allowedStartingCharacters?.length
+                        ? `starting with ${mobileRules.allowedStartingCharacters.join(' / ')}`
+                        : null,
+                      mobileRules.prefix ? `(${mobileRules.prefix})` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' ')
+                  : 'mobile number (validated against the tenant rule)'}
               </li>
               <li>
                 • <strong>dob</strong> - Date of birth (YYYY-MM-DD)
