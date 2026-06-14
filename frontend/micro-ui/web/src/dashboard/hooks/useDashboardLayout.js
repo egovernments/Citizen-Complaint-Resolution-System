@@ -82,12 +82,22 @@ function packRowsHorizontal(layout, filter = () => true) {
   }
 
   const packed = [];
-  for (const [y, row] of rows) {
+  for (const [originalY, row] of rows) {
     const sorted = [...row].sort((a, b) => a.x - b.x);
     let x = 0;
+    let y = originalY;
+    let rowMaxH = 0;
     for (const item of sorted) {
-      packed.push({ ...item, x, y });
-      x += item.w;
+      const w = item.w ?? 1;
+      const h = item.h ?? 1;
+      if (x > 0 && x + w > GRID_COLS) {
+        y += rowMaxH;
+        x = 0;
+        rowMaxH = h;
+      }
+      packed.push({ ...item, x, y, w, h });
+      x += w;
+      rowMaxH = Math.max(rowMaxH, h);
     }
   }
 

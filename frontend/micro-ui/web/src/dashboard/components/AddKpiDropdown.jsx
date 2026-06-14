@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import {
   CHART_WIDGETS,
   KPI_METRICS,
@@ -72,6 +72,7 @@ function MetricIcon({ kind }) {
 }
 
 const AddKpiDropdown = ({ visibleLayoutIds, onAddWidget, open, onOpenChange, containerRef }) => {
+  const panelRef = useRef(null);
 
   const availableItems = useMemo(() => {
     const metrics = KPI_METRICS.filter((m) => !visibleLayoutIds.includes(m.id)).map((m) => ({
@@ -88,9 +89,11 @@ const AddKpiDropdown = ({ visibleLayoutIds, onAddWidget, open, onOpenChange, con
   useEffect(() => {
     if (!open) return undefined;
     const handleClick = (event) => {
-      if (containerRef?.current && !containerRef.current.contains(event.target)) {
-        onOpenChange(false);
-      }
+      const insideTrigger =
+        containerRef?.current && containerRef.current.contains(event.target);
+      const insidePanel = panelRef.current && panelRef.current.contains(event.target);
+      if (insideTrigger || insidePanel) return;
+      onOpenChange(false);
     };
     const handleKey = (event) => {
       if (event.key === "Escape") onOpenChange(false);
@@ -107,6 +110,7 @@ const AddKpiDropdown = ({ visibleLayoutIds, onAddWidget, open, onOpenChange, con
 
   return (
     <div
+      ref={panelRef}
       className="dashboard-add-kpi-panel tw-w-72 tw-overflow-hidden tw-rounded tw-border tw-border-border tw-bg-surface tw-shadow-lg"
       role="menu"
     >

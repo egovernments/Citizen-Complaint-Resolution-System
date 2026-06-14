@@ -59,9 +59,9 @@ export const DEFAULT_KPI_LAYOUT_ITEM = {
 
 export const DEFAULT_KPI_LIST_LAYOUT_ITEM = {
   w: 2,
-  h: KPI_LIST_GRID_H * 2,
+  h: KPI_LIST_GRID_H,
   minW: 2,
-  minH: KPI_LIST_GRID_H * 2,
+  minH: KPI_LIST_GRID_H,
   maxH: 24,
 };
 

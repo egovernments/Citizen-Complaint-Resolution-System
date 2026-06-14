@@ -546,12 +546,12 @@ export const FILTER_DIMENSION_QUERIES = {
 
 function isoDateToStartMs(iso) {
   const [y, m, d] = iso.split("-").map(Number);
-  return new Date(y, m - 1, d).getTime();
+  return Date.UTC(y, m - 1, d);
 }
 
 function isoDateToEndExclusiveMs(iso) {
   const [y, m, d] = iso.split("-").map(Number);
-  return new Date(y, m - 1, d + 1).getTime();
+  return Date.UTC(y, m - 1, d + 1);
 }
 
 function mergeQueryFilters(existingFilters, globalFilters) {

@@ -6,6 +6,22 @@ import "leaflet/dist/leaflet.css";
 const BOMET_CENTER = [-0.7833, 35.3416];
 const DEFAULT_ZOOM = 12;
 
+function createPopupContent(pin) {
+  const root = document.createElement("div");
+  const title = document.createElement("strong");
+  title.textContent = pin.serviceCode || "Complaint";
+  root.appendChild(title);
+  if (pin.status) {
+    root.appendChild(document.createElement("br"));
+    root.appendChild(document.createTextNode(pin.status));
+  }
+  if (pin.count > 1) {
+    root.appendChild(document.createElement("br"));
+    root.appendChild(document.createTextNode(`${pin.count} complaints`));
+  }
+  return root;
+}
+
 /**
  * Complaint location map. One circle marker per complaint location
  * ({ lat, lng, count, serviceCode, status }), centred on Bomet.
@@ -52,11 +68,7 @@ export default function ComplaintMap({ pins = [] }) {
         fillColor: "#0d9488",
         fillOpacity: 0.65,
       })
-        .bindPopup(
-          `<strong>${p.serviceCode || "Complaint"}</strong>` +
-            (p.status ? `<br/>${p.status}` : "") +
-            (p.count > 1 ? `<br/>${p.count} complaints` : "")
-        )
+        .bindPopup(createPopupContent(p))
         .addTo(layer);
     });
     map.invalidateSize();

@@ -172,7 +172,7 @@ const DashboardGrid = ({
         status={card.status}
         listItems={card.listItems}
         hasList={card.hasList}
-        loading={loading && card.value == null}
+        loading={loading}
         onRemove={onRemove}
       />
     );
