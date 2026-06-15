@@ -7,6 +7,9 @@ module.exports = {
   // mode: 'development',
   entry: "./src/index.js",
   devtool: "none",
+  // src/ mixes .js and .jsx (dashboard/); webpack's default resolve list has no .jsx,
+  // so extensionless imports of .jsx files only worked on the dev server.
+  resolve: { extensions: [".js", ".jsx", ".json"] },
   module: {
     rules: [
       {
@@ -20,7 +23,7 @@ module.exports = {
         }
       },
       {
-        test: /\.(js)$/,
+        test: /\.(js|jsx)$/,
         exclude: /node_modules/,
         use: {
           loader: "babel-loader",
