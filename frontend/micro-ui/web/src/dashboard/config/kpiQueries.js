@@ -567,6 +567,11 @@ function mergeQueryFilters(existingFilters, globalFilters) {
 }
 
 function dateFilterColumnForQuery(query) {
+  // The events grain has no created_at/resolved_at; complaint_created_at filters events
+  // by the same complaint population as the facts widgets.
+  if (query.grain === "events") {
+    return "complaint_created_at";
+  }
   if (query.window?.timeRole === "resolved_at") {
     return "resolved_at";
   }
