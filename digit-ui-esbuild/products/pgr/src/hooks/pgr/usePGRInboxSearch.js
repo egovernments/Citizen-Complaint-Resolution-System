@@ -86,7 +86,14 @@ const usePGRInboxSearch = (reqCriteria) => {
       statusMap = states
         .filter((s) => s.state)
         .map((s) => ({
-          statusid: s.uuid,
+          // WorkflowStatusFilter uses `statusid` as each checkbox's value, and
+          // PGRInboxConfig.preProcess feeds the checked keys straight into the
+          // pgr-services `applicationStatus` filter. pgr-services matches that
+          // against the state CODE (e.g. PENDINGFORASSIGNMENT), not the workflow
+          // state UUID — so emitting `s.uuid` here made every status selection
+          // return zero rows and the inbox list vanished (issue #432). Use the
+          // state code as the identifier so a selection actually filters.
+          statusid: s.state,
           state: s.state,
           businessservice: "PGR",
         }));

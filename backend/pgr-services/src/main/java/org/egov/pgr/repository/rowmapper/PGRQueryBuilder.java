@@ -153,7 +153,7 @@ public class PGRQueryBuilder {
         }
 
 
-        addOrderByClause(builder, criteria);
+        addOrderByClause(builder, criteria, preparedStmtList);
 
         addLimitAndOffset(builder, criteria, preparedStmtList);
 
@@ -167,7 +167,7 @@ public class PGRQueryBuilder {
         return countQuery;
     }
 
-    private void addOrderByClause(StringBuilder builder, RequestSearchCriteria criteria){
+    private void addOrderByClause(StringBuilder builder, RequestSearchCriteria criteria, List<Object> preparedStmtList){
 
         if(StringUtils.isEmpty(criteria.getSortBy()))
             builder.append( " ORDER BY ser_createdtime ");
@@ -183,6 +183,20 @@ public class PGRQueryBuilder {
 
         else if(criteria.getSortBy()== RequestSearchCriteria.SortBy.createdTime)
             builder.append(" ORDER BY ser.createdtime ");
+
+        // SLA-remaining ordering. The inbox "SLA days remaining" column is the
+        // business-service SLA budget minus wall-clock elapsed since creation —
+        // egov-workflow-v2 computes businesssServiceSla the same way, with no
+        // per-state pausing. Sorting on that expression server-side keeps the
+        // order consistent across the FULL paginated result set; a client-side
+        // sortFunction can only reorder one page at a time, so rows drop in/out
+        // of view as page size changes (issue #432). The budget is a single
+        // configured constant, making this monotonically equivalent to ordering
+        // by createdtime today, but it stays correct if the budget changes.
+        else if(criteria.getSortBy()== RequestSearchCriteria.SortBy.sla){
+            builder.append(" ORDER BY (? - ((extract(epoch FROM NOW())*1000) - ser.createdtime)) ");
+            preparedStmtList.add(config.getBusinessLevelSla());
+        }
 
         if(criteria.getSortOrder()== RequestSearchCriteria.SortOrder.ASC)
             builder.append(" ASC ");
