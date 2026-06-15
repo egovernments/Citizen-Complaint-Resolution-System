@@ -11,19 +11,18 @@ import {
  * Custom hook that returns the mobile-number validation config for the
  * current tenant.
  *
- * Priority (per @vinothrallapalli-eGov review on PR #689):
- *   1. MDMS — `common-masters.UserValidation` master, entry where
- *      `fieldType === "mobile"` (and `isActive !== false`). This is the
- *      single source of truth used across egov-user, egov-hrms, the
+ * Priority:
+ *   1. MDMS — `common-masters.MobileNumberValidation` master (flat schema:
+ *      countryCode + mobileNumberRegex, default:true marks the tenant default).
+ *      Single source of truth used across egov-user, egov-hrms, the
  *      configurator, and digit-ui.
  *   2. Global configs — `window.globalConfigs.getConfig("CORE_MOBILE_CONFIGS")`.
- *      Acts as the build-time fallback for tenants that haven't seeded
- *      a UserValidation row yet AND for synchronous read sites that
- *      can't wait for the MDMS round-trip (e.g. declarative form
- *      configs that import this module eagerly).
+ *      Build-time fallback for tenants that haven't seeded a
+ *      MobileNumberValidation row yet, and for synchronous read sites that
+ *      can't wait for the MDMS round-trip.
  *   3. Library defaults — `@egovernments/digit-ui-libraries` constants
- *      module. The last-line fallback if neither MDMS nor globalConfigs
- *      surfaces a rule.
+ *      module. Last-line fallback if neither MDMS nor globalConfigs surfaces
+ *      a rule.
  *
  * The hook also writes the resolved rules to `window.__DIGIT_USER_VALIDATION.mobile`
  * so synchronous consumers (form-config getters that can't be hooks)
@@ -31,8 +30,7 @@ import {
  *
  * @param {string} tenantId - The tenant ID
  * @param {string} validationName - Reserved for future per-field-name
- *   selection. Today's UserValidation master has one row per
- *   `fieldType`; this param is kept on the hook signature so callers
+ *   selection. This param is kept on the hook signature so callers
  *   that want a non-default mobile rule later don't have to migrate.
  * @returns {object} - Returns validation rules and loading state
  */
@@ -50,7 +48,7 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
             moduleName: "common-masters",
             masterDetails: [
               {
-                name: "UserValidation",
+                name: "MobileNumberValidation",
               },
             ],
           },
@@ -65,17 +63,13 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
 
   const { isLoading, data, error } = Digit.Hooks.useCustomAPIHook(reqCriteria);
 
-  /** ---------- Priority 1: MDMS common-masters.UserValidation ---------- */
-  // The master is an array of `{ fieldType, isActive, attributes, rules }`
-  // rows. Pick the active mobile-typed row; if multiple rows ever exist
-  // we take the first active one (legacy seed used a single row, future
-  // tenants may add a `default: true` marker — both shapes covered).
-  const userValidationList = data?.["common-masters"]?.UserValidation || [];
-  const mdmsConfig = userValidationList.find(
-    (entry) =>
-      entry?.fieldType === "mobile" &&
-      entry?.isActive !== false,
-  );
+  /** ---------- Priority 1: MDMS common-masters.MobileNumberValidation ---------- */
+  // Flat schema: { countryCode, mobileNumberRegex, default, isActive }.
+  // Pick the record with default:true; fall back to the first active record.
+  const mobileNumberValidationList = data?.["common-masters"]?.MobileNumberValidation || [];
+  const mdmsConfig = mobileNumberValidationList.find(
+    (entry) => entry?.default === true && entry?.isActive !== false,
+  ) || mobileNumberValidationList.find((entry) => entry?.isActive !== false);
 
   /** ---------- Priority 2: Global Config ---------- */
   const globalConfig = window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS") || {};
@@ -91,38 +85,41 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
       errorMessage: DEFAULT_MOBILE_ERROR_MESSAGE,
       isActive: true,
     },
-    attributes: {},
   };
 
   /** ---------- Combined view (MDMS > globalConfigs > defaults) ---------- */
   const validationRules = {
     allowedStartingDigits:
-      mdmsConfig?.rules?.allowedStartingCharacters ||
       globalConfig?.mobileNumberAllowedStartingCharacters ||
       defaultValidation.rules.allowedStartingCharacters,
 
-    prefix:
-      mdmsConfig?.attributes?.prefix ||
+    countryCode:
+      mdmsConfig?.countryCode ||
+      globalConfig?.mobilePrefix ||
+      defaultValidation.rules.prefix,
+    prefix:  // backward-compat alias
+      mdmsConfig?.countryCode ||
       globalConfig?.mobilePrefix ||
       defaultValidation.rules.prefix,
 
-    pattern:
-      mdmsConfig?.rules?.pattern ||
+    mobileNumberRegex:
+      mdmsConfig?.mobileNumberRegex ||
+      globalConfig?.mobileNumberPattern ||
+      defaultValidation.rules.pattern,
+    pattern:  // backward-compat alias
+      mdmsConfig?.mobileNumberRegex ||
       globalConfig?.mobileNumberPattern ||
       defaultValidation.rules.pattern,
 
     minLength:
-      mdmsConfig?.rules?.minLength ||
       globalConfig?.mobileNumberLength ||
       defaultValidation.rules.minLength,
 
     maxLength:
-      mdmsConfig?.rules?.maxLength ||
       globalConfig?.mobileNumberLength ||
       defaultValidation.rules.maxLength,
 
     errorMessage:
-      mdmsConfig?.rules?.errorMessage ||
       globalConfig?.mobileNumberErrorMessage ||
       defaultValidation.rules.errorMessage,
 

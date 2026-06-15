@@ -2,14 +2,16 @@ import { useMemo } from 'react';
 import { useGetList, type Validator } from 'ra-core';
 
 export interface MobileRules {
-  pattern: string;
+  mobileNumberRegex: string;
+  pattern: string;        // backward-compat alias for mobileNumberRegex
+  countryCode?: string;
+  prefix?: string;        // backward-compat alias for countryCode
   minLength: number;
   maxLength: number;
   errorMessage: string;
-  prefix?: string;
 }
 
-// Kenya default — used when MDMS `ValidationConfigs.mobileNumberValidation`
+// Kenya default — used when MDMS `common-masters.MobileNumberValidation`
 // is missing or unreadable. Accept both the bare 9-digit subscriber number
 // (`712345678`) AND the everyday form prefixed with a trunk `0`
 // (`0712345678`) — Gurjeet's regression on #459/#471/#476 was hitting the
@@ -17,9 +19,11 @@ export interface MobileRules {
 // Matches `phoneKE` in `src/admin/validation.ts` so all employee forms
 // share one accept-set.
 const FALLBACK: MobileRules = {
+  mobileNumberRegex: '^0?[17][0-9]{8}$',
   pattern: '^0?[17][0-9]{8}$',
   minLength: 9,
   maxLength: 10,
+  countryCode: '+254',
   prefix: '+254',
   errorMessage:
     'Please enter a valid Kenyan mobile number (9 digits starting with 1 or 7, optional leading 0)',
@@ -27,25 +31,21 @@ const FALLBACK: MobileRules = {
 
 function parseRules(record: Record<string, unknown> | undefined): MobileRules {
   if (!record) return FALLBACK;
-  const raw = record.rules as Record<string, unknown> | undefined;
-  if (!raw) return FALLBACK;
-  // common-masters.UserValidation keeps the dial-code under `attributes.prefix`
-  // (ValidationConfigs.mobileNumberValidation kept it under `rules.prefix`),
-  // so read attributes first and fall back to rules for the legacy shape.
-  const attributes = record.attributes as Record<string, unknown> | undefined;
-  const prefix =
-    typeof attributes?.prefix === 'string' ? attributes.prefix
-    : typeof raw.prefix === 'string' ? (raw.prefix as string)
-    : FALLBACK.prefix;
+  // common-masters.MobileNumberValidation uses a flat structure:
+  // { countryCode, mobileNumberRegex, default }
+  const regex =
+    typeof record.mobileNumberRegex === 'string' ? record.mobileNumberRegex : FALLBACK.mobileNumberRegex;
+  const countryCode =
+    typeof record.countryCode === 'string' ? record.countryCode : FALLBACK.countryCode;
   return {
-    pattern: typeof raw.pattern === 'string' ? raw.pattern : FALLBACK.pattern,
-    minLength: typeof raw.minLength === 'number' ? raw.minLength : FALLBACK.minLength,
-    maxLength: typeof raw.maxLength === 'number' ? raw.maxLength : FALLBACK.maxLength,
-    prefix,
-    errorMessage:
-      typeof raw.errorMessage === 'string' && raw.errorMessage
-        ? raw.errorMessage
-        : FALLBACK.errorMessage,
+    mobileNumberRegex: regex,
+    pattern: regex,
+    countryCode,
+    prefix: countryCode,
+    // minLength/maxLength/errorMessage are not in the new schema; keep fallback values
+    minLength: FALLBACK.minLength,
+    maxLength: FALLBACK.maxLength,
+    errorMessage: FALLBACK.errorMessage,
   };
 }
 
@@ -56,23 +56,22 @@ export interface UseMobileValidatorResult {
 }
 
 export function useMobileValidator(): UseMobileValidatorResult {
-  // Source: common-masters.UserValidation (the `user-validation` resource).
-  // Pick the record whose fieldType === 'mobile' (preferring an active default),
-  // and read its rules.
+  // Source: common-masters.MobileNumberValidation (the `user-validation` resource,
+  // schema updated to MobileNumberValidation). Pick the record with default:true.
   const { data, isLoading } = useGetList('user-validation', {
     pagination: { page: 1, perPage: 50 },
-    sort: { field: 'fieldType', order: 'ASC' },
+    sort: { field: 'countryCode', order: 'ASC' },
   });
 
   const rules = useMemo<MobileRules>(() => {
     if (!data || data.length === 0) return FALLBACK;
-    const mobileRecords = data.filter((r) => {
+    const activeRecords = data.filter((r) => {
       const rec = r as Record<string, unknown>;
-      return rec.fieldType === 'mobile' && rec.isActive !== false;
+      return rec.isActive !== false;
     });
     const preferred =
-      mobileRecords.find((r) => (r as Record<string, unknown>).default === true) ??
-      mobileRecords[0] ??
+      activeRecords.find((r) => (r as Record<string, unknown>).default === true) ??
+      activeRecords[0] ??
       null;
     if (!preferred) return FALLBACK;
     return parseRules(preferred as Record<string, unknown>);
@@ -81,7 +80,7 @@ export function useMobileValidator(): UseMobileValidatorResult {
   const validator = useMemo<Validator>(() => {
     let compiled: RegExp | null = null;
     try {
-      compiled = new RegExp(rules.pattern);
+      compiled = new RegExp(rules.mobileNumberRegex);
     } catch {
       compiled = null;
     }

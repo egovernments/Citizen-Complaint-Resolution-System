@@ -6,11 +6,10 @@ import type { SchemaDescriptor } from './types';
  * default keyed "defaultMobileValidation" with pattern `^[17][0-9]{8}$`,
  * prefix +254).
  *
- * This is the *sister* schema of `common-masters.UserValidation` (see
- * `user-validation.ts`). The two overlap: both describe the same underlying
- * format rules, but DIGIT runtime reads them from different MDMS locations.
- * Editing one does NOT currently auto-propagate to the other — flagship
- * `UserValidationEditor` (Stage 3) will write both atomically.
+ * Note: `common-masters.UserValidation` has been replaced by
+ * `common-masters.MobileNumberValidation` (see `user-validation.ts`).
+ * This descriptor is for the separate `ValidationConfigs.mobileNumberValidation`
+ * schema — a distinct MDMS location read by some older digit-ui hooks.
  *
  * The JSON Schema declares `rules` as a nested object, which the default
  * auto-form would skip entirely. This descriptor expands nested paths into

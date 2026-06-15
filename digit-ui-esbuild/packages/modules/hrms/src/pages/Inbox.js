@@ -82,18 +82,19 @@ const Inbox = ({ parentRoute, businessService = "HRMS", initialStates = {}, filt
   const { data: validationConfig } = Digit.Hooks.useCustomMDMS(
     stateId,
     moduleName,
-    [{ name: "UserValidation" }],
+    [{ name: "MobileNumberValidation" }],
     {
       select: (data) => {
-        const validationData = data?.[moduleName]?.UserValidation?.find((x) => x.fieldType === "mobile");
-        const rules = validationData?.rules;
-        const attributes = validationData?.attributes;
+        const validationData = data?.[moduleName]?.MobileNumberValidation?.find((x) => x.default === true)
+          || data?.[moduleName]?.MobileNumberValidation?.[0];
         return {
-          prefix: attributes?.prefix || DEFAULT_MOBILE_PREFIX,
-          pattern: rules?.pattern || DEFAULT_MOBILE_PATTERN,
-          maxLength: rules?.maxLength || DEFAULT_MOBILE_MAX_LENGTH,
-          minLength: rules?.minLength || DEFAULT_MOBILE_MIN_LENGTH,
-          errorMessage: rules?.errorMessage || "ES_SEARCH_APPLICATION_MOBILE_INVALID",
+          countryCode: validationData?.countryCode || DEFAULT_MOBILE_PREFIX,
+          prefix: validationData?.countryCode || DEFAULT_MOBILE_PREFIX,  // backward-compat
+          mobileNumberRegex: validationData?.mobileNumberRegex || DEFAULT_MOBILE_PATTERN,
+          pattern: validationData?.mobileNumberRegex || DEFAULT_MOBILE_PATTERN,  // backward-compat
+          maxLength: DEFAULT_MOBILE_MAX_LENGTH,
+          minLength: DEFAULT_MOBILE_MIN_LENGTH,
+          errorMessage: "ES_SEARCH_APPLICATION_MOBILE_INVALID",
         };
       },
       staleTime: 300000,

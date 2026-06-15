@@ -2,7 +2,7 @@
  * Custom hook to fetch mobile number validation configuration from MDMS
  * Priority:
  * 1. Global configs (window.globalConfigs?.getConfig("CORE_MOBILE_CONFIGS"))
- * 2. MDMS configs (UserValidation - fieldType: mobile as default)
+ * 2. MDMS configs (MobileNumberValidation — flat countryCode/mobileNumberRegex)
  * 3. Default fallback validation
  *
  * Returns all available country validation configs for dropdown support,
@@ -21,33 +21,27 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
   const { isLoading, data: mdmsData, error } = Digit.Hooks.useCustomMDMS(
     stateId,
     moduleName,
-    [{ name: "UserValidation" }],
+    [{ name: "MobileNumberValidation" }],
     {
       select: (data) => {
-        const allValidations = data?.[moduleName]?.UserValidation || [];
-        const mobileValidations = allValidations.filter(item => item.fieldType === "mobile");
+        const allValidations = data?.[moduleName]?.MobileNumberValidation || [];
 
-        // Build config for each entry
-        const allConfigs = mobileValidations.map((item) => ({
-          fieldType: item.fieldType,
+        // Build config for each entry (flat schema: countryCode + mobileNumberRegex)
+        const allConfigs = allValidations.map((item) => ({
           isDefault: item.default === true,
-          prefix: item.attributes?.prefix || "+91",
-          pattern: item.rules?.pattern || "^[6-9][0-9]{9}$",
-          maxLength: item.rules?.maxLength || 10,
-          minLength: item.rules?.minLength || 10,
-          errorMessage: item.rules?.errorMessage || "ES_SEARCH_APPLICATION_MOBILE_INVALID",
-          allowedStartingCharacters: item.rules?.allowedStartingCharacters,
+          countryCode: item.countryCode || "+91",
+          prefix: item.countryCode || "+91",          // backward-compat alias
+          mobileNumberRegex: item.mobileNumberRegex || "^[6-9][0-9]{9}$",
+          pattern: item.mobileNumberRegex || "^[6-9][0-9]{9}$",  // backward-compat alias
           isActive: item.isActive !== false,
         }));
 
         // Default config is the one flagged as default
         const defaultConfig = allConfigs.find((c) => c.isDefault) || allConfigs[0] || {
+          countryCode: "+91",
           prefix: "+91",
+          mobileNumberRegex: "^[6-9][0-9]{9}$",
           pattern: "^[6-9][0-9]{9}$",
-          maxLength: 10,
-          minLength: 10,
-          errorMessage: "ES_SEARCH_APPLICATION_MOBILE_INVALID",
-          allowedStartingCharacters: ["6", "7", "8", "9"],
         };
 
         return {
@@ -74,11 +68,13 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
   /** ---------- Combine configs with priority ---------- */
   const validationRules = {
     allowedStartingCharacters:
-      globalConfig?.mobileNumberAllowedStartingCharacters || mdmsDefault?.allowedStartingCharacters || defaultValidation?.allowedStartingCharacters,
+      globalConfig?.mobileNumberAllowedStartingCharacters || defaultValidation?.allowedStartingCharacters,
 
-    prefix: globalConfig?.mobilePrefix || mdmsDefault?.prefix,
+    countryCode: globalConfig?.mobilePrefix || mdmsDefault?.countryCode,
+    prefix: globalConfig?.mobilePrefix || mdmsDefault?.countryCode,  // backward-compat alias
 
-    pattern: globalConfig?.mobileNumberPattern || mdmsDefault?.pattern,
+    mobileNumberRegex: globalConfig?.mobileNumberPattern || mdmsDefault?.mobileNumberRegex,
+    pattern: globalConfig?.mobileNumberPattern || mdmsDefault?.mobileNumberRegex,  // backward-compat alias
 
     minLength: globalConfig?.mobileNumberLength || mdmsDefault?.minLength,
 
@@ -97,9 +93,9 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
   // All available country configs for dropdown
   const allValidationConfigs = mdmsData?.allConfigs || [];
 
-  // Helper to get config by prefix value (e.g., "+91", "+251")
+  // Helper to get config by country code / prefix value (e.g., "+91", "+254")
   const getConfigByPrefix = (prefix) => {
-    return allValidationConfigs.find((c) => c.prefix === prefix) || validationRules;
+    return allValidationConfigs.find((c) => c.countryCode === prefix) || validationRules;
   };
 
   // Helper function to get min/max values for number validation

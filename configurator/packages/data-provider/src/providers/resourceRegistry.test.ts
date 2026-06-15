@@ -99,7 +99,7 @@ describe('resourceRegistry', () => {
     // the configurator before. If a future refactor drops one, this fails loud.
     const expected: Record<string, string> = {
       'theme-config': 'common-masters.ThemeConfig',
-      'user-validation': 'common-masters.UserValidation',
+      'user-validation': 'common-masters.MobileNumberValidation',
       'mobile-validation': 'ValidationConfigs.mobileNumberValidation',
       'tenant-boundary': 'egov-location.TenantBoundary',
       'auto-escalation-ignore': 'Workflow.AutoEscalationStatesToIgnore',

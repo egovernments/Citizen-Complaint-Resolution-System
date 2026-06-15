@@ -42,9 +42,8 @@ function normalizeMdmsRecord(mdms: MdmsRecord, config: ResourceConfig): RaRecord
   return {
     ...data,
     // Key by the MDMS uniqueIdentifier (genuinely unique per record) rather
-    // than data[idField]. When two records share the idField value (e.g. two
-    // UserValidation rows both fieldType "mobile"), data[idField] collapsed
-    // them to the same react-admin id, so every row opened the first record.
+    // than data[idField]. When two records share the idField value, data[idField]
+    // collapses them to the same react-admin id, so every row opens the first record.
     // uniqueIdentifier is always distinct; fall back to data[idField] only
     // for legacy records that lack it.
     id: mdms.uniqueIdentifier || extractId(data, config),

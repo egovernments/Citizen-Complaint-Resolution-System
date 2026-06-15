@@ -1,51 +1,26 @@
 import type { SchemaDescriptor } from './types';
 
 /**
- * Descriptor for `common-masters.UserValidation` (e.g. the Kenya mobile rule
- * keyed "mobile" with pattern `^0?[17][0-9]{8}$`, prefix +254).
+ * Descriptor for `common-masters.MobileNumberValidation` — the flat schema
+ * with `countryCode` and `mobileNumberRegex` fields (e.g. Kenya: +254,
+ * `^[17][0-9]{8}$`).
  *
- * The JSON Schema declares `rules` and `attributes` as nested objects, so the
- * default auto-form would skip them entirely. This descriptor expands nested
- * paths into individual widgets.
- *
- * Note: DIGIT runtime also reads `ValidationConfigs.mobileNumberValidation`
- * via `useMobileValidation`. The two schemas overlap; for now editing one
- * does NOT auto-propagate to the other. Flagship `UserValidationEditor`
- * (Stage 3) will write both atomically.
+ * Replaces the old `common-masters.UserValidation` nested schema
+ * (attributes.prefix / rules.pattern / rules.minLength etc.).
  */
 export const userValidationDescriptor: SchemaDescriptor = {
-  schema: 'common-masters.UserValidation',
+  schema: 'common-masters.MobileNumberValidation',
   groups: [
-    { title: 'Field', fields: ['zone', 'fieldType', 'default', 'isActive'] },
-    { title: 'Format rules', fields: [
-      'attributes.prefix',
-      'rules.pattern',
-      'rules.minLength',
-      'rules.maxLength',
-      'rules.allowedStartingCharacters',
-      'rules.errorMessage',
-    ] },
+    { title: 'Country', fields: ['countryCode', 'default', 'isActive'] },
+    { title: 'Validation', fields: ['mobileNumberRegex'] },
   ],
   fields: [
-    { path: 'zone', widget: 'text', required: true,
-      help: 'Unique identifier for this validation record (e.g. the tenant/zone). This is the record\'s unique key.' },
-    { path: 'fieldType', widget: 'text', required: true,
-      help: 'e.g. "mobile", "email". The kind of field this rule applies to (no longer the unique key).' },
+    { path: 'countryCode', widget: 'text', required: true,
+      help: 'E.164 country dialling prefix (e.g. +254 for Kenya, +91 for India). This is the record\'s unique key.' },
+    { path: 'mobileNumberRegex', widget: 'regex', required: true, label: 'Regex pattern',
+      help: 'Regex applied to the local subscriber number (without country code). E.g. ^[17][0-9]{8}$ for Kenya.' },
     { path: 'default', widget: 'boolean',
-      help: 'Mark this rule as the default for its fieldType.' },
+      help: 'Mark this as the default country for the tenant. Only one record should have default: true.' },
     { path: 'isActive', widget: 'boolean' },
-    { path: 'attributes.prefix', widget: 'text', label: 'Dial code prefix',
-      help: 'Country prefix shown/stored with the value (e.g. +254 for Kenya).' },
-    { path: 'rules.pattern', widget: 'regex', label: 'Regex pattern',
-      help: 'The validation regex — use the sample box below to test.' },
-    { path: 'rules.minLength', widget: 'integer', min: 1, max: 30,
-      label: 'Min length' },
-    { path: 'rules.maxLength', widget: 'integer', min: 1, max: 30,
-      label: 'Max length' },
-    { path: 'rules.allowedStartingCharacters', widget: 'chip-array',
-      label: 'Allowed first characters',
-      help: 'First digit/char each value must start with. For KE mobile: 0, 1, 7.' },
-    { path: 'rules.errorMessage', widget: 'text', label: 'Error message key',
-      help: 'Localization key shown on validation failure, e.g. CORE_COMMON_MOBILE_ERROR.' },
   ],
 };

@@ -51,17 +51,17 @@ export const phoneKE = raRegex(
  * Per @vinothrallapalli-eGov review on PR #690: don't hardcode the
  * length / starting-digit constraints, because each country has its
  * own postal-code rule. The canonical source is the
- * `common-masters.UserValidation` MDMS master — same master used for
- * mobile validation — with `fieldType === "postalCode"`.
+ * `common-masters.MobileNumberValidation` MDMS master — same master used for
+ * mobile validation — for postal code, use a separate MDMS entry or
+ * globalConfigs.CORE_POSTAL_CODE_CONFIGS.
  *
  * Read order (matches `useMobileValidation`):
  *   1. `window.__DIGIT_USER_VALIDATION.postalCode` — populated by the
- *      `useUserValidation` hook from the MDMS master.
+ *      `useMobileValidation` hook from the MDMS master.
  *   2. `globalConfigs.CORE_POSTAL_CODE_CONFIGS` — build-time fallback
  *      rendered by the playbook.
  *   3. Sensible default — `^[0-9]{5}$` (Kenya rule). Tenants with a
- *      different rule MUST seed a UserValidation row OR set the
- *      globalConfigs key.
+ *      different rule MUST set the globalConfigs key.
  *
  * `postalCode` is a function-valued validator so the resolution runs
  * at validation time (every keystroke), not at module-import time.
