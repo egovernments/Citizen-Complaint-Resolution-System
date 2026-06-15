@@ -29,11 +29,19 @@ function parseRules(record: Record<string, unknown> | undefined): MobileRules {
   if (!record) return FALLBACK;
   const raw = record.rules as Record<string, unknown> | undefined;
   if (!raw) return FALLBACK;
+  // common-masters.UserValidation keeps the dial-code under `attributes.prefix`
+  // (ValidationConfigs.mobileNumberValidation kept it under `rules.prefix`),
+  // so read attributes first and fall back to rules for the legacy shape.
+  const attributes = record.attributes as Record<string, unknown> | undefined;
+  const prefix =
+    typeof attributes?.prefix === 'string' ? attributes.prefix
+    : typeof raw.prefix === 'string' ? (raw.prefix as string)
+    : FALLBACK.prefix;
   return {
     pattern: typeof raw.pattern === 'string' ? raw.pattern : FALLBACK.pattern,
     minLength: typeof raw.minLength === 'number' ? raw.minLength : FALLBACK.minLength,
     maxLength: typeof raw.maxLength === 'number' ? raw.maxLength : FALLBACK.maxLength,
-    prefix: typeof raw.prefix === 'string' ? raw.prefix : FALLBACK.prefix,
+    prefix,
     errorMessage:
       typeof raw.errorMessage === 'string' && raw.errorMessage
         ? raw.errorMessage
@@ -48,19 +56,25 @@ export interface UseMobileValidatorResult {
 }
 
 export function useMobileValidator(): UseMobileValidatorResult {
-  const { data, isLoading } = useGetList('mobile-validation', {
-    pagination: { page: 1, perPage: 20 },
-    sort: { field: 'validationName', order: 'ASC' },
+  // Source: common-masters.UserValidation (the `user-validation` resource).
+  // Pick the record whose fieldType === 'mobile' (preferring an active default),
+  // and read its rules.
+  const { data, isLoading } = useGetList('user-validation', {
+    pagination: { page: 1, perPage: 50 },
+    sort: { field: 'fieldType', order: 'ASC' },
   });
 
   const rules = useMemo<MobileRules>(() => {
     if (!data || data.length === 0) return FALLBACK;
+    const mobileRecords = data.filter((r) => {
+      const rec = r as Record<string, unknown>;
+      return rec.fieldType === 'mobile' && rec.isActive !== false;
+    });
     const preferred =
-      data.find(
-        (r) =>
-          (r as Record<string, unknown>).validationName ===
-          'defaultMobileValidation',
-      ) ?? data[0];
+      mobileRecords.find((r) => (r as Record<string, unknown>).default === true) ??
+      mobileRecords[0] ??
+      null;
+    if (!preferred) return FALLBACK;
     return parseRules(preferred as Record<string, unknown>);
   }, [data]);
 

@@ -1372,7 +1372,7 @@
       ansible.builtin.command: >-
         bash {{ playbook_dir }}/files/integration-tests-build.sh
         "{{ integration_tests_src | default(playbook_dir ~ '/../../tests/integration-tests') }}"
-        "{{ integration_tests_dashboard_base | default('/integration-tests-v2/') }}"
+        "{{ integration_tests_dashboard_base | default('/tests-v2/') }}"
       register: it_build
       changed_when: true
       when: enable_integration_tests | default(false)
@@ -1465,6 +1465,57 @@
       when:
         - enable_integration_tests | default(false)
         - integration_tests_basic_auth_password is defined
+        - ansible_system != "Darwin"
+
+    # ---- RUN button: on-box test-runner daemon (opt-in: enable_integration_tests_runner) ----
+    # Backs the "Run tests" button on the v2 dashboard. Loopback-only Node
+    # service; nginx (/tests/api/, nginx_features.integration_tests_runner)
+    # is the auth front. Requires the dashboards block above (needs
+    # integration_tests_dir). A run is heavy and shares the box with the live
+    # stack, so this stays opt-in and nice'd. Linux only.
+    # Deps FIRST, so the next task installs the browser revision that matches
+    # the locked @playwright/test (1.59.1) rather than whatever an unpinned
+    # `npx playwright` would pull.
+    - name: "integration-tests runner — npm deps for the test suite (tsx + playwright)"
+      ansible.builtin.shell: npm ci || npm install
+      args:
+        chdir: "{{ integration_tests_dir }}"
+      changed_when: true
+      when:
+        - enable_integration_tests_runner | default(false)
+        - integration_tests_dir is defined
+        - ansible_system != "Darwin"
+
+    - name: "integration-tests runner — install Playwright browsers (repo-local binary, matched version)"
+      ansible.builtin.command: >-
+        node_modules/.bin/playwright install --with-deps chromium
+      args:
+        chdir: "{{ integration_tests_dir }}"
+      changed_when: true
+      when:
+        - enable_integration_tests_runner | default(false)
+        - integration_tests_dir is defined
+        - ansible_system != "Darwin"
+
+    - name: "integration-tests runner — install systemd unit"
+      ansible.builtin.template:
+        src: templates/integration-tests-runner.service.j2
+        dest: /etc/systemd/system/integration-tests-runner.service
+        mode: '0644'
+      when:
+        - enable_integration_tests_runner | default(false)
+        - integration_tests_dir is defined
+        - ansible_system != "Darwin"
+
+    - name: "integration-tests runner — enable + (re)start daemon"
+      ansible.builtin.systemd:
+        name: integration-tests-runner
+        state: restarted
+        enabled: true
+        daemon_reload: true
+      when:
+        - enable_integration_tests_runner | default(false)
+        - integration_tests_dir is defined
         - ansible_system != "Darwin"
 
     # Host nginx (Linux/Debian) — apt nginx + /etc/nginx site. Skipped on
@@ -1663,9 +1714,8 @@
         timeout: 15
         validate_certs: "{{ tls_enabled | default(true) }}"
       register: auth_probe
-      retries: 3
+      retries: 6
       delay: 10
-      no_log: true
 
     - name: "validate — auth probe returned an access_token"
       ansible.builtin.assert:
@@ -1691,6 +1741,51 @@
     # /healthz responds. The reachability probe below ALWAYS runs and
     # the bootstrap tasks key off its result.
     # ────────────────────────────────────────────────────────────────
+    # Pre-generate enc-service symmetric keys for the new state root and city
+    # tenant BEFORE MCP bootstrap creates the ADMIN user. egov-enc-service
+    # discovers tenants via MDMS search under STATE_LEVEL_TENANT_ID — at this
+    # point that's still `pg.citya`, so `mz` (a different root) is unknown and
+    # user encrypt/decrypt for `mz` throws "Tenant Id not found". The custom
+    # `:generatekey-endpoint` image exposes POST /crypto/v1/_generatekey which
+    # inserts the key row directly, bypassing MDMS discovery — solving the
+    # chicken-and-egg between bootstrap needing encryption and enc-service not
+    # yet knowing the new tenant. Idempotent (created: false when key exists).
+    - name: "pre-bootstrap — generate enc-service key for state root ({{ state_root }})"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:11234/egov-enc-service/crypto/v1/_generatekey"
+        method: POST
+        body_format: json
+        body:
+          RequestInfo:
+            apiId: Citizen
+            ver: ".01"
+            ts: null
+          tenantId: "{{ state_root }}"
+        status_code: [200]
+        timeout: 10
+      register: enc_key_root
+      failed_when: false
+      changed_when: (enc_key_root.json.created | default(false)) == true
+      when: state_root != 'pg'
+
+    - name: "pre-bootstrap — generate enc-service key for city tenant ({{ tenant_id }})"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:11234/egov-enc-service/crypto/v1/_generatekey"
+        method: POST
+        body_format: json
+        body:
+          RequestInfo:
+            apiId: Citizen
+            ver: ".01"
+            ts: null
+          tenantId: "{{ tenant_id }}"
+        status_code: [200]
+        timeout: 10
+      register: enc_key_city
+      failed_when: false
+      changed_when: (enc_key_city.json.created | default(false)) == true
+      when: state_root != 'pg'
+
     - name: "mcp-bootstrap — probe reachability"
       ansible.builtin.uri:
         url: "http://127.0.0.1:13101/healthz"
@@ -1711,6 +1806,9 @@
           source_tenant: "pg"
           mobile_regex: "{{ core_mobile_configs.mobileNumberPattern | default('^[6-9][0-9]{9}$') }}"
           mobile_length: "{{ core_mobile_configs.mobileNumberLength | default(10) }}"
+          mobile_prefix: "{{ core_mobile_configs.mobilePrefix | default(omit) }}"
+          mobile_allowed_starting_characters: "{{ core_mobile_configs.mobileNumberAllowedStartingCharacters | default(omit) }}"
+          mobile_error_message: "{{ core_mobile_configs.mobileNumberErrorMessage | default(omit) }}"
           user_validation: "{{ user_validation | default(omit) }}"
           auth:
             username: "{{ bootstrap_user | default('ADMIN') }}"
@@ -1734,6 +1832,9 @@
           source_tenant: "pg.citest"
           mobile_regex: "{{ core_mobile_configs.mobileNumberPattern | default('^[6-9][0-9]{9}$') }}"
           mobile_length: "{{ core_mobile_configs.mobileNumberLength | default(10) }}"
+          mobile_prefix: "{{ core_mobile_configs.mobilePrefix | default(omit) }}"
+          mobile_allowed_starting_characters: "{{ core_mobile_configs.mobileNumberAllowedStartingCharacters | default(omit) }}"
+          mobile_error_message: "{{ core_mobile_configs.mobileNumberErrorMessage | default(omit) }}"
           user_validation: "{{ user_validation | default(omit) }}"
           auth:
             username: "{{ bootstrap_user | default('ADMIN') }}"
@@ -1892,10 +1993,10 @@
         replace: '\1STATE_LEVEL_TENANT_ID: {{ state_root }}'
       when: state_root != 'pg'
 
-    - name: "post-bootstrap — restart services (except egov-hrms) to pick up new STATE_LEVEL_TENANT_ID"
+    - name: "post-bootstrap — recreate services (except egov-hrms) to pick up new STATE_LEVEL_TENANT_ID"
       ansible.builtin.shell: >-
         docker compose {{ compose_files }}
-        restart egov-user egov-workflow-v2 egov-enc-service pgr-services
+        up -d --force-recreate egov-user egov-workflow-v2 egov-enc-service pgr-services
       args:
         chdir: "{{ digit_dir }}"
       when: state_root != 'pg'
@@ -1910,9 +2011,9 @@
       changed_when: false
       when: state_root != 'pg'
 
-    - name: "post-bootstrap — restart egov-hrms after egov-user is healthy"
+    - name: "post-bootstrap — recreate egov-hrms after egov-user is healthy"
       ansible.builtin.shell: >-
-        docker compose {{ compose_files }} restart egov-hrms
+        docker compose {{ compose_files }} up -d --force-recreate egov-hrms
       args:
         chdir: "{{ digit_dir }}"
       changed_when: true

@@ -248,6 +248,17 @@ class CRSLoader:
                 print(f"❌ Failed to ensure StateInfo for '{tenant_code}'")
                 return False
 
+            # Create localization for the tenant
+            tenant_key = f"TENANT_TENANTS_{tenant_code.upper().replace('.', '_')}"
+            localization_messages = [{
+                "code": tenant_key,
+                "message": display_name,
+                "module": "rainmaker-common",
+                "locale": "en_IN"
+            }]
+            print(f"   Creating localization: {tenant_key}")
+            self.uploader.create_localization_messages(localization_messages, root_tenant)
+
             # Enable modules for the tenant
             for module in enable_modules:
                 self._enable_module_for_tenant(tenant_code, module)
@@ -266,6 +277,16 @@ class CRSLoader:
                 # Check if it's a "already exists" error
                 if "already exists" in str(error).lower() or "duplicate" in str(error).lower():
                     print(f"   (Tenant may already exist)")
+                    # Still create localization for existing tenant
+                    tenant_key = f"TENANT_TENANTS_{tenant_code.upper().replace('.', '_')}"
+                    localization_messages = [{
+                        "code": tenant_key,
+                        "message": display_name,
+                        "module": "rainmaker-common",
+                        "locale": "en_IN"
+                    }]
+                    print(f"   Creating localization for existing tenant: {tenant_key}")
+                    self.uploader.create_localization_messages(localization_messages, root_tenant)
                     return True
                 print(f"   Error: {error}")
             except:

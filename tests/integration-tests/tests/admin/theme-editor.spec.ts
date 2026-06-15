@@ -17,7 +17,9 @@ import { test, expect } from '@playwright/test';
 import { getDigitToken } from '../utils/auth';
 import { BASE_URL, ROOT_TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
 
-const THEME_RECORD_ID = 'kenya-green';
+// Theme record under common-masters.ThemeConfig — override per deployment
+// (e.g. `bomet-green`, `india-saffron`). Defaults to the naipepea seed.
+const THEME_RECORD_ID = process.env.THEME_RECORD_ID || 'kenya-green';
 
 test('API smoke — ThemeConfig record exists on the expected tenant', {
   annotation: {

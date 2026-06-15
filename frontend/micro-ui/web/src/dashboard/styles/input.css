@@ -1,0 +1,138 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .dashboard-widget {
+    @apply tw-h-full tw-overflow-hidden tw-rounded-lg tw-border tw-border-slate-200 tw-bg-white tw-shadow-sm;
+  }
+
+  .dashboard-drag-handle {
+    @apply tw-cursor-move tw-rounded-t-lg tw-border-b tw-border-slate-100 tw-bg-slate-50 tw-px-3 tw-py-2 tw-text-xs tw-font-medium tw-uppercase tw-tracking-wide tw-text-slate-500;
+  }
+
+  .kpi-inventory-item:active {
+    @apply tw-opacity-70;
+  }
+
+  /* Keep drag-over events on the grid container so the drop placeholder tracks smoothly */
+  .dashboard-external-drag .react-grid-item {
+    pointer-events: none;
+  }
+
+  .dashboard-external-drag .react-grid-placeholder {
+    transition: none;
+  }
+
+  .dashboard-kpi-drag-handle {
+    @apply tw-shrink-0 tw-border-0 tw-bg-transparent tw-py-1 tw-normal-case tw-tracking-normal;
+    min-height: 1.25rem;
+  }
+
+  .dashboard-kpi-remove {
+    @apply tw-opacity-0 tw-transition-opacity group-hover:tw-opacity-100;
+  }
+
+  .dashboard-kpi-widget .dashboard-widget {
+    @apply tw-transition-all tw-duration-150;
+  }
+
+  .dashboard-kpi-card.dashboard-widget {
+    @apply tw-h-full tw-overflow-hidden;
+    min-height: 0;
+  }
+
+  .dashboard-kpi-widget:hover .dashboard-widget {
+    @apply tw-border-brand-teal tw-bg-teal-50/40 tw-shadow-md;
+    box-shadow: 0 4px 12px rgb(13 148 136 / 0.12);
+  }
+
+  /* Chart widgets: allow content near plot edges */
+  .dashboard-chart-widget {
+    overflow: visible;
+  }
+
+  .dashboard-list-widget {
+    overflow: visible;
+    height: auto;
+  }
+
+  .layout .react-grid-item:has(.dashboard-chart-widget) {
+    overflow: visible;
+  }
+
+  .department-bar-chart {
+    overflow: visible;
+    min-height: 0;
+  }
+
+  .department-bar-chart .apexcharts-canvas,
+  .department-bar-chart .apexcharts-svg {
+    overflow: visible !important;
+  }
+
+  .dashboard-chart-tooltip {
+    position: fixed;
+    z-index: 10000;
+    max-width: 320px;
+    border-radius: 5px;
+    border: 1px solid #e3e3e3;
+    background: rgba(255, 255, 255, 0.98);
+    box-shadow: 2px 2px 6px -4px #999;
+    pointer-events: none;
+    padding: 0;
+  }
+
+  .dashboard-chart-tooltip-title {
+    margin: 0;
+    padding: 6px 10px;
+    border-bottom: 1px solid #eee;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.35;
+    color: #334155;
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  .dashboard-chart-tooltip-value {
+    margin: 0;
+    padding: 6px 10px;
+    font-size: 11px;
+    color: #475569;
+  }
+
+  .dashboard-chart-tooltip-value strong {
+    font-weight: 600;
+    color: #0f172a;
+  }
+
+  /* Bottom-right corner resize handle only */
+  .layout .react-grid-item > .react-resizable-handle::after {
+    content: none;
+    border: 0;
+  }
+
+  .layout .react-grid-item > .react-resizable-handle {
+    background: transparent;
+    opacity: 0;
+  }
+
+  .layout .react-grid-item:hover > .react-resizable-handle.react-resizable-handle-se {
+    opacity: 1;
+  }
+
+  .layout .react-grid-item > .react-resizable-handle.react-resizable-handle-se {
+    bottom: 0;
+    right: 0;
+    width: 16px;
+    height: 16px;
+    cursor: se-resize;
+  }
+
+  .layout .react-grid-placeholder {
+    background: transparent !important;
+    opacity: 0 !important;
+    border: 0 !important;
+  }
+}

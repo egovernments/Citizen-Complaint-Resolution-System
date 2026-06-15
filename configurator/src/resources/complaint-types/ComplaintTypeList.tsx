@@ -4,6 +4,7 @@ import { StatusChip } from '@/admin/fields';
 import { EntityLink } from '@/components/ui/EntityLink';
 
 const columns: DigitColumn[] = [
+  { source: 'menuPath', label: 'app.fields.menu_path' },
   { source: 'serviceCode', label: 'app.fields.service_code' },
   { source: 'name', label: 'app.fields.name', editable: true },
   {

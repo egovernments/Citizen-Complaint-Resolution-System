@@ -168,6 +168,34 @@ export const CreateComplaintConfig = {
         {
           head: "CS_COMPLAINT_LOCATION_DETAILS",
           body: [
+            // Pin-location map (egovernments/CCRS#447 item 5). Renders the
+            // same leaflet map the citizen flow uses (registered as
+            // `PGRComplaintLocationMap` → GeoLocations in Module.js). On a
+            // pin drop, GeoLocations.resolveWard() runs point-in-polygon
+            // against the bundled Nairobi-wards GeoJSON and writes
+            // `{ lat, lng, pincode, address, ward:{code,name,...} }` to the
+            // `GeoLocationsPoint` form key. PGRBoundaryComponent below
+            // already watches `formData.GeoLocationsPoint.ward` (CCRS#491)
+            // and auto-fills the County / Sub-County / Ward cascade from
+            // that pin — so dropping a pin populates the boundary picker
+            // for free, with no extra wiring on the employee path.
+            //
+            // Optional: the operator can still file by manually selecting
+            // the boundary cascade without dropping a pin. Leaving it
+            // non-mandatory also avoids forcing a geoLocation onto every
+            // submit (see the null-geoLocation persister risk noted on the
+            // ticket) — the map only contributes a geoLocation when a pin
+            // is actually placed.
+            {
+              isMandatory: false,
+              key: "GeoLocationsPoint",
+              type: "component",
+              component: "PGRComplaintLocationMap",
+              label: "CS_COMPLAINT_DETAILS_PIN_LOCATION",
+              populators: {
+                name: "GeoLocationsPoint",
+              },
+            },
             {
               inline: true,
               label: "CS_COMPLAINT_POSTALCODE__DETAILS",
@@ -183,7 +211,14 @@ export const CreateComplaintConfig = {
                 required: false,
                 validation: {
                   required: false,
-                  pattern: /^[0-9]{5}$/,
+                  // Postal-code shape is per-country. Read the pattern from
+                  // globalConfigs CORE_POSTAL_CONFIGS (e.g. MZ = 4 digits)
+                  // instead of hardcoding 5, so this field rule matches the
+                  // config-driven check in createComplaintForm.js. Falls back
+                  // to the legacy 5-digit default when the host hasn't set it.
+                  pattern: new RegExp(
+                    window?.globalConfigs?.getConfig?.("CORE_POSTAL_CONFIGS")?.postalCodePattern || "^[0-9]{5}$"
+                  ),
                 },
                 error: "CS_COMPLAINT_POSTALCODE_INVALID_ERROR",
               },

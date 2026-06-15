@@ -53,7 +53,10 @@ export const hrmsService = {
       const response = await apiClient.post(ENDPOINTS.USER_SEARCH, {
         RequestInfo: apiClient.buildRequestInfo({ action: '_search' }),
         tenantId,
-        userName: [userName],
+        // egov-user's UserSearchRequest declares userName as a plain String —
+        // sending an array gets HTTP 400 "Failed to parse field - userName.
+        // Expected type is String" and the pre-flight never runs.
+        userName,
         userType: 'EMPLOYEE',
       });
       const users = (response.user || []) as unknown[];
@@ -168,6 +171,44 @@ export const hrmsService = {
     password?: string;
   }): Employee {
     const now = Date.now();
+    const dayMs = 86_400_000;
+
+    // `department` accepts a comma-separated list ("HealthServices,WaterandSewage").
+    // HRMS only allows ONE current assignment with non-overlapping windows, so we
+    // replicate the tenant-bootstrap ADMIN pattern: first department = the current
+    // assignment, every additional department = a 1-day historical assignment in
+    // the past. PGR's department validation accepts an assignee when ANY
+    // assignment (current or historical) matches the complaint's department, so
+    // a multi-department employee qualifies for all of them.
+    const deptList = data.department
+      .split(',')
+      .map((d) => d.trim())
+      .filter(Boolean);
+    const primaryFrom = data.dateOfAppointment || now;
+    const assignments = deptList.map((dept, idx) => {
+      if (idx === 0) {
+        return {
+          designation: data.designation,
+          department: dept,
+          fromDate: primaryFrom,
+          isCurrentAssignment: true,
+        };
+      }
+      // Historical: each occupies a 1-day window strictly before the
+      // current assignment's fromDate.
+      return {
+        designation: data.designation,
+        department: dept,
+        fromDate: primaryFrom - (idx + 1) * dayMs,
+        toDate: primaryFrom - idx * dayMs,
+        isCurrentAssignment: false,
+      };
+    });
+    // Every assignment's fromDate must be >= dateOfAppointment — anchor it
+    // to the earliest historical window so HRMS doesn't reject either edge.
+    const dateOfAppointment = deptList.length > 1
+      ? primaryFrom - (deptList.length + 1) * dayMs
+      : (data.dateOfAppointment || now);
 
     const user: EmployeeUser = {
       userName: data.userName.toLowerCase(),
@@ -191,7 +232,7 @@ export const hrmsService = {
       code: data.code,
       tenantId: data.tenantId,
       user,
-      dateOfAppointment: data.dateOfAppointment || now,
+      dateOfAppointment,
       employeeStatus: 'EMPLOYED',
       employeeType: 'PERMANENT',
       jurisdictions: data.jurisdictions.map((j) => ({
@@ -205,14 +246,7 @@ export const hrmsService = {
         tenantId: data.tenantId,
         isActive: true,
       })),
-      assignments: [
-        {
-          designation: data.designation,
-          department: data.department,
-          fromDate: data.dateOfAppointment || now,
-          isCurrentAssignment: true,
-        },
-      ],
+      assignments,
     };
   },
 
@@ -277,14 +311,16 @@ export const hrmsService = {
     }
 
     if (employee.assignments?.length) {
-      const assignment = employee.assignments[0];
+      // Multi-department employees carry one assignment per department
+      // (current + historical) — validate every one, not just the first.
+      for (const assignment of employee.assignments) {
+        if (assignment.department && !existingDepartments.includes(assignment.department)) {
+          errors.push(`Department "${assignment.department}" not found`);
+        }
 
-      if (assignment.department && !existingDepartments.includes(assignment.department)) {
-        errors.push(`Department "${assignment.department}" not found`);
-      }
-
-      if (assignment.designation && !existingDesignations.includes(assignment.designation)) {
-        errors.push(`Designation "${assignment.designation}" not found`);
+        if (assignment.designation && !existingDesignations.includes(assignment.designation)) {
+          errors.push(`Designation "${assignment.designation}" not found`);
+        }
       }
     }
 

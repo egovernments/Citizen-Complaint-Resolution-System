@@ -23,7 +23,6 @@ jobs:
     defaults:
       run:
         working-directory: local-setup/ansible
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -47,6 +46,35 @@ jobs:
 
       - name: yamllint — inventory
         run: yamllint -c .yamllint inventory/group_vars/ inventory/host_vars/
+
+  config-contracts:
+    name: Config combination + infra contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Incident-derived combination rules (rules-as-code, each cites the
+      # incident it encodes). Real tenant host_vars are gitignored, so CI
+      # proves the RULES (self-test + fixtures + the tracked example);
+      # deploy.sh applies the same gate to operators' real configs.
+      - name: preflight — rule self-test
+        run: python3 local-setup/scripts/preflight.py --self-test
+
+      - name: preflight — fixtures (valid must pass, invalid must trip)
+        run: python3 local-setup/scripts/preflight.py --fixtures local-setup/tests/fixtures/host_vars/
+
+      - name: preflight — tracked example must pass
+        run: python3 local-setup/scripts/preflight.py local-setup/ansible/inventory/host_vars/_example.yml
+
+      # Cross-file contracts lint can't see: compose -f stack discipline,
+      # :latest pin freeze, overlay-service existence.
+      - name: infra contract tests
+        working-directory: local-setup/tests
+        run: |
+          npm ci
+          npx jest static/infra-contracts.test.ts
 
   test:
     runs-on: ubuntu-latest

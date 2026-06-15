@@ -32,6 +32,15 @@ var globalConfigs = (function () {
   var hrmsContext = {{ hrms_context | to_json }};
   var invalidEmployeeRoles = {{ invalid_employee_roles | to_json }};
   var authProvider = {{ auth_provider | to_json }};
+  // Per-surface auth provider (digit-ui-esbuild reads these post-#793):
+  //   citizen surface  -> CITIZEN_AUTH_PROVIDER || AUTH_PROVIDER || "digit"
+  //   employee surface -> EMPLOYEE_AUTH_PROVIDER || "digit"  (never inherits AUTH_PROVIDER)
+  // Pin `citizen_auth_provider: digit` in host_vars when Keycloak SSO is only
+  // wanted on the separate digit-ui-v2 (/citizen) surface and the legacy
+  // esbuild citizen login must stay on OTP (see issue #809). Defaults preserve
+  // existing behaviour: citizen inherits auth_provider, employee stays digit.
+  var citizenAuthProvider = {{ (citizen_auth_provider | default(auth_provider)) | to_json }};
+  var employeeAuthProvider = {{ (employee_auth_provider | default('digit')) | to_json }};
   var pgrBoundaryHighestLevel = {{ pgr_boundary_highest_level | to_json }};
   var pgrBoundaryLowestLevel = {{ pgr_boundary_lowest_level | to_json }};
   var boundaryType = {{ boundary_type | to_json }};
@@ -95,6 +104,10 @@ var globalConfigs = (function () {
       return hrmsContext;
     } else if (key === "AUTH_PROVIDER") {
       return authProvider;
+    } else if (key === "CITIZEN_AUTH_PROVIDER") {
+      return citizenAuthProvider;
+    } else if (key === "EMPLOYEE_AUTH_PROVIDER") {
+      return employeeAuthProvider;
     } else if (key === "INVALIDROLES") {
       return invalidEmployeeRoles;
     } else if (key === "PGR_BOUNDARY_HIGHEST_LEVEL") {

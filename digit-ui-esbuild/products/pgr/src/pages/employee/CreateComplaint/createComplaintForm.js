@@ -41,7 +41,31 @@ const CreateComplaintForm = ({
   // Fetch the list of service definitions (e.g., complaint types) for current tenant
   const serviceDefs = Digit.Hooks.pgr.useServiceDefs(tenantId, "PGR");
 
-
+  // Logged-in employee's department — needed to gate the Sub-Type dropdown
+  // so an employee can only file sub-types of their own department. The user
+  // token doesn't carry the department, so look it up from HRMS by the
+  // current user's uuid (same source AssigneeComponent uses).
+  const hrmsContext = window?.globalConfigs?.getConfig?.("HRMS_CONTEXT_PATH") || "egov-hrms";
+  const { data: currentEmployeeData } = Digit.Hooks.useCustomAPIHook({
+    url: `/${hrmsContext}/employees/_search`,
+    params: { tenantId, uuids: user?.info?.uuid },
+    config: { enabled: !!user?.info?.uuid },
+  });
+  // All departments the logged-in employee is actively assigned to. A user
+  // can hold multiple assignments (e.g. a department head / high-level user),
+  // so collect every active assignment's department — not just the first.
+  // This drives the department gating for the Type + Sub-Type dropdowns, with
+  // no dependency on role names (which can be customised/renamed).
+  const loggedInUserDepartments = useMemo(() => {
+    const employees = currentEmployeeData?.Employees || [];
+    const set = new Set();
+    employees.forEach((e) =>
+      (e?.assignments || [])
+        .filter((a) => a?.isCurrentAssignment !== false && a?.department)
+        .forEach((a) => set.add(a.department))
+    );
+    return [...set];
+  }, [currentEmployeeData]);
 
   useEffect(() => {
     if (toast?.show) {
@@ -85,17 +109,35 @@ const CreateComplaintForm = ({
 
 
   function getUniqueMenuPaths(data) {
-    const seenMenuPaths = new Set();
+    // Dedupe by menuPath + department (not menuPath alone). The same menuPath
+    // can exist under more than one department; for a multi-department user
+    // both must stay selectable, so keep one Type option per
+    // (menuPath, department). For single-department users this collapses to
+    // the same result as menuPath-only dedupe.
+    const seen = new Set();
     const uniqueItems = [];
-
-    for (const item of data) {
-      if (!seenMenuPaths.has(item.menuPath)) {
-        seenMenuPaths.add(item.menuPath);
+    for (const item of data || []) {
+      const key = `${item.menuPath}__${item.department}`;
+      if (!seen.has(key)) {
+        seen.add(key);
         uniqueItems.push(item);
       }
     }
 
-    return uniqueItems;
+    // Disambiguate only when the SAME menuPath spans multiple departments in
+    // the (already department-scoped) option set — otherwise a multi-dept user
+    // would see identical labels. Single-department users never trip this, so
+    // their labels stay plain.
+    const deptCountByMenuPath = uniqueItems.reduce((acc, it) => {
+      acc[it.menuPath] = (acc[it.menuPath] || 0) + 1;
+      return acc;
+    }, {});
+
+    return uniqueItems.map((it) =>
+      deptCountByMenuPath[it.menuPath] > 1
+        ? { ...it, menuPathName: `${it.menuPathName} - ${t(`DEPARTMENT_${it.department}`)}` }
+        : it
+    );
   }
 
   function getSubTypesByDepartment(baseItem, allItems) {
@@ -105,7 +147,23 @@ const CreateComplaintForm = ({
       return [];
     }
 
-    return allItems.filter(item => item.department === baseItem.department);
+    // Strict gate by the logged-in employee's department(s): only show
+    // sub-types when the user is assigned to the selected Type's department.
+    // Supports multiple departments. If the user isn't assigned to it (or the
+    // assignment hasn't loaded), show nothing — never forward a department the
+    // user isn't assigned to.
+    if (!loggedInUserDepartments.includes(baseItem.department)) {
+      return [];
+    }
+
+    // Sub-types = services under the SELECTED Type — match both menuPath and
+    // department, not department alone (department-only would leak services
+    // from other menuPaths in the same department into this Type's sub-list).
+    return allItems.filter(
+      (item) =>
+        item.department === baseItem.department &&
+        item.menuPath === baseItem.menuPath
+    );
   }
 
 
@@ -121,6 +179,15 @@ const CreateComplaintForm = ({
 
   const updatedConfig = useMemo(() => {
 
+    // Scope the Complaint Type options strictly to the logged-in employee's
+    // assigned department(s) — a user only sees Types they can act on (e.g. an
+    // "ambiental" user doesn't see the "Water"/DEPT_36 Type). If the user has
+    // no assignment (or it hasn't loaded yet), the list is empty: we never
+    // forward Types for a department the user isn't assigned to.
+    const departmentScopedDefs = (serviceDefs || []).filter((d) =>
+      loggedInUserDepartments.includes(d.department)
+    );
+
     const baseConfig = Digit.Utils.preProcessMDMSConfig(
       t,
       createComplaintConfig,
@@ -128,7 +195,7 @@ const CreateComplaintForm = ({
         updateDependent: [
           {
             key: "SelectComplaintType",
-            value: [getUniqueMenuPaths(serviceDefs) ? getUniqueMenuPaths(serviceDefs) : []],
+            value: [getUniqueMenuPaths(departmentScopedDefs) ? getUniqueMenuPaths(departmentScopedDefs) : []],
           },
           {
             key: "SelectSubComplaintType",
@@ -162,7 +229,7 @@ const CreateComplaintForm = ({
     });
 
     return { ...baseConfig, form: updatedForm };
-  }, [createComplaintConfig, serviceDefs, t, disabledFields, subType]);
+  }, [createComplaintConfig, serviceDefs, t, disabledFields, subType, loggedInUserDepartments]);
 
 
 

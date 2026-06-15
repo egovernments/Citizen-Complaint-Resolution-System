@@ -125,16 +125,24 @@ export default function Phase3Page() {
 
       if (departments.length > 0) {
         setProgressMessage('Creating departments...');
-        const deptResults = await mdmsService.createDepartments(
-          targetTenant,
-          departments.map(d => ({
-            code: d.code,
-            name: d.name,
-            active: d.active,
-          }))
-        );
+        const deptPayload = departments.map(d => ({
+          code: d.code,
+          name: d.name,
+          active: d.active,
+        }));
+
+        const deptResults = await mdmsService.createDepartments(targetTenant, deptPayload);
         deptsCreated = deptResults.success.length;
         setCreatedDepts(deptsCreated);
+
+        // Also write departments at the state-level tenant — pgr-services
+        // validates assignee department against common-masters.Department at mz.
+        const stateTenant = state.tenant;
+        if (stateTenant && stateTenant !== targetTenant) {
+          await mdmsService.createDepartments(stateTenant, deptPayload).catch(e =>
+            console.warn('departments at state-level failed (non-fatal):', e)
+          );
+        }
 
         // Create localizations for departments
         await localizationService.uploadDepartmentLocalizations(
@@ -179,21 +187,34 @@ export default function Phase3Page() {
       setProgress(0);
 
       // Create complaint types
+      // pgr-services backend queries ServiceDefs at the STATE-LEVEL tenant
+      // (via getStateLevelTenant), while digit-ui queries at the city tenant.
+      // Write to both so ASSIGN validation works regardless of tenant level.
       if (complaintTypes.length > 0) {
         setProgressMessage('Creating complaint types...');
-        const complaintResults = await mdmsService.createComplaintTypes(
-          targetTenant,
-          complaintTypes.map(ct => ({
-            serviceCode: ct.serviceCode,
-            name: ct.name,
-            keywords: ct.keywords,
-            department: ct.department,
-            slaHours: ct.slaHours,
-            active: ct.active,
-          }))
-        );
+        const ctPayload = complaintTypes.map(ct => ({
+          serviceCode: ct.serviceCode,
+          name: ct.name,
+          keywords: ct.keywords,
+          department: ct.department,
+          slaHours: ct.slaHours,
+          active: ct.active,
+          // group code derived from the sheet's "Complaint Type*" column —
+          // distinct menuPath values become the citizen UI's complaint menu
+          menuPath: ct.menuPath,
+        }));
+
+        const complaintResults = await mdmsService.createComplaintTypes(targetTenant, ctPayload);
         complaintsCreated = complaintResults.success.length;
         setCreatedComplaints(complaintsCreated);
+
+        // Also write at the state-level (root) tenant when city ≠ root
+        const stateTenant = state.tenant;
+        if (stateTenant && stateTenant !== targetTenant) {
+          await mdmsService.createComplaintTypes(stateTenant, ctPayload).catch(e =>
+            console.warn('complaint types at state-level failed (non-fatal):', e)
+          );
+        }
 
         // Create localizations for complaint types
         await localizationService.uploadComplaintTypeLocalizations(
@@ -202,7 +223,8 @@ export default function Phase3Page() {
             serviceCode: ct.serviceCode,
             name: ct.name,
             department: ct.department,
-            menuPath: 'Complaint',
+            menuPath: ct.menuPath,
+            menuName: ct.menuName,
           })),
           'en_IN'
         );

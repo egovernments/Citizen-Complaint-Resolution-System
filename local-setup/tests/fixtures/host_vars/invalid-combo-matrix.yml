@@ -1,0 +1,18 @@
+# Preflight fixture: every documented bad combination at once — preflight
+# must trip on this file (the CI run asserts invalid-* fixtures fire).
+db_fast_path: true                      # no ack, wrong master password
+auth_provider: keycloak                 # KC stack not enabled, no secret
+nginx_features:
+  digit_ui_v2: true                     # enable_digit_ui_v2 missing
+enable_mcp: true
+docker_registry: ''                     # MCP without a registry
+digit_ui_mode: docker                   # not a valid mode
+run_ci_tests: true                      # no boot_tenant
+state_tenant_id: ke
+boot_tenant: mz.maputo                  # outside the state root
+core_mobile_configs:
+  mobileNumberPattern: ^[17][0-9]{8}$   # 9-digit pattern…
+  mobileNumberLength: 10                # …with a 10-digit length
+  mobileNumberAllowedStartingCharacters: ['1', '7']
+bootstrap_secrets:
+  elasticsearch_master_password: wrong

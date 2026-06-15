@@ -20,9 +20,9 @@ import {
 } from '../utils/manage/api';
 import { testCode, testCodeIndexed } from '../utils/manage/codes';
 import { cleanupMdms } from '../utils/manage/teardown';
+import { ROOT_TENANT, CITY_TENANT } from '../utils/env';
 
-const TENANT_CODE = process.env.TENANT_CODE || 'ke';
-const CITY_TENANT = process.env.DIGIT_TENANT || `${TENANT_CODE}.nairobi`;
+const TENANT_CODE = ROOT_TENANT;
 const SCHEMA = 'RAINMAKER-PGR.ServiceDefs';
 const DEPT_SCHEMA = 'common-masters.Department';
 const LIST_PATH = '/configurator/manage/complaint-types';

@@ -88,6 +88,7 @@ const customEnglishMessages: TranslationMessages = {
       service_code: 'Service Code',
       department: 'Department',
       sla_hours: 'SLA (hrs)',
+      menu_path: 'Complaint Type',
       city: 'City',
       district: 'District',
       mobile: 'Mobile',

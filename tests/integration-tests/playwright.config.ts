@@ -15,6 +15,7 @@ export default defineConfig({
   testMatch: [
     '**/*.spec.ts',
     'fixtures/auth.setup.ts',
+    'fixtures/lifecycle.setup.ts',
   ],
   timeout: 120_000,
   expect: { timeout: 15_000 },
@@ -40,14 +41,23 @@ export default defineConfig({
       testMatch: /tests\/fixtures\/auth\.setup\.ts$/,
     },
     {
+      // Runs after `setup`. Drives the PGR API end-to-end to seed two
+      // complaints (one PENDINGFORASSIGNMENT, one CLOSEDAFTERRESOLUTION
+      // with rating=4) and writes lifecycle-fixtures.json. Downstream
+      // specs that need a "pinned" SRID read from that file.
+      name: 'lifecycle-setup',
+      testMatch: /tests\/fixtures\/lifecycle\.setup\.ts$/,
+      dependencies: ['setup'],
+    },
+    {
       name: 'chromium',
       use: {
         browserName: 'chromium',
         storageState: 'auth.json',
       },
-      dependencies: ['setup'],
+      dependencies: ['setup', 'lifecycle-setup'],
       // Don't try to run setup itself as part of the chromium project.
-      testIgnore: /tests\/fixtures\/auth\.setup\.ts$/,
+      testIgnore: /tests\/fixtures\/(auth|lifecycle)\.setup\.ts$/,
     },
   ],
 });

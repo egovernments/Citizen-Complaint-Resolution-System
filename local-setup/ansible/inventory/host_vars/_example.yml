@@ -154,17 +154,32 @@ digit_ui_v2_branch: "feat/digit-ui-v2-keycloak"
 
 # digit-integration-tests dashboards. Builds the react-admin catalog dashboard
 # from the VENDORED in-tree source (tests/integration-tests/) and serves both
-# the vanilla (/integration-tests/) and react-admin (/integration-tests-v2/)
+# the vanilla (/tests/) and react-admin (/tests-v2/)
 # dashboards from /var/www. The deploy only SERVES them — catalog.json + runs/
 # are produced out-of-band by a test runner (`make publish` from
 # tests/integration-tests/). Pair with `nginx_features.integration_tests: true`
 # below (ignored on hosts with nginx_preserve_vhost — wire those by hand from
 # tests/integration-tests/deploy/nginx-integration-tests.conf).
 enable_integration_tests: false
-integration_tests_dashboard_base: "/integration-tests-v2/"
+integration_tests_dashboard_base: "/tests-v2/"
 integration_tests_basic_auth_user: "digit-tests"
 # Set in vault (never commit a real password). The htpasswd task skips if unset.
 # integration_tests_basic_auth_password: "{{ vault_integration_tests_password }}"
+
+# RUN button: an on-box test-runner daemon that lets the v2 dashboard TRIGGER a
+# Playwright run (writes results back into /var/www/integration-tests). Requires
+# enable_integration_tests: true (it serves on the same vhost) AND
+# nginx_features.integration_tests_runner: true below. The API is proxied at
+# /tests/api/ behind the SAME basic-auth as the dashboards.
+# NOTE: a run is CPU/RAM heavy and shares the box with the live DIGIT stack
+# (it's nice'd, but still). Leave off unless you want in-dashboard runs.
+enable_integration_tests_runner: false
+# integration_tests_runner_port: 8181        # loopback port the daemon listens on
+# integration_tests_runner_run_limit: 5      # keep at most N runs on disk
+# integration_tests_runner_branch: "deployed"
+# Env file the run sources so it targets THIS box's tenant (BASE_URL/DIGIT_TENANT/
+# LOCALITY_CODE/SERVICE_CODE). Point at the deploy env you already maintain.
+# integration_tests_runner_tenant_env: "/opt/integration-tests/deploy/bomet.env"
 
 # ────────── Optional services (opt-in via flags) ──────────
 
@@ -239,6 +254,16 @@ enable_keycloak: false
 # verified a successful test login via /auth/realms/<realm>/account.
 auth_provider: ""
 
+# Per-surface override (digit-ui-esbuild resolves these post-#793):
+#   citizen surface  -> citizen_auth_provider  || auth_provider || 'digit'
+#   employee surface -> employee_auth_provider || 'digit'  (never inherits auth_provider)
+# Use these when Keycloak SSO ("Continue with Google") should live ONLY on the
+# separate digit-ui-v2 (/citizen) surface while the legacy esbuild citizen login
+# stays on OTP — e.g. bomet sets `citizen_auth_provider: digit` with
+# `auth_provider: keycloak` (issue #809). Leave unset to inherit the defaults above.
+# citizen_auth_provider: ""
+# employee_auth_provider: ""
+
 # OIDC public client id in the per-tenant realm. The realm template
 # ships `digit-ui`; only change this if you've forked the template
 # and added a different client.
@@ -266,6 +291,10 @@ requires_nairobi_mdms: false
 # volume — the overlay also corrects the named-volume mount path,
 # which forces container recreation and wipes the existing data.
 db_fast_path: true
+# scripts/preflight.py refuses db_fast_path without this explicit ack —
+# it encodes the data-wipe trap above. Set it only after confirming the
+# target box has no anonymous-volume postgres data worth keeping.
+db_fast_path_ack_data_wipe: true
 
 # Run the post-deploy CI suite (XLSX dataloader + Playwright). Requires
 # a sibling `digit-ui-fix/` clone next to this repo on the controller.
@@ -297,7 +326,8 @@ nginx_features:
   mcp: true                  # /mcp + /v1/* — MCP HTTP transport + REST shim (requires enable_mcp: true)
   keycloak: false            # /auth/ + /token-exchange/ — requires enable_keycloak: true
   digit_ui_v2: false         # /citizen/ — Vite + React 19 SPA (requires enable_digit_ui_v2: true)
-  integration_tests: false   # /integration-tests/ + -v2/ — test dashboards (requires enable_integration_tests: true)
+  integration_tests: false   # /tests/ + -v2/ — test dashboards (requires enable_integration_tests: true)
+  integration_tests_runner: false  # /tests/api/ — RUN-button daemon proxy (requires enable_integration_tests_runner: true)
 
 # If true, the playbook will NOT render `templates/nginx-site.conf.j2` into
 # /etc/nginx/sites-available/ and will NOT touch /etc/nginx/sites-enabled/.

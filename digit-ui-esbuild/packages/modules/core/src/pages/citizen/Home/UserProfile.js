@@ -67,7 +67,16 @@ const defaultValidationConfig = {
       // contain "O'Brien" / "Mary-Anne" / "John Jr." which the
       // alpha-only regex rejected too.
       name: "/^[a-zA-Z0-9 .'\\-]+$/i",
-      mobileNumber: "/^[6-9]{1}[0-9]{9}$/",
+      // Fallback mobile pattern for when the MDMS ValidationConfigs master
+      // isn't seeded for the tenant. Pull the tenant's pattern from
+      // globalConfigs.CORE_MOBILE_CONFIGS (e.g. Mozambique "^8[0-9]{8}$")
+      // instead of the old hardcoded India regex (/^[6-9][0-9]{9}$/), which
+      // rejected valid 9-digit numbers on save. globalConfigs.js is loaded
+      // before the bundle, so getConfig is available at module init. The
+      // generic numeric pattern is only a last resort if the config is absent.
+      mobileNumber:
+        window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.mobileNumberPattern ||
+        "/^[0-9]{6,15}$/",
       password: "/^([a-zA-Z0-9@#$%]{8,15})$/i",
     },
   ],
@@ -279,7 +288,13 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
 
   useEffect(() => {
     if (mdmsValidationData && mdmsValidationData?.UserProfileValidationConfig?.[0]) {
-      const updatedValidationConfig = mapConfigToRegExp(mdmsValidationData);
+      const updatedValidationConfig = mapConfigToRegExp(mdmsValidationData) || {};
+      // When the MDMS master isn't seeded, the select still yields keys with
+      // `undefined` values (e.g. mobileNumber). Drop those so they don't
+      // clobber the globalConfigs/default fallback established above.
+      Object.keys(updatedValidationConfig).forEach((key) => {
+        if (updatedValidationConfig[key] === undefined) delete updatedValidationConfig[key];
+      });
       if (mdmsValidationData?.prefix) {
         updatedValidationConfig.prefix = mdmsValidationData.prefix;
       }
@@ -766,7 +781,11 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
     const res = await Digit.UploadServices.Filefetch(ids, tenantId);
     if (res.data.fileStoreIds && res.data.fileStoreIds.length !== 0) {
       return {
-        thumbs: res.data.fileStoreIds.map((o) => o.url.split(",")[3]),
+        // #445: the *-profile filestore module generates no resize variants,
+        // so `o.url` is a single URL and split(",")[3] is undefined -> blank
+        // avatar. Fall back to the original URL, matching WorkFlow.js / the
+        // load path at line ~396.
+        thumbs: res.data.fileStoreIds.map((o) => o.url.split(",")[3] || o.url.split(",")[0]),
         images: res.data.fileStoreIds.map((o) => Digit.Utils.getFileUrl(o.url)),
       };
     } else {
@@ -775,6 +794,20 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
   };
 
   if (loading || isValidationConfigLoading) return <Loader></Loader>;
+
+  // The mobile-edit affordance is only honest when the save path actually
+  // accepts the new number. The Individual-service write
+  // (`/individual/v1/_update`) does; the legacy egov-user write
+  // (`/user/profile/_update`) silently strips `mobileNumber` server-side
+  // via `User.nullifySensitiveFields()` because the mobile is the login
+  // handle and self-service rotation has no OTP-verify guard. On
+  // deployments without the Individual service wired (e.g. naipepea), the
+  // editable input is therefore a lie — render it read-only so we don't
+  // promise behavior the backend prohibits. CCRS#555 follow-up. Defined at
+  // component scope so both the citizen and employee profile branches can
+  // read it (previously scoped inside the citizen branch only, which
+  // crashed the employee profile with "canEditMobile is not defined").
+  const canEditMobile = !!window?.globalConfigs?.getConfig("INDIVIDUAL_SERVICE_CONTEXT_PATH");
 
   // ----------------------------------------------------------------------
   // v2 Citizen branch — modernized chrome (form sections in a Card,
@@ -794,16 +827,6 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
       value: l.value,
       label: l.label,
     }));
-    // The mobile-edit affordance is only honest when the save path actually
-    // accepts the new number. The Individual-service write
-    // (`/individual/v1/_update`) does; the legacy egov-user write
-    // (`/user/profile/_update`) silently strips `mobileNumber` server-side
-    // via `User.nullifySensitiveFields()` because the mobile is the login
-    // handle and self-service rotation has no OTP-verify guard. On
-    // deployments without the Individual service wired (e.g. naipepea), the
-    // editable input is therefore a lie — render it read-only so we don't
-    // promise behavior the backend prohibits. CCRS#555 follow-up.
-    const canEditMobile = !!window?.globalConfigs?.getConfig("INDIVIDUAL_SERVICE_CONTEXT_PATH");
     return (
       <div
         className="v2-scope"

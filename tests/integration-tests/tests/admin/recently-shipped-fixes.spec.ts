@@ -255,6 +255,12 @@ If this row goes missing or its copy changes, several PGR UI tests in this suite
   });
 });
 
+// Tier-3 / deployment-pinned: the sw_KE locale + the en_IN PGR action
+// labels are seeded by the CCRS Kenya rollout. On a deployment without
+// that seed these blocks will fail at the locale-presence assertion.
+// TODO(Phase 7): add a skip-when-locale-not-seeded guard (probe
+// /localization/messages with module=rainmaker-common,locale=sw_KE and
+// short-circuit if rows === 0) instead of asserting unconditionally.
 test.describe('CCRS#42 — Complaint Type menuPathName labels', () => {
   test('API: 19 SERVICEDEFS.<menuPath> rows exist in en_IN AND sw_KE', {
     annotation: {
@@ -297,6 +303,9 @@ Tests 5 representative codes across the 19 menuPath values — fewer assertions 
   });
 });
 
+// Tier-3 / deployment-pinned: sw_KE rows are seeded by the CCRS Kenya
+// rollout. TODO(Phase 7): skip-when-locale-not-seeded guard (see CCRS#42
+// describe block above).
 test.describe('CCRS#44 — locale region-append regression', () => {
   test('API: rainmaker-common sw_KE search returns rows (not the broken sw_KEIN)', {
     annotation: {

@@ -79,13 +79,14 @@ function StatusPill({ status, t }) {
   );
 }
 
-function ComplaintRow({ data, onClick, t }) {
-  const { serviceCode, serviceRequestId, applicationStatus, auditDetails } = data;
-  const titleKey = `SERVICEDEFS.${(serviceCode || "").toUpperCase()}`;
-  const title = (() => {
-    const v = t(titleKey);
-    return v === titleKey ? serviceCode : v;
-  })();
+function ComplaintRow({ data, onClick, t, menuPath }) {
+  const { serviceRequestId, applicationStatus, auditDetails } = data;
+  // Complaint Type = the service def's menuPath, shown through the
+  // SERVICEDEFS localization key — identical to the employee/citizen
+  // details pages. When the message isn't seeded, t() returns the key
+  // (e.g. "SERVICEDEFS.COMPLAINT"), same as the details screens.
+  const titleKey = menuPath ? `SERVICEDEFS.${menuPath.toUpperCase()}` : "SERVICEDEFS.OTHERS";
+  const title = t(titleKey);
   const dateStr = auditDetails?.createdTime
     ? Digit.DateUtils.ConvertTimestampToDate(auditDetails.createdTime)
     : "";
@@ -230,6 +231,17 @@ export const ComplaintsList = () => {
     mobileNumber
   );
 
+  // Service defs give us serviceCode -> menuPath so each card can show the
+  // Complaint Type (category) rather than the sub-type. Cached via MDMS.
+  const serviceDefs = Digit.Hooks.pgr.useServiceDefs(tenantId, "PGR");
+  const menuPathByCode = React.useMemo(() => {
+    const map = {};
+    (serviceDefs || []).forEach((def) => {
+      if (def?.serviceCode) map[def.serviceCode] = def.menuPath;
+    });
+    return map;
+  }, [serviceDefs]);
+
   useEffect(() => {
     revalidate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -326,6 +338,7 @@ export const ComplaintsList = () => {
                 key={service.serviceRequestId}
                 data={service}
                 t={t}
+                menuPath={menuPathByCode[service.serviceCode]}
                 onClick={() => history.push(`${path}/${service.serviceRequestId}`)}
               />
             ))}

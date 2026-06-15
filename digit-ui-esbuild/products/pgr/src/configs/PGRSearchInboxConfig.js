@@ -101,6 +101,12 @@ const PGRSearchInboxConfig = () => {
                             key: "complaintNumber",
                             additionalCustomization: true,
                             disableSortBy: true,
+                            // #432.4: react-data-table ellipsis-truncates the
+                            // full serviceRequestId by default. wrap lets the
+                            // complaint number render in full; minWidth keeps
+                            // the column from collapsing too narrow.
+                            wrap: true,
+                            minWidth: "180px",
                         },
                         {
                             label: "WF_INBOX_HEADER_LOCALITY",
@@ -125,10 +131,14 @@ const PGRSearchInboxConfig = () => {
                             jsonPath: "businessObject.serviceSla",
                             additionalCustomization: true,
                             key: "state",
-                            // SLA sort would also need pgr-services to accept
-                            // `sortBy=serviceSla` — currently rejects with
-                            // typeMismatch. Tracked in the issue.
-                            disableSortBy: true,
+                            // #432.2: SLA sort is CLIENT-SIDE via react-data-table's
+                            // sortFunction (pgr-services' SortBy enum doesn't accept
+                            // `sortBy=serviceSla`, so we can't sort server-side).
+                            // NOTE: this only reorders rows on the CURRENT page —
+                            // it does not re-sort across the full paginated result set.
+                            sortFunction: (a, b) =>
+                                (a?.businessObject?.serviceSla ?? -Infinity) -
+                                (b?.businessObject?.serviceSla ?? -Infinity),
                         },
                     ],
                     enableGlobalSearch: false,
