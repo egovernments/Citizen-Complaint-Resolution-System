@@ -338,6 +338,18 @@ const DashboardGrid = ({
     [isExternalDrag, onLayoutStop]
   );
 
+  const handleResize = useCallback(
+    (gridLayout, _oldItem, newItem) => {
+      if (isExternalDrag || interactionRef.current !== "resize") return;
+
+      onLayoutChange(gridLayout, newItem.i, {
+        passThrough: false,
+        mode: "resize",
+      });
+    },
+    [isExternalDrag, onLayoutChange]
+  );
+
   const handleResizeStop = useCallback(
     (nextLayout) => {
       if (isExternalDrag) return;
@@ -345,7 +357,7 @@ const DashboardGrid = ({
       const activeId = activeItemRef.current;
       activeItemRef.current = null;
       interactionRef.current = null;
-      setPreventCollision(true);
+      setPreventCollision(false);
       onLayoutStop(withoutPlaceholder, "resize", activeId);
     },
     [isExternalDrag, onLayoutStop]
@@ -373,7 +385,7 @@ const DashboardGrid = ({
   const handleResizeStart = useCallback((_layout, _oldItem, newItem) => {
     activeItemRef.current = newItem.i;
     interactionRef.current = "resize";
-    setPreventCollision(false);
+    setPreventCollision(true);
   }, []);
 
   return (
@@ -390,6 +402,7 @@ const DashboardGrid = ({
           onLayoutChange={handleLayoutChange}
           onDrag={handleDrag}
           onDragStart={handleDragStart}
+          onResize={handleResize}
           onResizeStart={handleResizeStart}
           onDragStop={handleDragStop}
           onResizeStop={handleResizeStop}

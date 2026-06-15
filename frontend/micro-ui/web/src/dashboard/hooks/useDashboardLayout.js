@@ -144,6 +144,13 @@ function reflowAndPack(layout) {
   return result;
 }
 
+/** After drag/resize/remove: push overlaps aside and compact upward without repacking rows. */
+export function stabilizeLayout(layout, pinnedId = null) {
+  let result = pushAdjacentItems(layout, pinnedId);
+  result = compactLayoutVertically(result, pinnedId);
+  return result;
+}
+
 /** After drag/resize/remove: fill gaps in KPI rows, pack widget rows, compact upward. */
 export function optimizeLayoutAfterChange(layout) {
   let result = reflowAndPack(layout);
@@ -282,9 +289,9 @@ function applyDragFrame(layout, activeId, pointer, session) {
   return applyVerticalDrag(layout, activeId, pointer.y, session.origin.x);
 }
 
-/** Compact after resize without pushing widgets into new rows below. */
-export function optimizeLayoutAfterResize(layout) {
-  return optimizeLayoutAfterChange(layout);
+/** Compact after resize without repacking entire rows. */
+export function optimizeLayoutAfterResize(layout, pinnedId = null) {
+  return stabilizeLayout(layout, pinnedId);
 }
 
 /** Push overlapping items right or down; pinned item (being resized) stays put. */
@@ -502,7 +509,13 @@ function parseStoredLayout(saved) {
       return item;
     });
 
-  if (valid.length === 0 || hasOverlaps(valid)) return null;
+  if (valid.length === 0) return null;
+
+  if (hasOverlaps(valid)) {
+    const repaired = stabilizeLayout(valid);
+    return hasOverlaps(repaired) ? null : repaired;
+  }
+
   return valid;
 }
 
@@ -540,9 +553,9 @@ function loadLayout() {
       persistLayout(merged);
     }
 
-    return ensureNonEmptyLayout(optimizeLayoutAfterChange(merged));
+    return ensureNonEmptyLayout(merged);
   } catch {
-    return ensureNonEmptyLayout(optimizeLayoutAfterChange(DEFAULT_LAYOUT));
+    return ensureNonEmptyLayout(DEFAULT_LAYOUT);
   }
 }
 
@@ -619,7 +632,7 @@ export function useDashboardLayout() {
       const merged = mergeLayoutUpdate(prev, newLayout);
 
       if (options.mode === "resize") {
-        return optimizeLayoutAfterResize(merged);
+        return optimizeLayoutAfterResize(merged, pinnedId);
       }
 
       return prev;
@@ -635,7 +648,7 @@ export function useDashboardLayout() {
 
       let fixed = merged;
       if (mode === "drag" || mode === "resize") {
-        fixed = optimizeLayoutAfterChange(merged);
+        fixed = stabilizeLayout(merged, activeId);
       } else {
         fixed = compactLayoutVertically(merged);
       }
@@ -650,14 +663,14 @@ export function useDashboardLayout() {
 
   const resetLayout = useCallback(() => {
     clearSavedLayout();
-    const compacted = ensureNonEmptyLayout(optimizeLayoutAfterChange(DEFAULT_LAYOUT));
+    const compacted = ensureNonEmptyLayout(DEFAULT_LAYOUT);
     setLayout(compacted);
     persistLayout(compacted);
   }, []);
 
   const removeWidgetFromLayout = useCallback((widgetId) => {
     setLayout((prev) => {
-      const next = optimizeLayoutAfterChange(prev.filter((item) => item.i !== widgetId));
+      const next = compactLayoutVertically(prev.filter((item) => item.i !== widgetId));
       persistLayout(next);
       return next;
     });
@@ -675,7 +688,7 @@ export function useDashboardLayout() {
         y: position?.y ?? fallback.y,
       });
 
-      const next = ensureNonEmptyLayout(optimizeLayoutAfterChange([...prev, newItem]));
+      const next = ensureNonEmptyLayout(stabilizeLayout([...prev, newItem]));
       persistLayout(next);
       return next;
     });
@@ -700,7 +713,7 @@ export function useDashboardLayout() {
         ...(position && { x: position.x, y: position.y }),
       });
 
-      const next = ensureNonEmptyLayout(optimizeLayoutAfterChange([...prev, newItem]));
+      const next = ensureNonEmptyLayout(stabilizeLayout([...prev, newItem]));
       persistLayout(next);
       return next;
     });

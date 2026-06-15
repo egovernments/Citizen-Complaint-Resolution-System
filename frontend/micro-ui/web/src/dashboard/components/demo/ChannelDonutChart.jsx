@@ -7,7 +7,6 @@ const CY = 118;
 const OUTER_R = 72;
 const INNER_R = 42;
 const LABEL_R = 94;
-const CONNECTOR_R = 82;
 
 function toRad(deg) {
   return ((deg - 90) * Math.PI) / 180;
@@ -64,24 +63,22 @@ const ChannelDonutChart = ({ data = [] }) => {
       const mid = start + sweep / 2;
       cursor = end;
       const pct = Math.round((item.count / total) * 100);
-      const rim = polar(CX, CY, CONNECTOR_R, mid);
-      const elbow = polar(CX, CY, LABEL_R - 8, mid);
       const label = polar(CX, CY, LABEL_R, mid);
       const anchor = labelAnchor(mid);
       const dx = labelOffset(mid);
+      const hoverPoint = polar(CX, CY, OUTER_R + 8, mid);
       return {
         ...item,
         color,
         index,
-        start,
-        end,
         mid,
         pct,
         path: arcPath(CX, CY, OUTER_R, INNER_R, start, end),
-        connector: `${rim.x},${rim.y} ${elbow.x},${elbow.y} ${label.x + dx},${label.y}`,
         labelX: label.x + dx,
         labelY: label.y,
         labelAnchor: anchor,
+        hoverX: hoverPoint.x,
+        hoverY: hoverPoint.y,
       };
     });
   }, [data]);
@@ -108,15 +105,6 @@ const ChannelDonutChart = ({ data = [] }) => {
                 onMouseEnter={() => setActiveIndex(slice.index)}
                 onMouseLeave={() => setActiveIndex(null)}
               />
-              <polyline
-                points={slice.connector}
-                fill="none"
-                stroke={slice.color}
-                strokeWidth={1}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                pointerEvents="none"
-              />
               <text
                 x={slice.labelX}
                 y={slice.labelY}
@@ -136,8 +124,8 @@ const ChannelDonutChart = ({ data = [] }) => {
           <div
             className="channel-donut-tooltip"
             style={{
-              left: `${((active.labelX + 12) / 320) * 100}%`,
-              top: `${((active.labelY - 8) / 230) * 100}%`,
+              left: `${(active.hoverX / 320) * 100}%`,
+              top: `${(active.hoverY / 230) * 100}%`,
             }}
           >
             {active.label} : {active.count} ({active.pct}%)

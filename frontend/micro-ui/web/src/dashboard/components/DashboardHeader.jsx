@@ -73,7 +73,7 @@ const DashboardHeader = ({
 
         <div className="dashboard-header-controls">
           <label className="dashboard-header-search tw-hidden sm:tw-inline-flex">
-            <span className="tw-pointer-events-none tw-absolute tw-left-2.5 tw-top-1/2 tw--translate-y-1/2 tw-text-muted-foreground">
+            <span className="dashboard-header-search-icon" aria-hidden>
               <SearchIcon />
             </span>
             <input

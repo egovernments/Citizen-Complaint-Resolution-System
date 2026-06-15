@@ -133,6 +133,20 @@
     @apply tw-relative tw-m-0 tw-inline-flex tw-h-8 tw-shrink-0 tw-items-center;
   }
 
+  .dashboard-header-search-icon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    color: var(--dashboard-muted-foreground, #6b6860);
+    pointer-events: none;
+    transform: translateY(-50%);
+  }
+
   .dashboard-header-search-input {
     @apply tw-box-border tw-m-0 tw-block tw-h-8 tw-w-56 tw-rounded-sm tw-border tw-border-border tw-bg-surface tw-py-0 tw-pl-8 tw-pr-3 tw-text-[12px] tw-leading-none tw-text-foreground placeholder:tw-text-muted-foreground focus:tw-border-primary focus:tw-outline-none;
   }
