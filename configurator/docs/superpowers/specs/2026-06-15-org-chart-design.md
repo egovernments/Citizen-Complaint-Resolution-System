@@ -149,7 +149,6 @@ dagre and rendered together on the canvas. Output positions feed React Flow's
 - **Stats header** — total, with-manager, orphans, unresolved, cycles.
 - **Legend** — explains node kinds/flags.
 - **Search box** — highlight and center on a person (by name/code).
-- **Collapse/expand** subtrees (trees are small; cheap to support).
 - **Orphans side panel** — collapsible list "No reporting relationship (N)";
   clicking an entry navigates to that employee's page. Keeps the canvas
   meaningful instead of rendering dozens of floating cards.
@@ -192,6 +191,8 @@ dagre and rendered together on the canvas. Output positions feed React Flow's
 
 - Editing `reportingTo` from the chart (drag-to-reparent) — deferred; `_update`
   has quirks and writes are riskier.
+- Collapse/expand subtrees — low value given trees are tiny; deferred to avoid
+  added node-data/context wiring in v1.
 - Cross-tenant / merged-tenant org chart.
 - Dept/designation-based inferred hierarchy.
 - Export to image/PDF.
