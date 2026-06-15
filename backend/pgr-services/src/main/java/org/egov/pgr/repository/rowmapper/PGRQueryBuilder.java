@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.util.Calendar;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Repository
@@ -47,6 +48,10 @@ public class PGRQueryBuilder {
 
 
     public String getPGRSearchQuery(RequestSearchCriteria criteria, List<Object> preparedStmtList) {
+        return getPGRSearchQuery(criteria, preparedStmtList, null);
+    }
+
+    public String getPGRSearchQuery(RequestSearchCriteria criteria, List<Object> preparedStmtList, Map<String, Long> serviceCodeToSla) {
 
         StringBuilder builder = new StringBuilder(QUERY);
 
@@ -153,7 +158,7 @@ public class PGRQueryBuilder {
         }
 
 
-        addOrderByClause(builder, criteria, preparedStmtList);
+        addOrderByClause(builder, criteria, preparedStmtList, serviceCodeToSla);
 
         addLimitAndOffset(builder, criteria, preparedStmtList);
 
@@ -162,12 +167,16 @@ public class PGRQueryBuilder {
 
 
     public String getCountQuery(RequestSearchCriteria criteria, List<Object> preparedStmtList){
-        String query = getPGRSearchQuery(criteria, preparedStmtList);
+        return getCountQuery(criteria, preparedStmtList, null);
+    }
+
+    public String getCountQuery(RequestSearchCriteria criteria, List<Object> preparedStmtList, Map<String, Long> serviceCodeToSla){
+        String query = getPGRSearchQuery(criteria, preparedStmtList, serviceCodeToSla);
         String countQuery = COUNT_WRAPPER.replace("{INTERNAL_QUERY}", query);
         return countQuery;
     }
 
-    private void addOrderByClause(StringBuilder builder, RequestSearchCriteria criteria, List<Object> preparedStmtList){
+    private void addOrderByClause(StringBuilder builder, RequestSearchCriteria criteria, List<Object> preparedStmtList, Map<String, Long> serviceCodeToSla){
 
         if(StringUtils.isEmpty(criteria.getSortBy()))
             builder.append( " ORDER BY ser_createdtime ");
@@ -184,24 +193,34 @@ public class PGRQueryBuilder {
         else if(criteria.getSortBy()== RequestSearchCriteria.SortBy.createdTime)
             builder.append(" ORDER BY ser.createdtime ");
 
-        // SLA-remaining ordering. The inbox "SLA days remaining" column is the
-        // SLA budget minus wall-clock elapsed since creation — egov-workflow-v2
-        // computes businesssServiceSla the same way, with no per-state pausing.
-        // Sorting on that expression server-side keeps the order consistent
-        // across the FULL paginated result set; a client-side sortFunction can
-        // only reorder one page at a time, so rows drop in/out of view as page
-        // size changes (issue #432).
+        // SLA-remaining ordering = (SLA budget for this complaint type) − (wall-clock
+        // elapsed since creation). Done server-side so the order is consistent across
+        // the FULL paginated result set; a client-side sortFunction only reorders one
+        // page at a time, so rows dropped in/out of view as page size changed (#432).
         //
-        // The budget is currently a single business-service constant, so today
-        // this is monotonically equivalent to ORDER BY ser.createdtime. SLAs are
-        // expected to become per-complaint-type in future: when that lands, this
-        // is the ONLY spot that changes — replace the single bound budget with a
-        // per-serviceCode budget (e.g. a CASE ser.servicecode ... END built from
-        // the SLA-per-type master). The sortBy=sla API contract and all frontend
-        // code stay untouched, and createdtime ordering is no longer equivalent.
+        // The budget is per complaint type, sourced from MDMS RAINMAKER-PGR.ServiceDefs
+        // (slaHours), matching the inbox's displayed "SLA days remaining". When the map
+        // is available we build a CASE ser.servicecode ...; types not present in the map
+        // (and the empty-map / MDMS-failure case) fall back to the uniform business-level
+        // SLA, which keeps this correct even before per-type slaHours is populated.
         else if(criteria.getSortBy()== RequestSearchCriteria.SortBy.sla){
-            builder.append(" ORDER BY (? - ((extract(epoch FROM NOW())*1000) - ser.createdtime)) ");
-            preparedStmtList.add(config.getBusinessLevelSla());
+            long defaultSla = config.getBusinessLevelSla();
+            StringBuilder slaExpr = new StringBuilder();
+            if (serviceCodeToSla == null || serviceCodeToSla.isEmpty()) {
+                slaExpr.append("?");
+                preparedStmtList.add(defaultSla);
+            } else {
+                slaExpr.append("CASE ser.servicecode");
+                for (Map.Entry<String, Long> entry : serviceCodeToSla.entrySet()) {
+                    slaExpr.append(" WHEN ? THEN ?");
+                    preparedStmtList.add(entry.getKey());
+                    preparedStmtList.add(entry.getValue());
+                }
+                slaExpr.append(" ELSE ? END");
+                preparedStmtList.add(defaultSla);
+            }
+            builder.append(" ORDER BY ((").append(slaExpr)
+                   .append(") - ((extract(epoch FROM NOW())*1000) - ser.createdtime)) ");
         }
 
         if(criteria.getSortOrder()== RequestSearchCriteria.SortOrder.ASC)
