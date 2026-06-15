@@ -14,7 +14,7 @@ import { EmployeeNode } from './EmployeeNode';
 
 const nodeTypes: NodeTypes = { employee: EmployeeNode };
 
-interface TenantRecord { id: string; code?: string; name?: string }
+interface TenantRecord { id: string; code: string; name?: string }
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
@@ -75,8 +75,8 @@ export default function OrgChartPage() {
           <Select value={tenantId} onValueChange={setTenantId}>
             <SelectTrigger className="w-[260px]"><SelectValue placeholder="Select a tenant…" /></SelectTrigger>
             <SelectContent>
-              {(tenants ?? []).map((t) => (
-                <SelectItem key={t.id} value={String(t.code ?? t.id)}>{t.name ?? t.code ?? t.id}</SelectItem>
+              {(tenants ?? []).filter((t) => t.code).map((t) => (
+                <SelectItem key={t.code} value={t.code}>{t.name ?? t.code}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -86,6 +86,7 @@ export default function OrgChartPage() {
             onChange={(e) => setQuery(e.target.value)}
             className="w-[220px]"
             disabled={!data}
+            aria-label="Search employees by name or code"
           />
         </div>
       </div>
@@ -125,11 +126,10 @@ export default function OrgChartPage() {
             <ReactFlowProvider>
               <ReactFlow
                 nodes={canvasNodes}
-                edges={data!.canvasEdges}
+                edges={data?.canvasEdges ?? []}
                 nodeTypes={nodeTypes}
                 fitView
                 minZoom={0.1}
-                proOptions={{ hideAttribution: true }}
               >
                 <Background />
                 <Controls />
@@ -142,7 +142,7 @@ export default function OrgChartPage() {
         {data && data.orphanNodes.length > 0 && (
           <Card className="w-[260px] flex-shrink-0 overflow-auto p-3">
             <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-              No reporting relationship ({data.orphanNodes.length})
+              No reporting relationship ({query.trim() ? `${filteredOrphans.length} of ${data.orphanNodes.length}` : data.orphanNodes.length})
             </div>
             <div className="space-y-1">
               {filteredOrphans.map((o) => (
