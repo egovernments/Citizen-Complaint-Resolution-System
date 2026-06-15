@@ -23,7 +23,7 @@ export interface OrgEdge {
 
 export interface OrgGraphStats {
   total: number;
-  withManager: number;
+  withManager: number;   // employees who report to someone (resolved or unresolved manager); excludes self-references
   orphans: number;
   unresolved: number;
   cycles: number;

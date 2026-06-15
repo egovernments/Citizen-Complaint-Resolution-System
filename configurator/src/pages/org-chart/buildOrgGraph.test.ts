@@ -88,4 +88,19 @@ describe('buildOrgGraph', () => {
     const g = buildOrgGraph([e]);
     expect(g.nodes.find((n) => n.id === 'a')!.inactive).toBe(true);
   });
+
+  it('flags ALL members of a 3-node cycle as inCycle', () => {
+    const g = buildOrgGraph([emp('a', 'b'), emp('b', 'c'), emp('c', 'a')]);
+    expect(g.cycleEdges.length).toBe(1);
+    expect(g.stats.cycles).toBe(1);
+    for (const id of ['a', 'b', 'c']) {
+      expect(g.nodes.find((n) => n.id === id)!.inCycle).toBe(true);
+    }
+  });
+
+  it('classifies an intermediate node (has a manager AND reports) as manager', () => {
+    // a -> b -> c  (b reports to a, c reports to b)
+    const g = buildOrgGraph([emp('a'), emp('b', 'a'), emp('c', 'b')]);
+    expect(g.nodes.find((n) => n.id === 'b')!.kind).toBe('manager');
+  });
 });

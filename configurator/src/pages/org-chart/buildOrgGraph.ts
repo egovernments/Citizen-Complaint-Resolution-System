@@ -61,9 +61,14 @@ export function buildOrgGraph(employees: Employee[]): OrgGraph {
     hasOut.add(e.source);
     hasIn.add(e.target);
   }
+  // Mark every node that participates in a cycle, not just the back-edge endpoints.
   for (const e of cycleEdges) {
     cycleNodeIds.add(e.source);
     cycleNodeIds.add(e.target);
+    for (const id of [...byUuid.keys(), ...unresolved]) {
+      // A node is on the cycle if target reaches it and it reaches source.
+      if (reaches(e.target, id) && reaches(id, e.source)) cycleNodeIds.add(id);
+    }
   }
 
   // 4. Build employee nodes.
