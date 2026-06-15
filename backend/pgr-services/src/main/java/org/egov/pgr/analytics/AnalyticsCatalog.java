@@ -56,7 +56,10 @@ public class AnalyticsCatalog {
             setOf("created_at","resolved_at","last_transition_at","first_assigned_at","facts_built_at"),
             // groupable
             setOf("service_code","application_status","source","ward_code","zone_code","boundary_path",
-                  "service_group","department_code","aging_bucket","sla_status_bucket","current_assignee_uuid",
+                  "service_group","department_code","aging_bucket","sla_status_bucket",
+                  // UUID columns are groupable + distinct-countable but NOT filterable (no eq/in targeting);
+                  // account_id powers top-complainants aggregation, mirroring current_assignee_uuid.
+                  "current_assignee_uuid","account_id",
                   "is_open","is_resolved","is_reopened","was_rejected","sla_breached","current_state_sla_breached",
                   "has_rating","is_negative_rating","is_first_time_complainant","has_geo_pin","filed_on_behalf",
                   "latitude","longitude",   // map pins: group by (lat,long) → one row per complaint location
@@ -90,7 +93,10 @@ public class AnalyticsCatalog {
             setOf("status","previous_status","action","escalation_source","ward_code","zone_code","service_code",
                   "source","occurred_month","occurred_is_weekend","occurred_is_business_hr","is_assignment",
                   "is_escalation","is_reopen","is_backward_transition","status_is_terminal","status_is_open",
-                  "has_comment","has_multiple_assignees","actor_is_system","is_current_state","entered_at","status_seq"),
+                  "has_comment","has_multiple_assignees","actor_is_system","is_current_state","entered_at","status_seq",
+                  // complaint_created_at lets a complaint-creation date range filter events by the same
+                  // population as the facts widgets (events MV has no resolved_at).
+                  "complaint_created_at"),
             setOf("dwell_ms","state_sla_ms","business_sla_ms","comment_length","seq_delta","complaint_age_at_event_ms",
                   "event_rating","assignee_count"),
             setOf("service_request_id","assignee_uuid","actor_uuid","account_id"),
