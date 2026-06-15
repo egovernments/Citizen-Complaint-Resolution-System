@@ -3,18 +3,29 @@ const assert = require("node:assert/strict");
 
 function stubDocument() {
   const props = {};
+  // Minimal element + head stub so the v2-scope bridge (createElement +
+  // appendChild + getElementById) can run under node:test.
+  const elements = {};
+  const head = { children: [], appendChild(el) { this.children.push(el); } };
   global.document = {
     documentElement: {
       style: {
         setProperty(name, value) { props[name] = value; },
       },
     },
+    head,
+    createElement(tag) {
+      return { tagName: tag.toUpperCase(), id: "", textContent: "" };
+    },
+    getElementById(id) {
+      return head.children.find((el) => el.id === id) || elements[id] || null;
+    },
   };
   const origWarn = console.warn;
   const origLog = console.log;
   console.warn = () => {};
   console.log = () => {};
-  return { props, restore: () => { console.warn = origWarn; console.log = origLog; } };
+  return { props, head, restore: () => { console.warn = origWarn; console.log = origLog; } };
 }
 
 function freshApply() {
@@ -358,5 +369,125 @@ test("v3 not active without `primary-1` marker — v1/v2-only records keep their
     assert.equal(props["--color-button-primary-bg-hover"], "#E6B800");
     // But primary-1-derived vars should be absent.
     assert.equal(props["--color-primary-1"], undefined);
+  } finally { restore(); }
+});
+
+// ── v2-scope bridge ──────────────────────────────────────────────────────────
+
+const { hexToHslTriplet } = require("./applyTheme.js");
+
+test("hexToHslTriplet: known conversions + invalid input", () => {
+  assert.equal(hexToHslTriplet("#1B85D2"), "205 77% 46%");
+  assert.equal(hexToHslTriplet("#ffffff"), "0 0% 100%");
+  assert.equal(hexToHslTriplet("#fff"), "0 0% 100%");
+  assert.equal(hexToHslTriplet("ff0000"), "0 100% 50%"); // bare hex tolerated
+  assert.equal(hexToHslTriplet("not-a-color"), null);
+  assert.equal(hexToHslTriplet(undefined), null);
+  assert.equal(hexToHslTriplet("rgb(1,2,3)"), null);
+});
+
+test("v2 bridge: primary.main drives .v2-scope --v2-primary HSL triplet", () => {
+  const { head, restore } = stubDocument();
+  try {
+    const applyTheme = freshApply();
+    applyTheme({
+      version: "1",
+      colors: { primary: { main: "#10cdda" } },
+    });
+    const bridge = head.children.find((el) => el.id === "mdms-theme-v2-bridge");
+    assert.ok(bridge, "bridge <style> should be appended to head");
+    assert.match(bridge.textContent, /\.v2-scope \{/);
+    assert.match(bridge.textContent, /--v2-primary: 184 86% 46%/);
+    assert.match(bridge.textContent, /--v2-ring: 184 86% 46%/);
+  } finally { restore(); }
+});
+
+test("v2 bridge: v3 button-primary-bg-default wins over primary.main", () => {
+  const { head, restore } = stubDocument();
+  try {
+    const applyTheme = freshApply();
+    applyTheme({
+      version: "1",
+      colors: {
+        "primary-1": "#204F37", // v3 marker
+        "button-primary-bg-default": "#FEC931",
+        "button-primary-text": "#1D2433",
+        primary: { main: "#10cdda" },
+      },
+    });
+    const bridge = head.children.find((el) => el.id === "mdms-theme-v2-bridge");
+    assert.ok(bridge);
+    // #FEC931 = hsl(44 99% 59%)
+    assert.match(bridge.textContent, /--v2-primary: 44 99% 59%/);
+    assert.match(bridge.textContent, /--v2-primary-foreground: 221 28% 16%/);
+  } finally { restore(); }
+});
+
+test("v2 bridge: no usable color → no style tag injected", () => {
+  const { head, restore } = stubDocument();
+  try {
+    const applyTheme = freshApply();
+    applyTheme({ version: "1", colors: { grey: { bg: "#E6E6E6" } } });
+    const bridge = head.children.find((el) => el.id === "mdms-theme-v2-bridge");
+    assert.equal(bridge, undefined);
+  } finally { restore(); }
+});
+
+test("v2 bridge: re-apply reuses the same style tag (no duplicates)", () => {
+  const { head, restore } = stubDocument();
+  try {
+    const applyTheme = freshApply();
+    applyTheme({ version: "1", colors: { primary: { main: "#10cdda" } } });
+    applyTheme({ version: "1", colors: { primary: { main: "#1B85D2" } } });
+    const bridges = head.children.filter((el) => el.id === "mdms-theme-v2-bridge");
+    assert.equal(bridges.length, 1);
+    assert.match(bridges[0].textContent, /--v2-primary: 205 77% 46%/);
+  } finally { restore(); }
+});
+
+// ── v3 backfill for v1/v2 records ────────────────────────────────────────────
+
+test("v3 backfill: v1 record feeds button + primary-N tokens from palette", () => {
+  const { props, restore } = stubDocument();
+  try {
+    const applyTheme = freshApply();
+    applyTheme({
+      version: "1",
+      colors: { primary: { main: "#FEC931", dark: "#204F37" } },
+    });
+    assert.equal(props["--color-button-primary-bg-default"], "#FEC931");
+    assert.equal(props["--color-button-primary-bg-hover"], "#204F37");
+    assert.equal(props["--color-button-primary-bg-pressed"], "#204F37");
+    assert.equal(props["--color-primary-1"], "#204F37");
+    assert.equal(props["--color-primary-2"], "#FEC931");
+  } finally { restore(); }
+});
+
+test("v3 backfill: skipped entirely for real v3 records", () => {
+  const { props, restore } = stubDocument();
+  try {
+    const applyTheme = freshApply();
+    applyTheme({
+      version: "1",
+      colors: {
+        "primary-1": "#204F37",
+        "button-primary-bg-default": "#E6B800",
+        primary: { main: "#FEC931" },
+      },
+    });
+    // v3 path applied the record's own value, not a backfilled one
+    assert.equal(props["--color-button-primary-bg-default"], "#E6B800");
+    // hover wasn't in the record and must NOT be invented for v3 records
+    assert.equal(props["--color-button-primary-bg-hover"], undefined);
+  } finally { restore(); }
+});
+
+test("v3 backfill: no primary in record → nothing invented", () => {
+  const { props, restore } = stubDocument();
+  try {
+    const applyTheme = freshApply();
+    applyTheme({ version: "1", colors: { grey: { bg: "#E6E6E6" } } });
+    assert.equal(props["--color-button-primary-bg-default"], undefined);
+    assert.equal(props["--color-primary-2"], undefined);
   } finally { restore(); }
 });
