@@ -292,6 +292,7 @@ export interface EmployeeAssignment {
   fromDate: number;
   toDate?: number;
   govtOrderNumber?: string;
+  reportingTo?: string;          // manager's employee/user uuid (HRMS: employee uuid == user uuid)
   isCurrentAssignment: boolean;
   isHod?: boolean;
   auditDetails?: { createdBy: string; createdTime: number; lastModifiedBy: string; lastModifiedTime: number };
