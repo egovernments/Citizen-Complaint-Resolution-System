@@ -11,8 +11,10 @@ import {
   isKpiWidget,
 } from "../constants/layoutConfig";
 import { isTableWidget, TABLE_WIDGET_CONFIG } from "../config/dashboardTables";
+import { isDemoTableWidget, isDemoVizWidget, hasCustomChrome } from "../config/demoVisualizations";
 import KpiCard from "./KpiCard";
 import DashboardTable from "./DashboardTable";
+import DemoVisualization from "./DemoVisualization";
 import DepartmentBarChart, { WEEKDAY_CHART_ORDER } from "./DepartmentBarChart";
 import ComplaintMap from "./ComplaintMap";
 import ResizeGrip from "./ResizeGrip";
@@ -105,10 +107,23 @@ function dragItemTransform(itemId, layout, dragStartRef, draggingItemId, gridMet
   };
 }
 
+const CHART_OVERFLOW_VISIBLE_TYPES = new Set([
+  "bar-chart",
+  "horizontal-bar",
+  "line-chart",
+  "pie-chart",
+  "stacked-bar",
+  "histogram",
+  "sla-toggle",
+]);
+
 function gridItemClassName(widgetId) {
   if (isKpiWidget(widgetId)) return "dashboard-grid-item-kpi";
-  if (isTableWidget(widgetId)) return "dashboard-grid-item-chart-clipped";
-  if (WIDGETS[widgetId]?.type === "bar-chart") {
+  if (isTableWidget(widgetId) || isDemoTableWidget(widgetId)) {
+    return "dashboard-grid-item-chart-clipped";
+  }
+  const type = WIDGETS[widgetId]?.type;
+  if (type === "bar-chart" || CHART_OVERFLOW_VISIBLE_TYPES.has(type)) {
     return "dashboard-grid-item-chart-visible";
   }
   if (isChartWidget(widgetId)) return "dashboard-grid-item-chart-clipped";
@@ -230,6 +245,10 @@ const DashboardGrid = ({
   const renderWidget = (widgetId) => {
     const meta = WIDGETS[widgetId];
     if (!meta) return null;
+
+    if (isDemoVizWidget(widgetId)) {
+      return <DemoVisualization widgetId={widgetId} />;
+    }
 
     if (meta.type === "kpi") {
       return renderKpi(widgetId);
@@ -386,7 +405,8 @@ const DashboardGrid = ({
           {layout.map((item) => {
             const isKpi = isKpiWidget(item.i);
             const meta = WIDGETS[item.i];
-            const isTable = isTableWidget(item.i);
+            const isTable = isTableWidget(item.i) || isDemoTableWidget(item.i);
+            const customChrome = meta?.customChrome || hasCustomChrome(item.i);
             const isBarChart = meta?.type === "bar-chart";
             const offsetStyle = dragItemTransform(
               item.i,
@@ -418,24 +438,32 @@ const DashboardGrid = ({
                   label={`Remove ${meta?.metric ?? item.i}`}
                   onClick={(e) => handleRemove(e, item.i)}
                 />
-                {meta && (
-                  <WidgetHeader metric={meta.metric} subMetric={meta.subMetric} />
-                )}
-                <div
-                  className={
-                    isTable
-                      ? "dashboard-table-body tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-p-4"
-                      : "tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-hidden tw-p-4"
-                  }
-                >
-                  {isTable ? (
-                    <div className="dashboard-table-scroll tw-min-h-0 tw-flex-1 tw-overflow-auto">
-                      {renderWidget(item.i)}
+                {customChrome ? (
+                  <div className="tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-hidden">
+                    {renderWidget(item.i)}
+                  </div>
+                ) : (
+                  <>
+                    {meta && (
+                      <WidgetHeader metric={meta.metric} subMetric={meta.subMetric} />
+                    )}
+                    <div
+                      className={
+                        isTable
+                          ? "dashboard-table-body tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-p-4"
+                          : "tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-hidden tw-p-4"
+                      }
+                    >
+                      {isTable ? (
+                        <div className="dashboard-table-scroll tw-min-h-0 tw-flex-1 tw-overflow-auto">
+                          {renderWidget(item.i)}
+                        </div>
+                      ) : (
+                        renderWidget(item.i)
+                      )}
                     </div>
-                  ) : (
-                    renderWidget(item.i)
-                  )}
-                </div>
+                  </>
+                )}
                 <ResizeGrip />
               </section>
             );

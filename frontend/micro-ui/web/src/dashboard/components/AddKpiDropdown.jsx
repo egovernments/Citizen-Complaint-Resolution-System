@@ -12,6 +12,18 @@ const SHORT_LABELS = {
   "cl-metric-new-vs-repeat": "New vs repeat",
   "cl-metric-inflow-rate": "Inflow rate",
   "cl-metric-hot-ward": "Hot ward",
+  "demo-viz-number": "Number tile",
+  "demo-viz-sparkline": "Sparkline KPI",
+  "demo-viz-bar": "Bar chart",
+  "demo-viz-leaderboard": "Leaderboard",
+  "demo-viz-line": "Line chart",
+  "demo-viz-pie": "Channel donut",
+  "demo-viz-sla-toggle": "SLA table/bar",
+  "demo-viz-sla-risk": "SLA at risk",
+  "demo-viz-stacked": "Stacked bar",
+  "demo-viz-map": "Map demo",
+  "demo-viz-histogram": "Histogram",
+  "demo-viz-gauge": "Gauge",
 };
 
 function shortLabel(item) {

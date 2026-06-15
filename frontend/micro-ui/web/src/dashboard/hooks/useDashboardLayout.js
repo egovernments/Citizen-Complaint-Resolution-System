@@ -458,7 +458,7 @@ function normalizeChartItem(item) {
   };
 }
 
-const LEGACY_LAYOUT_VERSIONS = ["v19", "v18", "v17", "v16", "v15", "v14", "v13", "v12", "v11", "v10", "v9"];
+const LEGACY_LAYOUT_VERSIONS = ["v20", "v19", "v18", "v17", "v16", "v15", "v14", "v13", "v12", "v11", "v10", "v9"];
 
 function mergeMissingDefaultWidgets(layout) {
   const ids = new Set(layout.map((item) => item.i));

@@ -29,6 +29,7 @@ import {
   COMPARATIVE_REPORTING_METRICS,
   COMPARATIVE_REPORTING_SECTION,
 } from "./comparativeReportingLandscape";
+import { DEMO_VIZ_WIDGETS } from "./demoVisualizations";
 
 export {
   COMPLAINT_LANDSCAPE_SECTION,
@@ -48,7 +49,7 @@ export {
   subMetricValueKey,
 };
 
-export const CHART_WIDGETS = LANDSCAPE_CHARTS;
+export const CHART_WIDGETS = [...LANDSCAPE_CHARTS, ...DEMO_VIZ_WIDGETS];
 export const KPI_METRICS = [
   ...LANDSCAPE_METRICS,
   ...EMPLOYEE_PERFORMANCE_METRICS,

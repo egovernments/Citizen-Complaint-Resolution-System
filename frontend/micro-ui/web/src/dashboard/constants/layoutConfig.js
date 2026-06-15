@@ -1,4 +1,8 @@
 import { CHART_WIDGETS, KPI_METRICS } from "../config/supervisorMetrics";
+import {
+  DEMO_VIZ_DEFAULT_LAYOUT,
+  DEMO_VIZ_LAYOUT_DEFAULTS,
+} from "../config/demoVisualizations";
 import { isKpiListMetric } from "../config/kpiDisplay";
 
 export const GRID_COLS = 12;
@@ -86,6 +90,7 @@ const chartWidgets = Object.fromEntries(
       metric: c.metric,
       subMetric: c.subMetric,
       outputFormat: c.outputFormat,
+      ...(c.customChrome ? { customChrome: true } : {}),
     },
   ])
 );
@@ -104,6 +109,7 @@ export const DEFAULT_CHART_LAYOUT = {
   "cl-chart-wards": { x: 4, w: 4, h: 6, minW: 3, minH: 4, maxW: 8, maxH: 10 },
   "cl-chart-dow": { x: 8, w: 4, h: 6, minW: 3, minH: 4, maxW: 8, maxH: 10 },
   "cl-map-complaints": { x: 0, w: 8, h: 7, minW: 4, minH: 4, maxW: 12, maxH: 14 },
+  ...DEMO_VIZ_LAYOUT_DEFAULTS,
 };
 
 export const TOP_ROW_CHART_IDS = [
@@ -296,6 +302,7 @@ export const DEFAULT_LAYOUT = [
     static: false,
     resizeHandles: ["se"],
   },
+  ...DEMO_VIZ_DEFAULT_LAYOUT,
 ];
 
 export const DROPPING_ITEM_ID = "__dropping-kpi__";
