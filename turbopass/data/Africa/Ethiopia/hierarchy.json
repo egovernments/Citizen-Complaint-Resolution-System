@@ -1,0 +1,6312 @@
+{
+  "code": "ET",
+  "name": "Ethiopia",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "ET-TI",
+      "parent_code": "ET",
+      "name": "Tigray",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-298296162",
+          "parent_code": "ET-TI",
+          "name": "Mek'elē",
+          "type": "city",
+          "population": "185207",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-298296175",
+          "parent_code": "ET-TI",
+          "name": "Axum",
+          "type": "city",
+          "population": "51790",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-298296178",
+          "parent_code": "ET-TI",
+          "name": "Adigrat",
+          "type": "city",
+          "population": "71453",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-321226659",
+          "parent_code": "ET-TI",
+          "name": "Zalambessa",
+          "type": "city",
+          "population": "10551",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-321246986",
+          "parent_code": "ET-TI",
+          "name": "Addi Hirdi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-321247208",
+          "parent_code": "ET-TI",
+          "name": "Humera",
+          "type": "city",
+          "population": "21653",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-321251656",
+          "parent_code": "ET-TI",
+          "name": "Shire",
+          "type": "city",
+          "population": "47284",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-471337415",
+          "parent_code": "ET-TI",
+          "name": "Agula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-471337507",
+          "parent_code": "ET-TI",
+          "name": "Wukro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-503991134",
+          "parent_code": "ET-TI",
+          "name": "Dengolat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-513049745",
+          "parent_code": "ET-TI",
+          "name": "Samre",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-514110193",
+          "parent_code": "ET-TI",
+          "name": "Freweyni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-514110340",
+          "parent_code": "ET-TI",
+          "name": "Edaga Hamus",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-559957159",
+          "parent_code": "ET-TI",
+          "name": "Sele",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-559957954",
+          "parent_code": "ET-TI",
+          "name": "Hagere Selam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-560383279",
+          "parent_code": "ET-TI",
+          "name": "Abiy Addi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-580388523",
+          "parent_code": "ET-TI",
+          "name": "Dibdibo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-580388694",
+          "parent_code": "ET-TI",
+          "name": "ብዘት / Bizet",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-580396445",
+          "parent_code": "ET-TI",
+          "name": "Hawzen",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-706520810",
+          "parent_code": "ET-TI",
+          "name": "Maychew",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-978223126",
+          "parent_code": "ET-TI",
+          "name": "Negash",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150494436",
+          "parent_code": "ET-TI",
+          "name": "Alamata",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150494472",
+          "parent_code": "ET-TI",
+          "name": "Hiwane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150494529",
+          "parent_code": "ET-TI",
+          "name": "Korem",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150494536",
+          "parent_code": "ET-TI",
+          "name": "Betmara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150535988",
+          "parent_code": "ET-TI",
+          "name": "Yechila",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150881110",
+          "parent_code": "ET-TI",
+          "name": "Adi Shahu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150881303",
+          "parent_code": "ET-TI",
+          "name": "Metemmeli",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150883616",
+          "parent_code": "ET-TI",
+          "name": "Adi Da`Iro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150884206",
+          "parent_code": "ET-TI",
+          "name": "Werkamba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150887976",
+          "parent_code": "ET-TI",
+          "name": "Adi Bidera (1)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150891373",
+          "parent_code": "ET-TI",
+          "name": "Beleho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150899538",
+          "parent_code": "ET-TI",
+          "name": "Adi-Nebried",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150900702",
+          "parent_code": "ET-TI",
+          "name": "Ts'Abat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150902015",
+          "parent_code": "ET-TI",
+          "name": "Chelena",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150902200",
+          "parent_code": "ET-TI",
+          "name": "Debrè Kerbe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150902894",
+          "parent_code": "ET-TI",
+          "name": "Inda Aba Guna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150910887",
+          "parent_code": "ET-TI",
+          "name": "Addi Khaye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150920016",
+          "parent_code": "ET-TI",
+          "name": "Gijet",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150922289",
+          "parent_code": "ET-TI",
+          "name": "Wukro Maray",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150923608",
+          "parent_code": "ET-TI",
+          "name": "Ch'Emero",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150931642",
+          "parent_code": "ET-TI",
+          "name": "Fatsi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150933626",
+          "parent_code": "ET-TI",
+          "name": "Inticho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150938586",
+          "parent_code": "ET-TI",
+          "name": "Adi Abun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150939425",
+          "parent_code": "ET-TI",
+          "name": "Guia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150953189",
+          "parent_code": "ET-TI",
+          "name": "Atsbi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150954606",
+          "parent_code": "ET-TI",
+          "name": "Dansha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150955158",
+          "parent_code": "ET-TI",
+          "name": "Adi Ramets",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150960165",
+          "parent_code": "ET-TI",
+          "name": "Ch'Erch'Er",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150962639",
+          "parent_code": "ET-TI",
+          "name": "Arema",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1460494494",
+          "parent_code": "ET-TI",
+          "name": "Maymekden",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2304012573",
+          "parent_code": "ET-TI",
+          "name": "Fireselam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2304012574",
+          "parent_code": "ET-TI",
+          "name": "Adebay",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2304012577",
+          "parent_code": "ET-TI",
+          "name": "Ketema Nigus",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2304071874",
+          "parent_code": "ET-TI",
+          "name": "Adi Goshu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2304137677",
+          "parent_code": "ET-TI",
+          "name": "Dedebit",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2304137680",
+          "parent_code": "ET-TI",
+          "name": "ከተማ ክሳድ ጋባ",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2304137682",
+          "parent_code": "ET-TI",
+          "name": "May Hansse",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2304491896",
+          "parent_code": "ET-TI",
+          "name": "Sheraro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2304491897",
+          "parent_code": "ET-TI",
+          "name": "Khiret",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2330208431",
+          "parent_code": "ET-TI",
+          "name": "Gerhu Sirnay",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3260009007",
+          "parent_code": "ET-TI",
+          "name": "ከተማ ሕብረት",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3260120820",
+          "parent_code": "ET-TI",
+          "name": "Indabaguna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4020416460",
+          "parent_code": "ET-TI",
+          "name": "Rama",
+          "type": "city",
+          "population": "7824",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4586214041",
+          "parent_code": "ET-TI",
+          "name": "Mai Kadra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6794553802",
+          "parent_code": "ET-TI",
+          "name": "Maiwoini",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7278323671",
+          "parent_code": "ET-TI",
+          "name": "Selekleka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7278330221",
+          "parent_code": "ET-TI",
+          "name": "Quiha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7278330222",
+          "parent_code": "ET-TI",
+          "name": "መስዋእቲ ከተማ",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7278340444",
+          "parent_code": "ET-TI",
+          "name": "May Tsebri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7278340446",
+          "parent_code": "ET-TI",
+          "name": "Amba Madre",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7278376917",
+          "parent_code": "ET-TI",
+          "name": "Ehsaa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7799632677",
+          "parent_code": "ET-TI",
+          "name": "Mekoni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8479634428",
+          "parent_code": "ET-TI",
+          "name": "Maheber Dego",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8598077731",
+          "parent_code": "ET-TI",
+          "name": "Mai-Aini Refugee Camp",
+          "type": "city",
+          "population": "11718",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8615845070",
+          "parent_code": "ET-TI",
+          "name": "Hidmo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9081565491",
+          "parent_code": "ET-TI",
+          "name": "Haike Meshal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9085922598",
+          "parent_code": "ET-TI",
+          "name": "Kelisha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9120467816",
+          "parent_code": "ET-TI",
+          "name": "Hitsats",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9137631067",
+          "parent_code": "ET-TI",
+          "name": "Adwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9180642408",
+          "parent_code": "ET-TI",
+          "name": "Adi Mehameday",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9180918996",
+          "parent_code": "ET-TI",
+          "name": "Shimelba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9945399018",
+          "parent_code": "ET-TI",
+          "name": "Addi Hamli",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-9945438630",
+          "parent_code": "ET-TI",
+          "name": "Ksad Gimel",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "ET-AF",
+      "parent_code": "ET",
+      "name": "Afar Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-316840175",
+          "parent_code": "ET-AF",
+          "name": "Dedai",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316863864",
+          "parent_code": "ET-AF",
+          "name": "Awash",
+          "type": "city",
+          "population": "11053",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-321742798",
+          "parent_code": "ET-AF",
+          "name": "Asaita",
+          "type": "city",
+          "population": "22718",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150886905",
+          "parent_code": "ET-AF",
+          "name": "Ab'aala",
+          "type": "city",
+          "population": "14470",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150915176",
+          "parent_code": "ET-AF",
+          "name": "Chifra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150927327",
+          "parent_code": "ET-AF",
+          "name": "Elida'ar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1151004987",
+          "parent_code": "ET-AF",
+          "name": "Dubti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1235451313",
+          "parent_code": "ET-AF",
+          "name": "Semera",
+          "type": "city",
+          "population": "100000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1235451315",
+          "parent_code": "ET-AF",
+          "name": "Logiya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2152888719",
+          "parent_code": "ET-AF",
+          "name": "Gewane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2206470696",
+          "parent_code": "ET-AF",
+          "name": "Namelafen",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9286688980",
+          "parent_code": "ET-AF",
+          "name": "Kasagita",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13131045872",
+          "parent_code": "ET-AF",
+          "name": "Dalifage",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13138365781",
+          "parent_code": "ET-AF",
+          "name": "Wedarage",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ET-AM",
+      "parent_code": "ET",
+      "name": "Amhara Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-71464974",
+          "parent_code": "ET-AM",
+          "name": "ላሊበላ / Lalibela",
+          "type": "city",
+          "population": "8484",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-71556493",
+          "parent_code": "ET-AM",
+          "name": "Gonder",
+          "type": "city",
+          "population": "213434",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-71558889",
+          "parent_code": "ET-AM",
+          "name": "Azezo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-71612929",
+          "parent_code": "ET-AM",
+          "name": "Bahir Dar",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-271395042",
+          "parent_code": "ET-AM",
+          "name": "Tis Abay",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-281666535",
+          "parent_code": "ET-AM",
+          "name": "Dessie",
+          "type": "city",
+          "population": "169104",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-298296167",
+          "parent_code": "ET-AM",
+          "name": "Debre Birhan",
+          "type": "city",
+          "population": "73697",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-298296174",
+          "parent_code": "ET-AM",
+          "name": "Debre Markos",
+          "type": "city",
+          "population": "93780",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-298296176",
+          "parent_code": "ET-AM",
+          "name": "Kombolcha",
+          "type": "city",
+          "population": "75434",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-319196164",
+          "parent_code": "ET-AM",
+          "name": "Shoa Robit",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-321361857",
+          "parent_code": "ET-AM",
+          "name": "አዲስ ዘመን / Adis Zemen",
+          "type": "city",
+          "population": "24849",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-321734646",
+          "parent_code": "ET-AM",
+          "name": "Gish Abay",
+          "type": "city",
+          "population": "3385",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-504894005",
+          "parent_code": "ET-AM",
+          "name": "Bilbala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-511984995",
+          "parent_code": "ET-AM",
+          "name": "ሰቆጣ / Sekota",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-582633508",
+          "parent_code": "ET-AM",
+          "name": "Adi Arkay",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-595139881",
+          "parent_code": "ET-AM",
+          "name": "Amanuel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-595140133",
+          "parent_code": "ET-AM",
+          "name": "Finote Selam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-595140236",
+          "parent_code": "ET-AM",
+          "name": "Mancusa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-595140313",
+          "parent_code": "ET-AM",
+          "name": "Burie",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-595140559",
+          "parent_code": "ET-AM",
+          "name": "Addis Kidan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-595140591",
+          "parent_code": "ET-AM",
+          "name": "Injibara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-595140927",
+          "parent_code": "ET-AM",
+          "name": "Demebecha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-595141529",
+          "parent_code": "ET-AM",
+          "name": "Dejen",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-595141664",
+          "parent_code": "ET-AM",
+          "name": "Dangla",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-595142160",
+          "parent_code": "ET-AM",
+          "name": "መሸንቲ / Meshenti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-595142326",
+          "parent_code": "ET-AM",
+          "name": "Wereta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-595142552",
+          "parent_code": "ET-AM",
+          "name": "Enferaz",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1110095392",
+          "parent_code": "ET-AM",
+          "name": "Merawi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1110107361",
+          "parent_code": "ET-AM",
+          "name": "Bechena",
+          "type": "city",
+          "population": "19916",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1110107370",
+          "parent_code": "ET-AM",
+          "name": "Adet",
+          "type": "city",
+          "population": "21117",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1110107813",
+          "parent_code": "ET-AM",
+          "name": "Mota",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1136238315",
+          "parent_code": "ET-AM",
+          "name": "Deneba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1136248918",
+          "parent_code": "ET-AM",
+          "name": "Gosh Bado",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1136376878",
+          "parent_code": "ET-AM",
+          "name": "Jihur",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1136376907",
+          "parent_code": "ET-AM",
+          "name": "Enwari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150494445",
+          "parent_code": "ET-AM",
+          "name": "Kobo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150535974",
+          "parent_code": "ET-AM",
+          "name": "Asketama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150570832",
+          "parent_code": "ET-AM",
+          "name": "Debre Tabor",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150587805",
+          "parent_code": "ET-AM",
+          "name": "Aykel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150588806",
+          "parent_code": "ET-AM",
+          "name": "Shahadi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150589403",
+          "parent_code": "ET-AM",
+          "name": "Metemma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150606170",
+          "parent_code": "ET-AM",
+          "name": "Mekane Berhan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150880665",
+          "parent_code": "ET-AM",
+          "name": "Yejube",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150882688",
+          "parent_code": "ET-AM",
+          "name": "Dil Yibza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150886145",
+          "parent_code": "ET-AM",
+          "name": "Malek Sanca",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150887404",
+          "parent_code": "ET-AM",
+          "name": "Elias",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150889508",
+          "parent_code": "ET-AM",
+          "name": "Libo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150893724",
+          "parent_code": "ET-AM",
+          "name": "Harbu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150897807",
+          "parent_code": "ET-AM",
+          "name": "Gasay",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150898159",
+          "parent_code": "ET-AM",
+          "name": "Kimir Dingay",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150900936",
+          "parent_code": "ET-AM",
+          "name": "Akesta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150902466",
+          "parent_code": "ET-AM",
+          "name": "`Arb Gebeya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150908753",
+          "parent_code": "ET-AM",
+          "name": "Darechera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150912153",
+          "parent_code": "ET-AM",
+          "name": "Degan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150915997",
+          "parent_code": "ET-AM",
+          "name": "Amba Georgis",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150921947",
+          "parent_code": "ET-AM",
+          "name": "Mersa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150924236",
+          "parent_code": "ET-AM",
+          "name": "Bollo Silassie",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150926936",
+          "parent_code": "ET-AM",
+          "name": "Abay Yilas",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150929672",
+          "parent_code": "ET-AM",
+          "name": "Gelawdiwos",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150935562",
+          "parent_code": "ET-AM",
+          "name": "Finyano",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150937866",
+          "parent_code": "ET-AM",
+          "name": "Ebbenat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150937895",
+          "parent_code": "ET-AM",
+          "name": "Geber Shengo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150940878",
+          "parent_code": "ET-AM",
+          "name": "Kamisee",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150941359",
+          "parent_code": "ET-AM",
+          "name": "Arb Gebeya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150944601",
+          "parent_code": "ET-AM",
+          "name": "Wurgessa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150944917",
+          "parent_code": "ET-AM",
+          "name": "Shime",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150945344",
+          "parent_code": "ET-AM",
+          "name": "Molale",
+          "type": "city",
+          "population": "93800",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150949693",
+          "parent_code": "ET-AM",
+          "name": "Ataye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150950242",
+          "parent_code": "ET-AM",
+          "name": "Cha´cha´",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150954014",
+          "parent_code": "ET-AM",
+          "name": "Shano",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150956543",
+          "parent_code": "ET-AM",
+          "name": "Bati",
+          "type": "city",
+          "population": "43500",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1150957542",
+          "parent_code": "ET-AM",
+          "name": "Debark",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150958774",
+          "parent_code": "ET-AM",
+          "name": "Lumame",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150962209",
+          "parent_code": "ET-AM",
+          "name": "Nefas Meewcha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150962963",
+          "parent_code": "ET-AM",
+          "name": "Jiga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150968730",
+          "parent_code": "ET-AM",
+          "name": "Ciogguar Cudo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150976436",
+          "parent_code": "ET-AM",
+          "name": "Derek' Amba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150980515",
+          "parent_code": "ET-AM",
+          "name": "Dabat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150982161",
+          "parent_code": "ET-AM",
+          "name": "Feres Bet",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1151001684",
+          "parent_code": "ET-AM",
+          "name": "Hara Gebeya",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1151004854",
+          "parent_code": "ET-AM",
+          "name": "Ashenat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1235497987",
+          "parent_code": "ET-AM",
+          "name": "Debre Work",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1275584088",
+          "parent_code": "ET-AM",
+          "name": "Debre Sina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1293233626",
+          "parent_code": "ET-AM",
+          "name": "Woldia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1298133648",
+          "parent_code": "ET-AM",
+          "name": "Shul",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1323481237",
+          "parent_code": "ET-AM",
+          "name": "Kuta Ber",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1637671318",
+          "parent_code": "ET-AM",
+          "name": "Geshena",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1771167684",
+          "parent_code": "ET-AM",
+          "name": "Chagni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1795187965",
+          "parent_code": "ET-AM",
+          "name": "Abadra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1795187966",
+          "parent_code": "ET-AM",
+          "name": "Jawi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1795187969",
+          "parent_code": "ET-AM",
+          "name": "Workmeda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1910015963",
+          "parent_code": "ET-AM",
+          "name": "Balchi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1910016973",
+          "parent_code": "ET-AM",
+          "name": "Arerti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1913811201",
+          "parent_code": "ET-AM",
+          "name": "Shahura (Alefa)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2148000745",
+          "parent_code": "ET-AM",
+          "name": "Bokoksa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2167639984",
+          "parent_code": "ET-AM",
+          "name": "Alem Ketema",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2206470649",
+          "parent_code": "ET-AM",
+          "name": "Degolo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2206470681",
+          "parent_code": "ET-AM",
+          "name": "Hayq",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2206470689",
+          "parent_code": "ET-AM",
+          "name": "Mistima",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2295007466",
+          "parent_code": "ET-AM",
+          "name": "Maksegnit",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2304012568",
+          "parent_code": "ET-AM",
+          "name": "Abertege",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2358274006",
+          "parent_code": "ET-AM",
+          "name": "Mintamir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2358274008",
+          "parent_code": "ET-AM",
+          "name": "Sologiorgis",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2455981590",
+          "parent_code": "ET-AM",
+          "name": "Digo Tsion",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2455981593",
+          "parent_code": "ET-AM",
+          "name": "Gende Woin",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2455981595",
+          "parent_code": "ET-AM",
+          "name": "Mekane Selam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2455981597",
+          "parent_code": "ET-AM",
+          "name": "Mertule Mariam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2457203505",
+          "parent_code": "ET-AM",
+          "name": "Dahana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2461402410",
+          "parent_code": "ET-AM",
+          "name": "Karakore",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2723843915",
+          "parent_code": "ET-AM",
+          "name": "Amedber",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3196070462",
+          "parent_code": "ET-AM",
+          "name": "Mehal Meda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3225209601",
+          "parent_code": "ET-AM",
+          "name": "Sanja",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3249636898",
+          "parent_code": "ET-AM",
+          "name": "Yetmen",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3319736127",
+          "parent_code": "ET-AM",
+          "name": "Gebeze Mariam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3320675142",
+          "parent_code": "ET-AM",
+          "name": "Imiye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3320908677",
+          "parent_code": "ET-AM",
+          "name": "Achano",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3356666047",
+          "parent_code": "ET-AM",
+          "name": "Kon",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4093208400",
+          "parent_code": "ET-AM",
+          "name": "Gerba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4334071890",
+          "parent_code": "ET-AM",
+          "name": "Midre Genet",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4403374318",
+          "parent_code": "ET-AM",
+          "name": "Wahisa Abo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4430087948",
+          "parent_code": "ET-AM",
+          "name": "Lemi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4701344692",
+          "parent_code": "ET-AM",
+          "name": "Filakit Gereger",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5020647649",
+          "parent_code": "ET-AM",
+          "name": "Felege Birhan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6204783098",
+          "parent_code": "ET-AM",
+          "name": "Gelegu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6586028738",
+          "parent_code": "ET-AM",
+          "name": "Yebokile",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6586031310",
+          "parent_code": "ET-AM",
+          "name": "Kuyi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8585648559",
+          "parent_code": "ET-AM",
+          "name": "Dula Bota",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8585842455",
+          "parent_code": "ET-AM",
+          "name": "Chelala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9238775001",
+          "parent_code": "ET-AM",
+          "name": "Wegeda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9238775003",
+          "parent_code": "ET-AM",
+          "name": "Azena",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9238775008",
+          "parent_code": "ET-AM",
+          "name": "Mekane Eyesus",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9238775010",
+          "parent_code": "ET-AM",
+          "name": "Kola Diba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9239272283",
+          "parent_code": "ET-AM",
+          "name": "Muja",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9239272285",
+          "parent_code": "ET-AM",
+          "name": "Kilaj",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9324421640",
+          "parent_code": "ET-AM",
+          "name": "Amde Werq",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9327590048",
+          "parent_code": "ET-AM",
+          "name": "Gohala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9328101847",
+          "parent_code": "ET-AM",
+          "name": "Islamge",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9483792980",
+          "parent_code": "ET-AM",
+          "name": "Fint'Al Feres",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9490373105",
+          "parent_code": "ET-AM",
+          "name": "Tenta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9589465610",
+          "parent_code": "ET-AM",
+          "name": "Gumar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10008747789",
+          "parent_code": "ET-AM",
+          "name": "Demobasho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10858146191",
+          "parent_code": "ET-AM",
+          "name": "Liben",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11577695974",
+          "parent_code": "ET-AM",
+          "name": "Majete",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12032242010",
+          "parent_code": "ET-AM",
+          "name": "Āzayē",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12035039456",
+          "parent_code": "ET-AM",
+          "name": "Bikita",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12035041430",
+          "parent_code": "ET-AM",
+          "name": "Kossober",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13030491236",
+          "parent_code": "ET-AM",
+          "name": "Amber",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13045792608",
+          "parent_code": "ET-AM",
+          "name": "Jima",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13055163540",
+          "parent_code": "ET-AM",
+          "name": "Yelamgej",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13193359419",
+          "parent_code": "ET-AM",
+          "name": "Berehed",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13623748315",
+          "parent_code": "ET-AM",
+          "name": "Medina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ET-BE",
+      "parent_code": "ET",
+      "name": "Benishangul-Gumuz Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-321761901",
+          "parent_code": "ET-BE",
+          "name": "Asosa",
+          "type": "city",
+          "population": "20226",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1150892179",
+          "parent_code": "ET-BE",
+          "name": "Mengie",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150901967",
+          "parent_code": "ET-BE",
+          "name": "Daleti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150922827",
+          "parent_code": "ET-BE",
+          "name": "Bambasi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150936484",
+          "parent_code": "ET-BE",
+          "name": "Gubba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150957673",
+          "parent_code": "ET-BE",
+          "name": "Manasebo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1771167686",
+          "parent_code": "ET-BE",
+          "name": "Manbuk",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1790907821",
+          "parent_code": "ET-BE",
+          "name": "Almahal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1795187967",
+          "parent_code": "ET-BE",
+          "name": "Mindeera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1795187968",
+          "parent_code": "ET-BE",
+          "name": "Pawi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2119267858",
+          "parent_code": "ET-BE",
+          "name": "Kemashi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2670705980",
+          "parent_code": "ET-BE",
+          "name": "Tongo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10130264705",
+          "parent_code": "ET-BE",
+          "name": "Soge",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10132094137",
+          "parent_code": "ET-BE",
+          "name": "Gelgel Beles",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10132098801",
+          "parent_code": "ET-BE",
+          "name": "Alimu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ET-DD",
+      "parent_code": "ET",
+      "name": "Dire Dawa",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-298296168",
+          "parent_code": "ET-DD",
+          "name": "Dire Dawa",
+          "type": "city",
+          "population": "398000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-316855944",
+          "parent_code": "ET-DD",
+          "name": "Melka Jebdu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ET-GA",
+      "parent_code": "ET",
+      "name": "Gambela Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-321376181",
+          "parent_code": "ET-GA",
+          "name": "Gambela",
+          "type": "city",
+          "population": "31282",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1150928047",
+          "parent_code": "ET-GA",
+          "name": "Itang",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150938451",
+          "parent_code": "ET-GA",
+          "name": "Meti Chafi / Tilk u Meti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2519103796",
+          "parent_code": "ET-GA",
+          "name": "Matar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2519103798",
+          "parent_code": "ET-GA",
+          "name": "Pinyudo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5515721707",
+          "parent_code": "ET-GA",
+          "name": "Tharpham",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9312228051",
+          "parent_code": "ET-GA",
+          "name": "Abobo",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-10597732825",
+          "parent_code": "ET-GA",
+          "name": "Kuergeng",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12167251163",
+          "parent_code": "ET-GA",
+          "name": "Pagak(Gambella, Ethiopia)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ET-OR",
+      "parent_code": "ET",
+      "name": "Oromia Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-44927166",
+          "parent_code": "ET-OR",
+          "name": "Moyale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-237497443",
+          "parent_code": "ET-OR",
+          "name": "Mojo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-237498687",
+          "parent_code": "ET-OR",
+          "name": "Adama",
+          "type": "city",
+          "population": "228623",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-266775102",
+          "parent_code": "ET-OR",
+          "name": "Ambo",
+          "type": "city",
+          "population": "54211",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-283675670",
+          "parent_code": "ET-OR",
+          "name": "Waliso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-283675678",
+          "parent_code": "ET-OR",
+          "name": "Sokoru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-283675703",
+          "parent_code": "ET-OR",
+          "name": "Shebe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-283675736",
+          "parent_code": "ET-OR",
+          "name": "Seka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-283675743",
+          "parent_code": "ET-OR",
+          "name": "Tulu Bolo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-291079798",
+          "parent_code": "ET-OR",
+          "name": "Bishoftu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-294749162",
+          "parent_code": "ET-OR",
+          "name": "Bule Hora",
+          "type": "city",
+          "population": "27820",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-298296163",
+          "parent_code": "ET-OR",
+          "name": "Naqamte",
+          "type": "city",
+          "population": "92700",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-306617422",
+          "parent_code": "ET-OR",
+          "name": "El Ley",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316861042",
+          "parent_code": "ET-OR",
+          "name": "Wenji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316861082",
+          "parent_code": "ET-OR",
+          "name": "Melkasa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316862499",
+          "parent_code": "ET-OR",
+          "name": "Huruta / ሁሩታ",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316863118",
+          "parent_code": "ET-OR",
+          "name": "Bole",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316865580",
+          "parent_code": "ET-OR",
+          "name": "Haro Adi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316868552",
+          "parent_code": "ET-OR",
+          "name": "Mieso",
+          "type": "city",
+          "population": "12000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316868800",
+          "parent_code": "ET-OR",
+          "name": "Chiro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316869349",
+          "parent_code": "ET-OR",
+          "name": "Hirna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316869699",
+          "parent_code": "ET-OR",
+          "name": "Deder",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316869863",
+          "parent_code": "ET-OR",
+          "name": "Chelenko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316871083",
+          "parent_code": "ET-OR",
+          "name": "Chinaksen",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-318126326",
+          "parent_code": "ET-OR",
+          "name": "Batu",
+          "type": "city",
+          "population": "35931",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-319203456",
+          "parent_code": "ET-OR",
+          "name": "Welenchete",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-321378115",
+          "parent_code": "ET-OR",
+          "name": "Metu",
+          "type": "city",
+          "population": "22103",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-458742370",
+          "parent_code": "ET-OR",
+          "name": "Haro Dumal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-458746783",
+          "parent_code": "ET-OR",
+          "name": "Agarfa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-458778791",
+          "parent_code": "ET-OR",
+          "name": "Habe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-458779112",
+          "parent_code": "ET-OR",
+          "name": "Moje",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-458784179",
+          "parent_code": "ET-OR",
+          "name": "Delosebro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-458785299",
+          "parent_code": "ET-OR",
+          "name": "Sheik Hussein",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-458786627",
+          "parent_code": "ET-OR",
+          "name": "Adele",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-595138666",
+          "parent_code": "ET-OR",
+          "name": "Gebre Guracha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-595139341",
+          "parent_code": "ET-OR",
+          "name": "Chancho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-595139394",
+          "parent_code": "ET-OR",
+          "name": "Duber",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-595139687",
+          "parent_code": "ET-OR",
+          "name": "Muketuri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-595141251",
+          "parent_code": "ET-OR",
+          "name": "Filiklik",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-653289402",
+          "parent_code": "ET-OR",
+          "name": "Metahara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-706610025",
+          "parent_code": "ET-OR",
+          "name": "Goro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-706610125",
+          "parent_code": "ET-OR",
+          "name": "Sof Omar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-706617871",
+          "parent_code": "ET-OR",
+          "name": "Dinsho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1069556217",
+          "parent_code": "ET-OR",
+          "name": "Sululta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1083042084",
+          "parent_code": "ET-OR",
+          "name": "Debre Libanos",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1104290065",
+          "parent_code": "ET-OR",
+          "name": "Mega",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1104302163",
+          "parent_code": "ET-OR",
+          "name": "Kibre Mengist",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1104331823",
+          "parent_code": "ET-OR",
+          "name": "Bidre",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1104342805",
+          "parent_code": "ET-OR",
+          "name": "Asendabo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1104344400",
+          "parent_code": "ET-OR",
+          "name": "Deneba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1104349782",
+          "parent_code": "ET-OR",
+          "name": "Gurura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1104351850",
+          "parent_code": "ET-OR",
+          "name": "Teji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1104382516",
+          "parent_code": "ET-OR",
+          "name": "Adaba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1104431450",
+          "parent_code": "ET-OR",
+          "name": "Bedele",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150626042",
+          "parent_code": "ET-OR",
+          "name": "Jara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150697759",
+          "parent_code": "ET-OR",
+          "name": "K'Ojora",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150880673",
+          "parent_code": "ET-OR",
+          "name": "Degem Hambiso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150880950",
+          "parent_code": "ET-OR",
+          "name": "`Alemaya",
+          "type": "city",
+          "population": "63700",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150880962",
+          "parent_code": "ET-OR",
+          "name": "Melka Awash",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150880970",
+          "parent_code": "ET-OR",
+          "name": "Meko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150881654",
+          "parent_code": "ET-OR",
+          "name": "Bofa Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150882070",
+          "parent_code": "ET-OR",
+          "name": "Hudat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150882283",
+          "parent_code": "ET-OR",
+          "name": "Kurfa Chele",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150882390",
+          "parent_code": "ET-OR",
+          "name": "Jere",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150882539",
+          "parent_code": "ET-OR",
+          "name": "Bure",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150882679",
+          "parent_code": "ET-OR",
+          "name": "Nedjo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150882681",
+          "parent_code": "ET-OR",
+          "name": "Meraro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150882955",
+          "parent_code": "ET-OR",
+          "name": "Nunu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150883100",
+          "parent_code": "ET-OR",
+          "name": "Magaala Dabbasoo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150883265",
+          "parent_code": "ET-OR",
+          "name": "Dodolla",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150883465",
+          "parent_code": "ET-OR",
+          "name": "Kulubi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150884817",
+          "parent_code": "ET-OR",
+          "name": "Ali",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150884938",
+          "parent_code": "ET-OR",
+          "name": "Shukute",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150885018",
+          "parent_code": "ET-OR",
+          "name": "Mechara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150885057",
+          "parent_code": "ET-OR",
+          "name": "Goba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150885442",
+          "parent_code": "ET-OR",
+          "name": "Meliyu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150886385",
+          "parent_code": "ET-OR",
+          "name": "Negele",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150886397",
+          "parent_code": "ET-OR",
+          "name": "Inango",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150886862",
+          "parent_code": "ET-OR",
+          "name": "Menagesha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150887025",
+          "parent_code": "ET-OR",
+          "name": "Tulu Milki",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150887117",
+          "parent_code": "ET-OR",
+          "name": "Tobba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150887270",
+          "parent_code": "ET-OR",
+          "name": "InchIni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150887371",
+          "parent_code": "ET-OR",
+          "name": "Kela",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150887888",
+          "parent_code": "ET-OR",
+          "name": "Alemtena",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150887889",
+          "parent_code": "ET-OR",
+          "name": "Alga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150887901",
+          "parent_code": "ET-OR",
+          "name": "Kersa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150887937",
+          "parent_code": "ET-OR",
+          "name": "Aleltu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150888218",
+          "parent_code": "ET-OR",
+          "name": "Gobesa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150888228",
+          "parent_code": "ET-OR",
+          "name": "Debre Gelan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150888843",
+          "parent_code": "ET-OR",
+          "name": "Arboye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150889303",
+          "parent_code": "ET-OR",
+          "name": "Boke Tiko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150889653",
+          "parent_code": "ET-OR",
+          "name": "Bore",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150889979",
+          "parent_code": "ET-OR",
+          "name": "Micheta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150890024",
+          "parent_code": "ET-OR",
+          "name": "Holeta Genet",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150890522",
+          "parent_code": "ET-OR",
+          "name": "Haro Maya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150891206",
+          "parent_code": "ET-OR",
+          "name": "Yanfa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150891336",
+          "parent_code": "ET-OR",
+          "name": "Dera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150891390",
+          "parent_code": "ET-OR",
+          "name": "Bale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150891894",
+          "parent_code": "ET-OR",
+          "name": "Gulisso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150892163",
+          "parent_code": "ET-OR",
+          "name": "Jimata",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150892572",
+          "parent_code": "ET-OR",
+          "name": "Arsi Negelle",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150893546",
+          "parent_code": "ET-OR",
+          "name": "Dire",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150893692",
+          "parent_code": "ET-OR",
+          "name": "Seru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150894515",
+          "parent_code": "ET-OR",
+          "name": "Boreda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150894922",
+          "parent_code": "ET-OR",
+          "name": "Shambu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150898015",
+          "parent_code": "ET-OR",
+          "name": "Sheno",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150898063",
+          "parent_code": "ET-OR",
+          "name": "Dima",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150898120",
+          "parent_code": "ET-OR",
+          "name": "Chefedonsa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150898179",
+          "parent_code": "ET-OR",
+          "name": "Chole",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150898401",
+          "parent_code": "ET-OR",
+          "name": "Bombas",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150898693",
+          "parent_code": "ET-OR",
+          "name": "Dilela",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150898723",
+          "parent_code": "ET-OR",
+          "name": "Ginsi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150899111",
+          "parent_code": "ET-OR",
+          "name": "Bedeno",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150899199",
+          "parent_code": "ET-OR",
+          "name": "Kuyera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150899366",
+          "parent_code": "ET-OR",
+          "name": "Dambidollo",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1150899536",
+          "parent_code": "ET-OR",
+          "name": "Mendi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150901642",
+          "parent_code": "ET-OR",
+          "name": "WachIle",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150901661",
+          "parent_code": "ET-OR",
+          "name": "Mesela",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150903283",
+          "parent_code": "ET-OR",
+          "name": "Asella",
+          "type": "city",
+          "population": "110088",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1150903354",
+          "parent_code": "ET-OR",
+          "name": "Kile",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150906857",
+          "parent_code": "ET-OR",
+          "name": "Bolo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150908158",
+          "parent_code": "ET-OR",
+          "name": "Bila",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150908646",
+          "parent_code": "ET-OR",
+          "name": "Gedo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150909572",
+          "parent_code": "ET-OR",
+          "name": "Terre",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150911295",
+          "parent_code": "ET-OR",
+          "name": "Fitche",
+          "type": "city",
+          "population": "27493",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1150911375",
+          "parent_code": "ET-OR",
+          "name": "Obera Bota",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150911907",
+          "parent_code": "ET-OR",
+          "name": "Kobo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150912186",
+          "parent_code": "ET-OR",
+          "name": "Yubdo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150912417",
+          "parent_code": "ET-OR",
+          "name": "Ejaji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150912481",
+          "parent_code": "ET-OR",
+          "name": "Sup'E",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150913202",
+          "parent_code": "ET-OR",
+          "name": "Kefole",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150916626",
+          "parent_code": "ET-OR",
+          "name": "Ejersa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150919179",
+          "parent_code": "ET-OR",
+          "name": "K'Ore / Qoree",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150919267",
+          "parent_code": "ET-OR",
+          "name": "Sagure",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150920254",
+          "parent_code": "ET-OR",
+          "name": "Ilimo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150920620",
+          "parent_code": "ET-OR",
+          "name": "Kokosa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150920983",
+          "parent_code": "ET-OR",
+          "name": "Alem Teferi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150922975",
+          "parent_code": "ET-OR",
+          "name": "Getema",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150923080",
+          "parent_code": "ET-OR",
+          "name": "Fital",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150924327",
+          "parent_code": "ET-OR",
+          "name": "Bekoji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150925357",
+          "parent_code": "ET-OR",
+          "name": "Gelemso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150926035",
+          "parent_code": "ET-OR",
+          "name": "Karamile",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150927483",
+          "parent_code": "ET-OR",
+          "name": "Busa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150928100",
+          "parent_code": "ET-OR",
+          "name": "Tibe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150933931",
+          "parent_code": "ET-OR",
+          "name": "Aira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150934429",
+          "parent_code": "ET-OR",
+          "name": "Gojo Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150937410",
+          "parent_code": "ET-OR",
+          "name": "Sendafa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150938647",
+          "parent_code": "ET-OR",
+          "name": "Genet",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150938963",
+          "parent_code": "ET-OR",
+          "name": "Boko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150941652",
+          "parent_code": "ET-OR",
+          "name": "Gore",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150942958",
+          "parent_code": "ET-OR",
+          "name": "Babille",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150943402",
+          "parent_code": "ET-OR",
+          "name": "Wolenkomi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150944534",
+          "parent_code": "ET-OR",
+          "name": "Yayu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150945573",
+          "parent_code": "ET-OR",
+          "name": "Shenen",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150945773",
+          "parent_code": "ET-OR",
+          "name": "Rob Gebeya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150946097",
+          "parent_code": "ET-OR",
+          "name": "Wegide",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150951352",
+          "parent_code": "ET-OR",
+          "name": "Chanka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150951408",
+          "parent_code": "ET-OR",
+          "name": "Enchini",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150953098",
+          "parent_code": "ET-OR",
+          "name": "Gasera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150953459",
+          "parent_code": "ET-OR",
+          "name": "Alibo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150960173",
+          "parent_code": "ET-OR",
+          "name": "Gursum",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150960491",
+          "parent_code": "ET-OR",
+          "name": "Goru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150961406",
+          "parent_code": "ET-OR",
+          "name": "Derba",
+          "type": "city",
+          "population": "2188",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150970652",
+          "parent_code": "ET-OR",
+          "name": "Doba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150971502",
+          "parent_code": "ET-OR",
+          "name": "Uoter",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150972481",
+          "parent_code": "ET-OR",
+          "name": "Ghimbi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150977986",
+          "parent_code": "ET-OR",
+          "name": "Itiya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150978239",
+          "parent_code": "ET-OR",
+          "name": "Kersa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150978287",
+          "parent_code": "ET-OR",
+          "name": "Bulala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150978885",
+          "parent_code": "ET-OR",
+          "name": "Gida Ayana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150980719",
+          "parent_code": "ET-OR",
+          "name": "Bako",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150981965",
+          "parent_code": "ET-OR",
+          "name": "Ombole",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150982067",
+          "parent_code": "ET-OR",
+          "name": "Hidilola",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150982869",
+          "parent_code": "ET-OR",
+          "name": "Ginir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1151002480",
+          "parent_code": "ET-OR",
+          "name": "Kachise",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1151003201",
+          "parent_code": "ET-OR",
+          "name": "Robe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1151003576",
+          "parent_code": "ET-OR",
+          "name": "Shakiso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1151004930",
+          "parent_code": "ET-OR",
+          "name": "Solemo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1235476478",
+          "parent_code": "ET-OR",
+          "name": "Tiya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1235476482",
+          "parent_code": "ET-OR",
+          "name": "Lemen",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1285634229",
+          "parent_code": "ET-OR",
+          "name": "Gechi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1298133809",
+          "parent_code": "ET-OR",
+          "name": "Gouder",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1298133848",
+          "parent_code": "ET-OR",
+          "name": "Tsege",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1298133861",
+          "parent_code": "ET-OR",
+          "name": "Kiremu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1298134081",
+          "parent_code": "ET-OR",
+          "name": "Babich",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1298134139",
+          "parent_code": "ET-OR",
+          "name": "Uke",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1365154916",
+          "parent_code": "ET-OR",
+          "name": "Yebu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1415828839",
+          "parent_code": "ET-OR",
+          "name": "Gerbo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1415829273",
+          "parent_code": "ET-OR",
+          "name": "Sumbo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1415829395",
+          "parent_code": "ET-OR",
+          "name": "Gorki",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1415829606",
+          "parent_code": "ET-OR",
+          "name": "Asigori",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1415829690",
+          "parent_code": "ET-OR",
+          "name": "Tefki",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1445259753",
+          "parent_code": "ET-OR",
+          "name": "Wabe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1445259849",
+          "parent_code": "ET-OR",
+          "name": "Edo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1445259862",
+          "parent_code": "ET-OR",
+          "name": "Ashoka Velag",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1549948797",
+          "parent_code": "ET-OR",
+          "name": "Meki",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1562520590",
+          "parent_code": "ET-OR",
+          "name": "Beke",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1576552008",
+          "parent_code": "ET-OR",
+          "name": "Agaro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1576552151",
+          "parent_code": "ET-OR",
+          "name": "Shira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1576552169",
+          "parent_code": "ET-OR",
+          "name": "Gatira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1576552184",
+          "parent_code": "ET-OR",
+          "name": "Gembe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1576552300",
+          "parent_code": "ET-OR",
+          "name": "Leka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1576555865",
+          "parent_code": "ET-OR",
+          "name": "Gera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1580682941",
+          "parent_code": "ET-OR",
+          "name": "Koche",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1580685583",
+          "parent_code": "ET-OR",
+          "name": "Sigmo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1592291824",
+          "parent_code": "ET-OR",
+          "name": "Addis Alem",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1780097466",
+          "parent_code": "ET-OR",
+          "name": "Dandi Gudi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1780097498",
+          "parent_code": "ET-OR",
+          "name": "Kiltu Kara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1800190312",
+          "parent_code": "ET-OR",
+          "name": "Robe",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1900553723",
+          "parent_code": "ET-OR",
+          "name": "Tijo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1902275798",
+          "parent_code": "ET-OR",
+          "name": "Doni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1907128677",
+          "parent_code": "ET-OR",
+          "name": "Omonada",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1908173332",
+          "parent_code": "ET-OR",
+          "name": "Sire",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1908173413",
+          "parent_code": "ET-OR",
+          "name": "Abba Jimma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1908180027",
+          "parent_code": "ET-OR",
+          "name": "Abomsa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1908365276",
+          "parent_code": "ET-OR",
+          "name": "Kula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1908365280",
+          "parent_code": "ET-OR",
+          "name": "Deksis",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1908999467",
+          "parent_code": "ET-OR",
+          "name": "Chole",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1910385700",
+          "parent_code": "ET-OR",
+          "name": "Qoqa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1911575490",
+          "parent_code": "ET-OR",
+          "name": "Adulala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1911581646",
+          "parent_code": "ET-OR",
+          "name": "Sire Robe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1911660346",
+          "parent_code": "ET-OR",
+          "name": "Hurta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1911713870",
+          "parent_code": "ET-OR",
+          "name": "Gado Dona",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1913011143",
+          "parent_code": "ET-OR",
+          "name": "Ticho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1920864375",
+          "parent_code": "ET-OR",
+          "name": "Yabēlo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1923922218",
+          "parent_code": "ET-OR",
+          "name": "Bordode",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1924029599",
+          "parent_code": "ET-OR",
+          "name": "Wefe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1924116563",
+          "parent_code": "ET-OR",
+          "name": "Mechara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1924229303",
+          "parent_code": "ET-OR",
+          "name": "Komona",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1924229628",
+          "parent_code": "ET-OR",
+          "name": "Wachu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1953127867",
+          "parent_code": "ET-OR",
+          "name": "Mechitu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1953310052",
+          "parent_code": "ET-OR",
+          "name": "Robe Gerjeda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1953349744",
+          "parent_code": "ET-OR",
+          "name": "Washa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1962741608",
+          "parent_code": "ET-OR",
+          "name": "Beke Kelate",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1963006587",
+          "parent_code": "ET-OR",
+          "name": "Muger",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1963331026",
+          "parent_code": "ET-OR",
+          "name": "Finicha'a",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1967093153",
+          "parent_code": "ET-OR",
+          "name": "Abe dongooroo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1967244056",
+          "parent_code": "ET-OR",
+          "name": "Gutin",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1967474310",
+          "parent_code": "ET-OR",
+          "name": "Gelila",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1968071237",
+          "parent_code": "ET-OR",
+          "name": "Haro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1969076352",
+          "parent_code": "ET-OR",
+          "name": "Kelo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1969077354",
+          "parent_code": "ET-OR",
+          "name": "Hinde",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1969393317",
+          "parent_code": "ET-OR",
+          "name": "Ejere",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1969393319",
+          "parent_code": "ET-OR",
+          "name": "Gundo Meskel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1969475626",
+          "parent_code": "ET-OR",
+          "name": "Asassa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1969928017",
+          "parent_code": "ET-OR",
+          "name": "Kombosha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1969991353",
+          "parent_code": "ET-OR",
+          "name": "Wayu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1970735674",
+          "parent_code": "ET-OR",
+          "name": "Goben",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1973115079",
+          "parent_code": "ET-OR",
+          "name": "Chitu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1973115474",
+          "parent_code": "ET-OR",
+          "name": "Ginido",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1974437827",
+          "parent_code": "ET-OR",
+          "name": "Seyo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1975362722",
+          "parent_code": "ET-OR",
+          "name": "Sirambi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1978571059",
+          "parent_code": "ET-OR",
+          "name": "Ambuye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1981550710",
+          "parent_code": "ET-OR",
+          "name": "Bilo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1982034862",
+          "parent_code": "ET-OR",
+          "name": "Bila",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1982036134",
+          "parent_code": "ET-OR",
+          "name": "Shoboka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1982036634",
+          "parent_code": "ET-OR",
+          "name": "Hareto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1982059145",
+          "parent_code": "ET-OR",
+          "name": "Abora",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1989559165",
+          "parent_code": "ET-OR",
+          "name": "Limushay",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2079942797",
+          "parent_code": "ET-OR",
+          "name": "Mulo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2079971909",
+          "parent_code": "ET-OR",
+          "name": "Minare",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2080965977",
+          "parent_code": "ET-OR",
+          "name": "Sebeta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2081056414",
+          "parent_code": "ET-OR",
+          "name": "Banitu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2082478994",
+          "parent_code": "ET-OR",
+          "name": "Fiche Gelila",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2082499580",
+          "parent_code": "ET-OR",
+          "name": "Fiche",
+          "type": "city",
+          "population": "27493",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2082541807",
+          "parent_code": "ET-OR",
+          "name": "Debre Tsige",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2085628514",
+          "parent_code": "ET-OR",
+          "name": "Gohatsion",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2106294968",
+          "parent_code": "ET-OR",
+          "name": "Sibo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2109614318",
+          "parent_code": "ET-OR",
+          "name": "Birbirsa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2150450301",
+          "parent_code": "ET-OR",
+          "name": "Burka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2151469245",
+          "parent_code": "ET-OR",
+          "name": "Huse",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2151546248",
+          "parent_code": "ET-OR",
+          "name": "Dawo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2154235638",
+          "parent_code": "ET-OR",
+          "name": "Dedecha Bela",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2155925475",
+          "parent_code": "ET-OR",
+          "name": "Giundu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2155970430",
+          "parent_code": "ET-OR",
+          "name": "Balemi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2290536421",
+          "parent_code": "ET-OR",
+          "name": "Jaja",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2290614032",
+          "parent_code": "ET-OR",
+          "name": "Hare Wacha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2330972001",
+          "parent_code": "ET-OR",
+          "name": "Micha Biliso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2358274003",
+          "parent_code": "ET-OR",
+          "name": "Dekebora",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2358274004",
+          "parent_code": "ET-OR",
+          "name": "Edjere",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2503575146",
+          "parent_code": "ET-OR",
+          "name": "Jimma",
+          "type": "city",
+          "population": "207573",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2519103805",
+          "parent_code": "ET-OR",
+          "name": "Shebel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3271177494",
+          "parent_code": "ET-OR",
+          "name": "Begi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3769004404",
+          "parent_code": "ET-OR",
+          "name": "Dimtu Hambella",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3787309335",
+          "parent_code": "ET-OR",
+          "name": "Bode Ameda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3888977814",
+          "parent_code": "ET-OR",
+          "name": "Asebot",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4455189289",
+          "parent_code": "ET-OR",
+          "name": "Babo Tower",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4455189290",
+          "parent_code": "ET-OR",
+          "name": "Jarso Tower",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4664988750",
+          "parent_code": "ET-OR",
+          "name": "Shufune",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4956855001",
+          "parent_code": "ET-OR",
+          "name": "Finchawa",
+          "type": "city",
+          "population": "5560",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5027517393",
+          "parent_code": "ET-OR",
+          "name": "Dawa Digati",
+          "type": "city",
+          "population": "1264",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5060360456",
+          "parent_code": "ET-OR",
+          "name": "Gerba",
+          "type": "city",
+          "population": "7425",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5060896227",
+          "parent_code": "ET-OR",
+          "name": "Tore",
+          "type": "city",
+          "population": "3405",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5066985557",
+          "parent_code": "ET-OR",
+          "name": "Kercha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5124469321",
+          "parent_code": "ET-OR",
+          "name": "Aweday",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5380995125",
+          "parent_code": "ET-OR",
+          "name": "Burayu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6852200690",
+          "parent_code": "ET-OR",
+          "name": "Harodibe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6852200694",
+          "parent_code": "ET-OR",
+          "name": "Khundi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9238774998",
+          "parent_code": "ET-OR",
+          "name": "Wadera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9238775011",
+          "parent_code": "ET-OR",
+          "name": "Bedessa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9420171379",
+          "parent_code": "ET-OR",
+          "name": "Mote",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9431054662",
+          "parent_code": "ET-OR",
+          "name": "Bareda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9431111297",
+          "parent_code": "ET-OR",
+          "name": "Balo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10073476885",
+          "parent_code": "ET-OR",
+          "name": "Hiyadima",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10594717526",
+          "parent_code": "ET-OR",
+          "name": "Werka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11754034985",
+          "parent_code": "ET-OR",
+          "name": "Jibri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12035039457",
+          "parent_code": "ET-OR",
+          "name": "Sekoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ET-SO",
+      "parent_code": "ET",
+      "name": "Somali Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-298290931",
+          "parent_code": "ET-SO",
+          "name": "Jijiga",
+          "type": "city",
+          "population": "107122",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-298296173",
+          "parent_code": "ET-SO",
+          "name": "Gode",
+          "type": "city",
+          "population": "74546",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-316873871",
+          "parent_code": "ET-SO",
+          "name": "Togechane ቶግ ዋጃሌ",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-323347866",
+          "parent_code": "ET-SO",
+          "name": "Lasarat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-323350710",
+          "parent_code": "ET-SO",
+          "name": "Ayesha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-323363796",
+          "parent_code": "ET-SO",
+          "name": "Dewele",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-323760112",
+          "parent_code": "ET-SO",
+          "name": "Adagalla",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1110175440",
+          "parent_code": "ET-SO",
+          "name": "Hargele",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150697818",
+          "parent_code": "ET-SO",
+          "name": "Teferī Ber",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150882019",
+          "parent_code": "ET-SO",
+          "name": "Dolo",
+          "type": "city",
+          "population": "30970",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150882544",
+          "parent_code": "ET-SO",
+          "name": "East Imi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150883810",
+          "parent_code": "ET-SO",
+          "name": "Awareh",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1150887002",
+          "parent_code": "ET-SO",
+          "name": "Shilabo",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1150887335",
+          "parent_code": "ET-SO",
+          "name": "Mustakhil'",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150889371",
+          "parent_code": "ET-SO",
+          "name": "Fik'",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150898266",
+          "parent_code": "ET-SO",
+          "name": "Bike",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150898621",
+          "parent_code": "ET-SO",
+          "name": "Denan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150903208",
+          "parent_code": "ET-SO",
+          "name": "Āfdem",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150931560",
+          "parent_code": "ET-SO",
+          "name": "Erer",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150931652",
+          "parent_code": "ET-SO",
+          "name": "Dhagahle",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150936367",
+          "parent_code": "ET-SO",
+          "name": "Geladi",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1150949416",
+          "parent_code": "ET-SO",
+          "name": "Daror",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150951295",
+          "parent_code": "ET-SO",
+          "name": "West Imi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150967934",
+          "parent_code": "ET-SO",
+          "name": "Shinile",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150971905",
+          "parent_code": "ET-SO",
+          "name": "Werder",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1151004142",
+          "parent_code": "ET-SO",
+          "name": "Kellafo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404230434",
+          "parent_code": "ET-SO",
+          "name": "Gwyane Diriye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1680860698",
+          "parent_code": "ET-SO",
+          "name": "Raaso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1680867519",
+          "parent_code": "ET-SO",
+          "name": "Buundada",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1973381634",
+          "parent_code": "ET-SO",
+          "name": "Kebri Dehar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3192091042",
+          "parent_code": "ET-SO",
+          "name": "Melka Chireti",
+          "type": "city",
+          "population": "5152",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3294042630",
+          "parent_code": "ET-SO",
+          "name": "Bookh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3696831495",
+          "parent_code": "ET-SO",
+          "name": "Erestino",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4361712887",
+          "parent_code": "ET-SO",
+          "name": "Daratoole",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5521207731",
+          "parent_code": "ET-SO",
+          "name": "Softu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6557280186",
+          "parent_code": "ET-SO",
+          "name": "Araarso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7318068709",
+          "parent_code": "ET-SO",
+          "name": "Toon Barwaaqo",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-9238774996",
+          "parent_code": "ET-SO",
+          "name": "Gashamo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9238775007",
+          "parent_code": "ET-SO",
+          "name": "Kebri Beyah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9721668674",
+          "parent_code": "ET-SO",
+          "name": "Degehabur",
+          "type": "city",
+          "population": "32000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10034980522",
+          "parent_code": "ET-SO",
+          "name": "Burgesole",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10034980523",
+          "parent_code": "ET-SO",
+          "name": "Duuban",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10034980529",
+          "parent_code": "ET-SO",
+          "name": "Elanle",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-10034980531",
+          "parent_code": "ET-SO",
+          "name": "Raqo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10034980551",
+          "parent_code": "ET-SO",
+          "name": "Yamaaruglay",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10167441770",
+          "parent_code": "ET-SO",
+          "name": "Dhudub",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10203960590",
+          "parent_code": "ET-SO",
+          "name": "Inagabile",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10245278752",
+          "parent_code": "ET-SO",
+          "name": "Urmadag",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10310202091",
+          "parent_code": "ET-SO",
+          "name": "Qorof",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10310207110",
+          "parent_code": "ET-SO",
+          "name": "Fadhigaradle",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10310207122",
+          "parent_code": "ET-SO",
+          "name": "Lasoano",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10599269151",
+          "parent_code": "ET-SO",
+          "name": "Garbo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11048301150",
+          "parent_code": "ET-SO",
+          "name": "El Dere",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11586198707",
+          "parent_code": "ET-SO",
+          "name": "Dhagxanya Cado",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12494472234",
+          "parent_code": "ET-SO",
+          "name": "Garanuugle",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ET-AA",
+      "parent_code": "ET",
+      "name": "Addis Ababa",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27565076",
+          "parent_code": "ET-AA",
+          "name": "Addis Ababa",
+          "type": "city",
+          "population": "3500000",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "ET-HA",
+      "parent_code": "ET",
+      "name": "Harar",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-298296166",
+          "parent_code": "ET-HA",
+          "name": "Harar",
+          "type": "city",
+          "population": "132042",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "ET-SI",
+      "parent_code": "ET",
+      "name": "Sidama",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-237524640",
+          "parent_code": "ET-SI",
+          "name": "Irgalem",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-319213876",
+          "parent_code": "ET-SI",
+          "name": "Hantate",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1104301696",
+          "parent_code": "ET-SI",
+          "name": "Agre Salam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150899285",
+          "parent_code": "ET-SI",
+          "name": "Bona Qabelanka",
+          "type": "city",
+          "population": "50000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150900107",
+          "parent_code": "ET-SI",
+          "name": "Arbe Gona",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150933498",
+          "parent_code": "ET-SI",
+          "name": "Aleta Wendo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1195526426",
+          "parent_code": "ET-SI",
+          "name": "Chucko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1394787650",
+          "parent_code": "ET-SI",
+          "name": "Hawassa",
+          "type": "city",
+          "population": "160000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1445259708",
+          "parent_code": "ET-SI",
+          "name": "Woncho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8395454744",
+          "parent_code": "ET-SI",
+          "name": "Gado",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10624165668",
+          "parent_code": "ET-SI",
+          "name": "Girja",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ET-SW",
+      "parent_code": "ET",
+      "name": "South West Ethiopia Peoples",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-283675711",
+          "parent_code": "ET-SW",
+          "name": "Bonga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-283675716",
+          "parent_code": "ET-SW",
+          "name": "Bendi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-283675719",
+          "parent_code": "ET-SW",
+          "name": "Tepi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-283675722",
+          "parent_code": "ET-SW",
+          "name": "Mizan Aman",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150960225",
+          "parent_code": "ET-SW",
+          "name": "Jeba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1576552003",
+          "parent_code": "ET-SW",
+          "name": "Achuwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1576552018",
+          "parent_code": "ET-SW",
+          "name": "Angiyo Kolla",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1576552069",
+          "parent_code": "ET-SW",
+          "name": "Bitahora",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1576552128",
+          "parent_code": "ET-SW",
+          "name": "Daka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1576552132",
+          "parent_code": "ET-SW",
+          "name": "Del",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1576552137",
+          "parent_code": "ET-SW",
+          "name": "Dimbra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1576552138",
+          "parent_code": "ET-SW",
+          "name": "Diri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1576552175",
+          "parent_code": "ET-SW",
+          "name": "Geche",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1576552217",
+          "parent_code": "ET-SW",
+          "name": "Gojeb",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1576552319",
+          "parent_code": "ET-SW",
+          "name": "Masha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1576552446",
+          "parent_code": "ET-SW",
+          "name": "Oda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1576556041",
+          "parent_code": "ET-SW",
+          "name": "Saja",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1576556070",
+          "parent_code": "ET-SW",
+          "name": "Ufa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1976601512",
+          "parent_code": "ET-SW",
+          "name": "Tarcha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1976629627",
+          "parent_code": "ET-SW",
+          "name": "Amaya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2024619010",
+          "parent_code": "ET-SW",
+          "name": "Esara (Balle)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2079101362",
+          "parent_code": "ET-SW",
+          "name": "Telo (Feleke Selam)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2290441961",
+          "parent_code": "ET-SW",
+          "name": "Gasachare",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3396588849",
+          "parent_code": "ET-SW",
+          "name": "Dima",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8379996012",
+          "parent_code": "ET-SW",
+          "name": "Tocha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9713287871",
+          "parent_code": "ET-SW",
+          "name": "Aman",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-16827893",
+      "parent_code": "ET",
+      "name": "Central Ethiopia Regional State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-283675671",
+          "parent_code": "ST-16827893",
+          "name": "Welkite",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-319212763",
+          "parent_code": "ST-16827893",
+          "name": "Kibet",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-319212794",
+          "parent_code": "ST-16827893",
+          "name": "Butajira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-319311022",
+          "parent_code": "ST-16827893",
+          "name": "Durame",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1149030656",
+          "parent_code": "ST-16827893",
+          "name": "Shone",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150882593",
+          "parent_code": "ST-16827893",
+          "name": "Dugda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150884371",
+          "parent_code": "ST-16827893",
+          "name": "Enseno",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150887227",
+          "parent_code": "ST-16827893",
+          "name": "Koshe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150893679",
+          "parent_code": "ST-16827893",
+          "name": "K'Ali K'Esa Bota",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150897770",
+          "parent_code": "ST-16827893",
+          "name": "Hadero",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150903479",
+          "parent_code": "ST-16827893",
+          "name": "Agena",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150908764",
+          "parent_code": "ST-16827893",
+          "name": "Emdibir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150917953",
+          "parent_code": "ST-16827893",
+          "name": "Fofa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150921721",
+          "parent_code": "ST-16827893",
+          "name": "Tora",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150960672",
+          "parent_code": "ST-16827893",
+          "name": "Angacha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150961856",
+          "parent_code": "ST-16827893",
+          "name": "Do'esha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1234353232",
+          "parent_code": "ST-16827893",
+          "name": "Doyogena",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1234353482",
+          "parent_code": "ST-16827893",
+          "name": "Serera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1234353601",
+          "parent_code": "ST-16827893",
+          "name": "Mare",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1235476468",
+          "parent_code": "ST-16827893",
+          "name": "Achamo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1235476475",
+          "parent_code": "ST-16827893",
+          "name": "Wulbareg",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1235476477",
+          "parent_code": "ST-16827893",
+          "name": "Kela",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1235476483",
+          "parent_code": "ST-16827893",
+          "name": "Buee",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1235476484",
+          "parent_code": "ST-16827893",
+          "name": "Belessa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1235476485",
+          "parent_code": "ST-16827893",
+          "name": "Worabe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2282596817",
+          "parent_code": "ST-16827893",
+          "name": "Denboya",
+          "type": "city",
+          "population": "20000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3181570573",
+          "parent_code": "ST-16827893",
+          "name": "Zizencio",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3371004654",
+          "parent_code": "ST-16827893",
+          "name": "Shinshicho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4601173879",
+          "parent_code": "ST-16827893",
+          "name": "Hossana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5103134413",
+          "parent_code": "ST-16827893",
+          "name": "Jole 1",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6591932015",
+          "parent_code": "ST-16827893",
+          "name": "Alaba Kulito",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6629524616",
+          "parent_code": "ST-16827893",
+          "name": "Wekepeche",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11264661069",
+          "parent_code": "ST-16827893",
+          "name": "Lera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13842402855",
+          "parent_code": "ST-16827893",
+          "name": "Mudula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13886005871",
+          "parent_code": "ST-16827893",
+          "name": "Bonosha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-16827894",
+      "parent_code": "ET",
+      "name": "South Ethiopia Regional State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-253440282",
+          "parent_code": "ST-16827894",
+          "name": "Arba Minch",
+          "type": "city",
+          "population": "101000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-298296164",
+          "parent_code": "ST-16827894",
+          "name": "Wolaita Sodo",
+          "type": "city",
+          "population": "512498",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-298296169",
+          "parent_code": "ST-16827894",
+          "name": "Dilla",
+          "type": "city",
+          "population": "67036",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-319310736",
+          "parent_code": "ST-16827894",
+          "name": "Boditi",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-319311852",
+          "parent_code": "ST-16827894",
+          "name": "Tebela",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-540265111",
+          "parent_code": "ST-16827894",
+          "name": "Jinka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-614239700",
+          "parent_code": "ST-16827894",
+          "name": "Dimeka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150921795",
+          "parent_code": "ST-16827894",
+          "name": "Gidole",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150944230",
+          "parent_code": "ST-16827894",
+          "name": "Sawla",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150960006",
+          "parent_code": "ST-16827894",
+          "name": "Kemba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150960079",
+          "parent_code": "ST-16827894",
+          "name": "Garasse",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1150967112",
+          "parent_code": "ST-16827894",
+          "name": "Yirga Cheffe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1228170241",
+          "parent_code": "ST-16827894",
+          "name": "Karati",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1234353244",
+          "parent_code": "ST-16827894",
+          "name": "Eso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1234353459",
+          "parent_code": "ST-16827894",
+          "name": "Dorze",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1234353493",
+          "parent_code": "ST-16827894",
+          "name": "Boreda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1234353714",
+          "parent_code": "ST-16827894",
+          "name": "Chencha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1234360535",
+          "parent_code": "ST-16827894",
+          "name": "Chele",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1900758739",
+          "parent_code": "ST-16827894",
+          "name": "Gasuba",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1920760197",
+          "parent_code": "ST-16827894",
+          "name": "Soyama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2084927706",
+          "parent_code": "ST-16827894",
+          "name": "Galma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2140613125",
+          "parent_code": "ST-16827894",
+          "name": "Koibi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2169095783",
+          "parent_code": "ST-16827894",
+          "name": "Hembecho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2169095977",
+          "parent_code": "ST-16827894",
+          "name": "Bombe",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2302376929",
+          "parent_code": "ST-16827894",
+          "name": "Bale Hawassa",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2302376932",
+          "parent_code": "ST-16827894",
+          "name": "Gununo",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3371004656",
+          "parent_code": "ST-16827894",
+          "name": "Shanto",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3371004901",
+          "parent_code": "ST-16827894",
+          "name": "Gara Godo",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3371004907",
+          "parent_code": "ST-16827894",
+          "name": "Leera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3859575656",
+          "parent_code": "ST-16827894",
+          "name": "Hobicha Bada",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3859578921",
+          "parent_code": "ST-16827894",
+          "name": "Paracho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4490302892",
+          "parent_code": "ST-16827894",
+          "name": "Gazer",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5237777983",
+          "parent_code": "ST-16827894",
+          "name": "Selam Ber ሰላምበር",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8075110337",
+          "parent_code": "ST-16827894",
+          "name": "Beto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9238774994",
+          "parent_code": "ST-16827894",
+          "name": "Kele",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9238774995",
+          "parent_code": "ST-16827894",
+          "name": "Mirab Abaya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9238774997",
+          "parent_code": "ST-16827894",
+          "name": "Bulki",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9239272284",
+          "parent_code": "ST-16827894",
+          "name": "Badessa",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-9239272287",
+          "parent_code": "ST-16827894",
+          "name": "Segen",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11680886352",
+          "parent_code": "ST-16827894",
+          "name": "Dimtu",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-11680886353",
+          "parent_code": "ST-16827894",
+          "name": "Bitana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11680886354",
+          "parent_code": "ST-16827894",
+          "name": "Kercheche",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11680886355",
+          "parent_code": "ST-16827894",
+          "name": "Dalbo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11680886356",
+          "parent_code": "ST-16827894",
+          "name": "Edo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11688069259",
+          "parent_code": "ST-16827894",
+          "name": "Sorto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11688069260",
+          "parent_code": "ST-16827894",
+          "name": "Gocho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11688069261",
+          "parent_code": "ST-16827894",
+          "name": "Zaro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11688069262",
+          "parent_code": "ST-16827894",
+          "name": "Halale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11688069263",
+          "parent_code": "ST-16827894",
+          "name": "Lasho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11688069264",
+          "parent_code": "ST-16827894",
+          "name": "Wamura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11688069265",
+          "parent_code": "ST-16827894",
+          "name": "Beklo Segno",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-11690819627",
+          "parent_code": "ST-16827894",
+          "name": "Anka Oruwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11696471766",
+          "parent_code": "ST-16827894",
+          "name": "Giraara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11697131534",
+          "parent_code": "ST-16827894",
+          "name": "Ladisa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11699215658",
+          "parent_code": "ST-16827894",
+          "name": "Areka",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-11699847884",
+          "parent_code": "ST-16827894",
+          "name": "Galcha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11716457187",
+          "parent_code": "ST-16827894",
+          "name": "Achura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11740375124",
+          "parent_code": "ST-16827894",
+          "name": "Hanaze",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11755728194",
+          "parent_code": "ST-16827894",
+          "name": "Worqicha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11755728202",
+          "parent_code": "ST-16827894",
+          "name": "Holota",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11913436927",
+          "parent_code": "ST-16827894",
+          "name": "Laha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12857759565",
+          "parent_code": "ST-16827894",
+          "name": "Wachiga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13896978125",
+          "parent_code": "ST-16827894",
+          "name": "Kolango",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    }
+  ]
+}

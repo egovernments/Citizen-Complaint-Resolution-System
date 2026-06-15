@@ -1,0 +1,464 @@
+{
+  "code": "NA",
+  "name": "Namibia",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "NA-CA",
+      "parent_code": "NA",
+      "name": "Zambezi",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-331410669",
+          "parent_code": "NA-CA",
+          "name": "Katima Mulilo",
+          "type": "city",
+          "population": "28362",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "NA-ER",
+      "parent_code": "NA",
+      "name": "Erongo Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-33364834",
+          "parent_code": "NA-ER",
+          "name": "Walvis Bay",
+          "type": "city",
+          "population": "62096",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-33364835",
+          "parent_code": "NA-ER",
+          "name": "Swakopmund",
+          "type": "city",
+          "population": "25000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-124131089",
+          "parent_code": "NA-ER",
+          "name": "Arandis",
+          "type": "city",
+          "population": "5214",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-175496995",
+          "parent_code": "NA-ER",
+          "name": "Henties Bay",
+          "type": "city",
+          "population": "4720",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-243719248",
+          "parent_code": "NA-ER",
+          "name": "Karibib",
+          "type": "city",
+          "population": "5132",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-258875879",
+          "parent_code": "NA-ER",
+          "name": "Omaruru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-544157624",
+          "parent_code": "NA-ER",
+          "name": "Usakos",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NA-HA",
+      "parent_code": "NA",
+      "name": "Hardap",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-89142290",
+          "parent_code": "NA-HA",
+          "name": "Rehoboth",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-243746400",
+          "parent_code": "NA-HA",
+          "name": "Aranos",
+          "type": "city",
+          "population": "3683",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5669837284",
+          "parent_code": "NA-HA",
+          "name": "Mariental",
+          "type": "city",
+          "population": "12478",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NA-KA",
+      "parent_code": "NA",
+      "name": "Karas",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-82260251",
+          "parent_code": "NA-KA",
+          "name": "Keetmanshoop",
+          "type": "city",
+          "population": "20977",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-243653372",
+          "parent_code": "NA-KA",
+          "name": "Karasburg",
+          "type": "city",
+          "population": "6000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-243660491",
+          "parent_code": "NA-KA",
+          "name": "Lüderitz",
+          "type": "city",
+          "population": "12500",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-458742737",
+          "parent_code": "NA-KA",
+          "name": "Ariamsvlei",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NA-KH",
+      "parent_code": "NA",
+      "name": "Khomas",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-33364833",
+          "parent_code": "NA-KH",
+          "name": "Windhoek",
+          "type": "city",
+          "population": "325858",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "NA-KU",
+      "parent_code": "NA",
+      "name": "Kunene Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-258888029",
+          "parent_code": "NA-KU",
+          "name": "Khorixas",
+          "type": "city",
+          "population": "6900",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259002149",
+          "parent_code": "NA-KU",
+          "name": "Sesfontein",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259003379",
+          "parent_code": "NA-KU",
+          "name": "Opuwo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259222387",
+          "parent_code": "NA-KU",
+          "name": "Outjo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NA-OW",
+      "parent_code": "NA",
+      "name": "Ohangwena",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-259603941",
+          "parent_code": "NA-OW",
+          "name": "Okongo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5486980024",
+          "parent_code": "NA-OW",
+          "name": "Eenhana",
+          "type": "city",
+          "population": "5528",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12569520641",
+          "parent_code": "NA-OW",
+          "name": "Helao Nafidi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NA-OH",
+      "parent_code": "NA",
+      "name": "Omaheke",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-33364950",
+          "parent_code": "NA-OH",
+          "name": "Gobabis",
+          "type": "city",
+          "population": "19101",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "NA-OS",
+      "parent_code": "NA",
+      "name": "Omusati",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-259491696",
+          "parent_code": "NA-OS",
+          "name": "Oshikuku",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259587417",
+          "parent_code": "NA-OS",
+          "name": "Ruacana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259590679",
+          "parent_code": "NA-OS",
+          "name": "Okahao",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1362633207",
+          "parent_code": "NA-OS",
+          "name": "Outapi",
+          "type": "city",
+          "population": "7000",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NA-ON",
+      "parent_code": "NA",
+      "name": "Oshana",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-259489787",
+          "parent_code": "NA-ON",
+          "name": "Ondangwa",
+          "type": "city",
+          "population": "30000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259490969",
+          "parent_code": "NA-ON",
+          "name": "Oshakati",
+          "type": "city",
+          "population": "43000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1348262190",
+          "parent_code": "NA-ON",
+          "name": "Ongwediva",
+          "type": "city",
+          "population": "20260",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NA-OT",
+      "parent_code": "NA",
+      "name": "Oshikoto",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-259486111",
+          "parent_code": "NA-OT",
+          "name": "Oshivelo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259489730",
+          "parent_code": "NA-OT",
+          "name": "Oniipa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1376606376",
+          "parent_code": "NA-OT",
+          "name": "Omuthiya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7632695914",
+          "parent_code": "NA-OT",
+          "name": "Tsumeb",
+          "type": "city",
+          "population": "20000",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NA-OD",
+      "parent_code": "NA",
+      "name": "Otjozondjupa",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-243717016",
+          "parent_code": "NA-OD",
+          "name": "Okahandja",
+          "type": "city",
+          "population": "22639",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-245023717",
+          "parent_code": "NA-OD",
+          "name": "Otjiwarongo",
+          "type": "city",
+          "population": "49022",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-245024172",
+          "parent_code": "NA-OD",
+          "name": "Otavi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-245024692",
+          "parent_code": "NA-OD",
+          "name": "Grootfontein",
+          "type": "city",
+          "population": "16632",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4117178568",
+          "parent_code": "NA-OD",
+          "name": "Tsumkwe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NA-KE",
+      "parent_code": "NA",
+      "name": "Kavango East",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-259609505",
+          "parent_code": "NA-KE",
+          "name": "Rundu",
+          "type": "city",
+          "population": "63431",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-532157357",
+          "parent_code": "NA-KE",
+          "name": "Divundu",
+          "type": "city",
+          "population": "5430",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NA-KW",
+      "parent_code": "NA",
+      "name": "Kavango West",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1362628219",
+          "parent_code": "NA-KW",
+          "name": "Nkurenkuru",
+          "type": "city",
+          "population": "618",
+          "place_type": "town"
+        }
+      ]
+    }
+  ]
+}

@@ -4,13 +4,14 @@ import { useRef, useCallback } from 'react';
 import type { MutationMode } from '../columns/types';
 import { toast } from '../hooks/use-toast';
 import { ToastAction } from '../primitives/toast';
+import type { ToastActionElement } from '../primitives/toast';
 import * as React from 'react';
 
 interface PendingMutation {
   resource: string;
   params: UpdateParams | DeleteParams;
   type: 'update' | 'delete';
-  timeoutId: NodeJS.Timeout;
+  timeoutId: ReturnType<typeof setTimeout>;
   toastId: string;
 }
 
@@ -112,7 +113,7 @@ export function useMutationMode(options: UseMutationModeOptions = {}) {
               onClick: () => undo(mutationId),
             },
             'Undo'
-          ),
+          ) as unknown as ToastActionElement,
         });
 
         const timeoutId = setTimeout(() => {
@@ -161,7 +162,7 @@ export function useMutationMode(options: UseMutationModeOptions = {}) {
               onClick: () => undo(mutationId),
             },
             'Undo'
-          ),
+          ) as unknown as ToastActionElement,
         });
 
         const timeoutId = setTimeout(() => {

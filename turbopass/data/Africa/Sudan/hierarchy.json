@@ -1,0 +1,3824 @@
+{
+  "code": "SD",
+  "name": "Sudan",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "SS-BW",
+      "parent_code": "SD",
+      "name": "Western Bahr el Ghazal State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-237163366",
+          "parent_code": "SS-BW",
+          "name": "Raja",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-237193709",
+          "parent_code": "SS-BW",
+          "name": "Wau",
+          "type": "city",
+          "population": "136179",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-239218524",
+          "parent_code": "SS-BW",
+          "name": "Kuajiena",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-241490527",
+          "parent_code": "SS-BW",
+          "name": "Bisellia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2574155905",
+          "parent_code": "SS-BW",
+          "name": "Umm Higar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2574158593",
+          "parent_code": "SS-BW",
+          "name": "Kafia Kingi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2600706369",
+          "parent_code": "SS-BW",
+          "name": "Kosho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9051744084",
+          "parent_code": "SS-BW",
+          "name": "Nyin Akok",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9051759899",
+          "parent_code": "SS-BW",
+          "name": "Bagari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13282790380",
+          "parent_code": "SS-BW",
+          "name": "منجم أغبش",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13282790381",
+          "parent_code": "SS-BW",
+          "name": "Hofrat En Nahas",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SD-DS",
+      "parent_code": "SD",
+      "name": "South Darfur",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-291449779",
+          "parent_code": "SD-DS",
+          "name": "Nyala",
+          "type": "city",
+          "population": "566000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-321484289",
+          "parent_code": "SD-DS",
+          "name": "Kas",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2385330277",
+          "parent_code": "SD-DS",
+          "name": "Menawashei",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2574072000",
+          "parent_code": "SD-DS",
+          "name": "Buram",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2574095009",
+          "parent_code": "SD-DS",
+          "name": "Er-Rutrutaya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2574095014",
+          "parent_code": "SD-DS",
+          "name": "Khayr Wajih",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2574095017",
+          "parent_code": "SD-DS",
+          "name": "Sherab",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2574098107",
+          "parent_code": "SD-DS",
+          "name": "Rahad al Bardi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2575330355",
+          "parent_code": "SD-DS",
+          "name": "Rahad-Angatu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2575345363",
+          "parent_code": "SD-DS",
+          "name": "El Fifi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2575457120",
+          "parent_code": "SD-DS",
+          "name": "Abu Gudul",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2575457245",
+          "parent_code": "SD-DS",
+          "name": "El Aburu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2585787717",
+          "parent_code": "SD-DS",
+          "name": "Gereida",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2585934831",
+          "parent_code": "SD-DS",
+          "name": "Nkharh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2585974793",
+          "parent_code": "SD-DS",
+          "name": "Tulus",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2585974855",
+          "parent_code": "SD-DS",
+          "name": "Ed Al Fursan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2586028980",
+          "parent_code": "SD-DS",
+          "name": "Abu Sellala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2586034274",
+          "parent_code": "SD-DS",
+          "name": "Al Marwahah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2586084493",
+          "parent_code": "SD-DS",
+          "name": "Jidad",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2600826445",
+          "parent_code": "SD-DS",
+          "name": "Radom",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2610449411",
+          "parent_code": "SD-DS",
+          "name": "Al Toumat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2648947351",
+          "parent_code": "SD-DS",
+          "name": "Duma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2658646276",
+          "parent_code": "SD-DS",
+          "name": "Aboure",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2658646293",
+          "parent_code": "SD-DS",
+          "name": "Tuwal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2660513792",
+          "parent_code": "SD-DS",
+          "name": "Shergeila",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2660513983",
+          "parent_code": "SD-DS",
+          "name": "Al Malwi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2660547450",
+          "parent_code": "SD-DS",
+          "name": "Joukan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2660610562",
+          "parent_code": "SD-DS",
+          "name": "Al Akhdar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2670850995",
+          "parent_code": "SD-DS",
+          "name": "Ragag",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3170505535",
+          "parent_code": "SD-DS",
+          "name": "Deribat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4415168339",
+          "parent_code": "SD-DS",
+          "name": "Um Dafuq",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5158780854",
+          "parent_code": "SD-DS",
+          "name": "Um Bilil",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5203602187",
+          "parent_code": "SD-DS",
+          "name": "Tom Kitir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730407107",
+          "parent_code": "SD-DS",
+          "name": "Kubbum",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730431558",
+          "parent_code": "SD-DS",
+          "name": "Songo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8358281796",
+          "parent_code": "SD-DS",
+          "name": "Tom Kitir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8361704678",
+          "parent_code": "SD-DS",
+          "name": "Bulbul",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8378876533",
+          "parent_code": "SD-DS",
+          "name": "Shattai",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9132593417",
+          "parent_code": "SD-DS",
+          "name": "Sani Deleiba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10959715832",
+          "parent_code": "SD-DS",
+          "name": "Kin Taura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12247798598",
+          "parent_code": "SD-DS",
+          "name": "Seseiban",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12501680120",
+          "parent_code": "SD-DS",
+          "name": "Markundi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12554510543",
+          "parent_code": "SD-DS",
+          "name": "Umm Zaifa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12943279580",
+          "parent_code": "SD-DS",
+          "name": "Omlbasa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13188881377",
+          "parent_code": "SD-DS",
+          "name": "Bulbul",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13376088707",
+          "parent_code": "SD-DS",
+          "name": "Sunta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13529604490",
+          "parent_code": "SD-DS",
+          "name": "Damso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SD-KS",
+      "parent_code": "SD",
+      "name": "South Kordufan",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-210360300",
+          "parent_code": "SD-KS",
+          "name": "Kadugli",
+          "type": "city",
+          "population": "92674",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-576348786",
+          "parent_code": "SD-KS",
+          "name": "Dilling",
+          "type": "city",
+          "population": "59089",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1895967608",
+          "parent_code": "SD-KS",
+          "name": "Abu Jibeha",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2082551810",
+          "parent_code": "SD-KS",
+          "name": "Dibebad",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2144605187",
+          "parent_code": "SD-KS",
+          "name": "Gidel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2144606237",
+          "parent_code": "SD-KS",
+          "name": "Heiban",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2145231594",
+          "parent_code": "SD-KS",
+          "name": "Um Barmbeeta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2145231896",
+          "parent_code": "SD-KS",
+          "name": "Dallami",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2146403256",
+          "parent_code": "SD-KS",
+          "name": "Habila",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2146406946",
+          "parent_code": "SD-KS",
+          "name": "Talodi",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2146406956",
+          "parent_code": "SD-KS",
+          "name": "Tungaru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2150777648",
+          "parent_code": "SD-KS",
+          "name": "Al ‘Abbāsiyya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2151753467",
+          "parent_code": "SD-KS",
+          "name": "Kalogi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2151757926",
+          "parent_code": "SD-KS",
+          "name": "Rashād",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2153191077",
+          "parent_code": "SD-KS",
+          "name": "Kauda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2552312188",
+          "parent_code": "SD-KS",
+          "name": "Taroji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3200632462",
+          "parent_code": "SD-KS",
+          "name": "Tajmala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3202095244",
+          "parent_code": "SD-KS",
+          "name": "Kortala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3993761970",
+          "parent_code": "SD-KS",
+          "name": "Wakara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5848970429",
+          "parent_code": "SD-KS",
+          "name": "Tabsa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730429975",
+          "parent_code": "SD-KS",
+          "name": "Al Kiwek",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730430145",
+          "parent_code": "SD-KS",
+          "name": "Abū Kershola",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730430175",
+          "parent_code": "SD-KS",
+          "name": "Et Terter",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730431890",
+          "parent_code": "SD-KS",
+          "name": "Gedir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11363053644",
+          "parent_code": "SD-KS",
+          "name": "Al Farshaia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11363368563",
+          "parent_code": "SD-KS",
+          "name": "El Leri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SD-DW",
+      "parent_code": "SD",
+      "name": "West Darfur",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-696839744",
+          "parent_code": "SD-DW",
+          "name": "Habila",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-696840765",
+          "parent_code": "SD-DW",
+          "name": "Khorbranga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-696850923",
+          "parent_code": "SD-DW",
+          "name": "Gobe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-696854181",
+          "parent_code": "SD-DW",
+          "name": "Towing",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-696854923",
+          "parent_code": "SD-DW",
+          "name": "Sawani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-696856666",
+          "parent_code": "SD-DW",
+          "name": "Arara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-696859320",
+          "parent_code": "SD-DW",
+          "name": "Magarsa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-696871484",
+          "parent_code": "SD-DW",
+          "name": "Tundosa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2104175124",
+          "parent_code": "SD-DW",
+          "name": "Murnei",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2580440720",
+          "parent_code": "SD-DW",
+          "name": "Habila Kanari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2580440735",
+          "parent_code": "SD-DW",
+          "name": "Mejmerei",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2580440913",
+          "parent_code": "SD-DW",
+          "name": "Sisi Camp",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2580440915",
+          "parent_code": "SD-DW",
+          "name": "Rungatas",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2592451546",
+          "parent_code": "SD-DW",
+          "name": "Azerni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2826053972",
+          "parent_code": "SD-DW",
+          "name": "El Geneina",
+          "type": "city",
+          "population": "252744",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3276835447",
+          "parent_code": "SD-DW",
+          "name": "Al Kuraynik",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3276835450",
+          "parent_code": "SD-DW",
+          "name": "Umtajok",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3601705803",
+          "parent_code": "SD-DW",
+          "name": "Seleia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4019105282",
+          "parent_code": "SD-DW",
+          "name": "Kulbus",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5060807038",
+          "parent_code": "SD-DW",
+          "name": "Konga Haraza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5076775408",
+          "parent_code": "SD-DW",
+          "name": "Bir saliba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5076775855",
+          "parent_code": "SD-DW",
+          "name": "Abu Surug",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6029965454",
+          "parent_code": "SD-DW",
+          "name": "Beida",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730407156",
+          "parent_code": "SD-DW",
+          "name": "Jabun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730424395",
+          "parent_code": "SD-DW",
+          "name": "Kododol",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730425024",
+          "parent_code": "SD-DW",
+          "name": "Derjeil",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730426581",
+          "parent_code": "SD-DW",
+          "name": "Faganta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730426762",
+          "parent_code": "SD-DW",
+          "name": "Buretta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730426828",
+          "parent_code": "SD-DW",
+          "name": "Tongfuka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730426850",
+          "parent_code": "SD-DW",
+          "name": "Tendelti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730426854",
+          "parent_code": "SD-DW",
+          "name": "Kondobei",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730426907",
+          "parent_code": "SD-DW",
+          "name": "Keinyo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730426933",
+          "parent_code": "SD-DW",
+          "name": "Sarafayah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730426938",
+          "parent_code": "SD-DW",
+          "name": "Liria",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730426959",
+          "parent_code": "SD-DW",
+          "name": "Armankul",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730426965",
+          "parent_code": "SD-DW",
+          "name": "Mamun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730426969",
+          "parent_code": "SD-DW",
+          "name": "Bir Daqiq",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730430538",
+          "parent_code": "SD-DW",
+          "name": "Birkat Tayr",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730435211",
+          "parent_code": "SD-DW",
+          "name": "Qoz Nginnu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9193632506",
+          "parent_code": "SD-DW",
+          "name": "Kudumei",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9193653988",
+          "parent_code": "SD-DW",
+          "name": "Mugurnei Melam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9200004999",
+          "parent_code": "SD-DW",
+          "name": "Nurei",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9450382596",
+          "parent_code": "SD-DW",
+          "name": "Tulus",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9565907156",
+          "parent_code": "SD-DW",
+          "name": "Adar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9565993217",
+          "parent_code": "SD-DW",
+          "name": "Sirba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10790195593",
+          "parent_code": "SD-DW",
+          "name": "Konga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10831625906",
+          "parent_code": "SD-DW",
+          "name": "Mulli",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10834064003",
+          "parent_code": "SD-DW",
+          "name": "Kasarus",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10889698672",
+          "parent_code": "SD-DW",
+          "name": "Terbebe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10894791686",
+          "parent_code": "SD-DW",
+          "name": "Masteri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10894937200",
+          "parent_code": "SD-DW",
+          "name": "Gokar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10908683356",
+          "parent_code": "SD-DW",
+          "name": "Bara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10911025611",
+          "parent_code": "SD-DW",
+          "name": "Banjedeed east",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10942483983",
+          "parent_code": "SD-DW",
+          "name": "Adikong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10949121490",
+          "parent_code": "SD-DW",
+          "name": "Krinding",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-10951650761",
+          "parent_code": "SD-DW",
+          "name": "Ngorom kosuk",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10984539671",
+          "parent_code": "SD-DW",
+          "name": "Abun Kourti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10984590731",
+          "parent_code": "SD-DW",
+          "name": "Sildi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11054403480",
+          "parent_code": "SD-DW",
+          "name": "Ardamata",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11055727179",
+          "parent_code": "SD-DW",
+          "name": "Arbokonei",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11083752885",
+          "parent_code": "SD-DW",
+          "name": "Kireikir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11117720837",
+          "parent_code": "SD-DW",
+          "name": "Um dirabiro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11122565238",
+          "parent_code": "SD-DW",
+          "name": "Gondorni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11124978373",
+          "parent_code": "SD-DW",
+          "name": "Manjura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11131955738",
+          "parent_code": "SD-DW",
+          "name": "Girgira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11133657944",
+          "parent_code": "SD-DW",
+          "name": "Um Shalaya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11301717691",
+          "parent_code": "SD-DW",
+          "name": "Wireisa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11361727486",
+          "parent_code": "SD-DW",
+          "name": "Kouma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11516194297",
+          "parent_code": "SD-DW",
+          "name": "Sultanate Dar Masalit",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SD-KA",
+      "parent_code": "SD",
+      "name": "Kassala State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-300066939",
+          "parent_code": "SD-KA",
+          "name": "Kassala",
+          "type": "city",
+          "population": "436000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2050780659",
+          "parent_code": "SD-KA",
+          "name": "Wad Muzammil",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2487361789",
+          "parent_code": "SD-KA",
+          "name": "Khashm El Girba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2828441938",
+          "parent_code": "SD-KA",
+          "name": "New Halfa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3248749664",
+          "parent_code": "SD-KA",
+          "name": "Madinat al Masna'a",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3248749670",
+          "parent_code": "SD-KA",
+          "name": "Qaryah Sittah Arab",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3396917409",
+          "parent_code": "SD-KA",
+          "name": "Aroma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3398735314",
+          "parent_code": "SD-KA",
+          "name": "Hamaschkorieb",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4585865965",
+          "parent_code": "SD-KA",
+          "name": "Wad al Hulaywah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6881073938",
+          "parent_code": "SD-KA",
+          "name": "Almansora",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-8156211458",
+          "parent_code": "SD-KA",
+          "name": "Bereket",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12669631241",
+          "parent_code": "SD-KA",
+          "name": "الخريساب",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13370913026",
+          "parent_code": "SD-KA",
+          "name": "Kassala",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "SD-NR",
+      "parent_code": "SD",
+      "name": "River Nile State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-90112925",
+          "parent_code": "SD-NR",
+          "name": "Shendi",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-90114371",
+          "parent_code": "SD-NR",
+          "name": "Al Matamma",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-90116658",
+          "parent_code": "SD-NR",
+          "name": "Hillat el Taragma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-90118541",
+          "parent_code": "SD-NR",
+          "name": "كبوشية",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-90135018",
+          "parent_code": "SD-NR",
+          "name": "Ad-Damir",
+          "type": "city",
+          "population": "200000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-90135276",
+          "parent_code": "SD-NR",
+          "name": "Atbara",
+          "type": "city",
+          "population": "111399",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1950229972",
+          "parent_code": "SD-NR",
+          "name": "Abu Hamad",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3395842948",
+          "parent_code": "SD-NR",
+          "name": "Berber",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6388612644",
+          "parent_code": "SD-NR",
+          "name": "Al Akad",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730431904",
+          "parent_code": "SD-NR",
+          "name": "El Bauga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730431913",
+          "parent_code": "SD-NR",
+          "name": "`Abidiya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730433146",
+          "parent_code": "SD-NR",
+          "name": "Kadabas",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13373554546",
+          "parent_code": "SD-NR",
+          "name": "Barbar",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "SD-SI",
+      "parent_code": "SD",
+      "name": "Sennar State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-321438810",
+          "parent_code": "SD-SI",
+          "name": "Sennar",
+          "type": "city",
+          "population": "135581",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-321439070",
+          "parent_code": "SD-SI",
+          "name": "Sennar Junction",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2655669111",
+          "parent_code": "SD-SI",
+          "name": "Al Mazmūm",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3310640105",
+          "parent_code": "SD-SI",
+          "name": "El Suki",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3313215531",
+          "parent_code": "SD-SI",
+          "name": "Singa",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3313263698",
+          "parent_code": "SD-SI",
+          "name": "Barankwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3313263699",
+          "parent_code": "SD-SI",
+          "name": "Qindil",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3313277604",
+          "parent_code": "SD-SI",
+          "name": "Wad an Nail",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3313281455",
+          "parent_code": "SD-SI",
+          "name": "Al Quwaysi",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3414404893",
+          "parent_code": "SD-SI",
+          "name": "Ad Dinder",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3992138474",
+          "parent_code": "SD-SI",
+          "name": "Buzi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3992349935",
+          "parent_code": "SD-SI",
+          "name": "Ad Dali",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3992517404",
+          "parent_code": "SD-SI",
+          "name": "Hamra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4357440937",
+          "parent_code": "SD-SI",
+          "name": "Al `Azaza,Al ‘Azāza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7312340638",
+          "parent_code": "SD-SI",
+          "name": "Umm Shawkah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730433379",
+          "parent_code": "SD-SI",
+          "name": "Barankawa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730434661",
+          "parent_code": "SD-SI",
+          "name": "Qanufa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730435072",
+          "parent_code": "SD-SI",
+          "name": "Abu Arif",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SD-DN",
+      "parent_code": "SD",
+      "name": "North Darfur",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-300074306",
+          "parent_code": "SD-DN",
+          "name": "Al-Fashir",
+          "type": "city",
+          "population": "277000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-321459449",
+          "parent_code": "SD-DN",
+          "name": "Kutum",
+          "type": "city",
+          "population": "45000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-321474738",
+          "parent_code": "SD-DN",
+          "name": "Tawilah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-667976356",
+          "parent_code": "SD-DN",
+          "name": "Abu Sufyan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-667976400",
+          "parent_code": "SD-DN",
+          "name": "Dalil Dokhry",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-667976404",
+          "parent_code": "SD-DN",
+          "name": "Monjar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1820997112",
+          "parent_code": "SD-DN",
+          "name": "Dalil Babikir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1870260644",
+          "parent_code": "SD-DN",
+          "name": "Mellit",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1911154943",
+          "parent_code": "SD-DN",
+          "name": "Kebkabiya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1977579557",
+          "parent_code": "SD-DN",
+          "name": "Ailliet",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1977584722",
+          "parent_code": "SD-DN",
+          "name": "Umm Kaddada",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2126487382",
+          "parent_code": "SD-DN",
+          "name": "Saraf `Umrah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2173324830",
+          "parent_code": "SD-DN",
+          "name": "Kuma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2392785625",
+          "parent_code": "SD-DN",
+          "name": "Burush",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2438881866",
+          "parent_code": "SD-DN",
+          "name": "ساني كرو",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2572698029",
+          "parent_code": "SD-DN",
+          "name": "Misteriya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2932393524",
+          "parent_code": "SD-DN",
+          "name": "Tina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3154225269",
+          "parent_code": "SD-DN",
+          "name": "Jabel Aamir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3154245577",
+          "parent_code": "SD-DN",
+          "name": "Birkat Saira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3246118934",
+          "parent_code": "SD-DN",
+          "name": "Malha Wells",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3712913938",
+          "parent_code": "SD-DN",
+          "name": "Ein Bassaro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5613116289",
+          "parent_code": "SD-DN",
+          "name": "Kattal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5622056190",
+          "parent_code": "SD-DN",
+          "name": "Karnoi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7106527237",
+          "parent_code": "SD-DN",
+          "name": "Jebel Eisa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7108042405",
+          "parent_code": "SD-DN",
+          "name": "Umm Shisha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730407134",
+          "parent_code": "SD-DN",
+          "name": "At Tuwayshah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730407154",
+          "parent_code": "SD-DN",
+          "name": "Sayyah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730430606",
+          "parent_code": "SD-DN",
+          "name": "Wahat an Nukhaylah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730430689",
+          "parent_code": "SD-DN",
+          "name": "Gabir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8713089691",
+          "parent_code": "SD-DN",
+          "name": "El Sireaf",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11729993551",
+          "parent_code": "SD-DN",
+          "name": "Umm Baru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12347684172",
+          "parent_code": "SD-DN",
+          "name": "Abu Gomra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12407840884",
+          "parent_code": "SD-DN",
+          "name": "عطرون",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13373146123",
+          "parent_code": "SD-DN",
+          "name": "Korma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13376070880",
+          "parent_code": "SD-DN",
+          "name": "Mareiga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13376167084",
+          "parent_code": "SD-DN",
+          "name": "Um Bayada",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SD-KN",
+      "parent_code": "SD",
+      "name": "North Kordufan",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-248948675",
+          "parent_code": "SD-KN",
+          "name": "Umm Ruwaba",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-248948680",
+          "parent_code": "SD-KN",
+          "name": "Al Rahad",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-248948689",
+          "parent_code": "SD-KN",
+          "name": "El-Obeid",
+          "type": "city",
+          "population": "429000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1971661697",
+          "parent_code": "SD-KN",
+          "name": "Umm Badr",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2082551486",
+          "parent_code": "SD-KN",
+          "name": "As Salamat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2374654672",
+          "parent_code": "SD-KN",
+          "name": "Barah",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3424207593",
+          "parent_code": "SD-KN",
+          "name": "Hamrat El Sheikh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4676946085",
+          "parent_code": "SD-KN",
+          "name": "Sawdiri",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-5268002984",
+          "parent_code": "SD-KN",
+          "name": "Abu Zaima",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6191729787",
+          "parent_code": "SD-KN",
+          "name": "Um Garfa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6201908251",
+          "parent_code": "SD-KN",
+          "name": "جبرة الشيخ",
+          "type": "city",
+          "population": "231208",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6311734541",
+          "parent_code": "SD-KN",
+          "name": "Abu Haraz",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730430177",
+          "parent_code": "SD-KN",
+          "name": "Um Sayala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730430307",
+          "parent_code": "SD-KN",
+          "name": "Umm Dam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730430470",
+          "parent_code": "SD-KN",
+          "name": "`Amarah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730430502",
+          "parent_code": "SD-KN",
+          "name": "Al Mazrub",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730435239",
+          "parent_code": "SD-KN",
+          "name": "Umm Sumeima",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SD-DE",
+      "parent_code": "SD",
+      "name": "East Darfur",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-300076998",
+          "parent_code": "SD-DE",
+          "name": "Ad Da'ein",
+          "type": "city",
+          "population": "240000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-667976372",
+          "parent_code": "SD-DE",
+          "name": "Kafran Kualah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-667976377",
+          "parent_code": "SD-DE",
+          "name": "Wad Belal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-667976380",
+          "parent_code": "SD-DE",
+          "name": "Hamouda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-667976382",
+          "parent_code": "SD-DE",
+          "name": "Jabrona",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-667976437",
+          "parent_code": "SD-DE",
+          "name": "Futaha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2090798224",
+          "parent_code": "SD-DE",
+          "name": "saliea",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4034496333",
+          "parent_code": "SD-DE",
+          "name": "Abu Matarig",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4034512360",
+          "parent_code": "SD-DE",
+          "name": "Abu Jabrah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5150008414",
+          "parent_code": "SD-DE",
+          "name": "Khazan Gedid",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730426583",
+          "parent_code": "SD-DE",
+          "name": "Abu Karinka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730426594",
+          "parent_code": "SD-DE",
+          "name": "Muhajiriyah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7737512846",
+          "parent_code": "SD-DE",
+          "name": "Sheiria",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9138161388",
+          "parent_code": "SD-DE",
+          "name": "Assalaya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12779855572",
+          "parent_code": "SD-DE",
+          "name": "Yassin",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12779862395",
+          "parent_code": "SD-DE",
+          "name": "El Firdous",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13355453475",
+          "parent_code": "SD-DE",
+          "name": "Adilla",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SD-DC",
+      "parent_code": "SD",
+      "name": "Central Darfur",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-321481872",
+          "parent_code": "SD-DC",
+          "name": "Zalingei",
+          "type": "city",
+          "population": "27258",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2580426369",
+          "parent_code": "SD-DC",
+          "name": "Nyertete",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2580426371",
+          "parent_code": "SD-DC",
+          "name": "Thur",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5079070596",
+          "parent_code": "SD-DC",
+          "name": "Garsila",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5079074655",
+          "parent_code": "SD-DC",
+          "name": "Deleig",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5195684334",
+          "parent_code": "SD-DC",
+          "name": "Golo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5196091284",
+          "parent_code": "SD-DC",
+          "name": "Guldo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5729154912",
+          "parent_code": "SD-DC",
+          "name": "Rokero",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7672642713",
+          "parent_code": "SD-DC",
+          "name": "`Abata",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730426507",
+          "parent_code": "SD-DC",
+          "name": "Juguma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730426644",
+          "parent_code": "SD-DC",
+          "name": "Deringil",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8460533453",
+          "parent_code": "SD-DC",
+          "name": "Tebeldiya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8460533454",
+          "parent_code": "SD-DC",
+          "name": "You You",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8460533473",
+          "parent_code": "SD-DC",
+          "name": "Ramakaya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8460533474",
+          "parent_code": "SD-DC",
+          "name": "Demelenga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8460533475",
+          "parent_code": "SD-DC",
+          "name": "Ras El Fil",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8460533492",
+          "parent_code": "SD-DC",
+          "name": "Terenga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8460533493",
+          "parent_code": "SD-DC",
+          "name": "Karanga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8460533494",
+          "parent_code": "SD-DC",
+          "name": "Fosa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9382254631",
+          "parent_code": "SD-DC",
+          "name": "Hugeir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11304783073",
+          "parent_code": "SD-DC",
+          "name": "Bindisi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11453019747",
+          "parent_code": "SD-DC",
+          "name": "Um Keir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12530402711",
+          "parent_code": "SD-DC",
+          "name": "Modou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12531892004",
+          "parent_code": "SD-DC",
+          "name": "Mukjar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12708667356",
+          "parent_code": "SD-DC",
+          "name": "Adeila",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12708667420",
+          "parent_code": "SD-DC",
+          "name": "Selele",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12716483626",
+          "parent_code": "SD-DC",
+          "name": "Kordul",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SD-RS",
+      "parent_code": "SD",
+      "name": "Red Sea State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-288510602",
+          "parent_code": "SD-RS",
+          "name": "Port Sudan",
+          "type": "city",
+          "population": "489000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-288512635",
+          "parent_code": "SD-RS",
+          "name": "Sawakin",
+          "type": "city",
+          "population": "40000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2050431482",
+          "parent_code": "SD-RS",
+          "name": "Tokar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2971608212",
+          "parent_code": "SD-RS",
+          "name": "Jubayt",
+          "type": "city",
+          "population": "30000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2983364451",
+          "parent_code": "SD-RS",
+          "name": "Sinkāt",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3201578820",
+          "parent_code": "SD-RS",
+          "name": "Hayya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4227802242",
+          "parent_code": "SD-RS",
+          "name": "Tomala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5774586143",
+          "parent_code": "SD-RS",
+          "name": "Derudeib",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8826032862",
+          "parent_code": "SD-RS",
+          "name": "Hamashkoraib",
+          "type": "city",
+          "population": "25000",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SD-KH",
+      "parent_code": "SD",
+      "name": "Al Khartum State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27565117",
+          "parent_code": "SD-KH",
+          "name": "Khartoum",
+          "type": "city",
+          "population": "2682431",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-90149106",
+          "parent_code": "SD-KH",
+          "name": "Al 'Aylafun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-90152580",
+          "parent_code": "SD-KH",
+          "name": "Giad Industrial Complex",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1980789690",
+          "parent_code": "SD-KH",
+          "name": "Omdurman",
+          "type": "city",
+          "population": "2395159",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2056566800",
+          "parent_code": "SD-KH",
+          "name": "Jebel Aulia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2420184472",
+          "parent_code": "SD-KH",
+          "name": "Um Dawaban",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2952083273",
+          "parent_code": "SD-KH",
+          "name": "Iselat Wad Sarar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2956991062",
+          "parent_code": "SD-KH",
+          "name": "Al-Khojlab",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4261971292",
+          "parent_code": "SD-KH",
+          "name": "الجزيرة إسلانج",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6068904559",
+          "parent_code": "SD-KH",
+          "name": "موقف مواصلات القرية",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-6795231330",
+          "parent_code": "SD-KH",
+          "name": "الثورة الحارة الاولي",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        },
+        {
+          "code": "CTY-6796490350",
+          "parent_code": "SD-KH",
+          "name": "مكتب كهرباء التاسعة",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-6828042417",
+          "parent_code": "SD-KH",
+          "name": "جبرة جنوب",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        },
+        {
+          "code": "CTY-7730429202",
+          "parent_code": "SD-KH",
+          "name": "Arak Salih",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730435173",
+          "parent_code": "SD-KH",
+          "name": "Hillat Ash Sheikh Abu Qoron",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8510785334",
+          "parent_code": "SD-KH",
+          "name": "101",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        },
+        {
+          "code": "CTY-8815796190",
+          "parent_code": "SD-KH",
+          "name": "Bahri",
+          "type": "city",
+          "population": "1184000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-9057481709",
+          "parent_code": "SD-KH",
+          "name": "East Nile",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-12560167810",
+          "parent_code": "SD-KH",
+          "name": "مخطط الجوهرة السكني",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        },
+        {
+          "code": "CTY-12740081184",
+          "parent_code": "SD-KH",
+          "name": "الصفيرة",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        },
+        {
+          "code": "CTY-12772105601",
+          "parent_code": "SD-KH",
+          "name": "اسكان 73",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        }
+      ]
+    },
+    {
+      "code": "SD-GZ",
+      "parent_code": "SD",
+      "name": "Al Jazirah",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-90171779",
+          "parent_code": "SD-GZ",
+          "name": "Al Kamilin",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-90187514",
+          "parent_code": "SD-GZ",
+          "name": "Al Hasahisa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-90187942",
+          "parent_code": "SD-GZ",
+          "name": "Rufaah",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-300069794",
+          "parent_code": "SD-GZ",
+          "name": "Wad Madanī",
+          "type": "city",
+          "population": "369733",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2116631186",
+          "parent_code": "SD-GZ",
+          "name": "Al Managil",
+          "type": "city",
+          "population": "128000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2955411569",
+          "parent_code": "SD-GZ",
+          "name": "Tambool",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-7730432044",
+          "parent_code": "SD-GZ",
+          "name": "Hag Abdallah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730432056",
+          "parent_code": "SD-GZ",
+          "name": "Doba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730432131",
+          "parent_code": "SD-GZ",
+          "name": "Al Mu`ayliq",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730433025",
+          "parent_code": "SD-GZ",
+          "name": "Kereimet",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12390451764",
+          "parent_code": "SD-GZ",
+          "name": "ام القري",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13564003468",
+          "parent_code": "SD-GZ",
+          "name": "المحريبا العمده بلال",
+          "type": "city",
+          "population": "903",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SD-GD",
+      "parent_code": "SD",
+      "name": "Al Qadarif State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-294865520",
+          "parent_code": "SD-GD",
+          "name": "Al-Qadarif",
+          "type": "city",
+          "population": "354598",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2079932954",
+          "parent_code": "SD-GD",
+          "name": "Jazolei",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2522054333",
+          "parent_code": "SD-GD",
+          "name": "Basunda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3121562429",
+          "parent_code": "SD-GD",
+          "name": "El Hawata",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3136458377",
+          "parent_code": "SD-GD",
+          "name": "Ab Rakham",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3207135813",
+          "parent_code": "SD-GD",
+          "name": "Babikri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3302642511",
+          "parent_code": "SD-GD",
+          "name": "Balos",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3302642512",
+          "parent_code": "SD-GD",
+          "name": "Ban",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3302648934",
+          "parent_code": "SD-GD",
+          "name": "Qurein",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3302649275",
+          "parent_code": "SD-GD",
+          "name": "Kartot Village",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3803360022",
+          "parent_code": "SD-GD",
+          "name": "Bazora",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4339052110",
+          "parent_code": "SD-GD",
+          "name": "Gallabat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4339061649",
+          "parent_code": "SD-GD",
+          "name": "Doka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5434620573",
+          "parent_code": "SD-GD",
+          "name": "Al Fao",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-7312119809",
+          "parent_code": "SD-GD",
+          "name": "Qala` an Nahl",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730418119",
+          "parent_code": "SD-GD",
+          "name": "Al Mafazah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730418127",
+          "parent_code": "SD-GD",
+          "name": "Malek",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730424496",
+          "parent_code": "SD-GD",
+          "name": "Wad Kusaybah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730424772",
+          "parent_code": "SD-GD",
+          "name": "Um Kura`",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730428947",
+          "parent_code": "SD-GD",
+          "name": "Karsh al Fil",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730432690",
+          "parent_code": "SD-GD",
+          "name": "Rumaylah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730432781",
+          "parent_code": "SD-GD",
+          "name": "Qurayshah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730432782",
+          "parent_code": "SD-GD",
+          "name": "Shu`ayb",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730432785",
+          "parent_code": "SD-GD",
+          "name": "Tawarit",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730433374",
+          "parent_code": "SD-GD",
+          "name": "Bandighew",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8157651241",
+          "parent_code": "SD-GD",
+          "name": "Khor Zaraf",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9921439632",
+          "parent_code": "SD-GD",
+          "name": "Alqadamblia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11945620043",
+          "parent_code": "SD-GD",
+          "name": "Rashid",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12648541114",
+          "parent_code": "SD-GD",
+          "name": "Omblil",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12650771584",
+          "parent_code": "SD-GD",
+          "name": "الدهيمة",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12657499790",
+          "parent_code": "SD-GD",
+          "name": "Galby",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12661101336",
+          "parent_code": "SD-GD",
+          "name": "Saref Ahmar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12667902786",
+          "parent_code": "SD-GD",
+          "name": "Jabel Qana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12687140960",
+          "parent_code": "SD-GD",
+          "name": "Salmin",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SD-NW",
+      "parent_code": "SD",
+      "name": "White Nile",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-248948488",
+          "parent_code": "SD-NW",
+          "name": "Kosti",
+          "type": "city",
+          "population": "384000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-248948657",
+          "parent_code": "SD-NW",
+          "name": "Tandalti",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-321439793",
+          "parent_code": "SD-NW",
+          "name": "Rabak",
+          "type": "city",
+          "population": "152711",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1977780575",
+          "parent_code": "SD-NW",
+          "name": "Ed Dueim",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3990551590",
+          "parent_code": "SD-NW",
+          "name": "Ar Ruat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3992351175",
+          "parent_code": "SD-NW",
+          "name": "Kenana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3992374366",
+          "parent_code": "SD-NW",
+          "name": "Al Jabalayn",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4343078091",
+          "parent_code": "SD-NW",
+          "name": "Shabasha,Shabashah",
+          "type": "city",
+          "population": "16660",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5169025156",
+          "parent_code": "SD-NW",
+          "name": "White Nile",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5170992333",
+          "parent_code": "SD-NW",
+          "name": "Guli Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5939258730",
+          "parent_code": "SD-NW",
+          "name": "Shukri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5984930684",
+          "parent_code": "SD-NW",
+          "name": "Asalaya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6063075004",
+          "parent_code": "SD-NW",
+          "name": "Ash Shawal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7042406431",
+          "parent_code": "SD-NW",
+          "name": "Kilu Arba`a",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7508855136",
+          "parent_code": "SD-NW",
+          "name": "al Halbah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730424530",
+          "parent_code": "SD-NW",
+          "name": "Umm Hani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730427225",
+          "parent_code": "SD-NW",
+          "name": "Sufayyah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730428891",
+          "parent_code": "SD-NW",
+          "name": "AlSharak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730433193",
+          "parent_code": "SD-NW",
+          "name": "Al Kawa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730435071",
+          "parent_code": "SD-NW",
+          "name": "At Tibun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13371375719",
+          "parent_code": "SD-NW",
+          "name": "Aj Jabalain",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SD-NB",
+      "parent_code": "SD",
+      "name": "Blue Nile",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-300077759",
+          "parent_code": "SD-NB",
+          "name": "Ad-Damazin",
+          "type": "city",
+          "population": "213000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-321368128",
+          "parent_code": "SD-NB",
+          "name": "Er Roseires",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1795209723",
+          "parent_code": "SD-NB",
+          "name": "Al Kurumuk",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2597929648",
+          "parent_code": "SD-NB",
+          "name": "Gali",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2597933459",
+          "parent_code": "SD-NB",
+          "name": "But",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2655669439",
+          "parent_code": "SD-NB",
+          "name": "Garabin",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2655669549",
+          "parent_code": "SD-NB",
+          "name": "Agadi",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2670566435",
+          "parent_code": "SD-NB",
+          "name": "Dandro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3160805777",
+          "parent_code": "SD-NB",
+          "name": "Jirewa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3302165659",
+          "parent_code": "SD-NB",
+          "name": "Al Ahmar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3302165660",
+          "parent_code": "SD-NB",
+          "name": "El Barun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3302166581",
+          "parent_code": "SD-NB",
+          "name": "Quli",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3302166583",
+          "parent_code": "SD-NB",
+          "name": "Ruru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4346594926",
+          "parent_code": "SD-NB",
+          "name": "Wad Abok",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4776976166",
+          "parent_code": "SD-NB",
+          "name": "Famaka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4778617743",
+          "parent_code": "SD-NB",
+          "name": "Hudur",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7406551121",
+          "parent_code": "SD-NB",
+          "name": "Um Durman Fallata",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13375575393",
+          "parent_code": "SD-NB",
+          "name": "Geisan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SD-NO",
+      "parent_code": "SD",
+      "name": "Northern State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-75561491",
+          "parent_code": "SD-NO",
+          "name": "Al Dabbah",
+          "type": "city",
+          "population": "52000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-75562621",
+          "parent_code": "SD-NO",
+          "name": "Dongola",
+          "type": "city",
+          "population": "56167",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-100013911",
+          "parent_code": "SD-NO",
+          "name": "Wadi Halfa",
+          "type": "city",
+          "population": "15725",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1620604084",
+          "parent_code": "SD-NO",
+          "name": "Merowe",
+          "type": "city",
+          "population": "10000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1789680555",
+          "parent_code": "SD-NO",
+          "name": "Argo",
+          "type": "city",
+          "population": "7716",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1895872571",
+          "parent_code": "SD-NO",
+          "name": "Delgo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1956274629",
+          "parent_code": "SD-NO",
+          "name": "Karima",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1958038093",
+          "parent_code": "SD-NO",
+          "name": "Abri",
+          "type": "city",
+          "population": "40000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1958047978",
+          "parent_code": "SD-NO",
+          "name": "Kerma",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4116845005",
+          "parent_code": "SD-NO",
+          "name": "Al Goled",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4261906833",
+          "parent_code": "SD-NO",
+          "name": "Nuri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4269170161",
+          "parent_code": "SD-NO",
+          "name": "Dahasira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4269170162",
+          "parent_code": "SD-NO",
+          "name": "Az Zumah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4270926789",
+          "parent_code": "SD-NO",
+          "name": "Al Qurayr",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4270926793",
+          "parent_code": "SD-NO",
+          "name": "Tangasi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4272601381",
+          "parent_code": "SD-NO",
+          "name": "Korti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4284697254",
+          "parent_code": "SD-NO",
+          "name": "Al Ghabah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4298043993",
+          "parent_code": "SD-NO",
+          "name": "Seleim",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730424515",
+          "parent_code": "SD-NO",
+          "name": "Dunqulah al Qadimah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13371038735",
+          "parent_code": "SD-NO",
+          "name": "Merwoe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13371055007",
+          "parent_code": "SD-NO",
+          "name": "Nuri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13371056215",
+          "parent_code": "SD-NO",
+          "name": "Karima",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SD-GK",
+      "parent_code": "SD",
+      "name": "West Kordufan",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-210348785",
+          "parent_code": "SD-GK",
+          "name": "Heglig",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-238610118",
+          "parent_code": "SD-GK",
+          "name": "Abyei",
+          "type": "city",
+          "population": "20000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-321502878",
+          "parent_code": "SD-GK",
+          "name": "Babanusah",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-321503273",
+          "parent_code": "SD-GK",
+          "name": "Muglad",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2090839794",
+          "parent_code": "SD-GK",
+          "name": "Meriam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2269613906",
+          "parent_code": "SD-GK",
+          "name": "Al Lagowa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2373597402",
+          "parent_code": "SD-GK",
+          "name": "En Nahud",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2373597639",
+          "parent_code": "SD-GK",
+          "name": "Wad Banda",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2589949845",
+          "parent_code": "SD-GK",
+          "name": "Al-Dubub",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2590105444",
+          "parent_code": "SD-GK",
+          "name": "As Sumayh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3182058113",
+          "parent_code": "SD-GK",
+          "name": "Keilak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5692251414",
+          "parent_code": "SD-GK",
+          "name": "Ghubaysh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5838095352",
+          "parent_code": "SD-GK",
+          "name": "Al-Fula",
+          "type": "city",
+          "population": "8721",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-5929910137",
+          "parent_code": "SD-GK",
+          "name": "Al Taboun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6477684549",
+          "parent_code": "SD-GK",
+          "name": "السنوط",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6477685875",
+          "parent_code": "SD-GK",
+          "name": "Al Arak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730401014",
+          "parent_code": "SD-GK",
+          "name": "Khuwayy",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730425080",
+          "parent_code": "SD-GK",
+          "name": "Abu Zabad",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730425125",
+          "parent_code": "SD-GK",
+          "name": "`Iyal Bakhit",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730425137",
+          "parent_code": "SD-GK",
+          "name": "Dam Gamad",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730425160",
+          "parent_code": "SD-GK",
+          "name": "Dardog",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730425213",
+          "parent_code": "SD-GK",
+          "name": "Foga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730425222",
+          "parent_code": "SD-GK",
+          "name": "Abu Kabisa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12729181313",
+          "parent_code": "SD-GK",
+          "name": "Al-Qantour",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12729520237",
+          "parent_code": "SD-GK",
+          "name": "Al Khuwairat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12882225579",
+          "parent_code": "SD-GK",
+          "name": "Al-Kharsana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12896429885",
+          "parent_code": "SD-GK",
+          "name": "Al-Sitteeb",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "code": "ST",
+  "name": "São Tomé and Príncipe",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "ST-P",
+      "parent_code": "ST",
+      "name": "Autonomous Region of Príncipe",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-295343612",
+          "parent_code": "ST-P",
+          "name": "Santo António",
+          "type": "city",
+          "population": "2620",
+          "place_type": "town"
+        }
+      ]
+    }
+  ]
+}

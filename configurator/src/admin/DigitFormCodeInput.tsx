@@ -58,7 +58,7 @@ export function DigitFormCodeInput({
       // Server-side generation via idgen
       setGenerating(true);
       try {
-        const id = await (dataProvider as Record<string, unknown> & { idgenGenerate: (idName: string) => Promise<string> }).idgenGenerate(idName);
+        const id = await (dataProvider as unknown as Record<string, unknown> & { idgenGenerate: (idName: string) => Promise<string> }).idgenGenerate(idName);
         if (id) {
           setValue(inputProps.source, id, { shouldValidate: true, shouldDirty: true });
           setGenerated(true);

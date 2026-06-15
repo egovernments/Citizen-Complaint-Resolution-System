@@ -247,6 +247,7 @@ async function start() {
     define: {
       "process.env.NODE_ENV": '"development"',
       "process.env.REACT_APP_STATE_LEVEL_TENANT_ID": '""',
+      "process.env.REACT_APP_MAP_TENANT": JSON.stringify(process.env.REACT_APP_MAP_TENANT || ""),
       global: "window",
     },
     plugins: [cdnGlobalsPlugin, svgPlugin, liveReloadPlugin],

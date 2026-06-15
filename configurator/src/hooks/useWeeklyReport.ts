@@ -317,7 +317,7 @@ export function useWeeklyReport() {
           'RAINMAKER-PGR.WeeklyReportConfig',
         );
         if (configRecords.length > 0) {
-          config = { ...DEFAULT_CONFIG, ...(configRecords[0].data as ReportConfig) };
+          config = { ...DEFAULT_CONFIG, ...(configRecords[0].data as unknown as ReportConfig) };
         }
       } catch {
         // Schema may not exist yet — use defaults

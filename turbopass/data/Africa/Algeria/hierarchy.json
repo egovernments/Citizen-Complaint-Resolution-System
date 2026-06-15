@@ -1,0 +1,5661 @@
+{
+  "code": "DZ",
+  "name": "Algeria",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "DZ-16",
+      "parent_code": "DZ",
+      "name": "Algiers",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-273094269",
+          "parent_code": "DZ-16",
+          "name": "Burj Al Kifan",
+          "type": "city",
+          "population": "151950",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-288037571",
+          "parent_code": "DZ-16",
+          "name": "Bab Ezzouar",
+          "type": "city",
+          "population": "92000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-288370371",
+          "parent_code": "DZ-16",
+          "name": "Chéraga",
+          "type": "city",
+          "population": "80824",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-288380563",
+          "parent_code": "DZ-16",
+          "name": "Draria",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-288387133",
+          "parent_code": "DZ-16",
+          "name": "Kouba",
+          "type": "city",
+          "population": "104708",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-288399489",
+          "parent_code": "DZ-16",
+          "name": "El Harrach",
+          "type": "city",
+          "population": "48869",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-299617915",
+          "parent_code": "DZ-16",
+          "name": "Algiers",
+          "type": "city",
+          "population": "3415811",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-299837073",
+          "parent_code": "DZ-16",
+          "name": "Baraki",
+          "type": "city",
+          "population": "116375",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-313983005",
+          "parent_code": "DZ-16",
+          "name": "Douera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-313983223",
+          "parent_code": "DZ-16",
+          "name": "Souidania",
+          "type": "city",
+          "population": "17105",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-314767090",
+          "parent_code": "DZ-16",
+          "name": "Staoueli",
+          "type": "city",
+          "population": "47664",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316376810",
+          "parent_code": "DZ-16",
+          "name": "Birtouta",
+          "type": "city",
+          "population": "30575",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316376812",
+          "parent_code": "DZ-16",
+          "name": "Tessala El Merdja",
+          "type": "city",
+          "population": "15847",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316378657",
+          "parent_code": "DZ-16",
+          "name": "Sidi Moussa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316393181",
+          "parent_code": "DZ-16",
+          "name": "Les Eucalyptus",
+          "type": "city",
+          "population": "116107",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-317128784",
+          "parent_code": "DZ-16",
+          "name": "Rouiba",
+          "type": "city",
+          "population": "61984",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-317128785",
+          "parent_code": "DZ-16",
+          "name": "Reghaia",
+          "type": "city",
+          "population": "66215",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-317353592",
+          "parent_code": "DZ-16",
+          "name": "H'raoua",
+          "type": "city",
+          "population": "27565",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-317353655",
+          "parent_code": "DZ-16",
+          "name": "Ain Taya",
+          "type": "city",
+          "population": "34501",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-317353676",
+          "parent_code": "DZ-16",
+          "name": "Burj Al Bahri",
+          "type": "city",
+          "population": "27900",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-330434454",
+          "parent_code": "DZ-16",
+          "name": "Ain Benian",
+          "type": "city",
+          "population": "68354",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-479717042",
+          "parent_code": "DZ-16",
+          "name": "El Karia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2391093902",
+          "parent_code": "DZ-16",
+          "name": "Baba Hassen",
+          "type": "city",
+          "population": "23756",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2531694292",
+          "parent_code": "DZ-16",
+          "name": "Zeralda",
+          "type": "city",
+          "population": "51552",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3635144618",
+          "parent_code": "DZ-16",
+          "name": "Ouled Fayet",
+          "type": "city",
+          "population": "27593",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7472628255",
+          "parent_code": "DZ-16",
+          "name": "Sidi Abdellah",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "DZ-08",
+      "parent_code": "DZ",
+      "name": "Bechar",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-299695849",
+          "parent_code": "DZ-08",
+          "name": "Bechar",
+          "type": "city",
+          "population": "165627",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-424638440",
+          "parent_code": "DZ-08",
+          "name": "Beni Ounif",
+          "type": "city",
+          "population": "11209",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-429765441",
+          "parent_code": "DZ-08",
+          "name": "Abadla",
+          "type": "city",
+          "population": "13636",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1573550069",
+          "parent_code": "DZ-08",
+          "name": "Kenadsa",
+          "type": "city",
+          "population": "14060",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1573564804",
+          "parent_code": "DZ-08",
+          "name": "Lahmar",
+          "type": "city",
+          "population": "1961",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-45",
+      "parent_code": "DZ",
+      "name": "Naâma",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-424101403",
+          "parent_code": "DZ-45",
+          "name": "Mecheria",
+          "type": "city",
+          "population": "102359",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-424657355",
+          "parent_code": "DZ-45",
+          "name": "Ain Sefra",
+          "type": "city",
+          "population": "54229",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-424703021",
+          "parent_code": "DZ-45",
+          "name": "Naama",
+          "type": "city",
+          "population": "16251",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-424710466",
+          "parent_code": "DZ-45",
+          "name": "El Biodh",
+          "type": "city",
+          "population": "12074",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-32",
+      "parent_code": "DZ",
+      "name": "El Bayadh",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-424711276",
+          "parent_code": "DZ-32",
+          "name": "Bougtob",
+          "type": "city",
+          "population": "18568",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-452440131",
+          "parent_code": "DZ-32",
+          "name": "Kef Lahmar",
+          "type": "city",
+          "population": "20000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-452440133",
+          "parent_code": "DZ-32",
+          "name": "El Bayadh",
+          "type": "city",
+          "population": "91632",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "DZ-01",
+      "parent_code": "DZ",
+      "name": "Adrar",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-429501667",
+          "parent_code": "DZ-01",
+          "name": "Regane",
+          "type": "city",
+          "population": "20402",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-429541203",
+          "parent_code": "DZ-01",
+          "name": "Aoulef",
+          "type": "city",
+          "population": "21723",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3172476281",
+          "parent_code": "DZ-01",
+          "name": "Fenoughil",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3172476387",
+          "parent_code": "DZ-01",
+          "name": "Sali",
+          "type": "city",
+          "population": "16683",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3172476388",
+          "parent_code": "DZ-01",
+          "name": "Tamantit",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3172476762",
+          "parent_code": "DZ-01",
+          "name": "Tsabit",
+          "type": "city",
+          "population": "14895",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3944299542",
+          "parent_code": "DZ-01",
+          "name": "Zaouiet Kounta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3999497924",
+          "parent_code": "DZ-01",
+          "name": "Adrar",
+          "type": "city",
+          "population": "64781",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "DZ-37",
+      "parent_code": "DZ",
+      "name": "Tinduf",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-288825235",
+          "parent_code": "DZ-37",
+          "name": "Tindouf",
+          "type": "city",
+          "population": "45966",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-429767409",
+          "parent_code": "DZ-37",
+          "name": "Oum El Assel",
+          "type": "city",
+          "population": "3183",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-429770459",
+          "parent_code": "DZ-37",
+          "name": "Smara Refugee Camp",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-31",
+      "parent_code": "DZ",
+      "name": "Oran",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27565103",
+          "parent_code": "DZ-31",
+          "name": "Oran",
+          "type": "city",
+          "population": "852576",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-333954911",
+          "parent_code": "DZ-31",
+          "name": "Ain Turk",
+          "type": "city",
+          "population": "35687",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-428237405",
+          "parent_code": "DZ-31",
+          "name": "Qudayyil",
+          "type": "city",
+          "population": "42688",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-428239843",
+          "parent_code": "DZ-31",
+          "name": "Hassi Mefsoukh",
+          "type": "city",
+          "population": "12836",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-429683749",
+          "parent_code": "DZ-31",
+          "name": "Bethioua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-497122254",
+          "parent_code": "DZ-31",
+          "name": "Mers El Hadjadj",
+          "type": "city",
+          "population": "13153",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-810749486",
+          "parent_code": "DZ-31",
+          "name": "Hassi Ben Okba",
+          "type": "city",
+          "population": "13905",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-810749489",
+          "parent_code": "DZ-31",
+          "name": "Boufatis",
+          "type": "city",
+          "population": "11872",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-810749490",
+          "parent_code": "DZ-31",
+          "name": "Ben Freha",
+          "type": "city",
+          "population": "23254",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-810749504",
+          "parent_code": "DZ-31",
+          "name": "Bir El Djir",
+          "type": "city",
+          "population": "171883",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-810749515",
+          "parent_code": "DZ-31",
+          "name": "El Kerma",
+          "type": "city",
+          "population": "25636",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-810749516",
+          "parent_code": "DZ-31",
+          "name": "Es-Senia",
+          "type": "city",
+          "population": "97500",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-810749518",
+          "parent_code": "DZ-31",
+          "name": "Hassi Bounif",
+          "type": "city",
+          "population": "63581",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-810753701",
+          "parent_code": "DZ-31",
+          "name": "Oued Tlelat",
+          "type": "city",
+          "population": "19384",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-810756248",
+          "parent_code": "DZ-31",
+          "name": "Boutlelis",
+          "type": "city",
+          "population": "23920",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-979483576",
+          "parent_code": "DZ-31",
+          "name": "Mers El Kebir",
+          "type": "city",
+          "population": "17957",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1678539135",
+          "parent_code": "DZ-31",
+          "name": "Ain El Bia",
+          "type": "city",
+          "population": "32611",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2922724122",
+          "parent_code": "DZ-31",
+          "name": "Arzew",
+          "type": "city",
+          "population": "85658",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4506956466",
+          "parent_code": "DZ-31",
+          "name": "Sidi Chami",
+          "type": "city",
+          "population": "114050",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-46",
+      "parent_code": "DZ",
+      "name": "Aïn Témouchent",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-424065923",
+          "parent_code": "DZ-46",
+          "name": "Béni-Saf ⴱⵏⵉ ⵙⴰⴼ بني صاف",
+          "type": "city",
+          "population": "42284",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443422563",
+          "parent_code": "DZ-46",
+          "name": "Ain Temouchent",
+          "type": "city",
+          "population": "75558",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-443422903",
+          "parent_code": "DZ-46",
+          "name": "Sidi Ben Adda",
+          "type": "city",
+          "population": "14086",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-464631977",
+          "parent_code": "DZ-46",
+          "name": "Hammam Bouhadjar",
+          "type": "city",
+          "population": "35158",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-464632065",
+          "parent_code": "DZ-46",
+          "name": "Al Malih",
+          "type": "city",
+          "population": "18944",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-464683403",
+          "parent_code": "DZ-46",
+          "name": "Chaabat El Leham",
+          "type": "city",
+          "population": "14730",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501851328",
+          "parent_code": "DZ-46",
+          "name": "El Amria",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-810762302",
+          "parent_code": "DZ-46",
+          "name": "Ain El Arbaa",
+          "type": "city",
+          "population": "15683",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-837023849",
+          "parent_code": "DZ-46",
+          "name": "Souk El Tenine",
+          "type": "city",
+          "population": "15972",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-22",
+      "parent_code": "DZ",
+      "name": "Sidi Bel Abbès",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-299682062",
+          "parent_code": "DZ-22",
+          "name": "Sidi Bel Abbes",
+          "type": "city",
+          "population": "212935",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-439888319",
+          "parent_code": "DZ-22",
+          "name": "Sfisef",
+          "type": "city",
+          "population": "29696",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-439898380",
+          "parent_code": "DZ-22",
+          "name": "Hassi Zahana",
+          "type": "city",
+          "population": "8500",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-439900723",
+          "parent_code": "DZ-22",
+          "name": "Ben Badis",
+          "type": "city",
+          "population": "20346",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-442779551",
+          "parent_code": "DZ-22",
+          "name": "Telagh",
+          "type": "city",
+          "population": "44000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-442779799",
+          "parent_code": "DZ-22",
+          "name": "Ras El Ma",
+          "type": "city",
+          "population": "14862",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-464766548",
+          "parent_code": "DZ-22",
+          "name": "Ain El Berd",
+          "type": "city",
+          "population": "16013",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-464766553",
+          "parent_code": "DZ-22",
+          "name": "Sidi Brahim",
+          "type": "city",
+          "population": "10371",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-497155693",
+          "parent_code": "DZ-22",
+          "name": "Tenira",
+          "type": "city",
+          "population": "10049",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1373299402",
+          "parent_code": "DZ-22",
+          "name": "Bellouladi",
+          "type": "city",
+          "population": "11293",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4555604233",
+          "parent_code": "DZ-22",
+          "name": "Sidi Lahcene",
+          "type": "city",
+          "population": "25000",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-29",
+      "parent_code": "DZ",
+      "name": "Mascara",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-393867912",
+          "parent_code": "DZ-29",
+          "name": "El Ghomri",
+          "type": "city",
+          "population": "10043",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-393872536",
+          "parent_code": "DZ-29",
+          "name": "Mohammadia",
+          "type": "city",
+          "population": "84700",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-424739069",
+          "parent_code": "DZ-29",
+          "name": "Oued Taria",
+          "type": "city",
+          "population": "15901",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-424740106",
+          "parent_code": "DZ-29",
+          "name": "Ghriss",
+          "type": "city",
+          "population": "28823",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-424744420",
+          "parent_code": "DZ-29",
+          "name": "Tizi",
+          "type": "city",
+          "population": "12923",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-424749543",
+          "parent_code": "DZ-29",
+          "name": "Sig",
+          "type": "city",
+          "population": "70499",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-442967280",
+          "parent_code": "DZ-29",
+          "name": "Maoussa",
+          "type": "city",
+          "population": "10473",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-442968889",
+          "parent_code": "DZ-29",
+          "name": "Tighennif",
+          "type": "city",
+          "population": "62210",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-464067879",
+          "parent_code": "DZ-29",
+          "name": "Oued El Abtal",
+          "type": "city",
+          "population": "21278",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-464766544",
+          "parent_code": "DZ-29",
+          "name": "Oggaz",
+          "type": "city",
+          "population": "11140",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-464766551",
+          "parent_code": "DZ-29",
+          "name": "Zahana",
+          "type": "city",
+          "population": "21850",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-833944299",
+          "parent_code": "DZ-29",
+          "name": "Bouhenni",
+          "type": "city",
+          "population": "11715",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1049904231",
+          "parent_code": "DZ-29",
+          "name": "Hachem",
+          "type": "city",
+          "population": "23716",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1052525460",
+          "parent_code": "DZ-29",
+          "name": "Mamounia",
+          "type": "city",
+          "population": "13364",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3786548980",
+          "parent_code": "DZ-29",
+          "name": "Bouhanifia",
+          "type": "city",
+          "population": "18576",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5300225730",
+          "parent_code": "DZ-29",
+          "name": "Mascara",
+          "type": "city",
+          "population": "108587",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "DZ-27",
+      "parent_code": "DZ",
+      "name": "Mostaganem",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-299699468",
+          "parent_code": "DZ-27",
+          "name": "Mostaganem",
+          "type": "city",
+          "population": "145696",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-424944424",
+          "parent_code": "DZ-27",
+          "name": "Stidia",
+          "type": "city",
+          "population": "11965",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-424950598",
+          "parent_code": "DZ-27",
+          "name": "Ben Abdelmalek Ramdane",
+          "type": "city",
+          "population": "13607",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-424951766",
+          "parent_code": "DZ-27",
+          "name": "Hadjadj",
+          "type": "city",
+          "population": "17330",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-424952796",
+          "parent_code": "DZ-27",
+          "name": "Sidi Lakhdar",
+          "type": "city",
+          "population": "34612",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443036864",
+          "parent_code": "DZ-27",
+          "name": "Hassi Mameche",
+          "type": "city",
+          "population": "32903",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443036963",
+          "parent_code": "DZ-27",
+          "name": "Ain Nouissy",
+          "type": "city",
+          "population": "14530",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443037222",
+          "parent_code": "DZ-27",
+          "name": "Fornaka",
+          "type": "city",
+          "population": "16543",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-462633930",
+          "parent_code": "DZ-27",
+          "name": "Ain Tedles",
+          "type": "city",
+          "population": "38823",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-462633934",
+          "parent_code": "DZ-27",
+          "name": "Sidi Ali",
+          "type": "city",
+          "population": "37230",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-497122243",
+          "parent_code": "DZ-27",
+          "name": "Bouguirat",
+          "type": "city",
+          "population": "31469",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-497122245",
+          "parent_code": "DZ-27",
+          "name": "Mesra",
+          "type": "city",
+          "population": "25196",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-869746777",
+          "parent_code": "DZ-27",
+          "name": "Mazagran",
+          "type": "city",
+          "population": "22016",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1057795568",
+          "parent_code": "DZ-27",
+          "name": "Achacha",
+          "type": "city",
+          "population": "34789",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-25",
+      "parent_code": "DZ",
+      "name": "Constantine",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27564946",
+          "parent_code": "DZ-25",
+          "name": "Constantine",
+          "type": "city",
+          "population": "448374",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-291044188",
+          "parent_code": "DZ-25",
+          "name": "El Khroub",
+          "type": "city",
+          "population": "90122",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-394765107",
+          "parent_code": "DZ-25",
+          "name": "Ain Smara",
+          "type": "city",
+          "population": "36998",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-416689744",
+          "parent_code": "DZ-25",
+          "name": "Didouche Mourad",
+          "type": "city",
+          "population": "45000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-416690119",
+          "parent_code": "DZ-25",
+          "name": "Hamma Bouziane",
+          "type": "city",
+          "population": "79952",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443123684",
+          "parent_code": "DZ-25",
+          "name": "Aïn Abid",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-461906185",
+          "parent_code": "DZ-25",
+          "name": "Ibn Ziad",
+          "type": "city",
+          "population": "18861",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1856515102",
+          "parent_code": "DZ-25",
+          "name": "Ali Mendjeli",
+          "type": "city",
+          "population": "64120",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2804971863",
+          "parent_code": "DZ-25",
+          "name": "Ouled Rahmoune",
+          "type": "city",
+          "population": "26132",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2953775300",
+          "parent_code": "DZ-25",
+          "name": "Zighoud Youcef",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-24",
+      "parent_code": "DZ",
+      "name": "Guelma",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-299824735",
+          "parent_code": "DZ-24",
+          "name": "Guelma",
+          "type": "city",
+          "population": "157334",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-443023870",
+          "parent_code": "DZ-24",
+          "name": "Boucheghouf",
+          "type": "city",
+          "population": "25443",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443124959",
+          "parent_code": "DZ-24",
+          "name": "Oued Zenati",
+          "type": "city",
+          "population": "32870",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443125288",
+          "parent_code": "DZ-24",
+          "name": "Houari Boumediene",
+          "type": "city",
+          "population": "7114",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443125684",
+          "parent_code": "DZ-24",
+          "name": "Belkheir",
+          "type": "city",
+          "population": "17649",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443132308",
+          "parent_code": "DZ-24",
+          "name": "Heliopolis",
+          "type": "city",
+          "population": "26328",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443132335",
+          "parent_code": "DZ-24",
+          "name": "Guelaat Bou Sbaa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443132459",
+          "parent_code": "DZ-24",
+          "name": "Nechmaya",
+          "type": "city",
+          "population": "9964",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-461977236",
+          "parent_code": "DZ-24",
+          "name": "Khezara",
+          "type": "city",
+          "population": "10382",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-462008816",
+          "parent_code": "DZ-24",
+          "name": "Ain Makhlouf",
+          "type": "city",
+          "population": "12300",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-999885679",
+          "parent_code": "DZ-24",
+          "name": "Hammam Debagh",
+          "type": "city",
+          "population": "16391",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1539007250",
+          "parent_code": "DZ-24",
+          "name": "Hammam N'Bail",
+          "type": "city",
+          "population": "16199",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11554651399",
+          "parent_code": "DZ-24",
+          "name": "Dghamna Mohammed",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        }
+      ]
+    },
+    {
+      "code": "DZ-43",
+      "parent_code": "DZ",
+      "name": "Mila",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-416765559",
+          "parent_code": "DZ-43",
+          "name": "Oued Athmania",
+          "type": "city",
+          "population": "24810",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-416767390",
+          "parent_code": "DZ-43",
+          "name": "Tadjenanet",
+          "type": "city",
+          "population": "62000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443171188",
+          "parent_code": "DZ-43",
+          "name": "Sidi Merouane",
+          "type": "city",
+          "population": "23088",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443171239",
+          "parent_code": "DZ-43",
+          "name": "Grarem Gouga",
+          "type": "city",
+          "population": "42062",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-447593737",
+          "parent_code": "DZ-43",
+          "name": "Chelghoum Laid",
+          "type": "city",
+          "population": "82560",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-461906152",
+          "parent_code": "DZ-43",
+          "name": "Mila",
+          "type": "city",
+          "population": "69052",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-461906172",
+          "parent_code": "DZ-43",
+          "name": "Oued Endja",
+          "type": "city",
+          "population": "19739",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-461906180",
+          "parent_code": "DZ-43",
+          "name": "Ferdjioua",
+          "type": "city",
+          "population": "50167",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-465434692",
+          "parent_code": "DZ-43",
+          "name": "Telerghma",
+          "type": "city",
+          "population": "48028",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501761537",
+          "parent_code": "DZ-43",
+          "name": "Ain Beida Harriche",
+          "type": "city",
+          "population": "21013",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501761542",
+          "parent_code": "DZ-43",
+          "name": "Tassadane Haddada",
+          "type": "city",
+          "population": "17378",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1337756092",
+          "parent_code": "DZ-43",
+          "name": "Berdou",
+          "type": "city",
+          "population": "23299",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1765757939",
+          "parent_code": "DZ-43",
+          "name": "Djebel Aougueb جبل عڤاب",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4387185170",
+          "parent_code": "DZ-43",
+          "name": "Rouached",
+          "type": "city",
+          "population": "27086",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-21",
+      "parent_code": "DZ",
+      "name": "Skikda",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-299692217",
+          "parent_code": "DZ-21",
+          "name": "Skikda",
+          "type": "city",
+          "population": "188467",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-416687911",
+          "parent_code": "DZ-21",
+          "name": "Azzaba",
+          "type": "city",
+          "population": "56922",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-416689292",
+          "parent_code": "DZ-21",
+          "name": "El Harrouch",
+          "type": "city",
+          "population": "48994",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-428235508",
+          "parent_code": "DZ-21",
+          "name": "Ramdane Djamel",
+          "type": "city",
+          "population": "27194",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443189599",
+          "parent_code": "DZ-21",
+          "name": "Ain Kechra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443189615",
+          "parent_code": "DZ-21",
+          "name": "Tamalous",
+          "type": "city",
+          "population": "51262",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1240473695",
+          "parent_code": "DZ-21",
+          "name": "Ben Azzouz",
+          "type": "city",
+          "population": "29162",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1332406775",
+          "parent_code": "DZ-21",
+          "name": "Zitouna",
+          "type": "city",
+          "population": "8351",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1332414579",
+          "parent_code": "DZ-21",
+          "name": "Ouled Attia",
+          "type": "city",
+          "population": "10851",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1334517975",
+          "parent_code": "DZ-21",
+          "name": "Oum Toub",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3017350123",
+          "parent_code": "DZ-21",
+          "name": "Sidi Mezghiche",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3042693423",
+          "parent_code": "DZ-21",
+          "name": "El Hadaiek",
+          "type": "city",
+          "population": "18002",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5854829483",
+          "parent_code": "DZ-21",
+          "name": "Collo",
+          "type": "city",
+          "population": "83000",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "DZ-18",
+      "parent_code": "DZ",
+      "name": "Jijel",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-425066820",
+          "parent_code": "DZ-18",
+          "name": "Ziama Mansouriah",
+          "type": "city",
+          "population": "12642",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-425275146",
+          "parent_code": "DZ-18",
+          "name": "El Aouana",
+          "type": "city",
+          "population": "13273",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-425277665",
+          "parent_code": "DZ-18",
+          "name": "Qawas",
+          "type": "city",
+          "population": "26137",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-425278274",
+          "parent_code": "DZ-18",
+          "name": "Tahir",
+          "type": "city",
+          "population": "77367",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-425286810",
+          "parent_code": "DZ-18",
+          "name": "El Milia",
+          "type": "city",
+          "population": "83931",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-460797319",
+          "parent_code": "DZ-18",
+          "name": "Texenna",
+          "type": "city",
+          "population": "15682",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1388303309",
+          "parent_code": "DZ-18",
+          "name": "Chekfa",
+          "type": "city",
+          "population": "26553",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1941427461",
+          "parent_code": "DZ-18",
+          "name": "Jijel",
+          "type": "city",
+          "population": "134839",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3979471260",
+          "parent_code": "DZ-18",
+          "name": "Al Amir Abdelkader",
+          "type": "city",
+          "population": "38468",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-19",
+      "parent_code": "DZ",
+      "name": "Setif",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-299701636",
+          "parent_code": "DZ-19",
+          "name": "El Eulma",
+          "type": "city",
+          "population": "145380",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443160401",
+          "parent_code": "DZ-19",
+          "name": "Amoucha",
+          "type": "city",
+          "population": "13411",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443176816",
+          "parent_code": "DZ-19",
+          "name": "Salah Bey",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443176881",
+          "parent_code": "DZ-19",
+          "name": "Ain Oulmane",
+          "type": "city",
+          "population": "51207",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-455511464",
+          "parent_code": "DZ-19",
+          "name": "Beni Ouartilane",
+          "type": "city",
+          "population": "14528",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-455517479",
+          "parent_code": "DZ-19",
+          "name": "Hammam Guergour",
+          "type": "city",
+          "population": "15853",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-455517483",
+          "parent_code": "DZ-19",
+          "name": "Bougaa",
+          "type": "city",
+          "population": "22490",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-455545068",
+          "parent_code": "DZ-19",
+          "name": "Bouandas",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-455545070",
+          "parent_code": "DZ-19",
+          "name": "Ain Abessa",
+          "type": "city",
+          "population": "16770",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-455555425",
+          "parent_code": "DZ-19",
+          "name": "Guijel",
+          "type": "city",
+          "population": "33685",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-455555446",
+          "parent_code": "DZ-19",
+          "name": "Hammam Sokhna",
+          "type": "city",
+          "population": "13439",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-455579595",
+          "parent_code": "DZ-19",
+          "name": "Guenzet",
+          "type": "city",
+          "population": "1844",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-460797431",
+          "parent_code": "DZ-19",
+          "name": "Beni Aziz",
+          "type": "city",
+          "population": "8196",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-465524839",
+          "parent_code": "DZ-19",
+          "name": "Maoklane",
+          "type": "city",
+          "population": "15715",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-490604555",
+          "parent_code": "DZ-19",
+          "name": "El Ouricia",
+          "type": "city",
+          "population": "18087",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-490604560",
+          "parent_code": "DZ-19",
+          "name": "Aïn El Kebira",
+          "type": "city",
+          "population": "24075",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501761521",
+          "parent_code": "DZ-19",
+          "name": "Djemila",
+          "type": "city",
+          "population": "24145",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1356784489",
+          "parent_code": "DZ-19",
+          "name": "Ain Doukar",
+          "type": "city",
+          "population": "16095",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1356784508",
+          "parent_code": "DZ-19",
+          "name": "Beni Mouhli",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1356792074",
+          "parent_code": "DZ-19",
+          "name": "Beni Chebana",
+          "type": "city",
+          "population": "13174",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3050365307",
+          "parent_code": "DZ-19",
+          "name": "Bir El Arch",
+          "type": "city",
+          "population": "24995",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3209842489",
+          "parent_code": "DZ-19",
+          "name": "Aïn Arnat",
+          "type": "city",
+          "population": "43551",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3244674588",
+          "parent_code": "DZ-19",
+          "name": "عين أزال",
+          "type": "city",
+          "population": "37970",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4306315224",
+          "parent_code": "DZ-19",
+          "name": "Setif",
+          "type": "city",
+          "population": "288461",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "DZ-05",
+      "parent_code": "DZ",
+      "name": "Batna",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-299619085",
+          "parent_code": "DZ-05",
+          "name": "Batna",
+          "type": "city",
+          "population": "320281",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-443181342",
+          "parent_code": "DZ-05",
+          "name": "Arris",
+          "type": "city",
+          "population": "30207",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443181377",
+          "parent_code": "DZ-05",
+          "name": "Tazoult",
+          "type": "city",
+          "population": "27493",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-455555450",
+          "parent_code": "DZ-05",
+          "name": "Ain Djasser",
+          "type": "city",
+          "population": "15704",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-455555458",
+          "parent_code": "DZ-05",
+          "name": "Seriana",
+          "type": "city",
+          "population": "15445",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-460895922",
+          "parent_code": "DZ-05",
+          "name": "Merouana",
+          "type": "city",
+          "population": "38656",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-460895949",
+          "parent_code": "DZ-05",
+          "name": "Oued El Ma",
+          "type": "city",
+          "population": "20288",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-460974275",
+          "parent_code": "DZ-05",
+          "name": "Ras El Aioun",
+          "type": "city",
+          "population": "22551",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-460974309",
+          "parent_code": "DZ-05",
+          "name": "Boumagueur",
+          "type": "city",
+          "population": "8474",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-460974323",
+          "parent_code": "DZ-05",
+          "name": "N'Gaous",
+          "type": "city",
+          "population": "29504",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-462231832",
+          "parent_code": "DZ-05",
+          "name": "Oued Taga",
+          "type": "city",
+          "population": "18116",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-462231837",
+          "parent_code": "DZ-05",
+          "name": "Timgad",
+          "type": "city",
+          "population": "11828",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1074619884",
+          "parent_code": "DZ-05",
+          "name": "Aïn Touta",
+          "type": "city",
+          "population": "59904",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1405079756",
+          "parent_code": "DZ-05",
+          "name": "El Madher",
+          "type": "city",
+          "population": "18502",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1406479949",
+          "parent_code": "DZ-05",
+          "name": "Sefiane",
+          "type": "city",
+          "population": "14327",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1430981350",
+          "parent_code": "DZ-05",
+          "name": "Ouled Si Slimane",
+          "type": "city",
+          "population": "12473",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1514794418",
+          "parent_code": "DZ-05",
+          "name": "Bouzina",
+          "type": "city",
+          "population": "13383",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1514833483",
+          "parent_code": "DZ-05",
+          "name": "Ichemoul",
+          "type": "city",
+          "population": "10240",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-04",
+      "parent_code": "DZ",
+      "name": "Oum El Bouaghi",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-416631795",
+          "parent_code": "DZ-04",
+          "name": "Ain Mlila",
+          "type": "city",
+          "population": "88441",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-442687443",
+          "parent_code": "DZ-04",
+          "name": "Meskiana",
+          "type": "city",
+          "population": "28315",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-442688335",
+          "parent_code": "DZ-04",
+          "name": "Ain Beida",
+          "type": "city",
+          "population": "118662",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-442688831",
+          "parent_code": "DZ-04",
+          "name": "Oum El Bouaghi",
+          "type": "city",
+          "population": "88359",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-442689045",
+          "parent_code": "DZ-04",
+          "name": "Ain Fakroun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-442689414",
+          "parent_code": "DZ-04",
+          "name": "Sigus",
+          "type": "city",
+          "population": "17598",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443188978",
+          "parent_code": "DZ-04",
+          "name": "Ain Babouche",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443189243",
+          "parent_code": "DZ-04",
+          "name": "Ksar Sbahi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-461977232",
+          "parent_code": "DZ-04",
+          "name": "Fkirina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-462509099",
+          "parent_code": "DZ-04",
+          "name": "Dhala",
+          "type": "city",
+          "population": "11439",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-465434780",
+          "parent_code": "DZ-04",
+          "name": "Ain Kercha",
+          "type": "city",
+          "population": "32377",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1337015384",
+          "parent_code": "DZ-04",
+          "name": "Souk Naamane",
+          "type": "city",
+          "population": "23988",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1545411028",
+          "parent_code": "DZ-04",
+          "name": "Hanchir Toumghani",
+          "type": "city",
+          "population": "23159",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-06",
+      "parent_code": "DZ",
+      "name": "Bejaia",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-291964314",
+          "parent_code": "DZ-06",
+          "name": "Bejaia",
+          "type": "city",
+          "population": "177988",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-331970316",
+          "parent_code": "DZ-06",
+          "name": "Sidi Aich",
+          "type": "city",
+          "population": "13775",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-418104033",
+          "parent_code": "DZ-06",
+          "name": "Tazmalt",
+          "type": "city",
+          "population": "28891",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-418104397",
+          "parent_code": "DZ-06",
+          "name": "Akbou",
+          "type": "city",
+          "population": "52282",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-418104506",
+          "parent_code": "DZ-06",
+          "name": "Ighzer Amokrane",
+          "type": "city",
+          "population": "22719",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-418104782",
+          "parent_code": "DZ-06",
+          "name": "El Kseur",
+          "type": "city",
+          "population": "29842",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-425061188",
+          "parent_code": "DZ-06",
+          "name": "Tichy",
+          "type": "city",
+          "population": "16546",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-425062007",
+          "parent_code": "DZ-06",
+          "name": "Aokas",
+          "type": "city",
+          "population": "15989",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-425062579",
+          "parent_code": "DZ-06",
+          "name": "Souk El Tenine",
+          "type": "city",
+          "population": "14045",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-425064156",
+          "parent_code": "DZ-06",
+          "name": "Melbou ⵎⴻⵍⴱⵓ ملبو",
+          "type": "city",
+          "population": "11396",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-442762529",
+          "parent_code": "DZ-06",
+          "name": "Adekar",
+          "type": "city",
+          "population": "13067",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443160243",
+          "parent_code": "DZ-06",
+          "name": "Darguina",
+          "type": "city",
+          "population": "14146",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443160283",
+          "parent_code": "DZ-06",
+          "name": "Kherrata",
+          "type": "city",
+          "population": "35077",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-455500546",
+          "parent_code": "DZ-06",
+          "name": "Seddouk",
+          "type": "city",
+          "population": "20573",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-455500554",
+          "parent_code": "DZ-06",
+          "name": "Trouna",
+          "type": "city",
+          "population": "13412",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-455545064",
+          "parent_code": "DZ-06",
+          "name": "Amizour",
+          "type": "city",
+          "population": "37562",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-455545066",
+          "parent_code": "DZ-06",
+          "name": "Barbacha",
+          "type": "city",
+          "population": "16901",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-465589390",
+          "parent_code": "DZ-06",
+          "name": "Ighil Ali",
+          "type": "city",
+          "population": "9526",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-465589402",
+          "parent_code": "DZ-06",
+          "name": "Guendouz",
+          "type": "city",
+          "population": "14563",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1000745863",
+          "parent_code": "DZ-06",
+          "name": "Tamridjet",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1117953861",
+          "parent_code": "DZ-06",
+          "name": "Bouhamza",
+          "type": "city",
+          "population": "9123",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1350849495",
+          "parent_code": "DZ-06",
+          "name": "Amalou",
+          "type": "city",
+          "population": "8602",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1350849498",
+          "parent_code": "DZ-06",
+          "name": "Tamokra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1357209053",
+          "parent_code": "DZ-06",
+          "name": "Toudja",
+          "type": "city",
+          "population": "9827",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1359687433",
+          "parent_code": "DZ-06",
+          "name": "Taregregt",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1368546179",
+          "parent_code": "DZ-06",
+          "name": "Tifṛa",
+          "type": "city",
+          "population": "8400",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1368549541",
+          "parent_code": "DZ-06",
+          "name": "Ilmaten",
+          "type": "city",
+          "population": "11825",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1370246767",
+          "parent_code": "DZ-06",
+          "name": "Ighram",
+          "type": "city",
+          "population": "12387",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1370291698",
+          "parent_code": "DZ-06",
+          "name": "Semɛun",
+          "type": "city",
+          "population": "13616",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1370339888",
+          "parent_code": "DZ-06",
+          "name": "Taguemmount",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1370381871",
+          "parent_code": "DZ-06",
+          "name": "Feraoun",
+          "type": "city",
+          "population": "15482",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2207025298",
+          "parent_code": "DZ-06",
+          "name": "Hellouane",
+          "type": "city",
+          "population": "20000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2679573905",
+          "parent_code": "DZ-06",
+          "name": "Boudjellil",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2837616562",
+          "parent_code": "DZ-06",
+          "name": "El-bordj",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2852931042",
+          "parent_code": "DZ-06",
+          "name": "Oued Ghir",
+          "type": "city",
+          "population": "19345",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3014167925",
+          "parent_code": "DZ-06",
+          "name": "Beni Ksila ⴱⵏⵉ ⴽⵙⵉⵍⴰ بني كسيلة",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3088478771",
+          "parent_code": "DZ-06",
+          "name": "Taourirt Ighil",
+          "type": "city",
+          "population": "6653",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3090988170",
+          "parent_code": "DZ-06",
+          "name": "Bordj Mira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3755700078",
+          "parent_code": "DZ-06",
+          "name": "Tizi Tindjit",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4072579656",
+          "parent_code": "DZ-06",
+          "name": "Imessisen",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5339708283",
+          "parent_code": "DZ-06",
+          "name": "El Had",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12293582679",
+          "parent_code": "DZ-06",
+          "name": "Ighzer Ouzarif",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13718128391",
+          "parent_code": "DZ-06",
+          "name": "Beni Maouche",
+          "type": "city",
+          "population": "13412",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-34",
+      "parent_code": "DZ",
+      "name": "Bordj Bou Arreridj",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-291964008",
+          "parent_code": "DZ-34",
+          "name": "Bordj Bou Arreridjj",
+          "type": "city",
+          "population": "168346",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-417598846",
+          "parent_code": "DZ-34",
+          "name": "El Achir",
+          "type": "city",
+          "population": "23101",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-455579590",
+          "parent_code": "DZ-34",
+          "name": "Bordj Zemmoura",
+          "type": "city",
+          "population": "10296",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-465524798",
+          "parent_code": "DZ-34",
+          "name": "Ras El Oued",
+          "type": "city",
+          "population": "51482",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-465589424",
+          "parent_code": "DZ-34",
+          "name": "Medjana",
+          "type": "city",
+          "population": "22402",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1349282523",
+          "parent_code": "DZ-34",
+          "name": "Bordj Ghedir",
+          "type": "city",
+          "population": "26042",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-28",
+      "parent_code": "DZ",
+      "name": "M'Sila",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-299700319",
+          "parent_code": "DZ-28",
+          "name": "M'Sila",
+          "type": "city",
+          "population": "156647",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-439856784",
+          "parent_code": "DZ-28",
+          "name": "Ouled Derradj",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-439857152",
+          "parent_code": "DZ-28",
+          "name": "Berhoum",
+          "type": "city",
+          "population": "23620",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-439857505",
+          "parent_code": "DZ-28",
+          "name": "Magra",
+          "type": "city",
+          "population": "39250",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-439916608",
+          "parent_code": "DZ-28",
+          "name": "Sidi Aissa",
+          "type": "city",
+          "population": "72062",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-439921054",
+          "parent_code": "DZ-28",
+          "name": "Aïn El Hadjel ⵄⵉⵏ ⵍⴻⵃⴵⴻⵍ عين الحجل",
+          "type": "city",
+          "population": "33046",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-453662336",
+          "parent_code": "DZ-28",
+          "name": "Hammam Dhalaa",
+          "type": "city",
+          "population": "39850",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1431038792",
+          "parent_code": "DZ-28",
+          "name": "Ain Khadra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1561549472",
+          "parent_code": "DZ-28",
+          "name": "Belaiba",
+          "type": "city",
+          "population": "27404",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12771607687",
+          "parent_code": "DZ-28",
+          "name": "Maadid",
+          "type": "city",
+          "population": "22274",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-47",
+      "parent_code": "DZ",
+      "name": "Ghardaia",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1035297677",
+          "parent_code": "DZ-47",
+          "name": "Berriane",
+          "type": "city",
+          "population": "30200",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1035297701",
+          "parent_code": "DZ-47",
+          "name": "Bounoura",
+          "type": "city",
+          "population": "35405",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1035297707",
+          "parent_code": "DZ-47",
+          "name": "El Atteuf",
+          "type": "city",
+          "population": "14752",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1035388347",
+          "parent_code": "DZ-47",
+          "name": "Zelfana",
+          "type": "city",
+          "population": "10161",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1035396532",
+          "parent_code": "DZ-47",
+          "name": "Dayet Ben Dahoua",
+          "type": "city",
+          "population": "12643",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3148980256",
+          "parent_code": "DZ-47",
+          "name": "Metlili Chaamba",
+          "type": "city",
+          "population": "50280",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3475248415",
+          "parent_code": "DZ-47",
+          "name": "Ghardaia",
+          "type": "city",
+          "population": "142913",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3475267932",
+          "parent_code": "DZ-47",
+          "name": "الڨرارة ⵍⴳⵔⴰⵔⴰ",
+          "type": "city",
+          "population": "59514",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6364452763",
+          "parent_code": "DZ-47",
+          "name": "Belvedaire",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        }
+      ]
+    },
+    {
+      "code": "DZ-11",
+      "parent_code": "DZ",
+      "name": "Tamanrasset",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-89369215",
+          "parent_code": "DZ-11",
+          "name": "Tamanrasset",
+          "type": "city",
+          "population": "92635",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-452468385",
+          "parent_code": "DZ-11",
+          "name": "In Amguel",
+          "type": "city",
+          "population": "4208",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2155117371",
+          "parent_code": "DZ-11",
+          "name": "Abalessa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-30",
+      "parent_code": "DZ",
+      "name": "Ouargla",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-500193184",
+          "parent_code": "DZ-30",
+          "name": "Hassi Messaoud",
+          "type": "city",
+          "population": "45147",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-666136595",
+          "parent_code": "DZ-30",
+          "name": "فران ⴼⴻⵔⴰⵏ",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1035348369",
+          "parent_code": "DZ-30",
+          "name": "النقوسة ⵏⴳⵓⵙⴰ",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1035356453",
+          "parent_code": "DZ-30",
+          "name": "Ain Beida",
+          "type": "city",
+          "population": "19039",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1035356458",
+          "parent_code": "DZ-30",
+          "name": "Rouissat",
+          "type": "city",
+          "population": "58112",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3040399726",
+          "parent_code": "DZ-30",
+          "name": "El Hadjira",
+          "type": "city",
+          "population": "14965",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3869219093",
+          "parent_code": "DZ-30",
+          "name": "Ouargla",
+          "type": "city",
+          "population": "133024",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4374724383",
+          "parent_code": "DZ-30",
+          "name": "El Borma",
+          "type": "city",
+          "population": "3205",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-33",
+      "parent_code": "DZ",
+      "name": "Illizi",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2072091143",
+          "parent_code": "DZ-33",
+          "name": "In Amenas",
+          "type": "city",
+          "population": "7385",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3065495793",
+          "parent_code": "DZ-33",
+          "name": "Alrar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3457570013",
+          "parent_code": "DZ-33",
+          "name": "Illizi",
+          "type": "city",
+          "population": "17252",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "DZ-39",
+      "parent_code": "DZ",
+      "name": "El Oued",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-262963217",
+          "parent_code": "DZ-39",
+          "name": "El Oued",
+          "type": "city",
+          "population": "134699",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-443008187",
+          "parent_code": "DZ-39",
+          "name": "Hassi Khelifa",
+          "type": "city",
+          "population": "31784",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443008345",
+          "parent_code": "DZ-39",
+          "name": "Debila",
+          "type": "city",
+          "population": "25158",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443009273",
+          "parent_code": "DZ-39",
+          "name": "Hassani Abdelkrim",
+          "type": "city",
+          "population": "22755",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565785263",
+          "parent_code": "DZ-39",
+          "name": "Reguiba",
+          "type": "city",
+          "population": "40367",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565785698",
+          "parent_code": "DZ-39",
+          "name": "Kouinine",
+          "type": "city",
+          "population": "10076",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565786076",
+          "parent_code": "DZ-39",
+          "name": "Taghzout",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565786170",
+          "parent_code": "DZ-39",
+          "name": "Guemar",
+          "type": "city",
+          "population": "39168",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1566167535",
+          "parent_code": "DZ-39",
+          "name": "Bayadha",
+          "type": "city",
+          "population": "52000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1566167646",
+          "parent_code": "DZ-39",
+          "name": "Robbah",
+          "type": "city",
+          "population": "21965",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1566167652",
+          "parent_code": "DZ-39",
+          "name": "Nakhla",
+          "type": "city",
+          "population": "12652",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1566167739",
+          "parent_code": "DZ-39",
+          "name": "Magrane",
+          "type": "city",
+          "population": "24577",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-07",
+      "parent_code": "DZ",
+      "name": "Biskra",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-299682811",
+          "parent_code": "DZ-07",
+          "name": "Biskra",
+          "type": "city",
+          "population": "205608",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-443181299",
+          "parent_code": "DZ-07",
+          "name": "Chetma",
+          "type": "city",
+          "population": "13699",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-462020917",
+          "parent_code": "DZ-07",
+          "name": "Zeribet El Oued",
+          "type": "city",
+          "population": "21541",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-462020918",
+          "parent_code": "DZ-07",
+          "name": "Ain Naga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-462020919",
+          "parent_code": "DZ-07",
+          "name": "Sidi Okba",
+          "type": "city",
+          "population": "33509",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-498971186",
+          "parent_code": "DZ-07",
+          "name": "Tolga",
+          "type": "city",
+          "population": "55809",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-499012295",
+          "parent_code": "DZ-07",
+          "name": "Bouchagroune",
+          "type": "city",
+          "population": "13124",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1562495872",
+          "parent_code": "DZ-07",
+          "name": "Bordj Ben Azzouz",
+          "type": "city",
+          "population": "12702",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-17",
+      "parent_code": "DZ",
+      "name": "Djelfa",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-299681006",
+          "parent_code": "DZ-17",
+          "name": "Djelfa",
+          "type": "city",
+          "population": "289226",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-489198737",
+          "parent_code": "DZ-17",
+          "name": "الإدريسية ⵍⵉⴷⵔⵉⵙⵉⵢⴰ",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-489262954",
+          "parent_code": "DZ-17",
+          "name": "Ain El Ibel",
+          "type": "city",
+          "population": "28406",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-489290379",
+          "parent_code": "DZ-17",
+          "name": "Faidh El Botma",
+          "type": "city",
+          "population": "32501",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-552409728",
+          "parent_code": "DZ-17",
+          "name": "Hassi Bahbah",
+          "type": "city",
+          "population": "86421",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1435034107",
+          "parent_code": "DZ-17",
+          "name": "Hassi El Euch",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1439460912",
+          "parent_code": "DZ-17",
+          "name": "Dar Chioukh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1443523128",
+          "parent_code": "DZ-17",
+          "name": "Oum Laadham",
+          "type": "city",
+          "population": "23051",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3087947095",
+          "parent_code": "DZ-17",
+          "name": "Messaad",
+          "type": "city",
+          "population": "114625",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4369434755",
+          "parent_code": "DZ-17",
+          "name": "Beni Yagoub",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5465365929",
+          "parent_code": "DZ-17",
+          "name": "Charef",
+          "type": "city",
+          "population": "100000",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-03",
+      "parent_code": "DZ",
+      "name": "Laghouat",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-264573224",
+          "parent_code": "DZ-03",
+          "name": "Laghouat",
+          "type": "city",
+          "population": "144747",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-552386351",
+          "parent_code": "DZ-03",
+          "name": "Kheneg",
+          "type": "city",
+          "population": "10787",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-998564380",
+          "parent_code": "DZ-03",
+          "name": "Ksar El Hirane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1818161388",
+          "parent_code": "DZ-03",
+          "name": "Hassi Delaa",
+          "type": "city",
+          "population": "11204",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4552228445",
+          "parent_code": "DZ-03",
+          "name": "Hassi R'Mel",
+          "type": "city",
+          "population": "22133",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-12",
+      "parent_code": "DZ",
+      "name": "Tébessa",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-299683227",
+          "parent_code": "DZ-12",
+          "name": "Tebessa",
+          "type": "city",
+          "population": "196537",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-443014003",
+          "parent_code": "DZ-12",
+          "name": "Oum Ali",
+          "type": "city",
+          "population": "3744",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443014157",
+          "parent_code": "DZ-12",
+          "name": "El Ma Labiodh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443017215",
+          "parent_code": "DZ-12",
+          "name": "Morsott",
+          "type": "city",
+          "population": "17238",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443018226",
+          "parent_code": "DZ-12",
+          "name": "El Aouinet",
+          "type": "city",
+          "population": "21682",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-462012535",
+          "parent_code": "DZ-12",
+          "name": "الونزة ⵍⵡⴻⵏⵣⴰ",
+          "type": "city",
+          "population": "52737",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-462020920",
+          "parent_code": "DZ-12",
+          "name": "Cheria",
+          "type": "city",
+          "population": "75344",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-462020925",
+          "parent_code": "DZ-12",
+          "name": "Bi'r Muqaddam",
+          "type": "city",
+          "population": "5696",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1551260359",
+          "parent_code": "DZ-12",
+          "name": "El Ogla",
+          "type": "city",
+          "population": "14789",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1553171366",
+          "parent_code": "DZ-12",
+          "name": "El Kouif",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-40",
+      "parent_code": "DZ",
+      "name": "Khenchela",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-299702563",
+          "parent_code": "DZ-40",
+          "name": "Khenchela",
+          "type": "city",
+          "population": "108580",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-443188820",
+          "parent_code": "DZ-40",
+          "name": "Oued Rechache",
+          "type": "city",
+          "population": "24923",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443188921",
+          "parent_code": "DZ-40",
+          "name": "Tazogaght",
+          "type": "city",
+          "population": "38706",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-461977234",
+          "parent_code": "DZ-40",
+          "name": "Babar",
+          "type": "city",
+          "population": "34844",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-462508963",
+          "parent_code": "DZ-40",
+          "name": "Kais",
+          "type": "city",
+          "population": "34383",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-462508976",
+          "parent_code": "DZ-40",
+          "name": "Taouzient",
+          "type": "city",
+          "population": "10748",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1514842144",
+          "parent_code": "DZ-40",
+          "name": "Bouhmama",
+          "type": "city",
+          "population": "10614",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1748661064",
+          "parent_code": "DZ-40",
+          "name": "El Hamma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3823484201",
+          "parent_code": "DZ-40",
+          "name": "Chechar",
+          "type": "city",
+          "population": "27428",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-13",
+      "parent_code": "DZ",
+      "name": "Tlemcen",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-424087266",
+          "parent_code": "DZ-13",
+          "name": "Hennaya",
+          "type": "city",
+          "population": "33356",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-424090451",
+          "parent_code": "DZ-13",
+          "name": "Sebdou",
+          "type": "city",
+          "population": "39800",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-439902538",
+          "parent_code": "DZ-13",
+          "name": "Ouled Mimoun",
+          "type": "city",
+          "population": "26389",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-439911463",
+          "parent_code": "DZ-13",
+          "name": "Sabra",
+          "type": "city",
+          "population": "28555",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-439911514",
+          "parent_code": "DZ-13",
+          "name": "Maghnia",
+          "type": "city",
+          "population": "114634",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-443367433",
+          "parent_code": "DZ-13",
+          "name": "Hammam Boughrara",
+          "type": "city",
+          "population": "11444",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-464789603",
+          "parent_code": "DZ-13",
+          "name": "Sidi Boudjenane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-464789607",
+          "parent_code": "DZ-13",
+          "name": "Nedroma",
+          "type": "city",
+          "population": "32498",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-490570861",
+          "parent_code": "DZ-13",
+          "name": "Marsa Ben M'Hidi",
+          "type": "city",
+          "population": "6212",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-490570863",
+          "parent_code": "DZ-13",
+          "name": "Boukanoun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-490570871",
+          "parent_code": "DZ-13",
+          "name": "السواني ⵙⵡⴰⵏⵉ",
+          "type": "city",
+          "population": "9513",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-835877074",
+          "parent_code": "DZ-13",
+          "name": "Honaïne",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-841797699",
+          "parent_code": "DZ-13",
+          "name": "Mansourah",
+          "type": "city",
+          "population": "49150",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-841838477",
+          "parent_code": "DZ-13",
+          "name": "Ain Youcef",
+          "type": "city",
+          "population": "13234",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1038156340",
+          "parent_code": "DZ-13",
+          "name": "Mezaourou",
+          "type": "city",
+          "population": "6870",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1974927358",
+          "parent_code": "DZ-13",
+          "name": "Remchi",
+          "type": "city",
+          "population": "46999",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3105360278",
+          "parent_code": "DZ-13",
+          "name": "Ghazaouet",
+          "type": "city",
+          "population": "43774",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3110093634",
+          "parent_code": "DZ-13",
+          "name": "Tlemcen",
+          "type": "city",
+          "population": "140158",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4384390366",
+          "parent_code": "DZ-13",
+          "name": "Ain Tallout",
+          "type": "city",
+          "population": "10286",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4520491165",
+          "parent_code": "DZ-13",
+          "name": "Chetouane",
+          "type": "city",
+          "population": "47600",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-20",
+      "parent_code": "DZ",
+      "name": "Saïda",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-299822267",
+          "parent_code": "DZ-20",
+          "name": "Saida",
+          "type": "city",
+          "population": "128413",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-424611947",
+          "parent_code": "DZ-20",
+          "name": "Ain El Hadjar",
+          "type": "city",
+          "population": "29022",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-464284731",
+          "parent_code": "DZ-20",
+          "name": "Youb",
+          "type": "city",
+          "population": "17355",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-464486627",
+          "parent_code": "DZ-20",
+          "name": "Balloul",
+          "type": "city",
+          "population": "19711",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-14",
+      "parent_code": "DZ",
+      "name": "Tiaret",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-299684626",
+          "parent_code": "DZ-14",
+          "name": "Tiaret",
+          "type": "city",
+          "population": "201263",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-442973081",
+          "parent_code": "DZ-14",
+          "name": "Takhemaret",
+          "type": "city",
+          "population": "34124",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-442973218",
+          "parent_code": "DZ-14",
+          "name": "Ain El Hadid",
+          "type": "city",
+          "population": "15482",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-442973658",
+          "parent_code": "DZ-14",
+          "name": "Frenda",
+          "type": "city",
+          "population": "54162",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-442975387",
+          "parent_code": "DZ-14",
+          "name": "Dahmouni",
+          "type": "city",
+          "population": "24983",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-463218154",
+          "parent_code": "DZ-14",
+          "name": "Sougueur",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-463218168",
+          "parent_code": "DZ-14",
+          "name": "Ain Deheb",
+          "type": "city",
+          "population": "28595",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-463218174",
+          "parent_code": "DZ-14",
+          "name": "Rahouia",
+          "type": "city",
+          "population": "24983",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-929287939",
+          "parent_code": "DZ-14",
+          "name": "Mahdia",
+          "type": "city",
+          "population": "33082",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-929382990",
+          "parent_code": "DZ-14",
+          "name": "Mechraa Safa",
+          "type": "city",
+          "population": "16077",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3574502641",
+          "parent_code": "DZ-14",
+          "name": "Medrissa",
+          "type": "city",
+          "population": "15293",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11365218435",
+          "parent_code": "DZ-14",
+          "name": "Frenda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-38",
+      "parent_code": "DZ",
+      "name": "Tissemsilt",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-442976540",
+          "parent_code": "DZ-38",
+          "name": "Tissemsilt",
+          "type": "city",
+          "population": "75197",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-442977388",
+          "parent_code": "DZ-38",
+          "name": "Theniet El Had",
+          "type": "city",
+          "population": "30777",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-453587405",
+          "parent_code": "DZ-38",
+          "name": "Bordj El Emir Abdelkader",
+          "type": "city",
+          "population": "11716",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-581213367",
+          "parent_code": "DZ-38",
+          "name": "Lardjem",
+          "type": "city",
+          "population": "25217",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-581213369",
+          "parent_code": "DZ-38",
+          "name": "Bordj Bounaama",
+          "type": "city",
+          "population": "20864",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-48",
+      "parent_code": "DZ",
+      "name": "Relizane",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-299825178",
+          "parent_code": "DZ-48",
+          "name": "Relizane",
+          "type": "city",
+          "population": "130094",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-393866143",
+          "parent_code": "DZ-48",
+          "name": "El Matmar",
+          "type": "city",
+          "population": "17442",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-393866177",
+          "parent_code": "DZ-48",
+          "name": "Yellel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-462633852",
+          "parent_code": "DZ-48",
+          "name": "Ain Tarik",
+          "type": "city",
+          "population": "12253",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-462633891",
+          "parent_code": "DZ-48",
+          "name": "Ammi Moussa",
+          "type": "city",
+          "population": "28962",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-462633911",
+          "parent_code": "DZ-48",
+          "name": "Mediouna",
+          "type": "city",
+          "population": "30744",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-462633913",
+          "parent_code": "DZ-48",
+          "name": "Sidi M'hamed Ben Ali",
+          "type": "city",
+          "population": "20096",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-462633914",
+          "parent_code": "DZ-48",
+          "name": "Mazouna",
+          "type": "city",
+          "population": "26044",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-463218170",
+          "parent_code": "DZ-48",
+          "name": "Zemmora",
+          "type": "city",
+          "population": "30027",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-463218171",
+          "parent_code": "DZ-48",
+          "name": "Mendes",
+          "type": "city",
+          "population": "15127",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1040202449",
+          "parent_code": "DZ-48",
+          "name": "Ouled Aiche",
+          "type": "city",
+          "population": "8916",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1057262436",
+          "parent_code": "DZ-48",
+          "name": "Beni Zentis",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2377301721",
+          "parent_code": "DZ-48",
+          "name": "Oued Rhiou",
+          "type": "city",
+          "population": "90685",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3085551146",
+          "parent_code": "DZ-48",
+          "name": "El Hamadna",
+          "type": "city",
+          "population": "20805",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3085551184",
+          "parent_code": "DZ-48",
+          "name": "Djdiouia",
+          "type": "city",
+          "population": "33835",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3673963242",
+          "parent_code": "DZ-48",
+          "name": "Oued El Djemaa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4383641150",
+          "parent_code": "DZ-48",
+          "name": "Beni Dergoun",
+          "type": "city",
+          "population": "12364",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-26",
+      "parent_code": "DZ",
+      "name": "Médéa",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-288417925",
+          "parent_code": "DZ-26",
+          "name": "Medea",
+          "type": "city",
+          "population": "138355",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-288419592",
+          "parent_code": "DZ-26",
+          "name": "Berrouaghia",
+          "type": "city",
+          "population": "60152",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-439919524",
+          "parent_code": "DZ-26",
+          "name": "Tablat",
+          "type": "city",
+          "population": "27919",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443042584",
+          "parent_code": "DZ-26",
+          "name": "Ouamri",
+          "type": "city",
+          "population": "18000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443043847",
+          "parent_code": "DZ-26",
+          "name": "Sidi Naamane",
+          "type": "city",
+          "population": "17803",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443044186",
+          "parent_code": "DZ-26",
+          "name": "Beni Slimane",
+          "type": "city",
+          "population": "33779",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-453666215",
+          "parent_code": "DZ-26",
+          "name": "El Omaria",
+          "type": "city",
+          "population": "20705",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-497170603",
+          "parent_code": "DZ-26",
+          "name": "Souagui",
+          "type": "city",
+          "population": "15536",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-10",
+      "parent_code": "DZ",
+      "name": "Bouira",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-253291208",
+          "parent_code": "DZ-10",
+          "name": "Lakhdaria",
+          "type": "city",
+          "population": "59746",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-394733994",
+          "parent_code": "DZ-10",
+          "name": "Bouira",
+          "type": "city",
+          "population": "695585",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-394734839",
+          "parent_code": "DZ-10",
+          "name": "Bechloul",
+          "type": "city",
+          "population": "11775",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-394734848",
+          "parent_code": "DZ-10",
+          "name": "El Asnam",
+          "type": "city",
+          "population": "25458",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-417620827",
+          "parent_code": "DZ-10",
+          "name": "M'Chedallah",
+          "type": "city",
+          "population": "25563",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-417620891",
+          "parent_code": "DZ-10",
+          "name": "El Adjiba",
+          "type": "city",
+          "population": "18486",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-439917359",
+          "parent_code": "DZ-10",
+          "name": "Sour El-Ghozlane",
+          "type": "city",
+          "population": "50120",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-439918614",
+          "parent_code": "DZ-10",
+          "name": "Bir Ghbalou",
+          "type": "city",
+          "population": "11016",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443044984",
+          "parent_code": "DZ-10",
+          "name": "Aïn Bessem",
+          "type": "city",
+          "population": "42635",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-489192902",
+          "parent_code": "DZ-10",
+          "name": "Kadiria",
+          "type": "city",
+          "population": "22327",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1212675649",
+          "parent_code": "DZ-10",
+          "name": "El Hachimia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-41",
+      "parent_code": "DZ",
+      "name": "Souk Ahras",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-299698224",
+          "parent_code": "DZ-41",
+          "name": "Souk Ahras",
+          "type": "city",
+          "population": "155259",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-443019113",
+          "parent_code": "DZ-41",
+          "name": "M'Daourouch",
+          "type": "city",
+          "population": "41243",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443023131",
+          "parent_code": "DZ-41",
+          "name": "Mechroha",
+          "type": "city",
+          "population": "21802",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443130836",
+          "parent_code": "DZ-41",
+          "name": "Ouled Driss",
+          "type": "city",
+          "population": "11303",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-461977230",
+          "parent_code": "DZ-41",
+          "name": "بير بوهوش ⴱⵉⵔ ⴱⵓⵀⵓⵛ",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-461977237",
+          "parent_code": "DZ-41",
+          "name": "Sedrata",
+          "type": "city",
+          "population": "53218",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-462003370",
+          "parent_code": "DZ-41",
+          "name": "Taoura",
+          "type": "city",
+          "population": "18933",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-462003371",
+          "parent_code": "DZ-41",
+          "name": "Merahna",
+          "type": "city",
+          "population": "13319",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-462003373",
+          "parent_code": "DZ-41",
+          "name": "الحدادة ⵃⴻⴷⴷⴰⴷⴰ",
+          "type": "city",
+          "population": "7351",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1540356602",
+          "parent_code": "DZ-41",
+          "name": "عين الصنب ⵄⵉⵏ ⵚⵚⵏⴱ",
+          "type": "city",
+          "population": "15000",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-15",
+      "parent_code": "DZ",
+      "name": "Tizi Ouzou",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-253292160",
+          "parent_code": "DZ-15",
+          "name": "Tizi Ouzou",
+          "type": "city",
+          "population": "135088",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-253292622",
+          "parent_code": "DZ-15",
+          "name": "Draa Ben Khedda",
+          "type": "city",
+          "population": "31382",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-290255429",
+          "parent_code": "DZ-15",
+          "name": "Tadmait",
+          "type": "city",
+          "population": "22838",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-425029266",
+          "parent_code": "DZ-15",
+          "name": "Tigzirt",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-442761948",
+          "parent_code": "DZ-15",
+          "name": "Tizi Rached",
+          "type": "city",
+          "population": "17161",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-442761953",
+          "parent_code": "DZ-15",
+          "name": "Mekla",
+          "type": "city",
+          "population": "24237",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-442762008",
+          "parent_code": "DZ-15",
+          "name": "Freha",
+          "type": "city",
+          "population": "24228",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-442762044",
+          "parent_code": "DZ-15",
+          "name": "Azazga",
+          "type": "city",
+          "population": "34683",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-442789879",
+          "parent_code": "DZ-15",
+          "name": "Ain El Hammam",
+          "type": "city",
+          "population": "20401",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-442792269",
+          "parent_code": "DZ-15",
+          "name": "Larbaa Nath Irathen",
+          "type": "city",
+          "population": "29376",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443181184",
+          "parent_code": "DZ-15",
+          "name": "Ouadhia",
+          "type": "city",
+          "population": "15771",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443181221",
+          "parent_code": "DZ-15",
+          "name": "Mechtras",
+          "type": "city",
+          "population": "32683",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443181292",
+          "parent_code": "DZ-15",
+          "name": "Draa El Mizan",
+          "type": "city",
+          "population": "38886",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-454650785",
+          "parent_code": "DZ-15",
+          "name": "Tizi Ghenif",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-964565869",
+          "parent_code": "DZ-15",
+          "name": "Ait Yahia Moussa",
+          "type": "city",
+          "population": "20426",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1182317080",
+          "parent_code": "DZ-15",
+          "name": "Souk El Khemis",
+          "type": "city",
+          "population": "32121",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1182509818",
+          "parent_code": "DZ-15",
+          "name": "At Dwala",
+          "type": "city",
+          "population": "21551",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1182509826",
+          "parent_code": "DZ-15",
+          "name": "Ait Zmenzer",
+          "type": "city",
+          "population": "12117",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1195954686",
+          "parent_code": "DZ-15",
+          "name": "Ouacif",
+          "type": "city",
+          "population": "10313",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2279442270",
+          "parent_code": "DZ-15",
+          "name": "Tamazirt",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2936211799",
+          "parent_code": "DZ-15",
+          "name": "Bouzeguene",
+          "type": "city",
+          "population": "24311",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3241026346",
+          "parent_code": "DZ-15",
+          "name": "Azeffoun",
+          "type": "city",
+          "population": "16847",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4108308385",
+          "parent_code": "DZ-15",
+          "name": "Boghni",
+          "type": "city",
+          "population": "61263",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4368057605",
+          "parent_code": "DZ-15",
+          "name": "Beni Yenni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12771566781",
+          "parent_code": "DZ-15",
+          "name": "M'kira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-35",
+      "parent_code": "DZ",
+      "name": "Boumerdes",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-252600742",
+          "parent_code": "DZ-35",
+          "name": "Boumerdes",
+          "type": "city",
+          "population": "41685",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-253167052",
+          "parent_code": "DZ-35",
+          "name": "Thenia",
+          "type": "city",
+          "population": "21439",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-253167208",
+          "parent_code": "DZ-35",
+          "name": "Zemmouri",
+          "type": "city",
+          "population": "26408",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-253292625",
+          "parent_code": "DZ-35",
+          "name": "Dellys",
+          "type": "city",
+          "population": "32954",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-290212788",
+          "parent_code": "DZ-35",
+          "name": "Bordj Menaiel",
+          "type": "city",
+          "population": "64820",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-290255428",
+          "parent_code": "DZ-35",
+          "name": "Naciria",
+          "type": "city",
+          "population": "22431",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316373452",
+          "parent_code": "DZ-35",
+          "name": "Larbatache",
+          "type": "city",
+          "population": "19356",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316373483",
+          "parent_code": "DZ-35",
+          "name": "El Kharrouba",
+          "type": "city",
+          "population": "10885",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-317105898",
+          "parent_code": "DZ-35",
+          "name": "Corso",
+          "type": "city",
+          "population": "20705",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-317127887",
+          "parent_code": "DZ-35",
+          "name": "Ouled Brahim",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-317134979",
+          "parent_code": "DZ-35",
+          "name": "Boudouaou",
+          "type": "city",
+          "population": "71238",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-317142674",
+          "parent_code": "DZ-35",
+          "name": "Ouled Haddadj",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-317143897",
+          "parent_code": "DZ-35",
+          "name": "Ouled Moussa",
+          "type": "city",
+          "population": "45770",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-317155206",
+          "parent_code": "DZ-35",
+          "name": "Hammedi",
+          "type": "city",
+          "population": "40546",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-425026894",
+          "parent_code": "DZ-35",
+          "name": "Djinet",
+          "type": "city",
+          "population": "21966",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443158763",
+          "parent_code": "DZ-35",
+          "name": "Baghlia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-454650784",
+          "parent_code": "DZ-35",
+          "name": "Chaabet El Ameur",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-818784414",
+          "parent_code": "DZ-35",
+          "name": "Beni Amrane",
+          "type": "city",
+          "population": "23621",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-818784416",
+          "parent_code": "DZ-35",
+          "name": "Souk El Had",
+          "type": "city",
+          "population": "6693",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-964393476",
+          "parent_code": "DZ-35",
+          "name": "Isser",
+          "type": "city",
+          "population": "32580",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2944119167",
+          "parent_code": "DZ-35",
+          "name": "Khemis El Khechna",
+          "type": "city",
+          "population": "75962",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-44",
+      "parent_code": "DZ",
+      "name": "Aïn Defla",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-394266907",
+          "parent_code": "DZ-44",
+          "name": "Ain Defla",
+          "type": "city",
+          "population": "65453",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-394267731",
+          "parent_code": "DZ-44",
+          "name": "Rouina",
+          "type": "city",
+          "population": "21572",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443042310",
+          "parent_code": "DZ-44",
+          "name": "Aïn Soltane",
+          "type": "city",
+          "population": "21565",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443042469",
+          "parent_code": "DZ-44",
+          "name": "Djendel",
+          "type": "city",
+          "population": "30170",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-454619814",
+          "parent_code": "DZ-44",
+          "name": "El Abadia",
+          "type": "city",
+          "population": "40697",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1019348170",
+          "parent_code": "DZ-44",
+          "name": "Oued Chorfa",
+          "type": "city",
+          "population": "13353",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1019447024",
+          "parent_code": "DZ-44",
+          "name": "Djelida",
+          "type": "city",
+          "population": "36076",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1019508437",
+          "parent_code": "DZ-44",
+          "name": "El Amra",
+          "type": "city",
+          "population": "31073",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3028201605",
+          "parent_code": "DZ-44",
+          "name": "Miliana",
+          "type": "city",
+          "population": "44201",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3028239347",
+          "parent_code": "DZ-44",
+          "name": "Arib",
+          "type": "city",
+          "population": "24980",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3028366169",
+          "parent_code": "DZ-44",
+          "name": "El Attaf",
+          "type": "city",
+          "population": "57737",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3224632592",
+          "parent_code": "DZ-44",
+          "name": "Boumedfaa",
+          "type": "city",
+          "population": "21509",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-09",
+      "parent_code": "DZ",
+      "name": "Blida",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-288418022",
+          "parent_code": "DZ-09",
+          "name": "Blida",
+          "type": "city",
+          "population": "331779",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-316367211",
+          "parent_code": "DZ-09",
+          "name": "Larbaa",
+          "type": "city",
+          "population": "83819",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316373549",
+          "parent_code": "DZ-09",
+          "name": "Meftah",
+          "type": "city",
+          "population": "64978",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316374182",
+          "parent_code": "DZ-09",
+          "name": "Bougara",
+          "type": "city",
+          "population": "51203",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316374305",
+          "parent_code": "DZ-09",
+          "name": "Bouinan",
+          "type": "city",
+          "population": "31070",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-316374727",
+          "parent_code": "DZ-09",
+          "name": "Soumaa",
+          "type": "city",
+          "population": "37461",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316376509",
+          "parent_code": "DZ-09",
+          "name": "Boufarik",
+          "type": "city",
+          "population": "71446",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316377925",
+          "parent_code": "DZ-09",
+          "name": "Chebli",
+          "type": "city",
+          "population": "29660",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-394180413",
+          "parent_code": "DZ-09",
+          "name": "Chiffa",
+          "type": "city",
+          "population": "34268",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-394180743",
+          "parent_code": "DZ-09",
+          "name": "Mouzaia",
+          "type": "city",
+          "population": "52555",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-394180829",
+          "parent_code": "DZ-09",
+          "name": "El Affroun",
+          "type": "city",
+          "population": "42465",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-394303114",
+          "parent_code": "DZ-09",
+          "name": "Beni Tamou",
+          "type": "city",
+          "population": "36228",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1011084903",
+          "parent_code": "DZ-09",
+          "name": "Sidi Hammad",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1460396365",
+          "parent_code": "DZ-09",
+          "name": "Ouled Yaich",
+          "type": "city",
+          "population": "87131",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1711754181",
+          "parent_code": "DZ-09",
+          "name": "Bouarfa",
+          "type": "city",
+          "population": "35910",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2806242913",
+          "parent_code": "DZ-09",
+          "name": "Beni Mered",
+          "type": "city",
+          "population": "34860",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2939758266",
+          "parent_code": "DZ-09",
+          "name": "Oued El Alleug",
+          "type": "city",
+          "population": "40710",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10816080996",
+          "parent_code": "DZ-09",
+          "name": "Meftah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-02",
+      "parent_code": "DZ",
+      "name": "Chlef",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-299680100",
+          "parent_code": "DZ-02",
+          "name": "Chlef",
+          "type": "city",
+          "population": "178616",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-393990510",
+          "parent_code": "DZ-02",
+          "name": "Boukadir",
+          "type": "city",
+          "population": "51340",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-393991274",
+          "parent_code": "DZ-02",
+          "name": "Oued Sly",
+          "type": "city",
+          "population": "47248",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-424957233",
+          "parent_code": "DZ-02",
+          "name": "El Marsa",
+          "type": "city",
+          "population": "10807",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-424959220",
+          "parent_code": "DZ-02",
+          "name": "Tenes",
+          "type": "city",
+          "population": "35459",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-424961763",
+          "parent_code": "DZ-02",
+          "name": "Beni Haoua",
+          "type": "city",
+          "population": "20853",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443048075",
+          "parent_code": "DZ-02",
+          "name": "Sidi Akacha",
+          "type": "city",
+          "population": "26595",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443048266",
+          "parent_code": "DZ-02",
+          "name": "Abou El Hassen",
+          "type": "city",
+          "population": "22756",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443049657",
+          "parent_code": "DZ-02",
+          "name": "Ouled Fares",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443049850",
+          "parent_code": "DZ-02",
+          "name": "Chettia",
+          "type": "city",
+          "population": "71408",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1019510663",
+          "parent_code": "DZ-02",
+          "name": "El Karimia",
+          "type": "city",
+          "population": "28821",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1019510814",
+          "parent_code": "DZ-02",
+          "name": "Oum Drou",
+          "type": "city",
+          "population": "21326",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1021764985",
+          "parent_code": "DZ-02",
+          "name": "Ouled Ben Abdelkader",
+          "type": "city",
+          "population": "19952",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1025765744",
+          "parent_code": "DZ-02",
+          "name": "Ain Merane",
+          "type": "city",
+          "population": "51326",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1026201342",
+          "parent_code": "DZ-02",
+          "name": "Dahra",
+          "type": "city",
+          "population": "23802",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2967079117",
+          "parent_code": "DZ-02",
+          "name": "Oued Fodda",
+          "type": "city",
+          "population": "41710",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3932053440",
+          "parent_code": "DZ-02",
+          "name": "Vieux Ténès",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-42",
+      "parent_code": "DZ",
+      "name": "Tipaza",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-313438448",
+          "parent_code": "DZ-42",
+          "name": "Koléa",
+          "type": "city",
+          "population": "54401",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-313438452",
+          "parent_code": "DZ-42",
+          "name": "Bou Ismail",
+          "type": "city",
+          "population": "41684",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-418165557",
+          "parent_code": "DZ-42",
+          "name": "Tipaza",
+          "type": "city",
+          "population": "25225",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-424962636",
+          "parent_code": "DZ-42",
+          "name": "Damous",
+          "type": "city",
+          "population": "17111",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-424964849",
+          "parent_code": "DZ-42",
+          "name": "Quraya",
+          "type": "city",
+          "population": "20144",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-424964980",
+          "parent_code": "DZ-42",
+          "name": "Messelmoun",
+          "type": "city",
+          "population": "7564",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-424965583",
+          "parent_code": "DZ-42",
+          "name": "Hadjret Ennous",
+          "type": "city",
+          "population": "2150",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-424966351",
+          "parent_code": "DZ-42",
+          "name": "Sidi Ghiles",
+          "type": "city",
+          "population": "15281",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-424966632",
+          "parent_code": "DZ-42",
+          "name": "Cherchell",
+          "type": "city",
+          "population": "48056",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-424970741",
+          "parent_code": "DZ-42",
+          "name": "Sidi Rached",
+          "type": "city",
+          "population": "11062",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-434424190",
+          "parent_code": "DZ-42",
+          "name": "Attatba",
+          "type": "city",
+          "population": "27059",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-454641097",
+          "parent_code": "DZ-42",
+          "name": "Sidi Amar",
+          "type": "city",
+          "population": "13332",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-454645064",
+          "parent_code": "DZ-42",
+          "name": "Hadjout",
+          "type": "city",
+          "population": "48561",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-498919990",
+          "parent_code": "DZ-42",
+          "name": "Ahmer El Ain",
+          "type": "city",
+          "population": "29566",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-514531579",
+          "parent_code": "DZ-42",
+          "name": "Shenoua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-981256423",
+          "parent_code": "DZ-42",
+          "name": "Bourkika",
+          "type": "city",
+          "population": "22118",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1033320728",
+          "parent_code": "DZ-42",
+          "name": "Khemisti",
+          "type": "city",
+          "population": "15128",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1038318454",
+          "parent_code": "DZ-42",
+          "name": "Merad",
+          "type": "city",
+          "population": "19916",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-23",
+      "parent_code": "DZ",
+      "name": "Annaba",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-299618513",
+          "parent_code": "DZ-23",
+          "name": "Annaba",
+          "type": "city",
+          "population": "257359",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-425307289",
+          "parent_code": "DZ-23",
+          "name": "Berrahal",
+          "type": "city",
+          "population": "22631",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443025997",
+          "parent_code": "DZ-23",
+          "name": "El Hadjar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443026615",
+          "parent_code": "DZ-23",
+          "name": "El Bouni",
+          "type": "city",
+          "population": "125265",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443132566",
+          "parent_code": "DZ-23",
+          "name": "Ain Berda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1213307637",
+          "parent_code": "DZ-23",
+          "name": "Chetaibi",
+          "type": "city",
+          "population": "8035",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9021895855",
+          "parent_code": "DZ-23",
+          "name": "الكاليتوسة ⵍⴽⴰⵍⵉⵜⵓⵙⴰ",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-36",
+      "parent_code": "DZ",
+      "name": "El Tarf",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-425297963",
+          "parent_code": "DZ-36",
+          "name": "El Kala",
+          "type": "city",
+          "population": "35682",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-425299676",
+          "parent_code": "DZ-36",
+          "name": "Ain El Assel",
+          "type": "city",
+          "population": "16285",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-425300501",
+          "parent_code": "DZ-36",
+          "name": "El Tarf",
+          "type": "city",
+          "population": "25594",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-425302343",
+          "parent_code": "DZ-36",
+          "name": "Bouteldja",
+          "type": "city",
+          "population": "17738",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-425303909",
+          "parent_code": "DZ-36",
+          "name": "Ben Mehidi",
+          "type": "city",
+          "population": "33262",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443024583",
+          "parent_code": "DZ-36",
+          "name": "Drean",
+          "type": "city",
+          "population": "37686",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-462016284",
+          "parent_code": "DZ-36",
+          "name": "Zitouna",
+          "type": "city",
+          "population": "9736",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-462023183",
+          "parent_code": "DZ-36",
+          "name": "Besbes",
+          "type": "city",
+          "population": "46341",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501825717",
+          "parent_code": "DZ-36",
+          "name": "Echatt",
+          "type": "city",
+          "population": "34378",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1292047956",
+          "parent_code": "DZ-36",
+          "name": "Chefia",
+          "type": "city",
+          "population": "8195",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1292047957",
+          "parent_code": "DZ-36",
+          "name": "Lac des Oiseaux",
+          "type": "city",
+          "population": "10624",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2512322662",
+          "parent_code": "DZ-36",
+          "name": "Bouhadjar",
+          "type": "city",
+          "population": "20215",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-50",
+      "parent_code": "DZ",
+      "name": "Bordj Badji Mokhtar",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-429502149",
+          "parent_code": "DZ-50",
+          "name": "Bordj Badji Mokhtar",
+          "type": "city",
+          "population": "16437",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "DZ-49",
+      "parent_code": "DZ",
+      "name": "Timimoun Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-264575953",
+          "parent_code": "DZ-49",
+          "name": "Timimoun",
+          "type": "city",
+          "population": "33060",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1573475128",
+          "parent_code": "DZ-49",
+          "name": "Charouine",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3172476279",
+          "parent_code": "DZ-49",
+          "name": "Aougrout",
+          "type": "city",
+          "population": "11784",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3329464803",
+          "parent_code": "DZ-49",
+          "name": "Zaouiet Debagh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-55",
+      "parent_code": "DZ",
+      "name": "Touggourt",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-262963952",
+          "parent_code": "DZ-55",
+          "name": "Benaceur",
+          "type": "city",
+          "population": "10330",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262964161",
+          "parent_code": "DZ-55",
+          "name": "M'Naguer",
+          "type": "city",
+          "population": "14179",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262964638",
+          "parent_code": "DZ-55",
+          "name": "Touggourt",
+          "type": "city",
+          "population": "143270",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-443011119",
+          "parent_code": "DZ-55",
+          "name": "Taibet",
+          "type": "city",
+          "population": "20174",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3040392237",
+          "parent_code": "DZ-55",
+          "name": "Tamacine",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3040392239",
+          "parent_code": "DZ-55",
+          "name": "Blidet Amor",
+          "type": "city",
+          "population": "14540",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3040411041",
+          "parent_code": "DZ-55",
+          "name": "Meggarine",
+          "type": "city",
+          "population": "13751",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3871598095",
+          "parent_code": "DZ-55",
+          "name": "Tebesbest",
+          "type": "city",
+          "population": "35032",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-52",
+      "parent_code": "DZ",
+      "name": "Beni Abbes",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1573488063",
+          "parent_code": "DZ-52",
+          "name": "Bani Abbas",
+          "type": "city",
+          "population": "12000",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "DZ-53",
+      "parent_code": "DZ",
+      "name": "In Salah",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-89980948",
+          "parent_code": "DZ-53",
+          "name": "In Salah",
+          "type": "city",
+          "population": "32518",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-429533109",
+          "parent_code": "DZ-53",
+          "name": "In Ghar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-57",
+      "parent_code": "DZ",
+      "name": "El M'Ghair",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-499030046",
+          "parent_code": "DZ-57",
+          "name": "Tigdidine",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3040428134",
+          "parent_code": "DZ-57",
+          "name": "المغير ⵍⴻⵎⵖⵉⵢⴻⵔ",
+          "type": "city",
+          "population": "49793",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3040428142",
+          "parent_code": "DZ-57",
+          "name": "Djamaa",
+          "type": "city",
+          "population": "50916",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3312614201",
+          "parent_code": "DZ-57",
+          "name": "Sidi Amrane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-56",
+      "parent_code": "DZ",
+      "name": "Djanet",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2119580230",
+          "parent_code": "DZ-56",
+          "name": "Djanet",
+          "type": "city",
+          "population": "15000",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "DZ-54",
+      "parent_code": "DZ",
+      "name": "In Guezzam",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-262393185",
+          "parent_code": "DZ-54",
+          "name": "In Guezzam",
+          "type": "city",
+          "population": "7045",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-500352443",
+          "parent_code": "DZ-54",
+          "name": "Tinzaouatine",
+          "type": "city",
+          "population": "8700",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-58",
+      "parent_code": "DZ",
+      "name": "El Menia",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-258799889",
+          "parent_code": "DZ-58",
+          "name": "El Menia",
+          "type": "city",
+          "population": "40195",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4212483306",
+          "parent_code": "DZ-58",
+          "name": "The new pole, Hassi EL-Menia and Hassi Gara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-51",
+      "parent_code": "DZ",
+      "name": "Ouled Djellal",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-264507153",
+          "parent_code": "DZ-51",
+          "name": "Ouled Djellal",
+          "type": "city",
+          "population": "63237",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1514750533",
+          "parent_code": "DZ-51",
+          "name": "Doucen",
+          "type": "city",
+          "population": "26455",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1514750562",
+          "parent_code": "DZ-51",
+          "name": "Sidi Khaled",
+          "type": "city",
+          "population": "43315",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-60",
+      "parent_code": "DZ",
+      "name": "Barika",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-299833893",
+          "parent_code": "DZ-60",
+          "name": "Barika",
+          "type": "city",
+          "population": "162711",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1431001239",
+          "parent_code": "DZ-60",
+          "name": "Djezzar",
+          "type": "city",
+          "population": "22124",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-61",
+      "parent_code": "DZ",
+      "name": "El Kantara",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-427910708",
+          "parent_code": "DZ-61",
+          "name": "El Kantara",
+          "type": "city",
+          "population": "11415",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-462231822",
+          "parent_code": "DZ-61",
+          "name": "Djemourah",
+          "type": "city",
+          "population": "12574",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-62",
+      "parent_code": "DZ",
+      "name": "Bir El Ater",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-443012382",
+          "parent_code": "DZ-62",
+          "name": "Bir El Ater",
+          "type": "city",
+          "population": "103000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-443012443",
+          "parent_code": "DZ-62",
+          "name": "Negrine",
+          "type": "city",
+          "population": "6486",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-59",
+      "parent_code": "DZ",
+      "name": "Aflou",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-441464361",
+          "parent_code": "DZ-59",
+          "name": "Aflou",
+          "type": "city",
+          "population": "102025",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-64",
+      "parent_code": "DZ",
+      "name": "Ksar Chellala",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-581240873",
+          "parent_code": "DZ-64",
+          "name": "Ksar Chellala",
+          "type": "city",
+          "population": "52753",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-581240876",
+          "parent_code": "DZ-64",
+          "name": "Zmalet El Emir Abdelkader",
+          "type": "city",
+          "population": "18722",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-65",
+      "parent_code": "DZ",
+      "name": "Aïn Oussara",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-462549470",
+          "parent_code": "DZ-65",
+          "name": "Had Sahary",
+          "type": "city",
+          "population": "30451",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3790840624",
+          "parent_code": "DZ-65",
+          "name": "Birine",
+          "type": "city",
+          "population": "30913",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3870606925",
+          "parent_code": "DZ-65",
+          "name": "Ain Oussara",
+          "type": "city",
+          "population": "101239",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4241795233",
+          "parent_code": "DZ-65",
+          "name": "Sidi Ladjel",
+          "type": "city",
+          "population": "13661",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-66",
+      "parent_code": "DZ",
+      "name": "Messaad",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-489290379",
+          "parent_code": "DZ-66",
+          "name": "Faidh El Botma",
+          "type": "city",
+          "population": "32501",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1443523128",
+          "parent_code": "DZ-66",
+          "name": "Oum Laadham",
+          "type": "city",
+          "population": "23051",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3087947095",
+          "parent_code": "DZ-66",
+          "name": "Messaad",
+          "type": "city",
+          "population": "114625",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-20815946",
+      "parent_code": "DZ",
+      "name": "El Aricha Province",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "DZ-69",
+      "parent_code": "DZ",
+      "name": "El Abiodh Sidi Cheikh Province",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "DZ-68",
+      "parent_code": "DZ",
+      "name": "Bou Saâda Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-262969007",
+          "parent_code": "DZ-68",
+          "name": "Ben Srour",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-274946937",
+          "parent_code": "DZ-68",
+          "name": "Bou Saada",
+          "type": "city",
+          "population": "125573",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-455443197",
+          "parent_code": "DZ-68",
+          "name": "Ain El Melh",
+          "type": "city",
+          "population": "55000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-462549388",
+          "parent_code": "DZ-68",
+          "name": "Sidi Ameur",
+          "type": "city",
+          "population": "40000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-489290385",
+          "parent_code": "DZ-68",
+          "name": "Djebel Messaad",
+          "type": "city",
+          "population": "13948",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-489290386",
+          "parent_code": "DZ-68",
+          "name": "El Hamel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1438890521",
+          "parent_code": "DZ-68",
+          "name": "Medjedel",
+          "type": "city",
+          "population": "21058",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1561676303",
+          "parent_code": "DZ-68",
+          "name": "Ain Eddis",
+          "type": "city",
+          "population": "10716",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DZ-67",
+      "parent_code": "DZ",
+      "name": "Ksar El Boukhari Province",
+      "type": "state",
+      "children": []
+    }
+  ]
+}

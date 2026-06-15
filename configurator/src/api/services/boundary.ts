@@ -204,7 +204,7 @@ export const boundaryService = {
         `${ENDPOINTS.BOUNDARY_SEARCH}?tenantId=${encodeURIComponent(tenantId)}&codes=${encodeURIComponent(code)}`,
         { RequestInfo: apiClient.buildRequestInfo() },
       );
-      return (response.Boundary?.length ?? 0) > 0;
+      return ((response.Boundary as unknown[] | undefined)?.length ?? 0) > 0;
     } catch {
       return false;
     }
@@ -261,7 +261,7 @@ export const boundaryService = {
         `${ENDPOINTS.BOUNDARY_RELATIONSHIP_SEARCH}?${qs.toString()}`,
         { RequestInfo: apiClient.buildRequestInfo() },
       );
-      return (response.TenantBoundary?.length ?? 0) > 0;
+      return ((response.TenantBoundary as unknown[] | undefined)?.length ?? 0) > 0;
     } catch {
       return false;
     }
@@ -292,7 +292,7 @@ export const boundaryService = {
           const response = await apiClient.post(`${ENDPOINTS.BOUNDARY_SEARCH}?${qs}`, {
             RequestInfo: apiClient.buildRequestInfo(),
           });
-          for (const b of response.Boundary ?? []) {
+          for (const b of (response.Boundary as { code: string }[] | undefined) ?? []) {
             if (expected.has(b.code)) seen.add(b.code);
           }
         } catch {

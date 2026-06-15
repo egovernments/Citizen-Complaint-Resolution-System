@@ -1,0 +1,768 @@
+{
+  "code": "GW",
+  "name": "Guinea-Bissau",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "GW-BA",
+      "parent_code": "GW",
+      "name": "Bafatá Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1440998494",
+          "parent_code": "GW-BA",
+          "name": "Bafatá",
+          "type": "city",
+          "population": "34760",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1944642904",
+          "parent_code": "GW-BA",
+          "name": "Bambadinca",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3054801540",
+          "parent_code": "GW-BA",
+          "name": "Jabicunda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3054802407",
+          "parent_code": "GW-BA",
+          "name": "Bijine",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3054802537",
+          "parent_code": "GW-BA",
+          "name": "Galomaro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3802484319",
+          "parent_code": "GW-BA",
+          "name": "Xitole",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5667321867",
+          "parent_code": "GW-BA",
+          "name": "Gã-Mamudo",
+          "type": "city",
+          "population": "605",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5667419034",
+          "parent_code": "GW-BA",
+          "name": "Cuntuba",
+          "type": "city",
+          "population": "2034",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7600905073",
+          "parent_code": "GW-BA",
+          "name": "Contuboel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "GW-BM",
+      "parent_code": "GW",
+      "name": "Biombo Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1440998674",
+          "parent_code": "GW-BM",
+          "name": "Prabis",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1440998683",
+          "parent_code": "GW-BM",
+          "name": "Quinhamel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1440998693",
+          "parent_code": "GW-BM",
+          "name": "Safim",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "GW-BS",
+      "parent_code": "GW",
+      "name": "Bissau Autonomous Sector",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-254525765",
+          "parent_code": "GW-BS",
+          "name": "Bissau",
+          "type": "city",
+          "population": "395954",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "GW-BL",
+      "parent_code": "GW",
+      "name": "Bolama Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1440998537",
+          "parent_code": "GW-BL",
+          "name": "Bolama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10277751748",
+          "parent_code": "GW-BL",
+          "name": "Bubaque",
+          "type": "city",
+          "population": "3500",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "GW-CA",
+      "parent_code": "GW",
+      "name": "Cacheu Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-293456184",
+          "parent_code": "GW-CA",
+          "name": "São Domingos",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1440998598",
+          "parent_code": "GW-CA",
+          "name": "Caió",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1944611270",
+          "parent_code": "GW-CA",
+          "name": "Bula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2293469593",
+          "parent_code": "GW-CA",
+          "name": "Cacheu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2297815355",
+          "parent_code": "GW-CA",
+          "name": "Canchungo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2298095019",
+          "parent_code": "GW-CA",
+          "name": "Bigene",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2298095047",
+          "parent_code": "GW-CA",
+          "name": "Ingoré",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "GW-GA",
+      "parent_code": "GW",
+      "name": "Gabu Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1944642790",
+          "parent_code": "GW-GA",
+          "name": "Gabu",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1944704308",
+          "parent_code": "GW-GA",
+          "name": "Boé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1944704595",
+          "parent_code": "GW-GA",
+          "name": "Pitche",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2299114800",
+          "parent_code": "GW-GA",
+          "name": "Pirada",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3054802020",
+          "parent_code": "GW-GA",
+          "name": "Sonaco",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13430590428",
+          "parent_code": "GW-GA",
+          "name": "Huda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "GW-OI",
+      "parent_code": "GW",
+      "name": "Oio Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1440998660",
+          "parent_code": "GW-OI",
+          "name": "Nhacra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1562926028",
+          "parent_code": "GW-OI",
+          "name": "Mansoa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1944578267",
+          "parent_code": "GW-OI",
+          "name": "Bissorã",
+          "type": "city",
+          "population": "50774",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1944611258",
+          "parent_code": "GW-OI",
+          "name": "Farim",
+          "type": "city",
+          "population": "6405",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1944611269",
+          "parent_code": "GW-OI",
+          "name": "Mansabá",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1944611280",
+          "parent_code": "GW-OI",
+          "name": "Binar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "GW-QU",
+      "parent_code": "GW",
+      "name": "Quinara Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1440998555",
+          "parent_code": "GW-QU",
+          "name": "Buba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1440998649",
+          "parent_code": "GW-QU",
+          "name": "Fulacunda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1440998707",
+          "parent_code": "GW-QU",
+          "name": "Tite",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3803732657",
+          "parent_code": "GW-QU",
+          "name": "Empada",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "GW-TO",
+      "parent_code": "GW",
+      "name": "Tombali Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1440998579",
+          "parent_code": "GW-TO",
+          "name": "Cacine",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1440998628",
+          "parent_code": "GW-TO",
+          "name": "Catió",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1440998680",
+          "parent_code": "GW-TO",
+          "name": "Quebo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3844208941",
+          "parent_code": "GW-TO",
+          "name": "Cufar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "GW-L",
+      "parent_code": "GW",
+      "name": "East",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1440998494",
+          "parent_code": "GW-L",
+          "name": "Bafatá",
+          "type": "city",
+          "population": "34760",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1944642790",
+          "parent_code": "GW-L",
+          "name": "Gabu",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1944642904",
+          "parent_code": "GW-L",
+          "name": "Bambadinca",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1944704308",
+          "parent_code": "GW-L",
+          "name": "Boé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1944704595",
+          "parent_code": "GW-L",
+          "name": "Pitche",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2299114800",
+          "parent_code": "GW-L",
+          "name": "Pirada",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3054801540",
+          "parent_code": "GW-L",
+          "name": "Jabicunda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3054802020",
+          "parent_code": "GW-L",
+          "name": "Sonaco",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3054802407",
+          "parent_code": "GW-L",
+          "name": "Bijine",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3054802537",
+          "parent_code": "GW-L",
+          "name": "Galomaro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3802484319",
+          "parent_code": "GW-L",
+          "name": "Xitole",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5667321867",
+          "parent_code": "GW-L",
+          "name": "Gã-Mamudo",
+          "type": "city",
+          "population": "605",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5667419034",
+          "parent_code": "GW-L",
+          "name": "Cuntuba",
+          "type": "city",
+          "population": "2034",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7600905073",
+          "parent_code": "GW-L",
+          "name": "Contuboel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13430590428",
+          "parent_code": "GW-L",
+          "name": "Huda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "GW-N",
+      "parent_code": "GW",
+      "name": "North",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-293456184",
+          "parent_code": "GW-N",
+          "name": "São Domingos",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1440998598",
+          "parent_code": "GW-N",
+          "name": "Caió",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1440998660",
+          "parent_code": "GW-N",
+          "name": "Nhacra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1440998674",
+          "parent_code": "GW-N",
+          "name": "Prabis",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1440998683",
+          "parent_code": "GW-N",
+          "name": "Quinhamel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1440998693",
+          "parent_code": "GW-N",
+          "name": "Safim",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1562926028",
+          "parent_code": "GW-N",
+          "name": "Mansoa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1944578267",
+          "parent_code": "GW-N",
+          "name": "Bissorã",
+          "type": "city",
+          "population": "50774",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1944611258",
+          "parent_code": "GW-N",
+          "name": "Farim",
+          "type": "city",
+          "population": "6405",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1944611269",
+          "parent_code": "GW-N",
+          "name": "Mansabá",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1944611270",
+          "parent_code": "GW-N",
+          "name": "Bula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1944611280",
+          "parent_code": "GW-N",
+          "name": "Binar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2293469593",
+          "parent_code": "GW-N",
+          "name": "Cacheu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2297815355",
+          "parent_code": "GW-N",
+          "name": "Canchungo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2298095019",
+          "parent_code": "GW-N",
+          "name": "Bigene",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2298095047",
+          "parent_code": "GW-N",
+          "name": "Ingoré",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "GW-S",
+      "parent_code": "GW",
+      "name": "South",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1440998537",
+          "parent_code": "GW-S",
+          "name": "Bolama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1440998555",
+          "parent_code": "GW-S",
+          "name": "Buba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1440998579",
+          "parent_code": "GW-S",
+          "name": "Cacine",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1440998628",
+          "parent_code": "GW-S",
+          "name": "Catió",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1440998649",
+          "parent_code": "GW-S",
+          "name": "Fulacunda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1440998680",
+          "parent_code": "GW-S",
+          "name": "Quebo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1440998707",
+          "parent_code": "GW-S",
+          "name": "Tite",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3803732657",
+          "parent_code": "GW-S",
+          "name": "Empada",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3844208941",
+          "parent_code": "GW-S",
+          "name": "Cufar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10277751748",
+          "parent_code": "GW-S",
+          "name": "Bubaque",
+          "type": "city",
+          "population": "3500",
+          "place_type": "town"
+        }
+      ]
+    }
+  ]
+}

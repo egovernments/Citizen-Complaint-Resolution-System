@@ -91,7 +91,7 @@ export function EditableCell({
   const [editValue, setEditValue] = React.useState(value);
   const [error, setError] = React.useState<string | null>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
-  const blurTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const blurTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   React.useEffect(() => {
     setEditValue(value);
