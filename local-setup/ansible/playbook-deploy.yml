@@ -185,7 +185,7 @@
       - name: Configure Docker insecure-registries for VPC registry
         copy:
           dest: /etc/docker/daemon.json
-          content: "{{ {'insecure-registries': insecure_registries} | to_nice_json }}\n"
+          content: "{{ {'insecure-registries': insecure_registries | default([])} | to_nice_json }}\n"
           mode: '0644'
         register: daemon_json
         when: insecure_registries | default([]) | length > 0
@@ -621,6 +621,8 @@
         "{{ digit_ui_esbuild_repo_dir | default(playbook_dir ~ '/../../digit-ui-esbuild') }}"
         "{{ digit_ui_esbuild_repo | default('-') }}"
         "{{ digit_ui_esbuild_branch | default('') }}"
+      environment:
+        REACT_APP_MAP_TENANT: "{{ city_tenant | default(ui_state_tenant_id | default('')) }}"
       register: digit_ui_build_run
       changed_when: true
       when:
@@ -1290,6 +1292,69 @@
       when:
         - nginx_features.configurator | default(false)
         - configurator_build is defined
+
+    # ---- Turbopass search-api (opt-in: enable_turbopass) ----
+    # OSM place-name autocomplete for the configurator's Phase 2 boundary
+    # step (GET /turbopass/search?q=<term>&limit=<n>). Mirrors the MCP-build
+    # shape: sync the vendored source to the target, `docker build` there
+    # (local-only tag, no registry), run as a standalone container on
+    # loopback :13301. nginx proxies /turbopass/ → it (same gate in
+    # templates/nginx-site.conf.j2; trailing slash strips the prefix so the
+    # app sees /search). The scraped OSM data (turbopass/data, vendored
+    # in-tree) is mounted read-only at /data — the app reads DATA_DIR.
+    # Default off → zero behaviour change: no image, no container, no
+    # nginx block.
+    - name: "Turbopass — ensure build workspace on target"
+      ansible.builtin.file:
+        path: "{{ digit_dir }}/.build"
+        state: directory
+        mode: "0755"
+      when: enable_turbopass | default(false)
+
+    - name: "Turbopass — sync vendored source + scraped data to target"
+      ansible.builtin.synchronize:
+        src: "{{ playbook_dir }}/../../turbopass/"
+        dest: "{{ digit_dir }}/.build/turbopass/"
+        delete: false
+        rsync_opts:
+          - "--omit-dir-times"
+      when: enable_turbopass | default(false)
+
+    - name: "Turbopass — build search-api image (turbopass-search:local)"
+      ansible.builtin.command: >-
+        docker build
+        -t turbopass-search:local
+        -f {{ digit_dir }}/.build/turbopass/search-api/Dockerfile
+        {{ digit_dir }}/.build/turbopass/search-api
+      register: turbopass_build_run
+      changed_when: true
+      when: enable_turbopass | default(false)
+
+    - name: "Turbopass — (re)create the turbopass-search container"
+      ansible.builtin.shell: |
+        docker rm -f turbopass-search >/dev/null 2>&1 || true
+        docker run -d --name turbopass-search --restart unless-stopped \
+          -p 127.0.0.1:{{ turbopass_port | default(13301) }}:3000 \
+          -e DATA_DIR=/data \
+          -v {{ digit_dir }}/.build/turbopass/data:/data:ro \
+          turbopass-search:local
+      register: turbopass_run
+      changed_when: true
+      when: enable_turbopass | default(false)
+
+    # If a tenant just flipped enable_turbopass: true → false, the
+    # previously-running container isn't managed by compose, so nothing
+    # above stops it. Sweep it explicitly (same idiom as the search-stack
+    # sweep). No-op on tenants that never had it.
+    - name: "Turbopass — sweep container when flag is OFF"
+      ansible.builtin.shell: |
+        if docker ps -a --filter name=^turbopass-search$ --format '{{ "{{" }}.Names{{ "}}" }}' | grep -q '^turbopass-search$'; then
+          docker rm -f turbopass-search >/dev/null
+          echo "swept turbopass-search"
+        fi
+      register: turbopass_sweep
+      changed_when: turbopass_sweep.stdout | length > 0
+      when: not (enable_turbopass | default(false))
 
     # ---- digit-integration-tests dashboards (opt-in: enable_integration_tests) ----
     # Builds the react-admin catalog dashboard from the VENDORED in-tree source

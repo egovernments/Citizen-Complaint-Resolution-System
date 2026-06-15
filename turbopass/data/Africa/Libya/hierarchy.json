@@ -1,0 +1,1824 @@
+{
+  "code": "LY",
+  "name": "Libya",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "LY-WA",
+      "parent_code": "LY",
+      "name": "Al Wahat",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-277399765",
+          "parent_code": "LY-WA",
+          "name": "Ajdabiya",
+          "type": "city",
+          "population": "153806",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-361358942",
+          "parent_code": "LY-WA",
+          "name": "New Brega",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1160843625",
+          "parent_code": "LY-WA",
+          "name": "Jalu",
+          "type": "city",
+          "population": "7963",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1239730812",
+          "parent_code": "LY-WA",
+          "name": "Maradah",
+          "type": "city",
+          "population": "2229",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565509044",
+          "parent_code": "LY-WA",
+          "name": "Brega",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565509942",
+          "parent_code": "LY-WA",
+          "name": "Awjilah",
+          "type": "city",
+          "population": "4756",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565511190",
+          "parent_code": "LY-WA",
+          "name": "Jikharrah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LY-BA",
+      "parent_code": "LY",
+      "name": "Benghazi",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1312442225",
+          "parent_code": "LY-BA",
+          "name": "Benghazi",
+          "type": "city",
+          "population": "631555",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1565508929",
+          "parent_code": "LY-BA",
+          "name": "Al Abyar",
+          "type": "city",
+          "population": "30616",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1565510468",
+          "parent_code": "LY-BA",
+          "name": "Benina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565510638",
+          "parent_code": "LY-BA",
+          "name": "Bu Mariam",
+          "type": "city",
+          "population": "2785",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565510740",
+          "parent_code": "LY-BA",
+          "name": "Daryanah",
+          "type": "city",
+          "population": "4097",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565513140",
+          "parent_code": "LY-BA",
+          "name": "Zawiyat Masus",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1574963951",
+          "parent_code": "LY-BA",
+          "name": "Tocra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LY-BU",
+      "parent_code": "LY",
+      "name": "Butnan",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-277520853",
+          "parent_code": "LY-BU",
+          "name": "Tobruk",
+          "type": "city",
+          "population": "131102",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1170179740",
+          "parent_code": "LY-BU",
+          "name": "Umm Sa'ad",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1170179748",
+          "parent_code": "LY-BU",
+          "name": "Musaid",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1170259159",
+          "parent_code": "LY-BU",
+          "name": "Madinat Ras Bayad",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1173193744",
+          "parent_code": "LY-BU",
+          "name": "Bardia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1237297697",
+          "parent_code": "LY-BU",
+          "name": "Al Jaghbub",
+          "type": "city",
+          "population": "2768",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9763658889",
+          "parent_code": "LY-BU",
+          "name": "tobruk city",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LY-DR",
+      "parent_code": "LY",
+      "name": "Derna",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-288493021",
+          "parent_code": "LY-DR",
+          "name": "Darnah",
+          "type": "city",
+          "population": "50000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1172146730",
+          "parent_code": "LY-DR",
+          "name": "Al Qubbah",
+          "type": "city",
+          "population": "24631",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1172162124",
+          "parent_code": "LY-DR",
+          "name": "Umm ar Rizam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1172167545",
+          "parent_code": "LY-DR",
+          "name": "Timimi",
+          "type": "city",
+          "population": "4667",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565508919",
+          "parent_code": "LY-DR",
+          "name": "Al Abraq",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565511239",
+          "parent_code": "LY-DR",
+          "name": "Karsah",
+          "type": "city",
+          "population": "2252",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565511281",
+          "parent_code": "LY-DR",
+          "name": "Lamludah",
+          "type": "city",
+          "population": "2294",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565511332",
+          "parent_code": "LY-DR",
+          "name": "Martubah",
+          "type": "city",
+          "population": "2396",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3240603834",
+          "parent_code": "LY-DR",
+          "name": "Martubah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LY-GT",
+      "parent_code": "LY",
+      "name": "Ghat",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-260714409",
+          "parent_code": "LY-GT",
+          "name": "Ghat",
+          "type": "city",
+          "population": "22000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-260715301",
+          "parent_code": "LY-GT",
+          "name": "Al 'Uwaynat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LY-JA",
+      "parent_code": "LY",
+      "name": "Jabal al Akhdar",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-288491858",
+          "parent_code": "LY-JA",
+          "name": "Bayda",
+          "type": "city",
+          "population": "310329",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1159019627",
+          "parent_code": "LY-JA",
+          "name": "Shahhat",
+          "type": "city",
+          "population": "43376",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1159019634",
+          "parent_code": "LY-JA",
+          "name": "Susah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565511323",
+          "parent_code": "LY-JA",
+          "name": "Marawah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565511354",
+          "parent_code": "LY-JA",
+          "name": "Massa",
+          "type": "city",
+          "population": "3104",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565511715",
+          "parent_code": "LY-JA",
+          "name": "Qandulah",
+          "type": "city",
+          "population": "2422",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565512736",
+          "parent_code": "LY-JA",
+          "name": "ASuluntah",
+          "type": "city",
+          "population": "2512",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LY-JG",
+      "parent_code": "LY",
+      "name": "Jabal al Gharbi",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-277339119",
+          "parent_code": "LY-JG",
+          "name": "Al Qaryat al Sharqiyah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1157457006",
+          "parent_code": "LY-JG",
+          "name": "Al Rujban",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1157505021",
+          "parent_code": "LY-JG",
+          "name": "Yafran",
+          "type": "city",
+          "population": "72662",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1193620130",
+          "parent_code": "LY-JG",
+          "name": "Al Shuwairif",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1214773929",
+          "parent_code": "LY-JG",
+          "name": "Jadu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1215763443",
+          "parent_code": "LY-JG",
+          "name": "Jaffar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1281223987",
+          "parent_code": "LY-JG",
+          "name": "Ar Rayāyinah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565508856",
+          "parent_code": "LY-JG",
+          "name": "Abu Ghaylan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565508963",
+          "parent_code": "LY-JG",
+          "name": "Asbi'a",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1565509464",
+          "parent_code": "LY-JG",
+          "name": "Al Qanafidh",
+          "type": "city",
+          "population": "2431",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565509495",
+          "parent_code": "LY-JG",
+          "name": "Al Urban",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565509498",
+          "parent_code": "LY-JG",
+          "name": "Al Urqub",
+          "type": "city",
+          "population": "3554",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565509964",
+          "parent_code": "LY-JG",
+          "name": "Awlad Badr",
+          "type": "city",
+          "population": "2890",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565509988",
+          "parent_code": "LY-JG",
+          "name": "اولاد جابر",
+          "type": "city",
+          "population": "2283",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565510039",
+          "parent_code": "LY-JG",
+          "name": "Awlad Mas`ud",
+          "type": "city",
+          "population": "3147",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565510129",
+          "parent_code": "LY-JG",
+          "name": "Awlad Yahya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565510329",
+          "parent_code": "LY-JG",
+          "name": "Az Zurqan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565510610",
+          "parent_code": "LY-JG",
+          "name": "Gharyan",
+          "type": "city",
+          "population": "187854",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1565511456",
+          "parent_code": "LY-JG",
+          "name": "Nasmah",
+          "type": "city",
+          "population": "3687",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3302658161",
+          "parent_code": "LY-JG",
+          "name": "Al Qawasim",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3303648800",
+          "parent_code": "LY-JG",
+          "name": "Al Qaryat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4212111529",
+          "parent_code": "LY-JG",
+          "name": "Rahibat",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-7212959831",
+          "parent_code": "LY-JG",
+          "name": "Kikla",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8519193504",
+          "parent_code": "LY-JG",
+          "name": "Mizda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12456403546",
+          "parent_code": "LY-JG",
+          "name": "التضامن",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "LY-JI",
+      "parent_code": "LY",
+      "name": "Jafara",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-364324276",
+          "parent_code": "LY-JI",
+          "name": "Janzur",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1181267424",
+          "parent_code": "LY-JI",
+          "name": "Al-Zahra",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1195255987",
+          "parent_code": "LY-JI",
+          "name": "Al Maya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1286668670",
+          "parent_code": "LY-JI",
+          "name": "Sebiaa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565509358",
+          "parent_code": "LY-JI",
+          "name": "Al Ma`murah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565509417",
+          "parent_code": "LY-JI",
+          "name": "Al-Mashāshiṭa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565509525",
+          "parent_code": "LY-JI",
+          "name": "Al-Nasiriyya",
+          "type": "city",
+          "population": "2287",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565509932",
+          "parent_code": "LY-JI",
+          "name": "Al Tuwaybiyah",
+          "type": "city",
+          "population": "4316",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565512489",
+          "parent_code": "LY-JI",
+          "name": "Qasr Bin Ghashir",
+          "type": "city",
+          "population": "6569",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1565512631",
+          "parent_code": "LY-JI",
+          "name": "Sawani Bin Adam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565512664",
+          "parent_code": "LY-JI",
+          "name": "Sayyad",
+          "type": "city",
+          "population": "3725",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3300366408",
+          "parent_code": "LY-JI",
+          "name": "Al Aziziya",
+          "type": "city",
+          "population": "23399",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3460305547",
+          "parent_code": "LY-JI",
+          "name": "AL AMERYA",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3491677511",
+          "parent_code": "LY-JI",
+          "name": "Al kirimiya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3497125512",
+          "parent_code": "LY-JI",
+          "name": "Twaishah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4368397990",
+          "parent_code": "LY-JI",
+          "name": "Al Gew",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7211904385",
+          "parent_code": "LY-JI",
+          "name": "Tahlilt",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7241078221",
+          "parent_code": "LY-JI",
+          "name": "Bir Attuta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7241078222",
+          "parent_code": "LY-JI",
+          "name": "Bir Al Alam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7821172286",
+          "parent_code": "LY-JI",
+          "name": "Al Awata",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LY-JU",
+      "parent_code": "LY",
+      "name": "District of Al-Jufra",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1170597942",
+          "parent_code": "LY-JU",
+          "name": "Hun",
+          "type": "city",
+          "population": "30715",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1193623176",
+          "parent_code": "LY-JU",
+          "name": "Waddan",
+          "type": "city",
+          "population": "27590",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1193695763",
+          "parent_code": "LY-JU",
+          "name": "Zillah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565512727",
+          "parent_code": "LY-JU",
+          "name": "Suknah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LY-KF",
+      "parent_code": "LY",
+      "name": "Kufra",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-277407893",
+          "parent_code": "LY-KF",
+          "name": "Al Jawf",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1574963952",
+          "parent_code": "LY-KF",
+          "name": "Tazirbu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12814338455",
+          "parent_code": "LY-KF",
+          "name": "Al Kufrah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LY-MJ",
+      "parent_code": "LY",
+      "name": "Marj",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1159112554",
+          "parent_code": "LY-MJ",
+          "name": "Marj",
+          "type": "city",
+          "population": "90667",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1173420973",
+          "parent_code": "LY-MJ",
+          "name": "Jardas al Abid",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565510525",
+          "parent_code": "LY-MJ",
+          "name": "Battah",
+          "type": "city",
+          "population": "2649",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565512821",
+          "parent_code": "LY-MJ",
+          "name": "Taknis",
+          "type": "city",
+          "population": "3144",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3237889499",
+          "parent_code": "LY-MJ",
+          "name": "Old City Al Marj",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LY-MI",
+      "parent_code": "LY",
+      "name": "Bani Walid",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1160881649",
+          "parent_code": "LY-MI",
+          "name": "Bani Walid",
+          "type": "city",
+          "population": "100000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1170583242",
+          "parent_code": "LY-MI",
+          "name": "Zliten",
+          "type": "city",
+          "population": "240000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1185649367",
+          "parent_code": "LY-MI",
+          "name": "Abu Qurayn",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1191267828",
+          "parent_code": "LY-MI",
+          "name": "محلة نعيمة",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3305364529",
+          "parent_code": "LY-MI",
+          "name": "Tininai",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5431087789",
+          "parent_code": "LY-MI",
+          "name": "Misrata",
+          "type": "city",
+          "population": "600000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-6295612485",
+          "parent_code": "LY-MI",
+          "name": "Eshmekh Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7509528089",
+          "parent_code": "LY-MI",
+          "name": "Al Marduom Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LY-MQ",
+      "parent_code": "LY",
+      "name": "Murzuq",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-260716346",
+          "parent_code": "LY-MQ",
+          "name": "Murzuq",
+          "type": "city",
+          "population": "12746",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-260716413",
+          "parent_code": "LY-MQ",
+          "name": "Taraghin",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-419488780",
+          "parent_code": "LY-MQ",
+          "name": "Qatrun",
+          "type": "city",
+          "population": "4.50K",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1198419680",
+          "parent_code": "LY-MQ",
+          "name": "Zawilah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565508983",
+          "parent_code": "LY-MQ",
+          "name": "Al Bakhi",
+          "type": "city",
+          "population": "2920",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565509386",
+          "parent_code": "LY-MQ",
+          "name": "Al Malaqi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565509549",
+          "parent_code": "LY-MQ",
+          "name": "Aqqar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565509703",
+          "parent_code": "LY-MQ",
+          "name": "As Subaytat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565512958",
+          "parent_code": "LY-MQ",
+          "name": "Tasawah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3354582744",
+          "parent_code": "LY-MQ",
+          "name": "Tajerhi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LY-NL",
+      "parent_code": "LY",
+      "name": "Nalut",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-276850140",
+          "parent_code": "LY-NL",
+          "name": "Ghadames",
+          "type": "city",
+          "population": "10000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-277270298",
+          "parent_code": "LY-NL",
+          "name": "Nalut",
+          "type": "city",
+          "population": "99256",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1246799070",
+          "parent_code": "LY-NL",
+          "name": "Al Hawamid",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1246799080",
+          "parent_code": "LY-NL",
+          "name": "Tiji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1246799127",
+          "parent_code": "LY-NL",
+          "name": "Kabaw",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1246799128",
+          "parent_code": "LY-NL",
+          "name": "Badr",
+          "type": "city",
+          "population": "18693",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1253979845",
+          "parent_code": "LY-NL",
+          "name": "Wazin",
+          "type": "city",
+          "population": "360",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1278520315",
+          "parent_code": "LY-NL",
+          "name": "Dirj",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565509284",
+          "parent_code": "LY-NL",
+          "name": "Al Jawsh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565509384",
+          "parent_code": "LY-NL",
+          "name": "Al Majabirah",
+          "type": "city",
+          "population": "4116",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565513116",
+          "parent_code": "LY-NL",
+          "name": "Za`rarah",
+          "type": "city",
+          "population": "2321",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LY-NQ",
+      "parent_code": "LY",
+      "name": "Nuqat al Khams",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-277399662",
+          "parent_code": "LY-NQ",
+          "name": "Zuara",
+          "type": "city",
+          "population": "80310",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1169743113",
+          "parent_code": "LY-NQ",
+          "name": "Al Ajyaylat",
+          "type": "city",
+          "population": "4878",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1169748259",
+          "parent_code": "LY-NQ",
+          "name": "Al Jamil",
+          "type": "city",
+          "population": "23797",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1169748265",
+          "parent_code": "LY-NQ",
+          "name": "Riqdalin",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1169748270",
+          "parent_code": "LY-NQ",
+          "name": "Zulten",
+          "type": "city",
+          "population": "17000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1172802069",
+          "parent_code": "LY-NQ",
+          "name": "Ras Ajdir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1264730570",
+          "parent_code": "LY-NQ",
+          "name": "Al Assa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LY-SB",
+      "parent_code": "LY",
+      "name": "Sabha",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-260716310",
+          "parent_code": "LY-SB",
+          "name": "Ghadduwah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-260716549",
+          "parent_code": "LY-SB",
+          "name": "Sabha",
+          "type": "city",
+          "population": "138231",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2628393721",
+          "parent_code": "LY-SB",
+          "name": "Samnu",
+          "type": "city",
+          "population": "4500",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3309936122",
+          "parent_code": "LY-SB",
+          "name": "Al Zighan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4153684744",
+          "parent_code": "LY-SB",
+          "name": "Taminhint",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LY-SR",
+      "parent_code": "LY",
+      "name": "Sirte",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-299616414",
+          "parent_code": "LY-SR",
+          "name": "Sirte",
+          "type": "city",
+          "population": "48504",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-665116031",
+          "parent_code": "LY-SR",
+          "name": "Al Wachkah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1170541982",
+          "parent_code": "LY-SR",
+          "name": "Ras Lanuf",
+          "type": "city",
+          "population": "13000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1190768731",
+          "parent_code": "LY-SR",
+          "name": "Ben Jawwad",
+          "type": "city",
+          "population": "9675",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3307096902",
+          "parent_code": "LY-SR",
+          "name": "Wadi Jarv",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11541235019",
+          "parent_code": "LY-SR",
+          "name": "عمارات 600",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        }
+      ]
+    },
+    {
+      "code": "LY-TB",
+      "parent_code": "LY",
+      "name": "Tripoli",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1221370214",
+          "parent_code": "LY-TB",
+          "name": "Tajura",
+          "type": "city",
+          "population": "48836",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1411070218",
+          "parent_code": "LY-TB",
+          "name": "Abu Salim",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565509143",
+          "parent_code": "LY-TB",
+          "name": "Al Hamidiyah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565510267",
+          "parent_code": "LY-TB",
+          "name": "Ain Zara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1699640925",
+          "parent_code": "LY-TB",
+          "name": "Tripoli",
+          "type": "city",
+          "population": "2127000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2681366573",
+          "parent_code": "LY-TB",
+          "name": "Hey al-Andalus",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3195901761",
+          "parent_code": "LY-TB",
+          "name": "Salah Aldeen",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3297503861",
+          "parent_code": "LY-TB",
+          "name": "Old city of Tripoli",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5475837424",
+          "parent_code": "LY-TB",
+          "name": "Bab Bin Ghashir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5477163203",
+          "parent_code": "LY-TB",
+          "name": "Al-Kahili",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7241028752",
+          "parent_code": "LY-TB",
+          "name": "Adribe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7241078218",
+          "parent_code": "LY-TB",
+          "name": "Bab Al Aziziya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7241078220",
+          "parent_code": "LY-TB",
+          "name": "Wadi Al Rabie",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7523070220",
+          "parent_code": "LY-TB",
+          "name": "Al Hadba Project",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7870006895",
+          "parent_code": "LY-TB",
+          "name": "Suq Aljumea",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7885064069",
+          "parent_code": "LY-TB",
+          "name": "Al Hadba Al Badri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8074340992",
+          "parent_code": "LY-TB",
+          "name": "Ain Zara center",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8254010628",
+          "parent_code": "LY-TB",
+          "name": "Bir Al-Asta Milad",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10073965240",
+          "parent_code": "LY-TB",
+          "name": "Bab Akara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10073965241",
+          "parent_code": "LY-TB",
+          "name": "Bab Ghirgharish",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10073965242",
+          "parent_code": "LY-TB",
+          "name": "Bab Gorji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10074087391",
+          "parent_code": "LY-TB",
+          "name": "Bab Tarhuna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10074098707",
+          "parent_code": "LY-TB",
+          "name": "Bab Amrus",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10074101854",
+          "parent_code": "LY-TB",
+          "name": "Bab Mallaha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10076064442",
+          "parent_code": "LY-TB",
+          "name": "Bab Al Firnaj",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10076064443",
+          "parent_code": "LY-TB",
+          "name": "Bab Sidi Al Massri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10076064444",
+          "parent_code": "LY-TB",
+          "name": "Bab Ain Zara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LY-WD",
+      "parent_code": "LY",
+      "name": "Wadi al Hayaa",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-260715532",
+          "parent_code": "LY-WD",
+          "name": "Awbari",
+          "type": "city",
+          "population": "35000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-260715664",
+          "parent_code": "LY-WD",
+          "name": "Germa",
+          "type": "city",
+          "population": "4839",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-260715668",
+          "parent_code": "LY-WD",
+          "name": "Ghurayfah",
+          "type": "city",
+          "population": "14800",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-260715669",
+          "parent_code": "LY-WD",
+          "name": "Garagara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-260715722",
+          "parent_code": "LY-WD",
+          "name": "Al Fujayj",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565509178",
+          "parent_code": "LY-WD",
+          "name": "Al Hatiyah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565510688",
+          "parent_code": "LY-WD",
+          "name": "Burayk",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565512992",
+          "parent_code": "LY-WD",
+          "name": "Tuwiwah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565513008",
+          "parent_code": "LY-WD",
+          "name": "Tuosc",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2744041747",
+          "parent_code": "LY-WD",
+          "name": "al fkhfakhah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2750711785",
+          "parent_code": "LY-WD",
+          "name": "Bint Bayyah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2916531179",
+          "parent_code": "LY-WD",
+          "name": "Aldeesa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3358128553",
+          "parent_code": "LY-WD",
+          "name": "al riqebah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LY-WS",
+      "parent_code": "LY",
+      "name": "Wadi al Shatii",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1194502733",
+          "parent_code": "LY-WS",
+          "name": "Brak Al Shaati",
+          "type": "city",
+          "population": "43100",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1198398303",
+          "parent_code": "LY-WS",
+          "name": "Adiri",
+          "type": "city",
+          "population": "4611",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565509383",
+          "parent_code": "LY-WS",
+          "name": "Al Mahruqah",
+          "type": "city",
+          "population": "5104",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565512848",
+          "parent_code": "LY-WS",
+          "name": "Azwaiya",
+          "type": "city",
+          "population": "11022",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565513091",
+          "parent_code": "LY-WS",
+          "name": "Wanzarik",
+          "type": "city",
+          "population": "2531",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LY-ZA",
+      "parent_code": "LY",
+      "name": "Az Zawiya District",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-277399530",
+          "parent_code": "LY-ZA",
+          "name": "Al Zawiyah",
+          "type": "city",
+          "population": "318726",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1565509219",
+          "parent_code": "LY-ZA",
+          "name": "Al Hurshah",
+          "type": "city",
+          "population": "3759",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LY-MB",
+      "parent_code": "LY",
+      "name": "Murqub",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-277399044",
+          "parent_code": "LY-MB",
+          "name": "Tarhuna",
+          "type": "city",
+          "population": "120000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-277399357",
+          "parent_code": "LY-MB",
+          "name": "Khoms",
+          "type": "city",
+          "population": "103743",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-375721059",
+          "parent_code": "LY-MB",
+          "name": "Qasr al Qarabulli",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-506650392",
+          "parent_code": "LY-MB",
+          "name": "Central Msallata",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1565511426",
+          "parent_code": "LY-MB",
+          "name": "Ganeemh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1565512757",
+          "parent_code": "LY-MB",
+          "name": "Suq al Khamis",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4529751692",
+          "parent_code": "LY-MB",
+          "name": "Sheridat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7179243412",
+          "parent_code": "LY-MB",
+          "name": "Khadra - Tarhuna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9583406646",
+          "parent_code": "LY-MB",
+          "name": "Al-Khawaliq",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13380836804",
+          "parent_code": "LY-MB",
+          "name": "Gogaas",
+          "type": "city",
+          "population": "40000نسمة",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13386180932",
+          "parent_code": "LY-MB",
+          "name": "كعـــام",
+          "type": "city",
+          "population": "40000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13827063773",
+          "parent_code": "LY-MB",
+          "name": "Celine",
+          "type": "city",
+          "population": "#####",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13827127594",
+          "parent_code": "LY-MB",
+          "name": "Ben Juha",
+          "type": "city",
+          "population": "#####",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "LY-SU",
+      "parent_code": "LY",
+      "name": "Baladiyah Surman",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-375717610",
+          "parent_code": "LY-SU",
+          "name": "Surman",
+          "type": "city",
+          "population": "100000",
+          "place_type": "city"
+        }
+      ]
+    }
+  ]
+}

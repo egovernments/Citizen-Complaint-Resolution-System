@@ -1,0 +1,2144 @@
+{
+  "code": "SN",
+  "name": "Senegal",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "SN-KE",
+      "parent_code": "SN",
+      "name": "Kédougou Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1876298960",
+          "parent_code": "SN-KE",
+          "name": "Saraya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2158260818",
+          "parent_code": "SN-KE",
+          "name": "Batakokouta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3060297408",
+          "parent_code": "SN-KE",
+          "name": "Kedougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3765062010",
+          "parent_code": "SN-KE",
+          "name": "Mako",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5259983366",
+          "parent_code": "SN-KE",
+          "name": "Salemata",
+          "type": "city",
+          "population": "5000",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SN-DK",
+      "parent_code": "SN",
+      "name": "Dakar Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27565045",
+          "parent_code": "SN-DK",
+          "name": "Dakar",
+          "type": "city",
+          "population": "2396800",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-281170836",
+          "parent_code": "SN-DK",
+          "name": "Rufisque",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-281171041",
+          "parent_code": "SN-DK",
+          "name": "Pikine",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-662915731",
+          "parent_code": "SN-DK",
+          "name": "Keur Massar",
+          "type": "city",
+          "population": "337611",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1158142391",
+          "parent_code": "SN-DK",
+          "name": "Guédiawaye",
+          "type": "city",
+          "population": "286989",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1250211868",
+          "parent_code": "SN-DK",
+          "name": "Bargny",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2425283072",
+          "parent_code": "SN-DK",
+          "name": "Malika",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3303351290",
+          "parent_code": "SN-DK",
+          "name": "Diamniadio",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3564577822",
+          "parent_code": "SN-DK",
+          "name": "Sebikotane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3661556417",
+          "parent_code": "SN-DK",
+          "name": "Sangalkam",
+          "type": "city",
+          "population": "4191",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3679532714",
+          "parent_code": "SN-DK",
+          "name": "Bambylor",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4841785093",
+          "parent_code": "SN-DK",
+          "name": "Soowou Saloum",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8928159059",
+          "parent_code": "SN-DK",
+          "name": "Jaxaay",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8929811535",
+          "parent_code": "SN-DK",
+          "name": "Mbao",
+          "type": "city",
+          "population": "29571",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8929811542",
+          "parent_code": "SN-DK",
+          "name": "Diamaguène-Sicap Mbao",
+          "type": "city",
+          "population": "105782",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8929811543",
+          "parent_code": "SN-DK",
+          "name": "Tiaroye",
+          "type": "city",
+          "population": "179789",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8989386711",
+          "parent_code": "SN-DK",
+          "name": "Yeumbeul",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13426577054",
+          "parent_code": "SN-DK",
+          "name": "Gorom2",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SN-TH",
+      "parent_code": "SN",
+      "name": "Thiès Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-281170165",
+          "parent_code": "SN-TH",
+          "name": "Kayar",
+          "type": "city",
+          "population": "18010",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-281177216",
+          "parent_code": "SN-TH",
+          "name": "Pout",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-281177674",
+          "parent_code": "SN-TH",
+          "name": "Mboro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-281184145",
+          "parent_code": "SN-TH",
+          "name": "Meckhe",
+          "type": "city",
+          "population": "30000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-281184756",
+          "parent_code": "SN-TH",
+          "name": "Tivaouane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-286750662",
+          "parent_code": "SN-TH",
+          "name": "Sindia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-286752859",
+          "parent_code": "SN-TH",
+          "name": "M'bour",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-293840753",
+          "parent_code": "SN-TH",
+          "name": "Thiès",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-351411243",
+          "parent_code": "SN-TH",
+          "name": "Pire Goureye",
+          "type": "city",
+          "population": "5790",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-671824694",
+          "parent_code": "SN-TH",
+          "name": "Thiès",
+          "type": "city",
+          "population": "320000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1672030799",
+          "parent_code": "SN-TH",
+          "name": "Ngaparou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1888499156",
+          "parent_code": "SN-TH",
+          "name": "Nianing",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1980156217",
+          "parent_code": "SN-TH",
+          "name": "Pékesse",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2001329293",
+          "parent_code": "SN-TH",
+          "name": "Nguékhokh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2142498030",
+          "parent_code": "SN-TH",
+          "name": "Fissel",
+          "type": "city",
+          "population": "3000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2142498089",
+          "parent_code": "SN-TH",
+          "name": "Touba Toul",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2251183578",
+          "parent_code": "SN-TH",
+          "name": "Sandiara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2406466994",
+          "parent_code": "SN-TH",
+          "name": "Popenguine-Ndayane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2408021017",
+          "parent_code": "SN-TH",
+          "name": "La Somone",
+          "type": "city",
+          "population": "3702",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2517825265",
+          "parent_code": "SN-TH",
+          "name": "Thiadiaye",
+          "type": "city",
+          "population": "12157",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3564577825",
+          "parent_code": "SN-TH",
+          "name": "FC Thies",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3564578896",
+          "parent_code": "SN-TH",
+          "name": "FC Pout",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3659463017",
+          "parent_code": "SN-TH",
+          "name": "Khombole",
+          "type": "city",
+          "population": "12823",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3660141300",
+          "parent_code": "SN-TH",
+          "name": "Darou Khoudoss",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3669752019",
+          "parent_code": "SN-TH",
+          "name": "Tiénaba",
+          "type": "city",
+          "population": "4000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3670418935",
+          "parent_code": "SN-TH",
+          "name": "Tassette",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3670543271",
+          "parent_code": "SN-TH",
+          "name": "Ndiaganiao",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4051153290",
+          "parent_code": "SN-TH",
+          "name": "Pointe-Sarène",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6318645069",
+          "parent_code": "SN-TH",
+          "name": "Saly Portudal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8984033937",
+          "parent_code": "SN-TH",
+          "name": "Joal-Fadiouth",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13426561852",
+          "parent_code": "SN-TH",
+          "name": "Ngakham 2",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SN-LG",
+      "parent_code": "SN",
+      "name": "Louga Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-249743823",
+          "parent_code": "SN-LG",
+          "name": "Louga",
+          "type": "city",
+          "population": "82884",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-281181818",
+          "parent_code": "SN-LG",
+          "name": "Guéoul",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-281182572",
+          "parent_code": "SN-LG",
+          "name": "Kébémer",
+          "type": "city",
+          "population": "15585",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-292133208",
+          "parent_code": "SN-LG",
+          "name": "Léona",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-292135098",
+          "parent_code": "SN-LG",
+          "name": "Linguère",
+          "type": "city",
+          "population": "15000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-293442656",
+          "parent_code": "SN-LG",
+          "name": "Darou Mousty",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1510304643",
+          "parent_code": "SN-LG",
+          "name": "Keur Momar Sarr",
+          "type": "city",
+          "population": "1774",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1833426958",
+          "parent_code": "SN-LG",
+          "name": "Ndiagne",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1833426965",
+          "parent_code": "SN-LG",
+          "name": "Sagatta Gueth",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1967476977",
+          "parent_code": "SN-LG",
+          "name": "Doundodji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1977199647",
+          "parent_code": "SN-LG",
+          "name": "Sam Yabal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1980161826",
+          "parent_code": "SN-LG",
+          "name": "Sakal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2153543313",
+          "parent_code": "SN-LG",
+          "name": "Ndande",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2466835706",
+          "parent_code": "SN-LG",
+          "name": "Mbeuleukhé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3213024805",
+          "parent_code": "SN-LG",
+          "name": "Coki",
+          "type": "city",
+          "population": "7124",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3213025889",
+          "parent_code": "SN-LG",
+          "name": "Thiamène",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3655651551",
+          "parent_code": "SN-LG",
+          "name": "Dahra Djoloff",
+          "type": "city",
+          "population": "30896",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3723246967",
+          "parent_code": "SN-LG",
+          "name": "Mbacké Kadjor",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4065286711",
+          "parent_code": "SN-LG",
+          "name": "Yang-Yang",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4069601030",
+          "parent_code": "SN-LG",
+          "name": "Boulal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4516540198",
+          "parent_code": "SN-LG",
+          "name": "Thiel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5186041066",
+          "parent_code": "SN-LG",
+          "name": "Ndiob",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8987047226",
+          "parent_code": "SN-LG",
+          "name": "Labgar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SN-DB",
+      "parent_code": "SN",
+      "name": "Diourbel Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-249742121",
+          "parent_code": "SN-DB",
+          "name": "Diourbel",
+          "type": "city",
+          "population": "100445",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-292939503",
+          "parent_code": "SN-DB",
+          "name": "Bambey",
+          "type": "city",
+          "population": "21250",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-293437170",
+          "parent_code": "SN-DB",
+          "name": "Mbacké",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-293437934",
+          "parent_code": "SN-DB",
+          "name": "Touba",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1886938957",
+          "parent_code": "SN-DB",
+          "name": "Baba Garage",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1886939104",
+          "parent_code": "SN-DB",
+          "name": "Keur Ngana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1887598431",
+          "parent_code": "SN-DB",
+          "name": "Gat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1887598515",
+          "parent_code": "SN-DB",
+          "name": "Ndangalma",
+          "type": "city",
+          "population": "22350",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1975825238",
+          "parent_code": "SN-DB",
+          "name": "Taïf",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1975855380",
+          "parent_code": "SN-DB",
+          "name": "Ndindy",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3671850634",
+          "parent_code": "SN-DB",
+          "name": "Réfane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4388033196",
+          "parent_code": "SN-DB",
+          "name": "Nderep",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4388033201",
+          "parent_code": "SN-DB",
+          "name": "Bokhe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8061102228",
+          "parent_code": "SN-DB",
+          "name": "Lambaye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8607597426",
+          "parent_code": "SN-DB",
+          "name": "Ngohe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SN-FK",
+      "parent_code": "SN",
+      "name": "Fatick Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-249742347",
+          "parent_code": "SN-FK",
+          "name": "Fatick",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-292944781",
+          "parent_code": "SN-FK",
+          "name": "Gossas",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-293773405",
+          "parent_code": "SN-FK",
+          "name": "Sokone",
+          "type": "city",
+          "population": "14500",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-293773780",
+          "parent_code": "SN-FK",
+          "name": "Karang Poste",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1908446756",
+          "parent_code": "SN-FK",
+          "name": "Mbar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1975824079",
+          "parent_code": "SN-FK",
+          "name": "Colobane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2249141400",
+          "parent_code": "SN-FK",
+          "name": "Toubacouta",
+          "type": "city",
+          "population": "3000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2393456464",
+          "parent_code": "SN-FK",
+          "name": "Passy",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2527234933",
+          "parent_code": "SN-FK",
+          "name": "Djifer",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2527234935",
+          "parent_code": "SN-FK",
+          "name": "Palmarin Facao",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2960365724",
+          "parent_code": "SN-FK",
+          "name": "Diohine",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3329032836",
+          "parent_code": "SN-FK",
+          "name": "Béttenty",
+          "type": "city",
+          "population": "3886",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3329032897",
+          "parent_code": "SN-FK",
+          "name": "Diakhao",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3329032921",
+          "parent_code": "SN-FK",
+          "name": "Diofior",
+          "type": "city",
+          "population": "10985",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3329032931",
+          "parent_code": "SN-FK",
+          "name": "Dionewar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3329032941",
+          "parent_code": "SN-FK",
+          "name": "Diouroup",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3329032979",
+          "parent_code": "SN-FK",
+          "name": "Foundiougne",
+          "type": "city",
+          "population": "5610",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3329033512",
+          "parent_code": "SN-FK",
+          "name": "Loul Séssène",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3329033657",
+          "parent_code": "SN-FK",
+          "name": "Ndangane Campement",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3329033877",
+          "parent_code": "SN-FK",
+          "name": "Niakhar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3329033890",
+          "parent_code": "SN-FK",
+          "name": "Niodior",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3329034167",
+          "parent_code": "SN-FK",
+          "name": "Soum",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3329034564",
+          "parent_code": "SN-FK",
+          "name": "Touba Mourid",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3715513573",
+          "parent_code": "SN-FK",
+          "name": "Darou Salam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SN-ZG",
+      "parent_code": "SN",
+      "name": "Ziguinchor Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-293775990",
+          "parent_code": "SN-ZG",
+          "name": "Diouloulou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-310479710",
+          "parent_code": "SN-ZG",
+          "name": "Kafountine",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-351568022",
+          "parent_code": "SN-ZG",
+          "name": "Adéane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1884337639",
+          "parent_code": "SN-ZG",
+          "name": "Tendouk",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1917652469",
+          "parent_code": "SN-ZG",
+          "name": "Bignona",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2019941091",
+          "parent_code": "SN-ZG",
+          "name": "Tionk Essil",
+          "type": "city",
+          "population": "8507",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2061951438",
+          "parent_code": "SN-ZG",
+          "name": "Oussouye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2061951507",
+          "parent_code": "SN-ZG",
+          "name": "Mlomp",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2281987760",
+          "parent_code": "SN-ZG",
+          "name": "Ziguinchor",
+          "type": "city",
+          "population": "230000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2377934876",
+          "parent_code": "SN-ZG",
+          "name": "Elinkine",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3777963186",
+          "parent_code": "SN-ZG",
+          "name": "Coubalan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3790149293",
+          "parent_code": "SN-ZG",
+          "name": "Kabrousse",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4671950017",
+          "parent_code": "SN-ZG",
+          "name": "Abene",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SN-SL",
+      "parent_code": "SN",
+      "name": "Saint-Louis Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-249167293",
+          "parent_code": "SN-SL",
+          "name": "Saint-Louis",
+          "type": "city",
+          "population": "176000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-288544251",
+          "parent_code": "SN-SL",
+          "name": "Richard-Toll",
+          "type": "city",
+          "population": "73000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-292131432",
+          "parent_code": "SN-SL",
+          "name": "Mpal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-313410211",
+          "parent_code": "SN-SL",
+          "name": "Dagana",
+          "type": "city",
+          "population": "20916",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-330473443",
+          "parent_code": "SN-SL",
+          "name": "Podor",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1980163068",
+          "parent_code": "SN-SL",
+          "name": "Gandon",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1990546458",
+          "parent_code": "SN-SL",
+          "name": "Pété",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1990911426",
+          "parent_code": "SN-SL",
+          "name": "Gamadji Saré",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1994584630",
+          "parent_code": "SN-SL",
+          "name": "Gaé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2261315206",
+          "parent_code": "SN-SL",
+          "name": "Rao",
+          "type": "city",
+          "population": "1146",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2364382631",
+          "parent_code": "SN-SL",
+          "name": "Aéré Lao",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2364382646",
+          "parent_code": "SN-SL",
+          "name": "Galoya Toucouleur",
+          "type": "city",
+          "population": "5797",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2364382657",
+          "parent_code": "SN-SL",
+          "name": "Golléré",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2364382665",
+          "parent_code": "SN-SL",
+          "name": "Ndioum",
+          "type": "city",
+          "population": "15546",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2364382675",
+          "parent_code": "SN-SL",
+          "name": "Ndiandane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2364382680",
+          "parent_code": "SN-SL",
+          "name": "Ross Béthio",
+          "type": "city",
+          "population": "11000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2364382684",
+          "parent_code": "SN-SL",
+          "name": "Rosso Sénégal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2364576432",
+          "parent_code": "SN-SL",
+          "name": "Fass Ngom",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5922517861",
+          "parent_code": "SN-SL",
+          "name": "Gueye Kadar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9839117203",
+          "parent_code": "SN-SL",
+          "name": "Ndiayene Peulh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SN-KD",
+      "parent_code": "SN",
+      "name": "Kolda Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-351540931",
+          "parent_code": "SN-KD",
+          "name": "Médina Gounass",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-351551931",
+          "parent_code": "SN-KD",
+          "name": "Vélingara",
+          "type": "city",
+          "population": "23775",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-351553993",
+          "parent_code": "SN-KD",
+          "name": "Kounkané",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-351555303",
+          "parent_code": "SN-KD",
+          "name": "Dabo",
+          "type": "city",
+          "population": "1952",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-351556070",
+          "parent_code": "SN-KD",
+          "name": "Tiara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2280322918",
+          "parent_code": "SN-KD",
+          "name": "Abissamaoune",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2410110786",
+          "parent_code": "SN-KD",
+          "name": "Kolda",
+          "type": "city",
+          "population": "63000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3054766201",
+          "parent_code": "SN-KD",
+          "name": "Pata",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3054766471",
+          "parent_code": "SN-KD",
+          "name": "Médina Yoro Foulah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3054802328",
+          "parent_code": "SN-KD",
+          "name": "Mampatim",
+          "type": "city",
+          "population": "16000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3305025275",
+          "parent_code": "SN-KD",
+          "name": "Rawdatou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3305026634",
+          "parent_code": "SN-KD",
+          "name": "Médina Elmi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3765414281",
+          "parent_code": "SN-KD",
+          "name": "Linkéring",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3772829341",
+          "parent_code": "SN-KD",
+          "name": "Diaobé-Kabendou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3773230078",
+          "parent_code": "SN-KD",
+          "name": "Pakour",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3856697065",
+          "parent_code": "SN-KD",
+          "name": "Saré Yoba Diéga",
+          "type": "city",
+          "population": "1440",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8392483829",
+          "parent_code": "SN-KD",
+          "name": "Salikégné",
+          "type": "city",
+          "population": "686",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SN-TC",
+      "parent_code": "SN",
+      "name": "Tambacounda Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-249744836",
+          "parent_code": "SN-TC",
+          "name": "Tambacounda",
+          "type": "city",
+          "population": "78800",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-295844702",
+          "parent_code": "SN-TC",
+          "name": "Bakel",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-351514079",
+          "parent_code": "SN-TC",
+          "name": "Kidira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-351518334",
+          "parent_code": "SN-TC",
+          "name": "Goudiry",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-351528378",
+          "parent_code": "SN-TC",
+          "name": "Bala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-351530227",
+          "parent_code": "SN-TC",
+          "name": "Kothiary",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1967597774",
+          "parent_code": "SN-TC",
+          "name": "Koumpentoum",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2115560938",
+          "parent_code": "SN-TC",
+          "name": "Gouloumbou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2148386906",
+          "parent_code": "SN-TC",
+          "name": "Sinthiou Malème",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2149551616",
+          "parent_code": "SN-TC",
+          "name": "Malem Niani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2251183327",
+          "parent_code": "SN-TC",
+          "name": "Koussanar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2322110938",
+          "parent_code": "SN-TC",
+          "name": "Dawady",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2386618998",
+          "parent_code": "SN-TC",
+          "name": "Dialacoto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2386619052",
+          "parent_code": "SN-TC",
+          "name": "Missirah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2419961731",
+          "parent_code": "SN-TC",
+          "name": "Diawara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2462587943",
+          "parent_code": "SN-TC",
+          "name": "Makacolibantang",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2564232163",
+          "parent_code": "SN-TC",
+          "name": "Bani Israël",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2564243449",
+          "parent_code": "SN-TC",
+          "name": "Dianké Makha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2564247717",
+          "parent_code": "SN-TC",
+          "name": "Sadatou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3742804925",
+          "parent_code": "SN-TC",
+          "name": "Kaba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3754583214",
+          "parent_code": "SN-TC",
+          "name": "Bamba Thialène",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8489955170",
+          "parent_code": "SN-TC",
+          "name": "Méréto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8979095793",
+          "parent_code": "SN-TC",
+          "name": "Payar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SN-SE",
+      "parent_code": "SN",
+      "name": "Sédhiou Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-293467839",
+          "parent_code": "SN-SE",
+          "name": "Sédhiou",
+          "type": "city",
+          "population": "20141",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-293473292",
+          "parent_code": "SN-SE",
+          "name": "Tanaff",
+          "type": "city",
+          "population": "2829",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-351609994",
+          "parent_code": "SN-SE",
+          "name": "Marsassoum",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2251183179",
+          "parent_code": "SN-SE",
+          "name": "Bounkiling",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2251183215",
+          "parent_code": "SN-SE",
+          "name": "Madina Wandifa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2288874656",
+          "parent_code": "SN-SE",
+          "name": "Djibanar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2288874677",
+          "parent_code": "SN-SE",
+          "name": "Goudomp",
+          "type": "city",
+          "population": "12012",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2288874708",
+          "parent_code": "SN-SE",
+          "name": "Samine",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2288874840",
+          "parent_code": "SN-SE",
+          "name": "Simbandi Brassou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2288874860",
+          "parent_code": "SN-SE",
+          "name": "Diattacounda",
+          "type": "city",
+          "population": "3112",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3772239689",
+          "parent_code": "SN-SE",
+          "name": "Ndiamacouta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4278149037",
+          "parent_code": "SN-SE",
+          "name": "Diannah Malary",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SN-KA",
+      "parent_code": "SN",
+      "name": "Kaffrine Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-292953346",
+          "parent_code": "SN-KA",
+          "name": "Kaffrine",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2197082623",
+          "parent_code": "SN-KA",
+          "name": "Birkelane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2251183429",
+          "parent_code": "SN-KA",
+          "name": "Koungheul",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2251183510",
+          "parent_code": "SN-KA",
+          "name": "Malem-Hodar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2594253175",
+          "parent_code": "SN-KA",
+          "name": "Ndioum Ngainth",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2599876556",
+          "parent_code": "SN-KA",
+          "name": "Lour-Escale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3331920952",
+          "parent_code": "SN-KA",
+          "name": "Mabo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3474468823",
+          "parent_code": "SN-KA",
+          "name": "Nganda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3474476126",
+          "parent_code": "SN-KA",
+          "name": "Kélimane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3474486717",
+          "parent_code": "SN-KA",
+          "name": "Ngodiba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3743360198",
+          "parent_code": "SN-KA",
+          "name": "Ngainthe Pathè",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3743879210",
+          "parent_code": "SN-KA",
+          "name": "Pafa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8932492327",
+          "parent_code": "SN-KA",
+          "name": "Diokoul Mbelbouck",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SN-KL",
+      "parent_code": "SN",
+      "name": "Kaolack Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-292948744",
+          "parent_code": "SN-KL",
+          "name": "Guinguinéo",
+          "type": "city",
+          "population": "16000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-300514646",
+          "parent_code": "SN-KL",
+          "name": "N'Doffane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2142497603",
+          "parent_code": "SN-KL",
+          "name": "Medina Sabakh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2594253167",
+          "parent_code": "SN-KL",
+          "name": "Mboss",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2599359813",
+          "parent_code": "SN-KL",
+          "name": "Nioro du Rip",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2599359814",
+          "parent_code": "SN-KL",
+          "name": "Taïba Niassène",
+          "type": "city",
+          "population": "3957",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3329032973",
+          "parent_code": "SN-KL",
+          "name": "Fass",
+          "type": "city",
+          "population": "4553",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3329033094",
+          "parent_code": "SN-KL",
+          "name": "Gandiaye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3329033194",
+          "parent_code": "SN-KL",
+          "name": "Keur Madiabel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3329033378",
+          "parent_code": "SN-KL",
+          "name": "Koutal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3329033422",
+          "parent_code": "SN-KL",
+          "name": "Kahone",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3329033430",
+          "parent_code": "SN-KL",
+          "name": "Kaolack",
+          "type": "city",
+          "population": "172305",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3329033497",
+          "parent_code": "SN-KL",
+          "name": "Latmingué",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3329033669",
+          "parent_code": "SN-KL",
+          "name": "Ndiaffate Escale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3329033767",
+          "parent_code": "SN-KL",
+          "name": "Ndiédieng",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3329033807",
+          "parent_code": "SN-KL",
+          "name": "Ndramé Escale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3329034589",
+          "parent_code": "SN-KL",
+          "name": "Wack Ngouna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3715459567",
+          "parent_code": "SN-KL",
+          "name": "Porokhane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SN-MT",
+      "parent_code": "SN",
+      "name": "Matam Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-249744563",
+          "parent_code": "SN-MT",
+          "name": "Matam",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-351488962",
+          "parent_code": "SN-MT",
+          "name": "Ouro Sogui",
+          "type": "city",
+          "population": "15614",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1986710063",
+          "parent_code": "SN-MT",
+          "name": "Hamady Ounaré",
+          "type": "city",
+          "population": "9272",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1986710064",
+          "parent_code": "SN-MT",
+          "name": "Sinthiou Bamambé-Banadji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1986710103",
+          "parent_code": "SN-MT",
+          "name": "Kanel",
+          "type": "city",
+          "population": "15000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1987817535",
+          "parent_code": "SN-MT",
+          "name": "Nguidjilone",
+          "type": "city",
+          "population": "6568",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1990545734",
+          "parent_code": "SN-MT",
+          "name": "Thilogne",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2387615084",
+          "parent_code": "SN-MT",
+          "name": "Semmé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2985774788",
+          "parent_code": "SN-MT",
+          "name": "Dembakané",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3475208935",
+          "parent_code": "SN-MT",
+          "name": "Waoundé",
+          "type": "city",
+          "population": "9975",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4118232608",
+          "parent_code": "SN-MT",
+          "name": "Oudalaye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4118803689",
+          "parent_code": "SN-MT",
+          "name": "Ndiot",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4174075624",
+          "parent_code": "SN-MT",
+          "name": "Bokiladji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4174075639",
+          "parent_code": "SN-MT",
+          "name": "Ganguel Maka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4174075651",
+          "parent_code": "SN-MT",
+          "name": "Kawal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4605102505",
+          "parent_code": "SN-MT",
+          "name": "Lougré Thioly",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4605110270",
+          "parent_code": "SN-MT",
+          "name": "Younoferé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5459389911",
+          "parent_code": "SN-MT",
+          "name": "Ranérou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8656916834",
+          "parent_code": "SN-MT",
+          "name": "Orkadiere",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8984287143",
+          "parent_code": "SN-MT",
+          "name": "Liou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10156771436",
+          "parent_code": "SN-MT",
+          "name": "Soringho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    }
+  ]
+}

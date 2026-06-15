@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { ListFilter } from 'lucide-react';
 import type { FilterElement } from './types';
 import { Button } from '../primitives/button';

@@ -7,8 +7,9 @@ import { useTranslation } from "react-i18next";
 import _ from "lodash";
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
-import keNairobiWards from "../assets/boundaries/ke_nairobi_wards.json";
+import keNairobiWardsFallback from "../assets/boundaries/ke_nairobi_wards.json";
 import useWardHighlightColor from "../hooks/pgr/useWardHighlightColor";
+import useTenantBoundaries from "../hooks/pgr/useTenantBoundaries";
 
 // Fix default icon issue in React builds
 delete L.Icon.Default.prototype._getIconUrl;
@@ -107,6 +108,9 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   const [polygonPoints, setPolygonPoints] = useState([]);
   const [hoveredWard, setHoveredWard] = useState(null);
   const [selectedWard, setSelectedWard] = useState(null);
+  // Tenant ward polygons (boundary-service when MAP_TENANT is set, else
+  // the bundled static Nairobi wards). Null while the fetch is in flight.
+  const tenantBoundaries = useTenantBoundaries();
   const mapRef = useRef(null);
   const searchInputRef = useRef(null);
   const hasInitialized = useRef(false);
@@ -174,7 +178,8 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   }, [formData, config.key]);
 
   const fetchAddress = async (lat, lng) => {
-    const ward = resolveWard(lat, lng, keNairobiWards);
+    const wardCollection = tenantBoundaries || keNairobiWardsFallback;
+    const ward = resolveWard(lat, lng, wardCollection);
     setSelectedWard(ward?.code || null);
     try {
       const response = await fetch(
@@ -395,10 +400,10 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
               attribution='&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
               url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
             />
-            {keNairobiWards?.features?.length > 0 && (
+            {tenantBoundaries?.features?.length > 0 && (
               <GeoJSON
-                key={`${selectedWard || "_"}-${hoveredWard || "_"}`}
-                data={keNairobiWards}
+                key={`${selectedWard || "_"}-${hoveredWard || "_"}-${tenantBoundaries.features.length}`}
+                data={tenantBoundaries}
                 style={wardStyle}
                 onEachFeature={onEachWard}
               />

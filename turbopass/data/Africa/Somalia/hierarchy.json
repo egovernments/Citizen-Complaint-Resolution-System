@@ -1,0 +1,1408 @@
+{
+  "code": "SO",
+  "name": "Somalia",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "SO-BN",
+      "parent_code": "SO",
+      "name": "Banaadir",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-34684808",
+          "parent_code": "SO-BN",
+          "name": "Mogadishu",
+          "type": "city",
+          "population": "2610000",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "ST-3586169",
+      "parent_code": "SO",
+      "name": "Somaliland",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-43528353",
+          "parent_code": "ST-3586169",
+          "name": "Erigavo",
+          "type": "city",
+          "population": "190000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-291580881",
+          "parent_code": "ST-3586169",
+          "name": "Berbera",
+          "type": "city",
+          "population": "263000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-316518322",
+          "parent_code": "ST-3586169",
+          "name": "Zeila",
+          "type": "city",
+          "population": "25000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1136512165",
+          "parent_code": "ST-3586169",
+          "name": "Kalabeydh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1401883871",
+          "parent_code": "ST-3586169",
+          "name": "Cag iyo Dhabar Dalool",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404221333",
+          "parent_code": "ST-3586169",
+          "name": "Wadaamagoo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404221400",
+          "parent_code": "ST-3586169",
+          "name": "Qorilugud",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404221630",
+          "parent_code": "ST-3586169",
+          "name": "Gar Adag",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404221791",
+          "parent_code": "ST-3586169",
+          "name": "Caynabo عينبة",
+          "type": "city",
+          "population": "50000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1404222530",
+          "parent_code": "ST-3586169",
+          "name": "Hadaaftimo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404223358",
+          "parent_code": "ST-3586169",
+          "name": "Dhoqoshay",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404223640",
+          "parent_code": "ST-3586169",
+          "name": "Xiis حيس",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404223833",
+          "parent_code": "ST-3586169",
+          "name": "Tog Wajaale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404224159",
+          "parent_code": "ST-3586169",
+          "name": "Agabar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404224400",
+          "parent_code": "ST-3586169",
+          "name": "Baligubadle",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1404224477",
+          "parent_code": "ST-3586169",
+          "name": "Las Anod",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404225609",
+          "parent_code": "ST-3586169",
+          "name": "Baki",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404225981",
+          "parent_code": "ST-3586169",
+          "name": "Maydh ميط",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404227986",
+          "parent_code": "ST-3586169",
+          "name": "Las Khorey",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404230031",
+          "parent_code": "ST-3586169",
+          "name": "Sheikh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404231192",
+          "parent_code": "ST-3586169",
+          "name": "Oog أوغ",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1404231210",
+          "parent_code": "ST-3586169",
+          "name": "Dabaqabad",
+          "type": "city",
+          "population": "650",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404231301",
+          "parent_code": "ST-3586169",
+          "name": "Qudbiga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404231873",
+          "parent_code": "ST-3586169",
+          "name": "Gabiley",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404232532",
+          "parent_code": "ST-3586169",
+          "name": "Badhan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404233007",
+          "parent_code": "ST-3586169",
+          "name": "Borama",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1404233128",
+          "parent_code": "ST-3586169",
+          "name": "Taleh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404233332",
+          "parent_code": "ST-3586169",
+          "name": "Xudun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404233451",
+          "parent_code": "ST-3586169",
+          "name": "Waaciye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404233760",
+          "parent_code": "ST-3586169",
+          "name": "Lughaya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404234111",
+          "parent_code": "ST-3586169",
+          "name": "El Afweyn",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2454874210",
+          "parent_code": "ST-3586169",
+          "name": "Arabsiyo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4298140251",
+          "parent_code": "ST-3586169",
+          "name": "Hargeisa",
+          "type": "city",
+          "population": "1960000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-6494980933",
+          "parent_code": "ST-3586169",
+          "name": "Odweine",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8983416979",
+          "parent_code": "ST-3586169",
+          "name": "Qoryale قرياله",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9026659039",
+          "parent_code": "ST-3586169",
+          "name": "Buuhoodle",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9114709074",
+          "parent_code": "ST-3586169",
+          "name": "Bali Cumar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9261868139",
+          "parent_code": "ST-3586169",
+          "name": "Yiroowe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12031126312",
+          "parent_code": "ST-3586169",
+          "name": "Burao",
+          "type": "city",
+          "population": "425000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-13516931038",
+          "parent_code": "ST-3586169",
+          "name": "BALLIGA MAXAMED NUUR",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-13702728",
+      "parent_code": "SO",
+      "name": "Puntland",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-43528250",
+          "parent_code": "ST-13702728",
+          "name": "Bosaso",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-43528345",
+          "parent_code": "ST-13702728",
+          "name": "Garoowe",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-313778594",
+          "parent_code": "ST-13702728",
+          "name": "Hafun",
+          "type": "city",
+          "population": "13200",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-313929399",
+          "parent_code": "ST-13702728",
+          "name": "Qandala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-313933168",
+          "parent_code": "ST-13702728",
+          "name": "Bargal",
+          "type": "city",
+          "population": "7000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-313933231",
+          "parent_code": "ST-13702728",
+          "name": "Hurdiyo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-313941521",
+          "parent_code": "ST-13702728",
+          "name": "Samaysa Dheer",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-313941532",
+          "parent_code": "ST-13702728",
+          "name": "Xidda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-313941777",
+          "parent_code": "ST-13702728",
+          "name": "Iskushuban",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-313974266",
+          "parent_code": "ST-13702728",
+          "name": "El Dahir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404222605",
+          "parent_code": "ST-13702728",
+          "name": "Burtinle",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6528156412",
+          "parent_code": "ST-13702728",
+          "name": "Qardho",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "ST-13702729",
+      "parent_code": "SO",
+      "name": "Galmudug",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-43528267",
+          "parent_code": "ST-13702729",
+          "name": "Dusmareb",
+          "type": "city",
+          "population": "10500",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-43528320",
+          "parent_code": "ST-13702729",
+          "name": "Galkayo",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-313943293",
+          "parent_code": "ST-13702729",
+          "name": "Hobyo",
+          "type": "city",
+          "population": "11800",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404221535",
+          "parent_code": "ST-13702729",
+          "name": "El Buur",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404221763",
+          "parent_code": "ST-13702729",
+          "name": "Bacaadweyn",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404222910",
+          "parent_code": "ST-13702729",
+          "name": "Jariiban",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404226070",
+          "parent_code": "ST-13702729",
+          "name": "Galdogob",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404226404",
+          "parent_code": "ST-13702729",
+          "name": "Adado",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404230088",
+          "parent_code": "ST-13702729",
+          "name": "Buuryaqab",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404230603",
+          "parent_code": "ST-13702729",
+          "name": "Wabxo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404231132",
+          "parent_code": "ST-13702729",
+          "name": "Ceel Dheer",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404231170",
+          "parent_code": "ST-13702729",
+          "name": "Guriel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404234155",
+          "parent_code": "ST-13702729",
+          "name": "Gadobjiran",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6528156411",
+          "parent_code": "ST-13702729",
+          "name": "Harardhere",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7194085033",
+          "parent_code": "ST-13702729",
+          "name": "Afar Irdood",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10142960942",
+          "parent_code": "ST-13702729",
+          "name": "Abudwak",
+          "type": "city",
+          "population": "164286",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-10167410999",
+          "parent_code": "ST-13702729",
+          "name": "Bangele",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10167416717",
+          "parent_code": "ST-13702729",
+          "name": "Labagale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10167430608",
+          "parent_code": "ST-13702729",
+          "name": "Saaxo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10203958925",
+          "parent_code": "ST-13702729",
+          "name": "Dhabad ضابط",
+          "type": "city",
+          "population": "35000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-10252458011",
+          "parent_code": "ST-13702729",
+          "name": "Balanbale بالانبالي",
+          "type": "city",
+          "population": "60000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-10297949315",
+          "parent_code": "ST-13702729",
+          "name": "Dalsan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10660421966",
+          "parent_code": "ST-13702729",
+          "name": "Herale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13762244530",
+          "parent_code": "ST-13702729",
+          "name": "Baagq",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-13702730",
+      "parent_code": "SO",
+      "name": "Hirshabelle",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-36161070",
+          "parent_code": "ST-13702730",
+          "name": "Jowhar",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-36305937",
+          "parent_code": "ST-13702730",
+          "name": "Jalalaqsi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-43528290",
+          "parent_code": "ST-13702730",
+          "name": "Beledweyne",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1150892162",
+          "parent_code": "ST-13702730",
+          "name": "Ferfer",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404222064",
+          "parent_code": "ST-13702730",
+          "name": "Cadale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404222675",
+          "parent_code": "ST-13702730",
+          "name": "Balcad",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404223028",
+          "parent_code": "ST-13702730",
+          "name": "Halgan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404223307",
+          "parent_code": "ST-13702730",
+          "name": "Moqokori",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404223489",
+          "parent_code": "ST-13702730",
+          "name": "Duduble",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404224411",
+          "parent_code": "ST-13702730",
+          "name": "Buq Koosaar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404224434",
+          "parent_code": "ST-13702730",
+          "name": "Mukayle",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404225503",
+          "parent_code": "ST-13702730",
+          "name": "Bulo Burto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404226588",
+          "parent_code": "ST-13702730",
+          "name": "Warsheikh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404227191",
+          "parent_code": "ST-13702730",
+          "name": "Ceel-Baraf",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404230719",
+          "parent_code": "ST-13702730",
+          "name": "Buq Aqable",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404230890",
+          "parent_code": "ST-13702730",
+          "name": "Booco",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404231601",
+          "parent_code": "ST-13702730",
+          "name": "Matabaan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404232855",
+          "parent_code": "ST-13702730",
+          "name": "Mahadaay",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404233362",
+          "parent_code": "ST-13702730",
+          "name": "Adan Yabaal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404233609",
+          "parent_code": "ST-13702730",
+          "name": "Miir-Taqwo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404233630",
+          "parent_code": "ST-13702730",
+          "name": "Maxaas",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7722376241",
+          "parent_code": "ST-13702730",
+          "name": "Gambole",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-13702731",
+      "parent_code": "SO",
+      "name": "South West",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-35926758",
+          "parent_code": "ST-13702731",
+          "name": "Baidoa",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-36155607",
+          "parent_code": "ST-13702731",
+          "name": "Hudur",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-36155827",
+          "parent_code": "ST-13702731",
+          "name": "Merca",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-36161072",
+          "parent_code": "ST-13702731",
+          "name": "Afgooye",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-36161073",
+          "parent_code": "ST-13702731",
+          "name": "Qoryooley",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-36305949",
+          "parent_code": "ST-13702731",
+          "name": "Buurhakaba",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-36305953",
+          "parent_code": "ST-13702731",
+          "name": "Wanlaweyn",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-43527946",
+          "parent_code": "ST-13702731",
+          "name": "Barawa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404222014",
+          "parent_code": "ST-13702731",
+          "name": "Aw Dheegle",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404222191",
+          "parent_code": "ST-13702731",
+          "name": "Dara Salaam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404222395",
+          "parent_code": "ST-13702731",
+          "name": "Buulo-Jadiid",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404223252",
+          "parent_code": "ST-13702731",
+          "name": "Uffurow",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404223298",
+          "parent_code": "ST-13702731",
+          "name": "Yeed",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404223300",
+          "parent_code": "ST-13702731",
+          "name": "Sarmaan-Dheer",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404223334",
+          "parent_code": "ST-13702731",
+          "name": "Mubaarak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404223720",
+          "parent_code": "ST-13702731",
+          "name": "Goobato",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404223802",
+          "parent_code": "ST-13702731",
+          "name": "Garas Wiine",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404223973",
+          "parent_code": "ST-13702731",
+          "name": "Buurey",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404224775",
+          "parent_code": "ST-13702731",
+          "name": "Farsooley",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404224830",
+          "parent_code": "ST-13702731",
+          "name": "Rab Dhuure",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404225678",
+          "parent_code": "ST-13702731",
+          "name": "Afgoi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404225710",
+          "parent_code": "ST-13702731",
+          "name": "Shalaambood",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404225932",
+          "parent_code": "ST-13702731",
+          "name": "Ceel Barde",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404226014",
+          "parent_code": "ST-13702731",
+          "name": "Janaale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404227318",
+          "parent_code": "ST-13702731",
+          "name": "Wajid",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404228313",
+          "parent_code": "ST-13702731",
+          "name": "Diinsoor",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404229229",
+          "parent_code": "ST-13702731",
+          "name": "Gol-Weyn",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404229812",
+          "parent_code": "ST-13702731",
+          "name": "Sablaale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404231323",
+          "parent_code": "ST-13702731",
+          "name": "Buur Dhuxunle",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404231405",
+          "parent_code": "ST-13702731",
+          "name": "Aawdiinle",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404231820",
+          "parent_code": "ST-13702731",
+          "name": "Qansax Dheere",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404232964",
+          "parent_code": "ST-13702731",
+          "name": "Waberi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404233651",
+          "parent_code": "ST-13702731",
+          "name": "Kurtunwaarey",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404233657",
+          "parent_code": "ST-13702731",
+          "name": "Buulo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404233693",
+          "parent_code": "ST-13702731",
+          "name": "Tayeeglow",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3135537229",
+          "parent_code": "ST-13702731",
+          "name": "Buulo Mareer",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4844617321",
+          "parent_code": "ST-13702731",
+          "name": "Mudul-Braawe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8411616793",
+          "parent_code": "ST-13702731",
+          "name": "Berdale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11960200725",
+          "parent_code": "ST-13702731",
+          "name": "Daru-Salaam City",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "ST-13702732",
+      "parent_code": "SO",
+      "name": "Jubaland",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-36161074",
+          "parent_code": "ST-13702732",
+          "name": "Kismayo",
+          "type": "city",
+          "population": "166667",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-36305919",
+          "parent_code": "ST-13702732",
+          "name": "Bardera",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-36305922",
+          "parent_code": "ST-13702732",
+          "name": "Jamame",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-36305946",
+          "parent_code": "ST-13702732",
+          "name": "Jilib",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-43528307",
+          "parent_code": "ST-13702732",
+          "name": "Bu'aale",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1395957416",
+          "parent_code": "ST-13702732",
+          "name": "Doolow دولو",
+          "type": "city",
+          "population": "26800",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1404221611",
+          "parent_code": "ST-13702732",
+          "name": "Reys Qode",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404221930",
+          "parent_code": "ST-13702732",
+          "name": "Dhamaso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404222143",
+          "parent_code": "ST-13702732",
+          "name": "Afmadow",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404223185",
+          "parent_code": "ST-13702732",
+          "name": "Faafaxdhuun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404223191",
+          "parent_code": "ST-13702732",
+          "name": "Beled Hawa بولاهاوا",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1404223327",
+          "parent_code": "ST-13702732",
+          "name": "Hoosingo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404224167",
+          "parent_code": "ST-13702732",
+          "name": "Tulo Barwaqo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404224679",
+          "parent_code": "ST-13702732",
+          "name": "Dhobley",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404225468",
+          "parent_code": "ST-13702732",
+          "name": "Luuq لوق",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1404226067",
+          "parent_code": "ST-13702732",
+          "name": "Ceelwaaq عيل واق",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1404229909",
+          "parent_code": "ST-13702732",
+          "name": "Buurdhuubo بور ذوبو",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1404230111",
+          "parent_code": "ST-13702732",
+          "name": "Geedweyne",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404230195",
+          "parent_code": "ST-13702732",
+          "name": "El Adde",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404230241",
+          "parent_code": "ST-13702732",
+          "name": "Saakow",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404230799",
+          "parent_code": "ST-13702732",
+          "name": "Ceel Boon",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404231327",
+          "parent_code": "ST-13702732",
+          "name": "Cows Qurun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404231993",
+          "parent_code": "ST-13702732",
+          "name": "Gaduud",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404232659",
+          "parent_code": "ST-13702732",
+          "name": "Bangeeni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404232783",
+          "parent_code": "ST-13702732",
+          "name": "Meykaarebay",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404233193",
+          "parent_code": "ST-13702732",
+          "name": "Badhaadhe بدهاذ",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404233290",
+          "parent_code": "ST-13702732",
+          "name": "Buraa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404233370",
+          "parent_code": "ST-13702732",
+          "name": "Mcheruale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1404233530",
+          "parent_code": "ST-13702732",
+          "name": "Garbaharey",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-11044382876",
+          "parent_code": "ST-13702732",
+          "name": "Geriley",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    }
+  ]
+}

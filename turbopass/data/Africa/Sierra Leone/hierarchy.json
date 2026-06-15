@@ -1,0 +1,616 @@
+{
+  "code": "SL",
+  "name": "Sierra Leone",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "SL-E",
+      "parent_code": "SL",
+      "name": "Eastern Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-314005602",
+          "parent_code": "SL-E",
+          "name": "Kenema",
+          "type": "city",
+          "population": "188463",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-314007819",
+          "parent_code": "SL-E",
+          "name": "Koidu",
+          "type": "city",
+          "population": "124662",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-379438219",
+          "parent_code": "SL-E",
+          "name": "Blama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-476746505",
+          "parent_code": "SL-E",
+          "name": "Joru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-476753175",
+          "parent_code": "SL-E",
+          "name": "Panguma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-491409495",
+          "parent_code": "SL-E",
+          "name": "Segbwema",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-491411731",
+          "parent_code": "SL-E",
+          "name": "Daru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-859709020",
+          "parent_code": "SL-E",
+          "name": "Yengema",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-954899748",
+          "parent_code": "SL-E",
+          "name": "Tongo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1871061345",
+          "parent_code": "SL-E",
+          "name": "Kailahun",
+          "type": "city",
+          "population": "30,4 CR",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1871102703",
+          "parent_code": "SL-E",
+          "name": "Koindu",
+          "type": "city",
+          "population": "22,2CR",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1871316440",
+          "parent_code": "SL-E",
+          "name": "Pendembu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2934144302",
+          "parent_code": "SL-E",
+          "name": "Baoma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2942517058",
+          "parent_code": "SL-E",
+          "name": "Bendu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2965975293",
+          "parent_code": "SL-E",
+          "name": "Yomadu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2970863406",
+          "parent_code": "SL-E",
+          "name": "Yeida",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2986823991",
+          "parent_code": "SL-E",
+          "name": "Jaiama Nimiyama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10839320045",
+          "parent_code": "SL-E",
+          "name": "cassanova",
+          "type": "city",
+          "population": "120",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SL-N",
+      "parent_code": "SL",
+      "name": "Northern Province, Sierra Leone",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-483854997",
+          "parent_code": "SL-N",
+          "name": "Bendugu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-484029056",
+          "parent_code": "SL-N",
+          "name": "Sinkunia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-629093595",
+          "parent_code": "SL-N",
+          "name": "Binkolo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-667923318",
+          "parent_code": "SL-N",
+          "name": "Matotaka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1978562828",
+          "parent_code": "SL-N",
+          "name": "Magburaka",
+          "type": "city",
+          "population": "40313",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2963531639",
+          "parent_code": "SL-N",
+          "name": "Musaia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2964537583",
+          "parent_code": "SL-N",
+          "name": "Gbentu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3095265549",
+          "parent_code": "SL-N",
+          "name": "Falaba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4515774294",
+          "parent_code": "SL-N",
+          "name": "Kamabai",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5814036080",
+          "parent_code": "SL-N",
+          "name": "Kabala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11195122298",
+          "parent_code": "SL-N",
+          "name": "Mile 91",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11541295208",
+          "parent_code": "SL-N",
+          "name": "Makeni",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "SL-S",
+      "parent_code": "SL",
+      "name": "Southern Province, Sierra Leone",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-314001434",
+          "parent_code": "SL-S",
+          "name": "Bo",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-320060535",
+          "parent_code": "SL-S",
+          "name": "Pujehun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-320060540",
+          "parent_code": "SL-S",
+          "name": "Zimmi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-379429217",
+          "parent_code": "SL-S",
+          "name": "Baiima",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-379429231",
+          "parent_code": "SL-S",
+          "name": "Tikonko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-379429232",
+          "parent_code": "SL-S",
+          "name": "Bumpe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-379432200",
+          "parent_code": "SL-S",
+          "name": "Taiama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-496344427",
+          "parent_code": "SL-S",
+          "name": "Moyamba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-498808721",
+          "parent_code": "SL-S",
+          "name": "Bonthe",
+          "type": "city",
+          "population": "10206",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-799075295",
+          "parent_code": "SL-S",
+          "name": "Mattru Jong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-799075492",
+          "parent_code": "SL-S",
+          "name": "Gbangbatok",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-799075562",
+          "parent_code": "SL-S",
+          "name": "Sumbuya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1660977029",
+          "parent_code": "SL-S",
+          "name": "Potoru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1848488667",
+          "parent_code": "SL-S",
+          "name": "Sulima",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1871034824",
+          "parent_code": "SL-S",
+          "name": "Njala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1996625993",
+          "parent_code": "SL-S",
+          "name": "Mokanji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2036065483",
+          "parent_code": "SL-S",
+          "name": "Gbondapi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2036065518",
+          "parent_code": "SL-S",
+          "name": "Torma Bum",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2039805619",
+          "parent_code": "SL-S",
+          "name": "Gerihun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2132426145",
+          "parent_code": "SL-S",
+          "name": "Serabu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2955202970",
+          "parent_code": "SL-S",
+          "name": "Fairo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4523237131",
+          "parent_code": "SL-S",
+          "name": "Moribatown",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SL-W",
+      "parent_code": "SL",
+      "name": "Western Area",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27565056",
+          "parent_code": "SL-W",
+          "name": "Freetown",
+          "type": "city",
+          "population": "951000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-391778904",
+          "parent_code": "SL-W",
+          "name": "Hastings",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2132436578",
+          "parent_code": "SL-W",
+          "name": "Waterloo",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3121502524",
+          "parent_code": "SL-W",
+          "name": "Sumalia Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3339761873",
+          "parent_code": "SL-W",
+          "name": "Temne Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3339923413",
+          "parent_code": "SL-W",
+          "name": "Samura Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3343721316",
+          "parent_code": "SL-W",
+          "name": "Wongo Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SL-NW",
+      "parent_code": "SL",
+      "name": "North West Province, Sierra Leone",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-320058940",
+          "parent_code": "SL-NW",
+          "name": "Kambia",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-320060481",
+          "parent_code": "SL-NW",
+          "name": "Kamakwie",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-543447056",
+          "parent_code": "SL-NW",
+          "name": "Lunsar",
+          "type": "city",
+          "population": "36108",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1848318165",
+          "parent_code": "SL-NW",
+          "name": "Port Loko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2005877089",
+          "parent_code": "SL-NW",
+          "name": "Rokupr",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2245317971",
+          "parent_code": "SL-NW",
+          "name": "Pepel",
+          "type": "city",
+          "population": "6469",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2271599302",
+          "parent_code": "SL-NW",
+          "name": "Makatic",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2288978610",
+          "parent_code": "SL-NW",
+          "name": "Kukuna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2289143775",
+          "parent_code": "SL-NW",
+          "name": "Madina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2818709638",
+          "parent_code": "SL-NW",
+          "name": "Sainya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3072025742",
+          "parent_code": "SL-NW",
+          "name": "Lungi-Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13854883644",
+          "parent_code": "SL-NW",
+          "name": "Tintafor",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    }
+  ]
+}

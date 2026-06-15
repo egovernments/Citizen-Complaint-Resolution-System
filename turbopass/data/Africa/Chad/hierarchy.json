@@ -1,0 +1,3440 @@
+{
+  "code": "TD",
+  "name": "Chad",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "TD-TI",
+      "parent_code": "TD",
+      "name": "Tibesti",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-262207853",
+          "parent_code": "TD-TI",
+          "name": "Aouzou",
+          "type": "city",
+          "population": "1300",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262212119",
+          "parent_code": "TD-TI",
+          "name": "Bardai",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-469211612",
+          "parent_code": "TD-TI",
+          "name": "Zouar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TD-BO",
+      "parent_code": "TD",
+      "name": "Borkou",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-322497973",
+          "parent_code": "TD-BO",
+          "name": "Faya-Largeau",
+          "type": "city",
+          "population": "14123",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2858042463",
+          "parent_code": "TD-BO",
+          "name": "Kouba Olanga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4386064818",
+          "parent_code": "TD-BO",
+          "name": "Kirdimi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TD-EO",
+      "parent_code": "TD",
+      "name": "Ennedi-Ouest",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-322506424",
+          "parent_code": "TD-EO",
+          "name": "Fada",
+          "type": "city",
+          "population": "23786",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1785663149",
+          "parent_code": "TD-EO",
+          "name": "Kalait",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1823299543",
+          "parent_code": "TD-EO",
+          "name": "Ounianga Kebir",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1823300220",
+          "parent_code": "TD-EO",
+          "name": "Ounianga Serir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2849973449",
+          "parent_code": "TD-EO",
+          "name": "Gouro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6117048945",
+          "parent_code": "TD-EO",
+          "name": "Tebi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TD-WF",
+      "parent_code": "TD",
+      "name": "Wadi Fira",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-245494292",
+          "parent_code": "TD-WF",
+          "name": "Iriba",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-322498905",
+          "parent_code": "TD-WF",
+          "name": "Bahaï",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2087828617",
+          "parent_code": "TD-WF",
+          "name": "Iridimi Refugee Camp",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2089287005",
+          "parent_code": "TD-WF",
+          "name": "Tiné-Djagaraba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2090425801",
+          "parent_code": "TD-WF",
+          "name": "Biltine",
+          "type": "city",
+          "population": "11840",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2864860848",
+          "parent_code": "TD-WF",
+          "name": "Arada",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3105385861",
+          "parent_code": "TD-WF",
+          "name": "Karyari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3109160760",
+          "parent_code": "TD-WF",
+          "name": "Ourba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4579370727",
+          "parent_code": "TD-WF",
+          "name": "Guereda",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4579484106",
+          "parent_code": "TD-WF",
+          "name": "أم زوير Am Zoer",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4579587345",
+          "parent_code": "TD-WF",
+          "name": "Am Nabak Refugee Camp",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4579601911",
+          "parent_code": "TD-WF",
+          "name": "Camp de Réfugiés de Touloum مخيم تولوم",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4580784745",
+          "parent_code": "TD-WF",
+          "name": "Matadjana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5073674245",
+          "parent_code": "TD-WF",
+          "name": "Camp de Réfugiés de Kounougou مخيم كونوغو",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5075781391",
+          "parent_code": "TD-WF",
+          "name": "Camp de réfugiés de Birak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8310802153",
+          "parent_code": "TD-WF",
+          "name": "Oure Cassoni Refugee Camp",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8310802175",
+          "parent_code": "TD-WF",
+          "name": "Troungna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8310802176",
+          "parent_code": "TD-WF",
+          "name": "Maiba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8310802177",
+          "parent_code": "TD-WF",
+          "name": "Dougouba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8310802178",
+          "parent_code": "TD-WF",
+          "name": "Camp de Réfugiés de Milé مخيم ميلي",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8310802179",
+          "parent_code": "TD-WF",
+          "name": "Kolonga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TD-SA",
+      "parent_code": "TD",
+      "name": "Salamat",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-322037986",
+          "parent_code": "TD-SA",
+          "name": "Am Timan",
+          "type": "city",
+          "population": "38261",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2184663632",
+          "parent_code": "TD-SA",
+          "name": "Haraze",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2189505452",
+          "parent_code": "TD-SA",
+          "name": "Aboudéïa",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-5836068073",
+          "parent_code": "TD-SA",
+          "name": "Daradir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5836068319",
+          "parent_code": "TD-SA",
+          "name": "Am Habilé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5836069114",
+          "parent_code": "TD-SA",
+          "name": "Mouraye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5836069498",
+          "parent_code": "TD-SA",
+          "name": "Abgué",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5836069537",
+          "parent_code": "TD-SA",
+          "name": "Mangueigne",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719724752",
+          "parent_code": "TD-SA",
+          "name": "Djouna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8305336719",
+          "parent_code": "TD-SA",
+          "name": "Daha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8319031271",
+          "parent_code": "TD-SA",
+          "name": "Camp de Refugiés de Moyo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TD-SI",
+      "parent_code": "TD",
+      "name": "Sila",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2093484889",
+          "parent_code": "TD-SI",
+          "name": "Goz Amer",
+          "type": "city",
+          "population": "9950",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2093484890",
+          "parent_code": "TD-SI",
+          "name": "Koukou Angarana",
+          "type": "city",
+          "population": "5904",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2094966007",
+          "parent_code": "TD-SI",
+          "name": "Goz Beïda",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2398385114",
+          "parent_code": "TD-SI",
+          "name": "Am Dam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4751216434",
+          "parent_code": "TD-SI",
+          "name": "Magram Kebil",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5044642558",
+          "parent_code": "TD-SI",
+          "name": "Gassire قسيري",
+          "type": "city",
+          "population": "8188",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5044642633",
+          "parent_code": "TD-SI",
+          "name": "Camp de réfugiés de Djabal مخيم الجبل",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5363131434",
+          "parent_code": "TD-SI",
+          "name": "Kerfi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6029965476",
+          "parent_code": "TD-SI",
+          "name": "Haouich",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6029975035",
+          "parent_code": "TD-SI",
+          "name": "Dogdoré دوجوري",
+          "type": "city",
+          "population": "5019",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6029989188",
+          "parent_code": "TD-SI",
+          "name": "Moudouga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6029989221",
+          "parent_code": "TD-SI",
+          "name": "Moudeina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719727516",
+          "parent_code": "TD-SI",
+          "name": "Mié",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719727588",
+          "parent_code": "TD-SI",
+          "name": "Am Dagachi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719727674",
+          "parent_code": "TD-SI",
+          "name": "Koukou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719727822",
+          "parent_code": "TD-SI",
+          "name": "Todou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8309438019",
+          "parent_code": "TD-SI",
+          "name": "Tissi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8309438024",
+          "parent_code": "TD-SI",
+          "name": "Camp de réfugiés de Koukou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8309438025",
+          "parent_code": "TD-SI",
+          "name": "Mogororo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8309438026",
+          "parent_code": "TD-SI",
+          "name": "Addé أدي",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-8321475944",
+          "parent_code": "TD-SI",
+          "name": "Camp de Refugiés de Abgadam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8321475982",
+          "parent_code": "TD-SI",
+          "name": "Camp de Refugiés de Almarwaha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11866418962",
+          "parent_code": "TD-SI",
+          "name": "Zabout Refugee Camp",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13410353368",
+          "parent_code": "TD-SI",
+          "name": "Buchar Burgo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TD-OD",
+      "parent_code": "TD",
+      "name": "Ouaddaï",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-150384326",
+          "parent_code": "TD-OD",
+          "name": "Abéché",
+          "type": "city",
+          "population": "78191",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-150570006",
+          "parent_code": "TD-OD",
+          "name": "Adré",
+          "type": "city",
+          "population": "12000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2104038376",
+          "parent_code": "TD-OD",
+          "name": "Abdi",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2261676480",
+          "parent_code": "TD-OD",
+          "name": "Abkar Djombo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2580440841",
+          "parent_code": "TD-OD",
+          "name": "Farchana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2843019602",
+          "parent_code": "TD-OD",
+          "name": "Gungur",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4417532981",
+          "parent_code": "TD-OD",
+          "name": "Bieré",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4579254485",
+          "parent_code": "TD-OD",
+          "name": "Bredjing Refugee camp",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4579396289",
+          "parent_code": "TD-OD",
+          "name": "Arkoum",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4579448703",
+          "parent_code": "TD-OD",
+          "name": "Hadjer Hadid",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5016723435",
+          "parent_code": "TD-OD",
+          "name": "Amleyouna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5022612188",
+          "parent_code": "TD-OD",
+          "name": "Molou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5060797949",
+          "parent_code": "TD-OD",
+          "name": "Echbara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5206876619",
+          "parent_code": "TD-OD",
+          "name": "Djoroko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5434976513",
+          "parent_code": "TD-OD",
+          "name": "Abougoudam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719716013",
+          "parent_code": "TD-OD",
+          "name": "Tirti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719716084",
+          "parent_code": "TD-OD",
+          "name": "Borota",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719716134",
+          "parent_code": "TD-OD",
+          "name": "Ara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719716383",
+          "parent_code": "TD-OD",
+          "name": "Moura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719716427",
+          "parent_code": "TD-OD",
+          "name": "Galgas",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719716431",
+          "parent_code": "TD-OD",
+          "name": "Chokoyan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719724329",
+          "parent_code": "TD-OD",
+          "name": "Rakana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8308288136",
+          "parent_code": "TD-OD",
+          "name": "Mabrone",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8308288137",
+          "parent_code": "TD-OD",
+          "name": "Bredjing Refugee camp",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8308288138",
+          "parent_code": "TD-OD",
+          "name": "Treguine Refugee camp",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8308288139",
+          "parent_code": "TD-OD",
+          "name": "Guérry",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8308288140",
+          "parent_code": "TD-OD",
+          "name": "Tourané",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8308288164",
+          "parent_code": "TD-OD",
+          "name": "Gaga Refugee Camp",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8308288173",
+          "parent_code": "TD-OD",
+          "name": "Marfa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8308288174",
+          "parent_code": "TD-OD",
+          "name": "Bourtail",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11828455132",
+          "parent_code": "TD-OD",
+          "name": "Camp de réfugiés Alacha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TD-GR",
+      "parent_code": "TD",
+      "name": "Guéra",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-322044775",
+          "parent_code": "TD-GR",
+          "name": "Mongo",
+          "type": "city",
+          "population": "40233",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-322045430",
+          "parent_code": "TD-GR",
+          "name": "Bitkine",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2213002175",
+          "parent_code": "TD-GR",
+          "name": "Baro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2261675548",
+          "parent_code": "TD-GR",
+          "name": "Niergui",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2261675630",
+          "parent_code": "TD-GR",
+          "name": "Mangalmé",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2325195616",
+          "parent_code": "TD-GR",
+          "name": "Zan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2840709299",
+          "parent_code": "TD-GR",
+          "name": "Idjélidjé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2840709401",
+          "parent_code": "TD-GR",
+          "name": "Djondjol",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2840711683",
+          "parent_code": "TD-GR",
+          "name": "Bitchotchi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2840767466",
+          "parent_code": "TD-GR",
+          "name": "Tilégey",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2840767612",
+          "parent_code": "TD-GR",
+          "name": "Kouka Marnié",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5241555485",
+          "parent_code": "TD-GR",
+          "name": "Bagoua ( Bang-Bang)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5299394426",
+          "parent_code": "TD-GR",
+          "name": "Eref",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719688612",
+          "parent_code": "TD-GR",
+          "name": "Melfi ملفي",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-7719688630",
+          "parent_code": "TD-GR",
+          "name": "Djana Mougmo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719697428",
+          "parent_code": "TD-GR",
+          "name": "Banama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719723684",
+          "parent_code": "TD-GR",
+          "name": "Bonio-Komi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719724475",
+          "parent_code": "TD-GR",
+          "name": "Madoul",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719724598",
+          "parent_code": "TD-GR",
+          "name": "Oumérané",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719724657",
+          "parent_code": "TD-GR",
+          "name": "Sila",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719724660",
+          "parent_code": "TD-GR",
+          "name": "Gogmi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719725101",
+          "parent_code": "TD-GR",
+          "name": "Ibir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8305336717",
+          "parent_code": "TD-GR",
+          "name": "Chinguil",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "TD-BA",
+      "parent_code": "TD",
+      "name": "Batha",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-150545728",
+          "parent_code": "TD-BA",
+          "name": "Umm Hajar",
+          "type": "city",
+          "population": "20742",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-150545850",
+          "parent_code": "TD-BA",
+          "name": "Ati",
+          "type": "city",
+          "population": "35311",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2316310913",
+          "parent_code": "TD-BA",
+          "name": "Am Djemena",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2316311171",
+          "parent_code": "TD-BA",
+          "name": "Ambassana - Am Djénaba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2587546251",
+          "parent_code": "TD-BA",
+          "name": "كوندجوروو Koundjourou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3012158227",
+          "parent_code": "TD-BA",
+          "name": "Yao",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3884617401",
+          "parent_code": "TD-BA",
+          "name": "أوادي جديد Ouadi Djedid",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5236887552",
+          "parent_code": "TD-BA",
+          "name": "Ati Ardébé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6993117519",
+          "parent_code": "TD-BA",
+          "name": "Modo 1",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6996449223",
+          "parent_code": "TD-BA",
+          "name": "Abourda Ndoufa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719723497",
+          "parent_code": "TD-BA",
+          "name": "Mirsi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719723633",
+          "parent_code": "TD-BA",
+          "name": "Ab Koura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719727990",
+          "parent_code": "TD-BA",
+          "name": "Dulotiaya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7745517538",
+          "parent_code": "TD-BA",
+          "name": "Haraz",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13283337366",
+          "parent_code": "TD-BA",
+          "name": "village",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TD-HL",
+      "parent_code": "TD",
+      "name": "Hadjer-Lamis",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-150546205",
+          "parent_code": "TD-HL",
+          "name": "Ngoura",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-254126801",
+          "parent_code": "TD-HL",
+          "name": "Massaguet",
+          "type": "city",
+          "population": "29364",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-322046510",
+          "parent_code": "TD-HL",
+          "name": "Gama",
+          "type": "city",
+          "population": "34539",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-322046655",
+          "parent_code": "TD-HL",
+          "name": "Bokoro",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1693132866",
+          "parent_code": "TD-HL",
+          "name": "Massakory",
+          "type": "city",
+          "population": "16237",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1857039488",
+          "parent_code": "TD-HL",
+          "name": "Djermaya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1972909059",
+          "parent_code": "TD-HL",
+          "name": "Baltram بالترام",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1972909287",
+          "parent_code": "TD-HL",
+          "name": "Karal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2389209084",
+          "parent_code": "TD-HL",
+          "name": "Arbouchatak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3183168474",
+          "parent_code": "TD-HL",
+          "name": "Amérom",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3186609208",
+          "parent_code": "TD-HL",
+          "name": "Kekekonkia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3806410450",
+          "parent_code": "TD-HL",
+          "name": "Gambir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3806419871",
+          "parent_code": "TD-HL",
+          "name": "Djokhanat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3806744885",
+          "parent_code": "TD-HL",
+          "name": "Abdoumboul",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3830467345",
+          "parent_code": "TD-HL",
+          "name": "Kama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3830491183",
+          "parent_code": "TD-HL",
+          "name": "Moyto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3830513263",
+          "parent_code": "TD-HL",
+          "name": "Dilbini",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3881898132",
+          "parent_code": "TD-HL",
+          "name": "Abgodé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3881898135",
+          "parent_code": "TD-HL",
+          "name": "Daka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3956867106",
+          "parent_code": "TD-HL",
+          "name": "Guitté",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3956867149",
+          "parent_code": "TD-HL",
+          "name": "ماني Mani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3956867150",
+          "parent_code": "TD-HL",
+          "name": "Al Hadjer الحجر",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3958310422",
+          "parent_code": "TD-HL",
+          "name": "Al bout",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3960448455",
+          "parent_code": "TD-HL",
+          "name": "Baladja",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3963812626",
+          "parent_code": "TD-HL",
+          "name": "Gredaya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3973772883",
+          "parent_code": "TD-HL",
+          "name": "Boutcham",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3978076201",
+          "parent_code": "TD-HL",
+          "name": "Kouloudia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3986605969",
+          "parent_code": "TD-HL",
+          "name": "Kinasserom",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4039219393",
+          "parent_code": "TD-HL",
+          "name": "Tourba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4165214990",
+          "parent_code": "TD-HL",
+          "name": "Boutelfil",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4165267658",
+          "parent_code": "TD-HL",
+          "name": "N'Djamena-Fara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4260953472",
+          "parent_code": "TD-HL",
+          "name": "Douguia دوقيا",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4260953484",
+          "parent_code": "TD-HL",
+          "name": "Forchirom bariti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4420170431",
+          "parent_code": "TD-HL",
+          "name": "Makarati Soutou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7001144961",
+          "parent_code": "TD-HL",
+          "name": "Karme",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719724814",
+          "parent_code": "TD-HL",
+          "name": "Delniom",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TD-BG",
+      "parent_code": "TD",
+      "name": "Bahr el Gazel",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1693132865",
+          "parent_code": "TD-BG",
+          "name": "Moussoro",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2078112116",
+          "parent_code": "TD-BG",
+          "name": "Salal",
+          "type": "city",
+          "population": "16075",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3182895244",
+          "parent_code": "TD-BG",
+          "name": "Méchiméré",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4321345094",
+          "parent_code": "TD-BG",
+          "name": "Fzigui",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4321345637",
+          "parent_code": "TD-BG",
+          "name": "Mandjoura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4321345652",
+          "parent_code": "TD-BG",
+          "name": "Mouzragui",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4321345653",
+          "parent_code": "TD-BG",
+          "name": "Mouzrak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4321345675",
+          "parent_code": "TD-BG",
+          "name": "Chaddra شادرا",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6979294400",
+          "parent_code": "TD-BG",
+          "name": "Am Sileb",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8306862521",
+          "parent_code": "TD-BG",
+          "name": "Dourgoulanga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12633122948",
+          "parent_code": "TD-BG",
+          "name": "Dougoul Kréda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TD-KA",
+      "parent_code": "TD",
+      "name": "Kanem",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-469211942",
+          "parent_code": "TD-KA",
+          "name": "Mao",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-469222004",
+          "parent_code": "TD-KA",
+          "name": "Rig-Rig ريك ريك",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2077938837",
+          "parent_code": "TD-KA",
+          "name": "Nokou",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2078111727",
+          "parent_code": "TD-KA",
+          "name": "Ntiona",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2078112117",
+          "parent_code": "TD-KA",
+          "name": "الزقي",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2875824373",
+          "parent_code": "TD-KA",
+          "name": "Igranga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3068489198",
+          "parent_code": "TD-KA",
+          "name": "Tosou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3182895226",
+          "parent_code": "TD-KA",
+          "name": "Mondo",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3990135056",
+          "parent_code": "TD-KA",
+          "name": "Motoa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3992713825",
+          "parent_code": "TD-KA",
+          "name": "Yari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4007137637",
+          "parent_code": "TD-KA",
+          "name": "Gasri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4007137683",
+          "parent_code": "TD-KA",
+          "name": "Kirdiourom",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4008222248",
+          "parent_code": "TD-KA",
+          "name": "Yaouri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4009745652",
+          "parent_code": "TD-KA",
+          "name": "Am Doback",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4181281446",
+          "parent_code": "TD-KA",
+          "name": "Arayourou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4181493249",
+          "parent_code": "TD-KA",
+          "name": "Dokora",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4181519990",
+          "parent_code": "TD-KA",
+          "name": "Moal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4181520023",
+          "parent_code": "TD-KA",
+          "name": "Tomot",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4192005529",
+          "parent_code": "TD-KA",
+          "name": "Bourou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4479773372",
+          "parent_code": "TD-KA",
+          "name": "Aboumagar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4479774890",
+          "parent_code": "TD-KA",
+          "name": "Blani Bordari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4479774922",
+          "parent_code": "TD-KA",
+          "name": "Bongorey",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4479776928",
+          "parent_code": "TD-KA",
+          "name": "Kola Kola",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4479777553",
+          "parent_code": "TD-KA",
+          "name": "Mouzougui",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4479777563",
+          "parent_code": "TD-KA",
+          "name": "Mélea",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4479777809",
+          "parent_code": "TD-KA",
+          "name": "Ouli",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4479778184",
+          "parent_code": "TD-KA",
+          "name": "Tcheli",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4479778430",
+          "parent_code": "TD-KA",
+          "name": "Wadjigui",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719723360",
+          "parent_code": "TD-KA",
+          "name": "Boulounkou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8306862531",
+          "parent_code": "TD-KA",
+          "name": "Kékédina كيكيدينا",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "TD-CB",
+      "parent_code": "TD",
+      "name": "Chari-Baguirmi",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1692459415",
+          "parent_code": "TD-CB",
+          "name": "Dourbali",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1867271719",
+          "parent_code": "TD-CB",
+          "name": "Linia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2389208982",
+          "parent_code": "TD-CB",
+          "name": "La Loumia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2389208990",
+          "parent_code": "TD-CB",
+          "name": "Koundoul",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2389273908",
+          "parent_code": "TD-CB",
+          "name": "Bili",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3801765411",
+          "parent_code": "TD-CB",
+          "name": "Bogomoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3801766443",
+          "parent_code": "TD-CB",
+          "name": "Mogo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3806401709",
+          "parent_code": "TD-CB",
+          "name": "Maïgana مائقانا",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4001670569",
+          "parent_code": "TD-CB",
+          "name": "Boudamasa بوداماسا",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4282052851",
+          "parent_code": "TD-CB",
+          "name": "Massenya ماسينيا",
+          "type": "city",
+          "population": "3680",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4556953615",
+          "parent_code": "TD-CB",
+          "name": "Mandelia",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4683714133",
+          "parent_code": "TD-CB",
+          "name": "Bodoro بدرو",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7027451689",
+          "parent_code": "TD-CB",
+          "name": "Logone Gana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7137060639",
+          "parent_code": "TD-CB",
+          "name": "Kakoma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719705513",
+          "parent_code": "TD-CB",
+          "name": "Kraska",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719705519",
+          "parent_code": "TD-CB",
+          "name": "Mandjafa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719705541",
+          "parent_code": "TD-CB",
+          "name": "Maï-Ache",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719723698",
+          "parent_code": "TD-CB",
+          "name": "Oualdi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719723840",
+          "parent_code": "TD-CB",
+          "name": "Bouola",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719723883",
+          "parent_code": "TD-CB",
+          "name": "Baranga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719724282",
+          "parent_code": "TD-CB",
+          "name": "Tchalta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719724522",
+          "parent_code": "TD-CB",
+          "name": "Djaména",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719724668",
+          "parent_code": "TD-CB",
+          "name": "Bougoumène",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719727510",
+          "parent_code": "TD-CB",
+          "name": "Bousso",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-7719728631",
+          "parent_code": "TD-CB",
+          "name": "Bä-Illi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719728637",
+          "parent_code": "TD-CB",
+          "name": "Mbarlé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13155923526",
+          "parent_code": "TD-CB",
+          "name": "Ylla",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TD-LC",
+      "parent_code": "TD",
+      "name": "Lac",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-469212727",
+          "parent_code": "TD-LC",
+          "name": "Bol",
+          "type": "city",
+          "population": "112490",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-482078069",
+          "parent_code": "TD-LC",
+          "name": "Lioua ليوا",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2075978902",
+          "parent_code": "TD-LC",
+          "name": "Daboua",
+          "type": "city",
+          "population": "1000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2077347433",
+          "parent_code": "TD-LC",
+          "name": "Baga-Sola",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2077763677",
+          "parent_code": "TD-LC",
+          "name": "Ngaragou",
+          "type": "city",
+          "population": "5756",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2437334833",
+          "parent_code": "TD-LC",
+          "name": "Ngouri",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3182647439",
+          "parent_code": "TD-LC",
+          "name": "Ndjigidada",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3182647452",
+          "parent_code": "TD-LC",
+          "name": "Isseirom",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3295160523",
+          "parent_code": "TD-LC",
+          "name": "Kangalam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3370147235",
+          "parent_code": "TD-LC",
+          "name": "N'Gouboua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3687532126",
+          "parent_code": "TD-LC",
+          "name": "Tchoukoutalia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3895845329",
+          "parent_code": "TD-LC",
+          "name": "Kaiga Kindjiria",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3956444765",
+          "parent_code": "TD-LC",
+          "name": "Dibinintchi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3958310580",
+          "parent_code": "TD-LC",
+          "name": "Doum Doum",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3963812644",
+          "parent_code": "TD-LC",
+          "name": "Sidje",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3987815610",
+          "parent_code": "TD-LC",
+          "name": "Tataverom",
+          "type": "city",
+          "population": "500",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3990191244",
+          "parent_code": "TD-LC",
+          "name": "Kindiéra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4000694433",
+          "parent_code": "TD-LC",
+          "name": "Djoukou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4138953038",
+          "parent_code": "TD-LC",
+          "name": "Dar Salam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4420170281",
+          "parent_code": "TD-LC",
+          "name": "Kangalam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4420170630",
+          "parent_code": "TD-LC",
+          "name": "Yourtou 1",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TD-LO",
+      "parent_code": "TD",
+      "name": "Logone Occidental",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-290959385",
+          "parent_code": "TD-LO",
+          "name": "Krim-Krim",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-811383246",
+          "parent_code": "TD-LO",
+          "name": "Moundou",
+          "type": "city",
+          "population": "137929",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2244521379",
+          "parent_code": "TD-LO",
+          "name": "Bao",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3205518432",
+          "parent_code": "TD-LO",
+          "name": "Bénoye",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-5702280076",
+          "parent_code": "TD-LO",
+          "name": "Bah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5702280078",
+          "parent_code": "TD-LO",
+          "name": "Bekiri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5702280107",
+          "parent_code": "TD-LO",
+          "name": "Mbalkabra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5702281435",
+          "parent_code": "TD-LO",
+          "name": "Déli",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5702282122",
+          "parent_code": "TD-LO",
+          "name": "Saar-Gogne",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5702282556",
+          "parent_code": "TD-LO",
+          "name": "Laoukassy",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5702282572",
+          "parent_code": "TD-LO",
+          "name": "Dodinda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5702283053",
+          "parent_code": "TD-LO",
+          "name": "Bedara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5702283502",
+          "parent_code": "TD-LO",
+          "name": "Mballa Banyo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5702283512",
+          "parent_code": "TD-LO",
+          "name": "Benassa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5702285257",
+          "parent_code": "TD-LO",
+          "name": "Andji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5702285740",
+          "parent_code": "TD-LO",
+          "name": "Beissa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5702285897",
+          "parent_code": "TD-LO",
+          "name": "Ngondong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719723374",
+          "parent_code": "TD-LO",
+          "name": "Béladja",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719723903",
+          "parent_code": "TD-LO",
+          "name": "Tapol",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719723968",
+          "parent_code": "TD-LO",
+          "name": "Doguinndi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719725630",
+          "parent_code": "TD-LO",
+          "name": "Beinamar",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-7719726413",
+          "parent_code": "TD-LO",
+          "name": "Bourou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719728243",
+          "parent_code": "TD-LO",
+          "name": "Bémangra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8300315213",
+          "parent_code": "TD-LO",
+          "name": "Bebalem",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TD-LR",
+      "parent_code": "TD",
+      "name": "Logone Oriental",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-360153172",
+          "parent_code": "TD-LR",
+          "name": "Doba",
+          "type": "city",
+          "population": "24000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-931636088",
+          "parent_code": "TD-LR",
+          "name": "Baïbokoum",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1857523120",
+          "parent_code": "TD-LR",
+          "name": "Kome",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1988424970",
+          "parent_code": "TD-LR",
+          "name": "Bebedjia",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2075469537",
+          "parent_code": "TD-LR",
+          "name": "Goré",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3898354928",
+          "parent_code": "TD-LR",
+          "name": "Yamodo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3898512145",
+          "parent_code": "TD-LR",
+          "name": "Dobiti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5664078353",
+          "parent_code": "TD-LR",
+          "name": "Kara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5664087523",
+          "parent_code": "TD-LR",
+          "name": "Mbaïkoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5664151110",
+          "parent_code": "TD-LR",
+          "name": "Bitoye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5664151435",
+          "parent_code": "TD-LR",
+          "name": "Beboto 1",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-5664151707",
+          "parent_code": "TD-LR",
+          "name": "Beti 2",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5664151732",
+          "parent_code": "TD-LR",
+          "name": "Mbikou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5664154334",
+          "parent_code": "TD-LR",
+          "name": "Baké-Centre",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5664154534",
+          "parent_code": "TD-LR",
+          "name": "Miandoum",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5664156384",
+          "parent_code": "TD-LR",
+          "name": "Larmanaye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5664156395",
+          "parent_code": "TD-LR",
+          "name": "Bodo Centre",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-5664156850",
+          "parent_code": "TD-LR",
+          "name": "Beboni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719723454",
+          "parent_code": "TD-LR",
+          "name": "Donia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719726050",
+          "parent_code": "TD-LR",
+          "name": "Madana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8302318715",
+          "parent_code": "TD-LR",
+          "name": "Bédjo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8302318716",
+          "parent_code": "TD-LR",
+          "name": "Békan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9149263189",
+          "parent_code": "TD-LR",
+          "name": "Camp de réfugiés de Gondje",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9155247089",
+          "parent_code": "TD-LR",
+          "name": "Camp de réfugiés de Kobiteye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9155247090",
+          "parent_code": "TD-LR",
+          "name": "Camp de réfugiés de Kobiteye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9155247091",
+          "parent_code": "TD-LR",
+          "name": "Camp de réfugiés de Doholo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9155247092",
+          "parent_code": "TD-LR",
+          "name": "Camp de réfugiés de Amboko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TD-MA",
+      "parent_code": "TD",
+      "name": "Mandoul",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-240494362",
+          "parent_code": "TD-MA",
+          "name": "Koumra",
+          "type": "city",
+          "population": "38220",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1423833038",
+          "parent_code": "TD-MA",
+          "name": "Moissala",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2244521364",
+          "parent_code": "TD-MA",
+          "name": "Bedaya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2665730541",
+          "parent_code": "TD-MA",
+          "name": "Bébopen",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2665730588",
+          "parent_code": "TD-MA",
+          "name": "Bedjondo",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3204114098",
+          "parent_code": "TD-MA",
+          "name": "Bouna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3405290623",
+          "parent_code": "TD-MA",
+          "name": "Maya مايا",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5685114302",
+          "parent_code": "TD-MA",
+          "name": "Ngangara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5685114990",
+          "parent_code": "TD-MA",
+          "name": "Mouroum Goulaye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5685114997",
+          "parent_code": "TD-MA",
+          "name": "Békourou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5685115469",
+          "parent_code": "TD-MA",
+          "name": "Dembo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5685117811",
+          "parent_code": "TD-MA",
+          "name": "Béboro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5685119722",
+          "parent_code": "TD-MA",
+          "name": "Béssada",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5786709911",
+          "parent_code": "TD-MA",
+          "name": "Bekamba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8302318703",
+          "parent_code": "TD-MA",
+          "name": "Goundi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8302318704",
+          "parent_code": "TD-MA",
+          "name": "Péni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TD-ME",
+      "parent_code": "TD",
+      "name": "Mayo-Kebbi Est",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-252509153",
+          "parent_code": "TD-ME",
+          "name": "Bongor",
+          "type": "city",
+          "population": "30518",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2378226546",
+          "parent_code": "TD-ME",
+          "name": "Guélendeng",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2389208890",
+          "parent_code": "TD-ME",
+          "name": "Moulkou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4511122210",
+          "parent_code": "TD-ME",
+          "name": "Djouman (Samga)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4518674504",
+          "parent_code": "TD-ME",
+          "name": "Fianga",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4518700964",
+          "parent_code": "TD-ME",
+          "name": "Tikem",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4518745131",
+          "parent_code": "TD-ME",
+          "name": "Koupor (Kéra)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6203269612",
+          "parent_code": "TD-ME",
+          "name": "Kim",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6203269613",
+          "parent_code": "TD-ME",
+          "name": "Koyom",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6557827204",
+          "parent_code": "TD-ME",
+          "name": "Berem",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6557827615",
+          "parent_code": "TD-ME",
+          "name": "Goueygoudoum",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6557828652",
+          "parent_code": "TD-ME",
+          "name": "Djodo Gasa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6619063095",
+          "parent_code": "TD-ME",
+          "name": "Youé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719724613",
+          "parent_code": "TD-ME",
+          "name": "Ngam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719725636",
+          "parent_code": "TD-ME",
+          "name": "Gounou Gaya",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-7719726900",
+          "parent_code": "TD-ME",
+          "name": "Katoa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8296465101",
+          "parent_code": "TD-ME",
+          "name": "Pont Carol",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8296467642",
+          "parent_code": "TD-ME",
+          "name": "Guéné (Hollom Games)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8297301475",
+          "parent_code": "TD-ME",
+          "name": "Nanguigoto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8305312807",
+          "parent_code": "TD-ME",
+          "name": "Biliam Oursi (Rigaza)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TD-MO",
+      "parent_code": "TD",
+      "name": "Mayo-Kebbi Ouest",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-3266666998",
+          "parent_code": "TD-MO",
+          "name": "Pala",
+          "type": "city",
+          "population": "40202",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4518664776",
+          "parent_code": "TD-MO",
+          "name": "Léré ليري",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4683551622",
+          "parent_code": "TD-MO",
+          "name": "Mbursu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4683551630",
+          "parent_code": "TD-MO",
+          "name": "Binder",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-6528249967",
+          "parent_code": "TD-MO",
+          "name": "Gelo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6529227807",
+          "parent_code": "TD-MO",
+          "name": "Lame",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6552813935",
+          "parent_code": "TD-MO",
+          "name": "Gagal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6555178203",
+          "parent_code": "TD-MO",
+          "name": "Gegou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6557831078",
+          "parent_code": "TD-MO",
+          "name": "Lagon",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6619063087",
+          "parent_code": "TD-MO",
+          "name": "Torrock",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6619063101",
+          "parent_code": "TD-MO",
+          "name": "Tréné",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TD-MC",
+      "parent_code": "TD",
+      "name": "Moyen-Chari",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-240495529",
+          "parent_code": "TD-MC",
+          "name": "Djoli",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-360163529",
+          "parent_code": "TD-MC",
+          "name": "Sarh",
+          "type": "city",
+          "population": "113000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1327717858",
+          "parent_code": "TD-MC",
+          "name": "Kyabé",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1911985905",
+          "parent_code": "TD-MC",
+          "name": "Maro",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2261677399",
+          "parent_code": "TD-MC",
+          "name": "Danamadji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4335258601",
+          "parent_code": "TD-MC",
+          "name": "Roro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5235043250",
+          "parent_code": "TD-MC",
+          "name": "Baltoubay",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5765341412",
+          "parent_code": "TD-MC",
+          "name": "Balimba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5765353225",
+          "parent_code": "TD-MC",
+          "name": "Boum-Kebbir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5765359837",
+          "parent_code": "TD-MC",
+          "name": "Moussa Foyo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5765360072",
+          "parent_code": "TD-MC",
+          "name": "Alako",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5765361597",
+          "parent_code": "TD-MC",
+          "name": "Doumananga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5765361744",
+          "parent_code": "TD-MC",
+          "name": "Ngondeye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5765361869",
+          "parent_code": "TD-MC",
+          "name": "Manda ماندا",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5765362267",
+          "parent_code": "TD-MC",
+          "name": "Dindjébo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5765362465",
+          "parent_code": "TD-MC",
+          "name": "Singako",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5765362477",
+          "parent_code": "TD-MC",
+          "name": "Korbol",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719723583",
+          "parent_code": "TD-MC",
+          "name": "Bohobé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719724002",
+          "parent_code": "TD-MC",
+          "name": "Tari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719725332",
+          "parent_code": "TD-MC",
+          "name": "Kouno",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719726098",
+          "parent_code": "TD-MC",
+          "name": "Djéké Djéké",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8303196980",
+          "parent_code": "TD-MC",
+          "name": "Koumogo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8303196981",
+          "parent_code": "TD-MC",
+          "name": "Sido",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9155212204",
+          "parent_code": "TD-MC",
+          "name": "Belom بيلوم",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TD-TA",
+      "parent_code": "TD",
+      "name": "Tandjilé",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-290953200",
+          "parent_code": "TD-TA",
+          "name": "Kelo",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-322486018",
+          "parent_code": "TD-TA",
+          "name": "Guidari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-322486040",
+          "parent_code": "TD-TA",
+          "name": "Dono Manga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2326545630",
+          "parent_code": "TD-TA",
+          "name": "Bere",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2330651105",
+          "parent_code": "TD-TA",
+          "name": "Delbiane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2378389848",
+          "parent_code": "TD-TA",
+          "name": "Laï",
+          "type": "city",
+          "population": "20428",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-7719725416",
+          "parent_code": "TD-TA",
+          "name": "Kimré",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719725422",
+          "parent_code": "TD-TA",
+          "name": "Mérékertoué",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719725790",
+          "parent_code": "TD-TA",
+          "name": "Dafra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719725886",
+          "parent_code": "TD-TA",
+          "name": "Bakchoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719725956",
+          "parent_code": "TD-TA",
+          "name": "Ndam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719726085",
+          "parent_code": "TD-TA",
+          "name": "Dogou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719726238",
+          "parent_code": "TD-TA",
+          "name": "Déressia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719726333",
+          "parent_code": "TD-TA",
+          "name": "Kolon",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719728661",
+          "parent_code": "TD-TA",
+          "name": "Tchoua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7719728712",
+          "parent_code": "TD-TA",
+          "name": "Bologo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "TD-ND",
+      "parent_code": "TD",
+      "name": "N'Djamena",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27565022",
+          "parent_code": "TD-ND",
+          "name": "N'Djamena",
+          "type": "city",
+          "population": "1092066",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "TD-EE",
+      "parent_code": "TD",
+      "name": "East Ennedi",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1972867801",
+          "parent_code": "TD-EE",
+          "name": "Am-Djarass",
+          "type": "city",
+          "population": "20850",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2083909806",
+          "parent_code": "TD-EE",
+          "name": "Ito إيتو",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3106661459",
+          "parent_code": "TD-EE",
+          "name": "Bir Douane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4390107241",
+          "parent_code": "TD-EE",
+          "name": "Diona",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4535186510",
+          "parent_code": "TD-EE",
+          "name": "Orobo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    }
+  ]
+}
