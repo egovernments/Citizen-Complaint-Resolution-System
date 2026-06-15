@@ -1,0 +1,288 @@
+{
+  "code": "KM",
+  "name": "Comoros",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "KM-M",
+      "parent_code": "KM",
+      "name": "Moheli",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2317482076",
+          "parent_code": "KM-M",
+          "name": "Djoiezi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2317482080",
+          "parent_code": "KM-M",
+          "name": "Domoni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2317482083",
+          "parent_code": "KM-M",
+          "name": "Fomboni",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2317482086",
+          "parent_code": "KM-M",
+          "name": "Hoani هواني",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2317482090",
+          "parent_code": "KM-M",
+          "name": "Miringoni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2317482092",
+          "parent_code": "KM-M",
+          "name": "Nioumachoua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2317482095",
+          "parent_code": "KM-M",
+          "name": "Ouallah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2317482098",
+          "parent_code": "KM-M",
+          "name": "Ndrondroni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KM-A",
+      "parent_code": "KM",
+      "name": "Anjouan",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1229049286",
+          "parent_code": "KM-A",
+          "name": "Ouani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1229049495",
+          "parent_code": "KM-A",
+          "name": "Jimilimé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1229049545",
+          "parent_code": "KM-A",
+          "name": "Hajoho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1229049872",
+          "parent_code": "KM-A",
+          "name": "Bazimini",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1229050356",
+          "parent_code": "KM-A",
+          "name": "Bambao",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1229050437",
+          "parent_code": "KM-A",
+          "name": "Harembo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1229050458",
+          "parent_code": "KM-A",
+          "name": "Domoni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1295700465",
+          "parent_code": "KM-A",
+          "name": "Mutsamudu",
+          "type": "city",
+          "population": "30000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2317281173",
+          "parent_code": "KM-A",
+          "name": "Akibani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2317281174",
+          "parent_code": "KM-A",
+          "name": "Sima",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2318289090",
+          "parent_code": "KM-A",
+          "name": "Chandra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2995360506",
+          "parent_code": "KM-A",
+          "name": "Pomoni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7228442367",
+          "parent_code": "KM-A",
+          "name": "Tsembéhou تسيمبيهو",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8518493559",
+          "parent_code": "KM-A",
+          "name": "Adda-Douéni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "KM-G",
+      "parent_code": "KM",
+      "name": "Grande Comore",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-339324562",
+          "parent_code": "KM-G",
+          "name": "Moroni",
+          "type": "city",
+          "population": "111329",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2317587042",
+          "parent_code": "KM-G",
+          "name": "Hahaya هاهايا",
+          "type": "city",
+          "population": "2638",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4052722395",
+          "parent_code": "KM-G",
+          "name": "Foumbouni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4052811389",
+          "parent_code": "KM-G",
+          "name": "Pidjani بيدجاني",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4052835215",
+          "parent_code": "KM-G",
+          "name": "Mohoro موهورو",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4197785621",
+          "parent_code": "KM-G",
+          "name": "Salimani Itsandra سليماني إتسندرا",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4198486478",
+          "parent_code": "KM-G",
+          "name": "Iconi أيقونات",
+          "type": "city",
+          "population": "5474",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4198520619",
+          "parent_code": "KM-G",
+          "name": "Mitsoudjé ميتسودجي",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4269799557",
+          "parent_code": "KM-G",
+          "name": "M'djoiezi Hambou مدجويزي هامبو",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-12001116653",
+          "parent_code": "KM-G",
+          "name": "Mzaki مزاكي",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    }
+  ]
+}

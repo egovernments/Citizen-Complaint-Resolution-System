@@ -1,0 +1,1666 @@
+{
+  "code": "CI",
+  "name": "Ivory Coast",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "CI-SV",
+      "parent_code": "CI",
+      "name": "Savanes",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-319225844",
+          "parent_code": "CI-SV",
+          "name": "Niellé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443246110",
+          "parent_code": "CI-SV",
+          "name": "Tengréla",
+          "type": "city",
+          "population": "92454",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443285316",
+          "parent_code": "CI-SV",
+          "name": "Kouto",
+          "type": "city",
+          "population": "55893",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443357112",
+          "parent_code": "CI-SV",
+          "name": "Sinématiali",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443360458",
+          "parent_code": "CI-SV",
+          "name": "M’Bengué",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443377813",
+          "parent_code": "CI-SV",
+          "name": "Kong",
+          "type": "city",
+          "population": "33391",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1599958076",
+          "parent_code": "CI-SV",
+          "name": "Ouangolodougou",
+          "type": "city",
+          "population": "85334",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1599959917",
+          "parent_code": "CI-SV",
+          "name": "Korhogo",
+          "type": "city",
+          "population": "440926",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1626917070",
+          "parent_code": "CI-SV",
+          "name": "Napié",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1828765103",
+          "parent_code": "CI-SV",
+          "name": "Ferkéssédougou",
+          "type": "city",
+          "population": "160267",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2522426405",
+          "parent_code": "CI-SV",
+          "name": "Boundiali",
+          "type": "city",
+          "population": "92792",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2597925045",
+          "parent_code": "CI-SV",
+          "name": "Siempurgo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3910528101",
+          "parent_code": "CI-SV",
+          "name": "Kadarvogo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11986310212",
+          "parent_code": "CI-SV",
+          "name": "Lataha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "CI-ZZ",
+      "parent_code": "CI",
+      "name": "Zanzan",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-434403950",
+          "parent_code": "CI-ZZ",
+          "name": "Doropo",
+          "type": "city",
+          "population": "48225",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-593916769",
+          "parent_code": "CI-ZZ",
+          "name": "Bouna",
+          "type": "city",
+          "population": "94883",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-807184038",
+          "parent_code": "CI-ZZ",
+          "name": "Nassian",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-843415491",
+          "parent_code": "CI-ZZ",
+          "name": "Koun-Fao",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-843418409",
+          "parent_code": "CI-ZZ",
+          "name": "Tanda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2725962976",
+          "parent_code": "CI-ZZ",
+          "name": "Bondoukou",
+          "type": "city",
+          "population": "141568",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2747136963",
+          "parent_code": "CI-ZZ",
+          "name": "Transua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2964840313",
+          "parent_code": "CI-ZZ",
+          "name": "Bogofa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "CI-VB",
+      "parent_code": "CI",
+      "name": "Vallée du Bandama",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27565008",
+          "parent_code": "CI-VB",
+          "name": "Bouaké",
+          "type": "city",
+          "population": "832371",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-359160469",
+          "parent_code": "CI-VB",
+          "name": "Béoumi",
+          "type": "city",
+          "population": "25000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443294963",
+          "parent_code": "CI-VB",
+          "name": "Niakaramandougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443296531",
+          "parent_code": "CI-VB",
+          "name": "Foumbolo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443296909",
+          "parent_code": "CI-VB",
+          "name": "Dabakala",
+          "type": "city",
+          "population": "15000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443304149",
+          "parent_code": "CI-VB",
+          "name": "Diabo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443378249",
+          "parent_code": "CI-VB",
+          "name": "Katiola",
+          "type": "city",
+          "population": "90641",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-816241172",
+          "parent_code": "CI-VB",
+          "name": "Tafiré",
+          "type": "city",
+          "population": "15000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2144599945",
+          "parent_code": "CI-VB",
+          "name": "Tortiya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2491332497",
+          "parent_code": "CI-VB",
+          "name": "Sakassou",
+          "type": "city",
+          "population": "17000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2746220735",
+          "parent_code": "CI-VB",
+          "name": "Botro",
+          "type": "city",
+          "population": "15000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2963213117",
+          "parent_code": "CI-VB",
+          "name": "Fronan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3088929325",
+          "parent_code": "CI-VB",
+          "name": "Niéméné",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "CI-DN",
+      "parent_code": "CI",
+      "name": "Denguélé District",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-319225802",
+          "parent_code": "CI-DN",
+          "name": "Odienné",
+          "type": "city",
+          "population": "86279",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443216727",
+          "parent_code": "CI-DN",
+          "name": "Maninian",
+          "type": "city",
+          "population": "14000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443224124",
+          "parent_code": "CI-DN",
+          "name": "Tiéme",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443287953",
+          "parent_code": "CI-DN",
+          "name": "Madinani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-703942949",
+          "parent_code": "CI-DN",
+          "name": "Samatiguila",
+          "type": "city",
+          "population": "6000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2746956163",
+          "parent_code": "CI-DN",
+          "name": "Kaniasso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11385367626",
+          "parent_code": "CI-DN",
+          "name": "Gouéya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "CI-AB",
+      "parent_code": "CI",
+      "name": "Abidjan",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1046100133",
+          "parent_code": "CI-AB",
+          "name": "Abidjan",
+          "type": "city",
+          "population": "7567409",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1225859428",
+          "parent_code": "CI-AB",
+          "name": "Anyama",
+          "type": "city",
+          "population": "389592",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1601215067",
+          "parent_code": "CI-AB",
+          "name": "Bingerville",
+          "type": "city",
+          "population": "204656",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2905034837",
+          "parent_code": "CI-AB",
+          "name": "Songon",
+          "type": "city",
+          "population": "89778",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2983245632",
+          "parent_code": "CI-AB",
+          "name": "Attinguié",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9929065799",
+          "parent_code": "CI-AB",
+          "name": "Cité Symphonia",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        },
+        {
+          "code": "CTY-10102738243",
+          "parent_code": "CI-AB",
+          "name": "Cité Sainte Monique",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        }
+      ]
+    },
+    {
+      "code": "CI-CM",
+      "parent_code": "CI",
+      "name": "Comoé",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-319225870",
+          "parent_code": "CI-CM",
+          "name": "Agnibilékrou",
+          "type": "city",
+          "population": "99501",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-823613578",
+          "parent_code": "CI-CM",
+          "name": "Aprompronou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-843415826",
+          "parent_code": "CI-CM",
+          "name": "Aniassué",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-843416863",
+          "parent_code": "CI-CM",
+          "name": "Yakassé-Féyassé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-843510776",
+          "parent_code": "CI-CM",
+          "name": "Bonoua",
+          "type": "city",
+          "population": "118388",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1225830409",
+          "parent_code": "CI-CM",
+          "name": "Adiaké",
+          "type": "city",
+          "population": "18000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1376363113",
+          "parent_code": "CI-CM",
+          "name": "Krinjabo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1593622307",
+          "parent_code": "CI-CM",
+          "name": "Grand-Bassam",
+          "type": "city",
+          "population": "124567",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1596425102",
+          "parent_code": "CI-CM",
+          "name": "Aboisso",
+          "type": "city",
+          "population": "100903",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1625148248",
+          "parent_code": "CI-CM",
+          "name": "Assinie-Mafia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2189893258",
+          "parent_code": "CI-CM",
+          "name": "Abengourou",
+          "type": "city",
+          "population": "164424",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2535414237",
+          "parent_code": "CI-CM",
+          "name": "Ayamé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2729986503",
+          "parent_code": "CI-CM",
+          "name": "Bettié",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2863973471",
+          "parent_code": "CI-CM",
+          "name": "Noé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13726719035",
+          "parent_code": "CI-CM",
+          "name": "Dadiesso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13726731044",
+          "parent_code": "CI-CM",
+          "name": "Moussue",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13726743841",
+          "parent_code": "CI-CM",
+          "name": "Nyameasa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "CI-LG",
+      "parent_code": "CI",
+      "name": "Lagunes",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-319225766",
+          "parent_code": "CI-LG",
+          "name": "Tiassale",
+          "type": "city",
+          "population": "83648",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-319225767",
+          "parent_code": "CI-LG",
+          "name": "Akoupé",
+          "type": "city",
+          "population": "51000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-359133934",
+          "parent_code": "CI-LG",
+          "name": "Grand-Lahou",
+          "type": "city",
+          "population": "77479",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-843207421",
+          "parent_code": "CI-LG",
+          "name": "N’Douci",
+          "type": "city",
+          "population": "97194",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-846762369",
+          "parent_code": "CI-LG",
+          "name": "Alépé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1225847163",
+          "parent_code": "CI-LG",
+          "name": "Adzopé",
+          "type": "city",
+          "population": "156488",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1225951579",
+          "parent_code": "CI-LG",
+          "name": "Jackville",
+          "type": "city",
+          "population": "55000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1226027857",
+          "parent_code": "CI-LG",
+          "name": "Rubino",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1376344652",
+          "parent_code": "CI-LG",
+          "name": "Gomon",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1376344653",
+          "parent_code": "CI-LG",
+          "name": "Sikensi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1376345469",
+          "parent_code": "CI-LG",
+          "name": "Bodo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1605486862",
+          "parent_code": "CI-LG",
+          "name": "Dabou",
+          "type": "city",
+          "population": "138083",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2721007532",
+          "parent_code": "CI-LG",
+          "name": "Agboville",
+          "type": "city",
+          "population": "135082",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2730005221",
+          "parent_code": "CI-LG",
+          "name": "Yakassé-Attobrou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2921097119",
+          "parent_code": "CI-LG",
+          "name": "Céchi",
+          "type": "city",
+          "population": "25967",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2921489872",
+          "parent_code": "CI-LG",
+          "name": "Gbolouville",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5162635562",
+          "parent_code": "CI-LG",
+          "name": "Taabo",
+          "type": "city",
+          "population": "57189",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "CI-GD",
+      "parent_code": "CI",
+      "name": "Gôh-Djiboua",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-443319478",
+          "parent_code": "CI-GD",
+          "name": "Doukouya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443387111",
+          "parent_code": "CI-GD",
+          "name": "Lakota",
+          "type": "city",
+          "population": "169330",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-443389581",
+          "parent_code": "CI-GD",
+          "name": "Goudi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443389991",
+          "parent_code": "CI-GD",
+          "name": "Divo",
+          "type": "city",
+          "population": "294559",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-443392111",
+          "parent_code": "CI-GD",
+          "name": "Hiré",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443393778",
+          "parent_code": "CI-GD",
+          "name": "Oumé",
+          "type": "city",
+          "population": "127153",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-443394341",
+          "parent_code": "CI-GD",
+          "name": "Diégonéfla",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443395221",
+          "parent_code": "CI-GD",
+          "name": "Gagnoa",
+          "type": "city",
+          "population": "277044",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2403164231",
+          "parent_code": "CI-GD",
+          "name": "Ouragahio",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2746340457",
+          "parent_code": "CI-GD",
+          "name": "Guitry",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2775159278",
+          "parent_code": "CI-GD",
+          "name": "Guibéroua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2932415890",
+          "parent_code": "CI-GD",
+          "name": "Guépahouo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5158009659",
+          "parent_code": "CI-GD",
+          "name": "Hermankono Garo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "CI-BS",
+      "parent_code": "CI",
+      "name": "Bas-Sassandra",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-243642619",
+          "parent_code": "CI-BS",
+          "name": "San-Pédro",
+          "type": "city",
+          "population": "390654",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-443383638",
+          "parent_code": "CI-BS",
+          "name": "Gabiadji",
+          "type": "city",
+          "population": "113369",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443386533",
+          "parent_code": "CI-BS",
+          "name": "Sago",
+          "type": "city",
+          "population": "91140",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1153415065",
+          "parent_code": "CI-BS",
+          "name": "Méagui",
+          "type": "city",
+          "population": "153483",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1374676723",
+          "parent_code": "CI-BS",
+          "name": "Grand-Zattry",
+          "type": "city",
+          "population": "112049",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1595489017",
+          "parent_code": "CI-BS",
+          "name": "Sassandra",
+          "type": "city",
+          "population": "87945",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1599891204",
+          "parent_code": "CI-BS",
+          "name": "Soubré",
+          "type": "city",
+          "population": "272773",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1602774852",
+          "parent_code": "CI-BS",
+          "name": "Touih",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2721194434",
+          "parent_code": "CI-BS",
+          "name": "Tabou",
+          "type": "city",
+          "population": "62719",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2728722168",
+          "parent_code": "CI-BS",
+          "name": "Grand-Béréby",
+          "type": "city",
+          "population": "129340",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2746320464",
+          "parent_code": "CI-BS",
+          "name": "Fresco",
+          "type": "city",
+          "population": "48098",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2746333023",
+          "parent_code": "CI-BS",
+          "name": "Guéyo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2933584068",
+          "parent_code": "CI-BS",
+          "name": "Dahiri",
+          "type": "city",
+          "population": "34821",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2935909683",
+          "parent_code": "CI-BS",
+          "name": "Okrouyo",
+          "type": "city",
+          "population": "120053",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2935918848",
+          "parent_code": "CI-BS",
+          "name": "Dogbo",
+          "type": "city",
+          "population": "61632",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9517111609",
+          "parent_code": "CI-BS",
+          "name": "Buyo",
+          "type": "city",
+          "population": "100848",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9594335845",
+          "parent_code": "CI-BS",
+          "name": "Doba",
+          "type": "city",
+          "population": "95246",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10774266293",
+          "parent_code": "CI-BS",
+          "name": "Cité d'exploCitation",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        },
+        {
+          "code": "CTY-13136746292",
+          "parent_code": "CI-BS",
+          "name": "Lessiri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "CI-MG",
+      "parent_code": "CI",
+      "name": "Montagnes",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-319225783",
+          "parent_code": "CI-MG",
+          "name": "Bangolo",
+          "type": "city",
+          "population": "20000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443403388",
+          "parent_code": "CI-MG",
+          "name": "Kahin-Zarabaon",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443404014",
+          "parent_code": "CI-MG",
+          "name": "Zouan-Hounien",
+          "type": "city",
+          "population": "111099",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1077253574",
+          "parent_code": "CI-MG",
+          "name": "Binhouye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1079388440",
+          "parent_code": "CI-MG",
+          "name": "Duekoue",
+          "type": "city",
+          "population": "220953",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1091671536",
+          "parent_code": "CI-MG",
+          "name": "Tai",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1191398314",
+          "parent_code": "CI-MG",
+          "name": "Bloléquin",
+          "type": "city",
+          "population": "123133",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1238852358",
+          "parent_code": "CI-MG",
+          "name": "Zagné",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1239009716",
+          "parent_code": "CI-MG",
+          "name": "Kouibly",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1597913597",
+          "parent_code": "CI-MG",
+          "name": "Man",
+          "type": "city",
+          "population": "241969",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1597916993",
+          "parent_code": "CI-MG",
+          "name": "Danané",
+          "type": "city",
+          "population": "131586",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2726670194",
+          "parent_code": "CI-MG",
+          "name": "Guiglo",
+          "type": "city",
+          "population": "171454",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2730750565",
+          "parent_code": "CI-MG",
+          "name": "Biankouma",
+          "type": "city",
+          "population": "25000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2735919293",
+          "parent_code": "CI-MG",
+          "name": "Toulépleu",
+          "type": "city",
+          "population": "22000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2949727546",
+          "parent_code": "CI-MG",
+          "name": "Blapleu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4243497401",
+          "parent_code": "CI-MG",
+          "name": "Sipilou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "CI-SM",
+      "parent_code": "CI",
+      "name": "Sassandra-Marahoué",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-443315177",
+          "parent_code": "CI-SM",
+          "name": "Zuénoula",
+          "type": "city",
+          "population": "53000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443315229",
+          "parent_code": "CI-SM",
+          "name": "Gohitafla",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443318327",
+          "parent_code": "CI-SM",
+          "name": "Bonon",
+          "type": "city",
+          "population": "116871",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443319263",
+          "parent_code": "CI-SM",
+          "name": "Kononfla",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443321097",
+          "parent_code": "CI-SM",
+          "name": "Gonaté",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443327886",
+          "parent_code": "CI-SM",
+          "name": "Bonoufla",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443329790",
+          "parent_code": "CI-SM",
+          "name": "Vavoua",
+          "type": "city",
+          "population": "132528",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-443330540",
+          "parent_code": "CI-SM",
+          "name": "Vaafla",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443330869",
+          "parent_code": "CI-SM",
+          "name": "Séitifla",
+          "type": "city",
+          "population": "109252",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443331228",
+          "parent_code": "CI-SM",
+          "name": "Minoré",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1597912529",
+          "parent_code": "CI-SM",
+          "name": "Daloa",
+          "type": "city",
+          "population": "421879",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1599890269",
+          "parent_code": "CI-SM",
+          "name": "Issia",
+          "type": "city",
+          "population": "126252",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2726018272",
+          "parent_code": "CI-SM",
+          "name": "Sinfra",
+          "type": "city",
+          "population": "137210",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2948573986",
+          "parent_code": "CI-SM",
+          "name": "Dania",
+          "type": "city",
+          "population": "106612",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2948573991",
+          "parent_code": "CI-SM",
+          "name": "Iboguhé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2948576219",
+          "parent_code": "CI-SM",
+          "name": "Saïoua",
+          "type": "city",
+          "population": "100085",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3112520640",
+          "parent_code": "CI-SM",
+          "name": "Diafla",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3139825913",
+          "parent_code": "CI-SM",
+          "name": "Grosso (Ancien Prozi)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3141965342",
+          "parent_code": "CI-SM",
+          "name": "Vaou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4387322934",
+          "parent_code": "CI-SM",
+          "name": "Bouaflé",
+          "type": "city",
+          "population": "213967",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-13153833996",
+          "parent_code": "CI-SM",
+          "name": "Belleville",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13153834293",
+          "parent_code": "CI-SM",
+          "name": "Gadouan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "CI-YM",
+      "parent_code": "CI",
+      "name": "Yamoussoukro",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-319225774",
+          "parent_code": "CI-YM",
+          "name": "Yamoussoukro",
+          "type": "city",
+          "population": "340234",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-858772714",
+          "parent_code": "CI-YM",
+          "name": "Lolobo",
+          "type": "city",
+          "population": "34650",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2735786890",
+          "parent_code": "CI-YM",
+          "name": "Kossou",
+          "type": "city",
+          "population": "32320",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2746016530",
+          "parent_code": "CI-YM",
+          "name": "Attiégouakro",
+          "type": "city",
+          "population": "14863",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12264973193",
+          "parent_code": "CI-YM",
+          "name": "Kpangbassou 1",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        },
+        {
+          "code": "CTY-12265018204",
+          "parent_code": "CI-YM",
+          "name": "Kpangbassou 3",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        },
+        {
+          "code": "CTY-12265018230",
+          "parent_code": "CI-YM",
+          "name": "Kpangbassou 2",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        }
+      ]
+    },
+    {
+      "code": "CI-LC",
+      "parent_code": "CI",
+      "name": "Lacs",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-443299004",
+          "parent_code": "CI-LC",
+          "name": "Bocanda",
+          "type": "city",
+          "population": "59242",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-858772438",
+          "parent_code": "CI-LC",
+          "name": "Tiébissou",
+          "type": "city",
+          "population": "20000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1308393826",
+          "parent_code": "CI-LC",
+          "name": "Banabo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1377429553",
+          "parent_code": "CI-LC",
+          "name": "Bongouanou",
+          "type": "city",
+          "population": "32000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1597902622",
+          "parent_code": "CI-LC",
+          "name": "Toumodi",
+          "type": "city",
+          "population": "88580",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1597903144",
+          "parent_code": "CI-LC",
+          "name": "Dimbokro",
+          "type": "city",
+          "population": "70198",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2726676487",
+          "parent_code": "CI-LC",
+          "name": "Daoukro",
+          "type": "city",
+          "population": "101136",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2747035158",
+          "parent_code": "CI-LC",
+          "name": "M’Batto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2747060680",
+          "parent_code": "CI-LC",
+          "name": "Prikro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2944573639",
+          "parent_code": "CI-LC",
+          "name": "Kouassi-Kouassikro",
+          "type": "city",
+          "population": "25000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2946492905",
+          "parent_code": "CI-LC",
+          "name": "Didiévi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2946493616",
+          "parent_code": "CI-LC",
+          "name": "Tié-N’Diékro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5488446322",
+          "parent_code": "CI-LC",
+          "name": "Presidential Home",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        },
+        {
+          "code": "CTY-9127903107",
+          "parent_code": "CI-LC",
+          "name": "Cité",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        }
+      ]
+    },
+    {
+      "code": "CI-WR",
+      "parent_code": "CI",
+      "name": "Woroba",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-319225798",
+          "parent_code": "CI-WR",
+          "name": "Touba",
+          "type": "city",
+          "population": "30000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-443349580",
+          "parent_code": "CI-WR",
+          "name": "Kani",
+          "type": "city",
+          "population": "55109",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2725995822",
+          "parent_code": "CI-WR",
+          "name": "Séguéla",
+          "type": "city",
+          "population": "103980",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2735819665",
+          "parent_code": "CI-WR",
+          "name": "Mankono",
+          "type": "city",
+          "population": "74165",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2735910464",
+          "parent_code": "CI-WR",
+          "name": "Tiéningboué",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2773414916",
+          "parent_code": "CI-WR",
+          "name": "Sifié",
+          "type": "city",
+          "population": "31264",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4875518822",
+          "parent_code": "CI-WR",
+          "name": "Cité Zaré",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        }
+      ]
+    },
+    {
+      "code": "ST-19671460",
+      "parent_code": "CI",
+      "name": "District de Yamoussoukro",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "ST-19671461",
+      "parent_code": "CI",
+      "name": "District de Denguélé",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "ST-19671463",
+      "parent_code": "CI",
+      "name": "District de Woroba",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "ST-19671464",
+      "parent_code": "CI",
+      "name": "District de Gôh-Djiboua",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "ST-19671465",
+      "parent_code": "CI",
+      "name": "District de Lagunes",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "ST-19671466",
+      "parent_code": "CI",
+      "name": "District de Zanzan",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "ST-19671467",
+      "parent_code": "CI",
+      "name": "District de Montagnes",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "ST-19671468",
+      "parent_code": "CI",
+      "name": "District de Lacs",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "ST-19671469",
+      "parent_code": "CI",
+      "name": "District de Sassandra-Marahoué",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "ST-19671470",
+      "parent_code": "CI",
+      "name": "District de Savanes",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "ST-19671471",
+      "parent_code": "CI",
+      "name": "District de Comoé",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "ST-19671472",
+      "parent_code": "CI",
+      "name": "District de Bas-Sassandra",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "ST-19671473",
+      "parent_code": "CI",
+      "name": "District de Vallée du Bandama",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "ST-19671638",
+      "parent_code": "CI",
+      "name": "District de Abidjan",
+      "type": "state",
+      "children": []
+    }
+  ]
+}

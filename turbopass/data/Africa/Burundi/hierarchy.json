@@ -1,0 +1,1200 @@
+{
+  "code": "BI",
+  "name": "Burundi",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "BI-BM",
+      "parent_code": "BI",
+      "name": "Bujumbura Mairie",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-60715062",
+          "parent_code": "BI-BM",
+          "name": "Bujumbura",
+          "type": "city",
+          "population": "658859",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-5669814923",
+          "parent_code": "BI-BM",
+          "name": "Kanyosha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5810460939",
+          "parent_code": "BI-BM",
+          "name": "Muha",
+          "type": "city",
+          "population": "124836",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5810460941",
+          "parent_code": "BI-BM",
+          "name": "Ntahangwa",
+          "type": "city",
+          "population": "248915",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BI-BL",
+      "parent_code": "BI",
+      "name": "Bujumbura Rural Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-801770794",
+          "parent_code": "BI-BL",
+          "name": "Gatumba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1673541099",
+          "parent_code": "BI-BL",
+          "name": "Kabezi",
+          "type": "city",
+          "population": "49079",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3086305337",
+          "parent_code": "BI-BL",
+          "name": "Mubimbi",
+          "type": "city",
+          "population": "41689",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3124336020",
+          "parent_code": "BI-BL",
+          "name": "Isale",
+          "type": "city",
+          "population": "78740",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3124338236",
+          "parent_code": "BI-BL",
+          "name": "Mugongomanga",
+          "type": "city",
+          "population": "27985",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3124384462",
+          "parent_code": "BI-BL",
+          "name": "Mutambu",
+          "type": "city",
+          "population": "73463",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3124405085",
+          "parent_code": "BI-BL",
+          "name": "Mutimbuzi",
+          "type": "city",
+          "population": "69525",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3124413076",
+          "parent_code": "BI-BL",
+          "name": "Nyabiraba",
+          "type": "city",
+          "population": "50554",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4028108984",
+          "parent_code": "BI-BL",
+          "name": "Kanyosha",
+          "type": "city",
+          "population": "78823",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5669814924",
+          "parent_code": "BI-BL",
+          "name": "Mukike",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5795676837",
+          "parent_code": "BI-BL",
+          "name": "Mukike",
+          "type": "city",
+          "population": "24660",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BI-BR",
+      "parent_code": "BI",
+      "name": "Bururi",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-498675511",
+          "parent_code": "BI-BR",
+          "name": "Bururi",
+          "type": "city",
+          "population": "83614",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-753166904",
+          "parent_code": "BI-BR",
+          "name": "Rutovu",
+          "type": "city",
+          "population": "46111",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1343329007",
+          "parent_code": "BI-BR",
+          "name": "Matana",
+          "type": "city",
+          "population": "42777",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1343430505",
+          "parent_code": "BI-BR",
+          "name": "Mugamba",
+          "type": "city",
+          "population": "59084",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3095304258",
+          "parent_code": "BI-BR",
+          "name": "Vyanda",
+          "type": "city",
+          "population": "29685",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5669854831",
+          "parent_code": "BI-BR",
+          "name": "Songa",
+          "type": "city",
+          "population": "51831",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BI-MA",
+      "parent_code": "BI",
+      "name": "Makamba",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-498658946",
+          "parent_code": "BI-MA",
+          "name": "Nyanza Lac",
+          "type": "city",
+          "population": "112752",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-498665827",
+          "parent_code": "BI-MA",
+          "name": "Makamba",
+          "type": "city",
+          "population": "93558",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1344545312",
+          "parent_code": "BI-MA",
+          "name": "Mabanda",
+          "type": "city",
+          "population": "45836",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2334712994",
+          "parent_code": "BI-MA",
+          "name": "Mukungu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3095314791",
+          "parent_code": "BI-MA",
+          "name": "Kibago",
+          "type": "city",
+          "population": "44978",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9077019355",
+          "parent_code": "BI-MA",
+          "name": "Vugizo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BI-RT",
+      "parent_code": "BI",
+      "name": "Rutana",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-498671062",
+          "parent_code": "BI-RT",
+          "name": "Rutana",
+          "type": "city",
+          "population": "55177",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1344526636",
+          "parent_code": "BI-RT",
+          "name": "Gitanga",
+          "type": "city",
+          "population": "43727",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2311944884",
+          "parent_code": "BI-RT",
+          "name": "Bukemba",
+          "type": "city",
+          "population": "35471",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2311944888",
+          "parent_code": "BI-RT",
+          "name": "Muzye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3053293969",
+          "parent_code": "BI-RT",
+          "name": "Giharo",
+          "type": "city",
+          "population": "93365",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3069894162",
+          "parent_code": "BI-RT",
+          "name": "Mpinga-Kayove",
+          "type": "city",
+          "population": "52821",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3095265320",
+          "parent_code": "BI-RT",
+          "name": "Musongati",
+          "type": "city",
+          "population": "52949",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BI-CA",
+      "parent_code": "BI",
+      "name": "Cankuzo",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-498682112",
+          "parent_code": "BI-CA",
+          "name": "Cankuzo",
+          "type": "city",
+          "population": "47972",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1345841608",
+          "parent_code": "BI-CA",
+          "name": "Cendajuru",
+          "type": "city",
+          "population": "32458",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1345856442",
+          "parent_code": "BI-CA",
+          "name": "Gisagara",
+          "type": "city",
+          "population": "57322",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1347117125",
+          "parent_code": "BI-CA",
+          "name": "Kigamba",
+          "type": "city",
+          "population": "40773",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3358017799",
+          "parent_code": "BI-CA",
+          "name": "Mishiha",
+          "type": "city",
+          "population": "50348",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BI-RY",
+      "parent_code": "BI",
+      "name": "Ruyigi",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-498682265",
+          "parent_code": "BI-RY",
+          "name": "Ruyigi",
+          "type": "city",
+          "population": "56631",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1343503237",
+          "parent_code": "BI-RY",
+          "name": "Butaganzwa",
+          "type": "city",
+          "population": "63186",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1344518060",
+          "parent_code": "BI-RY",
+          "name": "Kinyinya",
+          "type": "city",
+          "population": "53038",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1345822568",
+          "parent_code": "BI-RY",
+          "name": "Gisuru",
+          "type": "city",
+          "population": "99461",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1345841605",
+          "parent_code": "BI-RY",
+          "name": "Bweru",
+          "type": "city",
+          "population": "37502",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3025119533",
+          "parent_code": "BI-RY",
+          "name": "Butezi",
+          "type": "city",
+          "population": "39178",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3057708440",
+          "parent_code": "BI-RY",
+          "name": "Nyabitsinda",
+          "type": "city",
+          "population": "51534",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BI-BB",
+      "parent_code": "BI",
+      "name": "Bubanza",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-498681772",
+          "parent_code": "BI-BB",
+          "name": "Bubanza",
+          "type": "city",
+          "population": "83678",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1345888968",
+          "parent_code": "BI-BB",
+          "name": "Gihanga",
+          "type": "city",
+          "population": "55344",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1345888970",
+          "parent_code": "BI-BB",
+          "name": "Mpanda",
+          "type": "city",
+          "population": "58913",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1347179719",
+          "parent_code": "BI-BB",
+          "name": "Musigati",
+          "type": "city",
+          "population": "82207",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3042404944",
+          "parent_code": "BI-BB",
+          "name": "Rugazi",
+          "type": "city",
+          "population": "57881",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BI-CI",
+      "parent_code": "BI",
+      "name": "Cibitoke",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-498681622",
+          "parent_code": "BI-CI",
+          "name": "Cibitoke",
+          "type": "city",
+          "population": "69045",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1347208022",
+          "parent_code": "BI-CI",
+          "name": "Bukinanyana",
+          "type": "city",
+          "population": "75750",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1347556383",
+          "parent_code": "BI-CI",
+          "name": "Rugombo",
+          "type": "city",
+          "population": "78587",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1347557540",
+          "parent_code": "BI-CI",
+          "name": "Buganda",
+          "type": "city",
+          "population": "69045",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3042329598",
+          "parent_code": "BI-CI",
+          "name": "Mabayi",
+          "type": "city",
+          "population": "66367",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3128522480",
+          "parent_code": "BI-CI",
+          "name": "Murwi",
+          "type": "city",
+          "population": "82235",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5807371292",
+          "parent_code": "BI-CI",
+          "name": "Mugina",
+          "type": "city",
+          "population": "88451",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BI-KY",
+      "parent_code": "BI",
+      "name": "Kayanza",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-498680729",
+          "parent_code": "BI-KY",
+          "name": "Kayanza",
+          "type": "city",
+          "population": "97252",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-498680748",
+          "parent_code": "BI-KY",
+          "name": "Matongo",
+          "type": "city",
+          "population": "70275",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1347160918",
+          "parent_code": "BI-KY",
+          "name": "Muruta",
+          "type": "city",
+          "population": "57888",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3045973159",
+          "parent_code": "BI-KY",
+          "name": "Gatara",
+          "type": "city",
+          "population": "64112",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3045981313",
+          "parent_code": "BI-KY",
+          "name": "Muhanga",
+          "type": "city",
+          "population": "64480",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3376660147",
+          "parent_code": "BI-KY",
+          "name": "Gahombo",
+          "type": "city",
+          "population": "39633",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3629618784",
+          "parent_code": "BI-KY",
+          "name": "Kabarore",
+          "type": "city",
+          "population": "62303",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4126314486",
+          "parent_code": "BI-KY",
+          "name": "Gahombo",
+          "type": "city",
+          "population": "39633",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5810156164",
+          "parent_code": "BI-KY",
+          "name": "Butaganzwa",
+          "type": "city",
+          "population": "51601",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5810156165",
+          "parent_code": "BI-KY",
+          "name": "Gasenyi",
+          "type": "city",
+          "population": "77868",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BI-MU",
+      "parent_code": "BI",
+      "name": "Muramvya",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-298699084",
+          "parent_code": "BI-MU",
+          "name": "Bugarama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-498856704",
+          "parent_code": "BI-MU",
+          "name": "Muramvya",
+          "type": "city",
+          "population": "81257",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1347111344",
+          "parent_code": "BI-MU",
+          "name": "Rutegama",
+          "type": "city",
+          "population": "41170",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1347215842",
+          "parent_code": "BI-MU",
+          "name": "Bukeye",
+          "type": "city",
+          "population": "66090",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3041822064",
+          "parent_code": "BI-MU",
+          "name": "Kiganda",
+          "type": "city",
+          "population": "48730",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3128490867",
+          "parent_code": "BI-MU",
+          "name": "Mbuye",
+          "type": "city",
+          "population": "55342",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BI-MW",
+      "parent_code": "BI",
+      "name": "Mwaro",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1343439979",
+          "parent_code": "BI-MW",
+          "name": "Mwaro",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3042132220",
+          "parent_code": "BI-MW",
+          "name": "Rusaka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3128461993",
+          "parent_code": "BI-MW",
+          "name": "Nyabihanga",
+          "type": "city",
+          "population": "60311",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3128469828",
+          "parent_code": "BI-MW",
+          "name": "Kayokwe",
+          "type": "city",
+          "population": "49127",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3128476142",
+          "parent_code": "BI-MW",
+          "name": "Gisozi",
+          "type": "city",
+          "population": "27954",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3128484088",
+          "parent_code": "BI-MW",
+          "name": "Ndava",
+          "type": "city",
+          "population": "57284",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3312209071",
+          "parent_code": "BI-MW",
+          "name": "Bisoro",
+          "type": "city",
+          "population": "34175",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BI-GI",
+      "parent_code": "BI",
+      "name": "Gitega",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-301351574",
+          "parent_code": "BI-GI",
+          "name": "Gitega",
+          "type": "city",
+          "population": "155005",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1343503231",
+          "parent_code": "BI-GI",
+          "name": "Ryansoro",
+          "type": "city",
+          "population": "35835",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1343503236",
+          "parent_code": "BI-GI",
+          "name": "Gishubi",
+          "type": "city",
+          "population": "55927",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1347134534",
+          "parent_code": "BI-GI",
+          "name": "Mutaho",
+          "type": "city",
+          "population": "65354",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1347134535",
+          "parent_code": "BI-GI",
+          "name": "Bugendana",
+          "type": "city",
+          "population": "108387",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3122576225",
+          "parent_code": "BI-GI",
+          "name": "Bukirasazi",
+          "type": "city",
+          "population": "32714",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3126608981",
+          "parent_code": "BI-GI",
+          "name": "Buraza",
+          "type": "city",
+          "population": "47485",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3126633143",
+          "parent_code": "BI-GI",
+          "name": "Itaba",
+          "type": "city",
+          "population": "51139",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3126650819",
+          "parent_code": "BI-GI",
+          "name": "Nyarusange",
+          "type": "city",
+          "population": "40904",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3126675629",
+          "parent_code": "BI-GI",
+          "name": "Giheta",
+          "type": "city",
+          "population": "73017",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9074384812",
+          "parent_code": "BI-GI",
+          "name": "Makebuko",
+          "type": "city",
+          "population": "59456",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BI-KR",
+      "parent_code": "BI",
+      "name": "Karuzi",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-498681136",
+          "parent_code": "BI-KR",
+          "name": "Karuzi",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1347127243",
+          "parent_code": "BI-KR",
+          "name": "Buhiga",
+          "type": "city",
+          "population": "71474",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1347127253",
+          "parent_code": "BI-KR",
+          "name": "Gitaramuka",
+          "type": "city",
+          "population": "78120",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1347127255",
+          "parent_code": "BI-KR",
+          "name": "Shombo",
+          "type": "city",
+          "population": "46815",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1347153562",
+          "parent_code": "BI-KR",
+          "name": "Bugenyuzi",
+          "type": "city",
+          "population": "81938",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3045981316",
+          "parent_code": "BI-KR",
+          "name": "Mutumba",
+          "type": "city",
+          "population": "41476",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3045981317",
+          "parent_code": "BI-KR",
+          "name": "Nyabikere",
+          "type": "city",
+          "population": "48993",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3095251338",
+          "parent_code": "BI-KR",
+          "name": "Gihogazi",
+          "type": "city",
+          "population": "67627",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BI-KI",
+      "parent_code": "BI",
+      "name": "Kirundo",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-301399969",
+          "parent_code": "BI-KI",
+          "name": "Kirundo",
+          "type": "city",
+          "population": "93110",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1347150636",
+          "parent_code": "BI-KI",
+          "name": "Ruhehe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1719077742",
+          "parent_code": "BI-KI",
+          "name": "Vumbi-Bukuba",
+          "type": "city",
+          "population": "77656",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3039360935",
+          "parent_code": "BI-KI",
+          "name": "Ntega",
+          "type": "city",
+          "population": "98665",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3041548506",
+          "parent_code": "BI-KI",
+          "name": "Bwambarangwe",
+          "type": "city",
+          "population": "66816",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3093178884",
+          "parent_code": "BI-KI",
+          "name": "Gitobe",
+          "type": "city",
+          "population": "57326",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3093181706",
+          "parent_code": "BI-KI",
+          "name": "Busoni",
+          "type": "city",
+          "population": "145424",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3130314368",
+          "parent_code": "BI-KI",
+          "name": "Bugabira",
+          "type": "city",
+          "population": "89259",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BI-MY",
+      "parent_code": "BI",
+      "name": "Muyinga",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-498681309",
+          "parent_code": "BI-MY",
+          "name": "Muyinga",
+          "type": "city",
+          "population": "138227",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1347139981",
+          "parent_code": "BI-MY",
+          "name": "Gasorwe",
+          "type": "city",
+          "population": "81998",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1719117213",
+          "parent_code": "BI-MY",
+          "name": "Gashoho",
+          "type": "city",
+          "population": "66107",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2306943166",
+          "parent_code": "BI-MY",
+          "name": "Butihinda",
+          "type": "city",
+          "population": "96890",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3046155937",
+          "parent_code": "BI-MY",
+          "name": "Mwakiro",
+          "type": "city",
+          "population": "43475",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3084743284",
+          "parent_code": "BI-MY",
+          "name": "Giteranyi",
+          "type": "city",
+          "population": "151230",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3128497355",
+          "parent_code": "BI-MY",
+          "name": "Buhinyuza",
+          "type": "city",
+          "population": "54482",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BI-NG",
+      "parent_code": "BI",
+      "name": "Ngozi",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-498680416",
+          "parent_code": "BI-NG",
+          "name": "Ngozi",
+          "type": "city",
+          "population": "120557",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1719077415",
+          "parent_code": "BI-NG",
+          "name": "Gashikanwa",
+          "type": "city",
+          "population": "57086",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3039412282",
+          "parent_code": "BI-NG",
+          "name": "Marangara",
+          "type": "city",
+          "population": "67832",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3045481313",
+          "parent_code": "BI-NG",
+          "name": "Kiremba",
+          "type": "city",
+          "population": "93336",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3086165615",
+          "parent_code": "BI-NG",
+          "name": "Busiga",
+          "type": "city",
+          "population": "65143",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3128524661",
+          "parent_code": "BI-NG",
+          "name": "Mwumba",
+          "type": "city",
+          "population": "61584",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3128526786",
+          "parent_code": "BI-NG",
+          "name": "Nyamurenza",
+          "type": "city",
+          "population": "57202",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3128532351",
+          "parent_code": "BI-NG",
+          "name": "Tangara",
+          "type": "city",
+          "population": "75640",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4023809919",
+          "parent_code": "BI-NG",
+          "name": "Ruhororo",
+          "type": "city",
+          "population": "62337",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BI-RM",
+      "parent_code": "BI",
+      "name": "Rumonge",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1345876693",
+          "parent_code": "BI-RM",
+          "name": "Rumonge",
+          "type": "city",
+          "population": "145074",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3095278576",
+          "parent_code": "BI-RM",
+          "name": "Buyengero",
+          "type": "city",
+          "population": "58670",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3095290909",
+          "parent_code": "BI-RM",
+          "name": "Burambi",
+          "type": "city",
+          "population": "57167",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5810510607",
+          "parent_code": "BI-RM",
+          "name": "Magara",
+          "type": "city",
+          "population": "30482",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9071133461",
+          "parent_code": "BI-RM",
+          "name": "Bugarama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9071133501",
+          "parent_code": "BI-RM",
+          "name": "Muhuta",
+          "type": "city",
+          "population": "60633",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13801092410",
+          "parent_code": "BI-RM",
+          "name": "Minago",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    }
+  ]
+}

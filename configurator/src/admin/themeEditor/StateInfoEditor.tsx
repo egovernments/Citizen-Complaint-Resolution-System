@@ -212,7 +212,7 @@ export function StateInfoEditor() {
         {
           ...record,
           data: updated,
-        },
+        } as unknown as Parameters<typeof digitClient.mdmsUpdate>[0],
         record.isActive,
       );
       toast({

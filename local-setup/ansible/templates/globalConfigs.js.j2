@@ -46,6 +46,13 @@ var globalConfigs = (function () {
   var boundaryType = {{ boundary_type | to_json }};
   var hierarchyType = {{ hierarchy_type | default('ADMIN') | to_json }};
   var mapCenter = {{ map_center | to_json }};
+  // Tenant whose boundary tree the SPA's map/boundary code resolves
+  // against (Turbopass/OSM boundary resolution). Mirrors the build-time
+  // REACT_APP_MAP_TENANT env on the playbook's digit-ui build task — this
+  // runtime key is the durable path that also covers prebuilt bundles.
+  // Empty string when neither city_tenant nor ui_state_tenant_id is set;
+  // the SPA falls back to its baked-in default.
+  var mapTenant = {{ (city_tenant | default(ui_state_tenant_id | default(''))) | to_json }};
   var employeeModuleDenylist = {{ employee_module_denylist | to_json }};
   var loginTenantAllowlist = {{ login_tenant_allowlist | to_json }};
   var coreMobileConfigs = {{ core_mobile_configs | to_json }};
@@ -116,6 +123,8 @@ var globalConfigs = (function () {
       return pgrBoundaryLowestLevel;
     } else if (key === "MAP_CENTER") {
       return mapCenter;
+    } else if (key === "MAP_TENANT") {
+      return mapTenant;
     } else if (key === "BOUNDARY_TYPE") {
       return boundaryType;
     } else if (key === "HIERARCHY_TYPE") {

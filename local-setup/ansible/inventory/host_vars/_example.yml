@@ -197,6 +197,19 @@ enable_search_stack: false
 # a public mirror) if you're not on the VPC.
 enable_mcp: true
 
+# ────────── Turbopass (OSM location autocomplete) ──────────
+# Build + run the vendored turbopass search-api (turbopass/search-api/) as a
+# standalone on-box container (`turbopass-search`, loopback 127.0.0.1:13301)
+# and render the nginx /turbopass/ proxy in front of it. Powers the
+# configurator's Phase 2 location autocomplete
+# (GET /turbopass/search?q=<term>&limit=<n>). Requires the scraped OSM data
+# under turbopass/data on the controller — the playbook syncs it to the
+# target and mounts it read-only into the container (DATA_DIR=/data).
+# Off by default: when false, no image is built, no container runs, and the
+# nginx vhost renders byte-identical to a pre-turbopass deploy.
+enable_turbopass: false
+# turbopass_port: 13301        # loopback port the search-api publishes on
+
 # ────────── Notifications (Novu + Twilio WhatsApp) ──────────
 # Turn on the `notifications` compose profile — adds 8 containers:
 #   digit-config-service, digit-user-preferences-service, novu-bridge,

@@ -1,0 +1,15 @@
+services:
+  overpass:
+    image: wiktorn/overpass-api
+    container_name: local-overpass
+    environment:
+      - OVERPASS_META=no
+      - OVERPASS_MODE=init
+      - OVERPASS_PLANET_URL=file:///data/merged.osm.bz2
+      - OVERPASS_RULES_LOAD=10
+    volumes:
+      - ../overpass_db:/db
+      - ../overpass_data:/data
+      - ./custom-entrypoint.sh:/app/docker-entrypoint.sh
+    ports:
+      - "8080:80"

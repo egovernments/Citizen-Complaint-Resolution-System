@@ -77,12 +77,12 @@ const DEFAULT_POSTAL_MESSAGE = 'Enter a valid 5-digit postal code (e.g. 00100)';
 function resolvePostalRule(): { pattern: RegExp; message: string } {
   const userValidation =
     typeof window !== 'undefined'
-      ? (window as Record<string, unknown>).__DIGIT_USER_VALIDATION
+      ? (window as unknown as Record<string, unknown>).__DIGIT_USER_VALIDATION
       : undefined;
   const mdmsRule = (userValidation as Record<string, Record<string, unknown>> | undefined)?.postalCode;
   const globalRule =
     typeof window !== 'undefined'
-      ? (window as Record<string, { getConfig?: (key: string) => Record<string, unknown> }>)
+      ? (window as unknown as Record<string, { getConfig?: (key: string) => Record<string, unknown> }>)
           .globalConfigs?.getConfig?.('CORE_POSTAL_CODE_CONFIGS')
       : undefined;
 
