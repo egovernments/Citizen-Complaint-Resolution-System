@@ -928,10 +928,22 @@ class PGRService {
 
 
   async upsertLocalizationMessage(tenantId, code, message, module = "digit-tenants", locale = "en_IN", authToken = null, userInfo = null) {
+    console.log('\n🔄 PGRService.upsertLocalizationMessage: Starting localization upsert');
+    console.log('  📍 Tenant ID:', tenantId);
+    console.log('  🏷️ Code:', code);
+    console.log('  📝 Message:', message);
+    console.log('  📦 Module:', module);
+    console.log('  🌍 Locale:', locale);
+    console.log('  🔑 Auth token:', authToken ? `${authToken.substring(0, 20)}...` : 'No token');
+    console.log('  🌐 Sandbox mode:', config.enableSandboxMode ? 'ENABLED' : 'DISABLED');
+    
     try {
       // Use sandboxHost if in sandbox mode, otherwise use egovServicesHost
       const host = config.enableSandboxMode ? config.sandboxHost : config.egovServices.egovServicesHost;
       const url = `${host}/localization/messages/v1/_upsert`;
+      
+      console.log('  🏠 Host being used:', host);
+      console.log('  🔗 Full URL:', url);
       
       const requestBody = {
         RequestInfo: {
@@ -952,6 +964,8 @@ class PGRService {
         ]
       };
 
+      console.log('  📨 Request body:', JSON.stringify(requestBody, null, 2));
+
       const options = {
         method: "POST",
         body: JSON.stringify(requestBody),
@@ -960,18 +974,37 @@ class PGRService {
         }
       };
 
+      console.log('  📤 Request method:', options.method);
+      console.log('  📋 Request headers:', JSON.stringify(options.headers));
+      console.log('  🚀 Sending upsert request...');
+
       const response = await fetch(url, options);
+      
+      console.log('  📡 Response status:', response.status);
+      console.log('  📡 Response status text:', response.statusText);
+      console.log('  📡 Response headers:', JSON.stringify(response.headers.raw ? response.headers.raw() : [...response.headers]));
       
       if (response.ok) {
         const data = await response.json();
-        console.log(`Successfully upserted localization for code: ${code}`);
+        console.log('  ✅ Successfully upserted localization');
+        console.log('  📦 Response data:', JSON.stringify(data, null, 2));
+        console.log(`  ✅ Successfully upserted localization for code: ${code}`);
         return true;
       } else {
-        console.error(`Failed to upsert localization for code: ${code}, status: ${response.status}`);
+        const errorText = await response.text();
+        console.error('  ❌ Failed to upsert localization');
+        console.error('  📍 Code:', code);
+        console.error('  📡 Status:', response.status);
+        console.error('  📝 Error response:', errorText);
+        console.error(`  ❌ Failed to upsert localization for code: ${code}, status: ${response.status}`);
         return false;
       }
     } catch (error) {
-      console.error(`Error upserting localization for code: ${code}`, error);
+      console.error('  ❌ Exception during upsert localization');
+      console.error('  📍 Code:', code);
+      console.error('  📝 Error message:', error.message);
+      console.error('  📚 Stack trace:', error.stack);
+      console.error(`  ❌ Error upserting localization for code: ${code}`, error);
       return false;
     }
   }
