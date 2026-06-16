@@ -4,12 +4,48 @@ import { useDispatch } from "react-redux";
 import { Dropdown, Toast } from "@egovernments/digit-ui-react-components";
 import { useRouteMatch, useHistory } from "react-router-dom";
 import { useQueryClient } from "react-query";
+import {
+  computeMobileLengths,
+  DEFAULT_MOBILE_PATTERN,
+  DEFAULT_MOBILE_PREFIX,
+} from "@egovernments/digit-ui-libraries";
 
 import { FormComposer } from "../../../components/FormComposer";
 import { createComplaint } from "../../../redux/actions/index";
 
 export const CreateComplaint = ({ parentUrl }) => {
   const { data: cities, isLoading }  = Digit.Utils.getMultiRootTenant()? Digit.Hooks.useTenants() :Digit.Hooks.pgr.useTenants();
+
+  const stateLvlTenantId = window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID");
+  const { data: mobileValidationConfig } = Digit.Hooks.useCustomMDMS(
+    stateLvlTenantId,
+    "common-masters",
+    [{ name: "MobileNumberValidation" }],
+    {
+      select: (data) => {
+        const list = data?.["common-masters"]?.MobileNumberValidation || [];
+        const record =
+          list.find((x) => x.default === true && x.isActive !== false) ||
+          list.find((x) => x.isActive !== false) ||
+          list[0];
+        if (!record) return null;
+        const gc = window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS");
+        const pattern = record.mobileNumberRegex || gc?.mobileNumberPattern || DEFAULT_MOBILE_PATTERN;
+        const { max } = computeMobileLengths(pattern);
+        return {
+          prefix: record.countryCode || gc?.mobilePrefix || DEFAULT_MOBILE_PREFIX,
+          pattern,
+          maxLength: max > 0 ? max : 15,
+        };
+      },
+      staleTime: 300000,
+      enabled: !!stateLvlTenantId,
+    }
+  );
+
+  const mobilePrefix = mobileValidationConfig?.prefix || window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.mobilePrefix || DEFAULT_MOBILE_PREFIX;
+  const mobilePattern = mobileValidationConfig?.pattern || window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.mobileNumberPattern || DEFAULT_MOBILE_PATTERN;
+  const mobileMaxLength = mobileValidationConfig?.maxLength || computeMobileLengths(mobilePattern).max || 15;
   const [showToast, setShowToast] = useState(null);
   const { t } = useTranslation();
 
@@ -205,9 +241,11 @@ export const CreateComplaint = ({ parentUrl }) => {
             name: "mobileNumber",
             validation: {
               required: true,
-              pattern: /^[6-9]\d{9}$/,
+              pattern: new RegExp(mobilePattern),
+              maxLength: mobileMaxLength,
             },
-            componentInFront: <div className="employee-card-input employee-card-input--front">+91</div>,
+            maxLength: mobileMaxLength,
+            componentInFront: <div className="employee-card-input employee-card-input--front">{mobilePrefix}</div>,
             error: t("CORE_COMMON_MOBILE_ERROR"),
           },
         },

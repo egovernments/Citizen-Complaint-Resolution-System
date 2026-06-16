@@ -75,12 +75,9 @@ const Login = ({ stateCode, isUserRegistered = true }) => {
           list[0];
         if (!record) return null;
         const gc = window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS");
-        const length = gc?.mobileNumberLength;
         return {
           prefix: record.countryCode,
           pattern: record.mobileNumberRegex,
-          maxLength: length || DEFAULT_MOBILE_MAX_LENGTH,
-          minLength: length || DEFAULT_MOBILE_MIN_LENGTH,
           errorMessage: gc?.mobileNumberErrorMessage || "CORE_COMMON_MOBILE_ERROR",
         };
       },
@@ -94,8 +91,6 @@ const Login = ({ stateCode, isUserRegistered = true }) => {
   const validationConfig = {
     prefix: globalCfg?.mobilePrefix || mdmsValidationConfig?.prefix,
     pattern: globalCfg?.mobileNumberPattern || mdmsValidationConfig?.pattern,
-    maxLength: globalCfg?.mobileNumberLength || mdmsValidationConfig?.maxLength,
-    minLength: globalCfg?.mobileNumberLength || mdmsValidationConfig?.minLength,
     errorMessage:
       globalCfg?.mobileNumberErrorMessage || mdmsValidationConfig?.errorMessage,
   };

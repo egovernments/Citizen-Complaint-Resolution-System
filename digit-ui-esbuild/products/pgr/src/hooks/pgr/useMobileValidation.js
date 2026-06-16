@@ -1,8 +1,7 @@
 import {
+  computeMobileLengths,
   DEFAULT_MOBILE_ALLOWED_STARTING_DIGITS,
   DEFAULT_MOBILE_ERROR_MESSAGE,
-  DEFAULT_MOBILE_MAX_LENGTH,
-  DEFAULT_MOBILE_MIN_LENGTH,
   DEFAULT_MOBILE_PATTERN,
   DEFAULT_MOBILE_PREFIX,
 } from "@egovernments/digit-ui-libraries";
@@ -80,14 +79,19 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
       allowedStartingCharacters: DEFAULT_MOBILE_ALLOWED_STARTING_DIGITS,
       prefix: DEFAULT_MOBILE_PREFIX,
       pattern: DEFAULT_MOBILE_PATTERN,
-      minLength: DEFAULT_MOBILE_MIN_LENGTH,
-      maxLength: DEFAULT_MOBILE_MAX_LENGTH,
       errorMessage: DEFAULT_MOBILE_ERROR_MESSAGE,
       isActive: true,
     },
   };
 
   /** ---------- Combined view (MDMS > globalConfigs > defaults) ---------- */
+  const resolvedPattern =
+    mdmsConfig?.mobileNumberRegex ||
+    globalConfig?.mobileNumberPattern ||
+    defaultValidation.rules.pattern;
+
+  const { min: resolvedMin, max: resolvedMax } = computeMobileLengths(resolvedPattern);
+
   const validationRules = {
     allowedStartingDigits:
       globalConfig?.mobileNumberAllowedStartingCharacters ||
@@ -97,27 +101,16 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
       mdmsConfig?.countryCode ||
       globalConfig?.mobilePrefix ||
       defaultValidation.rules.prefix,
-    prefix:  // backward-compat alias
+    prefix:
       mdmsConfig?.countryCode ||
       globalConfig?.mobilePrefix ||
       defaultValidation.rules.prefix,
 
-    mobileNumberRegex:
-      mdmsConfig?.mobileNumberRegex ||
-      globalConfig?.mobileNumberPattern ||
-      defaultValidation.rules.pattern,
-    pattern:  // backward-compat alias
-      mdmsConfig?.mobileNumberRegex ||
-      globalConfig?.mobileNumberPattern ||
-      defaultValidation.rules.pattern,
+    mobileNumberRegex: resolvedPattern,
+    pattern: resolvedPattern,
 
-    minLength:
-      globalConfig?.mobileNumberLength ||
-      defaultValidation.rules.minLength,
-
-    maxLength:
-      globalConfig?.mobileNumberLength ||
-      defaultValidation.rules.maxLength,
+    minLength: resolvedMin,
+    maxLength: resolvedMax > 0 ? resolvedMax : 15,
 
     errorMessage:
       globalConfig?.mobileNumberErrorMessage ||

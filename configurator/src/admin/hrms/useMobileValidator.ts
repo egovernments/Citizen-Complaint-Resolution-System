@@ -6,7 +6,6 @@ export interface MobileRules {
   pattern: string;
   countryCode?: string;
   prefix?: string;
-  minLength: number;
   maxLength: number;
   errorMessage: string;
 }
@@ -171,13 +170,12 @@ function parseRules(record: Record<string, unknown>): MobileRules {
     typeof record.mobilePrefix === 'string' ? record.mobilePrefix :
     FALLBACK_COUNTRY_CODE;
 
-  const { min, max } = computeRegexLengths(regex);
+  const { max } = computeRegexLengths(regex);
   return {
     mobileNumberRegex: regex,
     pattern: regex,
     countryCode,
     prefix: countryCode,
-    minLength: min,
     maxLength: max === -1 ? 15 : max,
     errorMessage: buildErrorMessage(regex),
   };
@@ -226,7 +224,6 @@ export function useMobileValidator(): UseMobileValidatorResult {
     const fn: Validator = (value: unknown) => {
       if (value === undefined || value === null || value === '') return 'Required';
       const s = String(value);
-      if (s.length < rules.minLength || s.length > rules.maxLength) return rules.errorMessage;
       if (compiled && !compiled.test(s)) return rules.errorMessage;
       return undefined;
     };

@@ -33,6 +33,31 @@ import ImageComponent from "../../../components/ImageComponent";
 
 const DEFAULT_TENANT = Digit?.ULBService?.getStateId?.();
 
+// Derive the maximum digit count from a mobile regex pattern string.
+// Works for exact-count patterns like ^[79][0-9]{8}$ (→9) and optional-prefix
+// patterns like ^0?[17][0-9]{8}$ (→10 max). Returns null when unbounded.
+function mobileRegexMaxLength(pattern) {
+  if (!pattern) return null;
+  const s = pattern.replace(/^\^/, "").replace(/\$$/, "");
+  let max = 0, i = 0;
+  while (i < s.length) {
+    if (s[i] === "[") { const e = s.indexOf("]", i + 1); i = e === -1 ? i + 1 : e + 1; }
+    else if (s[i] === "\\") { i += 2; }
+    else { i++; }
+    if (i < s.length && s[i] === "{") {
+      const e = s.indexOf("}", i);
+      if (e !== -1) {
+        const parts = s.slice(i + 1, e).split(",");
+        max += parseInt(parts[parts.length - 1], 10) || 0;
+        i = e + 1; continue;
+      }
+    } else if (i < s.length && (s[i] === "*" || s[i] === "+")) { return null; }
+    else if (i < s.length && s[i] === "?") { max += 1; i++; continue; }
+    max += 1;
+  }
+  return max > 0 ? max : null;
+}
+
 const defaultImage =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAO4AAADUCAMAAACs0e/bAAAAM1BMVEXK0eL" +
   "/" +
@@ -149,6 +174,10 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
   };
 
   const [validationConfig, setValidationConfig] = useState(mapConfigToRegExp(defaultValidationConfig) || {});
+  const [mobileMaxLength, setMobileMaxLength] = useState(
+    mobileRegexMaxLength(window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.mobileNumberPattern) ||
+    15
+  );
 
   const stateLvlTenantId = Digit.Utils.getMultiRootTenant()
     ? Digit.ULBService.getCurrentTenantId()
@@ -271,9 +300,11 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
           list.find((x) => x.isActive !== false) ||
           list[0];
         if (!record) return null;
+        const maxLen = mobileRegexMaxLength(record.mobileNumberRegex) || 15;
         return {
           UserProfileValidationConfig: [{ mobileNumber: record.mobileNumberRegex }],
           prefix: record.countryCode || DEFAULT_MOBILE_PREFIX,
+          maxLength: maxLen,
         };
       },
       enabled: !!stateLvlTenantId,
@@ -293,6 +324,9 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
         updatedValidationConfig.prefix = mdmsValidationData.prefix;
       }
       setValidationConfig((prev) => ({ ...prev, ...updatedValidationConfig }));
+      if (mdmsValidationData?.maxLength) {
+        setMobileMaxLength(mdmsValidationData.maxLength);
+      }
     }
   }, [mdmsValidationData]);
 
@@ -446,9 +480,10 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
   };
 
   const setUserMobileNumber = (value) => {
-    setMobileNo(value);
+    const digits = value.replace(/\D/g, "").slice(0, mobileMaxLength);
+    setMobileNo(digits);
 
-    if (userType === "employee" && !validationConfig?.mobileNumber?.test(value)) {
+    if (!validationConfig?.mobileNumber?.test(digits)) {
       setErrors({
         ...errors,
         mobileNumber: {
@@ -544,7 +579,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
         });
       }
 
-      if (userType === "employee" && !validationConfig?.mobileNumber?.test(mobileNumber)) {
+      if (canEditMobile && mobileNumber && !validationConfig?.mobileNumber?.test(mobileNumber)) {
         throw JSON.stringify({
           type: "error",
           message: t("CORE_COMMON_PROFILE_MOBILE_NUMBER_INVALID"),
@@ -1452,6 +1487,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
                 value={mobileNumber || ""}
                 onChange={canEditMobile ? (e) => setUserMobileNumber(e.target.value) : undefined}
                 readOnly={!canEditMobile}
+                maxLength={mobileMaxLength}
                 aria-invalid={!!errors?.mobileNumber}
                 aria-readonly={!canEditMobile || undefined}
                 title={canEditMobile ? undefined : tr(

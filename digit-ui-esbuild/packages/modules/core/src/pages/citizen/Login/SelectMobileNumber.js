@@ -14,7 +14,7 @@
 
 import React, { useMemo, useState } from "react";
 import {
-  DEFAULT_MOBILE_MAX_LENGTH,
+  computeMobileLengths,
   DEFAULT_MOBILE_PATTERN,
   DEFAULT_MOBILE_PREFIX,
 } from "@egovernments/digit-ui-libraries";
@@ -39,7 +39,8 @@ const SelectMobileNumber = ({
 
   const rawPattern = validationConfig?.pattern || DEFAULT_MOBILE_PATTERN;
   const mobileNumberPattern = useMemo(() => new RegExp(rawPattern), [rawPattern]);
-  const maxLength = validationConfig?.maxLength || DEFAULT_MOBILE_MAX_LENGTH;
+  const { max: derivedMax } = useMemo(() => computeMobileLengths(rawPattern), [rawPattern]);
+  const maxLength = derivedMax > 0 ? derivedMax : 15;
   const prefix = validationConfig?.prefix || DEFAULT_MOBILE_PREFIX;
   const mobileErrorKey = validationConfig?.errorMessage || "ERR_INVALID_MOBILE_NUMBER";
 

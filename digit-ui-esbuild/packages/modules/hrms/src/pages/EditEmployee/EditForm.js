@@ -1,7 +1,6 @@
 import { FormComposer, Toast, Loader } from "@egovernments/digit-ui-react-components";
 import {
-  DEFAULT_MOBILE_MAX_LENGTH,
-  DEFAULT_MOBILE_MIN_LENGTH,
+  computeMobileLengths,
   DEFAULT_MOBILE_PATTERN,
   DEFAULT_MOBILE_PREFIX,
 } from "@egovernments/digit-ui-libraries";
@@ -48,12 +47,12 @@ const EditForm = ({ tenantId, data }) => {
           list[0];
         if (!record) return null;
         const gc = window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS");
-        const length = gc?.mobileNumberLength;
+        const pattern = record.mobileNumberRegex || gc?.mobileNumberPattern || DEFAULT_MOBILE_PATTERN;
+        const { max } = computeMobileLengths(pattern);
         return {
-          prefix: record.countryCode || DEFAULT_MOBILE_PREFIX,
-          pattern: record.mobileNumberRegex || DEFAULT_MOBILE_PATTERN,
-          maxLength: length || DEFAULT_MOBILE_MAX_LENGTH,
-          minLength: length || DEFAULT_MOBILE_MIN_LENGTH,
+          prefix: record.countryCode || gc?.mobilePrefix || DEFAULT_MOBILE_PREFIX,
+          pattern,
+          maxLength: max > 0 ? max : 15,
           errorMessage: gc?.mobileNumberErrorMessage || "CORE_COMMON_MOBILE_ERROR",
         };
       },
@@ -83,13 +82,11 @@ const EditForm = ({ tenantId, data }) => {
   }, []);
 
   useEffect(() => {
-    const maxLength = validationConfig?.maxLength || 10;
-    const minLength = validationConfig?.minLength || 10;
     const pattern = validationConfig?.pattern
-      ? new RegExp(validationConfig.pattern, 'i')
+      ? new RegExp(validationConfig.pattern)
       : Digit.Utils.getPattern('MobileNo');
 
-    if (mobileNumber && mobileNumber.length >= minLength && mobileNumber.length <= maxLength && mobileNumber.match(pattern)) {
+    if (mobileNumber && pattern.test(mobileNumber)) {
       setShowToast(null);
       if (data.user.mobileNumber == mobileNumber) {
         setPhonecheck(true);
@@ -223,27 +220,13 @@ const EditForm = ({ tenantId, data }) => {
     const mobileNum = input?.SelectEmployeePhoneNumber?.mobileNumber;
 
     if (mobileNum) {
-      // Get validation parameters from MDMS or use defaults
-      const maxLength = validationConfig?.maxLength || 10;
-      const minLength = validationConfig?.minLength || 10;
       const pattern = validationConfig?.pattern
-        ? new RegExp(validationConfig.pattern, 'i')
+        ? new RegExp(validationConfig.pattern)
         : Digit.Utils.getPattern('MobileNo');
-
-      // Check length
-      if (mobileNum.length < minLength || mobileNum.length > maxLength) {
+      if (!pattern.test(mobileNum)) {
         setShowToast({
           key: true,
-          label: validationConfig?.errorMessage || "CORE_COMMON_MOBILE_ERROR"
-        });
-        return;
-      }
-
-      // Check pattern
-      if (!mobileNum.match(pattern)) {
-        setShowToast({
-          key: true,
-          label: validationConfig?.errorMessage || "CORE_COMMON_MOBILE_ERROR"
+          label: validationConfig?.errorMessage || "CORE_COMMON_MOBILE_ERROR",
         });
         return;
       }

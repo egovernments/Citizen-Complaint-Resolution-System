@@ -16,6 +16,8 @@ export interface DigitFormInputProps extends InputProps {
   className?: string;
   /** Optional helper text shown below the input (muted) */
   help?: string;
+  /** Maximum number of characters the input accepts (sets the HTML maxLength attribute) */
+  maxLength?: number;
 }
 
 export function DigitFormInput({
@@ -25,6 +27,7 @@ export function DigitFormInput({
   disabled = false,
   className,
   help,
+  maxLength,
   ...inputProps
 }: DigitFormInputProps) {
   // Auto-coerce number inputs so the form value is a number, not a string
@@ -46,8 +49,13 @@ export function DigitFormInput({
   const rawError = fieldState.error?.message;
   const errorMessage = rawError?.startsWith('@@react-admin@@')
     ? (() => {
-        try { return JSON.parse(rawError.slice(15)) as string; }
-        catch { return rawError.slice(15); }
+        try {
+          const parsed: unknown = JSON.parse(rawError.slice(15));
+          if (typeof parsed === 'string') return parsed;
+          if (parsed && typeof parsed === 'object' && 'message' in parsed)
+            return String((parsed as { message: unknown }).message);
+          return String(parsed);
+        } catch { return rawError.slice(15); }
       })()
     : rawError;
 
@@ -68,6 +76,7 @@ export function DigitFormInput({
         type={type}
         placeholder={placeholder}
         disabled={disabled}
+        maxLength={maxLength}
         aria-invalid={hasError || undefined}
         aria-describedby={hasError ? `${id}-error` : undefined}
         className={hasError ? 'border-destructive focus-visible:ring-destructive' : ''}
