@@ -46,6 +46,43 @@ type Step =
 
 type BoundaryPath = 'osm' | 'excel' | null;
 
+// The included levels, ascending by OSM admin_level.
+function getSelectedLevels(levels: OsmAdminLevel[]): OsmAdminLevel[] {
+  return [...levels].filter(l => l.selected).sort((a, b) => a.level - b.level);
+}
+
+// A valid hierarchy is a CONTIGUOUS subset of the discovered levels (>= 2),
+// each named. Contiguous because the hierarchy is a strict parent→child chain:
+// a gap would reparent a deep level's features onto the level above, silently
+// collapsing the skipped tier.
+function validateLevelSelection(levels: OsmAdminLevel[]): { valid: boolean; error: string | null } {
+  const allSorted = [...levels].sort((a, b) => a.level - b.level);
+  const selected = getSelectedLevels(levels);
+  if (selected.length < 2) {
+    return { valid: false, error: 'Select at least two levels to form a hierarchy.' };
+  }
+  const idx = selected.map(l => allSorted.findIndex(x => x.level === l.level));
+  const contiguous = idx[idx.length - 1] - idx[0] === idx.length - 1;
+  if (!contiguous) {
+    const gaps = allSorted
+      .slice(idx[0], idx[idx.length - 1] + 1)
+      .filter(l => !l.selected)
+      .map(l => `Level ${l.level}`);
+    return {
+      valid: false,
+      error:
+        `Selected levels must be contiguous — you can't skip a level in between, ` +
+        `the hierarchy is a strict parent→child chain. Re-include ${gaps.join(', ')}, ` +
+        `or trim from the top/bottom of the range instead.`,
+    };
+  }
+  const unnamed = selected.filter(l => !l.mappedName.trim());
+  if (unnamed.length) {
+    return { valid: false, error: `Name every selected level (missing: ${unnamed.map(l => `Level ${l.level}`).join(', ')}).` };
+  }
+  return { valid: true, error: null };
+}
+
 // Turbopass suggestions endpoint. Same-origin '/turbopass' by default (nginx
 // proxies it to the search-api container); override via VITE_TURBOPASS_URL.
 const TURBOPASS_BASE: string = import.meta.env.VITE_TURBOPASS_URL || '/turbopass';
@@ -561,7 +598,10 @@ out skel qt;`;
           level,
           features,
           examples: uniqueNames.slice(0, 3),
-          mappedName: ''
+          mappedName: '',
+          // Default all selected (a contiguous, valid starting point); the
+          // operator trims the range and names what they keep.
+          selected: true,
         };
       }).sort((a, b) => a.level - b.level);
 
@@ -586,14 +626,14 @@ out skel qt;`;
   // EXCLUDED (never silently re-parented) — if any were dropped, show the
   // review step so the operator knows exactly what's missing before create.
   const handlePrepareOsmCreate = () => {
-    const validLevels = adminLevels.filter(l => l.mappedName.trim());
-    if (validLevels.length < 2) {
-      setError("Please map at least two admin levels to create a hierarchy.");
+    const { valid, error: selError } = validateLevelSelection(adminLevels);
+    if (!valid) {
+      setError(selError);
       return;
     }
     setError(null);
 
-    const sortedLevels = [...validLevels].sort((a, b) => a.level - b.level);
+    const sortedLevels = getSelectedLevels(adminLevels);
     const { boundaries, skipped } = buildOsmBoundaries(sortedLevels, boundaryTenant, OSM_HIERARCHY_TYPE);
 
     if (boundaries.length === 0) {
@@ -612,9 +652,7 @@ out skel qt;`;
   };
 
   const runOsmCreate = async (boundariesToCreate: Boundary[]) => {
-    const validLevels = adminLevels
-      .filter(l => l.mappedName.trim())
-      .sort((a, b) => a.level - b.level);
+    const validLevels = getSelectedLevels(adminLevels);
     const levelNames = validLevels.map(l => l.mappedName.trim());
 
     setLoading(true);
@@ -1278,60 +1316,89 @@ out skel qt;`;
       )}
 
       {/* OSM: map admin levels to hierarchy names */}
-      {step === 'map-levels' && (
+      {step === 'map-levels' && (() => {
+        const levelSel = validateLevelSelection(adminLevels);
+        return (
         <DigitCard>
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <Header>Map Admin Levels</Header>
             <SubHeader>
               We found {adminLevels.length} levels of administrative boundaries for {searchTerm}.
-              Please provide a local name for each level (e.g., "Province", "District", "City", "Neighborhood").
+              Tick the levels to include and name each — the selection must be a
+              contiguous range (you can drop the outer levels, but not skip one in the middle).
             </SubHeader>
 
             <div className="space-y-4 pt-4">
               {adminLevels.map((lvl, index) => (
-                <div key={lvl.level} className="border p-6 rounded-lg bg-card/50 space-y-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-medium text-lg flex items-center">
-                        OSM Admin Level {lvl.level}
-                        <Badge variant="outline" className="ml-2 bg-background">
-                          {lvl.features.length} regions
-                        </Badge>
-                      </h3>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Examples: {lvl.examples.join(', ')}{lvl.examples.length < lvl.features.length ? ', etc.' : ''}
-                      </p>
-                    </div>
+                <div
+                  key={lvl.level}
+                  className={`border p-6 rounded-lg space-y-4 transition-colors ${lvl.selected ? 'bg-card/50' : 'bg-muted/30 opacity-60'}`}
+                >
+                  <div className="flex justify-between items-start gap-3">
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="mt-1.5 h-4 w-4 accent-primary cursor-pointer"
+                        checked={lvl.selected}
+                        disabled={loading}
+                        onChange={(e) => {
+                          const newLevels = [...adminLevels];
+                          newLevels[index] = { ...newLevels[index], selected: e.target.checked };
+                          setAdminLevels(newLevels);
+                        }}
+                      />
+                      <span>
+                        <h3 className="font-medium text-lg flex items-center">
+                          OSM Admin Level {lvl.level}
+                          <Badge variant="outline" className="ml-2 bg-background">
+                            {lvl.features.length} regions
+                          </Badge>
+                        </h3>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Examples: {lvl.examples.join(', ')}{lvl.examples.length < lvl.features.length ? ', etc.' : ''}
+                        </p>
+                      </span>
+                    </label>
                   </div>
 
-                  <div className="pt-2">
-                    <label className="text-sm font-medium mb-1.5 block">Hierarchy Name</label>
-                    <Input
-                      placeholder="e.g., District"
-                      value={lvl.mappedName}
-                      onChange={(e) => {
-                        const newLevels = [...adminLevels];
-                        newLevels[index].mappedName = e.target.value;
-                        setAdminLevels(newLevels);
-                      }}
-                      disabled={loading}
-                    />
-                  </div>
+                  {lvl.selected && (
+                    <div className="pt-2">
+                      <label className="text-sm font-medium mb-1.5 block">Hierarchy Name</label>
+                      <Input
+                        placeholder="e.g., District"
+                        value={lvl.mappedName}
+                        onChange={(e) => {
+                          const newLevels = [...adminLevels];
+                          newLevels[index] = { ...newLevels[index], mappedName: e.target.value };
+                          setAdminLevels(newLevels);
+                        }}
+                        disabled={loading}
+                      />
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
+
+            {!levelSel.valid && levelSel.error && (
+              <Alert variant="warning">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{levelSel.error}</AlertDescription>
+              </Alert>
+            )}
 
             <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0">
               <Button variant="ghost" size="sm" onClick={() => setStep('osm-search')} className="text-muted-foreground hover:text-primary">← Back</Button>
               <SubmitBar
                 label={loading ? "Creating..." : "Create Hierarchy & Boundaries"}
                 onSubmit={handlePrepareOsmCreate}
-                disabled={loading || adminLevels.filter(l => l.mappedName.trim()).length < 2}
+                disabled={loading || !levelSel.valid}
               />
             </div>
           </div>
         </DigitCard>
-      )}
+        );
+      })()}
 
       {/* OSM: review skipped features before create */}
       {step === 'osm-review' && (
