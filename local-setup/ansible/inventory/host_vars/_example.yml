@@ -87,12 +87,12 @@ pgr_boundary_lowest_level: "Ward"
 boundary_type: "Ward"          # what the smallest selectable boundary is called
 
 # Mobile-number validation rules used by the citizen-side UI on signup.
-# Ethiopia: +251 prefix, 9 digits starting with 7 (Safaricom ET) or 9 (Ethiotelecom).
+# Kenya: +254 prefix, 9-10 digits starting with 7 (Safaricom) or 1 (Airtel/Telkom).
 core_mobile_configs:
-  mobilePrefix: "+251"
-  mobileNumberPattern: "^[79][0-9]{8}$"
+  mobilePrefix: "+254"
+  mobileNumberPattern: "^0?[17][0-9]{8}$"
   mobileNumberLength: 9
-  mobileNumberAllowedStartingCharacters: ["7", "9"]
+  mobileNumberAllowedStartingCharacters: ["1", "7"]
   mobileNumberErrorMessage: "CORE_COMMON_MOBILE_ERROR"
 
 # Postal-code validation. The SPA reads this via globalConfigs key

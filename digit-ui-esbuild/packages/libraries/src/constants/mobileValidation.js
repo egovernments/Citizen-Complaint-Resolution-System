@@ -22,19 +22,19 @@
  */
 
 /** Full-anchor regex (use with `new RegExp(pattern)`). */
-export const DEFAULT_MOBILE_PATTERN = "^[79][0-9]{8}$";
+export const DEFAULT_MOBILE_PATTERN = "^0?[17][0-9]{8}$";
 
 /**
  * Lax (no-anchor) pattern for inbox-style search fields that want to
  * match either an empty string or a mobile number, e.g. `"^$|<lax>"`.
  */
-export const DEFAULT_MOBILE_PATTERN_LAX = "[79][0-9]{8}";
+export const DEFAULT_MOBILE_PATTERN_LAX = "0?[17][0-9]{8}";
 
 /** Displayed as a non-editable prefix on mobile inputs. */
-export const DEFAULT_MOBILE_PREFIX = "+251";
+export const DEFAULT_MOBILE_PREFIX = "+254";
 
 /** First digits accepted by the default pattern. */
-export const DEFAULT_MOBILE_ALLOWED_STARTING_DIGITS = ["7", "9"];
+export const DEFAULT_MOBILE_ALLOWED_STARTING_DIGITS = ["1", "7"];
 
 /**
  * Raw (non-localised) error message — UIs that have access to the
@@ -42,7 +42,7 @@ export const DEFAULT_MOBILE_ALLOWED_STARTING_DIGITS = ["7", "9"];
  * `CORE_COMMON_MOBILE_NUMBER_INVALID` instead.
  */
 export const DEFAULT_MOBILE_ERROR_MESSAGE =
-  "Please enter a valid 9-digit mobile number starting with 7 or 9";
+  "Please enter a valid 9-10 digit mobile number starting with 7 or 1";
 
 /**
  * Derive { min, max } digit counts from a mobile regex pattern string.

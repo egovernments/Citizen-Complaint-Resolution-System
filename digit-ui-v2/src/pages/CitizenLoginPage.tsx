@@ -35,15 +35,15 @@ const STATE_TENANT = (import.meta.env.VITE_CITIZEN_STATE_TENANT as string) || 's
 const CITY_TENANT = (import.meta.env.VITE_CITIZEN_TENANT as string) || 'statea.citya';
 
 // Read mobile validation config from globalConfigs (injected by nginx/Ansible).
-// Falls back to Ethiopia defaults (+251, 9 digits starting with 7 or 9).
+// Falls back to Kenya defaults (+254, 9-10 digits starting with 7 or 1).
 function getMobileConfig(): { regex: RegExp; prefix: string; maxLength: number; errorMessage: string } {
   const gc = (window as unknown as Record<string, { getConfig?: (k: string) => Record<string, unknown> | undefined }>)
     .globalConfigs?.getConfig?.('CORE_MOBILE_CONFIGS');
-  const pattern = (gc?.mobileNumberPattern as string | undefined) ?? '^[79][0-9]{8}$';
-  const prefix = (gc?.mobilePrefix as string | undefined) ?? '+251';
-  const maxLength = (gc?.mobileNumberLength as number | undefined) ?? 9;
+  const pattern = (gc?.mobileNumberPattern as string | undefined) ?? '^0?[17][0-9]{8}$';
+  const prefix = (gc?.mobilePrefix as string | undefined) ?? '+254';
+  const maxLength = (gc?.mobileNumberLength as number | undefined) ?? 10;
   let regex: RegExp;
-  try { regex = new RegExp(pattern); } catch { regex = /^[79][0-9]{8}$/; }
+  try { regex = new RegExp(pattern); } catch { regex = /^0?[17][0-9]{8}$/; }
   const errorMessage = `Enter a ${maxLength}-digit mobile number`;
   return { regex, prefix, maxLength, errorMessage };
 }
