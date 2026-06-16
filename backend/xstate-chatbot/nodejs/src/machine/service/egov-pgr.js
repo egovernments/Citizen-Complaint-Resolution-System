@@ -802,23 +802,6 @@ class PGRService {
       }
     }
 
-    // Upsert TENANT_TENANTS_<TENANTID> localization in background
-    // Use organization code from extraInfo if available (for sandbox mode)
-    const orgCode = (extraInfo && extraInfo.organizationTenantId) ? extraInfo.organizationTenantId : city.toUpperCase();
-    const tenantLocalizationCode = `TENANT_TENANTS_${orgCode}`;
-    const tenantDisplayName = orgCode; // Use the org code as the message
-    
-    // Upsert localization asynchronously in background (non-blocking)
-    this.upsertLocalizationMessage(orgCode, tenantLocalizationCode, tenantDisplayName, "digit-tenants", "en_IN", authToken, userInfo)
-      .then(result => {
-        if (result) {
-          console.log(`Successfully upserted tenant localization for ${tenantLocalizationCode}`);
-        }
-      })
-      .catch(error => {
-        console.error(`Failed to upsert tenant localization for ${tenantLocalizationCode}:`, error);
-      });
-
     requestBody["service"]["serviceCode"] = complaintType;
     requestBody["service"]["accountId"] = userId;
     requestBody["RequestInfo"]["userInfo"] = userInfo;
@@ -926,88 +909,6 @@ class PGRService {
     return results;
   }
 
-
-  async upsertLocalizationMessage(tenantId, code, message, module = "digit-tenants", locale = "en_IN", authToken = null, userInfo = null) {
-    console.log('\n🔄 PGRService.upsertLocalizationMessage: Starting localization upsert');
-    console.log('  📍 Tenant ID:', tenantId);
-    console.log('  🏷️ Code:', code);
-    console.log('  📝 Message:', message);
-    console.log('  📦 Module:', module);
-    console.log('  🌍 Locale:', locale);
-    console.log('  🔑 Auth token:', authToken ? `${authToken.substring(0, 20)}...` : 'No token');
-    console.log('  🌐 Sandbox mode:', config.enableSandboxMode ? 'ENABLED' : 'DISABLED');
-    
-    try {
-      // Use sandboxHost if in sandbox mode, otherwise use egovServicesHost
-      const host = config.enableSandboxMode ? config.sandboxHost : config.egovServices.egovServicesHost;
-      const url = `${host}/localization/messages/v1/_upsert`;
-      
-      console.log('  🏠 Host being used:', host);
-      console.log('  🔗 Full URL:', url);
-      
-      const requestBody = {
-        RequestInfo: {
-          apiId: "Rainmaker",
-          authToken: authToken || "",
-          msgId: `${Date.now()}|${locale}`,
-          plainAccessRequest: {}
-        },
-        locale: locale,
-        tenantId: tenantId,
-        messages: [
-          {
-            code: code,
-            message: message,
-            module: module,
-            locale: locale
-          }
-        ]
-      };
-
-      console.log('  📨 Request body:', JSON.stringify(requestBody, null, 2));
-
-      const options = {
-        method: "POST",
-        body: JSON.stringify(requestBody),
-        headers: {
-          "Content-Type": "application/json"
-        }
-      };
-
-      console.log('  📤 Request method:', options.method);
-      console.log('  📋 Request headers:', JSON.stringify(options.headers));
-      console.log('  🚀 Sending upsert request...');
-
-      const response = await fetch(url, options);
-      
-      console.log('  📡 Response status:', response.status);
-      console.log('  📡 Response status text:', response.statusText);
-      console.log('  📡 Response headers:', JSON.stringify(response.headers.raw ? response.headers.raw() : [...response.headers]));
-      
-      if (response.ok) {
-        const data = await response.json();
-        console.log('  ✅ Successfully upserted localization');
-        console.log('  📦 Response data:', JSON.stringify(data, null, 2));
-        console.log(`  ✅ Successfully upserted localization for code: ${code}`);
-        return true;
-      } else {
-        const errorText = await response.text();
-        console.error('  ❌ Failed to upsert localization');
-        console.error('  📍 Code:', code);
-        console.error('  📡 Status:', response.status);
-        console.error('  📝 Error response:', errorText);
-        console.error(`  ❌ Failed to upsert localization for code: ${code}, status: ${response.status}`);
-        return false;
-      }
-    } catch (error) {
-      console.error('  ❌ Exception during upsert localization');
-      console.error('  📍 Code:', code);
-      console.error('  📝 Error message:', error.message);
-      console.error('  📚 Stack trace:', error.stack);
-      console.error(`  ❌ Error upserting localization for code: ${code}`, error);
-      return false;
-    }
-  }
 
   async getShortenedURL(finalPath) {
     var url =
