@@ -1,20 +1,21 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { getLayoutStorageKey } from "../config/dashboardConfig";
 import {
-  DEFAULT_CHART_LAYOUT,
   DEFAULT_KPI_LAYOUT_ITEM,
   DEFAULT_LAYOUT,
   GRID_COLS,
-  TOP_ROW_CHART_IDS,
   WIDGETS,
   getDefaultChartItem,
   getDefaultKpiLayoutItem,
-  isChartWidget,
   isKpiWidget,
+  DEFAULT_CHART_LAYOUT,
 } from "../constants/layoutConfig";
 
-function itemsOverlap(a, b) {
-  if (a.i === b.i) return false;
+/* -------------------------------------------------------------------------- */
+/* Geometry helpers                                                            */
+/* -------------------------------------------------------------------------- */
+
+function rectsOverlap(a, b) {
   return (
     a.x < b.x + b.w &&
     a.x + a.w > b.x &&
@@ -23,423 +24,72 @@ function itemsOverlap(a, b) {
   );
 }
 
-function hasOverlaps(layout) {
-  for (let i = 0; i < layout.length; i += 1) {
-    for (let j = i + 1; j < layout.length; j += 1) {
-      if (itemsOverlap(layout[i], layout[j])) return true;
-    }
-  }
-  return false;
+function overlapArea(a, b) {
+  const xOverlap = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
+  const yOverlap = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+  return xOverlap * yOverlap;
 }
 
-/** True if `item` at (x, y) overlaps any item in `placed`. */
-function collidesAt(item, x, y, placed, excludeId = null) {
-  if (x < 0 || y < 0 || x + item.w > GRID_COLS) return true;
+function collidesAt(item, x, y, placed) {
   const candidate = { ...item, x, y };
-  return placed.some((other) => other.i !== excludeId && itemsOverlap(candidate, other));
+  return placed.some((other) => rectsOverlap(candidate, other));
 }
 
 /**
- * Move each widget up as far as possible (fixed column) to remove vertical gaps.
- * When `excludeId` is set (during drag), that item keeps its current position.
+ * Compact every item upward in its own column to the lowest free row.
+ * Items are placed in reading order (top-to-bottom, left-to-right) at the
+ * first slot that doesn't collide with an already-placed item. This both
+ * removes vertical gaps and resolves any overlaps (e.g. left after a swap or
+ * after a card was enlarged) by stacking the colliding items downward.
  */
-export function compactLayoutVertically(layout, excludeId = null) {
+export function compactVertically(layout) {
   const sorted = [...layout]
     .map((item) => ({ ...item }))
     .sort((a, b) => a.y - b.y || a.x - b.x);
 
-  const compacted = [];
-
+  const placed = [];
   for (const item of sorted) {
-    if (item.i === excludeId) {
-      compacted.push({ ...item });
-      continue;
-    }
-
-    let targetY = item.y;
-    for (let y = 0; y <= item.y; y += 1) {
-      if (!collidesAt(item, item.x, y, compacted, item.i)) {
-        targetY = y;
-        break;
-      }
-    }
-    compacted.push({ ...item, y: targetY });
+    let y = 0;
+    while (collidesAt(item, item.x, y, placed)) y += 1;
+    placed.push({ ...item, y });
   }
-
-  return compacted;
-}
-
-/** Pack widgets left within each shared row (same y). */
-function packRowsHorizontal(layout, filter = () => true) {
-  const targets = layout.filter(filter);
-  const others = layout.filter((item) => !filter(item));
-
-  const rows = new Map();
-  for (const item of targets) {
-    const row = rows.get(item.y) ?? [];
-    row.push(item);
-    rows.set(item.y, row);
-  }
-
-  const packed = [];
-  for (const [originalY, row] of rows) {
-    const sorted = [...row].sort((a, b) => a.x - b.x);
-    let x = 0;
-    let y = originalY;
-    let rowMaxH = 0;
-    for (const item of sorted) {
-      const w = item.w ?? 1;
-      const h = item.h ?? 1;
-      if (x > 0 && x + w > GRID_COLS) {
-        y += rowMaxH;
-        x = 0;
-        rowMaxH = h;
-      }
-      packed.push({ ...item, x, y, w, h });
-      x += w;
-      rowMaxH = Math.max(rowMaxH, h);
-    }
-  }
-
-  return [...others, ...packed];
-}
-
-/** Pack KPI cards into tight rows (left-aligned, wrap at 12 cols). Fills horizontal gaps. */
-export function packKpiLayout(layout) {
-  const kpis = layout
-    .filter((item) => isKpiWidget(item.i))
-    .sort((a, b) => a.y - b.y || a.x - b.x);
-  const nonKpis = layout.filter((item) => !isKpiWidget(item.i));
-
-  const packed = [];
-  let x = 0;
-  let y = 0;
-  let rowMaxH = DEFAULT_KPI_LAYOUT_ITEM.h;
-
-  for (const item of kpis) {
-    const w = item.w ?? DEFAULT_KPI_LAYOUT_ITEM.w;
-    const h = item.h ?? DEFAULT_KPI_LAYOUT_ITEM.h;
-
-    if (x > 0 && x + w > GRID_COLS) {
-      y += rowMaxH;
-      x = 0;
-      rowMaxH = h;
-    }
-
-    packed.push({ ...item, x, y, w, h });
-    x += w;
-    rowMaxH = Math.max(rowMaxH, h);
-  }
-
-  return [...packed, ...nonKpis];
-}
-
-function packNonKpiRows(layout) {
-  return packRowsHorizontal(layout, (item) => !isKpiWidget(item.i));
-}
-
-function reflowAndPack(layout) {
-  let result = packKpiLayout(layout);
-  result = packNonKpiRows(result);
-  return result;
-}
-
-/** After drag/resize/remove: push overlaps aside and compact upward without repacking rows. */
-export function stabilizeLayout(layout, pinnedId = null) {
-  let result = pushAdjacentItems(layout, pinnedId);
-  result = compactLayoutVertically(result, pinnedId);
-  return result;
-}
-
-/** After drag/resize/remove: fill gaps in KPI rows, pack widget rows, compact upward. */
-export function optimizeLayoutAfterChange(layout) {
-  let result = reflowAndPack(layout);
-  result = compactLayoutVertically(result);
-  // Vertical compact may free space in earlier KPI rows — repack once more.
-  result = reflowAndPack(result);
-  return result;
+  return placed;
 }
 
 /**
- * Reorder widgets in a single grid row based on pointer X.
- * Uses drag-start snapshot midpoints so detection stays stable.
+ * Swap the dragged card with the card it was dropped onto.
+ * The dragged card snaps to the displaced card's position, and the displaced
+ * card moves to where the dragged card started. If the card was dropped on
+ * empty space, nothing is swapped and the dragged card keeps its new position.
  */
-export function repackRowHorizontal(layout, snapshot, activeId, pointerX) {
-  if (!snapshot?.items?.length) return layout;
+export function swapOnDrop(layout, activeId, origin) {
+  const dragged = layout.find((item) => item.i === activeId);
+  if (!dragged) return layout;
 
-  const { rowY, items: snapshotItems } = snapshot;
-  const activeSnap = snapshotItems.find((item) => item.i === activeId);
-  if (!activeSnap) return layout;
-
-  if (snapshotItems.length <= 1) {
-    return layout.map((item) =>
-      item.i === activeId ? { ...item, x: pointerX, y: rowY } : item
-    );
-  }
-
-  let insertAt = 0;
-  for (const item of snapshotItems) {
+  let target = null;
+  let bestArea = 0;
+  for (const item of layout) {
     if (item.i === activeId) continue;
-    if (pointerX >= item.x + item.w / 2) insertAt += 1;
+    const area = overlapArea(dragged, item);
+    if (area > bestArea) {
+      bestArea = area;
+      target = item;
+    }
   }
 
-  const without = snapshotItems.filter((item) => item.i !== activeId);
-  const reordered = [
-    ...without.slice(0, insertAt),
-    activeSnap,
-    ...without.slice(insertAt),
-  ];
+  if (!target) return layout;
 
-  const rowIds = new Set(snapshotItems.map((item) => item.i));
-  const itemById = Object.fromEntries(
-    layout.filter((item) => rowIds.has(item.i)).map((item) => [item.i, item])
-  );
-
-  let x = 0;
-  const repackedRow = reordered.map((snap) => {
-    const placed = { ...itemById[snap.i], x, y: rowY };
-    x += snap.w;
-    return placed;
+  const targetPos = { x: target.x, y: target.y };
+  return layout.map((item) => {
+    if (item.i === activeId) return { ...item, x: targetPos.x, y: targetPos.y };
+    if (item.i === target.i) return { ...item, x: origin.x, y: origin.y };
+    return item;
   });
-
-  const others = layout.filter((item) => !rowIds.has(item.i));
-  return [...others, ...repackedRow];
 }
 
-/** Shift overlapping widgets vertically (x unchanged) to make room for the anchor. */
-function resolveVerticalCollisions(layout, anchorId) {
-  const items = layout.map((item) => ({ ...item }));
-  const anchorIdx = items.findIndex((item) => item.i === anchorId);
-  if (anchorIdx === -1) return items;
-
-  let changed = true;
-  let passes = 0;
-
-  while (changed && passes < 50) {
-    passes += 1;
-    changed = false;
-    const anchor = items[anchorIdx];
-
-    for (let i = 0; i < items.length; i += 1) {
-      if (i === anchorIdx || !itemsOverlap(items[i], anchor)) continue;
-
-      const mover = items[i];
-      const downY = anchor.y + anchor.h;
-      const upY = Math.max(0, anchor.y - mover.h);
-
-      const tryDown = { ...mover, y: downY };
-      const tryUp = { ...mover, y: upY };
-      const downBlocked = items.some(
-        (other, j) => j !== i && j !== anchorIdx && itemsOverlap(tryDown, other)
-      );
-      const upBlocked = items.some(
-        (other, j) => j !== i && j !== anchorIdx && itemsOverlap(tryUp, other)
-      );
-
-      let newY = mover.y;
-      if (!downBlocked) newY = downY;
-      else if (!upBlocked) newY = upY;
-
-      if (mover.y !== newY) {
-        items[i] = { ...mover, y: newY };
-        changed = true;
-      }
-    }
-  }
-
-  return compactLayoutVertically(items, anchorId);
-}
-
-/** Vertical drag: lock X, move Y, shift others vertically only. */
-function applyVerticalDrag(layout, activeId, pointerY, originX) {
-  const withActive = layout.map((item) =>
-    item.i === activeId
-      ? { ...item, x: originX, y: Math.max(0, pointerY) }
-      : { ...item }
-  );
-  return resolveVerticalCollisions(withActive, activeId);
-}
-
-const DRAG_AXIS_THRESHOLD = 1;
-
-function detectDragAxis(session, pointer) {
-  if (session.axis) return session.axis;
-  const dx = Math.abs(pointer.x - session.origin.x);
-  const dy = Math.abs(pointer.y - session.origin.y);
-  if (dx + dy < DRAG_AXIS_THRESHOLD) return null;
-  return dx >= dy ? "horizontal" : "vertical";
-}
-
-function applyDragFrame(layout, activeId, pointer, session) {
-  const axis = detectDragAxis(session, pointer);
-  if (!axis) return layout;
-
-  if (axis === "horizontal") {
-    const lockedPointer = { x: pointer.x, y: session.origin.y };
-    if (session.rowSnapshot?.items?.length) {
-      return repackRowHorizontal(layout, session.rowSnapshot, activeId, lockedPointer.x);
-    }
-    return layout.map((item) =>
-      item.i === activeId
-        ? { ...item, x: lockedPointer.x, y: session.origin.y }
-        : item
-    );
-  }
-
-  return applyVerticalDrag(layout, activeId, pointer.y, session.origin.x);
-}
-
-/** Compact after resize without repacking entire rows. */
-export function optimizeLayoutAfterResize(layout, pinnedId = null) {
-  return stabilizeLayout(layout, pinnedId);
-}
-
-/** Push overlapping items right or down; pinned item (being resized) stays put. */
-export function pushAdjacentItems(layout, pinnedId = null) {
-  const items = layout.map((item) => ({ ...item }));
-
-  let changed = true;
-  let passes = 0;
-
-  while (changed && passes < 50) {
-    passes += 1;
-    changed = false;
-
-    for (let i = 0; i < items.length; i += 1) {
-      for (let j = i + 1; j < items.length; j += 1) {
-        if (!itemsOverlap(items[i], items[j])) continue;
-
-        let anchorIdx = j;
-        let moveIdx = i;
-
-        if (items[i].i === pinnedId) {
-          anchorIdx = i;
-          moveIdx = j;
-        } else if (items[j].i === pinnedId) {
-          anchorIdx = j;
-          moveIdx = i;
-        } else if (
-          items[i].x > items[j].x ||
-          (items[i].x === items[j].x && items[i].y > items[j].y)
-        ) {
-          anchorIdx = i;
-          moveIdx = j;
-        }
-
-        const anchor = items[anchorIdx];
-        const mover = items[moveIdx];
-
-        let newX = anchor.x + anchor.w;
-        let newY = anchor.y;
-
-        if (newX + mover.w > GRID_COLS) {
-          newX = anchor.x;
-          newY = anchor.y + anchor.h;
-        }
-
-        const candidate = { ...mover, x: newX, y: newY };
-        if (itemsOverlap(candidate, anchor)) {
-          newX = anchor.x;
-          newY = anchor.y + anchor.h;
-        }
-
-        if (mover.x !== newX || mover.y !== newY) {
-          items[moveIdx].x = newX;
-          items[moveIdx].y = newY;
-          changed = true;
-        }
-      }
-    }
-  }
-
-  return items;
-}
-
-/** Only move cards that overlap the active card; active card position is kept. */
-export function resolveOverlapsForItem(layout, activeId) {
-  if (!activeId) return layout;
-
-  const items = layout.map((item) => ({ ...item }));
-  const activeIdx = items.findIndex((item) => item.i === activeId);
-  if (activeIdx === -1) return layout;
-
-  let changed = true;
-  let passes = 0;
-
-  while (changed && passes < 50) {
-    passes += 1;
-    changed = false;
-    const active = items[activeIdx];
-
-    for (let i = 0; i < items.length; i += 1) {
-      if (i === activeIdx || !itemsOverlap(items[i], active)) continue;
-
-      const mover = items[i];
-      let newX = active.x + active.w;
-      let newY = active.y;
-
-      if (newX + mover.w > GRID_COLS) {
-        newX = active.x;
-        newY = active.y + active.h;
-      }
-
-      const candidate = { ...mover, x: newX, y: newY };
-      if (itemsOverlap(candidate, active)) {
-        newX = active.x;
-        newY = active.y + active.h;
-      }
-
-      if (mover.x !== newX || mover.y !== newY) {
-        items[i].x = newX;
-        items[i].y = newY;
-        changed = true;
-      }
-    }
-  }
-
-  return items;
-}
-
-/** Snap chart rows below KPI band and keep the day-of-week chart below the top row. */
-export function reflowCharts(layout) {
-  const kpis = layout.filter((item) => isKpiWidget(item.i));
-  const charts = layout.filter((item) => isChartWidget(item.i));
-  const other = layout.filter((item) => !isKpiWidget(item.i) && !isChartWidget(item.i));
-
-  const kpiBottom = kpis.length ? Math.max(...kpis.map((item) => item.y + item.h)) : 0;
-
-  const topCharts = charts.filter((c) => TOP_ROW_CHART_IDS.includes(c.i));
-  const bottomCharts = charts.filter((c) => !TOP_ROW_CHART_IDS.includes(c.i));
-
-  const topRowY = kpiBottom;
-  const reflowedTop = topCharts.map((c) => {
-    const defaults = DEFAULT_CHART_LAYOUT[c.i] || {};
-    return {
-      ...defaults,
-      ...c,
-      y: topRowY,
-    };
-  });
-
-  const topRowBottom = reflowedTop.length
-    ? Math.max(...reflowedTop.map((c) => c.y + c.h))
-    : kpiBottom;
-
-  const reflowedBottom = bottomCharts.map((c) => {
-    const defaults = DEFAULT_CHART_LAYOUT[c.i] || {};
-    return {
-      ...defaults,
-      ...c,
-      y: topRowBottom,
-    };
-  });
-
-  return [...kpis, ...reflowedTop, ...reflowedBottom, ...other];
-}
-
-export function normalizeLayout(layout) {
-  return reflowCharts(packKpiLayout(layout));
-}
+/* -------------------------------------------------------------------------- */
+/* Item normalization (only for newly added widgets)                          */
+/* -------------------------------------------------------------------------- */
 
 function normalizeKpiItem(item) {
   const defaults = getDefaultKpiLayoutItem(item.i);
@@ -465,13 +115,13 @@ function normalizeChartItem(item) {
   };
 }
 
-const LEGACY_LAYOUT_VERSIONS = ["v20", "v19", "v18", "v17", "v16", "v15", "v14", "v13", "v12", "v11", "v10", "v9"];
+/* -------------------------------------------------------------------------- */
+/* localStorage persistence                                                    */
+/* -------------------------------------------------------------------------- */
 
-function mergeMissingDefaultWidgets(layout) {
-  const ids = new Set(layout.map((item) => item.i));
-  const missing = DEFAULT_LAYOUT.filter((item) => !ids.has(item.i));
-  return missing.length ? [...layout, ...missing] : layout;
-}
+const LEGACY_LAYOUT_VERSIONS = [
+  "v20", "v19", "v18", "v17", "v16", "v15", "v14", "v13", "v12", "v11", "v10", "v9",
+];
 
 function getAllLayoutStorageKeys() {
   const currentKey = getLayoutStorageKey();
@@ -482,92 +132,51 @@ function getAllLayoutStorageKeys() {
   ];
 }
 
-function clearSavedLayout() {
-  for (const key of getAllLayoutStorageKeys()) {
-    localStorage.removeItem(key);
-  }
-}
-
 function readSavedLayoutRaw() {
   for (const key of getAllLayoutStorageKeys()) {
     const saved = localStorage.getItem(key);
-    if (saved) return { key, saved };
+    if (saved) return saved;
   }
-
   return null;
-}
-
-function parseStoredLayout(saved) {
-  const parsed = JSON.parse(saved);
-  if (!Array.isArray(parsed) || parsed.length === 0) return null;
-
-  const valid = parsed
-    .filter((item) => WIDGETS[item.i])
-    .map((item) => {
-      if (isKpiWidget(item.i)) return normalizeKpiItem(item);
-      if (isChartWidget(item.i)) return normalizeChartItem(item);
-      return item;
-    });
-
-  if (valid.length === 0) return null;
-
-  if (hasOverlaps(valid)) {
-    const repaired = stabilizeLayout(valid);
-    return hasOverlaps(repaired) ? null : repaired;
-  }
-
-  return valid;
-}
-
-/** Never drop widgets when react-grid-layout sends a partial layout update. */
-function mergeLayoutUpdate(prev, next) {
-  if (!Array.isArray(next) || next.length === 0) return prev;
-  if (!Array.isArray(prev) || prev.length === 0) return next;
-
-  const nextIds = new Set(next.map((item) => item.i));
-  const missing = prev.filter((item) => !nextIds.has(item.i));
-  return missing.length ? [...next, ...missing] : next;
-}
-
-function ensureNonEmptyLayout(layout) {
-  if (!Array.isArray(layout) || layout.length === 0) {
-    return compactLayoutVertically(DEFAULT_LAYOUT);
-  }
-  return layout;
-}
-
-function loadLayout() {
-  try {
-    const stored = readSavedLayoutRaw();
-    if (!stored) return DEFAULT_LAYOUT;
-
-    const valid = parseStoredLayout(stored.saved);
-    if (!valid) return DEFAULT_LAYOUT;
-
-    const merged =
-      stored.key !== getLayoutStorageKey()
-        ? mergeMissingDefaultWidgets(valid)
-        : valid;
-
-    if (stored.key !== getLayoutStorageKey() || merged !== valid) {
-      persistLayout(merged);
-    }
-
-    return ensureNonEmptyLayout(merged);
-  } catch {
-    return ensureNonEmptyLayout(DEFAULT_LAYOUT);
-  }
 }
 
 function persistLayout(layout) {
   localStorage.setItem(getLayoutStorageKey(), JSON.stringify(layout));
 }
 
+function clearSavedLayout() {
+  for (const key of getAllLayoutStorageKeys()) {
+    localStorage.removeItem(key);
+  }
+}
+
+/**
+ * Load the saved layout exactly as it was persisted. No reflow, no repack, no
+ * compaction, no merging of default widgets. The only processing is dropping
+ * entries for widgets that no longer exist (so rendering can't crash).
+ */
+function loadLayout() {
+  try {
+    const saved = readSavedLayoutRaw();
+    if (!saved) return DEFAULT_LAYOUT;
+
+    const parsed = JSON.parse(saved);
+    if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_LAYOUT;
+
+    const valid = parsed.filter((item) => item && WIDGETS[item.i]);
+    return valid.length > 0 ? valid : DEFAULT_LAYOUT;
+  } catch {
+    return DEFAULT_LAYOUT;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Positioning for newly added KPI cards                                       */
+/* -------------------------------------------------------------------------- */
+
 function nextKpiPosition(layout) {
   const kpiItems = layout.filter((item) => isKpiWidget(item.i));
-  if (kpiItems.length === 0) {
-    return { x: 0, y: 0 };
-  }
+  if (kpiItems.length === 0) return { x: 0, y: 0 };
 
   const maxY = Math.max(...kpiItems.map((item) => item.y + item.h));
   const bottomRow = kpiItems.filter((item) => item.y + item.h === maxY);
@@ -576,101 +185,54 @@ function nextKpiPosition(layout) {
   if (usedWidth + DEFAULT_KPI_LAYOUT_ITEM.w <= GRID_COLS) {
     return { x: usedWidth, y: bottomRow[0].y };
   }
-
   return { x: 0, y: maxY };
 }
 
+/* -------------------------------------------------------------------------- */
+/* Hook                                                                        */
+/* -------------------------------------------------------------------------- */
+
 export function useDashboardLayout() {
   const [layout, setLayout] = useState(loadLayout);
-  const dragSessionRef = useRef(null);
 
-  const onDragBegin = useCallback((dragOrigin, layoutAtStart) => {
-    if (!dragOrigin || !layoutAtStart) {
-      dragSessionRef.current = null;
-      return;
-    }
-
-    const rowY = dragOrigin.y;
-    dragSessionRef.current = {
-      origin: { x: dragOrigin.x, y: dragOrigin.y },
-      axis: null,
-      rowSnapshot: {
-        rowY,
-        items: layoutAtStart
-          .filter((item) => item.y === rowY)
-          .sort((a, b) => a.x - b.x)
-          .map((item) => ({
-            i: item.i,
-            x: item.x,
-            y: item.y,
-            w: item.w,
-            h: item.h,
-          })),
-      },
-    };
-  }, []);
-
-  /** During drag/resize: preview in memory only. Persist on drag/resize stop. */
-  const onLayoutChange = useCallback((newLayout, pinnedId = null, options = {}) => {
-    setLayout((prev) => {
-      if (options.passThrough && pinnedId && dragSessionRef.current) {
-        const pointerPos =
-          options.pointerPos ??
-          (() => {
-            const fromRgl = newLayout.find((item) => item.i === pinnedId);
-            return fromRgl ? { x: fromRgl.x, y: fromRgl.y } : null;
-          })();
-        if (!pointerPos) return prev;
-
-        const session = dragSessionRef.current;
-        const axis = detectDragAxis(session, pointerPos);
-        if (axis) session.axis = axis;
-
-        return applyDragFrame(prev, pinnedId, pointerPos, session);
-      }
-
-      const merged = mergeLayoutUpdate(prev, newLayout);
-
-      if (options.mode === "resize") {
-        return optimizeLayoutAfterResize(merged, pinnedId);
-      }
-
-      return prev;
+  /**
+   * react-grid-layout's native onDragStop. `oldItem` holds the card's position
+   * before the drag (its origin); `newItem` holds where it was dropped.
+   * Post-drop processing: swap resolution -> compact vertically -> persist.
+   */
+  const onDragStop = useCallback((rglLayout, oldItem, newItem) => {
+    if (!newItem) return;
+    setLayout(() => {
+      const origin = { x: oldItem.x, y: oldItem.y };
+      const swapped = swapOnDrop(rglLayout, newItem.i, origin);
+      const next = compactVertically(swapped);
+      persistLayout(next);
+      return next;
     });
   }, []);
 
-  const onLayoutStop = useCallback((newLayout, mode = "drag", activeId = null) => {
-    setLayout((prev) => {
-      let merged = prev;
-      if (mode === "resize") {
-        merged = mergeLayoutUpdate(prev, newLayout);
-      }
-
-      let fixed = merged;
-      if (mode === "drag" || mode === "resize") {
-        fixed = stabilizeLayout(merged, activeId);
-      } else {
-        fixed = compactLayoutVertically(merged);
-      }
-
-      dragSessionRef.current = null;
-
-      const safe = ensureNonEmptyLayout(fixed);
-      persistLayout(safe);
-      return safe;
+  /**
+   * react-grid-layout's native onResizeStop. The resized card grew/shrank in
+   * place (allowOverlap keeps everything else frozen during the resize).
+   * On release: compact vertically (push cards below down / pull them up) -> persist.
+   */
+  const onResizeStop = useCallback((rglLayout) => {
+    setLayout(() => {
+      const next = compactVertically(rglLayout);
+      persistLayout(next);
+      return next;
     });
   }, []);
 
   const resetLayout = useCallback(() => {
     clearSavedLayout();
-    const compacted = ensureNonEmptyLayout(DEFAULT_LAYOUT);
-    setLayout(compacted);
-    persistLayout(compacted);
+    setLayout(DEFAULT_LAYOUT);
+    persistLayout(DEFAULT_LAYOUT);
   }, []);
 
   const removeWidgetFromLayout = useCallback((widgetId) => {
     setLayout((prev) => {
-      const next = compactLayoutVertically(prev.filter((item) => item.i !== widgetId));
+      const next = compactVertically(prev.filter((item) => item.i !== widgetId));
       persistLayout(next);
       return next;
     });
@@ -688,45 +250,47 @@ export function useDashboardLayout() {
         y: position?.y ?? fallback.y,
       });
 
-      const next = ensureNonEmptyLayout(stabilizeLayout([...prev, newItem]));
+      const next = compactVertically([...prev, newItem]);
       persistLayout(next);
       return next;
     });
   }, []);
 
-  const addWidgetToLayout = useCallback((widgetId, position) => {
-    if (!WIDGETS[widgetId]) return;
+  const addWidgetToLayout = useCallback(
+    (widgetId, position) => {
+      if (!WIDGETS[widgetId]) return;
 
-    if (isKpiWidget(widgetId)) {
-      addKpiToLayout(widgetId, position);
-      return;
-    }
+      if (isKpiWidget(widgetId)) {
+        addKpiToLayout(widgetId, position);
+        return;
+      }
 
-    setLayout((prev) => {
-      if (prev.some((item) => item.i === widgetId)) return prev;
+      setLayout((prev) => {
+        if (prev.some((item) => item.i === widgetId)) return prev;
 
-      const defaultItem = getDefaultChartItem(widgetId);
-      if (!defaultItem) return prev;
+        const defaultItem = getDefaultChartItem(widgetId);
+        if (!defaultItem) return prev;
 
-      const newItem = normalizeChartItem({
-        ...defaultItem,
-        ...(position && { x: position.x, y: position.y }),
+        const newItem = normalizeChartItem({
+          ...defaultItem,
+          ...(position && { x: position.x, y: position.y }),
+        });
+
+        const next = compactVertically([...prev, newItem]);
+        persistLayout(next);
+        return next;
       });
-
-      const next = ensureNonEmptyLayout(stabilizeLayout([...prev, newItem]));
-      persistLayout(next);
-      return next;
-    });
-  }, [addKpiToLayout]);
+    },
+    [addKpiToLayout]
+  );
 
   const visibleLayoutIds = layout.map((item) => item.i);
   const visibleKpiIds = layout.filter((item) => isKpiWidget(item.i)).map((item) => item.i);
 
   return {
     layout,
-    onLayoutChange,
-    onLayoutStop,
-    onDragBegin,
+    onDragStop,
+    onResizeStop,
     resetLayout,
     removeWidgetFromLayout,
     addKpiToLayout,

@@ -36,9 +36,8 @@ const AdminDashboard = () => {
   }, [filterOptions, applyFilterOptions]);
   const {
     layout,
-    onLayoutChange,
-    onLayoutStop,
-    onDragBegin,
+    onDragStop,
+    onResizeStop,
     resetLayout,
     removeWidgetFromLayout,
     addKpiToLayout,
@@ -90,9 +89,8 @@ const AdminDashboard = () => {
       ) : (
         <DashboardGrid
           layout={layout}
-          onLayoutChange={onLayoutChange}
-          onLayoutStop={onLayoutStop}
-          onDragBegin={onDragBegin}
+          onDragStop={onDragStop}
+          onResizeStop={onResizeStop}
           onRemoveWidget={removeWidgetFromLayout}
           onDropKpi={handleDropKpi}
           draggingKpiId={null}

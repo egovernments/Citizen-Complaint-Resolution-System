@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useMemo } from "react";
 import { Responsive, WidthProvider } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
@@ -71,41 +71,8 @@ const WidgetHeader = ({ metric, subMetric }) => (
 );
 
 const GRID_MARGIN = [16, 16];
-const GRID_COLS = 12;
 const DROP_SIZE = { w: DROPPING_ITEM.w, h: DROPPING_ITEM.h };
 const RESIZE_HANDLES = ["se"];
-
-function measureGridMetrics(containerWidth) {
-  if (!containerWidth) return null;
-  const [marginX, marginY] = GRID_MARGIN;
-  const colWidth = (containerWidth - marginX * (GRID_COLS + 1)) / GRID_COLS;
-  return {
-    colWidth,
-    rowHeight: KPI_ROW_HEIGHT,
-    marginX,
-    marginY,
-  };
-}
-
-function dragItemTransform(itemId, layout, dragStartRef, draggingItemId, gridMetrics) {
-  if (!draggingItemId || !gridMetrics || !dragStartRef.current?.positions?.[itemId]) {
-    return undefined;
-  }
-
-  const start = dragStartRef.current.positions[itemId];
-  const target = layout.find((entry) => entry.i === itemId);
-  if (!target) return undefined;
-
-  const dx = (target.x - start.x) * (gridMetrics.colWidth + gridMetrics.marginX);
-  const dy = (target.y - start.y) * (gridMetrics.rowHeight + gridMetrics.marginY);
-  if (dx === 0 && dy === 0) return undefined;
-
-  return {
-    transform: `translate(${dx}px, ${dy}px)`,
-    transition: "transform 150ms ease-out",
-    willChange: "transform",
-  };
-}
 
 const CHART_OVERFLOW_VISIBLE_TYPES = new Set([
   "bar-chart",
@@ -132,9 +99,8 @@ function gridItemClassName(widgetId) {
 
 const DashboardGrid = ({
   layout,
-  onLayoutChange,
-  onLayoutStop,
-  onDragBegin,
+  onDragStop,
+  onResizeStop,
   onRemoveWidget,
   onDropKpi,
   draggingKpiId,
@@ -143,28 +109,6 @@ const DashboardGrid = ({
   loading = false,
 }) => {
   const isExternalDrag = Boolean(draggingKpiId);
-  const activeItemRef = useRef(null);
-  const dragOriginRef = useRef(null);
-  const interactionRef = useRef(null);
-  const gridWrapRef = useRef(null);
-  const dragStartRef = useRef(null);
-  const [preventCollision, setPreventCollision] = useState(false);
-  const [draggingItemId, setDraggingItemId] = useState(null);
-  const [gridMetrics, setGridMetrics] = useState(null);
-
-  useEffect(() => {
-    const node = gridWrapRef.current;
-    if (!node) return undefined;
-
-    const update = () => {
-      setGridMetrics(measureGridMetrics(node.offsetWidth));
-    };
-
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, []);
 
   const layouts = useMemo(() => {
     const lg = layout.map((item) => ({
@@ -291,105 +235,26 @@ const DashboardGrid = ({
     return DROP_SIZE;
   }, [draggingKpiId, layout]);
 
-  const handleLayoutChange = useCallback(
-    (_, allLayouts) => {
-      if (isExternalDrag) return;
-      const mode = interactionRef.current;
-      // Drag swaps are handled in onDrag — skip here to avoid fighting RGL.
-      if (mode === "drag") return;
-
-      const next = allLayouts.lg || layout;
-      const withoutPlaceholder = next.filter((item) => item.i !== DROPPING_ITEM_ID);
-      if (withoutPlaceholder.length !== next.length) return;
-
-      onLayoutChange(withoutPlaceholder, activeItemRef.current, {
-        passThrough: false,
-        mode,
-      });
-    },
-    [isExternalDrag, layout, onLayoutChange]
-  );
-
-  const handleDrag = useCallback(
-    (gridLayout, _oldItem, newItem) => {
-      if (isExternalDrag || interactionRef.current !== "drag") return;
-
-      onLayoutChange(gridLayout, newItem.i, {
-        passThrough: true,
-        pointerPos: { x: newItem.x, y: newItem.y },
-      });
-    },
-    [isExternalDrag, onLayoutChange]
-  );
-
   const handleDragStop = useCallback(
-    (nextLayout) => {
+    (nextLayout, oldItem, newItem) => {
       if (isExternalDrag) return;
       const withoutPlaceholder = nextLayout.filter((item) => item.i !== DROPPING_ITEM_ID);
-      const activeId = activeItemRef.current;
-      activeItemRef.current = null;
-      dragOriginRef.current = null;
-      interactionRef.current = null;
-      setDraggingItemId(null);
-      dragStartRef.current = null;
-      setPreventCollision(false);
-      onLayoutStop(withoutPlaceholder, "drag", activeId);
+      onDragStop(withoutPlaceholder, oldItem, newItem);
     },
-    [isExternalDrag, onLayoutStop]
-  );
-
-  const handleResize = useCallback(
-    (gridLayout, _oldItem, newItem) => {
-      if (isExternalDrag || interactionRef.current !== "resize") return;
-
-      onLayoutChange(gridLayout, newItem.i, {
-        passThrough: false,
-        mode: "resize",
-      });
-    },
-    [isExternalDrag, onLayoutChange]
+    [isExternalDrag, onDragStop]
   );
 
   const handleResizeStop = useCallback(
-    (nextLayout) => {
+    (nextLayout, oldItem, newItem) => {
       if (isExternalDrag) return;
       const withoutPlaceholder = nextLayout.filter((item) => item.i !== DROPPING_ITEM_ID);
-      const activeId = activeItemRef.current;
-      activeItemRef.current = null;
-      interactionRef.current = null;
-      setPreventCollision(false);
-      onLayoutStop(withoutPlaceholder, "resize", activeId);
+      onResizeStop(withoutPlaceholder, oldItem, newItem);
     },
-    [isExternalDrag, onLayoutStop]
+    [isExternalDrag, onResizeStop]
   );
-
-  const handleDragStart = useCallback(
-    (_layout, oldItem, newItem) => {
-      activeItemRef.current = newItem.i;
-      dragOriginRef.current = { x: oldItem.x, y: oldItem.y };
-      interactionRef.current = "drag";
-      setDraggingItemId(newItem.i);
-      setPreventCollision(false);
-
-      dragStartRef.current = {
-        positions: Object.fromEntries(
-          layout.map((item) => [item.i, { x: item.x, y: item.y }])
-        ),
-      };
-
-      onDragBegin?.(dragOriginRef.current, layout);
-    },
-    [layout, onDragBegin]
-  );
-
-  const handleResizeStart = useCallback((_layout, _oldItem, newItem) => {
-    activeItemRef.current = newItem.i;
-    interactionRef.current = "resize";
-    setPreventCollision(true);
-  }, []);
 
   return (
-    <div ref={gridWrapRef}>
+    <div>
       <div className={isExternalDrag ? "dashboard-external-drag" : undefined}>
         <ResponsiveGridLayout
           className="layout"
@@ -399,16 +264,11 @@ const DashboardGrid = ({
           rowHeight={KPI_ROW_HEIGHT}
           margin={GRID_MARGIN}
           containerPadding={[0, 0]}
-          onLayoutChange={handleLayoutChange}
-          onDrag={handleDrag}
-          onDragStart={handleDragStart}
-          onResize={handleResize}
-          onResizeStart={handleResizeStart}
           onDragStop={handleDragStop}
           onResizeStop={handleResizeStop}
           draggableHandle=".dashboard-drag-handle, .dashboard-kpi-widget"
           compactType={null}
-          preventCollision={preventCollision}
+          allowOverlap
           isResizable
           isDroppable={isExternalDrag}
           droppingItem={DROPPING_ITEM}
@@ -420,21 +280,12 @@ const DashboardGrid = ({
             const meta = WIDGETS[item.i];
             const isTable = isTableWidget(item.i) || isDemoTableWidget(item.i);
             const customChrome = meta?.customChrome || hasCustomChrome(item.i);
-            const isBarChart = meta?.type === "bar-chart";
-            const offsetStyle = dragItemTransform(
-              item.i,
-              layout,
-              dragStartRef,
-              draggingItemId,
-              gridMetrics
-            );
 
             if (isKpi) {
               return (
                 <div
                   key={item.i}
                   className="dashboard-kpi-widget tw-group tw-relative tw-flex tw-h-full tw-flex-col tw-transition-all"
-                  style={offsetStyle}
                 >
                   {renderKpi(item.i, (e) => handleRemove(e, item.i))}
                 </div>
@@ -445,7 +296,6 @@ const DashboardGrid = ({
               <section
                 key={item.i}
                 className="tw-group tw-relative tw-flex tw-h-full tw-min-h-0 tw-flex-col tw-overflow-hidden tw-rounded tw-border tw-border-border tw-bg-surface"
-                style={offsetStyle}
               >
                 <WidgetRemoveButton
                   label={`Remove ${meta?.metric ?? item.i}`}
