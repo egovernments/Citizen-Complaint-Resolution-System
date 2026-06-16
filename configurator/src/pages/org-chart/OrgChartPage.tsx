@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
-  ReactFlow, ReactFlowProvider, Background, Controls, MiniMap, type NodeTypes,
+  ReactFlow, ReactFlowProvider, Background, Controls, type NodeTypes,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useGetList } from 'ra-core';
@@ -144,7 +144,6 @@ export default function OrgChartPage() {
               >
                 <Background />
                 <Controls />
-                <MiniMap pannable zoomable />
               </ReactFlow>
             </ReactFlowProvider>
           )}
