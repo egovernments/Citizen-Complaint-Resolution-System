@@ -42,8 +42,12 @@ export default function OrgChartPage() {
     pagination: { page: 1, perPage: 1000 },
     sort: { field: 'code', order: 'ASC' },
   });
-  const [tenantId, setTenantId] = useState<string>('');
+  const [selectedTenantId, setSelectedTenantId] = useState<string>('');
   const [query, setQuery] = useState('');
+
+  // Default to the first tenant until the user picks one. Derived during render
+  // (rather than set via an effect) to avoid an extra render.
+  const tenantId = selectedTenantId || tenants?.find((t) => t.code)?.code || '';
 
   const { data, isLoading, isError, refetch } = useOrgChartData(tenantId || undefined);
 
@@ -72,7 +76,7 @@ export default function OrgChartPage() {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <h1 className="text-xl font-semibold">Org Chart</h1>
         <div className="flex items-center gap-2">
-          <Select value={tenantId} onValueChange={setTenantId}>
+          <Select value={tenantId} onValueChange={setSelectedTenantId}>
             <SelectTrigger className="w-[260px]"><SelectValue placeholder="Select a tenant…" /></SelectTrigger>
             <SelectContent>
               {(tenants ?? []).filter((t) => t.code).map((t) => (
