@@ -40,7 +40,16 @@ export function DigitFormInput({
   } = useInput(parseProps);
 
   const hasError = fieldState.invalid && fieldState.isTouched;
-  const errorMessage = fieldState.error?.message;
+  // ra-core v5 wraps validator errors as `@@react-admin@@${JSON.stringify(msg)}`
+  // before storing them in react-hook-form state. Strip the prefix and unwrap
+  // the JSON string so the raw human-readable message is rendered.
+  const rawError = fieldState.error?.message;
+  const errorMessage = rawError?.startsWith('@@react-admin@@')
+    ? (() => {
+        try { return JSON.parse(rawError.slice(15)) as string; }
+        catch { return rawError.slice(15); }
+      })()
+    : rawError;
 
   return (
     <div className={className}>

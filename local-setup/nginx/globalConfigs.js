@@ -1,5 +1,5 @@
 var globalConfigs = (function () {
-  var stateTenantId = "ke";
+  var stateTenantId = "pg";
   var contextPath = "digit-ui";
   var gmaps_api_key = "";
   var finEnv = "dev";
@@ -10,7 +10,7 @@ var globalConfigs = (function () {
   var assetS3Bucket = "pg-egov-assets";
   var configModuleName = "commonMDMSConfig";
   var localeRegion = "IN";
-  var localeDefault = "en";
+  var localeDefault = "ka";
   var mdmsContext = "mdms-v2";
   var hrmsContext = "egov-hrms";
   var invalidEmployeeRoles = ["SYSTEM"];
@@ -19,6 +19,12 @@ var globalConfigs = (function () {
   var pgrBoundaryLowestLevel = "Ward";
   var mapCenter = { lat: -1.0, lng: 37.0 };
   var useInboxV1 = true;
+  var coreMobileConfigs = {
+    mobilePrefix: "+254",
+    mobileNumberPattern: "^0?[17][0-9]{8}$",
+    mobileNumberLength: 9,
+    mobileNumberAllowedStartingCharacters: ["1", "7"]
+  };
 
   // Runtime locale fallback for local setup: force default language unless user explicitly changes it.
   try {
@@ -97,6 +103,8 @@ var globalConfigs = (function () {
       return mapCenter;
     } else if (key === "USE_INBOX_V1") {
       return useInboxV1;
+    } else if (key === "CORE_MOBILE_CONFIGS") {
+      return coreMobileConfigs;
     }
   };
 

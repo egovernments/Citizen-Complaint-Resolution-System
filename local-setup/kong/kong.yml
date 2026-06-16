@@ -118,22 +118,15 @@ services:
     methods:
     - POST
 - name: user-otp-mock
-  url: http://localhost:9999
+  url: http://user-otp:8090
   tags:
   - core
   - auth
-  - mock
   routes:
   - name: user-otp-route
     paths:
     - /user-otp
     strip_path: false
-  plugins:
-  - name: request-termination
-    config:
-      status_code: 200
-      content_type: application/json
-      body: '{"ResponseInfo":{"apiId":"Rainmaker","ver":".01","ts":"","resMsgId":"uief87324","msgId":"","status":"successful"},"otp":{"otp":"","UUID":"","isValidationSuccessful":true}}'
 - name: enc-service
   url: http://egov-enc-service:1234
   tags:

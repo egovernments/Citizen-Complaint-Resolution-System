@@ -344,7 +344,7 @@ services:
     restart: "no"
 
   egov-user:
-    image: egovio/egov-user:master-fa75ba8
+    image: egovio/egov-user:mobile-validation-user-otp-a12e7d5
     container_name: egov-user
     depends_on:
       pgbouncer:
@@ -443,7 +443,7 @@ services:
     - egov-network
 
   user-otp:
-    image: egovio/user-otp:mobile-validation-user-otp-12b1961
+    image: egovio/user-otp:mobile-validation-user-otp-a12e7d5
     container_name: user-otp
     depends_on:
       egov-otp:
@@ -463,7 +463,7 @@ services:
       OTP_CREATE_URL: /otp/v1/_create
       USER_HOST: http://egov-user:8107/
       SEARCH_USER_URL: /user/_search
-      SMS_TOPIC: egov.core.notification.sms.otp
+      SMS_TOPIC: egov.core.notification.sms
       EMAIL_TOPIC: egov.core.notification.email
       EXPIRY_TIME_FOR_OTP: 300
       EGOV_LOCALISATION_HOST: http://egov-localization:8096
@@ -490,7 +490,7 @@ services:
     - egov-network
 
   egov-notification-sms:
-    image: egovio/egov-notification-sms:mobile-validation-user-otp-6dcaff8
+    image: egovio/egov-notification-sms:mobile-validation-user-otp-a12e7d5
     container_name: egov-notification-sms
     depends_on:
       redpanda:
@@ -499,7 +499,7 @@ services:
       SERVER_PORT: 8080
       KAFKA_CONFIG_BOOTSTRAP_SERVER_CONFIG: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
-      SMS_ENABLED: 'false'
+      SMS_ENABLED: 'true'
       KAFKA_TOPICS_NOTIFICATION_SMS_NAME: egov.core.notification.sms
       OTEL_TRACES_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m

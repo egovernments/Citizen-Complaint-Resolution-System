@@ -584,22 +584,7 @@ services:
     restart: "no"
 
   egov-user:
-    # Custom image stacks (a) the tenant-aware encryption fix from
-    # egovernments/Digit-Core#1044 — cherry-pick of c6f5438 + call-site
-    # migration 884c5e6 — on (b) the ccc0e13 NPE fix base in
-    # _updatenovalidate / profile/_update. Built off the pre-d69ce29
-    # commit lineage, so it also sidesteps the SafeHtmlValidator
-    # BeanCreationException regression that blocks citizen registration on
-    # the stock maven-jdk21-* images (CCRS#771).
-    #
-    # When Digit-Core#1044 merges upstream and an official
-    # `egovio/egov-user:<post-1044>` tag exists, replace this pin with
-    # the canonical image.
-    #
-    # `registry.preview.egov.theflywheel.in` is a read-only HTTPS proxy
-    # in front of the egov-ci VPC registry — public cert, no
-    # insecure-registries trust required, pullable from anywhere.
-    image: registry.preview.egov.theflywheel.in/egovio/egov-user:1044-preview
+    image: egovio/egov-user:mobile-validation-user-otp-9883730
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -651,6 +636,8 @@ services:
       JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
       CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: 'true'
       CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE: '123456'
+      EGOV_MOBILE_VALIDATION_DEFAULT_COUNTRY_CODE: '+91'
+      EGOV_MOBILE_VALIDATION_DEFAULT_REGEX: '^[6-9][0-9]{9}$'
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8107/user/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -1092,24 +1079,12 @@ services:
   # HRMS Service - Employee management
   # ===========================================================================
   egov-hrms:
-    # 800-preview: adds the user-enrichment tenant fix (DIGIT-Common#70 /
-    # CCRS#800) on top of digit-common-boundary-uuidlink. With the prior
-    # image, /egov-hrms/employees/_search returned `"user": null` for
-    # every employee on multi-tenant deploys — HRMS was sending the
-    # state-stripped tenant (`ke`) to egov-user while EMPLOYEE rows
-    # actually live at the city tenant (`ke.bomet`), so the SQL WHERE
-    # missed every row. Drop this back to a canonical
-    # `digit-common-boundary-uuidlink-<post-fix>` tag once DIGIT-Common#70
-    # merges and a follow-up build is published.
-    #
-    # Previous lineage notes (still in this image):
-    # - CCRS#482: custom password on employee create
-    # - CCRS#484: null tenantId on User object breaking MDMS mobile
-    #   validation
-    # EGOV_HRMS_DEV_MODE=true must be set so enrichUser() respects the
-    # password supplied in the request instead of overwriting with the
-    # default/auto-generated one.
-    image: registry.preview.egov.theflywheel.in/egovio/egov-hrms:800-preview
+    # digit-common-boundary: fixes CCRS#482 (custom password on employee
+    # create) + CCRS#484 (null tenantId on User object breaking MDMS
+    # mobile validation). EGOV_HRMS_DEV_MODE=true must be set so
+    # enrichUser() respects the password supplied in the request instead
+    # of overwriting with the default/auto-generated one.
+    image: registry.preview.egov.theflywheel.in/egovio/egov-hrms:digit-common-boundary-uuidlink
     container_name: egov-hrms
     depends_on:
       pgbouncer:
@@ -1250,9 +1225,7 @@ services:
   # PGR Services (Public Grievance Redressal)
   # ===========================================================================
   pgr-services:
-    # Parameterized so deploys can pin a nightly-develop (or other) build via
-    # PGR_SERVICES_IMAGE in the env; default keeps the prior behaviour.
-    image: ${PGR_SERVICES_IMAGE:-registry.preview.egov.theflywheel.in/pgr-services-dev:latest}
+    image: registry.preview.egov.theflywheel.in/pgr-services-dev:latest
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -1295,7 +1268,6 @@ services:
       EGOV_LOCALIZATION_HOST: http://egov-localization:8096/
       EGOV_USER_HOST: http://egov-user-proxy:8107/
       EGOV_LOCATION_HOST: http://boundary-service:8081/
-      EGOV_BOUNDARY_HOST: http://boundary-service:8081/
       EGOV_HRMS_HOST: http://egov-hrms:8092/
       EGOV_URL_SHORTNER_HOST: http://egov-url-shortening:8080/
       EGOV_UI_APP_HOST: http://localhost:18080
@@ -1366,11 +1338,7 @@ services:
   # docker build -t digit-ui-dev -f ../Citizen-Complaint-Resolution-System/frontend/micro-ui/web/docker/Dockerfile ../Citizen-Complaint-Resolution-System/frontend/micro-ui
   # ===========================================================================
   digit-ui:
-    # Parameterized so deploys can pin a nightly-develop (or other) build via
-    # DIGIT_UI_IMAGE; default keeps the prior pinned tag. NOTE: this is the
-    # legacy micro-ui container — the modern esbuild bundle is laid in via
-    # build_digit_ui or served by host nginx (see build/NIGHTLY-BUILDS.md).
-    image: ${DIGIT_UI_IMAGE:-registry.preview.egov.theflywheel.in/digit-ui:pgr-fixes}
+    image: registry.preview.egov.theflywheel.in/digit-ui:pgr-fixes
     container_name: digit-ui
     ports:
       - "18080:80"
@@ -1496,10 +1464,8 @@ services:
       - egov-network
 
   # ==================== DIGIT MCP Server ====================
-  # The MCP image is built off CCRS. Deploys inside the Hetzner egov VPC
-  # pull it from the private registry (10.0.0.4:5000); standalone/public
-  # boxes fall back to the pinned public build on ghcr.io (see the
-  # digit-mcp `image:` line below).
+  # The MCP image is built off CCRS and lives in a private VPC registry
+  # (10.0.0.4:5000). Hosts outside the Hetzner egov VPC can't pull it.
   # Both services are tagged `mcp` so they only start when the operator
   # explicitly opts in (`COMPOSE_PROFILES=mcp docker compose up`). On a
   # fresh public-internet box, the default deploy skips them entirely —
@@ -1528,11 +1494,10 @@ services:
     # MCP image source resolved at deploy time. The Ansible playbook
     # writes MCP_IMAGE={{ docker_registry }}/digit-mcp:latest into the
     # .env it generates per tenant (so compose picks it up here).
-    # When running compose directly without the playbook, the fallback
-    # below pulls a public, pinned build from ghcr.io — no VPC access or
-    # insecure-registries trust required. Override MCP_IMAGE to use a
-    # different registry/tag.
-    image: ${MCP_IMAGE:-ghcr.io/subhashini-egov/digit-mcp:2026-06-10}
+    # When running compose directly without the playbook, export
+    # MCP_IMAGE yourself — there's no built-in fallback because the
+    # right registry depends on the operator's network.
+    image: ${MCP_IMAGE}
     container_name: digit-mcp
     restart: unless-stopped
     depends_on:
@@ -1558,8 +1523,6 @@ services:
       SESSION_DB_NAME: mcp_sessions
       SESSION_DB_USER: mcp
       SESSION_DB_PASSWORD: ${MCP_DB_PASSWORD:-mcp123}
-      EGOV_REDIS_HOST: redis
-      EGOV_REDIS_PORT: "6379"
       # DIGIT egov-db read-only pool for the dashboard endpoints
       # (digit-db.ts). Without these, MCP falls back to its in-code
       # defaults (host=docker-postgres, password=egov123) and emits
@@ -1762,11 +1725,6 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: ${NOVU_NODE_ENV:-local}
-      # Required when NODE_ENV != local (the worker exits with "Missing
-      # environment variables: API_ROOT_URL" otherwise). Server-side call,
-      # so point at the api service directly — not the nginx-proxied
-      # NOVU_API_ROOT_URL public URL the dashboard uses.
-      API_ROOT_URL: http://novu-api:3000
       MONGO_URL: mongodb://${NOVU_MONGO_USERNAME:-root}:${NOVU_MONGO_PASSWORD:-secret}@novu-mongo:27017/novu-db?authSource=admin
       MONGO_MAX_POOL_SIZE: '500'
       REDIS_HOST: redis
@@ -2200,14 +2158,6 @@ services:
       # is on the egov-network too, listens on 8107, and forwards to
       # the real egov-user container.
       DIGIT_USER_HOST: http://egov-user-proxy:8107
-      # The DIGIT API gateway that token-exchange-svc forwards authenticated
-      # /kc/* calls to. The keycloak-deploy image defaults DIGIT_GATEWAY_HOST
-      # to the legacy zuul address http://gateway:8080, which does not exist
-      # on a kong-based stack — kong's proxy listens on :8000 and the service
-      # is named `kong`. Without this every /kc/* request 502s with
-      # "getaddrinfo EAI_AGAIN gateway". (CCRS#771-adjacent; the block sets
-      # DIGIT_USER_HOST but historically omitted the gateway host.)
-      DIGIT_GATEWAY_HOST: ${DIGIT_GATEWAY_HOST:-http://kong:8000}
       # Defaults to ADMIN (which user-seed.sh always creates on a
       # fresh DIGIT install). On environments where you have a
       # dedicated INTERNAL_MICROSERVICE_ROLE seeded, override via

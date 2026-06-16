@@ -27,7 +27,7 @@ ansible_host: 10.0.0.10
 #   - Grafana root URL (so dashboard links use the real domain)
 #   - Let's Encrypt certificate
 #   - Citizen-facing URLs the UI generates
-domain: digit.example.com
+domain: digit.example.com  
 
 # Default `true`. Renders nginx with `listen 443 ssl` + HTTP→HTTPS
 # redirect, expects Let's Encrypt certs at /etc/letsencrypt/live/<domain>/.
