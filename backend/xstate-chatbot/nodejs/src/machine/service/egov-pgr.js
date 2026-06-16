@@ -126,11 +126,11 @@ class PGRService {
         if (mdmsData['RAINMAKER-PGR'] && mdmsData['RAINMAKER-PGR']['ServiceDefs']) {
           const serviceDefs = mdmsData['RAINMAKER-PGR']['ServiceDefs'];
 
-          // Filter active services and limit to top frequent ones
+          // Filter active services - show all complaint types
           const activeServices = serviceDefs
             .filter(def => def.active === true)
-            .sort((a, b) => (a.order || 999) - (b.order || 999))
-            .slice(0, 5); // Show top 5 frequent complaints
+            .sort((a, b) => (a.order || 999) - (b.order || 999));
+            // Removed slice to show all complaint types
 
           let complaintTypes = [];
           let messageBundle = {};
@@ -159,8 +159,8 @@ class PGRService {
       );
       let sortedData = complaintTypeMdmsData
         .slice()
-        .sort((a, b) => (a.order || 999) - (b.order || 999))
-        .slice(0, 5); // Show top 5
+        .sort((a, b) => (a.order || 999) - (b.order || 999));
+        // Removed slice to show all complaint types
 
       let complaintTypes = [];
       let messageBundle = {};
@@ -698,6 +698,15 @@ class PGRService {
     }
   }
 
+  formatComplaintStatus(status) {
+    // Convert fully capitalized status to Title Case
+    // e.g., "PENDINGFORASSIGNMENT" -> "Pendingforassignment"
+    if (!status) return status;
+    
+    // Convert to title case: First letter uppercase, rest lowercase
+    return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+  }
+
   async preparePGRResult(responseBody, locale) {
     let serviceWrappers = responseBody.ServiceWrappers;
     var results = {};
@@ -725,8 +734,8 @@ class PGRService {
         filedDate = moment(filedDate)
           .tz(config.timeZone)
           .format(config.dateFormat);
-        // Use raw applicationStatus instead of trying to localize
-        let applicationStatus = serviceWrapper.service.applicationStatus;
+        // Format the applicationStatus for better display
+        let applicationStatus = this.formatComplaintStatus(serviceWrapper.service.applicationStatus);
         var data = {
           complaintType: dialog.get_message(serviceCode, locale),
           complaintNumber: serviceRequestId,
@@ -792,6 +801,21 @@ class PGRService {
       } catch (error) {
       }
     }
+
+    // Upsert TENANT_TENANTS_<TENANTID> localization in background
+    const tenantLocalizationCode = `TENANT_TENANTS_${city.toUpperCase()}`;
+    const tenantDisplayName = city; // Use the city/tenant name as the message
+    
+    // Upsert localization asynchronously in background
+    this.upsertLocalizationMessage(city, tenantLocalizationCode, tenantDisplayName, "digit-tenants", "en_IN", authToken)
+      .then(result => {
+        if (result) {
+          console.log(`Successfully upserted tenant localization for ${tenantLocalizationCode}`);
+        }
+      })
+      .catch(error => {
+        console.error(`Failed to upsert tenant localization for ${tenantLocalizationCode}:`, error);
+      });
 
     requestBody["service"]["serviceCode"] = complaintType;
     requestBody["service"]["accountId"] = userId;
@@ -900,6 +924,64 @@ class PGRService {
     return results;
   }
 
+
+  async upsertLocalizationMessage(tenantId, code, message, module = "digit-tenants", locale = "en_IN", authToken = null) {
+    try {
+      const url = `${config.egovServices.egovServicesHost}localization/messages/v1/_upsert`;
+      
+      const requestBody = {
+        RequestInfo: {
+          apiId: "emp",
+          ver: "1.0",
+          action: "create",
+          msgId: Date.now().toString(),
+          authToken: authToken || "",
+          userInfo: {
+            id: "1",
+            userName: null,
+            name: null,
+            type: null,
+            mobileNumber: null,
+            emailId: null,
+            roles: null,
+            uuid: "40dceade-992d-4a8f-8243-19dda76a4171"
+          }
+        },
+        locale: locale,
+        tenantId: tenantId,
+        messages: [
+          {
+            code: code,
+            message: message,
+            module: module,
+            locale: locale
+          }
+        ]
+      };
+
+      const options = {
+        method: "POST",
+        body: JSON.stringify(requestBody),
+        headers: {
+          "Content-Type": "application/json"
+        }
+      };
+
+      const response = await fetch(url, options);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`Successfully upserted localization for code: ${code}`);
+        return true;
+      } else {
+        console.error(`Failed to upsert localization for code: ${code}, status: ${response.status}`);
+        return false;
+      }
+    } catch (error) {
+      console.error(`Error upserting localization for code: ${code}`, error);
+      return false;
+    }
+  }
 
   async getShortenedURL(finalPath) {
     var url =
