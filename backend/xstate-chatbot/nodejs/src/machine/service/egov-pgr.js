@@ -929,7 +929,7 @@ class PGRService {
     try {
       // Use sandboxHost if in sandbox mode, otherwise use egovServicesHost
       const host = config.enableSandboxMode ? config.sandboxHost : config.egovServices.egovServicesHost;
-      const url = `${host}localization/messages/v1/_upsert`;
+      const url = `${host}/localization/messages/v1/_upsert`;
       
       const requestBody = {
         RequestInfo: {
