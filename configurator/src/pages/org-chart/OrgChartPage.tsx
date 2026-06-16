@@ -68,7 +68,7 @@ export default function OrgChartPage() {
   }, [data, matches, query]);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] p-4 gap-3">
+    <div className="flex flex-col h-full min-h-0 p-4 gap-3">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <h1 className="text-xl font-semibold">Org Chart</h1>
         <div className="flex items-center gap-2">
