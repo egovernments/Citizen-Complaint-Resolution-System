@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 import org.egov.pgr.repository.rowmapper.DocumentRowMapper;
 import org.egov.pgr.repository.rowmapper.PGRQueryBuilder;
 import org.egov.pgr.repository.rowmapper.PGRRowMapper;
+import org.egov.pgr.util.MDMSUtils;
 import org.egov.pgr.util.PGRConstants;
 import org.egov.pgr.util.PGRUtils;
 import org.egov.pgr.web.models.Document;
@@ -39,14 +40,28 @@ public class PGRRepository {
 
     private PGRUtils utils;
 
+    private MDMSUtils mdmsUtils;
+
 
     @Autowired
-    public PGRRepository(PGRQueryBuilder queryBuilder, PGRRowMapper rowMapper, DocumentRowMapper documentRowMapper, JdbcTemplate jdbcTemplate, PGRUtils utils) {
+    public PGRRepository(PGRQueryBuilder queryBuilder, PGRRowMapper rowMapper, DocumentRowMapper documentRowMapper, JdbcTemplate jdbcTemplate, PGRUtils utils, MDMSUtils mdmsUtils) {
         this.queryBuilder = queryBuilder;
         this.rowMapper = rowMapper;
         this.documentRowMapper = documentRowMapper;
         this.jdbcTemplate = jdbcTemplate;
         this.utils = utils;
+        this.mdmsUtils = mdmsUtils;
+    }
+
+    /**
+     * Per-complaint-type SLA map (serviceCode -> millis) for SLA ordering, fetched only
+     * when the caller asks to sort by SLA. Null otherwise, so non-SLA searches skip the
+     * MDMS lookup entirely (and the query builder falls back to the uniform SLA).
+     */
+    private Map<String, Long> slaMapFor(RequestSearchCriteria criteria) {
+        if (criteria.getSortBy() != RequestSearchCriteria.SortBy.sla)
+            return null;
+        return mdmsUtils.getServiceCodeToSlaMillis(criteria.getTenantId());
     }
 
 
@@ -79,7 +94,7 @@ public class PGRRepository {
 
         String tenantId = criteria.getTenantId();
         List<Object> preparedStmtList = new ArrayList<>();
-        String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList);
+        String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, slaMapFor(criteria));
         try {
             query = utils.replaceSchemaPlaceholder(query, tenantId);
         } catch (Exception e) {
@@ -123,7 +138,7 @@ public class PGRRepository {
 
         String tenantId = criteria.getTenantId();
         List<Object> preparedStmtList = new ArrayList<>();
-        String query = queryBuilder.getCountQuery(criteria, preparedStmtList);
+        String query = queryBuilder.getCountQuery(criteria, preparedStmtList, slaMapFor(criteria));
         try {
             query = utils.replaceSchemaPlaceholder(query, tenantId);
         } catch (Exception e) {

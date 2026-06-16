@@ -1264,6 +1264,32 @@ class CRSLoader:
                 emp = sr.json().get("Employees", [{}])[0] if sr.ok else {}
                 if emp.get("id"):
                     emp["user"]["password"] = password
+                    # HRMS _create is a no-op when the employee already
+                    # exists (e.g. CI-ADMIN pre-seeded in full-dump.sql
+                    # under pg.citest), leaving the assignment whatever
+                    # the seed shipped. pgr-services validates that an
+                    # assignee's department matches the complaint's
+                    # department, so a stale dept here yields
+                    # INVALID_ASSIGNMENT on every workflow update and
+                    # every PGR transition cascades into 400s. Reconcile
+                    # the current assignment to the dept/desig we just
+                    # resolved from MDMS.
+                    if emp.get("assignments"):
+                        current = next(
+                            (a for a in emp["assignments"] if a.get("isCurrentAssignment")),
+                            emp["assignments"][0],
+                        )
+                        prev_dept = current.get("department")
+                        prev_desig = current.get("designation")
+                        if prev_dept != department or prev_desig != designation:
+                            current["department"] = department
+                            current["designation"] = designation
+                            current["isCurrentAssignment"] = True
+                            print(
+                                f"   Reconciling existing assignment: "
+                                f"dept {prev_dept} -> {department}, "
+                                f"desig {prev_desig} -> {designation}"
+                            )
                     requests.post(f"{self.base_url}{hrms_svc}/employees/_update",
                         json={"RequestInfo": {"apiId": "Rainmaker", "authToken": self.auth_token,
                               "userInfo": self.user_info}, "Employees": [emp]},

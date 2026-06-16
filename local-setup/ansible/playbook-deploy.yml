@@ -77,6 +77,10 @@
       when:
         - digit_ui_mode in ['static', 'hmr']
         - ansible_system != 'Darwin'
+        # When a prebuilt bundle image is pinned (static mode), the git
+        # tree is not the source of what nginx serves — leave it alone so
+        # a deploy can't silently regress build/ to an older checkout.
+        - not (digit_ui_mode == 'static' and (digit_ui_bundle_image | default('')) | length > 0)
 
 
   tasks:
@@ -336,14 +340,16 @@
     # Same shape as MCP. When `build_default_data_handler: true`, the build
     # task below produces `default-data-handler:local` from utilities/default-data-handler
     # using build/maven/Dockerfile. Otherwise we pull the published image
-    # carrying the relaxed RAINMAKER-PGR schema (see source-file fix dated
-    # 2026-05-24).
+    # carrying the relaxed RAINMAKER-PGR schema (source-file fix dated
+    # 2026-05-24) and the pincode-free tenant.tenants template (the 0525
+    # build seeded pg's Indian pincodes onto every new tenant's citya,
+    # vetoing citizen submits with CS_COMMON_PINCODE_NOT_SERVICABLE).
     - name: "Resolve default-data-handler image tag"
       ansible.builtin.set_fact:
         ddh_image: >-
           {{ ddh_image
              | default('default-data-handler:local' if (build_default_data_handler | default(false))
-                       else 'ghcr.io/subhashini-egov/default-data-handler:2.12-draft-20260525-034354') }}
+                       else 'ghcr.io/subhashini-egov/default-data-handler:2.12-draft-20260611-111521') }}
 
     # ==================== Compose .env (per-tenant overrides) ====================
     # Templates Grafana's public root URL (so the JVM dashboard / observability
@@ -749,6 +755,32 @@
       changed_when: stop_digit_ui_static.stdout == "stopped"
       when: digit_ui_mode == "static"
 
+    # Prebuilt-bundle path: when `digit_ui_bundle_image` is set (e.g.
+    # ghcr.io/subhashini-egov/digit-ui-esbuild:nightly-develop, published
+    # from the monorepo's digit-ui-esbuild/), pull it and extract the
+    # baked SPA into the same build/ dir host nginx already serves —
+    # no on-host node/npm/esbuild, and no dependence on the upstream
+    # git repo's state. Per-tenant globalConfigs.js still propagates:
+    # nginx serves it from {{ digit_dir }}/nginx/ via a location alias
+    # that shadows the build's baked copy.
+    - name: "digit-ui mode=static — deploy prebuilt bundle from digit_ui_bundle_image"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        docker pull {{ digit_ui_bundle_image }}
+        id=$(docker create {{ digit_ui_bundle_image }})
+        trap 'docker rm -f "$id" >/dev/null' EXIT
+        rm -rf /opt/digit-ui-esbuild/build.new
+        docker cp "$id":/var/web/digit-ui /opt/digit-ui-esbuild/build.new
+        mkdir -p /opt/digit-ui-esbuild/build
+        rsync -a --delete /opt/digit-ui-esbuild/build.new/ /opt/digit-ui-esbuild/build/
+        rm -rf /opt/digit-ui-esbuild/build.new
+      args:
+        executable: /bin/bash
+      changed_when: true
+      when:
+        - digit_ui_mode == "static"
+        - (digit_ui_bundle_image | default('')) | length > 0
+
     - name: "digit-ui mode=static — install Node 20 if missing (esbuild.build.js needs it)"
       ansible.builtin.apt:
         name: nodejs
@@ -756,6 +788,7 @@
       when:
         - digit_ui_mode == "static"
         - ansible_system != "Darwin"
+        - (digit_ui_bundle_image | default('')) | length == 0
 
     - name: "digit-ui mode=static — npm install if package.json is newer than node_modules"
       ansible.builtin.shell: |
@@ -776,7 +809,9 @@
         fi
       register: npm_install
       changed_when: npm_install.stdout == "installed"
-      when: digit_ui_mode == "static"
+      when:
+        - digit_ui_mode == "static"
+        - (digit_ui_bundle_image | default('')) | length == 0
 
     - name: "digit-ui mode=static — run esbuild.build.js (idempotent: skips if build/ index newer than sources)"
       ansible.builtin.shell: |
@@ -799,7 +834,9 @@
         executable: /bin/bash
       register: esbuild_build
       changed_when: "'skipping rebuild' not in esbuild_build.stdout"
-      when: digit_ui_mode == "static"
+      when:
+        - digit_ui_mode == "static"
+        - (digit_ui_bundle_image | default('')) | length == 0
 
     # --- hmr mode ---
     - name: "digit-ui mode=hmr — stop digit-ui container after compose brought it up"
@@ -1789,6 +1826,7 @@
           mobile_allowed_starting_characters: "{{ core_mobile_configs.mobileNumberAllowedStartingCharacters | default(omit) }}"
           mobile_error_message: "{{ core_mobile_configs.mobileNumberErrorMessage | default(omit) }}"
           user_validation: "{{ user_validation | default(omit) }}"
+          pincode_allowlist: "{{ pgr_pincode_allowlist | default(omit) }}"
           auth:
             username: "{{ bootstrap_user | default('ADMIN') }}"
             password: "{{ bootstrap_password | default('eGov@123') }}"
@@ -1815,6 +1853,7 @@
           mobile_allowed_starting_characters: "{{ core_mobile_configs.mobileNumberAllowedStartingCharacters | default(omit) }}"
           mobile_error_message: "{{ core_mobile_configs.mobileNumberErrorMessage | default(omit) }}"
           user_validation: "{{ user_validation | default(omit) }}"
+          pincode_allowlist: "{{ pgr_pincode_allowlist | default(omit) }}"
           auth:
             username: "{{ bootstrap_user | default('ADMIN') }}"
             password: "{{ bootstrap_password | default('eGov@123') }}"
@@ -1972,6 +2011,19 @@
         replace: '\1STATE_LEVEL_TENANT_ID: {{ state_root }}'
       when: state_root != 'pg'
 
+    # The hrms-prereq-gate one-shot searches egov-user for the
+    # INTERNAL_MICROSERVICE_ROLE user at tenant `pg` before letting HRMS
+    # start. After the tenant rewrite HRMS boots against state_root, so
+    # the gate must check the same tenant — otherwise it passes on the
+    # pg seed user while state_root has no system user at all and HRMS
+    # crash-loops on the very thing the gate exists to prevent.
+    - name: "post-bootstrap — point hrms-prereq-gate at state_root in compose"
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '("tenantId":")pg(","roleCodes":\["INTERNAL_MICROSERVICE_ROLE"\])'
+        replace: '\1{{ state_root }}\2'
+      when: state_root != 'pg'
+
     - name: "post-bootstrap — recreate services (except egov-hrms) to pick up new STATE_LEVEL_TENANT_ID"
       ansible.builtin.shell: >-
         docker compose {{ compose_files }}
@@ -1990,11 +2042,58 @@
       changed_when: false
       when: state_root != 'pg'
 
+    # user-seed.sh only creates INTERNAL_USER on `pg`. HRMS (now pointed
+    # at state_root) tries to self-create it at boot, but egov-user's
+    # tenant-aware mobile validation (enforced even on _createnovalidate
+    # since :1044-preview) rejects HRMS's hardcoded 10-digit mobile on
+    # tenants with a stricter rule (e.g. ethiopia's ^[17][0-9]{8}$) and
+    # HRMS crash-loops with "Service returned null while fetching user".
+    # Seed it here with a mobile derived from the tenant's own rule:
+    # first allowed starting digit, padded with 9s to the rule length.
+    - name: "post-bootstrap — seed INTERNAL_USER system user on state_root for HRMS"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ upstream_kong_port }}/user/users/_createnovalidate"
+        method: POST
+        body_format: json
+        body:
+          RequestInfo: { apiId: digit, ver: "1.0" }
+          User:
+            userName: INTERNAL_USER
+            name: Internal Microservice User
+            mobileNumber: "{{ ((core_mobile_configs.mobileNumberAllowedStartingCharacters | first) ~ ('9' * ((core_mobile_configs.mobileNumberLength | int) - 1))) if core_mobile_configs is defined else '9999999999' }}"
+            gender: MALE
+            active: true
+            type: SYSTEM
+            tenantId: "{{ state_root }}"
+            password: "System@123"
+            roles:
+              - { code: INTERNAL_MICROSERVICE_ROLE, name: Internal Microservice Role, tenantId: "{{ state_root }}" }
+        status_code: [200, 400]
+        return_content: true
+      register: internal_user_seed
+      failed_when: >-
+        internal_user_seed.status != 200 and
+        'DuplicateUserName' not in (internal_user_seed.content | default(''))
+      changed_when: internal_user_seed.status == 200
+      when: state_root != 'pg'
+
     - name: "post-bootstrap — recreate egov-hrms after egov-user is healthy"
       ansible.builtin.shell: >-
         docker compose {{ compose_files }} up -d --force-recreate egov-hrms
       args:
         chdir: "{{ digit_dir }}"
+      when: state_root != 'pg'
+
+    # Without this wait a crash-looping HRMS (e.g. missing system user on
+    # state_root) sails through and the deploy reports success — that is
+    # exactly how the ethiopia HRMS outage went unnoticed on 2026-06-11.
+    - name: "post-bootstrap — wait for egov-hrms healthy after restart"
+      ansible.builtin.shell: docker inspect --format '{{ "{{" }}.State.Health.Status{{ "}}" }}' egov-hrms
+      register: hrms_health_post
+      retries: 30
+      delay: 10
+      until: hrms_health_post.stdout == 'healthy'
+      changed_when: false
       when: state_root != 'pg'
 
     # `docker compose restart egov-user` above does NOT cascade to

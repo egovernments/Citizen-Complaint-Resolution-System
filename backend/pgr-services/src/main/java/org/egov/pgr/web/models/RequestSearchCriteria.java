@@ -84,7 +84,8 @@ public class RequestSearchCriteria {
         locality,
         applicationStatus,
         serviceRequestId,
-        createdTime
+        createdTime,
+        sla
     }
 
     @SafeHtml

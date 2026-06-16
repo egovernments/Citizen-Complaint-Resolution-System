@@ -337,7 +337,7 @@ const FormExplorer = () => {
     // even though the location is geographically valid. Skip the
     // allowlist check in that case (closes egovernments/CCRS#469); the
     // ward-leaf check on the boundary cascade step covers correctness.
-    const wardResolved = !!merged?.GeoLocationsPoint?.ward?.code;
+    const wardResolved = !!merged?.GeoLocationsPoint?.ward?.code || !!merged?.SelectedBoundary?.code;
     if (!wardResolved && merged?.postalCode != null && String(merged.postalCode).length > 0) {
       // Kenyan postal codes preserve leading zeros (e.g. "00100") but number
       // inputs may store them without. Normalise both sides so "00100", "100"

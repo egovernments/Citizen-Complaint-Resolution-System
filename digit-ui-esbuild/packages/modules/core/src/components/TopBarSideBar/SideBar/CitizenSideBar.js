@@ -4,7 +4,7 @@ import React, { useState, Fragment, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useHistory } from "react-router-dom";
 import ChangeCity from "../../ChangeCity";
-import { defaultImage } from "../../utils";
+import { defaultImage, resolveProfilePhoto } from "../../utils";
 import StaticCitizenSideBar from "./StaticCitizenSideBar";
 import { Hamburger } from "@egovernments/digit-ui-components";
 import { LogoutIcon } from "@egovernments/digit-ui-react-components";
@@ -17,26 +17,22 @@ const Profile = ({ info, stateName, t }) => {
   // update (CCRS#556 sub-bug pair fix). Fall back to the per-uuid
   // userSearch lookup only if the session doesn't already carry one
   // (e.g. on first login).
-  const [profilePic, setProfilePic] = React.useState(
-    info?.photo ? info.photo.split(",").at(0) : null,
-  );
+  const [profilePic, setProfilePic] = React.useState(null);
   React.useEffect(() => {
-    if (info?.photo) {
-      setProfilePic(info.photo.split(",").at(0));
-      return;
-    }
-    const uuid = info?.uuid;
-    if (!uuid) return;
     let cancelled = false;
     (async () => {
-      const tenant = Digit.ULBService.getCurrentTenantId();
-      const usersResponse = await Digit.UserService.userSearch(tenant, { uuid: [uuid] }, {});
-      if (cancelled) return;
-      if (usersResponse?.user?.length) {
-        const userDetails = usersResponse.user[0];
-        const thumbs = userDetails?.photo?.split(",");
-        setProfilePic(thumbs?.at(0));
+      const stateId = Digit.ULBService.getStateId();
+      let photo = info?.photo;
+      if (!photo && info?.uuid) {
+        const tenant = Digit.ULBService.getCurrentTenantId();
+        const usersResponse = await Digit.UserService.userSearch(tenant, { uuid: [info.uuid] }, {});
+        if (cancelled) return;
+        photo = usersResponse?.user?.[0]?.photo;
       }
+      // #445: photo may be a bare fileStoreId — resolve to a real URL before
+      // it is used as an <img src>, otherwise the avatar shows the placeholder.
+      const resolved = await resolveProfilePhoto(photo, stateId);
+      if (!cancelled) setProfilePic(resolved);
     })();
     return () => {
       cancelled = true;
@@ -152,8 +148,10 @@ export const CitizenSideBar = ({
         }
         if (usersResponse && usersResponse.user && usersResponse?.user?.length) {
           const userDetails = usersResponse.user[0];
-          const thumbs = userDetails?.photo?.split(",");
-          setProfilePic(thumbs?.at(0));
+          // #445: photo may be a bare fileStoreId — resolve to a real URL so
+          // the sidebar avatar renders instead of falling back to a glyph.
+          const resolved = await resolveProfilePhoto(userDetails?.photo, Digit.ULBService.getStateId());
+          setProfilePic(resolved);
         }
       }
     };

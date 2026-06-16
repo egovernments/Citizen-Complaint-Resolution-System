@@ -2282,13 +2282,15 @@ class APIUploader:
             print(f"❌ Error: {str(e)}")
             return {}
 
-    def poll_boundary_template_status(self, tenant_id: str, hierarchy_type: str, max_attempts: int = 30, delay: int = 2) -> Dict:
+    def poll_boundary_template_status(self, tenant_id: str, hierarchy_type: str, max_attempts: int = 90, delay: int = 2) -> Dict:
         """Poll for boundary template generation completion
 
         Args:
             tenant_id: Tenant ID
             hierarchy_type: Hierarchy type
-            max_attempts: Maximum polling attempts
+            max_attempts: Maximum polling attempts (defaults give a 180 s window;
+                CI runners are slower than dev boxes, and the previous 60 s default
+                timed out on every CI run with an empty response on every attempt)
             delay: Delay between attempts (seconds)
 
         Returns:
@@ -2320,12 +2322,19 @@ class APIUploader:
 
         print(f"\n⏳ Polling for template generation (max {max_attempts} attempts)...")
 
+        # Track the last response so a timeout can dump what the server kept
+        # returning — without this the loop is silent on empty arrays and we
+        # can't tell "worker never picked up the task" apart from "worker
+        # wrote under a different key".
+        last_data: Dict = {}
+
         for attempt in range(1, max_attempts + 1):
             try:
                 response = self._request_with_retry(url, json=payload, headers=headers, params=params)
 
                 response.raise_for_status()
                 data = response.json()
+                last_data = data
 
                 resources = data.get('GeneratedResource', [])
                 if resources:
@@ -2349,6 +2358,14 @@ class APIUploader:
                         print(f"\n📋 Full resource response:")
                         print(f"   {json.dumps(resource, indent=2)[:1000]}")
                         return resource
+                else:
+                    # Empty GeneratedResource — log periodically so a timeout
+                    # tells us *what* the server kept returning. Without this
+                    # the loop is invisible (the previous code only printed
+                    # the Status line on non-empty responses).
+                    if attempt == 1 or attempt % 5 == 0:
+                        keys = list(data.keys()) if isinstance(data, dict) else []
+                        print(f"   Attempt {attempt}/{max_attempts}: GeneratedResource=[] (response keys: {keys})")
 
                 time.sleep(delay)
 
@@ -2357,6 +2374,11 @@ class APIUploader:
                 time.sleep(delay)
 
         print(f"\n⚠️ Template generation timed out after {max_attempts} attempts")
+        # Dump the last response so we can see whether the server was always
+        # returning an empty array or some other shape we didn't anticipate.
+        if last_data:
+            print(f"   Last response body:")
+            print(f"   {json.dumps(last_data, indent=2)[:800]}")
         return {}
 
     def download_boundary_template(self, tenant_id: str, filestore_id: str, hierarchy_type: str = "ADMIN", output_path: str = None, return_url: bool = False):

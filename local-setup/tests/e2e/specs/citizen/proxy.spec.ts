@@ -11,6 +11,7 @@
  * It must NOT use the ADMIN user — it must create a brand new CITIZEN.
  */
 import { test, expect } from '@playwright/test';
+import { fixedMobile } from '../../../utils/mobile';
 
 const BASE_URL = process.env.BASE_URL || 'https://keycloak-sandbox.live.digit.org';
 const KC_INTERNAL = 'http://localhost:18180';
@@ -233,7 +234,7 @@ test.describe('New Citizen Proxy Flow (simulates Google SSO)', () => {
               },
               citizen: {
                 name: 'E2E Test Citizen',
-                mobileNumber: '9888888888',
+                mobileNumber: fixedMobile(888888888),
                 tenantId: 'pg.citya',
               },
             },

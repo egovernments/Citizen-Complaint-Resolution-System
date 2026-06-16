@@ -2,6 +2,7 @@ import { api, createRequestInfo } from '../utils/api';
 import { db } from '../utils/db';
 import { config } from '../utils/config';
 import { CreateUserResponseSchema, LoginResponseSchema } from '../schemas/user';
+import { fixedMobile } from '../utils/mobile';
 
 describe('User Service', () => {
   const { ports, tenant } = config;
@@ -9,7 +10,7 @@ describe('User Service', () => {
   const testUser = {
     userName: `testuser-${timestamp}`,
     name: 'Test User',
-    mobileNumber: '9999900001',
+    mobileNumber: fixedMobile(999900001),
     gender: 'MALE',
     type: 'EMPLOYEE' as const,
     tenantId: tenant.city,
