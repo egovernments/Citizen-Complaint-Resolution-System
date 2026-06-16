@@ -50,6 +50,13 @@ type BoundaryPath = 'osm' | 'excel' | null;
 // proxies it to the search-api container); override via VITE_TURBOPASS_URL.
 const TURBOPASS_BASE: string = import.meta.env.VITE_TURBOPASS_URL || '/turbopass';
 
+// Overpass endpoint for the boundary-polygon fetch. Defaults to the public
+// instance (zero-config, but rate-limited / 504-prone under load). A deploy
+// that self-hosts Overpass sets VITE_OVERPASS_URL (e.g. same-origin
+// '/overpass/api/interpreter', proxied by nginx to the on-box container behind
+// the enable_overpass gate) at configurator build time.
+const OVERPASS_URL: string = import.meta.env.VITE_OVERPASS_URL || 'https://overpass-api.de/api/interpreter';
+
 // The OSM path always writes the ADMIN hierarchy (the Excel path lets the
 // operator name it).
 const OSM_HIERARCHY_TYPE = 'ADMIN';
@@ -510,7 +517,7 @@ out body;
 >;
 out skel qt;`;
 
-      const res = await fetch('https://overpass-api.de/api/interpreter', {
+      const res = await fetch(OVERPASS_URL, {
         method: 'POST',
         body: query
       });

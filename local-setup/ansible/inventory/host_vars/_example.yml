@@ -210,6 +210,23 @@ enable_mcp: true
 enable_turbopass: false
 # turbopass_port: 13301        # loopback port the search-api publishes on
 
+# ────────── Self-hosted Overpass (boundary-polygon fetch) ──────────
+# The configurator's Phase 2 OSM step fetches admin-boundary polygons from
+# Overpass. The public overpass-api.de is rate-limited / 504-prone; enable this
+# to run a standalone on-box `bomet-overpass` container (loopback 127.0.0.1:12346)
+# fed a boundary-filtered OSM extract, with nginx proxying /overpass/ → it. When
+# on, the configurator build bakes VITE_OVERPASS_URL=/overpass/api/interpreter so
+# Phase 2 uses the on-box instance. Off by default → public Overpass, nginx vhost
+# byte-identical to a pre-overpass deploy.
+# PREPARE THE EXTRACT FIRST (operator-specific country/size): see
+# overpass/README.md + overpass/prepare-extract.sh, then place the result at
+# overpass_planet_file on the target.
+enable_overpass: false
+# overpass_port: 12346                                   # loopback port
+# overpass_data_dir: /opt/overpass/data                  # holds the extract (mounted /data)
+# overpass_db_dir: /opt/overpass/db                      # Overpass DB volume (mounted /db)
+# overpass_planet_file: /opt/overpass/data/boundaries.osm.bz2  # prepared extract
+
 # ────────── Notifications (Novu + Twilio WhatsApp) ──────────
 # Turn on the `notifications` compose profile — adds 8 containers:
 #   digit-config-service, digit-user-preferences-service, novu-bridge,
