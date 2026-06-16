@@ -1,53 +1,28 @@
 import type { SchemaDescriptor } from './types';
 
 /**
- * Descriptor for `ValidationConfigs.mobileNumberValidation` — the mobile regex
- * rules consumed by the `useMobileValidation` hook in DIGIT-UI (e.g. the Kenya
- * default keyed "defaultMobileValidation" with pattern `^[17][0-9]{8}$`,
- * prefix +254).
- *
- * Note: `common-masters.UserValidation` has been replaced by
- * `common-masters.MobileNumberValidation` (see `user-validation.ts`).
- * This descriptor is for the separate `ValidationConfigs.mobileNumberValidation`
- * schema — a distinct MDMS location read by some older digit-ui hooks.
- *
- * The JSON Schema declares `rules` as a nested object, which the default
- * auto-form would skip entirely. This descriptor expands nested paths into
- * individual widgets.
+ * Descriptor for `common-masters.MobileNumberValidation` — the single source
+ * of truth for mobile validation across all frontends and backends. Fields:
+ * `countryCode`, `mobileNumberRegex`, `default`, `isActive`.
  */
 export const mobileValidationDescriptor: SchemaDescriptor = {
-  schema: 'ValidationConfigs.mobileNumberValidation',
+  schema: 'common-masters.MobileNumberValidation',
   groups: [
-    { title: 'Identity', fields: ['validationName'] },
+    { title: 'Identity', fields: ['countryCode'] },
     { title: 'Format rules', fields: [
-      'rules.prefix',
-      'rules.pattern',
-      'rules.minLength',
-      'rules.maxLength',
-      'rules.allowedStartingDigits',
-      'rules.errorMessage',
-      'rules.isActive',
+      'mobileNumberRegex',
+      'default',
+      'isActive',
     ] },
   ],
   fields: [
-    { path: 'validationName', widget: 'text', required: true,
-      help: 'Unique name for this validation rule — becomes the record\'s unique identifier (e.g. "defaultMobileValidation").' },
-    { path: 'rules.prefix', widget: 'text', label: 'Dial code prefix',
-      help: 'Country dial code shown/stored with the value, e.g. +254 (Kenya) or +91 (India).' },
-    { path: 'rules.pattern', widget: 'regex', label: 'Regex pattern',
-      help: 'The validation regex — use the sample box below to test.' },
-    { path: 'rules.minLength', widget: 'integer', min: 1, max: 20,
-      label: 'Min length',
-      help: 'Usually equal to Max length — most country mobile formats are fixed-length (e.g. 9 digits for KE, 10 for IN).' },
-    { path: 'rules.maxLength', widget: 'integer', min: 1, max: 20,
-      label: 'Max length',
-      help: 'Usually equal to Min length — most country mobile formats are fixed-length (e.g. 9 digits for KE, 10 for IN).' },
-    { path: 'rules.allowedStartingDigits', widget: 'chip-array',
-      label: 'Allowed starting digits',
-      help: 'First digit each mobile number must start with. For KE: 1, 7. For IN: 6, 7, 8, 9.' },
-    { path: 'rules.errorMessage', widget: 'text', label: 'Error message',
-      help: 'Literal message shown inline in DIGIT-UI on validation failure. Not a localization key — the exact text entered here is displayed to the user.' },
-    { path: 'rules.isActive', widget: 'boolean', label: 'Is active',
-      help: 'Whether this validation rule is currently active.' },
+    { path: 'countryCode', widget: 'text', required: true,
+      help: 'Country dial code — serves as the unique identifier (e.g. "+251" for Ethiopia, "+91" for India).' },
+    { path: 'mobileNumberRegex', widget: 'regex', label: 'Regex pattern',
+      help: 'Full-anchor regex for the national number portion (without country code), e.g. "^[79][0-9]{8}$".' },
+    { path: 'default', widget: 'boolean', label: 'Default',
+      help: 'Whether this is the default validation rule for the deployment.' },
+    { path: 'isActive', widget: 'boolean', label: 'Is active',
+      help: 'Inactive records are ignored by the validation hooks.' },
   ],
 };

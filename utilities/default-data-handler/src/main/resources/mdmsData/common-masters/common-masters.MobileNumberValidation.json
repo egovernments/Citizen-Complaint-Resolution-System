@@ -1,7 +1,7 @@
 [
   {
-    "countryCode": "+91",
-    "mobileNumberRegex": "^[6-9][0-9]{9}$",
+    "countryCode": "+251",
+    "mobileNumberRegex": "^[79][0-9]{8}$",
     "default": true
   }
 ]

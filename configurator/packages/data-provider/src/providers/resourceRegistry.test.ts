@@ -100,7 +100,7 @@ describe('resourceRegistry', () => {
     const expected: Record<string, string> = {
       'theme-config': 'common-masters.ThemeConfig',
       'user-validation': 'common-masters.MobileNumberValidation',
-      'mobile-validation': 'ValidationConfigs.mobileNumberValidation',
+      'mobile-validation': 'common-masters.MobileNumberValidation',
       'tenant-boundary': 'egov-location.TenantBoundary',
       'auto-escalation-ignore': 'Workflow.AutoEscalationStatesToIgnore',
       'workflow-bs-master': 'Workflow.BusinessServiceMasterConfig',

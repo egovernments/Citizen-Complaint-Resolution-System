@@ -1,7 +1,7 @@
 /**
- * Citizen login — mobile + fixed OTP (123456 on naipepea).
+ * Citizen login — mobile + fixed OTP (123456 on local dev).
  *
- * Auth model (verified against egov-user on naipepea, 2026-05-17):
+ * Auth model (verified against egov-user, 2026-05-17):
  *
  *   /user-otp/v1/_send       Kong request-termination, always returns 200.
  *                            We call it for parity with digit-ui-esbuild's
@@ -16,7 +16,7 @@
  *                            required — register returns the token directly)
  *                            and skip the retry.
  *
- * tenantId for the auth + register calls is the STATE tenant (`ke`), not the
+ * tenantId for the auth + register calls is the STATE tenant, not the
  * city tenant — egov-user keeps citizens at root.
  */
 import { useEffect, useState } from 'react';
@@ -31,12 +31,22 @@ import { apiClient, getApiBaseUrl, ENDPOINTS, isKeycloakMode } from '@/api';
 import { buildAuthorizeUrl, decodeJwtPayload, passwordGrantViaOverlay, saveKcTokens } from '@/api/keycloak';
 import { useApp } from '@/App';
 
-const STATE_TENANT = (import.meta.env.VITE_CITIZEN_STATE_TENANT as string) || 'ke';
-const CITY_TENANT = (import.meta.env.VITE_CITIZEN_TENANT as string) || 'ke.nairobi';
+const STATE_TENANT = (import.meta.env.VITE_CITIZEN_STATE_TENANT as string) || 'statea';
+const CITY_TENANT = (import.meta.env.VITE_CITIZEN_TENANT as string) || 'statea.citya';
 
-// 9-digit Kenya mobile, must start with 1 or 7. Enforced at egov-user too;
-// catching it client-side gives a nicer error than the upstream NPE.
-const MOBILE_RE = /^[17][0-9]{8}$/;
+// Read mobile validation config from globalConfigs (injected by nginx/Ansible).
+// Falls back to Ethiopia defaults (+251, 9 digits starting with 7 or 9).
+function getMobileConfig(): { regex: RegExp; prefix: string; maxLength: number; errorMessage: string } {
+  const gc = (window as unknown as Record<string, { getConfig?: (k: string) => Record<string, unknown> | undefined }>)
+    .globalConfigs?.getConfig?.('CORE_MOBILE_CONFIGS');
+  const pattern = (gc?.mobileNumberPattern as string | undefined) ?? '^[79][0-9]{8}$';
+  const prefix = (gc?.mobilePrefix as string | undefined) ?? '+251';
+  const maxLength = (gc?.mobileNumberLength as number | undefined) ?? 9;
+  let regex: RegExp;
+  try { regex = new RegExp(pattern); } catch { regex = /^[79][0-9]{8}$/; }
+  const errorMessage = `Enter a ${maxLength}-digit mobile number`;
+  return { regex, prefix, maxLength, errorMessage };
+}
 
 type Step = 'mobile' | 'otp';
 
@@ -49,6 +59,7 @@ export default function CitizenLoginPage() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const kcMode = isKeycloakMode();
+  const mobileCfg = getMobileConfig();
 
   // Surface errors bubbled up from the Keycloak callback page (e.g. the
   // overlay rejected the JWT or the user denied consent at the KC login
@@ -86,8 +97,8 @@ export default function CitizenLoginPage() {
   async function sendOtp(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!MOBILE_RE.test(mobile)) {
-      setError('Enter a 9-digit Kenyan mobile number starting with 1 or 7.');
+    if (!mobileCfg.regex.test(mobile)) {
+      setError(mobileCfg.errorMessage);
       return;
     }
     setPending(true);
@@ -237,10 +248,10 @@ export default function CitizenLoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Nai Pepea — Citizen sign in</CardTitle>
+          <CardTitle>Citizen sign in</CardTitle>
           <CardDescription>
             {step === 'mobile'
-              ? 'Enter your Kenyan mobile number to receive a sign-in code.'
+              ? 'Enter your mobile number to receive a sign-in code.'
               : `We sent a code to ${mobile}. Enter 123456 for this preview.`}
           </CardDescription>
         </CardHeader>
@@ -269,13 +280,13 @@ export default function CitizenLoginPage() {
               <div>
                 <Label htmlFor="mobile">Mobile number</Label>
                 <div className="flex items-center mt-1">
-                  <span className="px-3 py-2 border rounded-l-md bg-muted text-sm text-muted-foreground">+254</span>
+                  <span className="px-3 py-2 border rounded-l-md bg-muted text-sm text-muted-foreground">{mobileCfg.prefix}</span>
                   <Input
                     id="mobile"
                     inputMode="numeric"
                     autoComplete="tel-national"
-                    placeholder="712345678"
-                    maxLength={9}
+                    placeholder={'7' + '0'.repeat(mobileCfg.maxLength - 1)}
+                    maxLength={mobileCfg.maxLength}
                     value={mobile}
                     onChange={(e) => setMobile(e.target.value.replace(/\D/g, ''))}
                     className="rounded-l-none"

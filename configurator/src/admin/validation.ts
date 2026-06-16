@@ -36,7 +36,7 @@ export const phone = raRegex(
 
 /**
  * Kenya citizen mobile: 9 digits starting with 7 or 1, optionally
- * prefixed with 0. Matches MDMS `ValidationConfigs.mobileNumberValidation`
+ * prefixed with 0. Matches MDMS `common-masters.MobileNumberValidation`
  * at tenant `ke`. NOT clamped to the HRMS 10-digit floor — citizens have
  * no HRMS-side @Pattern constraint.
  */

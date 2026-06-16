@@ -35,39 +35,32 @@ const CreateEmployee = () => {
     enable: false,
   });
 
-  // Fetch mobile validation config from MDMS. Read from the canonical
-  // `ValidationConfigs.mobileNumberValidation` schema documented in
-  // `packages/libraries/src/constants/mobileValidation.js` and already
-  // used by `products/pgr/src/hooks/pgr/useMobileValidation.js`.
-  // Previously this fetched `commonUiConfig.UserValidation`, a different
-  // master that Nai Pepea doesn't seed with Kenyan rules — so the form
-  // fell through to India defaults and rejected valid Kenyan numbers
-  // (closes egovernments/CCRS#415, #420).
-  //
-  // minLength is clamped to 10 because HRMS's Employee DTO has an
-  // @Pattern requiring exactly 10 digits regardless of what MDMS
-  // permits — sending a 9-digit payload just kicks a 400 downstream.
+  // Fetch mobile validation config from common-masters.MobileNumberValidation —
+  // the single source of truth for mobile validation across all frontends and backends.
   const stateLvlTenantId = window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID");
-  const HRMS_MIN_MOBILE_DIGITS = 10;
   const { data: validationConfig, isLoading: isValidationLoading } = Digit.Hooks.useCustomMDMS(
     stateLvlTenantId,
-    "ValidationConfigs",
-    [{ name: "mobileNumberValidation" }],
+    "common-masters",
+    [{ name: "MobileNumberValidation" }],
     {
       select: (data) => {
-        const validationData = data?.ValidationConfigs?.mobileNumberValidation?.find(
-          (x) => x.validationName === "defaultMobileValidation"
-        );
-        const rules = validationData?.rules;
+        const list = data?.["common-masters"]?.MobileNumberValidation || [];
+        const record =
+          list.find((x) => x.default === true && x.isActive !== false) ||
+          list.find((x) => x.isActive !== false) ||
+          list[0];
+        if (!record) return null;
+        const gc = window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS");
+        const length = gc?.mobileNumberLength;
         return {
-          prefix: rules?.prefix || DEFAULT_MOBILE_PREFIX,
-          pattern: rules?.pattern || DEFAULT_MOBILE_PATTERN,
-          maxLength: rules?.maxLength || DEFAULT_MOBILE_MAX_LENGTH,
-          minLength: Math.max(rules?.minLength || DEFAULT_MOBILE_MIN_LENGTH, HRMS_MIN_MOBILE_DIGITS),
-          errorMessage: rules?.errorMessage || "CORE_COMMON_MOBILE_ERROR",
+          prefix: record.countryCode || DEFAULT_MOBILE_PREFIX,
+          pattern: record.mobileNumberRegex || DEFAULT_MOBILE_PATTERN,
+          maxLength: length || DEFAULT_MOBILE_MAX_LENGTH,
+          minLength: length || DEFAULT_MOBILE_MIN_LENGTH,
+          errorMessage: gc?.mobileNumberErrorMessage || "CORE_COMMON_MOBILE_ERROR",
         };
       },
-      staleTime: 300000, // Cache for 5 minutes
+      staleTime: 300000,
       enabled: !!stateLvlTenantId,
     }
   );

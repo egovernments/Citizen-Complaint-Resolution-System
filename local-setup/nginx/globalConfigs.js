@@ -20,10 +20,10 @@ var globalConfigs = (function () {
   var mapCenter = { lat: -1.0, lng: 37.0 };
   var useInboxV1 = true;
   var coreMobileConfigs = {
-    mobilePrefix: "+254",
-    mobileNumberPattern: "^0?[17][0-9]{8}$",
+    mobilePrefix: "+251",
+    mobileNumberPattern: "^[79][0-9]{8}$",
     mobileNumberLength: 9,
-    mobileNumberAllowedStartingCharacters: ["1", "7"]
+    mobileNumberAllowedStartingCharacters: ["7", "9"]
   };
 
   // Runtime locale fallback for local setup: force default language unless user explicitly changes it.

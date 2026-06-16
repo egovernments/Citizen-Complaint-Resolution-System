@@ -257,29 +257,23 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
     }
   };
 
-  // Read from the canonical `ValidationConfigs.mobileNumberValidation`
-  // schema — same swap we made in HRMS create/edit (#415/#420) and the
-  // citizen login (#429). Nai Pepea doesn't seed the legacy
-  // `commonUiConfig.UserValidation` master, so the profile page fell
-  // through to the India default regex and refused to save Kenyan
-  // mobile numbers on submit (closes egovernments/CCRS#444 sub-3).
+  // Read from common-masters.MobileNumberValidation — the single source
+  // of truth for mobile validation across all frontends and backends.
   const { data: mdmsValidationData, isValidationConfigLoading } = Digit.Hooks.useCustomMDMS(
     stateLvlTenantId,
-    "ValidationConfigs",
-    [{ name: "mobileNumberValidation" }],
+    "common-masters",
+    [{ name: "MobileNumberValidation" }],
     {
       select: (data) => {
-        const validationData = data?.ValidationConfigs?.mobileNumberValidation?.find(
-          (x) => x.validationName === "defaultMobileValidation"
-        );
-        const rules = validationData?.rules;
+        const list = data?.["common-masters"]?.MobileNumberValidation || [];
+        const record =
+          list.find((x) => x.default === true && x.isActive !== false) ||
+          list.find((x) => x.isActive !== false) ||
+          list[0];
+        if (!record) return null;
         return {
-          UserProfileValidationConfig: [
-            {
-              mobileNumber: rules?.pattern,
-            },
-          ],
-          prefix: rules?.prefix || DEFAULT_MOBILE_PREFIX,
+          UserProfileValidationConfig: [{ mobileNumber: record.mobileNumberRegex }],
+          prefix: record.countryCode || DEFAULT_MOBILE_PREFIX,
         };
       },
       enabled: !!stateLvlTenantId,
