@@ -1033,10 +1033,10 @@ services:
   # HRMS Prerequisites Gate - Verifies system user is queryable before HRMS starts
   # ===========================================================================
   hrms-prereq-gate:
-    image: registry.preview.egov.theflywheel.in/postgres:16
+    image: registry.preview.egov.theflywheel.in/curlimages/curl:latest
     container_name: hrms-prereq-gate
     depends_on:
-      pgbouncer:
+      egov-user:
         condition: service_healthy
       user-seed:
         condition: service_completed_successfully
@@ -1044,23 +1044,23 @@ services:
       - sh
       - -c
       - |
-        echo 'Verifying INTERNAL_USER (type=SYSTEM) exists in DB before HRMS starts...'
+        echo 'Waiting for INTERNAL_MICROSERVICE_ROLE user to be queryable via egov-user API...'
+        echo 'HRMS searches for users by roleCodes=INTERNAL_MICROSERVICE_ROLE on startup'
         i=1
-        while [ $$i -le 20 ]; do
-          COUNT=$$(psql "postgresql://egov:$${POSTGRES_PASSWORD:-egov123}@postgres:5432/egov" \
-            -tAc "SELECT COUNT(*) FROM public.eg_user WHERE type='SYSTEM' AND tenantid='pg' AND active=true" 2>/dev/null)
-          if [ "$${COUNT:-0}" -ge 1 ] 2>/dev/null; then
-            echo "Found $${COUNT} SYSTEM user(s) on pg on attempt $$i. HRMS can start."
+        while [ $$i -le 30 ]; do
+          RESPONSE=$$(curl -sf http://egov-user:8107/user/v1/_search \
+            -H "Content-Type: application/json" \
+            -d '{"RequestInfo":{"apiId":"check"},"tenantId":"pg","roleCodes":["INTERNAL_MICROSERVICE_ROLE"]}')
+          if echo "$$RESPONSE" | grep -q '"INTERNAL_MICROSERVICE_ROLE"'; then
+            echo "INTERNAL_MICROSERVICE_ROLE user found on attempt $$i! HRMS can start."
             exit 0
           fi
-          echo "Attempt $$i: no SYSTEM user on pg yet (COUNT=$${COUNT}), waiting 3s..."
+          echo "Attempt $$i: INTERNAL_MICROSERVICE_ROLE user not yet queryable, waiting 3s..."
           sleep 3
           i=$$((i + 1))
         done
-        echo "ERROR: No SYSTEM user found on tenant pg after 20 attempts!"
+        echo "ERROR: INTERNAL_MICROSERVICE_ROLE user not found after 30 attempts!"
         exit 1
-    environment:
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
     networks:
       - egov-network
     restart: "no"
