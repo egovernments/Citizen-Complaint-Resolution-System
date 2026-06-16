@@ -23,6 +23,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { PgrInboxPage } from '../pages/pgr-inbox.page';
 import { HrmsCreatePage } from '../pages/hrms-create.page';
 import { getDigitToken, loginViaApi } from '../utils/auth';
+import { uniqueMobile } from '../../utils/mobile';
 
 import * as path from 'path';
 import * as fs from 'fs';
@@ -65,9 +66,9 @@ async function assertLocalized(page: Page, context: string): Promise<string[]> {
   return rawKeys;
 }
 
-// Unique phones per run
-const CITIZEN_PHONE = '8' + Date.now().toString().slice(-9);
-const EMPLOYEE_PHONE = '9' + Date.now().toString().slice(-9);
+// Unique phones per run, shaped by the target tenant's mobile rules
+const CITIZEN_PHONE = uniqueMobile(0);
+const EMPLOYEE_PHONE = uniqueMobile(1);
 const CITIZEN_NAME = 'E2E Lifecycle Citizen';
 const EMPLOYEE_NAME = 'E2E Test Employee';
 

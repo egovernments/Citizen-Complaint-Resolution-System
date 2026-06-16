@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { PgrInboxPage } from '../pages/pgr-inbox.page';
 import { getDigitToken, loginViaApi } from '../utils/auth';
+import { fixedMobile } from '../../utils/mobile';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:18080';
 const TENANT = process.env.DIGIT_TENANT || 'uitest.citya';
@@ -58,7 +59,7 @@ test.describe.serial('Full PGR complaint lifecycle', () => {
         },
         citizen: {
           name: 'E2E Test Citizen',
-          mobileNumber: '9888888888',
+          mobileNumber: fixedMobile(888888888),
           tenantId: TENANT,
         },
       },
