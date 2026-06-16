@@ -803,11 +803,13 @@ class PGRService {
     }
 
     // Upsert TENANT_TENANTS_<TENANTID> localization in background
-    const tenantLocalizationCode = `TENANT_TENANTS_${city.toUpperCase()}`;
-    const tenantDisplayName = city; // Use the city/tenant name as the message
+    // Use organization code from extraInfo if available (for sandbox mode)
+    const orgCode = (extraInfo && extraInfo.organizationTenantId) ? extraInfo.organizationTenantId : city.toUpperCase();
+    const tenantLocalizationCode = `TENANT_TENANTS_${orgCode}`;
+    const tenantDisplayName = orgCode; // Use the org code as the message
     
     // Upsert localization asynchronously in background (non-blocking)
-    this.upsertLocalizationMessage(city, tenantLocalizationCode, tenantDisplayName, "digit-tenants", "en_IN", authToken, userInfo)
+    this.upsertLocalizationMessage(orgCode, tenantLocalizationCode, tenantDisplayName, "digit-tenants", "en_IN", authToken, userInfo)
       .then(result => {
         if (result) {
           console.log(`Successfully upserted tenant localization for ${tenantLocalizationCode}`);
@@ -933,21 +935,10 @@ class PGRService {
       
       const requestBody = {
         RequestInfo: {
-          apiId: "org.egov.localization",
-          ver: "1.0",
-          action: "create",
-          msgId: Date.now().toString(),
+          apiId: "Rainmaker",
           authToken: authToken || "",
-          userInfo: userInfo || {
-            id: "1",
-            userName: null,
-            name: null,
-            type: null,
-            mobileNumber: null,
-            emailId: null,
-            roles: null,
-            uuid: "40dceade-992d-4a8f-8243-19dda76a4171"
-          }
+          msgId: `${Date.now()}|${locale}`,
+          plainAccessRequest: {}
         },
         locale: locale,
         tenantId: tenantId,
