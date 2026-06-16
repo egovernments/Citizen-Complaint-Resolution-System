@@ -1580,8 +1580,14 @@ export const UICustomizations = {
         tenantId: Digit.ULBService.getCurrentTenantId(),
         limit: clonedData?.state?.tableForm?.limit || 10,
         offset: clonedData?.state?.tableForm?.offset ?? 0,
-        sortBy: "applicationStatus",
-        sortOrder: "DESC",
+        // Order by SLA remaining (most urgent first) server-side, so the order
+        // is consistent across the FULL paginated result set. The table's
+        // column-header sort is client-side react-table — it only reorders the
+        // current page, so rows appeared to drop in/out as page size changed
+        // (issue #432). pgr-services now supports sortBy=sla; see
+        // PGRQueryBuilder.addOrderByClause.
+        sortBy: "sla",
+        sortOrder: "ASC",
       };
 
       // Search form fields

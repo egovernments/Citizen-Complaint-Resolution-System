@@ -16,8 +16,10 @@
  * each state change is reflected in the UI.
  */
 import { test, expect } from '@playwright/test';
-import { PgrInboxPage } from '../pages/pgr-inbox.page';
-import { getDigitToken, loginViaApi } from '../utils/auth';
+import { PgrInboxPage } from '../../pages/pgr-inbox.page';
+import { getDigitToken, loginViaApi } from '../../utils/auth';
+import { uniqueMobile } from '../../../utils/mobile';
+import { citizenOtpLogin } from '../../utils/citizen-auth';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:18080';
 const TENANT = process.env.DIGIT_TENANT || 'uitest.citya';
@@ -25,8 +27,9 @@ const EMPLOYEE_USER = process.env.DIGIT_EMPLOYEE_USER || 'ADMIN';
 const EMPLOYEE_PASS = process.env.DIGIT_EMPLOYEE_PASSWORD || 'eGov@123';
 const FIXED_OTP = '123456';
 
-// Unique phone per run: 8 + last 9 digits of timestamp
-const CITIZEN_PHONE = '8' + Date.now().toString().slice(-9);
+// Unique phone per run, shaped by the target tenant's mobile rules
+// (CITIZEN_MOBILE_LENGTH/PREFIX env or globalConfigs via global-setup).
+const CITIZEN_PHONE = uniqueMobile();
 const CITIZEN_NAME = 'Playwright Test Citizen';
 
 test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
@@ -104,38 +107,9 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
       });
     });
 
-    // Navigate to citizen login
-    await page.goto(`${BASE_URL}/digit-ui/citizen/login`, {
-      waitUntil: 'domcontentloaded',
-      timeout: 30_000,
-    });
-    await page.waitForTimeout(2000);
-
-    // Enter phone number
-    const mobileInput = page.locator('input[name="mobileNumber"]');
-    await mobileInput.waitFor({ state: 'visible', timeout: 10_000 });
-    await mobileInput.click();
-    await mobileInput.type(CITIZEN_PHONE, { delay: 30 });
-    await page.waitForTimeout(500);
-
-    // Click Next
-    await page.locator('button:visible').filter({ hasText: /NEXT|Next|CS_COMMONS_NEXT/ }).click();
-    await page.waitForTimeout(5000);
-
-    // OTP page: enter 6-digit OTP
-    const otpInputs = page.locator('input[maxlength="1"]');
-    await otpInputs.first().waitFor({ state: 'visible', timeout: 10_000 });
-    const otpDigits = FIXED_OTP.split('');
-    for (let i = 0; i < otpDigits.length; i++) {
-      await otpInputs.nth(i).click();
-      await otpInputs.nth(i).type(otpDigits[i]);
-      await page.waitForTimeout(100);
-    }
-    await page.waitForTimeout(1000);
-
-    // Submit OTP
-    await page.locator('button:visible').filter({ hasText: /NEXT|Next|CS_COMMONS_NEXT/ }).click();
-    await page.waitForTimeout(10_000);
+    // Drive the V2 login UI via the shared helper (tel input + 6-box
+    // OTP with auto-advance); it asserts we actually leave /login.
+    await citizenOtpLogin(page, { mobile: CITIZEN_PHONE, otp: FIXED_OTP });
 
     // Verify citizen is logged in: token should be in localStorage
     const token = await page.evaluate(() => localStorage.getItem('Citizen.token'));
@@ -267,7 +241,7 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
 
     await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
 
-    await page.goto(`/digit-ui/employee/pgr/complaint/details/${serviceRequestId}`, {
+    await page.goto(`/digit-ui/employee/pgr/complaint-details/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -368,7 +342,7 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
 
     await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
 
-    await page.goto(`/digit-ui/employee/pgr/complaint/details/${serviceRequestId}`, {
+    await page.goto(`/digit-ui/employee/pgr/complaint-details/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -376,7 +350,7 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
 
     const bodyText = await page.locator('body').innerText();
     expect(bodyText).toContain(serviceRequestId);
-    expect(bodyText).toMatch(/PENDINGATLME|Pending at LME|Pending for resolution/i);
+    expect(bodyText).toMatch(/PENDINGATLME|Pending at (LME|last mile)|Pending for resolution/i);
     console.log(`Details page confirms PENDINGATLME status`);
   });
 
@@ -436,7 +410,7 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
 
     await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
 
-    await page.goto(`/digit-ui/employee/pgr/complaint/details/${serviceRequestId}`, {
+    await page.goto(`/digit-ui/employee/pgr/complaint-details/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });

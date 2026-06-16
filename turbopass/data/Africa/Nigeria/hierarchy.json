@@ -1,0 +1,7504 @@
+{
+  "code": "NG",
+  "name": "Nigeria",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "NG-YO",
+      "parent_code": "NG",
+      "name": "Yobe",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-255322295",
+          "parent_code": "NG-YO",
+          "name": "Potiskum",
+          "type": "city",
+          "population": "205876",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-469369303",
+          "parent_code": "NG-YO",
+          "name": "Machina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501331784",
+          "parent_code": "NG-YO",
+          "name": "Gashua",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501394304",
+          "parent_code": "NG-YO",
+          "name": "Baiomari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501430392",
+          "parent_code": "NG-YO",
+          "name": "Ngelzarma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501431156",
+          "parent_code": "NG-YO",
+          "name": "Garandoili",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501434017",
+          "parent_code": "NG-YO",
+          "name": "Dawasa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501463064",
+          "parent_code": "NG-YO",
+          "name": "Buni Yadi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501463359",
+          "parent_code": "NG-YO",
+          "name": "Gadaka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501464113",
+          "parent_code": "NG-YO",
+          "name": "Jakusko",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501464391",
+          "parent_code": "NG-YO",
+          "name": "Geidam",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501496479",
+          "parent_code": "NG-YO",
+          "name": "Nguru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501496682",
+          "parent_code": "NG-YO",
+          "name": "Wazagal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501540887",
+          "parent_code": "NG-YO",
+          "name": "Damaturu",
+          "type": "city",
+          "population": "88014",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12344268996",
+          "parent_code": "NG-YO",
+          "name": "Shana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12344332857",
+          "parent_code": "NG-YO",
+          "name": "Fika",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12344333772",
+          "parent_code": "NG-YO",
+          "name": "Dumbulwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NG-JI",
+      "parent_code": "NG",
+      "name": "Jigawa State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-501358748",
+          "parent_code": "NG-JI",
+          "name": "Malummaduri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501382867",
+          "parent_code": "NG-JI",
+          "name": "Gujungu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501417545",
+          "parent_code": "NG-JI",
+          "name": "Babura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501419716",
+          "parent_code": "NG-JI",
+          "name": "Kanya Babba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501430512",
+          "parent_code": "NG-JI",
+          "name": "Hadejia",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501430762",
+          "parent_code": "NG-JI",
+          "name": "Guri",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501430821",
+          "parent_code": "NG-JI",
+          "name": "Marma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501430839",
+          "parent_code": "NG-JI",
+          "name": "Madachi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501464276",
+          "parent_code": "NG-JI",
+          "name": "Teshegwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501466864",
+          "parent_code": "NG-JI",
+          "name": "Birnin Kudu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501482287",
+          "parent_code": "NG-JI",
+          "name": "Jahun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501484536",
+          "parent_code": "NG-JI",
+          "name": "Dawa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501501039",
+          "parent_code": "NG-JI",
+          "name": "Gumel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501516091",
+          "parent_code": "NG-JI",
+          "name": "Gantsa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501540908",
+          "parent_code": "NG-JI",
+          "name": "Dutse",
+          "type": "city",
+          "population": "17697",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4388868558",
+          "parent_code": "NG-JI",
+          "name": "kazaure",
+          "type": "city",
+          "population": "700000",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NG-ZA",
+      "parent_code": "NG",
+      "name": "Zamfara State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-462025382",
+          "parent_code": "NG-ZA",
+          "name": "Kaura-Namoda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501387355",
+          "parent_code": "NG-ZA",
+          "name": "Maru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501461944",
+          "parent_code": "NG-ZA",
+          "name": "Ramfashi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501509035",
+          "parent_code": "NG-ZA",
+          "name": "Bungudu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501511710",
+          "parent_code": "NG-ZA",
+          "name": "Anka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501515252",
+          "parent_code": "NG-ZA",
+          "name": "Gayri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501540899",
+          "parent_code": "NG-ZA",
+          "name": "Gusau",
+          "type": "city",
+          "population": "383162",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5824154411",
+          "parent_code": "NG-ZA",
+          "name": "Mafara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NG-SO",
+      "parent_code": "NG",
+      "name": "Sokoto State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-501341808",
+          "parent_code": "NG-SO",
+          "name": "Kebbe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501386060",
+          "parent_code": "NG-SO",
+          "name": "Tangaza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501386472",
+          "parent_code": "NG-SO",
+          "name": "Kware",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501386554",
+          "parent_code": "NG-SO",
+          "name": "Achida",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501387564",
+          "parent_code": "NG-SO",
+          "name": "Gwadabawa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501422443",
+          "parent_code": "NG-SO",
+          "name": "Wamako",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501426670",
+          "parent_code": "NG-SO",
+          "name": "Alkamu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501455710",
+          "parent_code": "NG-SO",
+          "name": "Wurno",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501461145",
+          "parent_code": "NG-SO",
+          "name": "Gada",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501467780",
+          "parent_code": "NG-SO",
+          "name": "Tureta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501467957",
+          "parent_code": "NG-SO",
+          "name": "Tambawal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501492810",
+          "parent_code": "NG-SO",
+          "name": "Sabon Birni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501494289",
+          "parent_code": "NG-SO",
+          "name": "Rabah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501496225",
+          "parent_code": "NG-SO",
+          "name": "Fokku",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501497799",
+          "parent_code": "NG-SO",
+          "name": "Sifawa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501498270",
+          "parent_code": "NG-SO",
+          "name": "Isa",
+          "type": "city",
+          "population": "146103",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501515079",
+          "parent_code": "NG-SO",
+          "name": "Kajiji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501515499",
+          "parent_code": "NG-SO",
+          "name": "Shagari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501520583",
+          "parent_code": "NG-SO",
+          "name": "Silame",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501520731",
+          "parent_code": "NG-SO",
+          "name": "Goronyo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501521200",
+          "parent_code": "NG-SO",
+          "name": "Ammanawa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501540904",
+          "parent_code": "NG-SO",
+          "name": "Sokoto",
+          "type": "city",
+          "population": "427760",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-5824207642",
+          "parent_code": "NG-SO",
+          "name": "Salame",
+          "type": "city",
+          "population": "5870",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5825477687",
+          "parent_code": "NG-SO",
+          "name": "Dange",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5825525368",
+          "parent_code": "NG-SO",
+          "name": "Bodinga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NG-KE",
+      "parent_code": "NG",
+      "name": "Kebbi State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-469246769",
+          "parent_code": "NG-KE",
+          "name": "Dakingari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-469247299",
+          "parent_code": "NG-KE",
+          "name": "Kaingiwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501341610",
+          "parent_code": "NG-KE",
+          "name": "Aliero",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501390414",
+          "parent_code": "NG-KE",
+          "name": "Koko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501399437",
+          "parent_code": "NG-KE",
+          "name": "Kalgo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501400227",
+          "parent_code": "NG-KE",
+          "name": "Bunza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501430492",
+          "parent_code": "NG-KE",
+          "name": "Dirinbaji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501435765",
+          "parent_code": "NG-KE",
+          "name": "Argungu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501445136",
+          "parent_code": "NG-KE",
+          "name": "Jega",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501457143",
+          "parent_code": "NG-KE",
+          "name": "Naman Goma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501458705",
+          "parent_code": "NG-KE",
+          "name": "Sakaba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501463537",
+          "parent_code": "NG-KE",
+          "name": "Zuru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501477167",
+          "parent_code": "NG-KE",
+          "name": "Lollo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501487382",
+          "parent_code": "NG-KE",
+          "name": "Ambursa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501506667",
+          "parent_code": "NG-KE",
+          "name": "Kamba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501512111",
+          "parent_code": "NG-KE",
+          "name": "Suru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501512405",
+          "parent_code": "NG-KE",
+          "name": "Bagudo",
+          "type": "city",
+          "population": "8845",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501518910",
+          "parent_code": "NG-KE",
+          "name": "Illo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501523378",
+          "parent_code": "NG-KE",
+          "name": "Kaura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501523502",
+          "parent_code": "NG-KE",
+          "name": "Zauro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501540938",
+          "parent_code": "NG-KE",
+          "name": "Birnin Kebbi",
+          "type": "city",
+          "population": "125594",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1809947505",
+          "parent_code": "NG-KE",
+          "name": "Yelwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3650657612",
+          "parent_code": "NG-KE",
+          "name": "Gubindari I",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NG-KD",
+      "parent_code": "NG",
+      "name": "Kaduna State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27565091",
+          "parent_code": "NG-KD",
+          "name": "Kaduna",
+          "type": "city",
+          "population": "760084",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-318095353",
+          "parent_code": "NG-KD",
+          "name": "Koi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501388581",
+          "parent_code": "NG-KD",
+          "name": "Zaria",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501401380",
+          "parent_code": "NG-KD",
+          "name": "Pambeguwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501409573",
+          "parent_code": "NG-KD",
+          "name": "Nungu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501428678",
+          "parent_code": "NG-KD",
+          "name": "Katabu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501448859",
+          "parent_code": "NG-KD",
+          "name": "Kachia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501460656",
+          "parent_code": "NG-KD",
+          "name": "Birnin Gwari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501493308",
+          "parent_code": "NG-KD",
+          "name": "Kafanchan",
+          "type": "city",
+          "population": "83092",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501495998",
+          "parent_code": "NG-KD",
+          "name": "Kujama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501521347",
+          "parent_code": "NG-KD",
+          "name": "Buruku",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501528312",
+          "parent_code": "NG-KD",
+          "name": "Manchok",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1803116441",
+          "parent_code": "NG-KD",
+          "name": "Kwakwasa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13321913893",
+          "parent_code": "NG-KD",
+          "name": "Jema'a",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13750810236",
+          "parent_code": "NG-KD",
+          "name": "Wanka town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NG-KN",
+      "parent_code": "NG",
+      "name": "Kano State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-501462879",
+          "parent_code": "NG-KN",
+          "name": "Tudun Wada",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501540880",
+          "parent_code": "NG-KN",
+          "name": "Kano",
+          "type": "city",
+          "population": "2395375",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2964904418",
+          "parent_code": "NG-KN",
+          "name": "Bagwai",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2965065968",
+          "parent_code": "NG-KN",
+          "name": "Garin Shanono",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2966013031",
+          "parent_code": "NG-KN",
+          "name": "Ajingi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2968315666",
+          "parent_code": "NG-KN",
+          "name": "Tsakuwa Babban Gari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2969268801",
+          "parent_code": "NG-KN",
+          "name": "Sabon Birni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2969271154",
+          "parent_code": "NG-KN",
+          "name": "Kofar Kudu Dumbulum",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2969271155",
+          "parent_code": "NG-KN",
+          "name": "Nassarawa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2969271156",
+          "parent_code": "NG-KN",
+          "name": "Zango Waje",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2970235658",
+          "parent_code": "NG-KN",
+          "name": "Dadin Kowa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2970340589",
+          "parent_code": "NG-KN",
+          "name": "Doguwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2971298388",
+          "parent_code": "NG-KN",
+          "name": "Bakaji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2971298389",
+          "parent_code": "NG-KN",
+          "name": "Gorondutse Cikin Gari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2971581524",
+          "parent_code": "NG-KN",
+          "name": "Yammawa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2971804658",
+          "parent_code": "NG-KN",
+          "name": "Galadanci",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2972354927",
+          "parent_code": "NG-KN",
+          "name": "Falgore",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2973440897",
+          "parent_code": "NG-KN",
+          "name": "Tsanyawa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2973716266",
+          "parent_code": "NG-KN",
+          "name": "Unguwar Kudu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2994124118",
+          "parent_code": "NG-KN",
+          "name": "Tamburawa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2996302682",
+          "parent_code": "NG-KN",
+          "name": "Getso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2996302683",
+          "parent_code": "NG-KN",
+          "name": "Gwarzo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7500338060",
+          "parent_code": "NG-KN",
+          "name": "Beli",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7500360333",
+          "parent_code": "NG-KN",
+          "name": "Sabon Gari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7500441268",
+          "parent_code": "NG-KN",
+          "name": "Rogo Sabon Gari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7500690609",
+          "parent_code": "NG-KN",
+          "name": "Kiru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7500709066",
+          "parent_code": "NG-KN",
+          "name": "Unguwar Fari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7500756622",
+          "parent_code": "NG-KN",
+          "name": "Sabuwar Abuja",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7500763397",
+          "parent_code": "NG-KN",
+          "name": "Sabuwar Anguwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7501061246",
+          "parent_code": "NG-KN",
+          "name": "Zango Bichi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7501082973",
+          "parent_code": "NG-KN",
+          "name": "Yar Kasuwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7501082974",
+          "parent_code": "NG-KN",
+          "name": "Nassarawa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7501143523",
+          "parent_code": "NG-KN",
+          "name": "Wal Adiya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7501248615",
+          "parent_code": "NG-KN",
+          "name": "Rimin Daddo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7501251486",
+          "parent_code": "NG-KN",
+          "name": "Armatawa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7501251487",
+          "parent_code": "NG-KN",
+          "name": "Zaure Bakwai",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7501314757",
+          "parent_code": "NG-KN",
+          "name": "Unguwar Zubairu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7501320094",
+          "parent_code": "NG-KN",
+          "name": "Zogarawa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7501326261",
+          "parent_code": "NG-KN",
+          "name": "Kwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7501338305",
+          "parent_code": "NG-KN",
+          "name": "Saye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7501405337",
+          "parent_code": "NG-KN",
+          "name": "Dambatta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503331281",
+          "parent_code": "NG-KN",
+          "name": "Kunya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503343724",
+          "parent_code": "NG-KN",
+          "name": "Tumfafi Kanawa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503343744",
+          "parent_code": "NG-KN",
+          "name": "Ungogo Arewa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503344417",
+          "parent_code": "NG-KN",
+          "name": "Tsamoni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503357839",
+          "parent_code": "NG-KN",
+          "name": "Dandalama Cikin Gari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503372391",
+          "parent_code": "NG-KN",
+          "name": "Danladi Nasidi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503372397",
+          "parent_code": "NG-KN",
+          "name": "Mariri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503389787",
+          "parent_code": "NG-KN",
+          "name": "Yarako",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503395456",
+          "parent_code": "NG-KN",
+          "name": "Chaka Baba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503399410",
+          "parent_code": "NG-KN",
+          "name": "Minjibir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503405432",
+          "parent_code": "NG-KN",
+          "name": "Bakin Ruwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503405442",
+          "parent_code": "NG-KN",
+          "name": "Bakin Dogo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503444194",
+          "parent_code": "NG-KN",
+          "name": "Tahade",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503450863",
+          "parent_code": "NG-KN",
+          "name": "Unguwar Mahauta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503470360",
+          "parent_code": "NG-KN",
+          "name": "Zakiri Maigari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503502953",
+          "parent_code": "NG-KN",
+          "name": "Dawakiji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503502956",
+          "parent_code": "NG-KN",
+          "name": "Gano",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503505052",
+          "parent_code": "NG-KN",
+          "name": "Zango Layin Gidan Mai Unguwar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503505053",
+          "parent_code": "NG-KN",
+          "name": "Niima Yamma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503505055",
+          "parent_code": "NG-KN",
+          "name": "Unguwar Mahaukci",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503532970",
+          "parent_code": "NG-KN",
+          "name": "Unguwar Arewa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503532975",
+          "parent_code": "NG-KN",
+          "name": "Komi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503547394",
+          "parent_code": "NG-KN",
+          "name": "Yanbarau",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503555161",
+          "parent_code": "NG-KN",
+          "name": "Zangon Baure",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503569463",
+          "parent_code": "NG-KN",
+          "name": "Unguwar Tsamiya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503576996",
+          "parent_code": "NG-KN",
+          "name": "Zango",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503587599",
+          "parent_code": "NG-KN",
+          "name": "Unguwar Fawa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503587602",
+          "parent_code": "NG-KN",
+          "name": "Yamma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503589805",
+          "parent_code": "NG-KN",
+          "name": "Tabuli",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503589814",
+          "parent_code": "NG-KN",
+          "name": "Utai Gabas",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503592721",
+          "parent_code": "NG-KN",
+          "name": "Yamusawa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503594791",
+          "parent_code": "NG-KN",
+          "name": "Yambade",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503594792",
+          "parent_code": "NG-KN",
+          "name": "Fuloti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503597829",
+          "parent_code": "NG-KN",
+          "name": "Fanda Sabon Gari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503626391",
+          "parent_code": "NG-KN",
+          "name": "Rimi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503635562",
+          "parent_code": "NG-KN",
+          "name": "Zango",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503635565",
+          "parent_code": "NG-KN",
+          "name": "Yankaji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503645135",
+          "parent_code": "NG-KN",
+          "name": "Zango",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503650738",
+          "parent_code": "NG-KN",
+          "name": "Sitti Kudu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503704672",
+          "parent_code": "NG-KN",
+          "name": "Zango",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503714956",
+          "parent_code": "NG-KN",
+          "name": "Burun Burun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503723103",
+          "parent_code": "NG-KN",
+          "name": "Unguwar Nazara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7503784759",
+          "parent_code": "NG-KN",
+          "name": "Unguwar Findi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NG-KT",
+      "parent_code": "NG",
+      "name": "Katsina State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-469351704",
+          "parent_code": "NG-KT",
+          "name": "Kaita",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501368083",
+          "parent_code": "NG-KT",
+          "name": "Daura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501386027",
+          "parent_code": "NG-KT",
+          "name": "Funtua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501415182",
+          "parent_code": "NG-KT",
+          "name": "Zango",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501460182",
+          "parent_code": "NG-KT",
+          "name": "Dutsin Ma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501495556",
+          "parent_code": "NG-KT",
+          "name": "Gurbin Baure",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501521153",
+          "parent_code": "NG-KT",
+          "name": "Malumfashi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501540897",
+          "parent_code": "NG-KT",
+          "name": "Katsina",
+          "type": "city",
+          "population": "318459",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "NG-AB",
+      "parent_code": "NG",
+      "name": "Abia State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-501344492",
+          "parent_code": "NG-AB",
+          "name": "Akwete",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501485919",
+          "parent_code": "NG-AB",
+          "name": "Arochukwu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501509753",
+          "parent_code": "NG-AB",
+          "name": "Ohafia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501517655",
+          "parent_code": "NG-AB",
+          "name": "Bende",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501517702",
+          "parent_code": "NG-AB",
+          "name": "Aba",
+          "type": "city",
+          "population": "1020900",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501523659",
+          "parent_code": "NG-AB",
+          "name": "Azumini",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2841325913",
+          "parent_code": "NG-AB",
+          "name": "Umuahia",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-6281521698",
+          "parent_code": "NG-AB",
+          "name": "Uturu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10975249123",
+          "parent_code": "NG-AB",
+          "name": "Nkwoagu Isuochi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10975249124",
+          "parent_code": "NG-AB",
+          "name": "Ngodo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10982213728",
+          "parent_code": "NG-AB",
+          "name": "Isi-Ikwuato",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10984743861",
+          "parent_code": "NG-AB",
+          "name": "Oke Ikpe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10984743866",
+          "parent_code": "NG-AB",
+          "name": "Obehie",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NG-AK",
+      "parent_code": "NG",
+      "name": "Akwa Ibom State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-501193829",
+          "parent_code": "NG-AK",
+          "name": "Uyo",
+          "type": "city",
+          "population": "436606",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501343986",
+          "parent_code": "NG-AK",
+          "name": "Eket",
+          "type": "city",
+          "population": "364489",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501347411",
+          "parent_code": "NG-AK",
+          "name": "Ikot Ibritam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501352042",
+          "parent_code": "NG-AK",
+          "name": "Odoro Ikpe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501422836",
+          "parent_code": "NG-AK",
+          "name": "Oruko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501436940",
+          "parent_code": "NG-AK",
+          "name": "Ikot Aba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501437405",
+          "parent_code": "NG-AK",
+          "name": "Abak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501439628",
+          "parent_code": "NG-AK",
+          "name": "Okoroete",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501455826",
+          "parent_code": "NG-AK",
+          "name": "Oron",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501468431",
+          "parent_code": "NG-AK",
+          "name": "Afaha Offiong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501478655",
+          "parent_code": "NG-AK",
+          "name": "Odot",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501489297",
+          "parent_code": "NG-AK",
+          "name": "Oko Ita",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501494340",
+          "parent_code": "NG-AK",
+          "name": "Udung Uko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501494484",
+          "parent_code": "NG-AK",
+          "name": "Enwang",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501507812",
+          "parent_code": "NG-AK",
+          "name": "Okopedi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501515557",
+          "parent_code": "NG-AK",
+          "name": "Etinan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501515871",
+          "parent_code": "NG-AK",
+          "name": "Mkpat Enin",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501516317",
+          "parent_code": "NG-AK",
+          "name": "Ikot Ekpene",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501522857",
+          "parent_code": "NG-AK",
+          "name": "Itu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501523775",
+          "parent_code": "NG-AK",
+          "name": "Abat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501527793",
+          "parent_code": "NG-AK",
+          "name": "James Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501527826",
+          "parent_code": "NG-AK",
+          "name": "Uquo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3271499682",
+          "parent_code": "NG-AK",
+          "name": "Qua Iboe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3619528981",
+          "parent_code": "NG-AK",
+          "name": "Afaha Ikot Ebak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3619534462",
+          "parent_code": "NG-AK",
+          "name": "Utu Etim Ekpo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10580076735",
+          "parent_code": "NG-AK",
+          "name": "Upenekang",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10623250030",
+          "parent_code": "NG-AK",
+          "name": "Urue Offong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10625203842",
+          "parent_code": "NG-AK",
+          "name": "Ikot Edibon",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10982952368",
+          "parent_code": "NG-AK",
+          "name": "Ibiaku Ntok Okpo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10983623087",
+          "parent_code": "NG-AK",
+          "name": "Nto Edino",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10983928919",
+          "parent_code": "NG-AK",
+          "name": "Nung Udoe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10984695963",
+          "parent_code": "NG-AK",
+          "name": "Idu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10984738536",
+          "parent_code": "NG-AK",
+          "name": "Urua Inyang",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10984836009",
+          "parent_code": "NG-AK",
+          "name": "Ikot Akpa Nkuk",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12348103547",
+          "parent_code": "NG-AK",
+          "name": "Elile",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NG-AN",
+      "parent_code": "NG",
+      "name": "Anambra State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-501332893",
+          "parent_code": "NG-AN",
+          "name": "Neni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501347024",
+          "parent_code": "NG-AN",
+          "name": "Nkpor",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501383665",
+          "parent_code": "NG-AN",
+          "name": "Enugu Umunze",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501438288",
+          "parent_code": "NG-AN",
+          "name": "Ogidi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501438883",
+          "parent_code": "NG-AN",
+          "name": "Enugwu-Ukwu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501439062",
+          "parent_code": "NG-AN",
+          "name": "Nnobi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501469021",
+          "parent_code": "NG-AN",
+          "name": "Ojoto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501479424",
+          "parent_code": "NG-AN",
+          "name": "Ukpor",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501488677",
+          "parent_code": "NG-AN",
+          "name": "Nzam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501488971",
+          "parent_code": "NG-AN",
+          "name": "Atani",
+          "type": "city",
+          "population": "230000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501491538",
+          "parent_code": "NG-AN",
+          "name": "Ihiala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501491906",
+          "parent_code": "NG-AN",
+          "name": "Nmiata",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501496853",
+          "parent_code": "NG-AN",
+          "name": "Nibo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501498402",
+          "parent_code": "NG-AN",
+          "name": "Umudioka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501498472",
+          "parent_code": "NG-AN",
+          "name": "Nnewi",
+          "type": "city",
+          "population": "900000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501498596",
+          "parent_code": "NG-AN",
+          "name": "Akwa Etiti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501508236",
+          "parent_code": "NG-AN",
+          "name": "Ozubulu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501514279",
+          "parent_code": "NG-AN",
+          "name": "Adazi Nnukwu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501515817",
+          "parent_code": "NG-AN",
+          "name": "Orifite",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501516054",
+          "parent_code": "NG-AN",
+          "name": "Aguleri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501522082",
+          "parent_code": "NG-AN",
+          "name": "Igbo-Ukwu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501522158",
+          "parent_code": "NG-AN",
+          "name": "Ajalli",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501540935",
+          "parent_code": "NG-AN",
+          "name": "Awka",
+          "type": "city",
+          "population": "301657",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-5022361629",
+          "parent_code": "NG-AN",
+          "name": "Ora-Eri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5232601618",
+          "parent_code": "NG-AN",
+          "name": "Onitsha",
+          "type": "city",
+          "population": "1080000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-7838229379",
+          "parent_code": "NG-AN",
+          "name": "Amorka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9130040855",
+          "parent_code": "NG-AN",
+          "name": "Fegge",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11032050423",
+          "parent_code": "NG-AN",
+          "name": "Achalla",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11048418337",
+          "parent_code": "NG-AN",
+          "name": "Alor",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11048477221",
+          "parent_code": "NG-AN",
+          "name": "Umuoji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12527103141",
+          "parent_code": "NG-AN",
+          "name": "Nteje",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12527149495",
+          "parent_code": "NG-AN",
+          "name": "Awkuzu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13018740231",
+          "parent_code": "NG-AN",
+          "name": "Amafuo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13204030355",
+          "parent_code": "NG-AN",
+          "name": "Ekwulobia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13850726987",
+          "parent_code": "NG-AN",
+          "name": "OBELEDU",
+          "type": "city",
+          "population": "3 million",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NG-BY",
+      "parent_code": "NG",
+      "name": "Bayelsa State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-245914677",
+          "parent_code": "NG-BY",
+          "name": "Yenagoa",
+          "type": "city",
+          "population": "353344",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501330003",
+          "parent_code": "NG-BY",
+          "name": "Okpoma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501379868",
+          "parent_code": "NG-BY",
+          "name": "Sagbama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501393291",
+          "parent_code": "NG-BY",
+          "name": "Amassoma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501428533",
+          "parent_code": "NG-BY",
+          "name": "Ekeremor",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501450875",
+          "parent_code": "NG-BY",
+          "name": "Mbiama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501463591",
+          "parent_code": "NG-BY",
+          "name": "Egwema",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501463732",
+          "parent_code": "NG-BY",
+          "name": "Akassa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501468146",
+          "parent_code": "NG-BY",
+          "name": "Lobia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501483736",
+          "parent_code": "NG-BY",
+          "name": "Otuoke",
+          "type": "city",
+          "population": "7000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501488129",
+          "parent_code": "NG-BY",
+          "name": "Forupa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501491582",
+          "parent_code": "NG-BY",
+          "name": "Kaiama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501513068",
+          "parent_code": "NG-BY",
+          "name": "Igbematoru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501513260",
+          "parent_code": "NG-BY",
+          "name": "Brass",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501513459",
+          "parent_code": "NG-BY",
+          "name": "Nembe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501521435",
+          "parent_code": "NG-BY",
+          "name": "Toru-Ndoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7593556252",
+          "parent_code": "NG-BY",
+          "name": "Ogbia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7769512604",
+          "parent_code": "NG-BY",
+          "name": "Odi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7769519130",
+          "parent_code": "NG-BY",
+          "name": "Odoni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NG-BE",
+      "parent_code": "NG",
+      "name": "Benue State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-312045158",
+          "parent_code": "NG-BE",
+          "name": "Makurdi",
+          "type": "city",
+          "population": "500797",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501339240",
+          "parent_code": "NG-BE",
+          "name": "Boju-Ega",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501369852",
+          "parent_code": "NG-BE",
+          "name": "Katsina Ala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501486785",
+          "parent_code": "NG-BE",
+          "name": "Otukpo",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501493490",
+          "parent_code": "NG-BE",
+          "name": "korinya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501496857",
+          "parent_code": "NG-BE",
+          "name": "Igumale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9675095299",
+          "parent_code": "NG-BE",
+          "name": "Ajio",
+          "type": "city",
+          "population": "20",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10296280294",
+          "parent_code": "NG-BE",
+          "name": "Adoka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11057522798",
+          "parent_code": "NG-BE",
+          "name": "Tse-Agberagba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11057561646",
+          "parent_code": "NG-BE",
+          "name": "Oju",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11057584875",
+          "parent_code": "NG-BE",
+          "name": "Vandeikya Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13247327143",
+          "parent_code": "NG-BE",
+          "name": "Gboko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NG-CR",
+      "parent_code": "NG",
+      "name": "Cross River State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-251608378",
+          "parent_code": "NG-CR",
+          "name": "Calabar",
+          "type": "city",
+          "population": "371022",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501331763",
+          "parent_code": "NG-CR",
+          "name": "Mkpani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501332743",
+          "parent_code": "NG-CR",
+          "name": "Obudu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501394083",
+          "parent_code": "NG-CR",
+          "name": "Akankpa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501394103",
+          "parent_code": "NG-CR",
+          "name": "Ugep",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501395079",
+          "parent_code": "NG-CR",
+          "name": "Akpet Central",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501431670",
+          "parent_code": "NG-CR",
+          "name": "Ikom",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501455679",
+          "parent_code": "NG-CR",
+          "name": "Ikot Nakanda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501478375",
+          "parent_code": "NG-CR",
+          "name": "Creek Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501484683",
+          "parent_code": "NG-CR",
+          "name": "Ekuri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501493570",
+          "parent_code": "NG-CR",
+          "name": "Okpoma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501507676",
+          "parent_code": "NG-CR",
+          "name": "Ikang",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501513931",
+          "parent_code": "NG-CR",
+          "name": "Oban",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501513936",
+          "parent_code": "NG-CR",
+          "name": "Efferaya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501514406",
+          "parent_code": "NG-CR",
+          "name": "Mfamosing",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501522063",
+          "parent_code": "NG-CR",
+          "name": "Agoi Ibami",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501522253",
+          "parent_code": "NG-CR",
+          "name": "Odukpani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501526928",
+          "parent_code": "NG-CR",
+          "name": "Obubra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501526943",
+          "parent_code": "NG-CR",
+          "name": "Edor-Abangork",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501530297",
+          "parent_code": "NG-CR",
+          "name": "Duke Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10622103437",
+          "parent_code": "NG-CR",
+          "name": "Anantigha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10964112753",
+          "parent_code": "NG-CR",
+          "name": "Nko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10972065863",
+          "parent_code": "NG-CR",
+          "name": "Itigidi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10974493293",
+          "parent_code": "NG-CR",
+          "name": "Ogoja",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10974493294",
+          "parent_code": "NG-CR",
+          "name": "Ogboja",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10974533852",
+          "parent_code": "NG-CR",
+          "name": "Boje",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10974897865",
+          "parent_code": "NG-CR",
+          "name": "Abuochiche",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10975135412",
+          "parent_code": "NG-CR",
+          "name": "Sankwala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NG-DE",
+      "parent_code": "NG",
+      "name": "Delta State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-501348017",
+          "parent_code": "NG-DE",
+          "name": "Akwukwu Igbo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501372302",
+          "parent_code": "NG-DE",
+          "name": "Obiaruku",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501389571",
+          "parent_code": "NG-DE",
+          "name": "Ogulagha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501399721",
+          "parent_code": "NG-DE",
+          "name": "Eku",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501406934",
+          "parent_code": "NG-DE",
+          "name": "Patani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501423675",
+          "parent_code": "NG-DE",
+          "name": "Kwale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501428854",
+          "parent_code": "NG-DE",
+          "name": "Okwagbe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501429259",
+          "parent_code": "NG-DE",
+          "name": "Ughelli",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501429290",
+          "parent_code": "NG-DE",
+          "name": "Bomadi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501448963",
+          "parent_code": "NG-DE",
+          "name": "Ashaka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501458843",
+          "parent_code": "NG-DE",
+          "name": "Abraka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501459042",
+          "parent_code": "NG-DE",
+          "name": "Islokolo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501462908",
+          "parent_code": "NG-DE",
+          "name": "Effurun",
+          "type": "city",
+          "population": "120000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501468756",
+          "parent_code": "NG-DE",
+          "name": "Umunede",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501469081",
+          "parent_code": "NG-DE",
+          "name": "Issele Uku",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501470729",
+          "parent_code": "NG-DE",
+          "name": "Orogun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501482915",
+          "parent_code": "NG-DE",
+          "name": "Sapele",
+          "type": "city",
+          "population": "238800",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501488599",
+          "parent_code": "NG-DE",
+          "name": "Owa Oyiebu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501489049",
+          "parent_code": "NG-DE",
+          "name": "Agbor",
+          "type": "city",
+          "population": "45820",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501495045",
+          "parent_code": "NG-DE",
+          "name": "Abbi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501495049",
+          "parent_code": "NG-DE",
+          "name": "Ozoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501497795",
+          "parent_code": "NG-DE",
+          "name": "Agbarho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501498552",
+          "parent_code": "NG-DE",
+          "name": "Ibusa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501512142",
+          "parent_code": "NG-DE",
+          "name": "Amukpe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501512439",
+          "parent_code": "NG-DE",
+          "name": "Orerokpe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501512498",
+          "parent_code": "NG-DE",
+          "name": "Burutu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501515838",
+          "parent_code": "NG-DE",
+          "name": "Ogwashi-Uku",
+          "type": "city",
+          "population": "50240",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501517194",
+          "parent_code": "NG-DE",
+          "name": "Aboh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501518836",
+          "parent_code": "NG-DE",
+          "name": "Koko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501521317",
+          "parent_code": "NG-DE",
+          "name": "Egwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501521391",
+          "parent_code": "NG-DE",
+          "name": "Jesse",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501523927",
+          "parent_code": "NG-DE",
+          "name": "Okpanam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501524291",
+          "parent_code": "NG-DE",
+          "name": "Oleh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501526830",
+          "parent_code": "NG-DE",
+          "name": "Kokori",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501540929",
+          "parent_code": "NG-DE",
+          "name": "Asaba",
+          "type": "city",
+          "population": "149603",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-5982177963",
+          "parent_code": "NG-DE",
+          "name": "Uzere",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7570693575",
+          "parent_code": "NG-DE",
+          "name": "Ugborodo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9702599529",
+          "parent_code": "NG-DE",
+          "name": "Warri",
+          "type": "city",
+          "population": "250000",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "NG-EB",
+      "parent_code": "NG",
+      "name": "Ebonyi State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-501493222",
+          "parent_code": "NG-EB",
+          "name": "Afikpo",
+          "type": "city",
+          "population": "0",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501496934",
+          "parent_code": "NG-EB",
+          "name": "Onicha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501500726",
+          "parent_code": "NG-EB",
+          "name": "Akeze",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501505494",
+          "parent_code": "NG-EB",
+          "name": "Isieke",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501528575",
+          "parent_code": "NG-EB",
+          "name": "Ishiagu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501540903",
+          "parent_code": "NG-EB",
+          "name": "Abakaliki",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3974130458",
+          "parent_code": "NG-EB",
+          "name": "Effium",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10879387848",
+          "parent_code": "NG-EB",
+          "name": "Onuebonyi Echara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10964102513",
+          "parent_code": "NG-EB",
+          "name": "Nkanu, Enugu State",
+          "type": "city",
+          "population": "245469",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10964112716",
+          "parent_code": "NG-EB",
+          "name": "Amaseri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10964112752",
+          "parent_code": "NG-EB",
+          "name": "Unwana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10972112151",
+          "parent_code": "NG-EB",
+          "name": "Onueke",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10974008154",
+          "parent_code": "NG-EB",
+          "name": "Ebiaji Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10975210511",
+          "parent_code": "NG-EB",
+          "name": "Ezzamgbo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10975210512",
+          "parent_code": "NG-EB",
+          "name": "Nguzu Edda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10975216232",
+          "parent_code": "NG-EB",
+          "name": "Iboko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10975218813",
+          "parent_code": "NG-EB",
+          "name": "Ezillo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10975220046",
+          "parent_code": "NG-EB",
+          "name": "Obiozara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10975228878",
+          "parent_code": "NG-EB",
+          "name": "Ugbodo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10975235890",
+          "parent_code": "NG-EB",
+          "name": "Isiaka Obilago",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NG-ED",
+      "parent_code": "NG",
+      "name": "Edo State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-501376775",
+          "parent_code": "NG-ED",
+          "name": "Okokpon",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501403119",
+          "parent_code": "NG-ED",
+          "name": "Uromi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501437921",
+          "parent_code": "NG-ED",
+          "name": "Ubiaja",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501439318",
+          "parent_code": "NG-ED",
+          "name": "Afuze",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501439325",
+          "parent_code": "NG-ED",
+          "name": "Abudu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501454024",
+          "parent_code": "NG-ED",
+          "name": "Uselu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501454528",
+          "parent_code": "NG-ED",
+          "name": "Ehor",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501454812",
+          "parent_code": "NG-ED",
+          "name": "Okada",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501476947",
+          "parent_code": "NG-ED",
+          "name": "Sabongidda Ora",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501477915",
+          "parent_code": "NG-ED",
+          "name": "Okha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501490845",
+          "parent_code": "NG-ED",
+          "name": "Idogbo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501493580",
+          "parent_code": "NG-ED",
+          "name": "Udo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501494230",
+          "parent_code": "NG-ED",
+          "name": "Iguobazuwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501498398",
+          "parent_code": "NG-ED",
+          "name": "Irrua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501498400",
+          "parent_code": "NG-ED",
+          "name": "Igueben",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501514541",
+          "parent_code": "NG-ED",
+          "name": "Agenebode",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501515973",
+          "parent_code": "NG-ED",
+          "name": "Ekpoma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501519405",
+          "parent_code": "NG-ED",
+          "name": "Oluku",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501522461",
+          "parent_code": "NG-ED",
+          "name": "Ibillo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501525837",
+          "parent_code": "NG-ED",
+          "name": "Fugar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2038026286",
+          "parent_code": "NG-ED",
+          "name": "Auchi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2149000430",
+          "parent_code": "NG-ED",
+          "name": "Benin City",
+          "type": "city",
+          "population": "1147188",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "NG-EK",
+      "parent_code": "NG",
+      "name": "Ekiti State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-318085912",
+          "parent_code": "NG-EK",
+          "name": "Ikole",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-318086596",
+          "parent_code": "NG-EK",
+          "name": "Ijan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501253172",
+          "parent_code": "NG-EK",
+          "name": "Alamoji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501331099",
+          "parent_code": "NG-EK",
+          "name": "Oke Igbira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501331256",
+          "parent_code": "NG-EK",
+          "name": "Igede-Ekiti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501431536",
+          "parent_code": "NG-EK",
+          "name": "Ise - Ekiti",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501484967",
+          "parent_code": "NG-EK",
+          "name": "Ilawe-Ekiti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501496699",
+          "parent_code": "NG-EK",
+          "name": "Ido Ekiti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501513625",
+          "parent_code": "NG-EK",
+          "name": "Otun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501513769",
+          "parent_code": "NG-EK",
+          "name": "Omuo-Obadore",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501540913",
+          "parent_code": "NG-EK",
+          "name": "Ado Ekiti",
+          "type": "city",
+          "population": "446749",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2501731912",
+          "parent_code": "NG-EK",
+          "name": "ekiti state government territory",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2541452089",
+          "parent_code": "NG-EK",
+          "name": "Ikere Ekiti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7681484499",
+          "parent_code": "NG-EK",
+          "name": "Ayegbaju",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12844255422",
+          "parent_code": "NG-EK",
+          "name": "Orun Ekiti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12844289037",
+          "parent_code": "NG-EK",
+          "name": "ogbon asolo",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        }
+      ]
+    },
+    {
+      "code": "NG-EN",
+      "parent_code": "NG",
+      "name": "Enugu State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27565107",
+          "parent_code": "NG-EN",
+          "name": "Enugu",
+          "type": "city",
+          "population": "722664",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501331835",
+          "parent_code": "NG-EN",
+          "name": "Nachi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501395566",
+          "parent_code": "NG-EN",
+          "name": "Awgu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501431274",
+          "parent_code": "NG-EN",
+          "name": "Udi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501523017",
+          "parent_code": "NG-EN",
+          "name": "Nsukka",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-13228673672",
+          "parent_code": "NG-EN",
+          "name": "Ngwo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13228673674",
+          "parent_code": "NG-EN",
+          "name": "Oji River",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13232911893",
+          "parent_code": "NG-EN",
+          "name": "Agbani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13799402962",
+          "parent_code": "NG-EN",
+          "name": "Achi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NG-FC",
+      "parent_code": "NG",
+      "name": "Federal Capital Territory",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-31203257",
+          "parent_code": "NG-FC",
+          "name": "Abuja",
+          "type": "city",
+          "population": "776298",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-319292827",
+          "parent_code": "NG-FC",
+          "name": "Dutsen Alhaji",
+          "type": "city",
+          "population": "500100",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501470686",
+          "parent_code": "NG-FC",
+          "name": "Madalla",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501471969",
+          "parent_code": "NG-FC",
+          "name": "Gwagwalada",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501516407",
+          "parent_code": "NG-FC",
+          "name": "Gwarinpa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3199516653",
+          "parent_code": "NG-FC",
+          "name": "Kubwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3615288382",
+          "parent_code": "NG-FC",
+          "name": "Abaji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3615289126",
+          "parent_code": "NG-FC",
+          "name": "Kuje",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12984989987",
+          "parent_code": "NG-FC",
+          "name": "Kwali",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NG-IM",
+      "parent_code": "NG",
+      "name": "Imo State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-501350698",
+          "parent_code": "NG-IM",
+          "name": "Orie Uratta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501350919",
+          "parent_code": "NG-IM",
+          "name": "Okpalla",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501362948",
+          "parent_code": "NG-IM",
+          "name": "Nkwerre",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501364846",
+          "parent_code": "NG-IM",
+          "name": "Dikenafai",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501367748",
+          "parent_code": "NG-IM",
+          "name": "Akpuru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501381855",
+          "parent_code": "NG-IM",
+          "name": "Akokwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501418558",
+          "parent_code": "NG-IM",
+          "name": "Irete",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501451929",
+          "parent_code": "NG-IM",
+          "name": "Ihuo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501474045",
+          "parent_code": "NG-IM",
+          "name": "Amaigbo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501479421",
+          "parent_code": "NG-IM",
+          "name": "Umuneke Ngor",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501489359",
+          "parent_code": "NG-IM",
+          "name": "Ubomiri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501491536",
+          "parent_code": "NG-IM",
+          "name": "Mberichi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501501584",
+          "parent_code": "NG-IM",
+          "name": "Naze",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501503292",
+          "parent_code": "NG-IM",
+          "name": "Ihiagwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501504987",
+          "parent_code": "NG-IM",
+          "name": "Osina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501516464",
+          "parent_code": "NG-IM",
+          "name": "Urualla",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501516476",
+          "parent_code": "NG-IM",
+          "name": "Obudi-Agwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501517255",
+          "parent_code": "NG-IM",
+          "name": "Isu Okpu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501519772",
+          "parent_code": "NG-IM",
+          "name": "Ata",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501528686",
+          "parent_code": "NG-IM",
+          "name": "Orlu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2469246094",
+          "parent_code": "NG-IM",
+          "name": "Owerri",
+          "type": "city",
+          "population": "401873",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-5918582386",
+          "parent_code": "NG-IM",
+          "name": "Oguta",
+          "type": "city",
+          "population": "300000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5918814522",
+          "parent_code": "NG-IM",
+          "name": "Umuguma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5920633524",
+          "parent_code": "NG-IM",
+          "name": "Obodo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6549161385",
+          "parent_code": "NG-IM",
+          "name": "Nnarambia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8873204359",
+          "parent_code": "NG-IM",
+          "name": "Mmahu-Egbema",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8972712057",
+          "parent_code": "NG-IM",
+          "name": "Nwaorieubi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9056768921",
+          "parent_code": "NG-IM",
+          "name": "Omuma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11034134755",
+          "parent_code": "NG-IM",
+          "name": "Mgbidi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11034134756",
+          "parent_code": "NG-IM",
+          "name": "Nnenasa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11034139688",
+          "parent_code": "NG-IM",
+          "name": "Umundugba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11034154281",
+          "parent_code": "NG-IM",
+          "name": "Amurie",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11040271649",
+          "parent_code": "NG-IM",
+          "name": "Aboh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13018702779",
+          "parent_code": "NG-IM",
+          "name": "Aji",
+          "type": "city",
+          "population": "100000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13018709698",
+          "parent_code": "NG-IM",
+          "name": "Ibiasogbe",
+          "type": "city",
+          "population": "150000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13018722855",
+          "parent_code": "NG-IM",
+          "name": "Eleh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13018750642",
+          "parent_code": "NG-IM",
+          "name": "Nempi",
+          "type": "city",
+          "population": "200000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13018757626",
+          "parent_code": "NG-IM",
+          "name": "Ubulu",
+          "type": "city",
+          "population": "200000",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NG-KO",
+      "parent_code": "NG",
+      "name": "Kogi State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-318084136",
+          "parent_code": "NG-KO",
+          "name": "Nagazi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501394891",
+          "parent_code": "NG-KO",
+          "name": "Odolu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501396169",
+          "parent_code": "NG-KO",
+          "name": "Egume",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501431997",
+          "parent_code": "NG-KO",
+          "name": "Ugwolawo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501432182",
+          "parent_code": "NG-KO",
+          "name": "Ogbogbo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501432291",
+          "parent_code": "NG-KO",
+          "name": "Ejule",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501464974",
+          "parent_code": "NG-KO",
+          "name": "Lokoja",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501479850",
+          "parent_code": "NG-KO",
+          "name": "Egbe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501497134",
+          "parent_code": "NG-KO",
+          "name": "Ayangba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501497208",
+          "parent_code": "NG-KO",
+          "name": "Ankpa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501498547",
+          "parent_code": "NG-KO",
+          "name": "Onyadega",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501503582",
+          "parent_code": "NG-KO",
+          "name": "Eggan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501514422",
+          "parent_code": "NG-KO",
+          "name": "Lokoja",
+          "type": "city",
+          "population": "90000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501514554",
+          "parent_code": "NG-KO",
+          "name": "Adankolo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501514555",
+          "parent_code": "NG-KO",
+          "name": "Zango-ndaji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501528052",
+          "parent_code": "NG-KO",
+          "name": "Sunawa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3614676499",
+          "parent_code": "NG-KO",
+          "name": "Abajikolo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3614676500",
+          "parent_code": "NG-KO",
+          "name": "Abajukolo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3614676501",
+          "parent_code": "NG-KO",
+          "name": "Abejukolo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3614676504",
+          "parent_code": "NG-KO",
+          "name": "Ayale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3614676505",
+          "parent_code": "NG-KO",
+          "name": "Iyale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3614720014",
+          "parent_code": "NG-KO",
+          "name": "Ogodu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3614720015",
+          "parent_code": "NG-KO",
+          "name": "Ogume",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4258125946",
+          "parent_code": "NG-KO",
+          "name": "Idah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6251483260",
+          "parent_code": "NG-KO",
+          "name": "Ajaokuta",
+          "type": "city",
+          "population": "16039",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8851563703",
+          "parent_code": "NG-KO",
+          "name": "Abobo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8851563705",
+          "parent_code": "NG-KO",
+          "name": "Eika -Adagu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8851563707",
+          "parent_code": "NG-KO",
+          "name": "Otite",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8851563708",
+          "parent_code": "NG-KO",
+          "name": "Eika-Adagu New Layout",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8851563710",
+          "parent_code": "NG-KO",
+          "name": "Uhuodo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8851563711",
+          "parent_code": "NG-KO",
+          "name": "Ozuri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NG-KW",
+      "parent_code": "NG",
+      "name": "Kwara State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27565089",
+          "parent_code": "NG-KW",
+          "name": "Ilorin",
+          "type": "city",
+          "population": "847582",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-496091921",
+          "parent_code": "NG-KW",
+          "name": "Kaiama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501365061",
+          "parent_code": "NG-KW",
+          "name": "Bacita",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501414884",
+          "parent_code": "NG-KW",
+          "name": "Boria",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501418185",
+          "parent_code": "NG-KW",
+          "name": "Lade",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501425189",
+          "parent_code": "NG-KW",
+          "name": "Kosubosu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501458967",
+          "parent_code": "NG-KW",
+          "name": "Suya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501459078",
+          "parent_code": "NG-KW",
+          "name": "Erin Ile",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501474294",
+          "parent_code": "NG-KW",
+          "name": "Pategi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501489807",
+          "parent_code": "NG-KW",
+          "name": "Omu Aran",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501492235",
+          "parent_code": "NG-KW",
+          "name": "Buari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501493190",
+          "parent_code": "NG-KW",
+          "name": "Ajasse Ipo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501494826",
+          "parent_code": "NG-KW",
+          "name": "Oro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501498896",
+          "parent_code": "NG-KW",
+          "name": "Isanlu Isin",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501520048",
+          "parent_code": "NG-KW",
+          "name": "Jebba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501520228",
+          "parent_code": "NG-KW",
+          "name": "Ijagbo Offa",
+          "type": "city",
+          "population": "90000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501524386",
+          "parent_code": "NG-KW",
+          "name": "Lafiagi",
+          "type": "city",
+          "population": "102779",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2157204623",
+          "parent_code": "NG-KW",
+          "name": "Owu-Obalayan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3828175257",
+          "parent_code": "NG-KW",
+          "name": "Omupo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13047974782",
+          "parent_code": "NG-KW",
+          "name": "Oja Tuntun, Oko Erin, Nigeria",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13047974784",
+          "parent_code": "NG-KW",
+          "name": "Oja Oba, Oko Erin, Nigeria",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13047974824",
+          "parent_code": "NG-KW",
+          "name": "Mandate Estate, Ilorin, Nigeria",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13048286612",
+          "parent_code": "NG-KW",
+          "name": "Oja Tutun, Oko Erin, Nigeria",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13048286617",
+          "parent_code": "NG-KW",
+          "name": "Offa, Nigeria",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13048286728",
+          "parent_code": "NG-KW",
+          "name": "Colony 2 Estate, Oke Ogun, Nigeria",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        }
+      ]
+    },
+    {
+      "code": "NG-LA",
+      "parent_code": "NG",
+      "name": "Lagos State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27565124",
+          "parent_code": "NG-LA",
+          "name": "Lagos",
+          "type": "city",
+          "population": "10404112",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501483970",
+          "parent_code": "NG-LA",
+          "name": "Ikorodu",
+          "type": "city",
+          "population": "535619",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501496653",
+          "parent_code": "NG-LA",
+          "name": "Epe",
+          "type": "city",
+          "population": "181409",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501517604",
+          "parent_code": "NG-LA",
+          "name": "Badagry",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501540907",
+          "parent_code": "NG-LA",
+          "name": "Ikeja",
+          "type": "city",
+          "population": "861300",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-889257358",
+          "parent_code": "NG-LA",
+          "name": "Alasia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3698552678",
+          "parent_code": "NG-LA",
+          "name": "Satellite Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5908615078",
+          "parent_code": "NG-LA",
+          "name": "Ikoyi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6245672385",
+          "parent_code": "NG-LA",
+          "name": "Alaro City",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NG-NI",
+      "parent_code": "NG",
+      "name": "Niger State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-330996381",
+          "parent_code": "NG-NI",
+          "name": "Wuya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-496092553",
+          "parent_code": "NG-NI",
+          "name": "Wawa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-496094518",
+          "parent_code": "NG-NI",
+          "name": "Shangunu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-496099878",
+          "parent_code": "NG-NI",
+          "name": "Babana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501372033",
+          "parent_code": "NG-NI",
+          "name": "Ibili",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501385039",
+          "parent_code": "NG-NI",
+          "name": "Kontagora",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501406012",
+          "parent_code": "NG-NI",
+          "name": "Katcha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501410891",
+          "parent_code": "NG-NI",
+          "name": "Agaie",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501426059",
+          "parent_code": "NG-NI",
+          "name": "Ibeto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501426182",
+          "parent_code": "NG-NI",
+          "name": "Luma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501473827",
+          "parent_code": "NG-NI",
+          "name": "Daga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501490654",
+          "parent_code": "NG-NI",
+          "name": "Mokwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501492065",
+          "parent_code": "NG-NI",
+          "name": "Eban",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501495281",
+          "parent_code": "NG-NI",
+          "name": "Salka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501510163",
+          "parent_code": "NG-NI",
+          "name": "Inana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501515664",
+          "parent_code": "NG-NI",
+          "name": "New Bussa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501517317",
+          "parent_code": "NG-NI",
+          "name": "Bida",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501517716",
+          "parent_code": "NG-NI",
+          "name": "Baro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501520477",
+          "parent_code": "NG-NI",
+          "name": "Utachu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501520720",
+          "parent_code": "NG-NI",
+          "name": "Tungan Bakere",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501526773",
+          "parent_code": "NG-NI",
+          "name": "Gulbin Boka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501528928",
+          "parent_code": "NG-NI",
+          "name": "Kagara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-625740529",
+          "parent_code": "NG-NI",
+          "name": "Minna",
+          "type": "city",
+          "population": "304000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-5836455143",
+          "parent_code": "NG-NI",
+          "name": "Tegina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5984707254",
+          "parent_code": "NG-NI",
+          "name": "Kudu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9925302354",
+          "parent_code": "NG-NI",
+          "name": "Luma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12293595673",
+          "parent_code": "NG-NI",
+          "name": "Kuta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NG-OG",
+      "parent_code": "NG",
+      "name": "Ogun State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27565109",
+          "parent_code": "NG-OG",
+          "name": "Abeokuta",
+          "type": "city",
+          "population": "888924",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501330380",
+          "parent_code": "NG-OG",
+          "name": "Sagamu",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501335872",
+          "parent_code": "NG-OG",
+          "name": "Ikoga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501410423",
+          "parent_code": "NG-OG",
+          "name": "Ile Ijoun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501414658",
+          "parent_code": "NG-OG",
+          "name": "Meko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501423491",
+          "parent_code": "NG-OG",
+          "name": "Agosa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501429798",
+          "parent_code": "NG-OG",
+          "name": "Ifo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501447786",
+          "parent_code": "NG-OG",
+          "name": "Ita Egbe",
+          "type": "city",
+          "population": "10000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501455737",
+          "parent_code": "NG-OG",
+          "name": "Abigi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501463722",
+          "parent_code": "NG-OG",
+          "name": "Ilishan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501478499",
+          "parent_code": "NG-OG",
+          "name": "Ibiade",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501484294",
+          "parent_code": "NG-OG",
+          "name": "Ishara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501494479",
+          "parent_code": "NG-OG",
+          "name": "Ijebu-Igbo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501496491",
+          "parent_code": "NG-OG",
+          "name": "Ijebu-Ode",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501496578",
+          "parent_code": "NG-OG",
+          "name": "Ilaro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501496641",
+          "parent_code": "NG-OG",
+          "name": "Iperu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501496729",
+          "parent_code": "NG-OG",
+          "name": "Ago-Iwoye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501499154",
+          "parent_code": "NG-OG",
+          "name": "Oja Odan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501507940",
+          "parent_code": "NG-OG",
+          "name": "Ogbere",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501513868",
+          "parent_code": "NG-OG",
+          "name": "Agbara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501514675",
+          "parent_code": "NG-OG",
+          "name": "Awdan Ibola",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501526839",
+          "parent_code": "NG-OG",
+          "name": "Owode",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5728563921",
+          "parent_code": "NG-OG",
+          "name": "Abeokuta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7643012377",
+          "parent_code": "NG-OG",
+          "name": "Idi-Iroko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7643451440",
+          "parent_code": "NG-OG",
+          "name": "Ipokia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7960625141",
+          "parent_code": "NG-OG",
+          "name": "Ikoga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13063249906",
+          "parent_code": "NG-OG",
+          "name": "Jobore, Omu Ijebu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13063253369",
+          "parent_code": "NG-OG",
+          "name": "Ibido, omu ijebu",
+          "type": "city",
+          "population": "1000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13063321625",
+          "parent_code": "NG-OG",
+          "name": "Irete, omu ijebu",
+          "type": "city",
+          "population": "1000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13063491190",
+          "parent_code": "NG-OG",
+          "name": "Ala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13063491191",
+          "parent_code": "NG-OG",
+          "name": "Eriwe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13063491192",
+          "parent_code": "NG-OG",
+          "name": "Debasco",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13063491193",
+          "parent_code": "NG-OG",
+          "name": "Egbe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13063491194",
+          "parent_code": "NG-OG",
+          "name": "Atiba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13063497953",
+          "parent_code": "NG-OG",
+          "name": "Imepe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13065343568",
+          "parent_code": "NG-OG",
+          "name": "Adefisan",
+          "type": "city",
+          "population": "2000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13236988834",
+          "parent_code": "NG-OG",
+          "name": "Mowe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NG-ON",
+      "parent_code": "NG",
+      "name": "Ondo State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-317914214",
+          "parent_code": "NG-ON",
+          "name": "Akugba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501331305",
+          "parent_code": "NG-ON",
+          "name": "Oke Agbe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501332654",
+          "parent_code": "NG-ON",
+          "name": "Oba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501378832",
+          "parent_code": "NG-ON",
+          "name": "Arogbo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501422641",
+          "parent_code": "NG-ON",
+          "name": "Okitipupa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501422743",
+          "parent_code": "NG-ON",
+          "name": "Igbokoda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501432542",
+          "parent_code": "NG-ON",
+          "name": "Bolorunduro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501449517",
+          "parent_code": "NG-ON",
+          "name": "Ondo",
+          "type": "city",
+          "population": "275000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501456111",
+          "parent_code": "NG-ON",
+          "name": "Igbekebo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501464929",
+          "parent_code": "NG-ON",
+          "name": "Owo",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501469682",
+          "parent_code": "NG-ON",
+          "name": "Okeigbo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501478483",
+          "parent_code": "NG-ON",
+          "name": "Ajagba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501478695",
+          "parent_code": "NG-ON",
+          "name": "Ore",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501478715",
+          "parent_code": "NG-ON",
+          "name": "Ugbo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501494514",
+          "parent_code": "NG-ON",
+          "name": "Irele",
+          "type": "city",
+          "population": "145166",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501496127",
+          "parent_code": "NG-ON",
+          "name": "Awoye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501496889",
+          "parent_code": "NG-ON",
+          "name": "Ikare",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501515707",
+          "parent_code": "NG-ON",
+          "name": "Igbara-Oke",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501519160",
+          "parent_code": "NG-ON",
+          "name": "Ifon",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501519531",
+          "parent_code": "NG-ON",
+          "name": "Aiyetoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501522187",
+          "parent_code": "NG-ON",
+          "name": "Oka-Akoko",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501523785",
+          "parent_code": "NG-ON",
+          "name": "Ita-Ogbolu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501524916",
+          "parent_code": "NG-ON",
+          "name": "Ile Oluji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501540926",
+          "parent_code": "NG-ON",
+          "name": "Akure",
+          "type": "city",
+          "population": "387087",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-537771518",
+          "parent_code": "NG-ON",
+          "name": "Idanre",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9937131274",
+          "parent_code": "NG-ON",
+          "name": "Abereke",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NG-OS",
+      "parent_code": "NG",
+      "name": "Osun State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-501361111",
+          "parent_code": "NG-OS",
+          "name": "Iwo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501396727",
+          "parent_code": "NG-OS",
+          "name": "Erin-Ijesa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501429659",
+          "parent_code": "NG-OS",
+          "name": "Ejigbo",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501480000",
+          "parent_code": "NG-OS",
+          "name": "Ila Orangun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501485612",
+          "parent_code": "NG-OS",
+          "name": "Ife",
+          "type": "city",
+          "population": "501952",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501485672",
+          "parent_code": "NG-OS",
+          "name": "Inisa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501487119",
+          "parent_code": "NG-OS",
+          "name": "Ilesa",
+          "type": "city",
+          "population": "277904",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501492772",
+          "parent_code": "NG-OS",
+          "name": "Iba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501504598",
+          "parent_code": "NG-OS",
+          "name": "Ogbagba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501518541",
+          "parent_code": "NG-OS",
+          "name": "Ikire",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501524492",
+          "parent_code": "NG-OS",
+          "name": "Ipetumodu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501528260",
+          "parent_code": "NG-OS",
+          "name": "Aiyepe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501528721",
+          "parent_code": "NG-OS",
+          "name": "Ifetedo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501540896",
+          "parent_code": "NG-OS",
+          "name": "Oshogbo",
+          "type": "city",
+          "population": "156694",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3761718606",
+          "parent_code": "NG-OS",
+          "name": "Aato",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4098892404",
+          "parent_code": "NG-OS",
+          "name": "Otan Ayegbaju",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4922985336",
+          "parent_code": "NG-OS",
+          "name": "Okinni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4923024138",
+          "parent_code": "NG-OS",
+          "name": "Erin-osun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4955033655",
+          "parent_code": "NG-OS",
+          "name": "Ilobu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NG-AD",
+      "parent_code": "NG",
+      "name": "Adamawa State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-501351965",
+          "parent_code": "NG-AD",
+          "name": "Tignon",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501360334",
+          "parent_code": "NG-AD",
+          "name": "Mayo Lope",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501406200",
+          "parent_code": "NG-AD",
+          "name": "Lafia",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501415654",
+          "parent_code": "NG-AD",
+          "name": "Gulak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501417461",
+          "parent_code": "NG-AD",
+          "name": "Fufore",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501424898",
+          "parent_code": "NG-AD",
+          "name": "Numan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501449905",
+          "parent_code": "NG-AD",
+          "name": "Boudjouma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501450343",
+          "parent_code": "NG-AD",
+          "name": "Michika",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501450400",
+          "parent_code": "NG-AD",
+          "name": "Marraraba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501454757",
+          "parent_code": "NG-AD",
+          "name": "Gombi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501472658",
+          "parent_code": "NG-AD",
+          "name": "Girei",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501473219",
+          "parent_code": "NG-AD",
+          "name": "Jimeta",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501474214",
+          "parent_code": "NG-AD",
+          "name": "Kiri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501475472",
+          "parent_code": "NG-AD",
+          "name": "Sangasumi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501479817",
+          "parent_code": "NG-AD",
+          "name": "Toungo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501480960",
+          "parent_code": "NG-AD",
+          "name": "Mubi",
+          "type": "city",
+          "population": "225705",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501483673",
+          "parent_code": "NG-AD",
+          "name": "Malabu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501489578",
+          "parent_code": "NG-AD",
+          "name": "Zakowan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501491077",
+          "parent_code": "NG-AD",
+          "name": "Guyuk",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501492842",
+          "parent_code": "NG-AD",
+          "name": "Maiha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501493107",
+          "parent_code": "NG-AD",
+          "name": "Shellem",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501499717",
+          "parent_code": "NG-AD",
+          "name": "Jada",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501507026",
+          "parent_code": "NG-AD",
+          "name": "Dilpurtu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501509116",
+          "parent_code": "NG-AD",
+          "name": "Gurin",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501519665",
+          "parent_code": "NG-AD",
+          "name": "Wuro Bokki",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501524739",
+          "parent_code": "NG-AD",
+          "name": "Maya Belwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501526085",
+          "parent_code": "NG-AD",
+          "name": "Laro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501540901",
+          "parent_code": "NG-AD",
+          "name": "Yola",
+          "type": "city",
+          "population": "336648",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-6376043132",
+          "parent_code": "NG-AD",
+          "name": "Song",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NG-GO",
+      "parent_code": "NG",
+      "name": "Gombe State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-501359869",
+          "parent_code": "NG-GO",
+          "name": "Jerikom",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501360127",
+          "parent_code": "NG-GO",
+          "name": "Doho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501362685",
+          "parent_code": "NG-GO",
+          "name": "Dong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501369742",
+          "parent_code": "NG-GO",
+          "name": "Kumo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501370128",
+          "parent_code": "NG-GO",
+          "name": "Lano",
+          "type": "city",
+          "population": "8000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501410373",
+          "parent_code": "NG-GO",
+          "name": "Biliri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501412132",
+          "parent_code": "NG-GO",
+          "name": "Garin Yarima Musa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501414441",
+          "parent_code": "NG-GO",
+          "name": "Maleri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501414522",
+          "parent_code": "NG-GO",
+          "name": "Difa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501439449",
+          "parent_code": "NG-GO",
+          "name": "Dukku",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501442213",
+          "parent_code": "NG-GO",
+          "name": "Kaltungo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501448486",
+          "parent_code": "NG-GO",
+          "name": "Filiya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501452138",
+          "parent_code": "NG-GO",
+          "name": "Nyuar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501458069",
+          "parent_code": "NG-GO",
+          "name": "Zambuk",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501482776",
+          "parent_code": "NG-GO",
+          "name": "Ribadu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501489412",
+          "parent_code": "NG-GO",
+          "name": "Talasse",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501491634",
+          "parent_code": "NG-GO",
+          "name": "Dukul",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501491701",
+          "parent_code": "NG-GO",
+          "name": "Galengu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501491899",
+          "parent_code": "NG-GO",
+          "name": "Chum",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501492026",
+          "parent_code": "NG-GO",
+          "name": "Deba Kowa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501492329",
+          "parent_code": "NG-GO",
+          "name": "Bajoga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501496110",
+          "parent_code": "NG-GO",
+          "name": "Wawa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501499077",
+          "parent_code": "NG-GO",
+          "name": "Kurjelli",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501501539",
+          "parent_code": "NG-GO",
+          "name": "Mallam Sidi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501512207",
+          "parent_code": "NG-GO",
+          "name": "Kurugu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501516868",
+          "parent_code": "NG-GO",
+          "name": "Jurara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501517057",
+          "parent_code": "NG-GO",
+          "name": "Dangar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501517753",
+          "parent_code": "NG-GO",
+          "name": "Ashaka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501520804",
+          "parent_code": "NG-GO",
+          "name": "Deba Fulani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501521436",
+          "parent_code": "NG-GO",
+          "name": "Wuro Dole",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2163706702",
+          "parent_code": "NG-GO",
+          "name": "Gombe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12017116546",
+          "parent_code": "NG-GO",
+          "name": "Pindiga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NG-NA",
+      "parent_code": "NG",
+      "name": "Nasarawa State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-317967216",
+          "parent_code": "NG-NA",
+          "name": "Akwanga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-317967219",
+          "parent_code": "NG-NA",
+          "name": "Lafia",
+          "type": "city",
+          "population": "509300",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501408582",
+          "parent_code": "NG-NA",
+          "name": "Keffi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501409258",
+          "parent_code": "NG-NA",
+          "name": "Nassarawa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501494534",
+          "parent_code": "NG-NA",
+          "name": "Ado",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501527955",
+          "parent_code": "NG-NA",
+          "name": "Masaka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3615289131",
+          "parent_code": "NG-NA",
+          "name": "Loko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3615291803",
+          "parent_code": "NG-NA",
+          "name": "Toto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9643470157",
+          "parent_code": "NG-NA",
+          "name": "Awe",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-10567823049",
+          "parent_code": "NG-NA",
+          "name": "Tabu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12320707853",
+          "parent_code": "NG-NA",
+          "name": "Doma",
+          "type": "city",
+          "population": "214600",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "NG-OY",
+      "parent_code": "NG",
+      "name": "Oyo State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27565036",
+          "parent_code": "NG-OY",
+          "name": "Oyo",
+          "type": "city",
+          "population": "736100",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-27565054",
+          "parent_code": "NG-OY",
+          "name": "Ogbomosho",
+          "type": "city",
+          "population": "1032000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-27565066",
+          "parent_code": "NG-OY",
+          "name": "Ibadan",
+          "type": "city",
+          "population": "3034200",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-330861062",
+          "parent_code": "NG-OY",
+          "name": "Saki",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501352895",
+          "parent_code": "NG-OY",
+          "name": "KOMU",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501356728",
+          "parent_code": "NG-OY",
+          "name": "Ilie",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501360671",
+          "parent_code": "NG-OY",
+          "name": "Eruwa Titun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501446904",
+          "parent_code": "NG-OY",
+          "name": "Iseyin",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501472284",
+          "parent_code": "NG-OY",
+          "name": "Eruwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501490572",
+          "parent_code": "NG-OY",
+          "name": "Igbo Ora",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501503111",
+          "parent_code": "NG-OY",
+          "name": "Iwere Ile",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501508678",
+          "parent_code": "NG-OY",
+          "name": "Akobo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501518276",
+          "parent_code": "NG-OY",
+          "name": "Iganna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501520341",
+          "parent_code": "NG-OY",
+          "name": "Oke Iho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501526864",
+          "parent_code": "NG-OY",
+          "name": "Kishi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11757060567",
+          "parent_code": "NG-OY",
+          "name": "Ipapo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NG-PL",
+      "parent_code": "NG",
+      "name": "Plateau State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-501411718",
+          "parent_code": "NG-PL",
+          "name": "Mangu Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501456937",
+          "parent_code": "NG-PL",
+          "name": "Gindiri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501540902",
+          "parent_code": "NG-PL",
+          "name": "Jos",
+          "type": "city",
+          "population": "900000",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "NG-RI",
+      "parent_code": "NG",
+      "name": "Rivers State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27565065",
+          "parent_code": "NG-RI",
+          "name": "Port Harcourt",
+          "type": "city",
+          "population": "1382592",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501271774",
+          "parent_code": "NG-RI",
+          "name": "Elelenwo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501331249",
+          "parent_code": "NG-RI",
+          "name": "Abua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501344606",
+          "parent_code": "NG-RI",
+          "name": "Igbo-Ekhe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501349166",
+          "parent_code": "NG-RI",
+          "name": "Ogu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501381067",
+          "parent_code": "NG-RI",
+          "name": "Okehi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501400998",
+          "parent_code": "NG-RI",
+          "name": "Elele",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501401968",
+          "parent_code": "NG-RI",
+          "name": "Chokocho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501403765",
+          "parent_code": "NG-RI",
+          "name": "Igwuruta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501404491",
+          "parent_code": "NG-RI",
+          "name": "Onne",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501467196",
+          "parent_code": "NG-RI",
+          "name": "Isiokpo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501468187",
+          "parent_code": "NG-RI",
+          "name": "Bori",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501484037",
+          "parent_code": "NG-RI",
+          "name": "Buguma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501488148",
+          "parent_code": "NG-RI",
+          "name": "Bodo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501488225",
+          "parent_code": "NG-RI",
+          "name": "Alesa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501493366",
+          "parent_code": "NG-RI",
+          "name": "Ndoni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501494526",
+          "parent_code": "NG-RI",
+          "name": "Oyigbo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501496489",
+          "parent_code": "NG-RI",
+          "name": "Kula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501496717",
+          "parent_code": "NG-RI",
+          "name": "Abonnema",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501499345",
+          "parent_code": "NG-RI",
+          "name": "Omoku",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501500863",
+          "parent_code": "NG-RI",
+          "name": "Akabuka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501506571",
+          "parent_code": "NG-RI",
+          "name": "Opobo Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501509610",
+          "parent_code": "NG-RI",
+          "name": "Eberi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501509796",
+          "parent_code": "NG-RI",
+          "name": "Ahoada",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501513263",
+          "parent_code": "NG-RI",
+          "name": "Bille",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501513323",
+          "parent_code": "NG-RI",
+          "name": "Degema",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501515580",
+          "parent_code": "NG-RI",
+          "name": "Bonny",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501515583",
+          "parent_code": "NG-RI",
+          "name": "Kpor",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501516019",
+          "parent_code": "NG-RI",
+          "name": "Dere",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501516094",
+          "parent_code": "NG-RI",
+          "name": "Okrika",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501519129",
+          "parent_code": "NG-RI",
+          "name": "Ngo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501521756",
+          "parent_code": "NG-RI",
+          "name": "Emohua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501523703",
+          "parent_code": "NG-RI",
+          "name": "Rumuodumaya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7896204001",
+          "parent_code": "NG-RI",
+          "name": "Akinima",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8873204360",
+          "parent_code": "NG-RI",
+          "name": "Ebocha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10984743867",
+          "parent_code": "NG-RI",
+          "name": "Ogale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13388446475",
+          "parent_code": "NG-RI",
+          "name": "Omagwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13715642215",
+          "parent_code": "NG-RI",
+          "name": "Queens Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NG-TA",
+      "parent_code": "NG",
+      "name": "Taraba State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-312045131",
+          "parent_code": "NG-TA",
+          "name": "Jalingo",
+          "type": "city",
+          "population": "118000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501356755",
+          "parent_code": "NG-TA",
+          "name": "Nguroje",
+          "type": "city",
+          "population": "300000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501358856",
+          "parent_code": "NG-TA",
+          "name": "Mutum Daya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501407183",
+          "parent_code": "NG-TA",
+          "name": "Pangri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501411262",
+          "parent_code": "NG-TA",
+          "name": "Gassol",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501411548",
+          "parent_code": "NG-TA",
+          "name": "Donga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501443744",
+          "parent_code": "NG-TA",
+          "name": "Lau",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501458840",
+          "parent_code": "NG-TA",
+          "name": "Sabon Gari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501471237",
+          "parent_code": "NG-TA",
+          "name": "Sansani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501471868",
+          "parent_code": "NG-TA",
+          "name": "Nahuta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501471901",
+          "parent_code": "NG-TA",
+          "name": "Balchumbi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501473648",
+          "parent_code": "NG-TA",
+          "name": "Garbe Shege",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501475742",
+          "parent_code": "NG-TA",
+          "name": "Mutum Biyu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501489621",
+          "parent_code": "NG-TA",
+          "name": "Mararaba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501490428",
+          "parent_code": "NG-TA",
+          "name": "Wukari",
+          "type": "city",
+          "population": "241546",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501495111",
+          "parent_code": "NG-TA",
+          "name": "Ibi",
+          "type": "city",
+          "population": "84054",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501516873",
+          "parent_code": "NG-TA",
+          "name": "Bambur",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501517535",
+          "parent_code": "NG-TA",
+          "name": "Dundewa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501518426",
+          "parent_code": "NG-TA",
+          "name": "Baissa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501520125",
+          "parent_code": "NG-TA",
+          "name": "Gembu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501520185",
+          "parent_code": "NG-TA",
+          "name": "Zinna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501521563",
+          "parent_code": "NG-TA",
+          "name": "Iware",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501524383",
+          "parent_code": "NG-TA",
+          "name": "Karim Lamido",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501524385",
+          "parent_code": "NG-TA",
+          "name": "Kogin Lamido",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501528367",
+          "parent_code": "NG-TA",
+          "name": "Rafin Kada",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2136200768",
+          "parent_code": "NG-TA",
+          "name": "Takum",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6375639265",
+          "parent_code": "NG-TA",
+          "name": "Sunkani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NG-BO",
+      "parent_code": "NG",
+      "name": "Borno State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27565111",
+          "parent_code": "NG-BO",
+          "name": "Maiduguri",
+          "type": "city",
+          "population": "1197497",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-469220680",
+          "parent_code": "NG-BO",
+          "name": "Damasak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-469220976",
+          "parent_code": "NG-BO",
+          "name": "Gajiram",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-469221065",
+          "parent_code": "NG-BO",
+          "name": "Kukawa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501328885",
+          "parent_code": "NG-BO",
+          "name": "Doro Gowon",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501333720",
+          "parent_code": "NG-BO",
+          "name": "Gubio",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501371394",
+          "parent_code": "NG-BO",
+          "name": "Anguwan Audu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501375890",
+          "parent_code": "NG-BO",
+          "name": "Anguwar Babeto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501376372",
+          "parent_code": "NG-BO",
+          "name": "Yimirshika 1",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501380234",
+          "parent_code": "NG-BO",
+          "name": "Ashigashiya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501384660",
+          "parent_code": "NG-BO",
+          "name": "Monguno",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501390154",
+          "parent_code": "NG-BO",
+          "name": "Kirkatha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501411625",
+          "parent_code": "NG-BO",
+          "name": "Ibrahim Baidu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501416376",
+          "parent_code": "NG-BO",
+          "name": "Dikwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501429495",
+          "parent_code": "NG-BO",
+          "name": "Abadam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501430112",
+          "parent_code": "NG-BO",
+          "name": "Angwa A D",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501450391",
+          "parent_code": "NG-BO",
+          "name": "Lassa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501454437",
+          "parent_code": "NG-BO",
+          "name": "Bila Nkeki",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501458106",
+          "parent_code": "NG-BO",
+          "name": "Baure",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501463118",
+          "parent_code": "NG-BO",
+          "name": "Kotembe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501478032",
+          "parent_code": "NG-BO",
+          "name": "Miringa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501478060",
+          "parent_code": "NG-BO",
+          "name": "Bwala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501484734",
+          "parent_code": "NG-BO",
+          "name": "Damboa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501488374",
+          "parent_code": "NG-BO",
+          "name": "Uba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501493060",
+          "parent_code": "NG-BO",
+          "name": "Gamboru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501493596",
+          "parent_code": "NG-BO",
+          "name": "Biu",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-501494921",
+          "parent_code": "NG-BO",
+          "name": "Burari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501502613",
+          "parent_code": "NG-BO",
+          "name": "Nokaram Ndiyam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501503730",
+          "parent_code": "NG-BO",
+          "name": "Gwoza",
+          "type": "city",
+          "population": "15176",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501504314",
+          "parent_code": "NG-BO",
+          "name": "Gashigar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501506283",
+          "parent_code": "NG-BO",
+          "name": "Grim Damchoba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501506873",
+          "parent_code": "NG-BO",
+          "name": "Ngadarma Bila Yahi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501506970",
+          "parent_code": "NG-BO",
+          "name": "Zadawa Yama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501518804",
+          "parent_code": "NG-BO",
+          "name": "Chibok",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501518860",
+          "parent_code": "NG-BO",
+          "name": "Askira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501519345",
+          "parent_code": "NG-BO",
+          "name": "Kautikari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501521548",
+          "parent_code": "NG-BO",
+          "name": "Baga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501524170",
+          "parent_code": "NG-BO",
+          "name": "Fikhayel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501526211",
+          "parent_code": "NG-BO",
+          "name": "Mafa",
+          "type": "city",
+          "population": "103518",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501526319",
+          "parent_code": "NG-BO",
+          "name": "Bama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501526463",
+          "parent_code": "NG-BO",
+          "name": "Gudumbali",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501527542",
+          "parent_code": "NG-BO",
+          "name": "Sabon Gari Gana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2199795507",
+          "parent_code": "NG-BO",
+          "name": "Maikaho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3297384628",
+          "parent_code": "NG-BO",
+          "name": "Bula Bul (Tumbun Gini)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3347095201",
+          "parent_code": "NG-BO",
+          "name": "Pulka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3368125137",
+          "parent_code": "NG-BO",
+          "name": "Tunbun Rago",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3372491465",
+          "parent_code": "NG-BO",
+          "name": "Tunbun Madayi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3382161772",
+          "parent_code": "NG-BO",
+          "name": "Banki",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3382918843",
+          "parent_code": "NG-BO",
+          "name": "Ghumma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3382918866",
+          "parent_code": "NG-BO",
+          "name": "W B Sule",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3391826320",
+          "parent_code": "NG-BO",
+          "name": "Gajigana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3393173166",
+          "parent_code": "NG-BO",
+          "name": "Muna Dalti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3393173170",
+          "parent_code": "NG-BO",
+          "name": "Yar Dole",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3395406740",
+          "parent_code": "NG-BO",
+          "name": "Kasugula Bama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3396911944",
+          "parent_code": "NG-BO",
+          "name": "Kaya Lawan Abogu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3396911960",
+          "parent_code": "NG-BO",
+          "name": "Kauji Kura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3402059171",
+          "parent_code": "NG-BO",
+          "name": "Anguwan Gotogoto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3622428227",
+          "parent_code": "NG-BO",
+          "name": "Mainuk",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3622475434",
+          "parent_code": "NG-BO",
+          "name": "Benisheikh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3657136889",
+          "parent_code": "NG-BO",
+          "name": "Mallam Fatori",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3680217729",
+          "parent_code": "NG-BO",
+          "name": "Jaudiri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7059576824",
+          "parent_code": "NG-BO",
+          "name": "Fuye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "NG-BA",
+      "parent_code": "NG",
+      "name": "Bauchi State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-255425308",
+          "parent_code": "NG-BA",
+          "name": "Bauchi",
+          "type": "city",
+          "population": "316173",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-483571821",
+          "parent_code": "NG-BA",
+          "name": "Azare",
+          "type": "city",
+          "population": "110452",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501336578",
+          "parent_code": "NG-BA",
+          "name": "Kari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501352687",
+          "parent_code": "NG-BA",
+          "name": "Futuk",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501404594",
+          "parent_code": "NG-BA",
+          "name": "Disina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501468536",
+          "parent_code": "NG-BA",
+          "name": "Boi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501489505",
+          "parent_code": "NG-BA",
+          "name": "Tafawa-Balewa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501497959",
+          "parent_code": "NG-BA",
+          "name": "Ningi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501498618",
+          "parent_code": "NG-BA",
+          "name": "Bure",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501513644",
+          "parent_code": "NG-BA",
+          "name": "Gamawa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501513647",
+          "parent_code": "NG-BA",
+          "name": "Kinsha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501516037",
+          "parent_code": "NG-BA",
+          "name": "Riban Garmu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501540889",
+          "parent_code": "NG-BA",
+          "name": "Yakubu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501540900",
+          "parent_code": "NG-BA",
+          "name": "Bauchi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-501540937",
+          "parent_code": "NG-BA",
+          "name": "Yakoba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1803116439",
+          "parent_code": "NG-BA",
+          "name": "Bara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8664742959",
+          "parent_code": "NG-BA",
+          "name": "Gwallameji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13280684089",
+          "parent_code": "NG-BA",
+          "name": "Zaranda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    }
+  ]
+}

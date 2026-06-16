@@ -1,0 +1,2024 @@
+{
+  "code": "EG",
+  "name": "Egypt",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "EG-SIN",
+      "parent_code": "EG",
+      "name": "North Sinai",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-248035196",
+          "parent_code": "EG-SIN",
+          "name": "Nekhel",
+          "type": "city",
+          "population": "11023",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-336214286",
+          "parent_code": "EG-SIN",
+          "name": "Bir al-Abd",
+          "type": "city",
+          "population": "87219",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768030243",
+          "parent_code": "EG-SIN",
+          "name": "Ash Sheikh Zuwayyed",
+          "type": "city",
+          "population": "60000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768030514",
+          "parent_code": "EG-SIN",
+          "name": "El Hassana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11300927566",
+          "parent_code": "EG-SIN",
+          "name": "El Arish",
+          "type": "city",
+          "population": "164830",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-11306193509",
+          "parent_code": "EG-SIN",
+          "name": "Al Maghara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "EG-JS",
+      "parent_code": "EG",
+      "name": "South Sinai",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27043265",
+          "parent_code": "EG-JS",
+          "name": "Dahab",
+          "type": "city",
+          "population": "12000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-29555531",
+          "parent_code": "EG-JS",
+          "name": "Sudr Cape",
+          "type": "city",
+          "population": "1725",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-428339450",
+          "parent_code": "EG-JS",
+          "name": "Sharm El Sheikh",
+          "type": "city",
+          "population": "38478",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-768030919",
+          "parent_code": "EG-JS",
+          "name": "Abu Rudays",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768582192",
+          "parent_code": "EG-JS",
+          "name": "At Tur",
+          "type": "city",
+          "population": "16129",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-768733590",
+          "parent_code": "EG-JS",
+          "name": "Abu Zenima",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768798152",
+          "parent_code": "EG-JS",
+          "name": "Taba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768799947",
+          "parent_code": "EG-JS",
+          "name": "Nueiba",
+          "type": "city",
+          "population": "18000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-768799993",
+          "parent_code": "EG-JS",
+          "name": "Nuweiba al Muzeinah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2571558867",
+          "parent_code": "EG-JS",
+          "name": "Saint Catherine",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "EG-ASN",
+      "parent_code": "EG",
+      "name": "Aswan",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-332075185",
+          "parent_code": "EG-ASN",
+          "name": "Kawm Ombo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-332075242",
+          "parent_code": "EG-ASN",
+          "name": "Daraw",
+          "type": "city",
+          "population": "38400",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-332186090",
+          "parent_code": "EG-ASN",
+          "name": "Faris",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768078792",
+          "parent_code": "EG-ASN",
+          "name": "Idfu",
+          "type": "city",
+          "population": "166102",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1667671341",
+          "parent_code": "EG-ASN",
+          "name": "Aswan",
+          "type": "city",
+          "population": "241261",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-5218983637",
+          "parent_code": "EG-ASN",
+          "name": "Al Kajuj",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10562128547",
+          "parent_code": "EG-ASN",
+          "name": "Al Khattara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10562128548",
+          "parent_code": "EG-ASN",
+          "name": "New Aswan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "EG-BA",
+      "parent_code": "EG",
+      "name": "Red Sea",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27084072",
+          "parent_code": "EG-BA",
+          "name": "Hurghada",
+          "type": "city",
+          "population": "160901",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-27133981",
+          "parent_code": "EG-BA",
+          "name": "El Gouna",
+          "type": "city",
+          "population": "15000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-27135821",
+          "parent_code": "EG-BA",
+          "name": "Marsa Alam",
+          "type": "city",
+          "population": "1918",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-27136155",
+          "parent_code": "EG-BA",
+          "name": "El Quseir",
+          "type": "city",
+          "population": "24344",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-27136248",
+          "parent_code": "EG-BA",
+          "name": "Safaga",
+          "type": "city",
+          "population": "28261",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-29906954",
+          "parent_code": "EG-BA",
+          "name": "Port Ghalib",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-296193469",
+          "parent_code": "EG-BA",
+          "name": "Ash Shalatin",
+          "type": "city",
+          "population": "6731",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-768582279",
+          "parent_code": "EG-BA",
+          "name": "Gharib Cape",
+          "type": "city",
+          "population": "32318",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4813663277",
+          "parent_code": "EG-BA",
+          "name": "Abu Ramad",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10935437586",
+          "parent_code": "EG-BA",
+          "name": "Suhein",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "EG-MT",
+      "parent_code": "EG",
+      "name": "Matruh",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-299546351",
+          "parent_code": "EG-MT",
+          "name": "Marsa Matruh",
+          "type": "city",
+          "population": "140000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-299612108",
+          "parent_code": "EG-MT",
+          "name": "As Sallum",
+          "type": "city",
+          "population": "8445",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-324629407",
+          "parent_code": "EG-MT",
+          "name": "Siwa Oasis",
+          "type": "city",
+          "population": "35000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-768026319",
+          "parent_code": "EG-MT",
+          "name": "Ad Daba‘a",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768026937",
+          "parent_code": "EG-MT",
+          "name": "El Alamein",
+          "type": "city",
+          "population": "10922",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-768751466",
+          "parent_code": "EG-MT",
+          "name": "Qaret Um El Saghir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768812338",
+          "parent_code": "EG-MT",
+          "name": "Sidi Abdel Rahman",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-10562128545",
+          "parent_code": "EG-MT",
+          "name": "Borj El Arab",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11309787185",
+          "parent_code": "EG-MT",
+          "name": "Umm Baraka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "EG-WAD",
+      "parent_code": "EG",
+      "name": "New Valley",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-336215777",
+          "parent_code": "EG-WAD",
+          "name": "Al Kharja Oases",
+          "type": "city",
+          "population": "61500",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-336216909",
+          "parent_code": "EG-WAD",
+          "name": "Mut",
+          "type": "city",
+          "population": "19616",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-336220315",
+          "parent_code": "EG-WAD",
+          "name": "Baris",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-336355231",
+          "parent_code": "EG-WAD",
+          "name": "Abu Minqar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-767964923",
+          "parent_code": "EG-WAD",
+          "name": "Balat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2662989689",
+          "parent_code": "EG-WAD",
+          "name": "El Dakhla Oases",
+          "type": "city",
+          "population": "80209",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-9506876992",
+          "parent_code": "EG-WAD",
+          "name": "الخارجة",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11483325798",
+          "parent_code": "EG-WAD",
+          "name": "New Suhaj",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-12753399915",
+          "parent_code": "EG-WAD",
+          "name": "Dendera",
+          "type": "city",
+          "population": "53109",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "EG-ALX",
+      "parent_code": "EG",
+      "name": "Alexandria",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27565020",
+          "parent_code": "EG-ALX",
+          "name": "Alexandria",
+          "type": "city",
+          "population": "4546231",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-332504177",
+          "parent_code": "EG-ALX",
+          "name": "Abu Qir",
+          "type": "city",
+          "population": "37997",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10562128546",
+          "parent_code": "EG-ALX",
+          "name": "New Borj El Arab",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "EG-IS",
+      "parent_code": "EG",
+      "name": "Al Ismailiya",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-768595872",
+          "parent_code": "EG-IS",
+          "name": "Al Ismailiyya",
+          "type": "city",
+          "population": "352000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-768596313",
+          "parent_code": "EG-IS",
+          "name": "Qantara West",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-768596321",
+          "parent_code": "EG-IS",
+          "name": "Qantara East",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3783957266",
+          "parent_code": "EG-IS",
+          "name": "Fayed",
+          "type": "city",
+          "population": "81000",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "EG-SUZ",
+      "parent_code": "EG",
+      "name": "Suez",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27564966",
+          "parent_code": "EG-SUZ",
+          "name": "Suez",
+          "type": "city",
+          "population": "488125",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-29593397",
+          "parent_code": "EG-SUZ",
+          "name": "Al Adabiyah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11489833146",
+          "parent_code": "EG-SUZ",
+          "name": "Ain Sokhna",
+          "type": "city",
+          "population": "45552",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11525807019",
+          "parent_code": "EG-SUZ",
+          "name": "New Suez",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "EG-GH",
+      "parent_code": "EG",
+      "name": "Gharbia",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-31582451",
+          "parent_code": "EG-GH",
+          "name": "El Mahalla El Kubra",
+          "type": "city",
+          "population": "431052",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-270227440",
+          "parent_code": "EG-GH",
+          "name": "Zifta",
+          "type": "city",
+          "population": "93740",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768602038",
+          "parent_code": "EG-GH",
+          "name": "Kafr Al-Zaiyat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768812366",
+          "parent_code": "EG-GH",
+          "name": "Ibyar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768812436",
+          "parent_code": "EG-GH",
+          "name": "Birma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1093710521",
+          "parent_code": "EG-GH",
+          "name": "Al-Santa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2742102194",
+          "parent_code": "EG-GH",
+          "name": "Tanta",
+          "type": "city",
+          "population": "429503",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4692953056",
+          "parent_code": "EG-GH",
+          "name": "MAHALLA ALKUBRA",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "EG-FYM",
+      "parent_code": "EG",
+      "name": "Faiyum",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-332566835",
+          "parent_code": "EG-FYM",
+          "name": "Matir Faris",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-332568455",
+          "parent_code": "EG-FYM",
+          "name": "Sinnuris",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-332569650",
+          "parent_code": "EG-FYM",
+          "name": "Itsa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-332571014",
+          "parent_code": "EG-FYM",
+          "name": "Al-Gharaq",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768033284",
+          "parent_code": "EG-FYM",
+          "name": "Fidimin",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768073561",
+          "parent_code": "EG-FYM",
+          "name": "Sanhur",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768555545",
+          "parent_code": "EG-FYM",
+          "name": "Faiyum",
+          "type": "city",
+          "population": "306393",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-768556033",
+          "parent_code": "EG-FYM",
+          "name": "Tutun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10600140235",
+          "parent_code": "EG-FYM",
+          "name": "Joesph The Trustful",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13768094335",
+          "parent_code": "EG-FYM",
+          "name": "نجع أبوسديره",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        }
+      ]
+    },
+    {
+      "code": "EG-BNS",
+      "parent_code": "EG",
+      "name": "Bani Sweif",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-331953850",
+          "parent_code": "EG-BNS",
+          "name": "Biba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331953872",
+          "parent_code": "EG-BNS",
+          "name": "Fashn",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768557743",
+          "parent_code": "EG-BNS",
+          "name": "Al-Wasitah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768586066",
+          "parent_code": "EG-BNS",
+          "name": "Beni Suef",
+          "type": "city",
+          "population": "219754",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-768586326",
+          "parent_code": "EG-BNS",
+          "name": "Ihnasya al Madinah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1127699160",
+          "parent_code": "EG-BNS",
+          "name": "New Bani Sweif",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-10308620834",
+          "parent_code": "EG-BNS",
+          "name": "قرية الحلابية",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "EG-MN",
+      "parent_code": "EG",
+      "name": "Al Minya",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-331953881",
+          "parent_code": "EG-MN",
+          "name": "Maghagha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331953907",
+          "parent_code": "EG-MN",
+          "name": "Beni Mazar",
+          "type": "city",
+          "population": "79553",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331954202",
+          "parent_code": "EG-MN",
+          "name": "Samalut",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768032316",
+          "parent_code": "EG-MN",
+          "name": "Al Minya",
+          "type": "city",
+          "population": "247000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-768554401",
+          "parent_code": "EG-MN",
+          "name": "Mallawi",
+          "type": "city",
+          "population": "142504",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768584669",
+          "parent_code": "EG-MN",
+          "name": "Deir Mawas",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768584680",
+          "parent_code": "EG-MN",
+          "name": "Abu Qurqas",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1085316881",
+          "parent_code": "EG-MN",
+          "name": "New Al Minya",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-11522999106",
+          "parent_code": "EG-MN",
+          "name": "New Mallawi City",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "EG-AST",
+      "parent_code": "EG",
+      "name": "Asyut",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-327143464",
+          "parent_code": "EG-AST",
+          "name": "Abnub",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-332014482",
+          "parent_code": "EG-AST",
+          "name": "Al Qusiya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-332014748",
+          "parent_code": "EG-AST",
+          "name": "Manfalut",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-332071942",
+          "parent_code": "EG-AST",
+          "name": "Abu Tig",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-332073264",
+          "parent_code": "EG-AST",
+          "name": "Sidfa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768732191",
+          "parent_code": "EG-AST",
+          "name": "Dairut",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5794148997",
+          "parent_code": "EG-AST",
+          "name": "New Asyut",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-6379231716",
+          "parent_code": "EG-AST",
+          "name": "Asyut",
+          "type": "city",
+          "population": "562743",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-6635281027",
+          "parent_code": "EG-AST",
+          "name": "Al Badari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6744163468",
+          "parent_code": "EG-AST",
+          "name": "El Ghanayem",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7129037706",
+          "parent_code": "EG-AST",
+          "name": "Sahel Silim",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "EG-SHG",
+      "parent_code": "EG",
+      "name": "Suhaj",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-299573543",
+          "parent_code": "EG-SHG",
+          "name": "Jirja",
+          "type": "city",
+          "population": "113600",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-332073408",
+          "parent_code": "EG-SHG",
+          "name": "Tima",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-332073542",
+          "parent_code": "EG-SHG",
+          "name": "Tahta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-332073585",
+          "parent_code": "EG-SHG",
+          "name": "Maragha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-332073659",
+          "parent_code": "EG-SHG",
+          "name": "Al-Manshah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1184124741",
+          "parent_code": "EG-SHG",
+          "name": "Akhmim",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1636218447",
+          "parent_code": "EG-SHG",
+          "name": "Suhaj",
+          "type": "city",
+          "population": "189695",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "EG-KN",
+      "parent_code": "EG",
+      "name": "Qena",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-299501065",
+          "parent_code": "EG-KN",
+          "name": "Qena",
+          "type": "city",
+          "population": "235362",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-332074139",
+          "parent_code": "EG-KN",
+          "name": "Balyana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-332074246",
+          "parent_code": "EG-KN",
+          "name": "Farshut",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-332074267",
+          "parent_code": "EG-KN",
+          "name": "Nag Hammadi",
+          "type": "city",
+          "population": "250000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-332074431",
+          "parent_code": "EG-KN",
+          "name": "Dishna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-332074724",
+          "parent_code": "EG-KN",
+          "name": "Qift",
+          "type": "city",
+          "population": "22063",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-332074802",
+          "parent_code": "EG-KN",
+          "name": "Qus",
+          "type": "city",
+          "population": "60068",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "EG-LX",
+      "parent_code": "EG",
+      "name": "Luxor",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-332074994",
+          "parent_code": "EG-LX",
+          "name": "Esna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1667671370",
+          "parent_code": "EG-LX",
+          "name": "Luxor",
+          "type": "city",
+          "population": "451318",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2969397825",
+          "parent_code": "EG-LX",
+          "name": "New Thebes",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "EG-GZ",
+      "parent_code": "EG",
+      "name": "Giza",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27565120",
+          "parent_code": "EG-GZ",
+          "name": "Giza",
+          "type": "city",
+          "population": "2681863",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-299523927",
+          "parent_code": "EG-GZ",
+          "name": "6th of October",
+          "type": "city",
+          "population": "184000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-299569009",
+          "parent_code": "EG-GZ",
+          "name": "Al-Hawamidyah",
+          "type": "city",
+          "population": "113000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-330194927",
+          "parent_code": "EG-GZ",
+          "name": "Sheikh Zayed",
+          "type": "city",
+          "population": "80000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-336335743",
+          "parent_code": "EG-GZ",
+          "name": "Bawiti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768588348",
+          "parent_code": "EG-GZ",
+          "name": "Al Ayyat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768590098",
+          "parent_code": "EG-GZ",
+          "name": "Al Saff",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768752207",
+          "parent_code": "EG-GZ",
+          "name": "Mandisha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768752276",
+          "parent_code": "EG-GZ",
+          "name": "Al Uwaynah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5873095285",
+          "parent_code": "EG-GZ",
+          "name": "Ash Sheikh Zayed",
+          "type": "city",
+          "population": "383000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-10039204860",
+          "parent_code": "EG-GZ",
+          "name": "منزل المهندس ايمن ابو حمد",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        },
+        {
+          "code": "CTY-12647519244",
+          "parent_code": "EG-GZ",
+          "name": "Northern Oases",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "EG-MNF",
+      "parent_code": "EG",
+      "name": "Monufia Governorate",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-299527803",
+          "parent_code": "EG-MNF",
+          "name": "Shibin El Kawm",
+          "type": "city",
+          "population": "184097",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-768565933",
+          "parent_code": "EG-MNF",
+          "name": "Tala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768565966",
+          "parent_code": "EG-MNF",
+          "name": "Al Shuhada",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768565984",
+          "parent_code": "EG-MNF",
+          "name": "Manuf",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1039311052",
+          "parent_code": "EG-MNF",
+          "name": "Ashmoun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1039314219",
+          "parent_code": "EG-MNF",
+          "name": "Samadon",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1088289428",
+          "parent_code": "EG-MNF",
+          "name": "Quwaysina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1090891081",
+          "parent_code": "EG-MNF",
+          "name": "Sers Al Layyan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1094131552",
+          "parent_code": "EG-MNF",
+          "name": "Kafr Al-Gazar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6105361393",
+          "parent_code": "EG-MNF",
+          "name": "Garawan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10940390949",
+          "parent_code": "EG-MNF",
+          "name": "Sadat City",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "EG-BH",
+      "parent_code": "EG",
+      "name": "Beheira Governorate",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-299499376",
+          "parent_code": "EG-BH",
+          "name": "Damanhur",
+          "type": "city",
+          "population": "227943",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-768566182",
+          "parent_code": "EG-BH",
+          "name": "Kom Hamada",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768601971",
+          "parent_code": "EG-BH",
+          "name": "Itay el-Barud",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768601998",
+          "parent_code": "EG-BH",
+          "name": "Delingat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768815269",
+          "parent_code": "EG-BH",
+          "name": "Rosetta",
+          "type": "city",
+          "population": "68947",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-769122369",
+          "parent_code": "EG-BH",
+          "name": "Abu Huminus",
+          "type": "city",
+          "population": "36801",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-769125281",
+          "parent_code": "EG-BH",
+          "name": "Kafr al Dawar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-769127625",
+          "parent_code": "EG-BH",
+          "name": "Abu al Matamir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-769129741",
+          "parent_code": "EG-BH",
+          "name": "Hawsh Isa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-887725623",
+          "parent_code": "EG-BH",
+          "name": "Al-Mahmudiya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1039327711",
+          "parent_code": "EG-BH",
+          "name": "Idku",
+          "type": "city",
+          "population": "210242",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2209384485",
+          "parent_code": "EG-BH",
+          "name": "El Natrun Valley",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3235552557",
+          "parent_code": "EG-BH",
+          "name": "Shubra Khit",
+          "type": "city",
+          "population": "30829",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3669525044",
+          "parent_code": "EG-BH",
+          "name": "Al Nubaria",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3979889685",
+          "parent_code": "EG-BH",
+          "name": "Elmagd",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5650937978",
+          "parent_code": "EG-BH",
+          "name": "El Rahmaniya",
+          "type": "city",
+          "population": "32093",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "EG-C",
+      "parent_code": "EG",
+      "name": "Cairo",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-271613766",
+          "parent_code": "EG-C",
+          "name": "Cairo",
+          "type": "city",
+          "population": "9120350",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-298439914",
+          "parent_code": "EG-C",
+          "name": "El Shorouk",
+          "type": "city",
+          "population": "94582",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-330190833",
+          "parent_code": "EG-C",
+          "name": "Fifteenth Of May",
+          "type": "city",
+          "population": "100511",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-330191267",
+          "parent_code": "EG-C",
+          "name": "Badr",
+          "type": "city",
+          "population": "33456",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-355923104",
+          "parent_code": "EG-C",
+          "name": "Madinaty",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768775606",
+          "parent_code": "EG-C",
+          "name": "Helwan",
+          "type": "city",
+          "population": "643327",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-7152775457",
+          "parent_code": "EG-C",
+          "name": "New Administrative Capital",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-7651711567",
+          "parent_code": "EG-C",
+          "name": "New Cairo",
+          "type": "city",
+          "population": "298343",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "EG-KB",
+      "parent_code": "EG",
+      "name": "Al Qalyubiya",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-31353319",
+          "parent_code": "EG-KB",
+          "name": "Banha",
+          "type": "city",
+          "population": "167029",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-270226451",
+          "parent_code": "EG-KB",
+          "name": "Qaha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-270227007",
+          "parent_code": "EG-KB",
+          "name": "Tukh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-299570446",
+          "parent_code": "EG-KB",
+          "name": "Qalyub",
+          "type": "city",
+          "population": "109000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-311994035",
+          "parent_code": "EG-KB",
+          "name": "Al-Obour",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-325783225",
+          "parent_code": "EG-KB",
+          "name": "Shebin el Qanater",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-332495459",
+          "parent_code": "EG-KB",
+          "name": "Aghour Al-Kubra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768553824",
+          "parent_code": "EG-KB",
+          "name": "Al Qanatir al Khairiya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768591737",
+          "parent_code": "EG-KB",
+          "name": "Shubra al Khayma",
+          "type": "city",
+          "population": "1016722",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-8911130194",
+          "parent_code": "EG-KB",
+          "name": "كفر شكر",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "EG-DK",
+      "parent_code": "EG",
+      "name": "Ad Dakahliya",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-31582434",
+          "parent_code": "EG-DK",
+          "name": "El Mansura",
+          "type": "city",
+          "population": "420195",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-270227401",
+          "parent_code": "EG-DK",
+          "name": "Mit Ghamr",
+          "type": "city",
+          "population": "119000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-270227536",
+          "parent_code": "EG-DK",
+          "name": "Aga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-332108921",
+          "parent_code": "EG-DK",
+          "name": "Dikirnis",
+          "type": "city",
+          "population": "137542",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-395459213",
+          "parent_code": "EG-DK",
+          "name": "Al Manzala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-699327818",
+          "parent_code": "EG-DK",
+          "name": "Talkha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768580580",
+          "parent_code": "EG-DK",
+          "name": "Abu al Shuquq",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768580931",
+          "parent_code": "EG-DK",
+          "name": "El Senbellawein",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1137313368",
+          "parent_code": "EG-DK",
+          "name": "Safur",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1137313517",
+          "parent_code": "EG-DK",
+          "name": "Atmeeda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6091032462",
+          "parent_code": "EG-DK",
+          "name": "Tanah",
+          "type": "city",
+          "population": "80000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-8418350064",
+          "parent_code": "EG-DK",
+          "name": "الحاج معوض",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9874178937",
+          "parent_code": "EG-DK",
+          "name": "Bani Ebeid",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10559845231",
+          "parent_code": "EG-DK",
+          "name": "Gamasa",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-10606685444",
+          "parent_code": "EG-DK",
+          "name": "entercoil",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10651073722",
+          "parent_code": "EG-DK",
+          "name": "Al-Asafra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "EG-DT",
+      "parent_code": "EG",
+      "name": "Damietta",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-295029548",
+          "parent_code": "EG-DT",
+          "name": "Damietta",
+          "type": "city",
+          "population": "267000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-665528750",
+          "parent_code": "EG-DT",
+          "name": "New Damietta",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-768598369",
+          "parent_code": "EG-DT",
+          "name": "Al Bar Cape",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "EG-KFS",
+      "parent_code": "EG",
+      "name": "Kafr El Sheikh",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-31578820",
+          "parent_code": "EG-KFS",
+          "name": "Biala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-299569447",
+          "parent_code": "EG-KFS",
+          "name": "Dusuq",
+          "type": "city",
+          "population": "110000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-767997839",
+          "parent_code": "EG-KFS",
+          "name": "Borj Al Burullous",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768815457",
+          "parent_code": "EG-KFS",
+          "name": "Sidi Salim",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768815533",
+          "parent_code": "EG-KFS",
+          "name": "Metoubes",
+          "type": "city",
+          "population": "0",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-769129756",
+          "parent_code": "EG-KFS",
+          "name": "Fuwah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3235545411",
+          "parent_code": "EG-KFS",
+          "name": "Baltim Resort",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6580603648",
+          "parent_code": "EG-KFS",
+          "name": "Kafr Al Sheikh",
+          "type": "city",
+          "population": "152000",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "EG-PTS",
+      "parent_code": "EG",
+      "name": "Port Said",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27564975",
+          "parent_code": "EG-PTS",
+          "name": "Port Said",
+          "type": "city",
+          "population": "538378",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-376304399",
+          "parent_code": "EG-PTS",
+          "name": "Port Fuad",
+          "type": "city",
+          "population": "70417",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "EG-SHR",
+      "parent_code": "EG",
+      "name": "Sharqia Governorate",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-299498464",
+          "parent_code": "EG-SHR",
+          "name": "Zagazig",
+          "type": "city",
+          "population": "285097",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-299571747",
+          "parent_code": "EG-SHR",
+          "name": "Abu Kabir",
+          "type": "city",
+          "population": "106000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-332219151",
+          "parent_code": "EG-SHR",
+          "name": "Mashtul Al-Suq",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-336211787",
+          "parent_code": "EG-SHR",
+          "name": "Minya Al-Qamh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-703527405",
+          "parent_code": "EG-SHR",
+          "name": "Diarb Negm",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-703527885",
+          "parent_code": "EG-SHR",
+          "name": "Bilbeis",
+          "type": "city",
+          "population": "141285",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768580464",
+          "parent_code": "EG-SHR",
+          "name": "Diyarb Nigm",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768580600",
+          "parent_code": "EG-SHR",
+          "name": "Kafr Saqr",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-768593719",
+          "parent_code": "EG-SHR",
+          "name": "Faqous",
+          "type": "city",
+          "population": "111532",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-768766246",
+          "parent_code": "EG-SHR",
+          "name": "10th of Ramadan City",
+          "type": "city",
+          "population": "250000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1051468629",
+          "parent_code": "EG-SHR",
+          "name": "Al-Salheya Al-Gedida",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10154769796",
+          "parent_code": "EG-SHR",
+          "name": "Tenth Of Ramadan",
+          "type": "city",
+          "population": "263321",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-12147735601",
+          "parent_code": "EG-SHR",
+          "name": "Pi-Ramesses",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12147736188",
+          "parent_code": "EG-SHR",
+          "name": "Qantir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    }
+  ]
+}

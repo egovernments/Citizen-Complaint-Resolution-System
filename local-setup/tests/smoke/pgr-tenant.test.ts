@@ -16,6 +16,7 @@ import { db } from '../utils/db';
 import { config } from '../utils/config';
 import { LoginResponseSchema } from '../schemas/user';
 import { SearchServiceResponseSchema } from '../schemas/pgr';
+import { uniqueMobile } from '../utils/mobile';
 
 // ── Tenant from env ──────────────────────────────────────────
 const TENANT = process.env.TENANT || 'pg.citya';
@@ -123,7 +124,7 @@ describe(`PGR E2E — ${TENANT}`, () => {
       const desigs: any[] = (global as any).__testDesigs;
       const desig = pick(desigs);
       userName = `e2e-${cityPart}-${timestamp}`;
-      const mobile = `9${String(timestamp).slice(-9)}`;
+      const mobile = uniqueMobile();
 
       console.log(`Creating HRMS employee: ${userName}, dept=${deptCode}, desig=${desig.code}`);
 
@@ -230,7 +231,7 @@ describe(`PGR E2E — ${TENANT}`, () => {
           tenantId: TENANT, serviceCode,
           description: `E2E test complaint on ${TENANT} - ${timestamp}`, source: 'web',
           address: { city: TENANT, locality: { code: LOCALITY_CODE, name: `${TENANT_LABEL} Central` }, geoLocation: { latitude: -0.37, longitude: 35.29 } },
-          citizen: { name: 'Test Citizen', mobileNumber: `8${String(timestamp).slice(-9)}`, tenantId: TENANT },
+          citizen: { name: 'Test Citizen', mobileNumber: uniqueMobile(1), tenantId: TENANT },
         },
         workflow: { action: 'APPLY' },
       }, { timeout: 30000 });

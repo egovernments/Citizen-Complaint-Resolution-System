@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import { useCallback } from 'react';
 import { useInput } from 'ra-core';
 import type { InputProps } from 'ra-core';
 import { Search, X } from 'lucide-react';

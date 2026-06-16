@@ -108,6 +108,17 @@ core_postal_configs:
   postalCodeLength: 5
   postalCodeErrorMessage: "CS_COMPLAINT_POSTALCODE_INVALID_ERROR"
 
+# Postal-code serviceability allowlist, passed to the MCP tenant
+# bootstrap as `pincode_allowlist` and seeded as `pincode` on every
+# tenant.tenants record. When set, a citizen who types a postal code
+# outside this list is blocked at submit with
+# CS_COMMON_PINCODE_NOT_SERVICABLE — unless they picked a ward, which
+# always supersedes the allowlist. Leave UNSET (the default) to accept
+# any postal code; do NOT set it to [] (mdms-v2 rejects empty arrays).
+# pgr_pincode_allowlist:
+#   - "00100"
+#   - "00200"
+
 # S3 bucket name used by egov-filestore as the asset bucket (sees
 # `asset_s3_bucket` in globalConfigs.js).
 asset_s3_bucket: "mytenant-egov-assets"
@@ -131,6 +142,18 @@ footer_bw_logo_url: ""
 #             Fewer moving parts; stable for production.
 # Both modes bind port 18080 internally; only one can be active.
 digit_ui_mode: static
+
+# Optional (static mode only): serve a PREBUILT bundle image instead of
+# cloning + building digit-ui-esbuild from git on the host. The playbook
+# pulls the image and extracts its baked /var/web/digit-ui into
+# /opt/digit-ui-esbuild/build/ (the dir nginx already serves). Build and
+# publish from the monorepo with:
+#   cd digit-ui-esbuild
+#   docker build -f docker/Dockerfile \
+#     -t <registry>/digit-ui-esbuild:<YYYYMMDD-HHMMSS> \
+#     -t <registry>/digit-ui-esbuild:nightly-develop . && docker push --all-tags <registry>/digit-ui-esbuild
+# Leave unset to keep the legacy git-clone + on-host esbuild behavior.
+# digit_ui_bundle_image: "ghcr.io/subhashini-egov/digit-ui-esbuild:nightly-develop"
 
 # ────────── digit-ui-v2 (Vite + React 19 citizen SPA) ──────────
 #
@@ -196,6 +219,19 @@ enable_search_stack: false
 # `docker compose up`. Flip to false (or override `docker_registry` to
 # a public mirror) if you're not on the VPC.
 enable_mcp: true
+
+# ────────── Turbopass (OSM location autocomplete) ──────────
+# Build + run the vendored turbopass search-api (turbopass/search-api/) as a
+# standalone on-box container (`turbopass-search`, loopback 127.0.0.1:13301)
+# and render the nginx /turbopass/ proxy in front of it. Powers the
+# configurator's Phase 2 location autocomplete
+# (GET /turbopass/search?q=<term>&limit=<n>). Requires the scraped OSM data
+# under turbopass/data on the controller — the playbook syncs it to the
+# target and mounts it read-only into the container (DATA_DIR=/data).
+# Off by default: when false, no image is built, no container runs, and the
+# nginx vhost renders byte-identical to a pre-turbopass deploy.
+enable_turbopass: false
+# turbopass_port: 13301        # loopback port the search-api publishes on
 
 # ────────── Notifications (Novu + Twilio WhatsApp) ──────────
 # Turn on the `notifications` compose profile — adds 8 containers:

@@ -1,0 +1,4904 @@
+{
+  "code": "ML",
+  "name": "Mali",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "ML-7",
+      "parent_code": "ML",
+      "name": "Gao",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-89918976",
+          "parent_code": "ML-7",
+          "name": "Gao",
+          "type": "city",
+          "population": "58000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1703668339",
+          "parent_code": "ML-7",
+          "name": "Ansongo",
+          "type": "city",
+          "population": "32700",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1703668409",
+          "parent_code": "ML-7",
+          "name": "Bamba-Poste",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703668490",
+          "parent_code": "ML-7",
+          "name": "Bara",
+          "type": "city",
+          "population": "12354",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703668759",
+          "parent_code": "ML-7",
+          "name": "Bourem",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1703669313",
+          "parent_code": "ML-7",
+          "name": "Djebock",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703669850",
+          "parent_code": "ML-7",
+          "name": "Forgho Sonrhai",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703671220",
+          "parent_code": "ML-7",
+          "name": "Ouattagouna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703672176",
+          "parent_code": "ML-7",
+          "name": "Taboye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703672268",
+          "parent_code": "ML-7",
+          "name": "Tarkint",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703672271",
+          "parent_code": "ML-7",
+          "name": "Tassiga C-Boura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703672326",
+          "parent_code": "ML-7",
+          "name": "Tin Hama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703672469",
+          "parent_code": "ML-7",
+          "name": "Wabaria",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2160169823",
+          "parent_code": "ML-7",
+          "name": "Tessit",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2162066508",
+          "parent_code": "ML-7",
+          "name": "Badji Gourma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2162066576",
+          "parent_code": "ML-7",
+          "name": "Goléa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2162066676",
+          "parent_code": "ML-7",
+          "name": "Monzonga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2162066750",
+          "parent_code": "ML-7",
+          "name": "Seyna-Île",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3328301524",
+          "parent_code": "ML-7",
+          "name": "Todjel Gabero",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ML-1",
+      "parent_code": "ML",
+      "name": "Kayes",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-277932033",
+          "parent_code": "ML-1",
+          "name": "Kayes",
+          "type": "city",
+          "population": "127368",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-330440424",
+          "parent_code": "ML-1",
+          "name": "Bafoulabe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-330449394",
+          "parent_code": "ML-1",
+          "name": "Mahina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1035398271",
+          "parent_code": "ML-1",
+          "name": "Diéma",
+          "type": "city",
+          "population": "17200",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703668340",
+          "parent_code": "ML-1",
+          "name": "Aourou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703668375",
+          "parent_code": "ML-1",
+          "name": "Bafarara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703668460",
+          "parent_code": "ML-1",
+          "name": "Bangassi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703668967",
+          "parent_code": "ML-1",
+          "name": "Diakon",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703668976",
+          "parent_code": "ML-1",
+          "name": "Diala-Banlieue",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703669041",
+          "parent_code": "ML-1",
+          "name": "Diamou",
+          "type": "city",
+          "population": "3793",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703669076",
+          "parent_code": "ML-1",
+          "name": "Diboli",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703669131",
+          "parent_code": "ML-1",
+          "name": "Diongaga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703669221",
+          "parent_code": "ML-1",
+          "name": "Dioumara Koussata",
+          "type": "city",
+          "population": "3700",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703669382",
+          "parent_code": "ML-1",
+          "name": "Dogofry",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703669732",
+          "parent_code": "ML-1",
+          "name": "Fanga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703669999",
+          "parent_code": "ML-1",
+          "name": "Gory Diafounou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670026",
+          "parent_code": "ML-1",
+          "name": "Goumera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670067",
+          "parent_code": "ML-1",
+          "name": "Grouméra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670081",
+          "parent_code": "ML-1",
+          "name": "Guémoukouraba",
+          "type": "city",
+          "population": "4650",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670347",
+          "parent_code": "ML-1",
+          "name": "Kalinioro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670425",
+          "parent_code": "ML-1",
+          "name": "Kassaro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670519",
+          "parent_code": "ML-1",
+          "name": "Kita",
+          "type": "city",
+          "population": "54548",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1703670606",
+          "parent_code": "ML-1",
+          "name": "Koniakary",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670745",
+          "parent_code": "ML-1",
+          "name": "Kourouninkoto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670763",
+          "parent_code": "ML-1",
+          "name": "Lambidou",
+          "type": "city",
+          "population": "12565",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703671179",
+          "parent_code": "ML-1",
+          "name": "Oussoubidiandia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703671419",
+          "parent_code": "ML-1",
+          "name": "Sadiola",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703671691",
+          "parent_code": "ML-1",
+          "name": "Ségala Ndi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703671700",
+          "parent_code": "ML-1",
+          "name": "Selinkegny",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703671766",
+          "parent_code": "ML-1",
+          "name": "Sero",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703671954",
+          "parent_code": "ML-1",
+          "name": "Somankidi",
+          "type": "city",
+          "population": "7900",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703672229",
+          "parent_code": "ML-1",
+          "name": "Takaba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703672241",
+          "parent_code": "ML-1",
+          "name": "Tambacara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703672297",
+          "parent_code": "ML-1",
+          "name": "Teichibe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1986223980",
+          "parent_code": "ML-1",
+          "name": "Kondonya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1986253719",
+          "parent_code": "ML-1",
+          "name": "Kéniéba",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1986296839",
+          "parent_code": "ML-1",
+          "name": "Fégui",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1996788897",
+          "parent_code": "ML-1",
+          "name": "Kersignané",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1996806344",
+          "parent_code": "ML-1",
+          "name": "Yaguiné",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1996806372",
+          "parent_code": "ML-1",
+          "name": "Yélimané",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1996806437",
+          "parent_code": "ML-1",
+          "name": "Dionkoulané",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1996825940",
+          "parent_code": "ML-1",
+          "name": "Diandioumé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2124594955",
+          "parent_code": "ML-1",
+          "name": "Diéoura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2124611420",
+          "parent_code": "ML-1",
+          "name": "Diangounté-Kamara",
+          "type": "city",
+          "population": "10800",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2124611439",
+          "parent_code": "ML-1",
+          "name": "Séféto",
+          "type": "city",
+          "population": "7928",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2132021075",
+          "parent_code": "ML-1",
+          "name": "Sambaga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2132021432",
+          "parent_code": "ML-1",
+          "name": "Koméoulou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2132085291",
+          "parent_code": "ML-1",
+          "name": "Bidadji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2138663335",
+          "parent_code": "ML-1",
+          "name": "Tourougoumbé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2164633922",
+          "parent_code": "ML-1",
+          "name": "Yéréré",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2165274986",
+          "parent_code": "ML-1",
+          "name": "Béma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2165274992",
+          "parent_code": "ML-1",
+          "name": "Diaye-Coura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2165274996",
+          "parent_code": "ML-1",
+          "name": "Fatao",
+          "type": "city",
+          "population": "8500",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2165274997",
+          "parent_code": "ML-1",
+          "name": "Gogui",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2165275011",
+          "parent_code": "ML-1",
+          "name": "Madiga-Sacko",
+          "type": "city",
+          "population": "12400",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2165275023",
+          "parent_code": "ML-1",
+          "name": "Nioro du Sahel",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2165275030",
+          "parent_code": "ML-1",
+          "name": "Simbi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2165275047",
+          "parent_code": "ML-1",
+          "name": "Youri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2165275417",
+          "parent_code": "ML-1",
+          "name": "Tinkaré",
+          "type": "city",
+          "population": "7100",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2165275422",
+          "parent_code": "ML-1",
+          "name": "Lakamané",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2165275435",
+          "parent_code": "ML-1",
+          "name": "Bendougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2165275524",
+          "parent_code": "ML-1",
+          "name": "Fassoudébé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2165275606",
+          "parent_code": "ML-1",
+          "name": "Tourourou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2186627966",
+          "parent_code": "ML-1",
+          "name": "Sobokou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2196474859",
+          "parent_code": "ML-1",
+          "name": "Maréna Diombougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2197856928",
+          "parent_code": "ML-1",
+          "name": "Kroukéto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2209289175",
+          "parent_code": "ML-1",
+          "name": "Kremis",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2210519719",
+          "parent_code": "ML-1",
+          "name": "Korompo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2211915608",
+          "parent_code": "ML-1",
+          "name": "Koréra-Koré",
+          "type": "city",
+          "population": "3836",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2218049337",
+          "parent_code": "ML-1",
+          "name": "Faléa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2223014498",
+          "parent_code": "ML-1",
+          "name": "Sandaré",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2240907390",
+          "parent_code": "ML-1",
+          "name": "Diabarou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2247751945",
+          "parent_code": "ML-1",
+          "name": "Tichy Ambidedi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2258838189",
+          "parent_code": "ML-1",
+          "name": "Koussané",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2330272696",
+          "parent_code": "ML-1",
+          "name": "Boutounguissi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2444918432",
+          "parent_code": "ML-1",
+          "name": "Bourdala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2445008981",
+          "parent_code": "ML-1",
+          "name": "Sérinati",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2564190146",
+          "parent_code": "ML-1",
+          "name": "Torodo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3017301107",
+          "parent_code": "ML-1",
+          "name": "Bandiougoula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3017308983",
+          "parent_code": "ML-1",
+          "name": "Niougoméra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3017309722",
+          "parent_code": "ML-1",
+          "name": "Kirané",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3017311377",
+          "parent_code": "ML-1",
+          "name": "Kodiè",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3151331281",
+          "parent_code": "ML-1",
+          "name": "Djoungounte",
+          "type": "city",
+          "population": "4256",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3374141228",
+          "parent_code": "ML-1",
+          "name": "Néguébougou",
+          "type": "city",
+          "population": "3600",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4023284284",
+          "parent_code": "ML-1",
+          "name": "Fadou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4023289309",
+          "parent_code": "ML-1",
+          "name": "Diabigué",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5821047535",
+          "parent_code": "ML-1",
+          "name": "Niagané",
+          "type": "city",
+          "population": "4350",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777500782",
+          "parent_code": "ML-1",
+          "name": "Gounfan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777500837",
+          "parent_code": "ML-1",
+          "name": "Diakaba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777500845",
+          "parent_code": "ML-1",
+          "name": "Cité des Cadres",
+          "type": "city",
+          "population": "1000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777500848",
+          "parent_code": "ML-1",
+          "name": "Manantali",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777500850",
+          "parent_code": "ML-1",
+          "name": "Dialan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777500856",
+          "parent_code": "ML-1",
+          "name": "Niantasso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777500860",
+          "parent_code": "ML-1",
+          "name": "Koundian",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777535155",
+          "parent_code": "ML-1",
+          "name": "Kaïnéra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777547266",
+          "parent_code": "ML-1",
+          "name": "Leya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777618587",
+          "parent_code": "ML-1",
+          "name": "Nouveau Fadougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777618671",
+          "parent_code": "ML-1",
+          "name": "Sagalo",
+          "type": "city",
+          "population": "15830",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777618792",
+          "parent_code": "ML-1",
+          "name": "Koffing",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777619101",
+          "parent_code": "ML-1",
+          "name": "Diourdaloma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777619264",
+          "parent_code": "ML-1",
+          "name": "Solea",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777619351",
+          "parent_code": "ML-1",
+          "name": "Faraba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777619373",
+          "parent_code": "ML-1",
+          "name": "Kouroukoto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777619395",
+          "parent_code": "ML-1",
+          "name": "Sitakily",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777619396",
+          "parent_code": "ML-1",
+          "name": "Baye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777619397",
+          "parent_code": "ML-1",
+          "name": "Dombia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777619398",
+          "parent_code": "ML-1",
+          "name": "Dialafara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777619402",
+          "parent_code": "ML-1",
+          "name": "Dabia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777682884",
+          "parent_code": "ML-1",
+          "name": "Djidian",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777682885",
+          "parent_code": "ML-1",
+          "name": "Sébékoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777682972",
+          "parent_code": "ML-1",
+          "name": "Tambaga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777683095",
+          "parent_code": "ML-1",
+          "name": "Moro-Moro",
+          "type": "city",
+          "population": "3550",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777683182",
+          "parent_code": "ML-1",
+          "name": "Namala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777683190",
+          "parent_code": "ML-1",
+          "name": "Souransan-Tomoto",
+          "type": "city",
+          "population": "4105",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777683340",
+          "parent_code": "ML-1",
+          "name": "Kobri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777683393",
+          "parent_code": "ML-1",
+          "name": "Guénikoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777683509",
+          "parent_code": "ML-1",
+          "name": "Balia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777683535",
+          "parent_code": "ML-1",
+          "name": "Bougarybaya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777683650",
+          "parent_code": "ML-1",
+          "name": "Senko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777683725",
+          "parent_code": "ML-1",
+          "name": "Sirakoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777683778",
+          "parent_code": "ML-1",
+          "name": "Soribougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777683801",
+          "parent_code": "ML-1",
+          "name": "Balandougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777683803",
+          "parent_code": "ML-1",
+          "name": "Badinko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777683806",
+          "parent_code": "ML-1",
+          "name": "Sagabari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777683815",
+          "parent_code": "ML-1",
+          "name": "Kokofata",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777683828",
+          "parent_code": "ML-1",
+          "name": "Toukoto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777689382",
+          "parent_code": "ML-1",
+          "name": "Hamdallaye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10329392924",
+          "parent_code": "ML-1",
+          "name": "Tabakoto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10657995584",
+          "parent_code": "ML-1",
+          "name": "Mambri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10989750138",
+          "parent_code": "ML-1",
+          "name": "Kelouga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13077504476",
+          "parent_code": "ML-1",
+          "name": "Lakanguemou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ML-8",
+      "parent_code": "ML",
+      "name": "Kidal",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2032098356",
+          "parent_code": "ML-8",
+          "name": "Kidal",
+          "type": "city",
+          "population": "25000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2532259434",
+          "parent_code": "ML-8",
+          "name": "Tessalit",
+          "type": "city",
+          "population": "8700",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12919001227",
+          "parent_code": "ML-8",
+          "name": "Anoumalane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ML-2",
+      "parent_code": "ML",
+      "name": "Koulikoro",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-277944562",
+          "parent_code": "ML-2",
+          "name": "Kolokani",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-277945591",
+          "parent_code": "ML-2",
+          "name": "Koulikoro",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-538454688",
+          "parent_code": "ML-2",
+          "name": "Kangaba",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-696608086",
+          "parent_code": "ML-2",
+          "name": "Kobalakoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1053187064",
+          "parent_code": "ML-2",
+          "name": "Sananfara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1118567790",
+          "parent_code": "ML-2",
+          "name": "Sangarebougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703668304",
+          "parent_code": "ML-2",
+          "name": "Allahina",
+          "type": "city",
+          "population": "3983",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703668403",
+          "parent_code": "ML-2",
+          "name": "Balamassala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703668439",
+          "parent_code": "ML-2",
+          "name": "Banamba",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1703668453",
+          "parent_code": "ML-2",
+          "name": "Banco",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703668508",
+          "parent_code": "ML-2",
+          "name": "Beleko Soba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703668674",
+          "parent_code": "ML-2",
+          "name": "Boron",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703669092",
+          "parent_code": "ML-2",
+          "name": "Dilly",
+          "type": "city",
+          "population": "6162",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703669111",
+          "parent_code": "ML-2",
+          "name": "Dioïla",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1703670022",
+          "parent_code": "ML-2",
+          "name": "Goumbou",
+          "type": "city",
+          "population": "14731",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670085",
+          "parent_code": "ML-2",
+          "name": "Guihoyo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670426",
+          "parent_code": "ML-2",
+          "name": "Kati",
+          "type": "city",
+          "population": "114983",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1703670494",
+          "parent_code": "ML-2",
+          "name": "Kiban",
+          "type": "city",
+          "population": "11300",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670643",
+          "parent_code": "ML-2",
+          "name": "Koronga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670727",
+          "parent_code": "ML-2",
+          "name": "Kourouba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670852",
+          "parent_code": "ML-2",
+          "name": "Madina Sacko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670946",
+          "parent_code": "ML-2",
+          "name": "Moribabougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670980",
+          "parent_code": "ML-2",
+          "name": "Mountougoula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670983",
+          "parent_code": "ML-2",
+          "name": "Mourdiah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670993",
+          "parent_code": "ML-2",
+          "name": "N'Gabakoro-Droit",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703671001",
+          "parent_code": "ML-2",
+          "name": "N'Gara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703671092",
+          "parent_code": "ML-2",
+          "name": "Nara",
+          "type": "city",
+          "population": "21257",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1703671110",
+          "parent_code": "ML-2",
+          "name": "Niantjila",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703671226",
+          "parent_code": "ML-2",
+          "name": "Ouenzzindougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703672434",
+          "parent_code": "ML-2",
+          "name": "Toukoroba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2121040137",
+          "parent_code": "ML-2",
+          "name": "Guire",
+          "type": "city",
+          "population": "5480",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2124304459",
+          "parent_code": "ML-2",
+          "name": "Gassambarou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2181065402",
+          "parent_code": "ML-2",
+          "name": "Kirina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2181065414",
+          "parent_code": "ML-2",
+          "name": "Soribougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2209296407",
+          "parent_code": "ML-2",
+          "name": "Tiélé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2242614392",
+          "parent_code": "ML-2",
+          "name": "Sirakorola",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2445208510",
+          "parent_code": "ML-2",
+          "name": "Kassela",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2565958898",
+          "parent_code": "ML-2",
+          "name": "Ballé",
+          "type": "city",
+          "population": "7648",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2610671457",
+          "parent_code": "ML-2",
+          "name": "Didiéni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2688105264",
+          "parent_code": "ML-2",
+          "name": "Bonegue",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3190396966",
+          "parent_code": "ML-2",
+          "name": "Sanankoroba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3190958804",
+          "parent_code": "ML-2",
+          "name": "Kodialani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4120235510",
+          "parent_code": "ML-2",
+          "name": "Krousalé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5025230779",
+          "parent_code": "ML-2",
+          "name": "Solomanibougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6159078146",
+          "parent_code": "ML-2",
+          "name": "Lena",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6670197373",
+          "parent_code": "ML-2",
+          "name": "Kwala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7083146945",
+          "parent_code": "ML-2",
+          "name": "Baguineda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777717671",
+          "parent_code": "ML-2",
+          "name": "Séléfougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777726898",
+          "parent_code": "ML-2",
+          "name": "Kerouane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777726928",
+          "parent_code": "ML-2",
+          "name": "Touba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777758086",
+          "parent_code": "ML-2",
+          "name": "Bougoukourala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777758303",
+          "parent_code": "ML-2",
+          "name": "Diebé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777758312",
+          "parent_code": "ML-2",
+          "name": "Massigui",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777758313",
+          "parent_code": "ML-2",
+          "name": "Dandougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777758335",
+          "parent_code": "ML-2",
+          "name": "Kotoula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777758346",
+          "parent_code": "ML-2",
+          "name": "Korokoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777758349",
+          "parent_code": "ML-2",
+          "name": "Zantiguila",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777758377",
+          "parent_code": "ML-2",
+          "name": "Nangola",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777758383",
+          "parent_code": "ML-2",
+          "name": "Togo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777758384",
+          "parent_code": "ML-2",
+          "name": "Massako",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777758388",
+          "parent_code": "ML-2",
+          "name": "Seribila",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777758391",
+          "parent_code": "ML-2",
+          "name": "Diangarela",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777758522",
+          "parent_code": "ML-2",
+          "name": "N'Golobougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777758545",
+          "parent_code": "ML-2",
+          "name": "Fana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777758549",
+          "parent_code": "ML-2",
+          "name": "Korodougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777758551",
+          "parent_code": "ML-2",
+          "name": "Marka-Coungo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777763649",
+          "parent_code": "ML-2",
+          "name": "Kourémalé 1",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777763672",
+          "parent_code": "ML-2",
+          "name": "Naréna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777763682",
+          "parent_code": "ML-2",
+          "name": "Dioulafoundo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777763685",
+          "parent_code": "ML-2",
+          "name": "Banancoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777763708",
+          "parent_code": "ML-2",
+          "name": "Habaladougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777763715",
+          "parent_code": "ML-2",
+          "name": "Karan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7777763747",
+          "parent_code": "ML-2",
+          "name": "Figuira Tomo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7778075339",
+          "parent_code": "ML-2",
+          "name": "Nossombougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7778075393",
+          "parent_code": "ML-2",
+          "name": "Sebekoro I",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7778148365",
+          "parent_code": "ML-2",
+          "name": "Nyamina",
+          "type": "city",
+          "population": "6135",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7778148482",
+          "parent_code": "ML-2",
+          "name": "Kenekoun",
+          "type": "city",
+          "population": "5100",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7778148496",
+          "parent_code": "ML-2",
+          "name": "Koula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7778148502",
+          "parent_code": "ML-2",
+          "name": "Tienfala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7778183732",
+          "parent_code": "ML-2",
+          "name": "Dialakorodji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7778183738",
+          "parent_code": "ML-2",
+          "name": "Dogodouman",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7779420956",
+          "parent_code": "ML-2",
+          "name": "Torodo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7779420964",
+          "parent_code": "ML-2",
+          "name": "N'Gouraba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7779420974",
+          "parent_code": "ML-2",
+          "name": "Niagadina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7779421033",
+          "parent_code": "ML-2",
+          "name": "Beneko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7779421100",
+          "parent_code": "ML-2",
+          "name": "Manabougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7779421104",
+          "parent_code": "ML-2",
+          "name": "Freintoumou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7779421116",
+          "parent_code": "ML-2",
+          "name": "Dienfein",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7779421126",
+          "parent_code": "ML-2",
+          "name": "Massako",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7779421146",
+          "parent_code": "ML-2",
+          "name": "Dialakoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7779421149",
+          "parent_code": "ML-2",
+          "name": "Bankoumana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7779421252",
+          "parent_code": "ML-2",
+          "name": "Doubabougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7779421323",
+          "parent_code": "ML-2",
+          "name": "Kambila",
+          "type": "city",
+          "population": "13974",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7779421374",
+          "parent_code": "ML-2",
+          "name": "Kenenkoun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7779421376",
+          "parent_code": "ML-2",
+          "name": "Siby",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7779421382",
+          "parent_code": "ML-2",
+          "name": "Kodiala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7779421399",
+          "parent_code": "ML-2",
+          "name": "Kalifabougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7779421417",
+          "parent_code": "ML-2",
+          "name": "Daban",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7779421462",
+          "parent_code": "ML-2",
+          "name": "Djoliba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7779421524",
+          "parent_code": "ML-2",
+          "name": "Niouma-Makana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7779421550",
+          "parent_code": "ML-2",
+          "name": "Ouélessébougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7779421554",
+          "parent_code": "ML-2",
+          "name": "Bouala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7779421566",
+          "parent_code": "ML-2",
+          "name": "Ferekoroba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7779421580",
+          "parent_code": "ML-2",
+          "name": "M'Piebougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7779421594",
+          "parent_code": "ML-2",
+          "name": "Sandama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7779421595",
+          "parent_code": "ML-2",
+          "name": "Faraba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7779421606",
+          "parent_code": "ML-2",
+          "name": "Falani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7779421614",
+          "parent_code": "ML-2",
+          "name": "Faladié",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7779421615",
+          "parent_code": "ML-2",
+          "name": "Simidji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7779421617",
+          "parent_code": "ML-2",
+          "name": "Dialakoroba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7958643998",
+          "parent_code": "ML-2",
+          "name": "Djenidie",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8064921301",
+          "parent_code": "ML-2",
+          "name": "Kalaban Coro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8512862477",
+          "parent_code": "ML-2",
+          "name": "Toubakoro",
+          "type": "city",
+          "population": "4800",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10536949891",
+          "parent_code": "ML-2",
+          "name": "Kounabougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10603823108",
+          "parent_code": "ML-2",
+          "name": "Kofoulatie",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10748651985",
+          "parent_code": "ML-2",
+          "name": "Dianikoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10826982198",
+          "parent_code": "ML-2",
+          "name": "Falla",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10839996783",
+          "parent_code": "ML-2",
+          "name": "Kindia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11594802542",
+          "parent_code": "ML-2",
+          "name": "Balandougou II",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12887331975",
+          "parent_code": "ML-2",
+          "name": "Mamaribougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ML-5",
+      "parent_code": "ML",
+      "name": "Mopti",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-495440728",
+          "parent_code": "ML-5",
+          "name": "Hombori",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-495454624",
+          "parent_code": "ML-5",
+          "name": "Douentza",
+          "type": "city",
+          "population": "27775",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-546898545",
+          "parent_code": "ML-5",
+          "name": "Sangha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703668438",
+          "parent_code": "ML-5",
+          "name": "Banakane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703668486",
+          "parent_code": "ML-5",
+          "name": "Bankass",
+          "type": "city",
+          "population": "8675",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1703668551",
+          "parent_code": "ML-5",
+          "name": "Berdosso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703668666",
+          "parent_code": "ML-5",
+          "name": "Boni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703668670",
+          "parent_code": "ML-5",
+          "name": "Borko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703668891",
+          "parent_code": "ML-5",
+          "name": "Dallah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703668895",
+          "parent_code": "ML-5",
+          "name": "Damada",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703668907",
+          "parent_code": "ML-5",
+          "name": "Dandoli",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703668941",
+          "parent_code": "ML-5",
+          "name": "Deh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703668948",
+          "parent_code": "ML-5",
+          "name": "Dia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703669013",
+          "parent_code": "ML-5",
+          "name": "Diallassagou",
+          "type": "city",
+          "population": "22539",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703669034",
+          "parent_code": "ML-5",
+          "name": "Diamabacourou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703669048",
+          "parent_code": "ML-5",
+          "name": "Diankabou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703669095",
+          "parent_code": "ML-5",
+          "name": "Dimbal-Habbe",
+          "type": "city",
+          "population": "3600",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703669123",
+          "parent_code": "ML-5",
+          "name": "Diona",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703669126",
+          "parent_code": "ML-5",
+          "name": "Diondiori",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703669265",
+          "parent_code": "ML-5",
+          "name": "Dioungani-Peulh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703669285",
+          "parent_code": "ML-5",
+          "name": "Dioura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703669330",
+          "parent_code": "ML-5",
+          "name": "Djoulouna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703669360",
+          "parent_code": "ML-5",
+          "name": "Dogo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703669879",
+          "parent_code": "ML-5",
+          "name": "Gagna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703669912",
+          "parent_code": "ML-5",
+          "name": "Gathi-Loumo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670419",
+          "parent_code": "ML-5",
+          "name": "Kargué",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670623",
+          "parent_code": "ML-5",
+          "name": "Koporo Pen",
+          "type": "city",
+          "population": "5700",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670632",
+          "parent_code": "ML-5",
+          "name": "Kormou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670641",
+          "parent_code": "ML-5",
+          "name": "Koro",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1703670836",
+          "parent_code": "ML-5",
+          "name": "Madiama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670857",
+          "parent_code": "ML-5",
+          "name": "Madougou-Dogon",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703671027",
+          "parent_code": "ML-5",
+          "name": "N'Gouma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703671512",
+          "parent_code": "ML-5",
+          "name": "Sah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703671866",
+          "parent_code": "ML-5",
+          "name": "Socoura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703671926",
+          "parent_code": "ML-5",
+          "name": "Sokoura",
+          "type": "city",
+          "population": "7170",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703672032",
+          "parent_code": "ML-5",
+          "name": "Soroly",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703672045",
+          "parent_code": "ML-5",
+          "name": "Soubala",
+          "type": "city",
+          "population": "3800",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703672364",
+          "parent_code": "ML-5",
+          "name": "Tongo-Tongo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703672451",
+          "parent_code": "ML-5",
+          "name": "Toungourou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703672511",
+          "parent_code": "ML-5",
+          "name": "Yoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703672532",
+          "parent_code": "ML-5",
+          "name": "Youdiou",
+          "type": "city",
+          "population": "3680",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703672543",
+          "parent_code": "ML-5",
+          "name": "Youwarou",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1717464519",
+          "parent_code": "ML-5",
+          "name": "Konna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1717464540",
+          "parent_code": "ML-5",
+          "name": "Mopti",
+          "type": "city",
+          "population": "114296",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1717466865",
+          "parent_code": "ML-5",
+          "name": "Tenenkou",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1725811097",
+          "parent_code": "ML-5",
+          "name": "Sévaré",
+          "type": "city",
+          "population": "40000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1755221185",
+          "parent_code": "ML-5",
+          "name": "Sofara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2128158110",
+          "parent_code": "ML-5",
+          "name": "Korientzé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2134106055",
+          "parent_code": "ML-5",
+          "name": "Diafarabé",
+          "type": "city",
+          "population": "7300",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2146038206",
+          "parent_code": "ML-5",
+          "name": "Dialloube",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2148314289",
+          "parent_code": "ML-5",
+          "name": "Bangadié",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2149166230",
+          "parent_code": "ML-5",
+          "name": "Sendégué",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2157600846",
+          "parent_code": "ML-5",
+          "name": "Duari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2158106376",
+          "parent_code": "ML-5",
+          "name": "Guiri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2172209697",
+          "parent_code": "ML-5",
+          "name": "Bandiagara",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2436713462",
+          "parent_code": "ML-5",
+          "name": "Samayé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2444106132",
+          "parent_code": "ML-5",
+          "name": "Mondoro-Habe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2464146322",
+          "parent_code": "ML-5",
+          "name": "Djenné",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2520615740",
+          "parent_code": "ML-5",
+          "name": "Fatoma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3058863946",
+          "parent_code": "ML-5",
+          "name": "Guimini",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4969124491",
+          "parent_code": "ML-5",
+          "name": "Mougna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5929162913",
+          "parent_code": "ML-5",
+          "name": "Kandara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7624125055",
+          "parent_code": "ML-5",
+          "name": "Pigna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7770461274",
+          "parent_code": "ML-5",
+          "name": "Dinangourou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7770483129",
+          "parent_code": "ML-5",
+          "name": "Douna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7771364762",
+          "parent_code": "ML-5",
+          "name": "Ouori-Marka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ML-3",
+      "parent_code": "ML",
+      "name": "Sikasso Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-89942783",
+          "parent_code": "ML-3",
+          "name": "Sikasso",
+          "type": "city",
+          "population": "226000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-277943923",
+          "parent_code": "ML-3",
+          "name": "Koutiala",
+          "type": "city",
+          "population": "99000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1703668611",
+          "parent_code": "ML-3",
+          "name": "Bobola-Zangasso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703668713",
+          "parent_code": "ML-3",
+          "name": "Bougouni",
+          "type": "city",
+          "population": "59679",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1703669413",
+          "parent_code": "ML-3",
+          "name": "Dogoni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670397",
+          "parent_code": "ML-3",
+          "name": "Karangana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670498",
+          "parent_code": "ML-3",
+          "name": "Kiffosso I",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670705",
+          "parent_code": "ML-3",
+          "name": "Koumbia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670755",
+          "parent_code": "ML-3",
+          "name": "Koury",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670756",
+          "parent_code": "ML-3",
+          "name": "Koutiala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670799",
+          "parent_code": "ML-3",
+          "name": "M'Pessoba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670921",
+          "parent_code": "ML-3",
+          "name": "Miniko-Soba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703671033",
+          "parent_code": "ML-3",
+          "name": "N'Goutjina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703672460",
+          "parent_code": "ML-3",
+          "name": "Toutiala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703672493",
+          "parent_code": "ML-3",
+          "name": "Yanfolila",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1703672531",
+          "parent_code": "ML-3",
+          "name": "Yorosso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703672548",
+          "parent_code": "ML-3",
+          "name": "Zangaradougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2147473031",
+          "parent_code": "ML-3",
+          "name": "Kadiolo",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2242614132",
+          "parent_code": "ML-3",
+          "name": "Kolondièba",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-6711664075",
+          "parent_code": "ML-3",
+          "name": "Kaledougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6753257782",
+          "parent_code": "ML-3",
+          "name": "Fourou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6753268126",
+          "parent_code": "ML-3",
+          "name": "Niangassoba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6753689022",
+          "parent_code": "ML-3",
+          "name": "Loulouni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6753782403",
+          "parent_code": "ML-3",
+          "name": "Diou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6756922288",
+          "parent_code": "ML-3",
+          "name": "Zanferebougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6756922292",
+          "parent_code": "ML-3",
+          "name": "N'Kourala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6760122738",
+          "parent_code": "ML-3",
+          "name": "Zégoua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6762121195",
+          "parent_code": "ML-3",
+          "name": "Garalo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6769500255",
+          "parent_code": "ML-3",
+          "name": "Boura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6774558401",
+          "parent_code": "ML-3",
+          "name": "Molobala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6774558847",
+          "parent_code": "ML-3",
+          "name": "Ourikela",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6774570415",
+          "parent_code": "ML-3",
+          "name": "Diaramana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716101003",
+          "parent_code": "ML-3",
+          "name": "Manankoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716101067",
+          "parent_code": "ML-3",
+          "name": "Kignan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716101094",
+          "parent_code": "ML-3",
+          "name": "N'Tjikouna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716101097",
+          "parent_code": "ML-3",
+          "name": "Nongo-Souala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716101098",
+          "parent_code": "ML-3",
+          "name": "Badogo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716101100",
+          "parent_code": "ML-3",
+          "name": "Yorobougoula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716101109",
+          "parent_code": "ML-3",
+          "name": "Konona",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716101116",
+          "parent_code": "ML-3",
+          "name": "Finkolo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716101156",
+          "parent_code": "ML-3",
+          "name": "Nangalasso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716101214",
+          "parent_code": "ML-3",
+          "name": "Kapala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716101233",
+          "parent_code": "ML-3",
+          "name": "Dougoubala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716101238",
+          "parent_code": "ML-3",
+          "name": "Lobougoula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716101252",
+          "parent_code": "ML-3",
+          "name": "Danderesso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716101381",
+          "parent_code": "ML-3",
+          "name": "Dialakoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716101382",
+          "parent_code": "ML-3",
+          "name": "Koumankou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716101628",
+          "parent_code": "ML-3",
+          "name": "Tella",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716101707",
+          "parent_code": "ML-3",
+          "name": "Wola",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716101859",
+          "parent_code": "ML-3",
+          "name": "Sinkolo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716101881",
+          "parent_code": "ML-3",
+          "name": "Karangasso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716101884",
+          "parent_code": "ML-3",
+          "name": "Kapala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716101958",
+          "parent_code": "ML-3",
+          "name": "Famessasso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716101991",
+          "parent_code": "ML-3",
+          "name": "Baramba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102008",
+          "parent_code": "ML-3",
+          "name": "Konina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102010",
+          "parent_code": "ML-3",
+          "name": "Kouo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102011",
+          "parent_code": "ML-3",
+          "name": "Konseguela",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102038",
+          "parent_code": "ML-3",
+          "name": "N'Togonasso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102051",
+          "parent_code": "ML-3",
+          "name": "N'Golonianasso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102060",
+          "parent_code": "ML-3",
+          "name": "N'Tossoni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102111",
+          "parent_code": "ML-3",
+          "name": "Koloni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102114",
+          "parent_code": "ML-3",
+          "name": "Doussoudiana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102119",
+          "parent_code": "ML-3",
+          "name": "Zamiasso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102122",
+          "parent_code": "ML-3",
+          "name": "Doumanani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102123",
+          "parent_code": "ML-3",
+          "name": "Kafana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102140",
+          "parent_code": "ML-3",
+          "name": "Zanzoni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102142",
+          "parent_code": "ML-3",
+          "name": "Fonfona",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102200",
+          "parent_code": "ML-3",
+          "name": "Tousseguela",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102216",
+          "parent_code": "ML-3",
+          "name": "Kafouziéla",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102222",
+          "parent_code": "ML-3",
+          "name": "Finkolo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102242",
+          "parent_code": "ML-3",
+          "name": "Niéna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102247",
+          "parent_code": "ML-3",
+          "name": "Farakala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102252",
+          "parent_code": "ML-3",
+          "name": "Sido",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102303",
+          "parent_code": "ML-3",
+          "name": "Kourouma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102370",
+          "parent_code": "ML-3",
+          "name": "Fama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102466",
+          "parent_code": "ML-3",
+          "name": "Debelin",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102556",
+          "parent_code": "ML-3",
+          "name": "Defina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102585",
+          "parent_code": "ML-3",
+          "name": "Kouoro Barrage",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102605",
+          "parent_code": "ML-3",
+          "name": "Miena",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102619",
+          "parent_code": "ML-3",
+          "name": "Blendio",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102647",
+          "parent_code": "ML-3",
+          "name": "Tiongui",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102648",
+          "parent_code": "ML-3",
+          "name": "Kadiana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102674",
+          "parent_code": "ML-3",
+          "name": "Fakola",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102702",
+          "parent_code": "ML-3",
+          "name": "Kebila",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102712",
+          "parent_code": "ML-3",
+          "name": "Kalana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102740",
+          "parent_code": "ML-3",
+          "name": "Diaka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102761",
+          "parent_code": "ML-3",
+          "name": "Kangare",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102774",
+          "parent_code": "ML-3",
+          "name": "Siékorolé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102776",
+          "parent_code": "ML-3",
+          "name": "Binko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102783",
+          "parent_code": "ML-3",
+          "name": "Kléla",
+          "type": "city",
+          "population": "5566",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102802",
+          "parent_code": "ML-3",
+          "name": "Menamba 1",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102808",
+          "parent_code": "ML-3",
+          "name": "Mahou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102813",
+          "parent_code": "ML-3",
+          "name": "Maréna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102825",
+          "parent_code": "ML-3",
+          "name": "Misséni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102827",
+          "parent_code": "ML-3",
+          "name": "Torakoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102835",
+          "parent_code": "ML-3",
+          "name": "Bougoula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102837",
+          "parent_code": "ML-3",
+          "name": "Koumantou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102838",
+          "parent_code": "ML-3",
+          "name": "N'Tentou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102841",
+          "parent_code": "ML-3",
+          "name": "Kéléya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7716102842",
+          "parent_code": "ML-3",
+          "name": "Ouroun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10658376441",
+          "parent_code": "ML-3",
+          "name": "Bananso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10736821567",
+          "parent_code": "ML-3",
+          "name": "Sanzana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10878551334",
+          "parent_code": "ML-3",
+          "name": "Kessana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11134033068",
+          "parent_code": "ML-3",
+          "name": "Doumanaba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ML-4",
+      "parent_code": "ML",
+      "name": "Ségou Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-277944125",
+          "parent_code": "ML-4",
+          "name": "Markala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-358313999",
+          "parent_code": "ML-4",
+          "name": "San",
+          "type": "city",
+          "population": "26744",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-379907222",
+          "parent_code": "ML-4",
+          "name": "Tominian",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-694212047",
+          "parent_code": "ML-4",
+          "name": "Siribala Koura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-694218519",
+          "parent_code": "ML-4",
+          "name": "Molodo-Centre",
+          "type": "city",
+          "population": "7040",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-695545709",
+          "parent_code": "ML-4",
+          "name": "Diabaly",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-696604485",
+          "parent_code": "ML-4",
+          "name": "Konobougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1554886381",
+          "parent_code": "ML-4",
+          "name": "Kimparana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703669148",
+          "parent_code": "ML-4",
+          "name": "Dioro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703669524",
+          "parent_code": "ML-4",
+          "name": "Dougabougou",
+          "type": "city",
+          "population": "26500",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703669597",
+          "parent_code": "ML-4",
+          "name": "Doura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670574",
+          "parent_code": "ML-4",
+          "name": "Kolongo-Tomo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670808",
+          "parent_code": "ML-4",
+          "name": "Ke Macina",
+          "type": "city",
+          "population": "36170",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703671088",
+          "parent_code": "ML-4",
+          "name": "Nampala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703671124",
+          "parent_code": "ML-4",
+          "name": "Niono-Socoura",
+          "type": "city",
+          "population": "47000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703671616",
+          "parent_code": "ML-4",
+          "name": "Sansanding",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703671636",
+          "parent_code": "ML-4",
+          "name": "Sarro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703671655",
+          "parent_code": "ML-4",
+          "name": "Saye",
+          "type": "city",
+          "population": "4900",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703671675",
+          "parent_code": "ML-4",
+          "name": "Sebougou",
+          "type": "city",
+          "population": "9500",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703671899",
+          "parent_code": "ML-4",
+          "name": "Sokolo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703672112",
+          "parent_code": "ML-4",
+          "name": "Souleye",
+          "type": "city",
+          "population": "3060",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703672350",
+          "parent_code": "ML-4",
+          "name": "Togou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1717506745",
+          "parent_code": "ML-4",
+          "name": "Ségou",
+          "type": "city",
+          "population": "165000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2122122839",
+          "parent_code": "ML-4",
+          "name": "Kominé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2130931872",
+          "parent_code": "ML-4",
+          "name": "Bla",
+          "type": "city",
+          "population": "15000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2144976684",
+          "parent_code": "ML-4",
+          "name": "Madina UP5",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2159469495",
+          "parent_code": "ML-4",
+          "name": "Barouéli",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2217104059",
+          "parent_code": "ML-4",
+          "name": "Markala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2217104060",
+          "parent_code": "ML-4",
+          "name": "Monimpébougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2418363655",
+          "parent_code": "ML-4",
+          "name": "Soke",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2538701173",
+          "parent_code": "ML-4",
+          "name": "Boky-Were",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2538701175",
+          "parent_code": "ML-4",
+          "name": "Tongué",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7685575686",
+          "parent_code": "ML-4",
+          "name": "Sibila",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7685576100",
+          "parent_code": "ML-4",
+          "name": "Niaro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7699166143",
+          "parent_code": "ML-4",
+          "name": "Kara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7765565700",
+          "parent_code": "ML-4",
+          "name": "Kallan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7765565719",
+          "parent_code": "ML-4",
+          "name": "Sekoro",
+          "type": "city",
+          "population": "5100",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7765565760",
+          "parent_code": "ML-4",
+          "name": "Katiena",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7765565773",
+          "parent_code": "ML-4",
+          "name": "Banankoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7765565788",
+          "parent_code": "ML-4",
+          "name": "Temou",
+          "type": "city",
+          "population": "5900",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7765565845",
+          "parent_code": "ML-4",
+          "name": "N'Gara",
+          "type": "city",
+          "population": "3300",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7765565857",
+          "parent_code": "ML-4",
+          "name": "Boussin",
+          "type": "city",
+          "population": "12401",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7765565863",
+          "parent_code": "ML-4",
+          "name": "Konodimini",
+          "type": "city",
+          "population": "5200",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7765639229",
+          "parent_code": "ML-4",
+          "name": "Gouendo",
+          "type": "city",
+          "population": "3900",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7765639288",
+          "parent_code": "ML-4",
+          "name": "N'Gassola",
+          "type": "city",
+          "population": "4100",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7765639294",
+          "parent_code": "ML-4",
+          "name": "Samine",
+          "type": "city",
+          "population": "10500",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7765639304",
+          "parent_code": "ML-4",
+          "name": "Boidie",
+          "type": "city",
+          "population": "4800",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7765645243",
+          "parent_code": "ML-4",
+          "name": "Dougouolo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7765645284",
+          "parent_code": "ML-4",
+          "name": "Samabogo",
+          "type": "city",
+          "population": "13165",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7765648686",
+          "parent_code": "ML-4",
+          "name": "Diaramana",
+          "type": "city",
+          "population": "7500",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7765648697",
+          "parent_code": "ML-4",
+          "name": "Somasso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7765648707",
+          "parent_code": "ML-4",
+          "name": "Falo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7765648718",
+          "parent_code": "ML-4",
+          "name": "Yangasso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7765648734",
+          "parent_code": "ML-4",
+          "name": "Fani",
+          "type": "city",
+          "population": "4500",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7765648743",
+          "parent_code": "ML-4",
+          "name": "Niala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7765670485",
+          "parent_code": "ML-4",
+          "name": "Madina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7765670527",
+          "parent_code": "ML-4",
+          "name": "Karaba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7765670546",
+          "parent_code": "ML-4",
+          "name": "Zamblala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7765670553",
+          "parent_code": "ML-4",
+          "name": "Dieli",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7765670566",
+          "parent_code": "ML-4",
+          "name": "Teneni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7765670568",
+          "parent_code": "ML-4",
+          "name": "Somo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7765670590",
+          "parent_code": "ML-4",
+          "name": "Téné",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7765733211",
+          "parent_code": "ML-4",
+          "name": "Mandiakuy",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7938013049",
+          "parent_code": "ML-4",
+          "name": "Tatrima",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8411253741",
+          "parent_code": "ML-4",
+          "name": "Moambougou",
+          "type": "city",
+          "population": "4500",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8540261217",
+          "parent_code": "ML-4",
+          "name": "Molodo-Bambara",
+          "type": "city",
+          "population": "4600",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8552481036",
+          "parent_code": "ML-4",
+          "name": "Niono Km23",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8555928241",
+          "parent_code": "ML-4",
+          "name": "Soroweli",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10989717444",
+          "parent_code": "ML-4",
+          "name": "Tiemana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11161460046",
+          "parent_code": "ML-4",
+          "name": "Moribila",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11378701055",
+          "parent_code": "ML-4",
+          "name": "Niamana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11955586670",
+          "parent_code": "ML-4",
+          "name": "Fatine",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12016600721",
+          "parent_code": "ML-4",
+          "name": "Matomo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12072538161",
+          "parent_code": "ML-4",
+          "name": "Cinzana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ML-6",
+      "parent_code": "ML",
+      "name": "Timbuktu",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-89381749",
+          "parent_code": "ML-6",
+          "name": "Timbuktu",
+          "type": "city",
+          "population": "36000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-343632642",
+          "parent_code": "ML-6",
+          "name": "Kabara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-343638854",
+          "parent_code": "ML-6",
+          "name": "Bambara-Maoundé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703668244",
+          "parent_code": "ML-6",
+          "name": "Adiora",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703668264",
+          "parent_code": "ML-6",
+          "name": "Aglal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703668477",
+          "parent_code": "ML-6",
+          "name": "Banikane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703668542",
+          "parent_code": "ML-6",
+          "name": "Ber",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703668579",
+          "parent_code": "ML-6",
+          "name": "Bintagoungou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703668751",
+          "parent_code": "ML-6",
+          "name": "Bourem Sidi Amar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703668771",
+          "parent_code": "ML-6",
+          "name": "Bourem-Inaly",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703668865",
+          "parent_code": "ML-6",
+          "name": "Daka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703668914",
+          "parent_code": "ML-6",
+          "name": "Dangha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703669655",
+          "parent_code": "ML-6",
+          "name": "Essakane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703669902",
+          "parent_code": "ML-6",
+          "name": "Garbakoira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703669905",
+          "parent_code": "ML-6",
+          "name": "Gargando",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670003",
+          "parent_code": "ML-6",
+          "name": "Gossi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670035",
+          "parent_code": "ML-6",
+          "name": "Goundam",
+          "type": "city",
+          "population": "16253",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1703670061",
+          "parent_code": "ML-6",
+          "name": "Gourma-Rharous",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1703670110",
+          "parent_code": "ML-6",
+          "name": "Hangabera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670240",
+          "parent_code": "ML-6",
+          "name": "Inadiatafane",
+          "type": "city",
+          "population": "3557",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670512",
+          "parent_code": "ML-6",
+          "name": "Kirchamba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670594",
+          "parent_code": "ML-6",
+          "name": "Kondi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670820",
+          "parent_code": "ML-6",
+          "name": "Madiakoye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703670924",
+          "parent_code": "ML-6",
+          "name": "Minkiéri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703671026",
+          "parent_code": "ML-6",
+          "name": "N'Gorkou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703671395",
+          "parent_code": "ML-6",
+          "name": "Razelma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703671517",
+          "parent_code": "ML-6",
+          "name": "Salakoira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703672116",
+          "parent_code": "ML-6",
+          "name": "Soumpi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703672320",
+          "parent_code": "ML-6",
+          "name": "Tienkour",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703672331",
+          "parent_code": "ML-6",
+          "name": "Tindirma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703672367",
+          "parent_code": "ML-6",
+          "name": "Tonka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703672423",
+          "parent_code": "ML-6",
+          "name": "Toukabangou Tao",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1703672461",
+          "parent_code": "ML-6",
+          "name": "Toya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1707219318",
+          "parent_code": "ML-6",
+          "name": "Léré",
+          "type": "city",
+          "population": "16000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1707219327",
+          "parent_code": "ML-6",
+          "name": "Niafunké",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1707621787",
+          "parent_code": "ML-6",
+          "name": "Diré",
+          "type": "city",
+          "population": "22400",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2121573913",
+          "parent_code": "ML-6",
+          "name": "Saraféré",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2153684419",
+          "parent_code": "ML-6",
+          "name": "Sarayamou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2153857377",
+          "parent_code": "ML-6",
+          "name": "Nyambourgou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2156877981",
+          "parent_code": "ML-6",
+          "name": "Tin Aicha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2384677726",
+          "parent_code": "ML-6",
+          "name": "Echell",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ML-BKO",
+      "parent_code": "ML",
+      "name": "Bamako",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27564954",
+          "parent_code": "ML-BKO",
+          "name": "Bamako",
+          "type": "city",
+          "population": "1809106",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3190396967",
+          "parent_code": "ML-BKO",
+          "name": "Sénou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6311015214",
+          "parent_code": "ML-BKO",
+          "name": "Kalaban Coura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8064881089",
+          "parent_code": "ML-BKO",
+          "name": "Sabalibougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8065005494",
+          "parent_code": "ML-BKO",
+          "name": "Sébénikoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8065005495",
+          "parent_code": "ML-BKO",
+          "name": "Para Djicoroni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8065203735",
+          "parent_code": "ML-BKO",
+          "name": "Médina Coura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8065650960",
+          "parent_code": "ML-BKO",
+          "name": "Lafiabougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ML-9",
+      "parent_code": "ML",
+      "name": "Ménaka",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-469237102",
+          "parent_code": "ML-9",
+          "name": "Anderamboukane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1707621789",
+          "parent_code": "ML-9",
+          "name": "Inekar",
+          "type": "city",
+          "population": "8700",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1707621796",
+          "parent_code": "ML-9",
+          "name": "Ménaka",
+          "type": "city",
+          "population": "20700",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2555339078",
+          "parent_code": "ML-9",
+          "name": "Talataye",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2871585807",
+          "parent_code": "ML-9",
+          "name": "In Chinnana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2871597658",
+          "parent_code": "ML-9",
+          "name": "Agazragane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2871605729",
+          "parent_code": "ML-9",
+          "name": "Achibogo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2877487748",
+          "parent_code": "ML-9",
+          "name": "Tamalate",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3196247046",
+          "parent_code": "ML-9",
+          "name": "Anuzagren",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3317651118",
+          "parent_code": "ML-9",
+          "name": "Tidarméné",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SN-TC",
+      "parent_code": "ML",
+      "name": "Tambacounda Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-249744836",
+          "parent_code": "SN-TC",
+          "name": "Tambacounda",
+          "type": "city",
+          "population": "78800",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-295844702",
+          "parent_code": "SN-TC",
+          "name": "Bakel",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-351514079",
+          "parent_code": "SN-TC",
+          "name": "Kidira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-351518334",
+          "parent_code": "SN-TC",
+          "name": "Goudiry",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-351528378",
+          "parent_code": "SN-TC",
+          "name": "Bala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-351530227",
+          "parent_code": "SN-TC",
+          "name": "Kothiary",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1967597774",
+          "parent_code": "SN-TC",
+          "name": "Koumpentoum",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2115560938",
+          "parent_code": "SN-TC",
+          "name": "Gouloumbou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2148386906",
+          "parent_code": "SN-TC",
+          "name": "Sinthiou Malème",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2149551616",
+          "parent_code": "SN-TC",
+          "name": "Malem Niani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2251183327",
+          "parent_code": "SN-TC",
+          "name": "Koussanar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2322110938",
+          "parent_code": "SN-TC",
+          "name": "Dawady",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2386618998",
+          "parent_code": "SN-TC",
+          "name": "Dialacoto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2386619052",
+          "parent_code": "SN-TC",
+          "name": "Missirah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2419961731",
+          "parent_code": "SN-TC",
+          "name": "Diawara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2462587943",
+          "parent_code": "SN-TC",
+          "name": "Makacolibantang",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2564232163",
+          "parent_code": "SN-TC",
+          "name": "Bani Israël",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2564243449",
+          "parent_code": "SN-TC",
+          "name": "Dianké Makha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2564247717",
+          "parent_code": "SN-TC",
+          "name": "Sadatou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3742804925",
+          "parent_code": "SN-TC",
+          "name": "Kaba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3754583214",
+          "parent_code": "SN-TC",
+          "name": "Bamba Thialène",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8489955170",
+          "parent_code": "SN-TC",
+          "name": "Méréto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8979095793",
+          "parent_code": "SN-TC",
+          "name": "Payar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ML-10",
+      "parent_code": "ML",
+      "name": "Taoudénit Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1703670237",
+          "parent_code": "ML-10",
+          "name": "Inabag",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    }
+  ]
+}

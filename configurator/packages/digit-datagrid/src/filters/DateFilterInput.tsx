@@ -1,4 +1,3 @@
-import React from 'react';
 import { useInput } from 'ra-core';
 import type { InputProps } from 'ra-core';
 import { Label } from '../primitives/label';

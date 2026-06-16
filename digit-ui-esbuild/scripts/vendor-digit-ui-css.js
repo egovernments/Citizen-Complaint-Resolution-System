@@ -183,8 +183,15 @@ const ROOT_BLOCK = `:root {
   --color-sidebar-bg: #0B4B66;
   --color-sidebar-text-active: #FFFFFF;
   --color-sidebar-text-default: #D1D5DB;
-  --color-sidebar-hover-text: #FFFFFF;
-  --color-sidebar-hover-bg: #FBEEE8;
+  /* #562: sidebar-hover-{bg,text} are intentionally NOT hardcoded here.
+   * Theming values belong in the MDMS ThemeConfig; the UI only reads them.
+   * The old hardcoded pair (--color-sidebar-hover-bg: #FBEEE8 light peach +
+   * --color-sidebar-hover-text: #FFFFFF white) was white-on-light and, worse,
+   * shadowed the config — a tenant that set neither got the broken pair.
+   * With no :root default, the sidebar rules' existing var() chain resolves
+   * to an explicit ThemeConfig value if present, else the config-driven
+   * --color-primary-selected-bg (light tint) + --color-primary-1 (dark) —
+   * a readable pair from the tenant's own colors. */
   --color-sidebar-icon-active: #FFFFFF;
   --color-sidebar-selected-bg: #c84c0e;
   --color-sidebar-selected-text: #FFFFFF;

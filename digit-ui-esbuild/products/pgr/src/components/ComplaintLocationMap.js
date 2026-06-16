@@ -6,8 +6,9 @@ import { CardLabel } from "@egovernments/digit-ui-react-components";
 import { useTranslation } from "react-i18next";
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
-import keNairobiWards from "../assets/boundaries/ke_nairobi_wards.json";
+import keNairobiWardsFallback from "../assets/boundaries/ke_nairobi_wards.json";
 import useWardHighlightColor from "../hooks/pgr/useWardHighlightColor";
+import useTenantBoundaries from "../hooks/pgr/useTenantBoundaries";
 
 // Fix default icon issue in React builds
 delete L.Icon.Default.prototype._getIconUrl;
@@ -38,13 +39,18 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
   // in Swahili).
   const nominatimLang = ((i18n?.language || Digit?.StoreData?.getCurrentLanguage?.() || "en") + "").split("_")[0] || "en";
 
+  // Tenant ward polygons (boundary-service when MAP_TENANT is set, else
+  // the bundled static Nairobi wards). Null while the fetch is in flight.
+  const tenantBoundaries = useTenantBoundaries();
+
   const matchedWard = useMemo(() => {
-    if (!latitude || !longitude || !keNairobiWards?.features?.length) return null;
+    const wardCollection = tenantBoundaries || keNairobiWardsFallback;
+    if (!latitude || !longitude || !wardCollection?.features?.length) return null;
     const pt = turfPoint([longitude, latitude]);
-    return keNairobiWards.features.find((f) => {
+    return wardCollection.features.find((f) => {
       try { return booleanPointInPolygon(pt, f); } catch { return false; }
     }) || null;
-  }, [latitude, longitude]);
+  }, [latitude, longitude, tenantBoundaries]);
 
   const wardLayerStyle = (feature) => {
     const isMatch = matchedWard && feature?.properties?.code === matchedWard.properties.code;
@@ -168,10 +174,10 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
               attribution='&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
               url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
             />
-            {keNairobiWards?.features?.length > 0 && (
+            {tenantBoundaries?.features?.length > 0 && (
               <GeoJSON
-                key={matchedWard?.properties?.code || "_"}
-                data={keNairobiWards}
+                key={`${matchedWard?.properties?.code || "_"}-${tenantBoundaries.features.length}`}
+                data={tenantBoundaries}
                 style={wardLayerStyle}
               />
             )}

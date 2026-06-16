@@ -1,5 +1,7 @@
 package org.egov.pgr.util;
 
+import com.jayway.jsonpath.JsonPath;
+import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.utils.MultiStateInstanceUtil;
 import org.egov.mdms.model.MasterDetail;
@@ -13,14 +15,55 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 import static org.egov.pgr.util.PGRConstants.MDMS_MODULE_NAME;
 import static org.egov.pgr.util.PGRConstants.MDMS_SERVICEDEF;
 import static org.egov.pgr.util.PGRConstants.MDMS_COMMON_MASTERS_MODULE_NAME;
 import static org.egov.pgr.util.PGRConstants.MDMS_DEPT_MASTER;
+import static org.egov.pgr.util.PGRConstants.MDMS_DATA_JSONPATH;
+import static org.egov.pgr.util.PGRConstants.MDMS_DATA_SLA_KEYWORD;
+import static org.egov.pgr.util.PGRConstants.MDMS_DATA_SERVICE_CODE_KEYWORD;
 
+@Slf4j
 @Component
 public class MDMSUtils {
+
+    // serviceCode -> SLA millis (from RAINMAKER-PGR.ServiceDefs.slaHours), cached per
+    // state-level tenant. Backs per-complaint-type SLA ordering of the inbox (issue
+    // #432). Cache lives for the process lifetime — slaHours changes in MDMS need a
+    // pgr-services restart to take effect, same staleness window the migration map had.
+    private final Map<String, Map<String, Long>> serviceCodeToSlaCache = new ConcurrentHashMap<>();
+
+    /**
+     * serviceCode -> SLA in millis, derived from MDMS RAINMAKER-PGR.ServiceDefs.slaHours.
+     * Cached per state-level tenant. Returns an empty map (never null) on MDMS failure,
+     * so callers can fall back to the uniform business-level SLA.
+     */
+    public Map<String, Long> getServiceCodeToSlaMillis(String tenantId) {
+        String stateTenant = multiStateInstanceUtil.getStateLevelTenant(tenantId);
+        return serviceCodeToSlaCache.computeIfAbsent(stateTenant, this::fetchServiceCodeToSlaMillis);
+    }
+
+    private Map<String, Long> fetchServiceCodeToSlaMillis(String stateTenant) {
+        Map<String, Long> map = new LinkedHashMap<>();
+        try {
+            MdmsCriteriaReq req = getMDMSRequest(new RequestInfo(), stateTenant);
+            Object result = serviceRequestRepository.fetchResult(getMdmsSearchUrl(), req);
+            List<Map<String, Object>> defs = JsonPath.read(result, MDMS_DATA_JSONPATH);
+            for (Map<String, Object> def : defs) {
+                Object code = def.get(MDMS_DATA_SERVICE_CODE_KEYWORD);
+                Object sla = def.get(MDMS_DATA_SLA_KEYWORD);
+                if (code != null && sla instanceof Number)
+                    map.put(code.toString(), TimeUnit.HOURS.toMillis(((Number) sla).longValue()));
+            }
+        } catch (Exception e) {
+            log.error("Failed to load serviceCode->SLA map for tenant {}; inbox SLA sort will fall back "
+                    + "to the business-level SLA", stateTenant, e);
+        }
+        return map;
+    }
 
 
 

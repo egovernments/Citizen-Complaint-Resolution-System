@@ -131,7 +131,7 @@ export function JurisdictionEditor({
         // lives under ke.nairobi, BOMET under ke). HRMS stores each
         // jurisdiction with the boundary's *home* tenantId, not the session's.
         // Fall back to the session tenant only if we can't resolve.
-        const rowTenant = (r as Record<string, unknown>).tenantId;
+        const rowTenant = (r as unknown as Record<string, unknown>).tenantId;
         const resolvedTenant = typeof rowTenant === 'string' && rowTenant ? rowTenant : tenantId;
         return {
           ...r,
