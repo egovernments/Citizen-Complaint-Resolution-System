@@ -806,8 +806,8 @@ class PGRService {
     const tenantLocalizationCode = `TENANT_TENANTS_${city.toUpperCase()}`;
     const tenantDisplayName = city; // Use the city/tenant name as the message
     
-    // Upsert localization asynchronously in background
-    this.upsertLocalizationMessage(city, tenantLocalizationCode, tenantDisplayName, "digit-tenants", "en_IN", authToken)
+    // Upsert localization asynchronously in background (non-blocking)
+    this.upsertLocalizationMessage(city, tenantLocalizationCode, tenantDisplayName, "digit-tenants", "en_IN", authToken, userInfo)
       .then(result => {
         if (result) {
           console.log(`Successfully upserted tenant localization for ${tenantLocalizationCode}`);
@@ -925,18 +925,18 @@ class PGRService {
   }
 
 
-  async upsertLocalizationMessage(tenantId, code, message, module = "digit-tenants", locale = "en_IN", authToken = null) {
+  async upsertLocalizationMessage(tenantId, code, message, module = "digit-tenants", locale = "en_IN", authToken = null, userInfo = null) {
     try {
       const url = `${config.egovServices.egovServicesHost}localization/messages/v1/_upsert`;
       
       const requestBody = {
         RequestInfo: {
-          apiId: "emp",
+          apiId: "org.egov.localization",
           ver: "1.0",
           action: "create",
           msgId: Date.now().toString(),
           authToken: authToken || "",
-          userInfo: {
+          userInfo: userInfo || {
             id: "1",
             userName: null,
             name: null,
@@ -1007,12 +1007,20 @@ class PGRService {
     // Use sandbox-ui for sandbox mode, digit-ui otherwise
     const uiPath = config.enableSandboxMode ? 'sandbox-ui' : 'digit-ui';
 
-    let url =
-      config.egovServices.externalHost +
-      "citizen/otpLogin?mobileNo=" +
-      mobileNumber +
-      `&redirectTo=${uiPath}/citizen/pgr/complaints/` +
-      encodedPath;
+    let url;
+    if (config.enableSandboxMode) {
+      // For sandbox mode, use the proper login page with redirect
+      const sandboxHost = config.sandboxHost || 'https://sandbox.digit.org';
+      url = `${sandboxHost}/sandbox-ui/user/login?redirectTo=/sandbox-ui/citizen/pgr/complaints/${encodedPath}`;
+    } else {
+      // For production mode, use the OTP login
+      url = config.egovServices.externalHost +
+        "citizen/otpLogin?mobileNo=" +
+        mobileNumber +
+        `/digit-ui/citizen/pgr/complaints/` +
+        encodedPath;
+    }
+    
     let shortURL = await this.getShortenedURL(url);
     return shortURL;
   }
