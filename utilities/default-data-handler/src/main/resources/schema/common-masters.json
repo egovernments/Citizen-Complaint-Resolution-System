@@ -677,9 +677,6 @@
         "countryCode"
       ],
       "properties": {
-        "tenantId": {
-          "type": "string"
-        },
         "countryCode": {
           "type": "string"
         },
