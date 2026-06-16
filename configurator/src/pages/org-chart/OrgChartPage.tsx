@@ -1,11 +1,11 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ReactFlow, ReactFlowProvider, Background, Controls, type NodeTypes,
+  ReactFlow, ReactFlowProvider, Background, Controls, ControlButton, type NodeTypes,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useGetList } from 'ra-core';
 import { useNavigate } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Maximize, Minimize } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -50,6 +50,23 @@ export default function OrgChartPage() {
   const tenantId = selectedTenantId || tenants?.find((t) => t.code)?.code || '';
 
   const { data, isLoading, isError, refetch } = useOrgChartData(tenantId || undefined);
+
+  // Full-screen the canvas via the Fullscreen API; keep the icon in sync with
+  // the actual state (so the Esc key / browser exit updates it too).
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen?.();
+    } else {
+      canvasRef.current?.requestFullscreen?.();
+    }
+  };
 
   const matches = useCallback(
     (text: string) =>
@@ -135,16 +152,25 @@ export default function OrgChartPage() {
             </div>
           ) : (
             <ReactFlowProvider>
-              <ReactFlow
-                nodes={canvasNodes}
-                edges={data?.canvasEdges ?? []}
-                nodeTypes={nodeTypes}
-                fitView
-                minZoom={0.1}
-              >
-                <Background />
-                <Controls />
-              </ReactFlow>
+              <div ref={canvasRef} className="h-full w-full bg-background">
+                <ReactFlow
+                  nodes={canvasNodes}
+                  edges={data?.canvasEdges ?? []}
+                  nodeTypes={nodeTypes}
+                  fitView
+                  minZoom={0.1}
+                >
+                  <Background />
+                  <Controls>
+                    <ControlButton
+                      onClick={toggleFullscreen}
+                      title={isFullscreen ? 'Exit full screen' : 'Full screen'}
+                    >
+                      {isFullscreen ? <Minimize /> : <Maximize />}
+                    </ControlButton>
+                  </Controls>
+                </ReactFlow>
+              </div>
             </ReactFlowProvider>
           )}
         </Card>
