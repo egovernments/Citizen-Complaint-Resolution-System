@@ -999,26 +999,28 @@
   color: var(--status-progress);
 }
 
-.dashboard-sla-status-select {
-  appearance: none;
-  -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%236b6860' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  background-position: right 8px center;
-  background-repeat: no-repeat;
-  background-size: 10px;
-  border: 0;
-  cursor: pointer;
-  min-width: 7.5rem;
-  padding-right: 1.5rem;
+.tw-pointer-events-none{
+  pointer-events: none;
 }
 
-.dashboard-sla-status-select:focus {
-  outline: none;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 25%, transparent);
+.tw-absolute{
+  position: absolute;
 }
 
 .tw-relative{
   position: relative;
+}
+
+.tw-bottom-1{
+  bottom: 0.25rem;
+}
+
+.tw-right-5{
+  right: 1.25rem;
+}
+
+.tw-z-\[2\]{
+  z-index: 2;
 }
 
 .tw-m-0{

@@ -1,9 +1,9 @@
-import React, { useState } from "react";
+import React from "react";
 
-const STATUS_OPTIONS = [
-  { id: "in_progress", label: "In Progress" },
-  { id: "reopened", label: "Reopened" },
-];
+const STATUS_LABELS = {
+  in_progress: "In Progress",
+  reopened: "Reopened",
+};
 
 const INITIAL_ROWS = [
   {
@@ -56,13 +56,7 @@ function statusPillClass(status) {
 }
 
 const SlaAtRiskTable = () => {
-  const [rows, setRows] = useState(INITIAL_ROWS);
-
-  const updateStatus = (rowId, status) => {
-    setRows((prev) =>
-      prev.map((row) => (row.id === rowId ? { ...row, status } : row))
-    );
-  };
+  const rows = INITIAL_ROWS;
 
   return (
     <div className="tw-flex tw-h-full tw-min-h-0 tw-flex-col">
@@ -108,19 +102,9 @@ const SlaAtRiskTable = () => {
                     </div>
                   </td>
                   <td className="dashboard-table-td">
-                    <select
-                      value={row.status}
-                      onChange={(e) => updateStatus(row.id, e.target.value)}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      className={`${statusPillClass(row.status)} dashboard-sla-status-select`}
-                      aria-label={`Status for ${row.id}`}
-                    >
-                      {STATUS_OPTIONS.map((opt) => (
-                        <option key={opt.id} value={opt.id}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
+                    <span className={statusPillClass(row.status)}>
+                      {STATUS_LABELS[row.status] ?? row.status}
+                    </span>
                   </td>
                   <td className="dashboard-table-td">
                     <button

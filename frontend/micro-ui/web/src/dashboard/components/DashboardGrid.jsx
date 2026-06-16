@@ -71,6 +71,14 @@ const WidgetHeader = ({ metric, subMetric }) => (
   </header>
 );
 
+// Per-card "last updated" caption, pinned bottom-right (offset to clear the
+// resize grip). No backend freshness signal yet, so it uses the load time.
+const CardUpdatedStamp = ({ label }) => (
+  <span className="dashboard-card-updated tw-pointer-events-none tw-absolute tw-bottom-1 tw-right-5 tw-z-[2] tw-rounded tw-bg-surface tw-px-1 tw-text-[10px] tw-leading-tight tw-text-muted-foreground">
+    Updated {label}
+  </span>
+);
+
 const GRID_MARGIN = [16, 16];
 const DROP_SIZE = { w: DROPPING_ITEM.w, h: DROPPING_ITEM.h };
 const RESIZE_HANDLES = ["se"];
@@ -110,6 +118,19 @@ const DashboardGrid = ({
   loading = false,
 }) => {
   const isExternalDrag = Boolean(draggingKpiId);
+
+  // Stamp the load time once. Swap for the API's data-as-of timestamp once a
+  // backend freshness signal is available.
+  const lastUpdatedLabel = useMemo(
+    () =>
+      new Date().toLocaleString(undefined, {
+        day: "numeric",
+        month: "short",
+        hour: "numeric",
+        minute: "2-digit",
+      }),
+    []
+  );
 
   const layouts = useMemo(() => {
     const lg = layout.map((item) => ({
@@ -290,6 +311,7 @@ const DashboardGrid = ({
                   className="dashboard-kpi-widget tw-group tw-relative tw-flex tw-h-full tw-flex-col tw-transition-all"
                 >
                   {renderKpi(item.i, (e) => handleRemove(e, item.i))}
+                  <CardUpdatedStamp label={lastUpdatedLabel} />
                 </div>
               );
             }
@@ -329,6 +351,7 @@ const DashboardGrid = ({
                     </div>
                   </>
                 )}
+                <CardUpdatedStamp label={lastUpdatedLabel} />
                 <ResizeGrip />
               </section>
             );
