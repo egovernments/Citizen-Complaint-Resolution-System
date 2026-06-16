@@ -7,6 +7,7 @@ import {
   DROPPING_ITEM_ID,
   KPI_ROW_HEIGHT,
   WIDGETS,
+  getSizeConstraints,
   isChartWidget,
   isKpiWidget,
 } from "../constants/layoutConfig";
@@ -113,6 +114,7 @@ const DashboardGrid = ({
   const layouts = useMemo(() => {
     const lg = layout.map((item) => ({
       ...item,
+      ...getSizeConstraints(item.i),
       resizeHandles: RESIZE_HANDLES,
       className: gridItemClassName(item.i),
     }));

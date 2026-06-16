@@ -4,9 +4,9 @@ import { DASHBOARD_FONT_FAMILY } from "../../config/dashboardConfig";
 import ViewToggle from "./ViewToggle";
 
 const SLA_BUCKETS = [
-  { id: "within", label: "Within SLA", count: 11, color: "#6b8f71" },
-  { id: "breaching", label: "Breaching SLA", count: 15, color: "#2d6a6a" },
-  { id: "breached", label: "Breached SLA", count: 34, color: "#c45c3e" },
+  { id: "within", label: "Within SLA", count: 11, color: "var(--status-resolved)" },
+  { id: "breaching", label: "Breaching SLA", count: 15, color: "var(--status-progress)" },
+  { id: "breached", label: "Breached SLA", count: 34, color: "var(--status-breach)" },
 ];
 
 const SlaBucketTable = ({ rows }) => (
@@ -76,7 +76,7 @@ const ComplaintsBySlaWidget = () => {
         labels: { style: { fontSize: "10px" } },
       },
       grid: {
-        borderColor: "#e8e6e1",
+        borderColor: "var(--border)",
         strokeDashArray: 3,
       },
       tooltip: { theme: "light" },

@@ -31,8 +31,8 @@ const HorizontalBarChart = ({ data = [] }) => {
           maxWidth: 140,
         },
       },
-      colors: ["#0d9488"],
-      grid: { borderColor: "#e8e6e1", strokeDashArray: 3 },
+      colors: ["var(--chart-1)"],
+      grid: { borderColor: "var(--border)", strokeDashArray: 3 },
       tooltip: { theme: "light" },
     }),
     [categories]

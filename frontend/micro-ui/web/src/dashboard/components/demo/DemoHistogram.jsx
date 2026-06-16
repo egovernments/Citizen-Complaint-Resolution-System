@@ -27,8 +27,8 @@ const DemoHistogram = ({ data = [] }) => {
       yaxis: {
         labels: { style: { fontSize: "10px" } },
       },
-      colors: ["#64748b"],
-      grid: { borderColor: "#e8e6e1", strokeDashArray: 3 },
+      colors: ["var(--chart-2)"],
+      grid: { borderColor: "var(--border)", strokeDashArray: 3 },
       tooltip: { theme: "light" },
     }),
     [categories]

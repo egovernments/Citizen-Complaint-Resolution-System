@@ -3,7 +3,7 @@ import React from "react";
 const DemoGauge = ({ value = 0, target = 90, label = "SLA compliance" }) => {
   const pct = Math.min(100, Math.max(0, value));
   const onTrack = pct >= target;
-  const barColor = onTrack ? "var(--dashboard-status-resolved, #059669)" : "var(--brand-teal, #0d9488)";
+  const barColor = onTrack ? "var(--status-resolved)" : "var(--primary)";
 
   return (
     <div className="tw-flex tw-h-full tw-min-h-0 tw-flex-col tw-justify-center tw-gap-4">
@@ -27,7 +27,7 @@ const DemoGauge = ({ value = 0, target = 90, label = "SLA compliance" }) => {
           <span>0%</span>
           <span
             className="tw-font-medium"
-            style={{ color: onTrack ? "var(--dashboard-status-resolved, #059669)" : undefined }}
+            style={{ color: onTrack ? "var(--status-resolved)" : undefined }}
           >
             {onTrack ? "On track" : `${target - pct}% below goal`}
           </span>

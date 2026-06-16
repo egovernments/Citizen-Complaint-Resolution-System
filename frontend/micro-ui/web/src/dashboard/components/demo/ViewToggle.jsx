@@ -12,7 +12,7 @@ const ViewToggle = ({ value, onChange, options }) => (
           onClick={() => onChange(opt.id)}
           className={
             active
-              ? "tw-border-0 tw-bg-brand-dark tw-px-2.5 tw-py-1 tw-text-[11px] tw-font-medium tw-text-white"
+              ? "tw-border-0 tw-bg-chrome tw-px-2.5 tw-py-1 tw-text-[11px] tw-font-medium tw-text-chrome-foreground"
               : "tw-border-0 tw-bg-surface tw-px-2.5 tw-py-1 tw-text-[11px] tw-font-medium tw-text-muted-foreground hover:tw-text-foreground"
           }
         >

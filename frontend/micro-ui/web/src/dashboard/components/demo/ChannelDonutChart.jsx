@@ -1,6 +1,12 @@
 import React, { useMemo, useState } from "react";
 
-const DEFAULT_COLORS = ["#1a4d3e", "#2d6a6a", "#6b8f71", "#c45c3e", "#000000"];
+const DEFAULT_COLORS = [
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+];
 
 const CX = 160;
 const CY = 118;
@@ -99,7 +105,7 @@ const ChannelDonutChart = ({ data = [] }) => {
               <path
                 d={slice.path}
                 fill={slice.color}
-                stroke="#ffffff"
+                stroke="var(--surface)"
                 strokeWidth={2}
                 className="channel-donut-slice"
                 onMouseEnter={() => setActiveIndex(slice.index)}

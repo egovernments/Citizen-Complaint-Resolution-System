@@ -8,7 +8,7 @@ const RankedList = ({ items }) => (
         className="tw-flex tw-items-center tw-justify-between tw-rounded-sm tw-bg-muted tw-py-1.5"
       >
         <div className="tw-flex tw-min-w-0 tw-items-center tw-gap-2">
-          <span className="tw-flex tw-h-5 tw-w-5 tw-flex-shrink-0 tw-items-center tw-justify-center tw-rounded-full tw-bg-brand-teal tw-text-[10px] tw-font-bold tw-text-white">
+          <span className="tw-flex tw-h-5 tw-w-5 tw-flex-shrink-0 tw-items-center tw-justify-center tw-rounded-full tw-bg-primary tw-text-[10px] tw-font-bold tw-text-primary-foreground">
             {item.rank}
           </span>
           <span

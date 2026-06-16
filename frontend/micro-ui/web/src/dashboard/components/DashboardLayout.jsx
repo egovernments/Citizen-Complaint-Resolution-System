@@ -26,7 +26,7 @@ const DashboardLayout = ({
 
   return (
     <div
-      className="dashboard-root tw-flex tw-h-screen tw-overflow-hidden tw-bg-slate-100 tw-font-sans tw-text-foreground"
+      className="dashboard-root tw-flex tw-h-screen tw-overflow-hidden tw-bg-background tw-font-sans tw-text-foreground"
       style={brandStyle}
     >
       <Sidebar />
@@ -38,7 +38,7 @@ const DashboardLayout = ({
           filters={filters}
           filterOptions={filterOptions}
         />
-        <main className="tw-flex-1 tw-overflow-auto tw-bg-slate-100 tw-p-4 lg:tw-p-6">
+        <main className="tw-flex-1 tw-overflow-auto tw-bg-background tw-p-4 lg:tw-p-6">
           <DashboardFilters
             filters={filters}
             onFilterChange={onFilterChange}

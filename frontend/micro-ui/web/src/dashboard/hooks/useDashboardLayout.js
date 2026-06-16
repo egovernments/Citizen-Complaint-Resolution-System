@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { getLayoutStorageKey } from "../config/dashboardConfig";
 import {
   DEFAULT_KPI_LAYOUT_ITEM,
@@ -33,6 +33,15 @@ function overlapArea(a, b) {
 function collidesAt(item, x, y, placed) {
   const candidate = { ...item, x, y };
   return placed.some((other) => rectsOverlap(candidate, other));
+}
+
+function hasOverlaps(layout) {
+  for (let i = 0; i < layout.length; i += 1) {
+    for (let j = i + 1; j < layout.length; j += 1) {
+      if (rectsOverlap(layout[i], layout[j])) return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -153,7 +162,10 @@ function clearSavedLayout() {
 /**
  * Load the saved layout exactly as it was persisted. No reflow, no repack, no
  * compaction, no merging of default widgets. The only processing is dropping
- * entries for widgets that no longer exist (so rendering can't crash).
+ * entries for widgets that no longer exist (so rendering can't crash) and, as a
+ * safety net, repairing data that was saved with real overlaps (e.g. corrupt
+ * layouts left by an older implementation). A clean saved layout is returned
+ * untouched so the user's exact arrangement is preserved on refresh.
  */
 function loadLayout() {
   try {
@@ -164,7 +176,15 @@ function loadLayout() {
     if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_LAYOUT;
 
     const valid = parsed.filter((item) => item && WIDGETS[item.i]);
-    return valid.length > 0 ? valid : DEFAULT_LAYOUT;
+    if (valid.length === 0) return DEFAULT_LAYOUT;
+
+    if (hasOverlaps(valid)) {
+      const repaired = compactVertically(valid);
+      persistLayout(repaired);
+      return repaired;
+    }
+
+    return valid;
   } catch {
     return DEFAULT_LAYOUT;
   }
@@ -196,65 +216,98 @@ export function useDashboardLayout() {
   const [layout, setLayout] = useState(loadLayout);
 
   /**
+   * react-grid-layout keeps an internal copy of the layout and only re-syncs
+   * from props when the new layout deep-differs (lodash isEqual) from the one
+   * it last synced. After a drag that nets no positional change, our compacted
+   * result is geometrically identical to the pre-drag layout, so RGL keeps its
+   * stale internal copy with the dragged card left at its overlapping drop
+   * position — that's the residual overlap.
+   *
+   * RGL clones layout items through `cloneLayoutItem`, which strips any custom
+   * fields but preserves the standard `moved` flag. With `allowOverlap` enabled
+   * RGL never runs compaction, so `moved` is inert. Toggling `moved` on every
+   * layout we hand back therefore guarantees the deep-equality check fails and
+   * RGL re-syncs to our clean state, without affecting positioning.
+   */
+  const syncFlagRef = useRef(false);
+  const stampSync = useCallback((next) => {
+    syncFlagRef.current = !syncFlagRef.current;
+    const moved = syncFlagRef.current;
+    return next.map((item) => ({ ...item, moved }));
+  }, []);
+
+  /**
    * react-grid-layout's native onDragStop. `oldItem` holds the card's position
    * before the drag (its origin); `newItem` holds where it was dropped.
    * Post-drop processing: swap resolution -> compact vertically -> persist.
    */
-  const onDragStop = useCallback((rglLayout, oldItem, newItem) => {
-    if (!newItem) return;
-    setLayout(() => {
-      const origin = { x: oldItem.x, y: oldItem.y };
-      const swapped = swapOnDrop(rglLayout, newItem.i, origin);
-      const next = compactVertically(swapped);
-      persistLayout(next);
-      return next;
-    });
-  }, []);
+  const onDragStop = useCallback(
+    (rglLayout, oldItem, newItem) => {
+      if (!newItem) return;
+      setLayout(() => {
+        const origin = { x: oldItem.x, y: oldItem.y };
+        const swapped = swapOnDrop(rglLayout, newItem.i, origin);
+        const next = compactVertically(swapped);
+        persistLayout(next);
+        return stampSync(next);
+      });
+    },
+    [stampSync]
+  );
 
   /**
    * react-grid-layout's native onResizeStop. The resized card grew/shrank in
    * place (allowOverlap keeps everything else frozen during the resize).
    * On release: compact vertically (push cards below down / pull them up) -> persist.
    */
-  const onResizeStop = useCallback((rglLayout) => {
-    setLayout(() => {
-      const next = compactVertically(rglLayout);
-      persistLayout(next);
-      return next;
-    });
-  }, []);
+  const onResizeStop = useCallback(
+    (rglLayout) => {
+      setLayout(() => {
+        const next = compactVertically(rglLayout);
+        persistLayout(next);
+        return stampSync(next);
+      });
+    },
+    [stampSync]
+  );
 
   const resetLayout = useCallback(() => {
     clearSavedLayout();
-    setLayout(DEFAULT_LAYOUT);
     persistLayout(DEFAULT_LAYOUT);
-  }, []);
+    setLayout(stampSync(DEFAULT_LAYOUT));
+  }, [stampSync]);
 
-  const removeWidgetFromLayout = useCallback((widgetId) => {
-    setLayout((prev) => {
-      const next = compactVertically(prev.filter((item) => item.i !== widgetId));
-      persistLayout(next);
-      return next;
-    });
-  }, []);
-
-  const addKpiToLayout = useCallback((widgetId, position) => {
-    if (!isKpiWidget(widgetId)) return;
-    setLayout((prev) => {
-      if (prev.some((item) => item.i === widgetId)) return prev;
-
-      const fallback = nextKpiPosition(prev);
-      const newItem = normalizeKpiItem({
-        i: widgetId,
-        x: position?.x ?? fallback.x,
-        y: position?.y ?? fallback.y,
+  const removeWidgetFromLayout = useCallback(
+    (widgetId) => {
+      setLayout((prev) => {
+        const next = compactVertically(prev.filter((item) => item.i !== widgetId));
+        persistLayout(next);
+        return stampSync(next);
       });
+    },
+    [stampSync]
+  );
 
-      const next = compactVertically([...prev, newItem]);
-      persistLayout(next);
-      return next;
-    });
-  }, []);
+  const addKpiToLayout = useCallback(
+    (widgetId, position) => {
+      if (!isKpiWidget(widgetId)) return;
+      setLayout((prev) => {
+        if (prev.some((item) => item.i === widgetId)) return prev;
+
+        const fallback = nextKpiPosition(prev);
+        const newItem = normalizeKpiItem({
+          i: widgetId,
+          x: position?.x ?? fallback.x,
+          y: position?.y ?? fallback.y,
+        });
+
+        const next = compactVertically([...prev, newItem]);
+        persistLayout(next);
+        return stampSync(next);
+      });
+    },
+    [stampSync]
+  );
 
   const addWidgetToLayout = useCallback(
     (widgetId, position) => {
@@ -278,10 +331,10 @@ export function useDashboardLayout() {
 
         const next = compactVertically([...prev, newItem]);
         persistLayout(next);
-        return next;
+        return stampSync(next);
       });
     },
-    [addKpiToLayout]
+    [addKpiToLayout, stampSync]
   );
 
   const visibleLayoutIds = layout.map((item) => item.i);

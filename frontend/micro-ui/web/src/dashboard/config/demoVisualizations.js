@@ -138,11 +138,11 @@ export const DEMO_VIZ_DATA = {
     series: [{ name: "Filed", data: [12, 15, 11, 18, 14, 8, 6] }],
   },
   "demo-viz-pie": [
-    { label: "Mobile App", count: 12, color: "#1a4d3e" },
-    { label: "Web", count: 12, color: "#2d6a6a" },
-    { label: "Call", count: 12, color: "#6b8f71" },
-    { label: "Counter", count: 12, color: "#c45c3e" },
-    { label: "WhatsApp", count: 12, color: "#000000" },
+    { label: "Mobile App", count: 12, color: "var(--chart-1)" },
+    { label: "Web", count: 12, color: "var(--chart-2)" },
+    { label: "Call", count: 12, color: "var(--chart-3)" },
+    { label: "Counter", count: 12, color: "var(--chart-4)" },
+    { label: "WhatsApp", count: 12, color: "var(--chart-5)" },
   ],
   "demo-viz-stacked": {
     categories: ["W1", "W2", "W3", "W4"],
@@ -172,17 +172,31 @@ export const DEMO_VIZ_DATA = {
   },
 };
 
+/**
+ * Layout defaults and size constraints per demo widget.
+ *
+ * Grid math: row height is 52px with a 16px vertical margin, so an item that is
+ * `h` rows tall is `68 * h - 16` px. A standard widget (drag-handle header +
+ * p-4 body) spends roughly 84px on chrome, so usable content height is about
+ * `68 * h - 100` px. The minimums below are chosen so each visualization always
+ * has enough room to render without the chart collapsing, axes overlapping, or
+ * content overflowing:
+ *   - text/number tiles need ~3 rows
+ *   - apex/SVG charts need ~4 rows of height to keep a usable plot area
+ *   - charts with long axis labels (leaderboard) or inline controls
+ *     (sla-toggle header) need at least 4 columns of width
+ */
 export const DEMO_VIZ_LAYOUT_DEFAULTS = {
   "demo-viz-number": { x: 0, w: 2, h: 3, minW: 2, minH: 3, maxW: 4, maxH: 4 },
-  "demo-viz-sparkline": { x: 2, w: 3, h: 4, minW: 3, minH: 3, maxW: 6, maxH: 6 },
-  "demo-viz-gauge": { x: 5, w: 3, h: 4, minW: 3, minH: 3, maxW: 6, maxH: 6 },
+  "demo-viz-sparkline": { x: 2, w: 3, h: 4, minW: 3, minH: 4, maxW: 6, maxH: 6 },
+  "demo-viz-gauge": { x: 5, w: 3, h: 4, minW: 3, minH: 4, maxW: 6, maxH: 6 },
   "demo-viz-pie": { x: 8, w: 4, h: 5, minW: 3, minH: 4, maxW: 6, maxH: 8 },
   "demo-viz-bar": { x: 4, w: 4, h: 6, minW: 3, minH: 4, maxW: 8, maxH: 10 },
-  "demo-viz-leaderboard": { x: 8, w: 4, h: 6, minW: 3, minH: 4, maxW: 8, maxH: 10 },
+  "demo-viz-leaderboard": { x: 8, w: 4, h: 6, minW: 4, minH: 4, maxW: 8, maxH: 10 },
   "demo-viz-line": { x: 0, w: 4, h: 6, minW: 3, minH: 4, maxW: 8, maxH: 10 },
   "demo-viz-stacked": { x: 0, w: 6, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
   "demo-viz-histogram": { x: 6, w: 6, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
-  "demo-viz-sla-toggle": { x: 0, w: 4, h: 5, minW: 3, minH: 4, maxW: 6, maxH: 8 },
+  "demo-viz-sla-toggle": { x: 0, w: 4, h: 5, minW: 4, minH: 4, maxW: 6, maxH: 8 },
   "demo-viz-sla-risk": { x: 0, w: 12, h: 8, minW: 6, minH: 6, maxW: 12, maxH: 14 },
   "demo-viz-map": { x: 0, w: 7, h: 7, minW: 4, minH: 5, maxW: 12, maxH: 14 },
 };

@@ -19,8 +19,8 @@ const DemoLineChart = ({ categories = [], series = [] }) => {
       yaxis: {
         labels: { style: { fontSize: "10px" } },
       },
-      colors: ["#0d9488"],
-      grid: { borderColor: "#e8e6e1" },
+      colors: ["var(--chart-1)"],
+      grid: { borderColor: "var(--border)" },
       markers: { size: 4 },
       legend: { show: false },
       tooltip: { theme: "light" },

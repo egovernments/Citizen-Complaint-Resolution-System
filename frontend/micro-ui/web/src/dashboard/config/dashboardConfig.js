@@ -1,8 +1,13 @@
-/** Default brand palette — override per tenant via globalConfigs (see keys below). */
+/**
+ * Default brand palette — override per tenant via globalConfigs (see keys below).
+ * Defaults mirror the canonical palette tokens (--primary / --chrome /
+ * --chrome-muted) defined in styles/input.css so unbranded tenants stay
+ * consistent with the standardized theme.
+ */
 export const DEFAULT_BRAND_THEME = {
-  teal: "#0d9488",
-  dark: "#134e4a",
-  slate: "#334155",
+  teal: "lab(35.8817% -24.1734 -2.46631)",
+  dark: "lab(12.1586% -9.80562 -2.97114)",
+  slate: "lab(56.1186% -6.32274 -2.64311)",
 };
 
 export const DASHBOARD_FONT_FAMILY =

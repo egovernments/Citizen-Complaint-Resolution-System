@@ -2,7 +2,7 @@ import React, { useMemo } from "react";
 import Chart from "react-apexcharts";
 import { DASHBOARD_FONT_FAMILY } from "../../config/dashboardConfig";
 
-const STACKED_COLORS = ["#dc2626", "#64748b", "#059669"];
+const STACKED_COLORS = ["var(--chart-4)", "var(--chart-2)", "var(--chart-3)"];
 
 const DemoStackedBarChart = ({ categories = [], series = [] }) => {
   const options = useMemo(
@@ -32,7 +32,7 @@ const DemoStackedBarChart = ({ categories = [], series = [] }) => {
         horizontalAlign: "right",
         fontSize: "11px",
       },
-      grid: { borderColor: "#e8e6e1" },
+      grid: { borderColor: "var(--border)" },
       tooltip: { theme: "light" },
     }),
     [categories]

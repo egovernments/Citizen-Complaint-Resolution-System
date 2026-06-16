@@ -63,9 +63,9 @@ export default function ComplaintMap({ pins = [] }) {
     pins.forEach((p) => {
       L.circleMarker([p.lat, p.lng], {
         radius: 6,
-        color: "#0d9488",
+        color: "var(--primary)",
         weight: 1,
-        fillColor: "#0d9488",
+        fillColor: "var(--primary)",
         fillOpacity: 0.65,
       })
         .bindPopup(createPopupContent(p))

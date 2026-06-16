@@ -38,9 +38,7 @@ function resolveColumnWidth(slotWidthPx) {
 }
 
 /** Center sparse bar groups by shrinking the plot area with symmetric grid padding. */
-function resolveBarGroupLayout(categoryCount, containerWidth) {
-  const bottomPad = XAXIS_LABEL_HEIGHT_PX;
-
+function resolveBarGroupLayout(categoryCount, containerWidth, bottomPad) {
   if (!categoryCount || !containerWidth || categoryCount > SPARSE_CATEGORY_THRESHOLD) {
     return {
       gridPadding: { left: 8, right: 4, top: 4, bottom: bottomPad },
@@ -60,9 +58,13 @@ function resolveBarGroupLayout(categoryCount, containerWidth) {
 
 function truncateCategoryLabel(label, slotWidthPx) {
   const text = String(label ?? "").trim() || "—";
-  const maxChars = Math.max(8, Math.floor(slotWidthPx / 5.5));
+  if (!slotWidthPx) return text;
+  // ~6px per character at the 10px label font; reserve an 8px gutter so
+  // neighbouring labels never touch. Truncate to whatever actually fits the
+  // category slot instead of forcing a fixed minimum that overflows.
+  const maxChars = Math.max(3, Math.floor((slotWidthPx - 8) / 6));
   if (text.length <= maxChars) return text;
-  return `${text.slice(0, Math.max(maxChars - 1, 3))}…`;
+  return `${text.slice(0, Math.max(maxChars - 1, 2))}…`;
 }
 
 function resolveTooltipPosition(clientX, clientY) {
@@ -129,9 +131,16 @@ const DepartmentBarChart = ({ data, categoryOrder, compact = false }) => {
   const containerWidth = containerSize.width;
   const containerHeight = containerSize.height;
 
+  // At small heights the fixed x-axis label reserve and tick count would crush
+  // the plot area (squished bars, overlapping y-axis labels). Scale them down so
+  // a short chart still renders cleanly.
+  const isShort = containerHeight > 0 && containerHeight < 200;
+  const xAxisLabelHeight = isShort ? 26 : XAXIS_LABEL_HEIGHT_PX;
+  const yTickAmount = isShort ? 3 : compact ? 4 : 5;
+
   const { gridPadding, slotWidth } = useMemo(
-    () => resolveBarGroupLayout(categoryCount, containerWidth),
-    [categoryCount, containerWidth]
+    () => resolveBarGroupLayout(categoryCount, containerWidth, xAxisLabelHeight),
+    [categoryCount, containerWidth, xAxisLabelHeight]
   );
 
   const columnWidth = useMemo(
@@ -185,8 +194,8 @@ const DepartmentBarChart = ({ data, categoryOrder, compact = false }) => {
           rotate: 0,
           rotateAlways: false,
           trim: false,
-          hideOverlappingLabels: false,
-          maxHeight: XAXIS_LABEL_HEIGHT_PX,
+          hideOverlappingLabels: true,
+          maxHeight: xAxisLabelHeight,
           offsetY: 2,
           style: { fontSize: "10px" },
           formatter: (value) => truncateCategoryLabel(value, slotWidth),
@@ -202,11 +211,11 @@ const DepartmentBarChart = ({ data, categoryOrder, compact = false }) => {
         },
         forceNiceScale: true,
         min: 0,
-        tickAmount: compact ? 4 : 5,
+        tickAmount: yTickAmount,
       },
-      colors: ["var(--brand-teal, #0d9488)"],
+      colors: ["var(--chart-1)"],
       grid: {
-        borderColor: "#e2e8f0",
+        borderColor: "var(--border)",
         strokeDashArray: 3,
         padding: gridPadding,
       },
@@ -218,12 +227,13 @@ const DepartmentBarChart = ({ data, categoryOrder, compact = false }) => {
     [
       categories,
       columnWidth,
-      compact,
       containerHeight,
       gridPadding,
       handleDataPointEnter,
       handleDataPointLeave,
       slotWidth,
+      xAxisLabelHeight,
+      yTickAmount,
     ]
   );
 

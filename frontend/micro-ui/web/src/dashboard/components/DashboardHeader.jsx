@@ -60,7 +60,7 @@ const DashboardHeader = ({
     : `${productLabel} Operations`;
 
   return (
-    <header className="dashboard-header tw-flex-shrink-0 tw-bg-slate-100">
+    <header className="dashboard-header tw-flex-shrink-0 tw-bg-background">
       <div className="dashboard-header-top tw-flex tw-h-12 tw-shrink-0 tw-items-center tw-justify-between tw-gap-4 tw-border-b tw-border-border tw-bg-surface tw-px-4 lg:tw-px-6">
         <div className="tw-min-w-0">
           <div className="tw-flex tw-flex-wrap tw-items-baseline tw-gap-x-3 tw-gap-y-0.5">

@@ -23,7 +23,7 @@ const SparklineNumberTile = ({ value, label, delta, deltaLabel = "WoW", sparklin
           opacityTo: 0.05,
         },
       },
-      colors: ["#0d9488"],
+      colors: ["var(--chart-1)"],
       tooltip: { enabled: false },
     }),
     []

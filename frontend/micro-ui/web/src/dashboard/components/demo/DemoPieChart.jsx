@@ -2,7 +2,12 @@ import React, { useMemo } from "react";
 import Chart from "react-apexcharts";
 import { DASHBOARD_FONT_FAMILY } from "../../config/dashboardConfig";
 
-const PIE_COLORS = ["#0d9488", "#64748b", "#059669", "#dc2626"];
+const PIE_COLORS = [
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+];
 
 const DemoPieChart = ({ data = [] }) => {
   const labels = data.map((d) => d.label);
@@ -24,7 +29,7 @@ const DemoPieChart = ({ data = [] }) => {
         enabled: true,
         style: { fontSize: "10px" },
       },
-      stroke: { width: 1, colors: ["#fff"] },
+      stroke: { width: 1, colors: ["var(--surface)"] },
       tooltip: { theme: "light" },
     }),
     [labels]

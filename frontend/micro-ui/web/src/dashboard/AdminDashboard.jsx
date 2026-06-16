@@ -64,12 +64,12 @@ const AdminDashboard = () => {
       filterOptionsLoading={loading}
     >
       {error && (
-        <div className="tw-mb-4 tw-flex tw-items-center tw-justify-between tw-rounded-md tw-border tw-border-red-200 tw-bg-red-50 tw-px-4 tw-py-3 tw-text-sm tw-text-red-800">
+        <div className="tw-mb-4 tw-flex tw-items-center tw-justify-between tw-rounded-md tw-border tw-border-[color-mix(in_srgb,var(--destructive)_30%,transparent)] tw-bg-status-breach-bg tw-px-4 tw-py-3 tw-text-sm tw-text-destructive">
           <span>{error}</span>
           <button
             type="button"
             onClick={refetch}
-            className="tw-ml-4 tw-flex-shrink-0 tw-rounded-md tw-border tw-border-red-300 tw-bg-white tw-px-3 tw-py-1 tw-text-xs tw-font-medium tw-text-red-700 hover:tw-bg-red-100"
+            className="tw-ml-4 tw-flex-shrink-0 tw-rounded-md tw-border tw-border-[color-mix(in_srgb,var(--destructive)_40%,transparent)] tw-bg-surface tw-px-3 tw-py-1 tw-text-xs tw-font-medium tw-text-destructive hover:tw-bg-status-breach-bg"
           >
             Retry
           </button>

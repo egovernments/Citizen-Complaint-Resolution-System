@@ -6,14 +6,84 @@
 
 @layer base {
   .dashboard-root {
-    --dashboard-background: #ffffff;
-    --dashboard-foreground: #1b1b1b;
-    --dashboard-surface: #ffffff;
-    --dashboard-border: #e8e6e1;
-    --dashboard-muted: #f0eeea;
-    --dashboard-muted-foreground: #6b6860;
-    --dashboard-status-resolved: #059669;
-    --dashboard-status-breach: #dc2626;
+    /* ============================================================
+     * Canonical color palette — single source of truth.
+     * Every dashboard color (Tailwind tokens, raw CSS, chart series)
+     * resolves to one of these variables. Update colors here only.
+     * ============================================================ */
+
+    /* Surfaces & text */
+    --background: lab(98.2586% -0.2231 -0.716782);
+    --foreground: lab(5.23127% -1.15929 -6.2068);
+    --surface: lab(100% 0 0);
+    --surface-2: lab(97.097% -0.443935 -1.43216);
+    --surface-3: lab(94.7753% -0.662118 -2.14608);
+    --card: lab(100% 0 0);
+    --card-foreground: lab(5.23127% -1.15929 -6.2068);
+    --popover: lab(100% 0 0);
+    --popover-foreground: lab(5.23127% -1.15929 -6.2068);
+
+    /* Brand / interactive */
+    --primary: lab(35.8817% -24.1734 -2.46631);
+    --primary-foreground: lab(98.84% 0.0000298023 -0.0000119209);
+    --secondary: lab(94.2798% -2.53278 -1.0635);
+    --secondary-foreground: lab(9.71627% -6.29769 -2.60819);
+    --muted: lab(94.8109% -1.28037 -1.23321);
+    --muted-foreground: lab(39.77% -3.78458 -3.66642);
+    --accent: lab(93.2569% -6.07967 -0.65273);
+    --accent-foreground: lab(7.50164% -8.19696 -3.84778);
+    --destructive: lab(45.6933% 66.2056 47.555);
+    --destructive-foreground: lab(98.84% 0.0000298023 -0.0000119209);
+
+    /* Lines & focus */
+    --border: lab(88.4492% -2.04447 -1.97053);
+    --input: lab(88.4492% -2.04447 -1.97053);
+    --ring: lab(35.8817% -24.1734 -2.46631);
+
+    /* Chrome (top bar / nav) */
+    --chrome: lab(12.1586% -9.80562 -2.97114);
+    --chrome-foreground: lab(96.5699% -1.58328 -0.665271);
+    --chrome-muted: lab(56.1186% -6.32274 -2.64311);
+
+    /* Status (foreground + tinted background pairs) */
+    --status-open: lab(36.6287% -20.0702 -21.1027);
+    --status-open-bg: lab(94.3508% -6.32584 -6.12073);
+    --status-assigned: lab(35.8108% -25.0002 -10.2503);
+    --status-assigned-bg: lab(94.4979% -9.48459 -3.96528);
+    --status-progress: lab(41.816% 17.1944 63.4163);
+    --status-progress-bg: lab(95.4544% 2.6814 15.3591);
+    --status-resolved: lab(36.3321% -35.6256 3.05576);
+    --status-resolved-bg: lab(94.7185% -13.6163 1.20147);
+    --status-rejected: lab(36.1728% -1.98329 -7.04196);
+    --status-rejected-bg: lab(93.0362% -0.553161 -1.78919);
+    --status-overdue: lab(45.8049% 62.9533 44.1);
+    --status-overdue-bg: lab(95.0932% 9.04813 5.32234);
+    --status-breach: lab(37.1998% 71.0423 26.7454);
+    --status-breach-bg: lab(93.7677% 13.0259 4.10725);
+
+    /* Chart series */
+    --chart-1: lab(36.1215% -31.3433 -3.14357);
+    --chart-2: lab(48.7634% -31.2502 -12.8129);
+    --chart-3: lab(60.588% -31.0205 5.71432);
+    --chart-4: lab(46.0249% 56.4689 37.9874);
+    --chart-5: lab(42.1906% -16.731 -27.7727);
+
+    /* ------------------------------------------------------------
+     * Legacy aliases — kept so existing var(--dashboard-*) and
+     * var(--brand-*) references map onto the canonical palette.
+     * ------------------------------------------------------------ */
+    --dashboard-background: var(--background);
+    --dashboard-foreground: var(--foreground);
+    --dashboard-surface: var(--surface);
+    --dashboard-border: var(--border);
+    --dashboard-muted: var(--muted);
+    --dashboard-muted-foreground: var(--muted-foreground);
+    --dashboard-status-resolved: var(--status-resolved);
+    --dashboard-status-breach: var(--status-breach);
+    --brand-teal: var(--primary);
+    --brand-dark: var(--chrome);
+    --brand-slate: var(--chrome-muted);
+
     --dashboard-font-family: Inter, Roboto, ui-sans-serif, system-ui, sans-serif;
     font-family: var(--dashboard-font-family);
     font-feature-settings: "tnum" 1;
@@ -72,7 +142,7 @@
 
   .dashboard-widget-remove-btn:focus {
     @apply tw-outline-none;
-    box-shadow: 0 0 0 2px rgb(13 148 136 / 0.3);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 30%, transparent);
   }
 
   .dashboard-kpi-card {
@@ -152,7 +222,7 @@
   }
 
   .dashboard-header-search-input:focus {
-    box-shadow: 0 0 0 2px rgb(13 148 136 / 0.15);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 15%, transparent);
   }
 
   .dashboard-header-controls .dashboard-header-btn {
@@ -173,7 +243,7 @@
 
   .dashboard-header-controls .dashboard-add-kpi-trigger:hover {
     @apply tw-border-primary tw-text-primary;
-    background-color: rgb(240 238 234 / 0.5);
+    background-color: color-mix(in srgb, var(--muted) 50%, transparent);
   }
 
   .dashboard-header-kpi-anchor {
@@ -223,7 +293,7 @@
   }
 
   .dashboard-filter-inline-date:focus {
-    box-shadow: 0 0 0 2px rgb(13 148 136 / 0.15);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 15%, transparent);
   }
 
   .dashboard-filter-inline-date-wrap .dashboard-filter-inline-date::-webkit-calendar-picker-indicator {
@@ -248,7 +318,7 @@
   }
 
   .dashboard-filter-inline-select:focus {
-    box-shadow: 0 0 0 2px rgb(13 148 136 / 0.15);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 15%, transparent);
   }
 
   .dashboard-filter-inline-select-wrap::after {
@@ -321,9 +391,9 @@
   }
 
   .dashboard-kpi-widget:hover .dashboard-kpi-card {
-    border-color: rgb(13 148 136 / 0.4);
-    background-color: rgb(13 148 136 / 0.05);
-    box-shadow: 0 4px 12px rgb(13 148 136 / 0.1);
+    border-color: color-mix(in srgb, var(--primary) 40%, transparent);
+    background-color: color-mix(in srgb, var(--primary) 5%, transparent);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 10%, transparent);
   }
 
   .dashboard-table-body {
@@ -396,7 +466,7 @@
   }
 
   .dashboard-root table.dashboard-table tbody tr.dashboard-table-row-highlight td.dashboard-table-td {
-    background-color: rgb(254 63 33 / 0.08) !important;
+    background-color: color-mix(in srgb, var(--status-breach) 8%, transparent) !important;
   }
 
   .dashboard-root table.dashboard-table col.dashboard-table-col-fixed {
@@ -416,7 +486,7 @@
   }
 
   .dashboard-table-row-highlight {
-    background-color: rgb(254 63 33 / 0.08);
+    background-color: color-mix(in srgb, var(--status-breach) 8%, transparent);
   }
 
   .dashboard-table-trend-up {
@@ -471,7 +541,7 @@
     transform: translate(-50%, -100%);
     border-radius: 4px;
     border: 1px solid var(--dashboard-border, #e8e6e1);
-    background: rgba(255, 255, 255, 0.98);
+    background: var(--popover);
     box-shadow: 0 2px 8px rgb(0 0 0 / 0.08);
     padding: 4px 8px;
     font-size: 11px;
@@ -491,7 +561,7 @@
     max-width: 320px;
     border-radius: 5px;
     border: 1px solid var(--dashboard-border, #e8e6e1);
-    background: rgba(255, 255, 255, 0.98);
+    background: var(--popover);
     box-shadow: 2px 2px 6px -4px #999;
     pointer-events: none;
     padding: 0;
@@ -555,7 +625,7 @@
   }
 
   .dashboard-sla-link {
-    color: #2d6a6a;
+    color: var(--primary);
     font-weight: 500;
     text-decoration: none;
     cursor: pointer;
@@ -568,8 +638,8 @@
   .dashboard-sla-breach-pill {
     display: inline-block;
     border-radius: 4px;
-    background-color: var(--dashboard-status-breach, #dc2626);
-    color: #fff;
+    background-color: var(--status-breach);
+    color: var(--primary-foreground);
     font-size: 9px;
     font-weight: 700;
     letter-spacing: 0.03em;
@@ -590,13 +660,13 @@
   }
 
   .dashboard-sla-status-pill--reopened {
-    background-color: #fee2e2;
-    color: #dc2626;
+    background-color: var(--status-breach-bg);
+    color: var(--status-breach);
   }
 
   .dashboard-sla-status-pill--in-progress {
-    background-color: #fef3c7;
-    color: #b45309;
+    background-color: var(--status-progress-bg);
+    color: var(--status-progress);
   }
 
   .dashboard-sla-status-select {
@@ -614,7 +684,7 @@
 
   .dashboard-sla-status-select:focus {
     outline: none;
-    box-shadow: 0 0 0 2px rgb(45 106 106 / 0.25);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 25%, transparent);
   }
 }
 

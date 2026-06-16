@@ -1,8 +1,5 @@
 import { CHART_WIDGETS, KPI_METRICS } from "../config/supervisorMetrics";
-import {
-  DEMO_VIZ_DEFAULT_LAYOUT,
-  DEMO_VIZ_LAYOUT_DEFAULTS,
-} from "../config/demoVisualizations";
+import { DEMO_VIZ_LAYOUT_DEFAULTS } from "../config/demoVisualizations";
 import { isKpiListMetric } from "../config/kpiDisplay";
 
 export const GRID_COLS = 12;
@@ -101,11 +98,11 @@ export const WIDGETS = {
 };
 
 export const DEFAULT_CHART_LAYOUT = {
-  "cl-list-categories": { x: 0, w: 6, h: 6, minW: 4, minH: 6, maxW: 12, maxH: 12 },
-  "cl-table-resolution": { x: 6, w: 6, h: 6, minW: 4, minH: 6, maxW: 12, maxH: 12 },
-  "cl-table-locality": { x: 0, w: 6, h: 6, minW: 4, minH: 6, maxW: 12, maxH: 12 },
-  "cl-table-workflow-stages": { x: 6, w: 6, h: 6, minW: 4, minH: 6, maxW: 12, maxH: 12 },
-  "cl-chart-categories": { x: 0, w: 4, h: 6, minW: 3, minH: 4, maxW: 8, maxH: 10 },
+  "cl-list-categories": { x: 0, w: 6, h: 4, minW: 4, minH: 4, maxW: 12, maxH: 12 },
+  "cl-table-resolution": { x: 6, w: 6, h: 4, minW: 4, minH: 4, maxW: 12, maxH: 12 },
+  "cl-table-locality": { x: 0, w: 6, h: 4, minW: 4, minH: 4, maxW: 12, maxH: 12 },
+  "cl-table-workflow-stages": { x: 6, w: 6, h: 4, minW: 4, minH: 4, maxW: 12, maxH: 12 },
+  "cl-chart-categories": { x: 0, w: 4, h: 6, minW: 3, minH: 6, maxW: 8, maxH: 10 },
   "cl-chart-wards": { x: 4, w: 4, h: 6, minW: 3, minH: 4, maxW: 8, maxH: 10 },
   "cl-chart-dow": { x: 8, w: 4, h: 6, minW: 3, minH: 4, maxW: 8, maxH: 10 },
   "cl-map-complaints": { x: 0, w: 8, h: 7, minW: 4, minH: 4, maxW: 12, maxH: 14 },
@@ -120,189 +117,32 @@ export const TOP_ROW_CHART_IDS = [
 ];
 
 export const DEFAULT_LAYOUT = [
-  {
-    w: 2,
-    h: 2,
-    x: 0,
-    y: 0,
-    i: "cl-metric-total-registered",
-    minW: 2,
-    minH: 2,
-    maxH: 6,
-    moved: false,
-    static: false,
-    resizeHandles: ["se"],
-  },
-  {
-    w: 2,
-    h: 2,
-    x: 2,
-    y: 0,
-    i: "cl-metric-total-open",
-    minW: 2,
-    minH: 2,
-    maxH: 6,
-    moved: false,
-    static: false,
-    resizeHandles: ["se"],
-  },
-  {
-    w: 2,
-    h: 2,
-    x: 4,
-    y: 0,
-    i: "cl-metric-total-resolved",
-    minW: 2,
-    minH: 2,
-    maxH: 6,
-    moved: false,
-    static: false,
-    resizeHandles: ["se"],
-  },
-  {
-    w: 2,
-    h: 2,
-    x: 6,
-    y: 0,
-    i: "cl-metric-channel-mix",
-    minW: 2,
-    minH: 2,
-    maxH: 6,
-    moved: false,
-    static: false,
-    resizeHandles: ["se"],
-  },
-  {
-    w: 2,
-    h: 2,
-    x: 8,
-    y: 0,
-    i: "cl-metric-new-vs-repeat",
-    minW: 2,
-    minH: 2,
-    maxH: 6,
-    moved: false,
-    static: false,
-    resizeHandles: ["se"],
-  },
-  {
-    w: 2,
-    h: 2,
-    x: 10,
-    y: 0,
-    i: "cl-metric-inflow-rate",
-    minW: 2,
-    minH: 2,
-    maxH: 6,
-    moved: false,
-    static: false,
-    resizeHandles: ["se"],
-  },
-  {
-    w: 6,
-    h: 6,
-    x: 0,
-    y: 2,
-    i: "cl-list-categories",
-    minW: 4,
-    minH: 6,
-    maxH: 12,
-    moved: false,
-    static: false,
-    resizeHandles: ["se"],
-  },
-  {
-    w: 6,
-    h: 6,
-    x: 6,
-    y: 2,
-    i: "cl-table-resolution",
-    minW: 4,
-    minH: 6,
-    maxH: 12,
-    moved: false,
-    static: false,
-    resizeHandles: ["se"],
-  },
-  {
-    w: 6,
-    h: 6,
-    x: 0,
-    y: 8,
-    i: "cl-table-locality",
-    minW: 4,
-    minH: 6,
-    maxH: 12,
-    moved: false,
-    static: false,
-    resizeHandles: ["se"],
-  },
-  {
-    w: 6,
-    h: 6,
-    x: 6,
-    y: 8,
-    i: "cl-table-workflow-stages",
-    minW: 4,
-    minH: 6,
-    maxH: 12,
-    moved: false,
-    static: false,
-    resizeHandles: ["se"],
-  },
-  {
-    w: 4,
-    h: 6,
-    x: 0,
-    y: 14,
-    i: "cl-chart-categories",
-    minW: 3,
-    minH: 4,
-    maxH: 10,
-    moved: false,
-    static: false,
-    resizeHandles: ["se"],
-  },
-  {
-    w: 4,
-    h: 6,
-    x: 4,
-    y: 14,
-    i: "cl-chart-wards",
-    minW: 3,
-    minH: 4,
-    maxH: 10,
-    moved: false,
-    static: false,
-    resizeHandles: ["se"],
-  },
-  {
-    w: 4,
-    h: 6,
-    x: 8,
-    y: 14,
-    i: "cl-chart-dow",
-    minW: 3,
-    minH: 4,
-    maxH: 10,
-    moved: false,
-    static: false,
-    resizeHandles: ["se"],
-  },
-  {
-    w: 8,
-    h: 7,
-    x: 0,
-    y: 20,
-    i: "cl-map-complaints",
-    minW: 4,
-    minH: 4,
-    maxH: 14,
-    moved: false,
-    static: false,
-    resizeHandles: ["se"],
-  },
-  ...DEMO_VIZ_DEFAULT_LAYOUT,
+  { i: "cl-metric-total-registered", x: 0, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "cl-metric-total-open", x: 2, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "cl-metric-total-resolved", x: 4, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "cl-metric-channel-mix", x: 6, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "cl-metric-new-vs-repeat", x: 8, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "cl-metric-inflow-rate", x: 10, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "cl-list-categories", x: 0, y: 2, w: 6, h: 4, minW: 4, minH: 4, maxW: 12, maxH: 12, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "cl-table-resolution", x: 6, y: 2, w: 6, h: 4, minW: 4, minH: 4, maxW: 12, maxH: 12, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "cl-table-locality", x: 0, y: 6, w: 6, h: 4, minW: 4, minH: 4, maxW: 12, maxH: 12, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "cl-table-workflow-stages", x: 6, y: 6, w: 6, h: 4, minW: 4, minH: 4, maxW: 12, maxH: 12, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "cl-chart-categories", x: 0, y: 10, w: 4, h: 6, minW: 3, minH: 6, maxW: 8, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "cl-chart-wards", x: 4, y: 10, w: 4, h: 6, minW: 3, minH: 4, maxW: 8, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "cl-chart-dow", x: 8, y: 10, w: 4, h: 6, minW: 3, minH: 4, maxW: 8, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "cl-map-complaints", x: 0, y: 16, w: 8, h: 7, minW: 4, minH: 4, maxW: 12, maxH: 14, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "demo-viz-pie", x: 8, y: 16, w: 4, h: 5, minW: 3, minH: 4, maxW: 6, maxH: 8, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "demo-viz-leaderboard", x: 8, y: 21, w: 4, h: 6, minW: 4, minH: 4, maxW: 8, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "demo-viz-number", x: 0, y: 23, w: 2, h: 3, minW: 2, minH: 3, maxW: 4, maxH: 4, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "demo-viz-sparkline", x: 2, y: 23, w: 3, h: 4, minW: 3, minH: 4, maxW: 6, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "demo-viz-gauge", x: 5, y: 23, w: 3, h: 4, minW: 3, minH: 4, maxW: 6, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "demo-viz-sla-toggle", x: 0, y: 27, w: 6, h: 5, minW: 4, minH: 4, maxW: 6, maxH: 8, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "demo-viz-bar", x: 6, y: 27, w: 6, h: 5, minW: 3, minH: 4, maxW: 8, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "demo-viz-line", x: 0, y: 32, w: 6, h: 6, minW: 3, minH: 4, maxW: 8, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "demo-viz-histogram", x: 6, y: 32, w: 6, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "demo-viz-map", x: 0, y: 38, w: 6, h: 6, minW: 4, minH: 5, maxW: 12, maxH: 14, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "demo-viz-stacked", x: 6, y: 38, w: 6, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "demo-viz-sla-risk", x: 0, y: 44, w: 12, h: 6, minW: 6, minH: 6, maxW: 12, maxH: 14, moved: false, static: false, resizeHandles: ["se"] },
 ];
 
 export const DROPPING_ITEM_ID = "__dropping-kpi__";
@@ -325,4 +165,24 @@ export function getDefaultChartItem(widgetId) {
   const defaults = DEFAULT_CHART_LAYOUT[widgetId];
   if (!defaults) return null;
   return { i: widgetId, ...defaults };
+}
+
+/**
+ * Current min/max size constraints for a widget, sourced from config.
+ * Applied at render time so resize limits always reflect the latest config —
+ * even for widgets persisted with older (looser) constraints — without
+ * touching the saved x/y/w/h.
+ */
+export function getSizeConstraints(widgetId) {
+  const source = isKpiWidget(widgetId)
+    ? getDefaultKpiLayoutItem(widgetId)
+    : DEFAULT_CHART_LAYOUT[widgetId];
+  if (!source) return {};
+
+  const constraints = {};
+  if (source.minW != null) constraints.minW = source.minW;
+  if (source.minH != null) constraints.minH = source.minH;
+  if (source.maxW != null) constraints.maxW = source.maxW;
+  if (source.maxH != null) constraints.maxH = source.maxH;
+  return constraints;
 }

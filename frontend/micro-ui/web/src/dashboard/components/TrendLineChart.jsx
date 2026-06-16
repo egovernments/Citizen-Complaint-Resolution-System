@@ -13,9 +13,9 @@ const TrendLineChart = ({ data }) => {
     stroke: { curve: "smooth", width: 3 },
     xaxis: { categories: data.months },
     yaxis: { title: { text: "Complaints" } },
-    colors: ["#0d9488", "#64748b"],
+    colors: ["var(--chart-1)", "var(--chart-2)"],
     legend: { position: "top", horizontalAlign: "right" },
-    grid: { borderColor: "#e2e8f0" },
+    grid: { borderColor: "var(--border)" },
     markers: { size: 4 },
     tooltip: { theme: "light" },
   };
