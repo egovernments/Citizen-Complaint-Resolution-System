@@ -636,8 +636,8 @@ services:
       JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
       CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: 'true'
       CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE: '123456'
-      EGOV_MOBILE_VALIDATION_DEFAULT_COUNTRY_CODE: '+91'
-      EGOV_MOBILE_VALIDATION_DEFAULT_REGEX: '^[6-9][0-9]{9}$'
+      EGOV_MOBILE_VALIDATION_DEFAULT_COUNTRY_CODE: '+251'
+      EGOV_MOBILE_VALIDATION_DEFAULT_REGEX: '^[79][0-9]{8}$'
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8107/user/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
