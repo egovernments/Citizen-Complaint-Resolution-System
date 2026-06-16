@@ -927,7 +927,9 @@ class PGRService {
 
   async upsertLocalizationMessage(tenantId, code, message, module = "digit-tenants", locale = "en_IN", authToken = null, userInfo = null) {
     try {
-      const url = `${config.egovServices.egovServicesHost}localization/messages/v1/_upsert`;
+      // Use sandboxHost if in sandbox mode, otherwise use egovServicesHost
+      const host = config.enableSandboxMode ? config.sandboxHost : config.egovServices.egovServicesHost;
+      const url = `${host}localization/messages/v1/_upsert`;
       
       const requestBody = {
         RequestInfo: {
