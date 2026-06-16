@@ -38,7 +38,7 @@ function Legend() {
 
 export default function OrgChartPage() {
   const navigate = useNavigate();
-  const { data: tenants } = useGetList<TenantRecord>('tenants', {
+  const { data: tenants, isLoading: tenantsLoading } = useGetList<TenantRecord>('tenants', {
     pagination: { page: 1, perPage: 1000 },
     sort: { field: 'code', order: 'ASC' },
   });
@@ -76,8 +76,10 @@ export default function OrgChartPage() {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <h1 className="text-xl font-semibold">Org Chart</h1>
         <div className="flex items-center gap-2">
-          <Select value={tenantId} onValueChange={setSelectedTenantId}>
-            <SelectTrigger className="w-[260px]"><SelectValue placeholder="Select a tenant…" /></SelectTrigger>
+          <Select value={tenantId} onValueChange={setSelectedTenantId} disabled={tenantsLoading}>
+            <SelectTrigger className="w-[260px]">
+              <SelectValue placeholder={tenantsLoading ? 'Loading tenants…' : 'Select a tenant…'} />
+            </SelectTrigger>
             <SelectContent>
               {(tenants ?? []).filter((t) => t.code).map((t) => (
                 <SelectItem key={t.code} value={t.code}>{t.name ?? t.code}</SelectItem>
@@ -114,8 +116,13 @@ export default function OrgChartPage() {
 
       <div className="flex flex-1 gap-3 min-h-0">
         <Card className="flex-1 min-w-0 overflow-hidden">
-          {!tenantId ? (
-            <div className="h-full grid place-items-center text-muted-foreground text-sm">Select a tenant to view its org chart.</div>
+          {tenantsLoading && !tenantId ? (
+            <div className="h-full grid place-items-center text-muted-foreground gap-2 text-sm">
+              <Loader2 className="w-6 h-6 animate-spin" />
+              Loading tenants…
+            </div>
+          ) : !tenantId ? (
+            <div className="h-full grid place-items-center text-muted-foreground text-sm">No tenants available.</div>
           ) : isLoading ? (
             <div className="h-full grid place-items-center text-muted-foreground"><Loader2 className="w-6 h-6 animate-spin" /></div>
           ) : isError ? (
