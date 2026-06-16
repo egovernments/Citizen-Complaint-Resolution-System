@@ -161,7 +161,9 @@ export default function OrgChartPage() {
                   minZoom={0.1}
                 >
                   <Background />
-                  <Controls>
+                  {/* Hide the default fit-view button — its frame icon reads as a
+                      second "fullscreen" button next to the real one below. */}
+                  <Controls showFitView={false}>
                     <ControlButton
                       onClick={toggleFullscreen}
                       title={isFullscreen ? 'Exit full screen' : 'Full screen'}
