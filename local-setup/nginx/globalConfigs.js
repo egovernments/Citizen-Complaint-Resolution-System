@@ -1,5 +1,5 @@
 var globalConfigs = (function () {
-  var stateTenantId = "pg";
+  var stateTenantId = "ke";
   var contextPath = "digit-ui";
   var gmaps_api_key = "";
   var finEnv = "dev";
@@ -10,7 +10,7 @@ var globalConfigs = (function () {
   var assetS3Bucket = "pg-egov-assets";
   var configModuleName = "commonMDMSConfig";
   var localeRegion = "IN";
-  var localeDefault = "ka";
+  var localeDefault = "en";
   var mdmsContext = "mdms-v2";
   var hrmsContext = "egov-hrms";
   var invalidEmployeeRoles = ["SYSTEM"];
@@ -22,7 +22,6 @@ var globalConfigs = (function () {
   var coreMobileConfigs = {
     mobilePrefix: "+254",
     mobileNumberPattern: "^0?[17][0-9]{8}$",
-    mobileNumberLength: 9,
     mobileNumberAllowedStartingCharacters: ["1", "7"]
   };
 
