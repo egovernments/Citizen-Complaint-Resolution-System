@@ -2,11 +2,8 @@ import React, { useMemo } from "react";
 import Chart from "react-apexcharts";
 import { DASHBOARD_FONT_FAMILY } from "../config/dashboardConfig";
 import { resolveDashboardCssColor } from "../config/chartColors";
-import {
-  getNumberTileValueClass,
-  VISUALIZATION_STYLES,
-  VIZ_TYPE,
-} from "../config/visualizationStyles";
+import { VISUALIZATION_STYLES, VIZ_TYPE } from "../config/visualizationStyles";
+import { getNumberTileValueClass } from "../config/kpiDisplay";
 import ResizeGrip from "./ResizeGrip";
 
 const SPARKLINE_HEIGHT = 22;
@@ -106,7 +103,7 @@ const KpiSparklineCard = ({
         {deltaDisplay ? (
           <div className={`${sparklineTile.delta} ${valueClass}`}>{deltaDisplay}</div>
         ) : loading ? (
-          <div className={`${sparklineTile.delta} dashboard-kpi-sparkline-delta--muted`}>…</div>
+          <div className={`${sparklineTile.delta} ${sparklineTile.deltaMuted}`}>…</div>
         ) : null}
       </div>
 

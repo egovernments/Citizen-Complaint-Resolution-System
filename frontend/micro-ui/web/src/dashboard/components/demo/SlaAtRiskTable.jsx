@@ -6,7 +6,7 @@ import {
   getDataTableThClass,
   getSlaRiskStatusPillClass,
   SLA_RISK_TABLE_STYLES,
-} from "../../config/dataTablePresentation";
+} from "../../config/visualizationStyles";
 
 const STATUS_LABELS = {
   in_progress: "In Progress",

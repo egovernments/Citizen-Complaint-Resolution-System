@@ -1,9 +1,6 @@
 import React from "react";
-import {
-  getNumberTileValueClass,
-  VISUALIZATION_STYLES,
-  VIZ_TYPE,
-} from "../config/visualizationStyles";
+import { VISUALIZATION_STYLES, VIZ_TYPE } from "../config/visualizationStyles";
+import { getNumberTileValueClass } from "../config/kpiDisplay";
 import ResizeGrip from "./ResizeGrip";
 
 const numberTile = VISUALIZATION_STYLES[VIZ_TYPE.NUMBER_TILE];
@@ -81,13 +78,13 @@ const KpiCard = ({
       ) : null}
 
       {hasList ? (
-        <div className="dashboard-kpi-list-body tw-mt-2 tw-min-h-0 tw-flex-1 tw-overflow-y-auto">
+        <div className={`${numberTile.listBody} tw-mt-2 tw-min-h-0 tw-flex-1 tw-overflow-y-auto`}>
           {listItems.length > 0 ? (
-            <ol className="dashboard-kpi-list tw-m-0 tw-list-none tw-space-y-1 tw-p-0">
+            <ol className={`${numberTile.list} tw-m-0 tw-list-none tw-space-y-1 tw-p-0`}>
               {listItems.map((item) => (
                 <li
                   key={`${item.rank}-${item.label}`}
-                  className="dashboard-kpi-list-item tw-flex tw-items-center tw-justify-between tw-gap-2 tw-rounded-sm tw-bg-muted tw-px-2 tw-py-1.5"
+                  className={`${numberTile.listItem} tw-flex tw-items-center tw-justify-between tw-gap-2 tw-rounded-sm tw-bg-muted tw-px-2 tw-py-1.5`}
                 >
                   <div className="tw-flex tw-min-w-0 tw-items-center tw-gap-1.5">
                     <span className="tw-flex tw-h-4 tw-w-4 tw-shrink-0 tw-items-center tw-justify-center tw-rounded-full tw-bg-muted tw-text-[9px] tw-font-bold tw-text-foreground">

@@ -2,6 +2,8 @@
  * KPI card presentation — thresholds, context lines, and list data sources.
  */
 
+import { VISUALIZATION_STYLES, VIZ_TYPE } from "./visualizationStyles";
+
 export const KPI_STATUS = {
   ON_TRACK: "on_track",
   NORMAL: "normal",
@@ -139,19 +141,31 @@ export function getStatusValueClass(status) {
   }
 }
 
+/** Value color for number tiles — threshold-driven, shared by every metric card. */
+export function getNumberTileValueClass(status, { unavailable = false } = {}) {
+  const styles = VISUALIZATION_STYLES[VIZ_TYPE.NUMBER_TILE];
+  if (unavailable) return styles.valueUnavailable;
+  return getStatusValueClass(status);
+}
+
 /** Delta arrow color — uses metric threshold when set, else treats volume increases as negative. */
 export function getSparklineDeltaClass(deltaPercent, metricId) {
+  const {
+    deltaMuted,
+    deltaNeutral,
+    deltaPositive,
+    deltaNegative,
+  } = VISUALIZATION_STYLES[VIZ_TYPE.NUMBER_TILE_SPARKLINE];
+
   if (deltaPercent == null || !Number.isFinite(deltaPercent)) {
-    return "dashboard-kpi-sparkline-delta--muted";
+    return deltaMuted;
   }
-  if (deltaPercent === 0) return "dashboard-kpi-sparkline-delta--neutral";
+  if (deltaPercent === 0) return deltaNeutral;
 
   const threshold = getKpiDisplayConfig(metricId).threshold;
   const higherIsBetter = threshold?.higherIsBetter ?? false;
   const improving = higherIsBetter ? deltaPercent > 0 : deltaPercent < 0;
-  return improving
-    ? "dashboard-kpi-sparkline-delta--positive"
-    : "dashboard-kpi-sparkline-delta--negative";
+  return improving ? deltaPositive : deltaNegative;
 }
 
 export function statusValueToCssColor(statusClass) {

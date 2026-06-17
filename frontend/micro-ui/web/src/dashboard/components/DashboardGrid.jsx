@@ -16,7 +16,14 @@ import {
 } from "../constants/layoutConfig";
 import { widgetMatchesSearch } from "../utils/dashboardSearch";
 import { isTableWidget, TABLE_WIDGET_CONFIG } from "../config/dashboardTables";
-import { VISUALIZATION_STYLES, VIZ_TYPE } from "../config/visualizationStyles";
+import {
+  SHARED_CHROME,
+  buildWidgetHeaderClassName,
+  getWidgetBodyClassName,
+  getWidgetScrollClassName,
+  isChartOverflowVisibleType,
+  VIZ_TYPE,
+} from "../config/visualizationStyles";
 import { isDemoTableWidget, isDemoVizWidget, hasCustomChrome } from "../config/demoVisualizations";
 import KpiCard from "./KpiCard";
 import KpiSparklineCard from "./KpiSparklineCard";
@@ -67,12 +74,16 @@ const WidgetRemoveButton = ({ label, onClick }) => (
   </button>
 );
 
-const WidgetHeader = ({ metric, subMetric, headerClassName = "dashboard-drag-handle" }) => (
+const WidgetHeader = ({
+  metric,
+  subMetric,
+  headerClassName = SHARED_CHROME.dragHandle,
+}) => (
   <header className={`${headerClassName} tw-min-w-0`}>
     <div className="tw-min-w-0 tw-flex-1">
-      <h2 className="dashboard-drag-handle-title">{metric}</h2>
+      <h2 className={SHARED_CHROME.dragHandleTitle}>{metric}</h2>
       {subMetric ? (
-        <p className="dashboard-drag-handle-subtitle">{subMetric}</p>
+        <p className={SHARED_CHROME.dragHandleSubtitle}>{subMetric}</p>
       ) : null}
     </div>
   </header>
@@ -82,23 +93,13 @@ const WidgetHeader = ({ metric, subMetric, headerClassName = "dashboard-drag-han
 const GRID_MARGIN = [16, 16];
 const RESIZE_HANDLES = ["se"];
 
-const CHART_OVERFLOW_VISIBLE_TYPES = new Set([
-  "bar-chart",
-  "horizontal-bar",
-  "line-chart",
-  "pie-chart",
-  "stacked-bar",
-  "histogram",
-  "sla-toggle",
-]);
-
 function gridItemClassName(widgetId) {
   if (isKpiWidget(widgetId)) return "dashboard-grid-item-kpi";
   if (isTableWidget(widgetId) || isDemoTableWidget(widgetId)) {
     return "dashboard-grid-item-chart-clipped";
   }
-  const type = WIDGETS[widgetId]?.type;
-  if (type === "bar-chart" || CHART_OVERFLOW_VISIBLE_TYPES.has(type)) {
+  const vizType = WIDGETS[widgetId]?.type;
+  if (vizType && isChartOverflowVisibleType(vizType)) {
     return "dashboard-grid-item-chart-visible";
   }
   if (isChartWidget(widgetId)) return "dashboard-grid-item-chart-clipped";
@@ -375,15 +376,8 @@ const DashboardGrid = ({
           {layout.map((item) => {
             const isKpi = isKpiWidget(item.i);
             const meta = WIDGETS[item.i];
+            const vizType = meta?.type;
             const isTable = isTableWidget(item.i) || isDemoTableWidget(item.i);
-            const isBarChart = meta?.type === "bar-chart";
-            const isHorizontalBar = meta?.type === "horizontal-bar";
-            const isStackedBar = meta?.type === "stacked-bar";
-            const isLineChart = meta?.type === "line-chart";
-            const isPieChart = meta?.type === "pie-chart";
-            const isHistogram = meta?.type === "histogram";
-            const isGauge = meta?.type === "gauge";
-            const isDataTable = isTable || meta?.type === "data-table";
             const customChrome = meta?.customChrome || hasCustomChrome(item.i);
             const isSearchMatch =
               !isSearchActive ||
@@ -425,59 +419,14 @@ const DashboardGrid = ({
                       <WidgetHeader
                         metric={meta.metric}
                         subMetric={meta.subMetric}
-                        headerClassName={
-                          isBarChart ||
-                          isHorizontalBar ||
-                          isStackedBar ||
-                          isLineChart ||
-                          isPieChart ||
-                          isHistogram ||
-                          isGauge ||
-                          isDataTable
-                            ? `dashboard-drag-handle ${
-                                isStackedBar
-                                  ? VISUALIZATION_STYLES[VIZ_TYPE.STACKED_BAR].header
-                                  : isHorizontalBar
-                                    ? VISUALIZATION_STYLES[VIZ_TYPE.HORIZONTAL_BAR].header
-                                    : isLineChart
-                                      ? VISUALIZATION_STYLES[VIZ_TYPE.LINE_CHART].header
-                                      : isPieChart
-                                        ? VISUALIZATION_STYLES[VIZ_TYPE.PIE_CHART].header
-                                        : isHistogram
-                                          ? VISUALIZATION_STYLES[VIZ_TYPE.HISTOGRAM].header
-                                          : isGauge
-                                            ? VISUALIZATION_STYLES[VIZ_TYPE.GAUGE].header
-                                        : isDataTable
-                                          ? VISUALIZATION_STYLES[VIZ_TYPE.DATA_TABLE].header
-                                  : VISUALIZATION_STYLES[VIZ_TYPE.BAR_CHART].header
-                              }`
-                            : "dashboard-drag-handle"
-                        }
+                        headerClassName={buildWidgetHeaderClassName(vizType)}
                       />
                     )}
                     <div
-                      className={
-                        isTable
-                          ? VISUALIZATION_STYLES[VIZ_TYPE.DATA_TABLE].body
-                          : isBarChart
-                            ? VISUALIZATION_STYLES[VIZ_TYPE.BAR_CHART].body
-                            : isHorizontalBar
-                              ? VISUALIZATION_STYLES[VIZ_TYPE.HORIZONTAL_BAR].body
-                            : isStackedBar
-                              ? VISUALIZATION_STYLES[VIZ_TYPE.STACKED_BAR].body
-                              : isLineChart
-                                ? VISUALIZATION_STYLES[VIZ_TYPE.LINE_CHART].body
-                                : isPieChart
-                                  ? VISUALIZATION_STYLES[VIZ_TYPE.PIE_CHART].body
-                                  : isHistogram
-                                    ? VISUALIZATION_STYLES[VIZ_TYPE.HISTOGRAM].body
-                                    : isGauge
-                                      ? VISUALIZATION_STYLES[VIZ_TYPE.GAUGE].body
-                              : "tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-hidden tw-p-4"
-                      }
+                      className={getWidgetBodyClassName(vizType, { isTable })}
                     >
                       {isTable ? (
-                        <div className={VISUALIZATION_STYLES[VIZ_TYPE.DATA_TABLE].scroll}>
+                        <div className={getWidgetScrollClassName()}>
                           {renderWidget(item.i)}
                         </div>
                       ) : (

@@ -2,6 +2,9 @@ import React, { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { getChartColor } from "../config/chartColors";
+import { VISUALIZATION_STYLES, VIZ_TYPE } from "../config/visualizationStyles";
+
+const mapStyles = VISUALIZATION_STYLES[VIZ_TYPE.MAP];
 
 const MAP_MARKER_COLOR = getChartColor(0);
 
@@ -80,7 +83,7 @@ export default function ComplaintMap({ pins = [] }) {
   return (
     <div
       ref={elRef}
-      className="tw-h-full tw-w-full tw-rounded"
+      className={`${mapStyles.container} tw-h-full tw-w-full tw-rounded`}
       style={{ minHeight: 220 }}
     />
   );

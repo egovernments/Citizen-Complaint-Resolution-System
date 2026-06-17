@@ -3,6 +3,9 @@
  */
 
 import { resolveDashboardCssColor } from "./chartColors";
+import { VISUALIZATION_STYLES, VIZ_TYPE } from "./visualizationStyles";
+
+const LINE_CHART_STYLES = VISUALIZATION_STYLES[VIZ_TYPE.LINE_CHART];
 
 export const LINE_CHART_MAX_SERIES = 4;
 export const LINE_CHART_STROKE_WIDTH = 2.5;
@@ -144,12 +147,12 @@ export function applyLineChartMarkerHoverState(
       colors[seriesIndex]
     ) {
       marker.style.fill = colors[seriesIndex];
-      marker.classList.add("dashboard-line-chart-marker-active");
+      marker.classList.add(LINE_CHART_STYLES.markerActive);
       return;
     }
 
     marker.style.fill = surfaceColor;
-    marker.classList.remove("dashboard-line-chart-marker-active");
+    marker.classList.remove(LINE_CHART_STYLES.markerActive);
   });
 }
 
@@ -182,13 +185,13 @@ export function buildLineChartTooltip() {
           if (value == null || Number.isNaN(Number(value))) return "";
           const name = names[index] ?? `Series ${index + 1}`;
           const color = palette[index] ?? palette[0];
-          return `<div class="dashboard-line-chart-tooltip-row" style="color:${color}">${name} : ${Math.round(Number(value))}</div>`;
+          return `<div class="${LINE_CHART_STYLES.tooltipRow}" style="color:${color}">${name} : ${Math.round(Number(value))}</div>`;
         })
         .join("");
 
-      return `<div class="dashboard-line-chart-tooltip">${
+      return `<div class="${LINE_CHART_STYLES.tooltip}">${
         label
-          ? `<div class="dashboard-line-chart-tooltip-title">${label}</div>`
+          ? `<div class="${LINE_CHART_STYLES.tooltipTitle}">${label}</div>`
           : ""
       }${rows}</div>`;
     },

@@ -1,5 +1,8 @@
 import React from "react";
-import { DATA_TABLE_STYLES } from "../config/dataTablePresentation";
+import {
+  DATA_TABLE_STYLES,
+  SHARED_CHROME,
+} from "../config/visualizationStyles";
 
 /**
  * Shared chrome for data-table widgets with custom headers (title + optional controls).
@@ -17,7 +20,7 @@ const DataTableChrome = ({
 
   return (
     <div className={styles.shell}>
-      <header className={`${styles.headerChrome} dashboard-drag-handle`}>
+      <header className={`${styles.headerChrome} ${SHARED_CHROME.dragHandle}`}>
         <h2 className={styles.title}>{title}</h2>
         {headerActions}
       </header>

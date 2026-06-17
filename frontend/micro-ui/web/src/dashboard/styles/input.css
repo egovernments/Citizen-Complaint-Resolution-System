@@ -130,7 +130,7 @@
   }
 
   .dashboard-widget-remove-btn {
-    @apply tw-absolute tw-right-1 tw-top-1 tw-z-10 tw-box-border tw-m-0 tw-inline-flex tw-h-6 tw-w-6 tw-cursor-pointer tw-items-center tw-justify-center tw-rounded-sm tw-border-0 tw-bg-transparent tw-p-0 tw-text-muted-foreground;
+    @apply tw-absolute tw-right-1 tw-top-1 tw-z-10 tw-box-border tw-m-0 tw-inline-flex tw-h-6 tw-w-6 tw-items-center tw-justify-center tw-rounded-sm tw-border-0 tw-bg-transparent tw-p-0 tw-text-muted-foreground;
     font: inherit;
     -webkit-appearance: none;
     appearance: none;
@@ -421,7 +421,7 @@
   .dashboard-widget-surface input,
   .dashboard-widget-surface select,
   .dashboard-widget-surface textarea {
-    cursor: pointer;
+    cursor: default;
   }
 
   .dashboard-widget-surface .dashboard-bar-chart-body,
@@ -925,8 +925,26 @@
     @apply tw-mt-0 tw-leading-none;
   }
 
+  /* Viz type: map — geographic distribution */
+  .dashboard-map {
+    min-height: 0;
+  }
+
+  .dashboard-map-body {
+    @apply tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-hidden tw-p-0;
+    padding-bottom: 1.125rem;
+  }
+
+  .dashboard-map-header {
+    @apply tw-border-b-0 tw-px-3 tw-pb-0 tw-pt-1.5;
+  }
+
+  .dashboard-map-header .dashboard-drag-handle-title {
+    @apply tw-leading-tight;
+  }
+
   .dashboard-pie-slice {
-    cursor: pointer;
+    cursor: default;
   }
 
   .dashboard-pie-tooltip {
@@ -1011,14 +1029,14 @@
   }
 
   .dashboard-view-toggle button {
-    cursor: pointer;
+    cursor: default;
   }
 
   .dashboard-sla-link {
     color: var(--chart-1);
     font-weight: 500;
     text-decoration: none;
-    cursor: pointer;
+    cursor: default;
   }
 
   .dashboard-sla-link:hover {
@@ -1085,7 +1103,7 @@
     background-repeat: no-repeat;
     background-size: 10px;
     border: 0;
-    cursor: pointer;
+    cursor: default;
     min-width: 7.5rem;
     padding-right: 1.5rem;
   }

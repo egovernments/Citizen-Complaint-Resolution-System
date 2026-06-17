@@ -18,7 +18,7 @@ import {
   resolveLineChartYAxisBounds,
   setLineChartMarkersVisible,
 } from "../config/lineChartPresentation";
-import { VISUALIZATION_STYLES, VIZ_TYPE } from "../config/visualizationStyles";
+import { VISUALIZATION_STYLES, VIZ_TYPE, SHARED_CHROME } from "../config/visualizationStyles";
 import { useChartContainerSize } from "../hooks/useChartContainerSize";
 import ViewToggle from "./demo/ViewToggle";
 
@@ -185,14 +185,14 @@ const LineChart = ({
     categories.length > 0 &&
     normalizedSeries.some((entry) => entry.data.some((value) => Number(value) > 0));
 
-  const lineChartClass = VISUALIZATION_STYLES[VIZ_TYPE.LINE_CHART].container;
+  const lineStyles = VISUALIZATION_STYLES[VIZ_TYPE.LINE_CHART];
   const showHeader = Boolean(headerTitle && periods);
 
   const chart = !hasData ? null : (
     <div
       ref={containerRef}
-      className={`${lineChartClass} tw-h-full tw-min-h-0 tw-w-full tw-flex-1 tw-overflow-visible${
-        isAnimating ? " dashboard-line-chart-animating" : ""
+      className={`${lineStyles.container} tw-h-full tw-min-h-0 tw-w-full tw-flex-1 tw-overflow-visible${
+        isAnimating ? ` ${lineStyles.animating}` : ""
       }`}
       style={markerStyleVars}
     >
@@ -217,8 +217,10 @@ const LineChart = ({
 
   return (
     <div className="tw-flex tw-h-full tw-min-h-0 tw-flex-col">
-      <header className="dashboard-line-chart-header-bar dashboard-drag-handle tw-flex tw-shrink-0 tw-items-center tw-justify-between tw-gap-3 tw-px-4 tw-pb-0 tw-pt-2.5 tw-pr-8">
-        <h2 className="dashboard-drag-handle-title">{headerTitle}</h2>
+      <header
+        className={`${lineStyles.headerBar} ${SHARED_CHROME.dragHandle} tw-flex tw-shrink-0 tw-items-center tw-justify-between tw-gap-3 tw-px-4 tw-pb-0 tw-pt-2.5 tw-pr-8`}
+      >
+        <h2 className={SHARED_CHROME.dragHandleTitle}>{headerTitle}</h2>
         <ViewToggle
           value={period}
           onChange={handlePeriodChange}
@@ -226,7 +228,7 @@ const LineChart = ({
           options={LINE_CHART_PERIOD_OPTIONS}
         />
       </header>
-      <div className="dashboard-line-chart-widget-body">{chart}</div>
+      <div className={lineStyles.widgetBody}>{chart}</div>
     </div>
   );
 };

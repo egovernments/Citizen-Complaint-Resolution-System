@@ -13,7 +13,7 @@ import {
   buildBarChartYAxis,
   getBarChartSeriesColor,
 } from "../config/barChartPresentation";
-import { VISUALIZATION_STYLES, VIZ_TYPE } from "../config/visualizationStyles";
+import { SHARED_CHROME, VISUALIZATION_STYLES, VIZ_TYPE } from "../config/visualizationStyles";
 import {
   resolveLabelSlotWidth,
   truncateCategoryLabel,
@@ -110,12 +110,12 @@ function ChartTooltipPortal({ tooltip }) {
 
   return createPortal(
     <div
-      className="dashboard-chart-tooltip"
+      className={SHARED_CHROME.chartTooltip}
       style={{ left: `${left}px`, top: `${top}px` }}
       role="tooltip"
     >
-      <p className="dashboard-chart-tooltip-title">{tooltip.label}</p>
-      <p className="dashboard-chart-tooltip-value">
+      <p className={SHARED_CHROME.chartTooltipTitle}>{tooltip.label}</p>
+      <p className={SHARED_CHROME.chartTooltipValue}>
         Count: <strong>{tooltip.value}</strong>
       </p>
     </div>,

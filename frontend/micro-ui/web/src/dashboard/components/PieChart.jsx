@@ -11,13 +11,13 @@ const PieChart = ({ data = [] }) => {
 
   const slices = useMemo(() => normalizePieChartData(data), [data]);
   const active = activeIndex != null ? slices[activeIndex] : null;
-  const pieClass = VISUALIZATION_STYLES[VIZ_TYPE.PIE_CHART].container;
+  const pieStyles = VISUALIZATION_STYLES[VIZ_TYPE.PIE_CHART];
   const valueLabelColor = getPieChartValueLabelColor();
 
   if (!slices.length) return null;
 
   return (
-    <div className={`${pieClass} tw-flex tw-h-full tw-min-h-0 tw-w-full tw-flex-col`}>
+    <div className={`${pieStyles.container} tw-flex tw-h-full tw-min-h-0 tw-w-full tw-flex-col`}>
       <div className="tw-relative tw-min-h-0 tw-flex-1">
         <svg
           viewBox={`0 0 ${PIE_CHART_VIEWBOX.width} ${PIE_CHART_VIEWBOX.height}`}
@@ -32,7 +32,7 @@ const PieChart = ({ data = [] }) => {
                 fill={slice.color}
                 stroke="var(--surface)"
                 strokeWidth={2}
-                className="dashboard-pie-slice"
+                className={pieStyles.slice}
                 onMouseEnter={() => setActiveIndex(slice.index)}
                 onMouseLeave={() => setActiveIndex(null)}
               />
@@ -67,7 +67,7 @@ const PieChart = ({ data = [] }) => {
         </svg>
         {active ? (
           <div
-            className="dashboard-pie-tooltip"
+            className={pieStyles.tooltip}
             style={{
               left: `${(active.hoverX / PIE_CHART_VIEWBOX.width) * 100}%`,
               top: `${(active.hoverY / PIE_CHART_VIEWBOX.height) * 100}%`,

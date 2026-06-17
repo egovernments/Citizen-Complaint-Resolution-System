@@ -185,15 +185,6 @@
   -webkit-font-smoothing: antialiased;
 }
 
-.dashboard-widget{
-  height: 100%;
-  overflow: hidden;
-  border-radius: 0.25rem;
-  border-width: 1px;
-  border-color: var(--border);
-  background-color: var(--surface);
-}
-
 .dashboard-drag-handle{
   display: flex;
   flex-shrink: 0;
@@ -247,7 +238,6 @@
   display: inline-flex;
   height: 1.5rem;
   width: 1.5rem;
-  cursor: pointer;
   align-items: center;
   justify-content: center;
   border-radius: 4px;
@@ -752,7 +742,7 @@
   .dashboard-widget-surface input,
   .dashboard-widget-surface select,
   .dashboard-widget-surface textarea {
-  cursor: pointer;
+  cursor: default;
 }
 
 .dashboard-widget-surface .dashboard-bar-chart-body,
@@ -1428,8 +1418,36 @@
   line-height: 1;
 }
 
+/* Viz type: map — geographic distribution */
+
+.dashboard-map {
+  min-height: 0;
+}
+
+.dashboard-map-body{
+  display: flex;
+  min-height: 0px;
+  flex: 1 1 0%;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0px;
+  padding-bottom: 1.125rem;
+}
+
+.dashboard-map-header{
+  border-bottom-width: 0px;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  padding-bottom: 0px;
+  padding-top: 0.375rem;
+}
+
+.dashboard-map-header .dashboard-drag-handle-title{
+  line-height: 1.25;
+}
+
 .dashboard-pie-slice {
-  cursor: pointer;
+  cursor: default;
 }
 
 .dashboard-pie-tooltip {
@@ -1514,14 +1532,14 @@
 }
 
 .dashboard-view-toggle button {
-  cursor: pointer;
+  cursor: default;
 }
 
 .dashboard-sla-link {
   color: var(--chart-1);
   font-weight: 500;
   text-decoration: none;
-  cursor: pointer;
+  cursor: default;
 }
 
 .dashboard-sla-link:hover {
@@ -1614,10 +1632,6 @@
   margin-bottom: 1rem;
 }
 
-.tw-ml-2{
-  margin-left: 0.5rem;
-}
-
 .tw-ml-4{
   margin-left: 1rem;
 }
@@ -1632,13 +1646,6 @@
 
 .tw-mt-2{
   margin-top: 0.5rem;
-}
-
-.tw-line-clamp-2{
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
 }
 
 .tw-block{
@@ -1677,10 +1684,6 @@
   height: 1rem;
 }
 
-.tw-h-5{
-  height: 1.25rem;
-}
-
 .tw-h-full{
   height: 100%;
 }
@@ -1707,10 +1710,6 @@
 
 .tw-w-4{
   width: 1rem;
-}
-
-.tw-w-5{
-  width: 1.25rem;
 }
 
 .tw-w-60{
@@ -2188,10 +2187,6 @@
 
 .tw-text-status-resolved{
   color: var(--status-resolved);
-}
-
-.tw-text-surface{
-  color: var(--surface);
 }
 
 .tw-text-white{

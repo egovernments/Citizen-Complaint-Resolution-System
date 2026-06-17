@@ -3,7 +3,7 @@ import {
   DATA_TABLE_STYLES,
   getDataTableTdClass,
   getDataTableThClass,
-} from "../config/dataTablePresentation";
+} from "../config/visualizationStyles";
 
 const TrendCell = ({ value }) => {
   const { muted, trendUp, trendDown } = DATA_TABLE_STYLES;

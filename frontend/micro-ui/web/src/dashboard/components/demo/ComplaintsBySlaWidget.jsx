@@ -4,8 +4,9 @@ import {
   DATA_TABLE_STYLES,
   getDataTableTdClass,
   getDataTableThClass,
-} from "../../config/dataTablePresentation";
-import { VISUALIZATION_STYLES, VIZ_TYPE } from "../../config/visualizationStyles";
+  VISUALIZATION_STYLES,
+  VIZ_TYPE,
+} from "../../config/visualizationStyles";
 import DataTableChrome from "../DataTableChrome";
 import DepartmentBarChart from "../DepartmentBarChart";
 import ViewToggle from "./ViewToggle";
