@@ -6,7 +6,6 @@ import { CardLabel } from "@egovernments/digit-ui-react-components";
 import { useTranslation } from "react-i18next";
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
-import keNairobiWardsFallback from "../assets/boundaries/ke_nairobi_wards.json";
 import useWardHighlightColor from "../hooks/pgr/useWardHighlightColor";
 import useTenantBoundaries from "../hooks/pgr/useTenantBoundaries";
 
@@ -39,12 +38,13 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
   // in Swahili).
   const nominatimLang = ((i18n?.language || Digit?.StoreData?.getCurrentLanguage?.() || "en") + "").split("_")[0] || "en";
 
-  // Tenant ward polygons (boundary-service when MAP_TENANT is set, else
-  // the bundled static Nairobi wards). Null while the fetch is in flight.
+  // Tenant ward polygons from boundary-service for the configured MAP_TENANT.
+  // Null while the fetch is in flight; empty collection when the tenant has
+  // no usable geometry (no overlay — never another tenant's static wards).
   const tenantBoundaries = useTenantBoundaries();
 
   const matchedWard = useMemo(() => {
-    const wardCollection = tenantBoundaries || keNairobiWardsFallback;
+    const wardCollection = tenantBoundaries;
     if (!latitude || !longitude || !wardCollection?.features?.length) return null;
     const pt = turfPoint([longitude, latitude]);
     return wardCollection.features.find((f) => {
