@@ -1,6 +1,7 @@
 import { DigitShow } from '@/admin';
 import { FieldSection, FieldRow, JsonViewer } from '@/admin/fields';
 import { EntityLink } from '@/components/ui/EntityLink';
+import { BoundaryMap } from '@/components/ui/BoundaryMap';
 import { useShowController } from 'ra-core';
 
 export function BoundaryShow() {
@@ -21,6 +22,12 @@ export function BoundaryShow() {
           {rec.additionalDetails != null && (
             <FieldSection title="Additional Details">
               <JsonViewer data={rec.additionalDetails} />
+            </FieldSection>
+          )}
+
+          {rec.geometry != null && (
+            <FieldSection title="Map">
+              <BoundaryMap data={rec.geometry as Parameters<typeof BoundaryMap>[0]['data']} />
             </FieldSection>
           )}
 
