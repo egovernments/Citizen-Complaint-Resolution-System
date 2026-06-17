@@ -131,7 +131,7 @@ export function JurisdictionEditor({
         // lives under ke.nairobi, BOMET under ke). HRMS stores each
         // jurisdiction with the boundary's *home* tenantId, not the session's.
         // Fall back to the session tenant only if we can't resolve.
-        const rowTenant = (r as Record<string, unknown>).tenantId;
+        const rowTenant = (r as unknown as Record<string, unknown>).tenantId;
         const resolvedTenant = typeof rowTenant === 'string' && rowTenant ? rowTenant : tenantId;
         return {
           ...r,
@@ -169,13 +169,54 @@ export function JurisdictionEditor({
     writeRows(next);
   };
 
-  const getBoundaryOptions = (hierarchyType: string, boundaryType: string): BoundaryRecord[] => {
-    if (!boundaryType) return [];
-    const inner = boundariesByHierarchyAndType.byHierarchy.get(hierarchyType);
-    if (inner && inner.size > 0) {
-      return inner.get(boundaryType) ?? [];
+  const boundaryByCode = useMemo(() => {
+    const m = new Map<string, BoundaryRecord>();
+    for (const b of boundaries ?? []) if (b.code) m.set(b.code, b);
+    return m;
+  }, [boundaries]);
+
+  // Walk up parentCode from the deepest stored boundary so the cascade
+  // pre-fills the selection at every level on edit.
+  const reconstructPath = (boundaryCode: string): Record<string, string> => {
+    const path: Record<string, string> = {};
+    let cur = boundaryCode ? boundaryByCode.get(boundaryCode) : undefined;
+    let guard = 0;
+    while (cur && guard++ < 25) {
+      if (cur.boundaryType) path[cur.boundaryType] = cur.code;
+      cur = cur.parentCode ? boundaryByCode.get(cur.parentCode) : undefined;
     }
-    return boundariesByHierarchyAndType.byTypeOnly.get(boundaryType) ?? [];
+    return path;
+  };
+
+  // Boundaries selectable at one level: of that type in the hierarchy, filtered
+  // to the chosen parent (root level lists all of its type).
+  const boundariesForLevel = (
+    hierType: string,
+    levelType: string,
+    parentCode?: string,
+  ): BoundaryRecord[] => {
+    const inner = boundariesByHierarchyAndType.byHierarchy.get(hierType);
+    let candidates =
+      inner && inner.size > 0
+        ? inner.get(levelType) ?? []
+        : boundariesByHierarchyAndType.byTypeOnly.get(levelType) ?? [];
+    if (parentCode) candidates = candidates.filter((b) => b.parentCode === parentCode);
+    return candidates;
+  };
+
+  // Picking a boundary at a level makes it the deepest stored selection;
+  // deeper levels reset automatically (the path is derived from row.boundary).
+  const selectLevel = (index: number, levelType: string, code: string) => {
+    const picked = boundaryByCode.get(code);
+    updateRow(index, {
+      boundary: code,
+      boundaryType: levelType,
+      // Correct any stale stored hierarchy (e.g. "ADMIN") to the boundary's real one.
+      ...(picked?.hierarchyType ? { hierarchyType: picked.hierarchyType } : {}),
+      ...(picked?.tenantId
+        ? ({ tenantId: picked.tenantId } as Partial<EmployeeJurisdiction>)
+        : {}),
+    });
   };
 
   return (
@@ -197,14 +238,26 @@ export function JurisdictionEditor({
       ) : (
         <div className="space-y-2">
           {rows.map((row, index) => {
-            const hierarchyType = row.hierarchyType ?? '';
-            const boundaryType = row.boundaryType ?? '';
-            const boundary = row.boundary ?? '';
-
-            const boundaryTypes = hierarchyType
-              ? boundaryTypesByHierarchy.get(hierarchyType) ?? []
-              : [];
-            const boundaryOptions = getBoundaryOptions(hierarchyType, boundaryType);
+            const storedHier = row.hierarchyType ?? '';
+            // Old jurisdictions (bulk import) often store a stale hierarchy name
+            // like "ADMIN" that doesn't match the tenant's real boundary
+            // hierarchy (e.g. "Bomet_Hierarchy") — so the cascade rendered empty.
+            // Infer the effective hierarchy from the stored boundary, then fall
+            // back to the sole hierarchy, so existing jurisdictions still show.
+            const knownHiers = new Set(hierarchyChoices.map((c) => c.value));
+            const boundaryHier = row.boundary
+              ? boundaryByCode.get(row.boundary)?.hierarchyType
+              : undefined;
+            const hierarchyType =
+              storedHier && knownHiers.has(storedHier)
+                ? storedHier
+                : boundaryHier && knownHiers.has(boundaryHier)
+                  ? boundaryHier
+                  : hierarchyChoices.length === 1
+                    ? hierarchyChoices[0].value
+                    : storedHier;
+            const levels = hierarchyType ? boundaryTypesByHierarchy.get(hierarchyType) ?? [] : [];
+            const path = reconstructPath(row.boundary ?? '');
 
             return (
               <div key={index} className="relative border rounded p-3 pr-10 bg-muted/30">
@@ -216,7 +269,7 @@ export function JurisdictionEditor({
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   <div>
                     <Label className="mb-1.5 block text-xs font-medium text-foreground">
                       Hierarchy
@@ -247,69 +300,53 @@ export function JurisdictionEditor({
                     </Select>
                   </div>
 
-                  <div>
-                    <Label className="mb-1.5 block text-xs font-medium text-foreground">
-                      Boundary Type
-                    </Label>
-                    <Select
-                      value={boundaryType}
-                      onValueChange={(value) =>
-                        updateRow(index, { boundaryType: value, boundary: '' })
-                      }
-                      disabled={!hierarchyType || boundaryTypes.length === 0}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select boundary type..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {boundaryTypes.map((t) => (
-                          <SelectItem key={t} value={t} data-value={t}>
-                            {t}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <Label className="mb-1.5 block text-xs font-medium text-foreground">
-                      Boundary
-                    </Label>
-                    <Select
-                      value={boundary}
-                      onValueChange={(value) => {
-                        const picked = boundaryOptions.find((b) => b.code === value);
-                        updateRow(index, {
-                          boundary: value,
-                          // Inherit the selected boundary's home tenant so HRMS
-                          // can resolve it — boundaries at ke.nairobi are not
-                          // visible under ke and vice versa.
-                          ...(picked?.tenantId
-                            ? ({ tenantId: picked.tenantId } as Partial<EmployeeJurisdiction>)
-                            : {}),
-                        });
-                      }}
-                      disabled={!boundaryType || boundariesLoading}
-                    >
-                      <SelectTrigger>
-                        <SelectValue
-                          placeholder={boundariesLoading ? 'Loading...' : 'Select boundary...'}
-                        />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {boundaryOptions.map((b) => (
-                          <SelectItem key={b.code} value={b.code} data-value={b.code}>
-                            {b.name ?? b.code}
-                            {b.tenantId && b.tenantId !== tenantId ? (
-                              <span className="ml-2 text-xs text-muted-foreground">
-                                · {b.tenantId}
-                              </span>
-                            ) : null}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {/* One dropdown per hierarchy level (e.g. Province → District →
+                      Municipality). Each level is filtered to the parent picked
+                      above it; depth adapts to whatever the hierarchy defines.
+                      The deepest pick becomes the stored jurisdiction boundary. */}
+                  {levels.map((levelType, li) => {
+                    const parentType = li > 0 ? levels[li - 1] : null;
+                    const parentCode = parentType ? path[parentType] : undefined;
+                    const gatedOff = li > 0 && !parentCode;
+                    const opts = boundariesForLevel(hierarchyType, levelType, parentCode);
+                    const selected = path[levelType] ?? '';
+                    return (
+                      <div key={levelType}>
+                        <Label className="mb-1.5 block text-xs font-medium text-foreground">
+                          {levelType}
+                        </Label>
+                        <Select
+                          value={selected}
+                          onValueChange={(code) => selectLevel(index, levelType, code)}
+                          disabled={!hierarchyType || gatedOff || boundariesLoading}
+                        >
+                          <SelectTrigger>
+                            <SelectValue
+                              placeholder={
+                                gatedOff
+                                  ? `Select ${parentType} first`
+                                  : boundariesLoading
+                                    ? 'Loading...'
+                                    : `Select ${levelType}...`
+                              }
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {opts.map((b) => (
+                              <SelectItem key={b.code} value={b.code} data-value={b.code}>
+                                {b.name ?? b.code}
+                                {b.tenantId && b.tenantId !== tenantId ? (
+                                  <span className="ml-2 text-xs text-muted-foreground">
+                                    · {b.tenantId}
+                                  </span>
+                                ) : null}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    );
+                  })}
                 </div>
 
               </div>

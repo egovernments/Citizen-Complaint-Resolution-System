@@ -130,6 +130,35 @@ async function hrmsGetList(client: DigitApiClient, config: ResourceConfig, tenan
   return [];
 }
 
+// Fetch ONE employee with the same child-tenant fallback hrmsGetList uses.
+// When logged in at the state tenant (e.g. `ke`), employees live under city
+// tenants (`ke.ige`); searching only the session tenant misses them, so the
+// Show/Edit pages couldn't load the employee or its jurisdictions.
+async function hrmsFindOne(
+  client: DigitApiClient,
+  tenantId: string,
+  id: string,
+): Promise<Record<string, unknown> | undefined> {
+  const searchAt = async (t: string) => {
+    let r = await client.employeeSearch(t, { uuids: [id] });
+    if (!r.length) r = await client.employeeSearch(t, { codes: [id] });
+    return r[0];
+  };
+  const direct = await searchAt(tenantId);
+  if (direct) return direct;
+  if (!tenantId.includes('.')) {
+    const tenantRecords = await client.mdmsSearch(tenantId, 'tenant.tenants', { limit: 200 });
+    const cityTenants = tenantRecords
+      .filter((r) => r.isActive && r.data?.code && String(r.data.code).startsWith(`${tenantId}.`))
+      .map((r) => String(r.data.code));
+    for (const ct of cityTenants) {
+      const hit = await searchAt(ct).catch(() => undefined);
+      if (hit) return hit;
+    }
+  }
+  return undefined;
+}
+
 async function boundaryGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string): Promise<RaRecord[]> {
   function flattenTrees(trees: Record<string, unknown>[]): RaRecord[] {
     const flat: RaRecord[] = [];
@@ -480,12 +509,12 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         return { data: found };
       }
       if (config.type === 'hrms') {
-        // idField is 'uuid', so search by uuids first; fall back to codes for backward compat
-        const byUuid = await client.employeeSearch(tenantId, { uuids: [String(params.id)] });
-        if (byUuid.length) return { data: normalizeRecord(byUuid[0], config) };
-        const byCodes = await client.employeeSearch(tenantId, { codes: [String(params.id)] });
-        if (byCodes.length) return { data: normalizeRecord(byCodes[0], config) };
-        throw new Error(`Employee not found: ${params.id}`);
+        // Search the session tenant, then fall back to child tenants (mirrors
+        // hrmsGetList) so a state-tenant admin can open a city-tenant employee
+        // with its full record — assignments + jurisdictions included.
+        const found = await hrmsFindOne(client, tenantId, String(params.id));
+        if (!found) throw new Error(`Employee not found: ${params.id}`);
+        return { data: normalizeRecord(found, config) };
       }
       if (config.type === 'pgr') {
         const wrappers = await client.pgrSearch(tenantId, { serviceRequestId: String(params.id) });
