@@ -10,7 +10,9 @@ const columns: DigitColumn[] = [
 ];
 
 export function BoundaryList() {
-  const [showMap, setShowMap] = useState(false);
+  // Default the map open — boundaries are inherently spatial and the map is
+  // the most useful view; the toggle lets users collapse it for the raw list.
+  const [showMap, setShowMap] = useState(true);
 
   return (
     <div className="space-y-4">

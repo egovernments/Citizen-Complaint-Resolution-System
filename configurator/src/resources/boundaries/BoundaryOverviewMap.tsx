@@ -9,55 +9,57 @@ type Feature = {
   properties: { code: string; name: string; boundaryType?: string };
 };
 
-// "See everything we just created" map for the management view. Resolves the
-// logged-in tenant, walks its boundary hierarchy, and draws the leaf-level
-// polygons (wards) highlighted on an OSM basemap. Leaves only — drawing every
-// level stacks overlapping fills; the lowest level is the meaningful outline.
+// boundary-service emits a unit-square placeholder for boundaries created
+// without real geometry. Filter those out so the map shows only real outlines.
+const DEGENERATE_SPAN_DEG = 0.001;
+function ringIsReal(ring: unknown): boolean {
+  if (!Array.isArray(ring) || ring.length === 0) return false;
+  if (ring.length > 5) return true;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const pt of ring as number[][]) {
+    if (!Array.isArray(pt) || pt.length < 2) return false;
+    minX = Math.min(minX, pt[0]); maxX = Math.max(maxX, pt[0]);
+    minY = Math.min(minY, pt[1]); maxY = Math.max(maxY, pt[1]);
+  }
+  return maxX - minX >= DEGENERATE_SPAN_DEG || maxY - minY >= DEGENERATE_SPAN_DEG;
+}
+function hasRealGeometry(g?: { type: string; coordinates: unknown }): boolean {
+  if (!g || !Array.isArray(g.coordinates)) return false;
+  if (g.type === 'Polygon') return ringIsReal((g.coordinates as unknown[])[0]);
+  if (g.type === 'MultiPolygon') {
+    return (g.coordinates as unknown[][]).some((poly) => Array.isArray(poly) && ringIsReal(poly[0]));
+  }
+  return false;
+}
+
+// "See everything we created" map for the Management view. Fetches every
+// boundary ENTITY for the logged-in tenant (one /boundary/_search, no codes)
+// and highlights the ones with real geometry on an OSM basemap. Entity-based
+// rather than relationship-based so it works even when the hierarchy tree is
+// incomplete or inconsistent — geometry lives on the entity, not the tree.
 export function BoundaryOverviewMap() {
   const tenantId = apiClient.getAuth().tenantId;
-  const [hierarchies, setHierarchies] = useState<{ hierarchyType: string }[]>([]);
-  const [selected, setSelected] = useState<string>('');
   const [features, setFeatures] = useState<Feature[]>([]);
   const [status, setStatus] = useState<'idle' | 'loading' | 'empty' | 'ready' | 'error'>('idle');
-  const [count, setCount] = useState<{ leaves: number; withGeom: number }>({ leaves: 0, withGeom: 0 });
+  const [count, setCount] = useState<{ total: number; withGeom: number }>({ total: 0, withGeom: 0 });
 
-  // Load hierarchies once, default to the first.
   useEffect(() => {
     if (!tenantId) return;
-    boundaryService
-      .getHierarchies(tenantId)
-      .then((hs) => {
-        setHierarchies(hs);
-        if (hs.length > 0) setSelected(hs[0].hierarchyType);
-      })
-      .catch(() => setStatus('error'));
-  }, [tenantId]);
-
-  // Fetch tree + geometries for the selected hierarchy.
-  useEffect(() => {
-    if (!tenantId || !selected) return;
     let cancelled = false;
     setStatus('loading');
     (async () => {
       try {
-        const tree = await boundaryService.searchBoundaries(tenantId, { hierarchyType: selected });
-        // Leaves = codes that are never a parent of another node.
-        const parents = new Set(tree.map((b) => b.parent).filter(Boolean) as string[]);
-        const leaves = tree.filter((b) => !parents.has(b.code));
-        const geomByCode = await boundaryService.getGeometriesByCodes(
-          tenantId,
-          leaves.map((b) => b.code),
-        );
+        const entities = await boundaryService.getAllBoundaryEntities(tenantId);
         if (cancelled) return;
-        const feats: Feature[] = leaves
-          .filter((b) => geomByCode[b.code])
-          .map((b) => ({
+        const feats: Feature[] = entities
+          .filter((e) => hasRealGeometry(e.geometry))
+          .map((e) => ({
             type: 'Feature',
-            geometry: geomByCode[b.code],
-            properties: { code: b.code, name: b.name || b.code, boundaryType: b.boundaryType },
+            geometry: e.geometry as { type: string; coordinates: unknown },
+            properties: { code: e.code, name: e.code, boundaryType: e.boundaryType },
           }));
         setFeatures(feats);
-        setCount({ leaves: leaves.length, withGeom: feats.length });
+        setCount({ total: entities.length, withGeom: feats.length });
         setStatus(feats.length > 0 ? 'ready' : 'empty');
       } catch {
         if (!cancelled) setStatus('error');
@@ -66,7 +68,7 @@ export function BoundaryOverviewMap() {
     return () => {
       cancelled = true;
     };
-  }, [tenantId, selected]);
+  }, [tenantId]);
 
   if (!tenantId) return null;
 
@@ -74,22 +76,9 @@ export function BoundaryOverviewMap() {
     <div className="space-y-3">
       <div className="flex items-center gap-3">
         <span className="text-sm font-medium">Boundary map</span>
-        {hierarchies.length > 1 && (
-          <select
-            value={selected}
-            onChange={(e) => setSelected(e.target.value)}
-            className="border rounded px-2 py-1 text-sm"
-          >
-            {hierarchies.map((h) => (
-              <option key={h.hierarchyType} value={h.hierarchyType}>
-                {h.hierarchyType}
-              </option>
-            ))}
-          </select>
-        )}
         {status === 'ready' && (
           <span className="text-xs text-gray-500">
-            {count.withGeom} of {count.leaves} boundaries with geometry
+            {count.withGeom} of {count.total} boundaries with map geometry
           </span>
         )}
       </div>
@@ -98,7 +87,7 @@ export function BoundaryOverviewMap() {
       {status === 'error' && <div className="text-sm text-red-600">Could not load boundaries for this tenant.</div>}
       {status === 'empty' && (
         <div className="text-sm text-gray-500">
-          No boundaries with real geometry yet. Run Phase 2 to populate them.
+          No boundaries with real map geometry yet. Run Phase 2 (Fetch from OpenStreetMap) to populate them.
         </div>
       )}
       {status === 'ready' && (

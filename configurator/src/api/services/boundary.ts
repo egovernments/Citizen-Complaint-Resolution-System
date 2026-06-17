@@ -229,6 +229,26 @@ export const boundaryService = {
     return byCode;
   },
 
+  // Fetch ALL boundary entities for a tenant in one shot. /boundary/_search
+  // with only tenantId (no codes) returns every entity (capped ~300 by the
+  // service) with its geometry — the same call the MCP's boundary_entity_search
+  // makes. Used by the Management overview map so it renders whatever has real
+  // geometry, independent of the (sometimes inconsistent) relationship tree.
+  async getAllBoundaryEntities(
+    tenantId: string,
+    limit = 300,
+  ): Promise<Array<{ code: string; geometry?: { type: string; coordinates: unknown }; boundaryType?: string }>> {
+    const qs = `tenantId=${encodeURIComponent(tenantId)}&limit=${limit}`;
+    try {
+      const response = await apiClient.post(`${ENDPOINTS.BOUNDARY_SEARCH}?${qs}`, {
+        RequestInfo: apiClient.buildRequestInfo(),
+      });
+      return (response.Boundary as Array<{ code: string; geometry?: { type: string; coordinates: unknown }; boundaryType?: string }> | undefined) ?? [];
+    } catch {
+      return [];
+    }
+  },
+
   async boundaryEntityExists(tenantId: string, code: string): Promise<boolean> {
     try {
       const response = await apiClient.post(
