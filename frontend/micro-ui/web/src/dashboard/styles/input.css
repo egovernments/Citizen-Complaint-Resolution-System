@@ -669,8 +669,8 @@
   }
 
   .dashboard-sla-status-pill--in-progress {
-    background-color: color-mix(in srgb, var(--chart-2) 14%, transparent);
-    color: var(--chart-2);
+    background-color: color-mix(in srgb, var(--status-progress) 14%, transparent);
+    color: var(--status-progress);
   }
 
   .dashboard-viz-chart-1 {

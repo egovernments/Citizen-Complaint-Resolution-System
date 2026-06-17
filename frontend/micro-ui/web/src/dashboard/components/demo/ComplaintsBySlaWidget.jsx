@@ -2,6 +2,8 @@ import React, { useMemo, useState } from "react";
 import Chart from "react-apexcharts";
 import { DASHBOARD_FONT_FAMILY } from "../../config/dashboardConfig";
 import { getChartColor } from "../../config/chartColors";
+import { useChartContainerSize } from "../../hooks/useChartContainerSize";
+import { buildXAxisLabelOptions } from "../../utils/barChartXAxis";
 import ViewToggle from "./ViewToggle";
 
 const SLA_BUCKETS = [
@@ -47,10 +49,17 @@ const SlaBucketTable = ({ rows }) => (
 
 const ComplaintsBySlaWidget = () => {
   const [view, setView] = useState("table");
+  const { containerRef, containerSize } = useChartContainerSize();
+  const { width: containerWidth, height: containerHeight } = containerSize;
 
   const categories = SLA_BUCKETS.map((b) => b.label);
   const values = SLA_BUCKETS.map((b) => b.count);
   const colors = SLA_BUCKETS.map((b) => b.color);
+
+  const xAxisLabels = useMemo(
+    () => buildXAxisLabelOptions(categories, containerWidth),
+    [categories, containerWidth]
+  );
 
   const chartOptions = useMemo(
     () => ({
@@ -71,7 +80,7 @@ const ComplaintsBySlaWidget = () => {
       legend: { show: false },
       xaxis: {
         categories,
-        labels: { style: { fontSize: "10px" } },
+        labels: xAxisLabels,
       },
       yaxis: {
         labels: { style: { fontSize: "10px" } },
@@ -82,7 +91,7 @@ const ComplaintsBySlaWidget = () => {
       },
       tooltip: { theme: "light" },
     }),
-    [categories, colors]
+    [categories, colors, xAxisLabels]
   );
 
   const series = useMemo(() => [{ name: "Complaints", data: values }], [values]);
@@ -104,8 +113,17 @@ const ComplaintsBySlaWidget = () => {
         {view === "table" ? (
           <SlaBucketTable rows={SLA_BUCKETS} />
         ) : (
-          <div className="tw-h-full tw-min-h-0 tw-w-full">
-            <Chart options={chartOptions} series={series} type="bar" height="100%" width="100%" />
+          <div ref={containerRef} className="tw-h-full tw-min-h-0 tw-w-full">
+            {containerHeight > 0 && containerWidth > 0 ? (
+              <Chart
+                key={`${containerWidth}-${xAxisLabels.show}-${categories.join("|")}`}
+                options={chartOptions}
+                series={series}
+                type="bar"
+                height={containerHeight}
+                width="100%"
+              />
+            ) : null}
           </div>
         )}
       </div>

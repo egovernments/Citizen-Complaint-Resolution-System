@@ -1,14 +1,22 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import Chart from "react-apexcharts";
 import { DASHBOARD_FONT_FAMILY } from "../config/dashboardConfig";
+import { useChartContainerSize } from "../hooks/useChartContainerSize";
+import {
+  resolveLabelSlotWidth,
+  shouldShowXAxisLabels,
+  truncateCategoryLabel,
+  Y_AXIS_GUTTER_PX,
+} from "../utils/barChartXAxis";
 
 const MAX_BAR_WIDTH_PX = 44;
 const SPARSE_CATEGORY_THRESHOLD = 4;
 const GROUP_SLOT_WIDTH_PX = 72;
-const Y_AXIS_GUTTER_PX = 40;
 /** Reserved space below the plot for horizontal x-axis labels. */
 const XAXIS_LABEL_HEIGHT_PX = 48;
+const XAXIS_LABEL_HEIGHT_COMPACT_PX = 26;
+const XAXIS_LABEL_HEIGHT_HIDDEN_PX = 4;
 const TOOLTIP_OFFSET = 12;
 const TOOLTIP_EST_WIDTH = 280;
 const TOOLTIP_EST_HEIGHT = 56;
@@ -56,17 +64,6 @@ function resolveBarGroupLayout(categoryCount, containerWidth, bottomPad) {
   };
 }
 
-function truncateCategoryLabel(label, slotWidthPx) {
-  const text = String(label ?? "").trim() || "—";
-  if (!slotWidthPx) return text;
-  // ~6px per character at the 10px label font; reserve an 8px gutter so
-  // neighbouring labels never touch. Truncate to whatever actually fits the
-  // category slot instead of forcing a fixed minimum that overflows.
-  const maxChars = Math.max(3, Math.floor((slotWidthPx - 8) / 6));
-  if (text.length <= maxChars) return text;
-  return `${text.slice(0, Math.max(maxChars - 1, 2))}…`;
-}
-
 function resolveTooltipPosition(clientX, clientY) {
   const margin = TOOLTIP_OFFSET;
   const maxLeft = window.innerWidth - TOOLTIP_EST_WIDTH - margin;
@@ -112,8 +109,7 @@ function ChartTooltipPortal({ tooltip }) {
 }
 
 const DepartmentBarChart = ({ data, categoryOrder, compact = false }) => {
-  const containerRef = useRef(null);
-  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  const { containerRef, containerSize } = useChartContainerSize();
   const [tooltip, setTooltip] = useState(null);
 
   const chartData = useMemo(
@@ -131,11 +127,25 @@ const DepartmentBarChart = ({ data, categoryOrder, compact = false }) => {
   const containerWidth = containerSize.width;
   const containerHeight = containerSize.height;
 
+  const labelSlotWidth = useMemo(
+    () => resolveLabelSlotWidth(categoryCount, containerWidth),
+    [categoryCount, containerWidth]
+  );
+
+  const showXAxisLabels = useMemo(
+    () => shouldShowXAxisLabels(categories, labelSlotWidth),
+    [categories, labelSlotWidth]
+  );
+
   // At small heights the fixed x-axis label reserve and tick count would crush
   // the plot area (squished bars, overlapping y-axis labels). Scale them down so
-  // a short chart still renders cleanly.
+  // a short chart still renders cleanly — or drop labels entirely when they won't fit.
   const isShort = containerHeight > 0 && containerHeight < 200;
-  const xAxisLabelHeight = isShort ? 26 : XAXIS_LABEL_HEIGHT_PX;
+  const xAxisLabelHeight = showXAxisLabels
+    ? isShort
+      ? XAXIS_LABEL_HEIGHT_COMPACT_PX
+      : XAXIS_LABEL_HEIGHT_PX
+    : XAXIS_LABEL_HEIGHT_HIDDEN_PX;
   const yTickAmount = isShort ? 3 : compact ? 4 : 5;
 
   const { gridPadding, slotWidth } = useMemo(
@@ -190,7 +200,7 @@ const DepartmentBarChart = ({ data, categoryOrder, compact = false }) => {
         categories,
         tickPlacement: "on",
         labels: {
-          show: true,
+          show: showXAxisLabels,
           rotate: 0,
           rotateAlways: false,
           trim: false,
@@ -198,7 +208,7 @@ const DepartmentBarChart = ({ data, categoryOrder, compact = false }) => {
           maxHeight: xAxisLabelHeight,
           offsetY: 2,
           style: { fontSize: "10px" },
-          formatter: (value) => truncateCategoryLabel(value, slotWidth),
+          formatter: (value) => truncateCategoryLabel(value, labelSlotWidth),
         },
         axisBorder: { show: false },
         axisTicks: { show: false },
@@ -231,29 +241,12 @@ const DepartmentBarChart = ({ data, categoryOrder, compact = false }) => {
       gridPadding,
       handleDataPointEnter,
       handleDataPointLeave,
-      slotWidth,
+      showXAxisLabels,
+      labelSlotWidth,
       xAxisLabelHeight,
       yTickAmount,
     ]
   );
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return undefined;
-
-    const updateSize = () => {
-      const { width, height } = el.getBoundingClientRect();
-      setContainerSize({
-        width: Math.floor(width),
-        height: Math.floor(height),
-      });
-    };
-
-    updateSize();
-    const observer = new ResizeObserver(updateSize);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
 
   useEffect(() => () => setTooltip(null), []);
 
@@ -267,7 +260,7 @@ const DepartmentBarChart = ({ data, categoryOrder, compact = false }) => {
       >
         {containerHeight > 0 && containerWidth > 0 ? (
           <Chart
-            key={`${containerHeight}-${containerWidth}-${categories.join("|")}`}
+            key={`${containerHeight}-${containerWidth}-${showXAxisLabels}-${categories.join("|")}`}
             options={options}
             series={series}
             type="bar"
