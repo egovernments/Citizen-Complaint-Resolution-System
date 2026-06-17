@@ -1,12 +1,13 @@
 import React, { useMemo, useState } from "react";
 import Chart from "react-apexcharts";
 import { DASHBOARD_FONT_FAMILY } from "../../config/dashboardConfig";
+import { getChartColor } from "../../config/chartColors";
 import ViewToggle from "./ViewToggle";
 
 const SLA_BUCKETS = [
-  { id: "within", label: "Within SLA", count: 11, color: "var(--status-resolved)" },
-  { id: "breaching", label: "Breaching SLA", count: 15, color: "var(--status-progress)" },
-  { id: "breached", label: "Breached SLA", count: 34, color: "var(--status-breach)" },
+  { id: "within", label: "Within SLA", count: 11, color: getChartColor(0) },
+  { id: "breaching", label: "Breaching SLA", count: 15, color: getChartColor(1) },
+  { id: "breached", label: "Breached SLA", count: 34, color: getChartColor(2) },
 ];
 
 const SlaBucketTable = ({ rows }) => (

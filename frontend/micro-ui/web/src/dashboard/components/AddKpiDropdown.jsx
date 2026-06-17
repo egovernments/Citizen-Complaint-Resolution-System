@@ -83,7 +83,15 @@ function MetricIcon({ kind }) {
   );
 }
 
-const AddKpiDropdown = ({ visibleLayoutIds, onAddWidget, open, onOpenChange, containerRef }) => {
+const AddKpiDropdown = ({
+  visibleLayoutIds,
+  onAddWidget,
+  onDragWidgetStart,
+  onDragWidgetEnd,
+  open,
+  onOpenChange,
+  containerRef,
+}) => {
   const panelRef = useRef(null);
 
   const availableItems = useMemo(() => {
@@ -120,6 +128,12 @@ const AddKpiDropdown = ({ visibleLayoutIds, onAddWidget, open, onOpenChange, con
 
   if (!open) return null;
 
+  const handleDragStart = (event, widgetId) => {
+    event.dataTransfer.setData("text/plain", widgetId);
+    event.dataTransfer.effectAllowed = "copy";
+    onDragWidgetStart?.(widgetId);
+  };
+
   return (
     <div
       ref={panelRef}
@@ -137,23 +151,30 @@ const AddKpiDropdown = ({ visibleLayoutIds, onAddWidget, open, onOpenChange, con
         ) : (
           availableItems.map((item) => (
             <li key={item.id}>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  onAddWidget(item.id);
-                  onOpenChange(false);
-                }}
-                className="dashboard-add-kpi-item tw-flex tw-w-full tw-items-center tw-gap-2.5 tw-border-0 tw-bg-transparent tw-px-3 tw-py-2 tw-text-left"
+              <div
+                draggable
+                onDragStart={(event) => handleDragStart(event, item.id)}
+                onDragEnd={() => onDragWidgetEnd?.()}
+                className="dashboard-add-kpi-item tw-flex tw-cursor-grab tw-items-center tw-gap-2.5 tw-px-3 tw-py-2 active:tw-cursor-grabbing"
               >
                 <MetricIcon kind={iconKind(item)} />
-                <span className="tw-min-w-0 tw-flex-1 tw-truncate tw-text-[12px] tw-text-foreground">
-                  {shortLabel(item)}
-                </span>
-                <span className="tw-shrink-0 tw-text-[10px] tw-font-semibold tw-uppercase tw-tracking-wide tw-text-muted-foreground">
-                  Stat +
-                </span>
-              </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    onAddWidget(item.id);
+                    onOpenChange(false);
+                  }}
+                  className="tw-flex tw-min-w-0 tw-flex-1 tw-items-center tw-gap-2.5 tw-border-0 tw-bg-transparent tw-p-0 tw-text-left"
+                >
+                  <span className="tw-min-w-0 tw-flex-1 tw-truncate tw-text-[12px] tw-text-foreground">
+                    {shortLabel(item)}
+                  </span>
+                  <span className="tw-shrink-0 tw-text-[10px] tw-font-semibold tw-uppercase tw-tracking-wide tw-text-muted-foreground">
+                    Stat +
+                  </span>
+                </button>
+              </div>
             </li>
           ))
         )}

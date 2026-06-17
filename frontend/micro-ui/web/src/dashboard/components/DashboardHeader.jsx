@@ -44,11 +44,15 @@ const DashboardHeader = ({
   visibleLayoutIds,
   onAddWidget,
   onResetLayout,
+  onDragWidgetStart,
+  onDragWidgetEnd,
+  searchQuery,
+  onSearchQueryChange,
+  onExport,
   filters,
   filterOptions,
 }) => {
   const [addKpiOpen, setAddKpiOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const addKpiRef = useRef(null);
   const productLabel = useMemo(() => getProductLabel(), []);
   const subtitle = useMemo(
@@ -79,7 +83,7 @@ const DashboardHeader = ({
             <input
               type="search"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => onSearchQueryChange(e.target.value)}
               placeholder="Search complaints, wards, citizens."
               className="dashboard-header-search-input"
             />
@@ -99,6 +103,8 @@ const DashboardHeader = ({
             <AddKpiDropdown
               visibleLayoutIds={visibleLayoutIds}
               onAddWidget={onAddWidget}
+              onDragWidgetStart={onDragWidgetStart}
+              onDragWidgetEnd={onDragWidgetEnd}
               open={addKpiOpen}
               onOpenChange={setAddKpiOpen}
               containerRef={addKpiRef}
@@ -116,6 +122,7 @@ const DashboardHeader = ({
 
           <button
             type="button"
+            onClick={onExport}
             className="dashboard-header-btn dashboard-header-export"
             title="Export dashboard"
           >

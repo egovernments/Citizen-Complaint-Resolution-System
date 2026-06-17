@@ -1,12 +1,6 @@
 import React, { useMemo, useState } from "react";
 
-const DEFAULT_COLORS = [
-  "var(--chart-1)",
-  "var(--chart-2)",
-  "var(--chart-3)",
-  "var(--chart-4)",
-  "var(--chart-5)",
-];
+import { getChartColor } from "../../config/chartColors";
 
 const CX = 160;
 const CY = 118;
@@ -62,7 +56,7 @@ const ChannelDonutChart = ({ data = [] }) => {
     const total = data.reduce((sum, item) => sum + item.count, 0) || 1;
     let cursor = 0;
     return data.map((item, index) => {
-      const color = item.color || DEFAULT_COLORS[index % DEFAULT_COLORS.length];
+      const color = item.color || getChartColor(index);
       const sweep = (item.count / total) * 360;
       const start = cursor;
       const end = cursor + sweep;

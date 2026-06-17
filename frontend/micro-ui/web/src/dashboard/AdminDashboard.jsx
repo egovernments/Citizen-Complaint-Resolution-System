@@ -1,11 +1,14 @@
-import React, { useCallback, useEffect, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import "./styles/dashboard.css";
 import DashboardLayout from "./components/DashboardLayout";
 import DashboardGrid from "./components/DashboardGrid";
 import { buildAllKpiCardData } from "./config/kpiQueries";
+import { isKpiWidget } from "./constants/layoutConfig";
 import { useDashboardLayout } from "./hooks/useDashboardLayout";
 import { useDashboardData } from "./hooks/useDashboardData";
 import { useDashboardFilters } from "./hooks/useDashboardFilters";
+import { downloadDashboardExport } from "./utils/exportDashboard";
+import { countMatchingWidgets } from "./utils/dashboardSearch";
 
 const AdminDashboard = () => {
   const { filters, setFilter, clearFilters, applyFilterOptions, resolveSubMetricId } =
@@ -38,6 +41,7 @@ const AdminDashboard = () => {
     layout,
     onDragStop,
     onResizeStop,
+    onLayoutChange,
     resetLayout,
     removeWidgetFromLayout,
     addKpiToLayout,
@@ -45,18 +49,60 @@ const AdminDashboard = () => {
     visibleLayoutIds,
   } = useDashboardLayout();
 
-  const handleDropKpi = useCallback(
-    (widgetId, position) => {
-      addKpiToLayout(widgetId, position);
-    },
-    [addKpiToLayout]
+  const [searchQuery, setSearchQuery] = useState("");
+  const [draggingWidgetId, setDraggingWidgetId] = useState(null);
+
+  const searchContext = useMemo(
+    () => ({ kpiCardData, chartData }),
+    [kpiCardData, chartData]
   );
+
+  const matchingWidgetCount = useMemo(
+    () => countMatchingWidgets(layout, searchQuery, searchContext),
+    [layout, searchQuery, searchContext]
+  );
+
+  const handleDropWidget = useCallback(
+    (widgetId, position) => {
+      if (isKpiWidget(widgetId)) {
+        addKpiToLayout(widgetId, position);
+        return;
+      }
+      addWidgetToLayout(widgetId, position);
+    },
+    [addKpiToLayout, addWidgetToLayout]
+  );
+
+  const handleExternalDragEnd = useCallback(() => {
+    setDraggingWidgetId(null);
+  }, []);
+
+  // Safety net: HTML5 dragend always fires, even when drop is outside the grid.
+  useEffect(() => {
+    if (!draggingWidgetId) return undefined;
+    window.addEventListener("dragend", handleExternalDragEnd);
+    return () => window.removeEventListener("dragend", handleExternalDragEnd);
+  }, [draggingWidgetId, handleExternalDragEnd]);
+
+  const handleExport = useCallback(() => {
+    downloadDashboardExport({
+      layout,
+      kpiCardData,
+      chartData,
+      filters,
+    });
+  }, [layout, kpiCardData, chartData, filters]);
 
   return (
     <DashboardLayout
       visibleLayoutIds={visibleLayoutIds}
       onAddWidget={addWidgetToLayout}
       onResetLayout={resetLayout}
+      onDragWidgetStart={setDraggingWidgetId}
+      onDragWidgetEnd={handleExternalDragEnd}
+      searchQuery={searchQuery}
+      onSearchQueryChange={setSearchQuery}
+      onExport={handleExport}
       filters={filters}
       onFilterChange={setFilter}
       onClearFilters={clearFilters}
@@ -87,17 +133,28 @@ const AdminDashboard = () => {
           </button>
         </div>
       ) : (
-        <DashboardGrid
-          layout={layout}
-          onDragStop={onDragStop}
-          onResizeStop={onResizeStop}
-          onRemoveWidget={removeWidgetFromLayout}
-          onDropKpi={handleDropKpi}
-          draggingKpiId={null}
-          kpiCardData={kpiCardData}
-          chartData={chartData}
-          loading={loading}
-        />
+        <>
+          {searchQuery.trim() && matchingWidgetCount === 0 ? (
+            <p className="tw-mb-3 tw-text-[12px] tw-text-muted-foreground">
+              No widgets match &ldquo;{searchQuery.trim()}&rdquo;.
+            </p>
+          ) : null}
+          <DashboardGrid
+            layout={layout}
+            onDragStop={onDragStop}
+            onResizeStop={onResizeStop}
+            onLayoutChange={onLayoutChange}
+            onRemoveWidget={removeWidgetFromLayout}
+            onDropWidget={handleDropWidget}
+            onExternalDragEnd={handleExternalDragEnd}
+            draggingWidgetId={draggingWidgetId}
+            searchQuery={searchQuery}
+            searchContext={searchContext}
+            kpiCardData={kpiCardData}
+            chartData={chartData}
+            loading={loading}
+          />
+        </>
       )}
     </DashboardLayout>
   );

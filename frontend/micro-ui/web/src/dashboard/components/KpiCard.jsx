@@ -86,7 +86,7 @@ const KpiCard = ({
                   className="dashboard-kpi-list-item tw-flex tw-items-center tw-justify-between tw-gap-2 tw-rounded-sm tw-bg-muted tw-px-2 tw-py-1.5"
                 >
                   <div className="tw-flex tw-min-w-0 tw-items-center tw-gap-1.5">
-                    <span className="tw-flex tw-h-4 tw-w-4 tw-shrink-0 tw-items-center tw-justify-center tw-rounded-full tw-bg-primary tw-text-[9px] tw-font-bold tw-text-primary-foreground">
+                    <span className="tw-flex tw-h-4 tw-w-4 tw-shrink-0 tw-items-center tw-justify-center tw-rounded-full tw-bg-muted tw-text-[9px] tw-font-bold tw-text-foreground">
                       {item.rank}
                     </span>
                     <span

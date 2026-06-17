@@ -1,6 +1,9 @@
 import React, { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { getChartColor } from "../config/chartColors";
+
+const MAP_MARKER_COLOR = getChartColor(0);
 
 // Bomet town — the map opens centred here regardless of pin spread.
 const BOMET_CENTER = [-0.7833, 35.3416];
@@ -63,9 +66,9 @@ export default function ComplaintMap({ pins = [] }) {
     pins.forEach((p) => {
       L.circleMarker([p.lat, p.lng], {
         radius: 6,
-        color: "var(--primary)",
+        color: MAP_MARKER_COLOR,
         weight: 1,
-        fillColor: "var(--primary)",
+        fillColor: MAP_MARKER_COLOR,
         fillOpacity: 0.65,
       })
         .bindPopup(createPopupContent(p))

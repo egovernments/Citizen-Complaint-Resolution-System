@@ -2,9 +2,11 @@ import React, { useMemo } from "react";
 import Chart from "react-apexcharts";
 import { DASHBOARD_FONT_FAMILY } from "../../config/dashboardConfig";
 
+import { getChartColor } from "../../config/chartColors";
+
 const SparklineNumberTile = ({ value, label, delta, deltaLabel = "WoW", sparkline = [] }) => {
   const up = delta >= 0;
-  const deltaClass = up ? "tw-text-status-resolved" : "tw-text-status-breach";
+  const deltaColor = up ? getChartColor(2) : getChartColor(0);
 
   const chartOptions = useMemo(
     () => ({
@@ -40,7 +42,10 @@ const SparklineNumberTile = ({ value, label, delta, deltaLabel = "WoW", sparklin
         <div className="tw-text-[36px] tw-font-semibold tw-tabular-nums tw-leading-none tw-text-foreground">
           {value}
         </div>
-        <div className={`tw-pb-1 tw-text-[12px] tw-font-semibold tw-tabular-nums ${deltaClass}`}>
+        <div
+          className="tw-pb-1 tw-text-[12px] tw-font-semibold tw-tabular-nums"
+          style={{ color: deltaColor }}
+        >
           {up ? "↑" : "↓"} {Math.abs(delta).toFixed(1)}% {deltaLabel}
         </div>
       </div>

@@ -1,9 +1,10 @@
 import React from "react";
+import { getChartColor } from "../../config/chartColors";
 
 const DemoGauge = ({ value = 0, target = 90, label = "SLA compliance" }) => {
   const pct = Math.min(100, Math.max(0, value));
   const onTrack = pct >= target;
-  const barColor = onTrack ? "var(--status-resolved)" : "var(--primary)";
+  const barColor = onTrack ? getChartColor(2) : getChartColor(0);
 
   return (
     <div className="tw-flex tw-h-full tw-min-h-0 tw-flex-col tw-justify-center tw-gap-4">
@@ -27,7 +28,7 @@ const DemoGauge = ({ value = 0, target = 90, label = "SLA compliance" }) => {
           <span>0%</span>
           <span
             className="tw-font-medium"
-            style={{ color: onTrack ? "var(--status-resolved)" : undefined }}
+            style={{ color: onTrack ? getChartColor(2) : undefined }}
           >
             {onTrack ? "On track" : `${target - pct}% below goal`}
           </span>

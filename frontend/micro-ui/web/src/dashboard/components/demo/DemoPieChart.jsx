@@ -2,12 +2,7 @@ import React, { useMemo } from "react";
 import Chart from "react-apexcharts";
 import { DASHBOARD_FONT_FAMILY } from "../../config/dashboardConfig";
 
-const PIE_COLORS = [
-  "var(--chart-1)",
-  "var(--chart-2)",
-  "var(--chart-3)",
-  "var(--chart-4)",
-];
+import { PIE_CHART_COLORS } from "../../config/chartColors";
 
 const DemoPieChart = ({ data = [] }) => {
   const labels = data.map((d) => d.label);
@@ -20,7 +15,7 @@ const DemoPieChart = ({ data = [] }) => {
         fontFamily: DASHBOARD_FONT_FAMILY,
       },
       labels,
-      colors: PIE_COLORS,
+      colors: PIE_CHART_COLORS,
       legend: {
         position: "bottom",
         fontSize: "11px",

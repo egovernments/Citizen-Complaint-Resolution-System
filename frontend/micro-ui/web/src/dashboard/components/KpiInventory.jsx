@@ -164,7 +164,9 @@ const KpiInventory = ({
                         {section.metrics.map((metric) =>
                           renderInventoryItem(metric, { draggable: true })
                         )}
-                        {section.widgets.map((widget) => renderInventoryItem(widget))}
+                        {section.widgets.map((widget) =>
+                          renderInventoryItem(widget, { draggable: true })
+                        )}
                       </ul>
                     )}
                   </div>

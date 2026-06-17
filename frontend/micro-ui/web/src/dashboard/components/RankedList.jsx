@@ -1,4 +1,5 @@
 import React from "react";
+import { getChartColor } from "../config/chartColors";
 
 const RankedList = ({ items }) => (
   <ol className="tw-m-0 tw-list-none tw-w-full tw-space-y-1 tw-p-0">
@@ -8,7 +9,10 @@ const RankedList = ({ items }) => (
         className="tw-flex tw-items-center tw-justify-between tw-rounded-sm tw-bg-muted tw-py-1.5"
       >
         <div className="tw-flex tw-min-w-0 tw-items-center tw-gap-2">
-          <span className="tw-flex tw-h-5 tw-w-5 tw-flex-shrink-0 tw-items-center tw-justify-center tw-rounded-full tw-bg-primary tw-text-[10px] tw-font-bold tw-text-primary-foreground">
+          <span
+            className="tw-flex tw-h-5 tw-w-5 tw-flex-shrink-0 tw-items-center tw-justify-center tw-rounded-full tw-text-[10px] tw-font-bold tw-text-surface"
+            style={{ backgroundColor: getChartColor(item.rank - 1) }}
+          >
             {item.rank}
           </span>
           <span

@@ -98,7 +98,7 @@ const SlaAtRiskTable = () => {
                   <td className="dashboard-table-td">
                     <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-1.5">
                       <span className="dashboard-sla-breach-pill">{row.slaLabel}</span>
-                      <span className="tw-font-medium tw-text-status-breach">{row.slaOver}</span>
+                      <span className="dashboard-sla-overdue">{row.slaOver}</span>
                     </div>
                   </td>
                   <td className="dashboard-table-td">

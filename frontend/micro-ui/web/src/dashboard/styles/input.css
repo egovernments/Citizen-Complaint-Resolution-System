@@ -218,7 +218,7 @@
   }
 
   .dashboard-header-search-input {
-    @apply tw-box-border tw-m-0 tw-block tw-h-8 tw-w-56 tw-rounded-sm tw-border tw-border-border tw-bg-surface tw-py-0 tw-pl-8 tw-pr-3 tw-text-[12px] tw-leading-none tw-text-foreground placeholder:tw-text-muted-foreground focus:tw-border-primary focus:tw-outline-none;
+    @apply tw-box-border tw-m-0 tw-block tw-h-8 tw-w-56 tw-rounded-sm tw-border tw-border-border tw-bg-surface tw-py-0 tw-pl-8 tw-pr-3 tw-text-[12px] tw-leading-none tw-text-foreground placeholder:tw-text-muted-foreground focus:tw-border-foreground focus:tw-outline-none;
   }
 
   .dashboard-header-search-input:focus {
@@ -242,7 +242,7 @@
   }
 
   .dashboard-header-controls .dashboard-add-kpi-trigger:hover {
-    @apply tw-border-primary tw-text-primary;
+    @apply tw-border-foreground tw-text-foreground;
     background-color: color-mix(in srgb, var(--muted) 50%, transparent);
   }
 
@@ -287,7 +287,7 @@
   }
 
   .dashboard-filter-inline-date {
-    @apply tw-box-border tw-m-0 tw-block tw-h-7 tw-min-h-7 tw-max-h-7 tw-w-[7.25rem] tw-rounded-sm tw-border tw-border-border tw-bg-surface tw-py-0 tw-px-2 tw-text-[12px] tw-leading-none tw-text-foreground focus:tw-border-primary focus:tw-outline-none;
+    @apply tw-box-border tw-m-0 tw-block tw-h-7 tw-min-h-7 tw-max-h-7 tw-w-[7.25rem] tw-rounded-sm tw-border tw-border-border tw-bg-surface tw-py-0 tw-px-2 tw-text-[12px] tw-leading-none tw-text-foreground focus:tw-border-foreground focus:tw-outline-none;
     color-scheme: light;
     font-family: inherit;
   }
@@ -313,7 +313,7 @@
   }
 
   .dashboard-filter-inline-select {
-    @apply tw-box-border tw-m-0 tw-h-7 tw-min-h-7 tw-max-h-7 tw-min-w-[7.5rem] tw-appearance-none tw-rounded-sm tw-border tw-border-border tw-bg-surface tw-py-0 tw-px-2 tw-pr-7 tw-text-[12px] tw-leading-none tw-text-foreground focus:tw-border-primary focus:tw-outline-none;
+    @apply tw-box-border tw-m-0 tw-h-7 tw-min-h-7 tw-max-h-7 tw-min-w-[7.5rem] tw-appearance-none tw-rounded-sm tw-border tw-border-border tw-bg-surface tw-py-0 tw-px-2 tw-pr-7 tw-text-[12px] tw-leading-none tw-text-foreground focus:tw-border-foreground focus:tw-outline-none;
     font-family: inherit;
   }
 
@@ -359,7 +359,10 @@
     min-height: 1.75rem;
   }
 
-  .layout .react-grid-item.dashboard-grid-item-kpi,
+  .layout .react-grid-item.dashboard-grid-item-kpi {
+    overflow: hidden;
+  }
+
   .layout .react-grid-item.dashboard-grid-item-chart-visible {
     overflow: visible;
   }
@@ -386,14 +389,14 @@
   }
 
   .tw-group:hover .dashboard-resize-grip-line {
-    stroke: var(--brand-teal, #0d9488);
+    stroke: var(--chart-1);
     opacity: 0.9;
   }
 
   .dashboard-kpi-widget:hover .dashboard-kpi-card {
-    border-color: color-mix(in srgb, var(--primary) 40%, transparent);
-    background-color: color-mix(in srgb, var(--primary) 5%, transparent);
-    box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 10%, transparent);
+    border-color: color-mix(in srgb, var(--foreground) 18%, transparent);
+    background-color: var(--surface);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--foreground) 6%, transparent);
   }
 
   .dashboard-table-body {
@@ -466,7 +469,7 @@
   }
 
   .dashboard-root table.dashboard-table tbody tr.dashboard-table-row-highlight td.dashboard-table-td {
-    background-color: color-mix(in srgb, var(--status-breach) 8%, transparent) !important;
+    background-color: color-mix(in srgb, var(--chart-1) 8%, transparent) !important;
   }
 
   .dashboard-root table.dashboard-table col.dashboard-table-col-fixed {
@@ -482,21 +485,22 @@
   }
 
   .dashboard-table-badge {
-    @apply tw-shrink-0 tw-text-[8px] tw-font-bold tw-uppercase tw-tracking-wide tw-text-status-breach;
+    @apply tw-shrink-0 tw-text-[8px] tw-font-bold tw-uppercase tw-tracking-wide;
+    color: var(--chart-4);
   }
 
   .dashboard-table-row-highlight {
-    background-color: color-mix(in srgb, var(--status-breach) 8%, transparent);
+    background-color: color-mix(in srgb, var(--chart-1) 8%, transparent);
   }
 
   .dashboard-table-trend-up {
     @apply tw-font-semibold;
-    color: var(--dashboard-status-resolved, #059669);
+    color: var(--chart-3);
   }
 
   .dashboard-table-trend-down {
     @apply tw-font-semibold;
-    color: var(--dashboard-status-breach, #dc2626);
+    color: var(--chart-1);
   }
 
   .dashboard-table-muted {
@@ -625,7 +629,7 @@
   }
 
   .dashboard-sla-link {
-    color: var(--primary);
+    color: var(--chart-1);
     font-weight: 500;
     text-decoration: none;
     cursor: pointer;
@@ -660,13 +664,27 @@
   }
 
   .dashboard-sla-status-pill--reopened {
-    background-color: var(--status-breach-bg);
-    color: var(--status-breach);
+    background-color: color-mix(in srgb, var(--chart-4) 14%, transparent);
+    color: var(--chart-4);
   }
 
   .dashboard-sla-status-pill--in-progress {
-    background-color: var(--status-progress-bg);
-    color: var(--status-progress);
+    background-color: color-mix(in srgb, var(--chart-2) 14%, transparent);
+    color: var(--chart-2);
+  }
+
+  .dashboard-viz-chart-1 {
+    color: var(--chart-1);
+  }
+
+  .dashboard-sla-overdue {
+    color: var(--status-breach);
+    font-weight: 500;
+  }
+
+  .dashboard-search-dimmed {
+    opacity: 0.12;
+    pointer-events: none;
   }
 
   .dashboard-sla-status-select {

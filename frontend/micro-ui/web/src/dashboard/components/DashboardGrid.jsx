@@ -1,16 +1,20 @@
 import React, { useCallback, useMemo } from "react";
-import { Responsive, WidthProvider } from "react-grid-layout";
+import GridLayout, { WidthProvider } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import {
   DROPPING_ITEM,
   DROPPING_ITEM_ID,
+  GRID_COLS,
   KPI_ROW_HEIGHT,
   WIDGETS,
   getSizeConstraints,
+  getDefaultChartItem,
+  getDefaultKpiLayoutItem,
   isChartWidget,
   isKpiWidget,
 } from "../constants/layoutConfig";
+import { widgetMatchesSearch } from "../utils/dashboardSearch";
 import { isTableWidget, TABLE_WIDGET_CONFIG } from "../config/dashboardTables";
 import { isDemoTableWidget, isDemoVizWidget, hasCustomChrome } from "../config/demoVisualizations";
 import KpiCard from "./KpiCard";
@@ -20,7 +24,7 @@ import DepartmentBarChart, { WEEKDAY_CHART_ORDER } from "./DepartmentBarChart";
 import ComplaintMap from "./ComplaintMap";
 import ResizeGrip from "./ResizeGrip";
 
-const ResponsiveGridLayout = WidthProvider(Responsive);
+const GridLayoutWithWidth = WidthProvider(GridLayout);
 
 const ChartPlaceholder = ({ message }) => (
   <div className="tw-flex tw-h-full tw-items-center tw-justify-center tw-p-4 tw-text-[12px] tw-text-muted-foreground">
@@ -80,7 +84,6 @@ const CardUpdatedStamp = ({ label }) => (
 );
 
 const GRID_MARGIN = [16, 16];
-const DROP_SIZE = { w: DROPPING_ITEM.w, h: DROPPING_ITEM.h };
 const RESIZE_HANDLES = ["se"];
 
 const CHART_OVERFLOW_VISIBLE_TYPES = new Set([
@@ -106,18 +109,33 @@ function gridItemClassName(widgetId) {
   return undefined;
 }
 
+function getDropPreviewSize(widgetId) {
+  if (isKpiWidget(widgetId)) {
+    const defaults = getDefaultKpiLayoutItem(widgetId);
+    return { w: defaults.w, h: defaults.h };
+  }
+  const defaults = getDefaultChartItem(widgetId);
+  if (defaults) return { w: defaults.w, h: defaults.h };
+  return { w: DROPPING_ITEM.w, h: DROPPING_ITEM.h };
+}
+
 const DashboardGrid = ({
   layout,
   onDragStop,
   onResizeStop,
+  onLayoutChange,
   onRemoveWidget,
-  onDropKpi,
-  draggingKpiId,
+  onDropWidget,
+  onExternalDragEnd,
+  draggingWidgetId,
+  searchQuery = "",
+  searchContext = {},
   kpiCardData = {},
   chartData = {},
   loading = false,
 }) => {
-  const isExternalDrag = Boolean(draggingKpiId);
+  const isExternalDrag = Boolean(draggingWidgetId);
+  const isSearchActive = Boolean(searchQuery?.trim());
 
   // Stamp the load time once. Swap for the API's data-as-of timestamp once a
   // backend freshness signal is available.
@@ -132,15 +150,16 @@ const DashboardGrid = ({
     []
   );
 
-  const layouts = useMemo(() => {
-    const lg = layout.map((item) => ({
-      ...item,
-      ...getSizeConstraints(item.i),
-      resizeHandles: RESIZE_HANDLES,
-      className: gridItemClassName(item.i),
-    }));
-    return { lg, md: lg, sm: lg, xs: lg };
-  }, [layout]);
+  const gridLayout = useMemo(
+    () =>
+      layout.map((item) => ({
+        ...item,
+        ...getSizeConstraints(item.i),
+        resizeHandles: RESIZE_HANDLES,
+        className: gridItemClassName(item.i),
+      })),
+    [layout]
+  );
 
   const renderKpi = (metricId, onRemove) => {
     const card = kpiCardData?.[metricId];
@@ -244,19 +263,26 @@ const DashboardGrid = ({
 
   const handleDrop = useCallback(
     (gridLayout, item, event) => {
+      // Clear external-drag mode before RGL re-syncs so dropping state can't
+      // stick and block normal grid drags until refresh.
+      onExternalDragEnd?.();
+
       const widgetId = event.dataTransfer.getData("text/plain");
-      if (!widgetId || !isKpiWidget(widgetId)) return;
+      if (!widgetId || !WIDGETS[widgetId]) return;
       if (layout.some((entry) => entry.i === widgetId)) return;
-      onDropKpi(widgetId, { x: item.x, y: item.y });
+
+      requestAnimationFrame(() => {
+        onDropWidget(widgetId, { x: item.x, y: item.y });
+      });
     },
-    [layout, onDropKpi]
+    [layout, onDropWidget, onExternalDragEnd]
   );
 
   const handleDropDragOver = useCallback(() => {
-    if (!draggingKpiId || !isKpiWidget(draggingKpiId)) return false;
-    if (layout.some((entry) => entry.i === draggingKpiId)) return false;
-    return DROP_SIZE;
-  }, [draggingKpiId, layout]);
+    if (!draggingWidgetId || !WIDGETS[draggingWidgetId]) return false;
+    if (layout.some((entry) => entry.i === draggingWidgetId)) return false;
+    return getDropPreviewSize(draggingWidgetId);
+  }, [draggingWidgetId, layout]);
 
   const handleDragStop = useCallback(
     (nextLayout, oldItem, newItem) => {
@@ -276,19 +302,28 @@ const DashboardGrid = ({
     [isExternalDrag, onResizeStop]
   );
 
+  const handleLayoutChange = useCallback(
+    (nextLayout) => {
+      if (isExternalDrag) return;
+      const withoutPlaceholder = nextLayout.filter((item) => item.i !== DROPPING_ITEM_ID);
+      onLayoutChange(withoutPlaceholder);
+    },
+    [isExternalDrag, onLayoutChange]
+  );
+
   return (
     <div>
       <div className={isExternalDrag ? "dashboard-external-drag" : undefined}>
-        <ResponsiveGridLayout
+        <GridLayoutWithWidth
           className="layout"
-          layouts={layouts}
-          breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480 }}
-          cols={{ lg: 12, md: 12, sm: 6, xs: 4 }}
+          layout={gridLayout}
+          cols={GRID_COLS}
           rowHeight={KPI_ROW_HEIGHT}
           margin={GRID_MARGIN}
           containerPadding={[0, 0]}
           onDragStop={handleDragStop}
           onResizeStop={handleResizeStop}
+          onLayoutChange={handleLayoutChange}
           draggableHandle=".dashboard-drag-handle, .dashboard-kpi-widget"
           compactType={null}
           allowOverlap
@@ -303,12 +338,20 @@ const DashboardGrid = ({
             const meta = WIDGETS[item.i];
             const isTable = isTableWidget(item.i) || isDemoTableWidget(item.i);
             const customChrome = meta?.customChrome || hasCustomChrome(item.i);
+            const isSearchMatch =
+              !isSearchActive ||
+              widgetMatchesSearch(item.i, searchQuery, {
+                kpiCardData,
+                chartData,
+                ...searchContext,
+              });
+            const dimClass = isSearchMatch ? "" : " dashboard-search-dimmed";
 
             if (isKpi) {
               return (
                 <div
                   key={item.i}
-                  className="dashboard-kpi-widget tw-group tw-relative tw-flex tw-h-full tw-flex-col tw-transition-all"
+                  className={`dashboard-kpi-widget tw-group tw-relative tw-flex tw-h-full tw-flex-col tw-transition-all${dimClass}`}
                 >
                   {renderKpi(item.i, (e) => handleRemove(e, item.i))}
                   <CardUpdatedStamp label={lastUpdatedLabel} />
@@ -319,7 +362,7 @@ const DashboardGrid = ({
             return (
               <section
                 key={item.i}
-                className="tw-group tw-relative tw-flex tw-h-full tw-min-h-0 tw-flex-col tw-overflow-hidden tw-rounded tw-border tw-border-border tw-bg-surface"
+                className={`tw-group tw-relative tw-flex tw-h-full tw-min-h-0 tw-flex-col tw-overflow-hidden tw-rounded tw-border tw-border-border tw-bg-surface${dimClass}`}
               >
                 <WidgetRemoveButton
                   label={`Remove ${meta?.metric ?? item.i}`}
@@ -356,7 +399,7 @@ const DashboardGrid = ({
               </section>
             );
           })}
-        </ResponsiveGridLayout>
+        </GridLayoutWithWidth>
       </div>
     </div>
   );

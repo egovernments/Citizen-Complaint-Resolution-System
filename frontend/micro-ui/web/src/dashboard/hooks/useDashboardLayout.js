@@ -35,13 +35,28 @@ function collidesAt(item, x, y, placed) {
   return placed.some((other) => rectsOverlap(candidate, other));
 }
 
-function hasOverlaps(layout) {
+export function hasOverlaps(layout) {
   for (let i = 0; i < layout.length; i += 1) {
     for (let j = i + 1; j < layout.length; j += 1) {
       if (rectsOverlap(layout[i], layout[j])) return true;
     }
   }
   return false;
+}
+
+function layoutPositionsEqual(a, b) {
+  if (a.length !== b.length) return false;
+  const byId = new Map(b.map((item) => [item.i, item]));
+  return a.every((item) => {
+    const other = byId.get(item.i);
+    return (
+      other &&
+      item.x === other.x &&
+      item.y === other.y &&
+      item.w === other.w &&
+      item.h === other.h
+    );
+  });
 }
 
 /**
@@ -208,12 +223,22 @@ function nextKpiPosition(layout) {
   return { x: 0, y: maxY };
 }
 
+/** Same post-drop pipeline as onDragStop: swap with overlapped card, then compact. */
+function placeNewItemInLayout(prev, newItem) {
+  const origin = { x: newItem.x, y: newItem.y };
+  const swapped = swapOnDrop([...prev, newItem], newItem.i, origin);
+  return compactVertically(swapped);
+}
+
 /* -------------------------------------------------------------------------- */
 /* Hook                                                                        */
 /* -------------------------------------------------------------------------- */
 
 export function useDashboardLayout() {
   const [layout, setLayout] = useState(loadLayout);
+  const intendedLayoutRef = useRef(null);
+  const resyncGenerationRef = useRef(0);
+  const layoutChangeCorrectionRef = useRef(false);
 
   /**
    * react-grid-layout keeps an internal copy of the layout and only re-syncs
@@ -236,6 +261,63 @@ export function useDashboardLayout() {
     return next.map((item) => ({ ...item, moved }));
   }, []);
 
+  const applyLayout = useCallback(
+    (next) => {
+      persistLayout(next);
+      setLayout(stampSync(next));
+    },
+    [stampSync]
+  );
+
+  /**
+   * RGL (v1.3.4) calls onDragStop/onResizeStop before clearing its internal
+   * `activeDrag` flag, and getDerivedStateFromProps skips prop-sync while that
+   * flag is set. Push our compacted layout immediately, then again after two
+   * animation frames once RGL has finished its own setState — without remounting
+   * the grid (which re-initializes every chart).
+   */
+  const commitLayoutAfterInteraction = useCallback(
+    (next) => {
+      intendedLayoutRef.current = next;
+      layoutChangeCorrectionRef.current = false;
+      applyLayout(next);
+
+      const generation = resyncGenerationRef.current + 1;
+      resyncGenerationRef.current = generation;
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (resyncGenerationRef.current !== generation) return;
+          applyLayout(next);
+        });
+      });
+    },
+    [applyLayout]
+  );
+
+  /**
+   * RGL fires onLayoutChange synchronously at the end of drag/resize stop with
+   * its own (possibly overlapping) layout. If positions still differ from what
+   * we computed, push our compacted layout one more time.
+   */
+  const onLayoutChange = useCallback(
+    (rglLayout) => {
+      const intended = intendedLayoutRef.current;
+      if (!intended) return;
+
+      if (layoutPositionsEqual(rglLayout, intended)) {
+        intendedLayoutRef.current = null;
+        layoutChangeCorrectionRef.current = false;
+        return;
+      }
+
+      if (layoutChangeCorrectionRef.current) return;
+      layoutChangeCorrectionRef.current = true;
+      applyLayout(intended);
+    },
+    [applyLayout]
+  );
+
   /**
    * react-grid-layout's native onDragStop. `oldItem` holds the card's position
    * before the drag (its origin); `newItem` holds where it was dropped.
@@ -244,15 +326,12 @@ export function useDashboardLayout() {
   const onDragStop = useCallback(
     (rglLayout, oldItem, newItem) => {
       if (!newItem) return;
-      setLayout(() => {
-        const origin = { x: oldItem.x, y: oldItem.y };
-        const swapped = swapOnDrop(rglLayout, newItem.i, origin);
-        const next = compactVertically(swapped);
-        persistLayout(next);
-        return stampSync(next);
-      });
+      const origin = { x: oldItem.x, y: oldItem.y };
+      const swapped = swapOnDrop(rglLayout, newItem.i, origin);
+      const next = compactVertically(swapped);
+      commitLayoutAfterInteraction(next);
     },
-    [stampSync]
+    [commitLayoutAfterInteraction]
   );
 
   /**
@@ -262,13 +341,10 @@ export function useDashboardLayout() {
    */
   const onResizeStop = useCallback(
     (rglLayout) => {
-      setLayout(() => {
-        const next = compactVertically(rglLayout);
-        persistLayout(next);
-        return stampSync(next);
-      });
+      const next = compactVertically(rglLayout);
+      commitLayoutAfterInteraction(next);
     },
-    [stampSync]
+    [commitLayoutAfterInteraction]
   );
 
   const resetLayout = useCallback(() => {
@@ -301,7 +377,7 @@ export function useDashboardLayout() {
           y: position?.y ?? fallback.y,
         });
 
-        const next = compactVertically([...prev, newItem]);
+        const next = placeNewItemInLayout(prev, newItem);
         persistLayout(next);
         return stampSync(next);
       });
@@ -329,7 +405,7 @@ export function useDashboardLayout() {
           ...(position && { x: position.x, y: position.y }),
         });
 
-        const next = compactVertically([...prev, newItem]);
+        const next = placeNewItemInLayout(prev, newItem);
         persistLayout(next);
         return stampSync(next);
       });
@@ -344,6 +420,7 @@ export function useDashboardLayout() {
     layout,
     onDragStop,
     onResizeStop,
+    onLayoutChange,
     resetLayout,
     removeWidgetFromLayout,
     addKpiToLayout,

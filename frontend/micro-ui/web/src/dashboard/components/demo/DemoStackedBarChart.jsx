@@ -2,9 +2,14 @@ import React, { useMemo } from "react";
 import Chart from "react-apexcharts";
 import { DASHBOARD_FONT_FAMILY } from "../../config/dashboardConfig";
 
-const STACKED_COLORS = ["var(--chart-4)", "var(--chart-2)", "var(--chart-3)"];
+import { getChartColor } from "../../config/chartColors";
 
 const DemoStackedBarChart = ({ categories = [], series = [] }) => {
+  const stackedColors = useMemo(
+    () => [getChartColor(3), getChartColor(1), getChartColor(2)],
+    []
+  );
+
   const options = useMemo(
     () => ({
       chart: {
@@ -26,7 +31,7 @@ const DemoStackedBarChart = ({ categories = [], series = [] }) => {
       yaxis: {
         labels: { style: { fontSize: "10px" } },
       },
-      colors: STACKED_COLORS,
+      colors: stackedColors,
       legend: {
         position: "top",
         horizontalAlign: "right",
@@ -35,7 +40,7 @@ const DemoStackedBarChart = ({ categories = [], series = [] }) => {
       grid: { borderColor: "var(--border)" },
       tooltip: { theme: "light" },
     }),
-    [categories]
+    [categories, stackedColors]
   );
 
   return (
