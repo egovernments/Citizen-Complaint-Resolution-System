@@ -34,6 +34,9 @@ export const KPI_DISPLAY = {
     displayTitle: "Registered",
     context: { type: "timeWindow" },
   },
+  "cl-metric-inflow-rate": {
+    displayTitle: "Daily inflow",
+  },
   "ce-metric-reopen-rate": {
     displayTitle: "Reopen rate",
     threshold: { kind: "percent", higherIsBetter: false, onTrack: 10, breaching: 25 },
@@ -133,6 +136,34 @@ export function getStatusValueClass(status) {
       return "tw-text-status-breach";
     default:
       return "tw-text-foreground";
+  }
+}
+
+/** Delta arrow color — uses metric threshold when set, else treats volume increases as negative. */
+export function getSparklineDeltaClass(deltaPercent, metricId) {
+  if (deltaPercent == null || !Number.isFinite(deltaPercent)) {
+    return "dashboard-kpi-sparkline-delta--muted";
+  }
+  if (deltaPercent === 0) return "dashboard-kpi-sparkline-delta--neutral";
+
+  const threshold = getKpiDisplayConfig(metricId).threshold;
+  const higherIsBetter = threshold?.higherIsBetter ?? false;
+  const improving = higherIsBetter ? deltaPercent > 0 : deltaPercent < 0;
+  return improving
+    ? "dashboard-kpi-sparkline-delta--positive"
+    : "dashboard-kpi-sparkline-delta--negative";
+}
+
+export function statusValueToCssColor(statusClass) {
+  switch (statusClass) {
+    case "tw-text-status-resolved":
+      return "var(--status-resolved)";
+    case "tw-text-status-breach":
+      return "var(--status-breach)";
+    case "tw-text-muted-foreground":
+      return "var(--muted-foreground)";
+    default:
+      return "var(--foreground)";
   }
 }
 

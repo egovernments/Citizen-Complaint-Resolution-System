@@ -1,4 +1,12 @@
 import React from "react";
+import DataTableChrome from "../DataTableChrome";
+import {
+  DATA_TABLE_STYLES,
+  getDataTableTdClass,
+  getDataTableThClass,
+  getSlaRiskStatusPillClass,
+  SLA_RISK_TABLE_STYLES,
+} from "../../config/dataTablePresentation";
 
 const STATUS_LABELS = {
   in_progress: "In Progress",
@@ -48,80 +56,68 @@ const INITIAL_ROWS = [
   },
 ];
 
-function statusPillClass(status) {
-  if (status === "reopened") {
-    return "dashboard-sla-status-pill dashboard-sla-status-pill--reopened";
-  }
-  return "dashboard-sla-status-pill dashboard-sla-status-pill--in-progress";
-}
-
 const SlaAtRiskTable = () => {
+  const tableStyles = DATA_TABLE_STYLES;
+  const slaStyles = SLA_RISK_TABLE_STYLES;
   const rows = INITIAL_ROWS;
 
   return (
-    <div className="tw-flex tw-h-full tw-min-h-0 tw-flex-col">
-      <header className="dashboard-drag-handle tw-shrink-0 tw-border-b tw-border-border tw-px-4 tw-py-2.5 tw-pr-8">
-        <h2 className="dashboard-drag-handle-title">SLA at risk — next 24 hours</h2>
-      </header>
-      <div className="dashboard-table-body tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-p-4">
-        <div className="dashboard-table-scroll tw-min-h-0 tw-flex-1 tw-overflow-auto">
-          <table className="dashboard-table">
-            <thead>
-              <tr>
-                <th className="dashboard-table-th">No.</th>
-                <th className="dashboard-table-th">Type</th>
-                <th className="dashboard-table-th">Locality</th>
-                <th className="dashboard-table-th">Owner</th>
-                <th className="dashboard-table-th">SLA</th>
-                <th className="dashboard-table-th">Status</th>
-                <th className="dashboard-table-th">Next action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.id}>
-                  <td className="dashboard-table-td">
-                    <a
-                      href="#demo"
-                      className="dashboard-sla-link"
-                      onClick={(e) => e.preventDefault()}
-                    >
-                      {row.id}
-                    </a>
-                  </td>
-                  <td className="dashboard-table-td">{row.type}</td>
-                  <td className="dashboard-table-td">{row.locality}</td>
-                  <td className="dashboard-table-td">
-                    <div className="tw-font-medium">{row.ownerName}</div>
-                    <div className="dashboard-table-muted">{row.ownerRole}</div>
-                  </td>
-                  <td className="dashboard-table-td">
-                    <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-1.5">
-                      <span className="dashboard-sla-breach-pill">{row.slaLabel}</span>
-                      <span className="dashboard-sla-overdue">{row.slaOver}</span>
-                    </div>
-                  </td>
-                  <td className="dashboard-table-td">
-                    <span className={statusPillClass(row.status)}>
-                      {STATUS_LABELS[row.status] ?? row.status}
-                    </span>
-                  </td>
-                  <td className="dashboard-table-td">
-                    <button
-                      type="button"
-                      className="dashboard-sla-link tw-border-0 tw-bg-transparent tw-p-0"
-                      onClick={(e) => e.preventDefault()}
-                    >
-                      Resolve
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
+    <DataTableChrome title="SLA at risk — next 24 hours">
+      <table className={tableStyles.table}>
+        <thead>
+          <tr>
+            <th className={getDataTableThClass()}>No.</th>
+            <th className={getDataTableThClass()}>Type</th>
+            <th className={getDataTableThClass()}>Locality</th>
+            <th className={getDataTableThClass()}>Owner</th>
+            <th className={getDataTableThClass()}>SLA</th>
+            <th className={getDataTableThClass()}>Status</th>
+            <th className={getDataTableThClass()}>Next action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id}>
+              <td className={getDataTableTdClass()}>
+                <a
+                  href="#demo"
+                  className={slaStyles.link}
+                  onClick={(e) => e.preventDefault()}
+                >
+                  {row.id}
+                </a>
+              </td>
+              <td className={getDataTableTdClass()}>{row.type}</td>
+              <td className={getDataTableTdClass()}>{row.locality}</td>
+              <td className={getDataTableTdClass()}>
+                <div className={slaStyles.ownerName}>{row.ownerName}</div>
+                <div className={tableStyles.muted}>{row.ownerRole}</div>
+              </td>
+              <td className={getDataTableTdClass()}>
+                <div className={slaStyles.slaCell}>
+                  <span className={slaStyles.breachPill}>{row.slaLabel}</span>
+                  <span className={slaStyles.overdue}>{row.slaOver}</span>
+                </div>
+              </td>
+              <td className={getDataTableTdClass()}>
+                <span className={getSlaRiskStatusPillClass(row.status)}>
+                  {STATUS_LABELS[row.status] ?? row.status}
+                </span>
+              </td>
+              <td className={getDataTableTdClass()}>
+                <button
+                  type="button"
+                  className={slaStyles.linkButton}
+                  onClick={(e) => e.preventDefault()}
+                >
+                  Resolve
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </DataTableChrome>
   );
 };
 

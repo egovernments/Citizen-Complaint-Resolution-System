@@ -1,6 +1,12 @@
 import React from "react";
-import { getStatusValueClass } from "../config/kpiDisplay";
+import {
+  getNumberTileValueClass,
+  VISUALIZATION_STYLES,
+  VIZ_TYPE,
+} from "../config/visualizationStyles";
 import ResizeGrip from "./ResizeGrip";
+
+const numberTile = VISUALIZATION_STYLES[VIZ_TYPE.NUMBER_TILE];
 
 const RemoveIcon = () => (
   <svg
@@ -33,16 +39,14 @@ const KpiCard = ({
 }) => {
   const isUnavailable = value === "—";
   const displayValue = value ?? (loading ? "…" : "—");
-  const valueClass = isUnavailable
-    ? "tw-text-muted-foreground"
-    : getStatusValueClass(status);
+  const valueClass = getNumberTileValueClass(status, { unavailable: isUnavailable });
 
   return (
     <div
-      className={`dashboard-kpi-card tw-group${
+      className={`${numberTile.card} tw-group${
         hasList
           ? " tw-flex tw-h-full tw-min-h-0 tw-flex-col"
-          : " dashboard-kpi-card--metric"
+          : ` ${numberTile.cardMetric}`
       }`}
     >
       {onRemove ? (
@@ -58,22 +62,22 @@ const KpiCard = ({
         </button>
       ) : null}
 
-      <div className="dashboard-kpi-title" title={title}>
+      <div className={numberTile.title} title={title}>
         {title}
       </div>
 
       <div
-        className={`dashboard-kpi-value ${valueClass} ${
-          loading ? "tw-animate-pulse" : ""
+        className={`${numberTile.value} ${valueClass} ${
+          loading ? numberTile.valueLoading : ""
         }`}
       >
         {displayValue}
       </div>
 
       {!hasList ? (
-        <div className="dashboard-kpi-context">{context || "\u00A0"}</div>
+        <div className={numberTile.context}>{context || "\u00A0"}</div>
       ) : context ? (
-        <div className="dashboard-kpi-context tw-mt-2">{context}</div>
+        <div className={`${numberTile.context} tw-mt-2`}>{context}</div>
       ) : null}
 
       {hasList ? (

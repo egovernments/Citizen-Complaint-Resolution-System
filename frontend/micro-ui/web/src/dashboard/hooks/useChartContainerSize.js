@@ -27,6 +27,14 @@ export function useChartContainerSize() {
     updateSize();
     const observer = new ResizeObserver(updateSize);
     observer.observe(containerNode);
+
+    // react-grid-layout resizes the grid item wrapper; observing it keeps charts
+    // in sync during horizontal drag-resize inside nested flex chrome (e.g. SLA toggle).
+    const gridItem = containerNode.closest(".react-grid-item");
+    if (gridItem && gridItem !== containerNode) {
+      observer.observe(gridItem);
+    }
+
     return () => observer.disconnect();
   }, [containerNode]);
 

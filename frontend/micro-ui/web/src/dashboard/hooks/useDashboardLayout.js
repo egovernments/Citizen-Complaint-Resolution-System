@@ -7,9 +7,17 @@ import {
   WIDGETS,
   getDefaultChartItem,
   getDefaultKpiLayoutItem,
+  isHeightLockedChart,
   isKpiWidget,
   DEFAULT_CHART_LAYOUT,
 } from "../constants/layoutConfig";
+import { isSparklineKpi } from "../config/kpiSparkline";
+
+/** Demo stacked bars always included in the default dashboard view. */
+const DEFAULT_VIEW_STACKED_WIDGETS = new Set([
+  "demo-viz-stacked",
+  "demo-viz-stacked-horizontal",
+]);
 
 /* -------------------------------------------------------------------------- */
 /* Geometry helpers                                                            */
@@ -117,25 +125,29 @@ export function swapOnDrop(layout, activeId, origin) {
 
 function normalizeKpiItem(item) {
   const defaults = getDefaultKpiLayoutItem(item.i);
+  const heightLocked = isSparklineKpi(item.i);
   return {
     ...defaults,
     ...item,
+    ...(heightLocked ? { h: defaults.h } : {}),
     minW: item.minW ?? defaults.minW,
-    minH: Math.max(item.minH ?? defaults.minH, defaults.minH),
-    maxH: defaults.maxH ?? DEFAULT_KPI_LAYOUT_ITEM.maxH,
+    minH: heightLocked ? defaults.minH : Math.max(item.minH ?? defaults.minH, defaults.minH),
+    maxH: heightLocked ? defaults.maxH : defaults.maxH ?? DEFAULT_KPI_LAYOUT_ITEM.maxH,
   };
 }
 
 function normalizeChartItem(item) {
   const defaults = DEFAULT_CHART_LAYOUT[item.i];
   if (!defaults) return item;
+  const heightLocked = isHeightLockedChart(item.i);
   return {
     ...defaults,
     ...item,
+    ...(heightLocked ? { h: defaults.h } : {}),
     minW: item.minW ?? defaults.minW,
-    minH: item.minH ?? defaults.minH,
+    minH: heightLocked ? defaults.minH : (item.minH ?? defaults.minH),
     maxW: defaults.maxW ?? item.maxW,
-    maxH: defaults.maxH ?? item.maxH,
+    maxH: heightLocked ? defaults.maxH : (defaults.maxH ?? item.maxH),
   };
 }
 
@@ -174,6 +186,16 @@ function clearSavedLayout() {
   }
 }
 
+/** Add default stacked-bar demos when missing from a persisted layout. */
+function mergeDefaultStackedWidgets(layout) {
+  const existing = new Set(layout.map((item) => item.i));
+  const missing = DEFAULT_LAYOUT.filter(
+    (item) => DEFAULT_VIEW_STACKED_WIDGETS.has(item.i) && !existing.has(item.i)
+  );
+  if (!missing.length) return layout;
+  return compactVertically([...layout, ...missing]);
+}
+
 /**
  * Load the saved layout exactly as it was persisted. No reflow, no repack, no
  * compaction, no merging of default widgets. The only processing is dropping
@@ -193,13 +215,37 @@ function loadLayout() {
     const valid = parsed.filter((item) => item && WIDGETS[item.i]);
     if (valid.length === 0) return DEFAULT_LAYOUT;
 
-    if (hasOverlaps(valid)) {
-      const repaired = compactVertically(valid);
-      persistLayout(repaired);
-      return repaired;
+    const normalized = valid.map((item) => {
+      if (isSparklineKpi(item.i)) {
+        return { ...item, h: 2, minH: 2, maxH: 2 };
+      }
+      if (isHeightLockedChart(item.i)) {
+        const defaults = DEFAULT_CHART_LAYOUT[item.i];
+        return {
+          ...item,
+          h: defaults?.h ?? item.h,
+          minH: defaults?.minH ?? item.minH,
+          maxH: defaults?.maxH ?? item.maxH,
+        };
+      }
+      return item;
+    });
+
+    if (hasOverlaps(normalized)) {
+      const repaired = compactVertically(normalized);
+      const withStacked = mergeDefaultStackedWidgets(repaired);
+      persistLayout(withStacked);
+      return withStacked;
     }
 
-    return valid;
+    const withStacked = mergeDefaultStackedWidgets(normalized);
+    if (withStacked.length > normalized.length) {
+      persistLayout(withStacked);
+    } else if (normalized.some((item, i) => item !== valid[i])) {
+      persistLayout(normalized);
+    }
+
+    return withStacked;
   } catch {
     return DEFAULT_LAYOUT;
   }

@@ -1,9 +1,13 @@
 import React, { useMemo, useState } from "react";
-import Chart from "react-apexcharts";
-import { DASHBOARD_FONT_FAMILY } from "../../config/dashboardConfig";
 import { getChartColor } from "../../config/chartColors";
-import { useChartContainerSize } from "../../hooks/useChartContainerSize";
-import { buildXAxisLabelOptions } from "../../utils/barChartXAxis";
+import {
+  DATA_TABLE_STYLES,
+  getDataTableTdClass,
+  getDataTableThClass,
+} from "../../config/dataTablePresentation";
+import { VISUALIZATION_STYLES, VIZ_TYPE } from "../../config/visualizationStyles";
+import DataTableChrome from "../DataTableChrome";
+import DepartmentBarChart from "../DepartmentBarChart";
 import ViewToggle from "./ViewToggle";
 
 const SLA_BUCKETS = [
@@ -12,94 +16,63 @@ const SLA_BUCKETS = [
   { id: "breached", label: "Breached SLA", count: 34, color: getChartColor(2) },
 ];
 
-const SlaBucketTable = ({ rows }) => (
-  <table className="dashboard-table tw-w-full">
-    <thead>
-      <tr>
-        <th className="dashboard-table-th tw-py-1 tw-font-medium">Bucket</th>
-        <th className="dashboard-table-th dashboard-table-th-right tw-py-1 tw-font-medium">
-          Count
-        </th>
-      </tr>
-    </thead>
-    <tbody>
-      {rows.map((row) => (
-        <tr key={row.id} className="tw-border-t tw-border-border">
-          <td className="dashboard-table-td tw-py-2">
-            <span className="tw-inline-flex tw-items-center tw-gap-2">
-              <span
-                className="tw-h-2 tw-w-2 tw-shrink-0 tw-rounded-full"
-                style={{ backgroundColor: row.color }}
-                aria-hidden
-              />
-              <span>{row.label}</span>
-            </span>
-          </td>
-          <td
-            className="dashboard-table-td dashboard-table-td-right tw-py-2 tw-font-semibold tw-tabular-nums"
-            style={{ color: row.color }}
-          >
-            {row.count}
-          </td>
+const SlaBucketTable = ({ rows }) => {
+  const styles = DATA_TABLE_STYLES;
+
+  return (
+    <table className={styles.table}>
+      <thead>
+        <tr>
+          <th className={getDataTableThClass()}>Bucket</th>
+          <th className={getDataTableThClass("right")}>Count</th>
         </tr>
-      ))}
-    </tbody>
-  </table>
-);
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.id}>
+            <td className={getDataTableTdClass()}>
+              <span className={styles.legendLabel}>
+                <span
+                  className={styles.legendSwatch}
+                  style={{ backgroundColor: row.color }}
+                  aria-hidden
+                />
+                <span>{row.label}</span>
+              </span>
+            </td>
+            <td
+              className={`${getDataTableTdClass("right")} ${styles.valueEmphasis}`}
+              style={{ color: row.color }}
+            >
+              {row.count}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+};
 
 const ComplaintsBySlaWidget = () => {
   const [view, setView] = useState("table");
-  const { containerRef, containerSize } = useChartContainerSize();
-  const { width: containerWidth, height: containerHeight } = containerSize;
+  const tableStyles = DATA_TABLE_STYLES;
+  const barBodyClass = VISUALIZATION_STYLES[VIZ_TYPE.BAR_CHART].body;
+  const slaToggleBodyBar = VISUALIZATION_STYLES[VIZ_TYPE.SLA_TOGGLE].bodyBar;
 
-  const categories = SLA_BUCKETS.map((b) => b.label);
-  const values = SLA_BUCKETS.map((b) => b.count);
-  const colors = SLA_BUCKETS.map((b) => b.color);
-
-  const xAxisLabels = useMemo(
-    () => buildXAxisLabelOptions(categories, containerWidth),
-    [categories, containerWidth]
+  const barChartData = useMemo(
+    () => SLA_BUCKETS.map(({ label, count }) => ({ label, count })),
+    []
   );
 
-  const chartOptions = useMemo(
-    () => ({
-      chart: {
-        type: "bar",
-        toolbar: { show: false },
-        fontFamily: DASHBOARD_FONT_FAMILY,
-      },
-      plotOptions: {
-        bar: {
-          borderRadius: 2,
-          columnWidth: "42%",
-          distributed: true,
-        },
-      },
-      colors,
-      dataLabels: { enabled: false },
-      legend: { show: false },
-      xaxis: {
-        categories,
-        labels: xAxisLabels,
-      },
-      yaxis: {
-        labels: { style: { fontSize: "10px" } },
-      },
-      grid: {
-        borderColor: "var(--border)",
-        strokeDashArray: 3,
-      },
-      tooltip: { theme: "light" },
-    }),
-    [categories, colors, xAxisLabels]
-  );
-
-  const series = useMemo(() => [{ name: "Complaints", data: values }], [values]);
+  const bodyClassName =
+    view === "table"
+      ? tableStyles.body
+      : `${barBodyClass} ${slaToggleBodyBar} tw-min-w-0 tw-w-full tw-flex-1`;
 
   return (
-    <div className="tw-flex tw-h-full tw-min-h-0 tw-flex-col">
-      <header className="dashboard-drag-handle tw-flex tw-shrink-0 tw-items-center tw-justify-between tw-gap-3 tw-border-b tw-border-border tw-px-4 tw-py-2.5 tw-pr-8">
-        <h2 className="dashboard-drag-handle-title">Complaints by SLA</h2>
+    <DataTableChrome
+      title="Complaints by SLA"
+      headerActions={
         <ViewToggle
           value={view}
           onChange={setView}
@@ -108,26 +81,16 @@ const ComplaintsBySlaWidget = () => {
             { id: "bar", label: "Bar" },
           ]}
         />
-      </header>
-      <div className="tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-hidden tw-p-4">
-        {view === "table" ? (
-          <SlaBucketTable rows={SLA_BUCKETS} />
-        ) : (
-          <div ref={containerRef} className="tw-h-full tw-min-h-0 tw-w-full">
-            {containerHeight > 0 && containerWidth > 0 ? (
-              <Chart
-                key={`${containerWidth}-${xAxisLabels.show}-${categories.join("|")}`}
-                options={chartOptions}
-                series={series}
-                type="bar"
-                height={containerHeight}
-                width="100%"
-              />
-            ) : null}
-          </div>
-        )}
-      </div>
-    </div>
+      }
+      bodyClassName={bodyClassName}
+      scrollable={view === "table"}
+    >
+      {view === "table" ? (
+        <SlaBucketTable rows={SLA_BUCKETS} />
+      ) : (
+        <DepartmentBarChart data={barChartData} compact />
+      )}
+    </DataTableChrome>
   );
 };
 

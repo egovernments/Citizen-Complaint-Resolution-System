@@ -271,6 +271,11 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 30%, transparent);
 }
 
+/* ---------------------------------------------------------------
+   * Viz type: number-tile (metric KPI cards + demo number tiles)
+   * Class names are referenced from config/visualizationStyles.js
+   * --------------------------------------------------------------- */
+
 .dashboard-kpi-card{
   position: relative;
   box-sizing: border-box;
@@ -337,6 +342,77 @@
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+
+/* Viz type: number-tile-sparkline (delta + trend line) */
+
+.dashboard-kpi-card--sparkline{
+  height: 100%;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 26px auto;
+  gap: 0.25rem;
+  min-height: 0;
+  padding-bottom: 1.125rem;
+}
+
+.dashboard-kpi-card--sparkline .dashboard-kpi-title{
+  align-self: flex-start;
+  overflow: hidden;
+  padding-right: 1.25rem;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.dashboard-kpi-sparkline-value-row{
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: 0.375rem;
+  min-width: 0;
+}
+
+.dashboard-kpi-card--sparkline .dashboard-kpi-value{
+  flex-shrink: 0;
+  align-self: auto;
+}
+
+.dashboard-kpi-sparkline-delta{
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  --tw-numeric-spacing: tabular-nums;
+  font-variant-numeric: var(--tw-ordinal) var(--tw-slashed-zero) var(--tw-numeric-figure) var(--tw-numeric-spacing) var(--tw-numeric-fraction);
+  line-height: 1;
+  padding-bottom: 0.2em;
+}
+
+.dashboard-kpi-sparkline-delta--positive {
+  color: var(--status-resolved);
+}
+
+.dashboard-kpi-sparkline-delta--negative {
+  color: var(--status-breach);
+}
+
+.dashboard-kpi-sparkline-delta--neutral{
+  color: var(--foreground);
+}
+
+.dashboard-kpi-sparkline-delta--muted{
+  color: var(--muted-foreground);
+}
+
+.dashboard-kpi-sparkline-chart{
+  overflow: hidden;
+  height: 22px;
+  min-height: 22px;
+  align-self: start;
+}
+
+.dashboard-kpi-sparkline-chart .apexcharts-canvas,
+  .dashboard-kpi-sparkline-chart svg {
+  overflow: visible !important;
 }
 
 .dashboard-header-controls{
@@ -657,14 +733,48 @@
   color: var(--foreground);
 }
 
-.dashboard-kpi-widget {
+.dashboard-widget-surface {
   cursor: grab;
-  height: 100%;
-  min-height: 0;
 }
 
-.dashboard-kpi-widget:active {
+.dashboard-widget-surface:active,
+  .react-grid-item.react-draggable-dragging .dashboard-widget-surface {
   cursor: grabbing;
+}
+
+.dashboard-widget-surface .dashboard-widget-remove-btn,
+  .dashboard-widget-surface .dashboard-view-toggle,
+  .dashboard-widget-surface .dashboard-gauge-target-marker,
+  .dashboard-widget-surface .dashboard-table-scroll,
+  .dashboard-widget-surface .dashboard-kpi-list-body,
+  .dashboard-widget-surface a,
+  .dashboard-widget-surface button,
+  .dashboard-widget-surface input,
+  .dashboard-widget-surface select,
+  .dashboard-widget-surface textarea {
+  cursor: pointer;
+}
+
+.dashboard-widget-surface .dashboard-bar-chart-body,
+  .dashboard-widget-surface .dashboard-horizontal-bar-body,
+  .dashboard-widget-surface .dashboard-stacked-bar-body,
+  .dashboard-widget-surface .dashboard-line-chart-body,
+  .dashboard-widget-surface .dashboard-pie-chart-body,
+  .dashboard-widget-surface .dashboard-gauge-body,
+  .dashboard-widget-surface .dashboard-sla-toggle-body,
+  .dashboard-widget-surface .apexcharts-canvas,
+  .dashboard-widget-surface .apexcharts-svg {
+  cursor: grab;
+}
+
+.react-grid-item.react-draggable-dragging .dashboard-widget-surface .apexcharts-canvas,
+  .react-grid-item.react-draggable-dragging .dashboard-widget-surface .apexcharts-svg {
+  cursor: grabbing;
+}
+
+.dashboard-kpi-widget {
+  height: 100%;
+  min-height: 0;
 }
 
 .dashboard-kpi-widget .dashboard-widget{
@@ -723,8 +833,67 @@
   box-shadow: 0 4px 12px color-mix(in srgb, var(--foreground) 6%, transparent);
 }
 
-.dashboard-table-body {
-  min-height: 0;
+/* Viz type: data-table — ranked / breakdown tables */
+
+.dashboard-data-table-shell{
+  display: flex;
+  height: 100%;
+  min-height: 0px;
+  width: 100%;
+  min-width: 0px;
+  flex-direction: column;
+}
+
+.dashboard-data-table-header{
+  border-bottom-width: 0px;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  padding-bottom: 0px;
+  padding-top: 0.25rem;
+}
+
+.dashboard-data-table-header-bar{
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-bottom-width: 0px;
+  padding-left: 1rem;
+  padding-bottom: 0px;
+  padding-top: 0.5rem;
+  padding-right: 2rem;
+}
+
+.dashboard-data-table-header .dashboard-drag-handle-title,
+  .dashboard-data-table-header-bar .dashboard-drag-handle-title{
+  line-height: 1.25;
+}
+
+.dashboard-data-table-header .dashboard-drag-handle-subtitle,
+  .dashboard-data-table-header-bar .dashboard-drag-handle-subtitle{
+  margin-top: 0px;
+  line-height: 1;
+}
+
+.dashboard-data-table-body{
+  display: flex;
+  min-height: 0px;
+  flex: 1 1 0%;
+  flex-direction: column;
+  justify-content: flex-start;
+  overflow: hidden;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  padding-top: 0px;
+  margin-top: -2px;
+  padding-bottom: 1.125rem;
+}
+
+/* SLA table/bar toggle — reserve space for absolute Updated stamp (same as other cards) */
+
+.dashboard-sla-toggle-body {
+  padding-bottom: 1.125rem;
 }
 
 .dashboard-table-scroll{
@@ -732,6 +901,7 @@
   width: 100%;
   flex: 1 1 0%;
   overflow: auto;
+  max-height: 100%;
   font-family: inherit;
   font-size: 12px;
 }
@@ -779,6 +949,7 @@
   font-weight: 500 !important;
   color: var(--dashboard-muted-foreground, #6b6860) !important;
   vertical-align: bottom;
+  padding-top: 0.125rem !important;
 }
 
 .dashboard-root table.dashboard-table th.dashboard-table-th-right,
@@ -849,43 +1020,432 @@
   color: var(--muted-foreground);
 }
 
-.department-bar-chart {
+.dashboard-data-table-legend-swatch{
+  height: 0.5rem;
+  width: 0.5rem;
+  flex-shrink: 0;
+  border-radius: 9999px;
+}
+
+.dashboard-data-table-legend-label{
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.dashboard-data-table-value-emphasis{
+  font-weight: 600;
+}
+
+.dashboard-data-table-owner-name{
+  font-weight: 500;
+}
+
+.dashboard-data-table-sla-cell{
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+/* Viz type: bar-chart — vertical bars (all normal bar chart widgets) */
+
+.dashboard-bar-chart {
   overflow: visible;
   min-height: 0;
 }
 
-.department-bar-chart .apexcharts-canvas,
-  .department-bar-chart .apexcharts-svg {
+.dashboard-bar-chart-body{
+  display: flex;
+  min-height: 0px;
+  width: 100%;
+  min-width: 0px;
+  flex: 1 1 0%;
+  flex-direction: column;
+  overflow: hidden;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  padding-top: 0px;
+  margin-top: -10px;
+  padding-bottom: 1.125rem;
+}
+
+.dashboard-bar-chart-header{
+  border-bottom-width: 0px;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  padding-bottom: 0px;
+  padding-top: 0.375rem;
+}
+
+.dashboard-bar-chart-header .dashboard-drag-handle-title{
+  line-height: 1.25;
+}
+
+.dashboard-bar-chart-header .dashboard-drag-handle-subtitle{
+  margin-top: 0px;
+  line-height: 1;
+}
+
+/* Viz type: gauge — progress bar vs target */
+
+.dashboard-gauge-header{
+  border-bottom-width: 0px;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  padding-bottom: 0px;
+  padding-top: 0.25rem;
+}
+
+.dashboard-gauge-header .dashboard-drag-handle-title{
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.dashboard-gauge-body{
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  gap: 0px;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  padding-top: 0px;
+  padding-bottom: 0.125rem;
+}
+
+.dashboard-gauge-value{
+  margin-bottom: 0.125rem;
+  font-size: 32px;
+  font-weight: 600;
+  --tw-numeric-spacing: tabular-nums;
+  font-variant-numeric: var(--tw-ordinal) var(--tw-slashed-zero) var(--tw-numeric-figure) var(--tw-numeric-spacing) var(--tw-numeric-fraction);
+  line-height: 1;
+  color: var(--foreground);
+}
+
+.dashboard-gauge-track{
+  position: relative;
+  margin-top: 0px;
+  margin-bottom: 0px;
+  height: 0.5rem;
+  width: 100%;
+  overflow: visible;
+  border-radius: 9999px;
+  background-color: var(--muted);
+}
+
+.dashboard-gauge-fill{
+  height: 100%;
+  border-radius: 9999px;
+  background-color: var(--chart-1);
+}
+
+.dashboard-gauge-target-marker{
+  position: absolute;
+  top: 0px;
+  bottom: 0px;
+  display: flex;
+  width: 0.75rem;
+  cursor: default;
+  align-items: center;
+  justify-content: center;
+  transform: translateX(-50%);
+}
+
+.dashboard-gauge-target-line{
+  pointer-events: none;
+  display: block;
+  height: calc(100% + 6px);
+  width: 0px;
+  border-left: 2px dotted var(--foreground);
+  opacity: 0.55;
+}
+
+.dashboard-gauge-target-tooltip{
+  pointer-events: none;
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  z-index: 10;
+  margin-bottom: 0.25rem;
+  white-space: nowrap;
+  border-radius: 0.25rem;
+  background-color: var(--foreground);
+  padding-left: 0.375rem;
+  padding-right: 0.375rem;
+  padding-top: 0.125rem;
+  padding-bottom: 0.125rem;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.25;
+  color: var(--surface);
+  transform: translateX(-50%);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.dashboard-gauge-target-marker:hover .dashboard-gauge-target-tooltip,
+  .dashboard-gauge-target-marker:focus-visible .dashboard-gauge-target-tooltip {
+  opacity: 1;
+}
+
+.dashboard-gauge-status{
+  margin-top: 0.125rem;
+  font-size: 11px;
+  line-height: 1.25;
+  color: var(--muted-foreground);
+}
+
+.dashboard-bar-chart .apexcharts-canvas,
+  .dashboard-bar-chart .apexcharts-svg {
   overflow: visible !important;
 }
 
-.channel-donut-chart {
+.dashboard-bar-chart .apexcharts-gridlines-horizontal line,
+  .dashboard-bar-chart .apexcharts-gridlines-vertical line {
+  display: none;
+}
+
+/* Viz type: horizontal-bar — ranked / ratio bars */
+
+.dashboard-horizontal-bar {
   overflow: visible;
   min-height: 0;
 }
 
-.channel-donut-slice {
+.dashboard-horizontal-bar-body{
+  display: flex;
+  min-height: 0px;
+  flex: 1 1 0%;
+  flex-direction: column;
+  overflow: hidden;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  padding-top: 0px;
+  margin-top: -10px;
+  padding-bottom: 1.125rem;
+}
+
+.dashboard-horizontal-bar-header{
+  border-bottom-width: 0px;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  padding-bottom: 0px;
+  padding-top: 0.375rem;
+}
+
+.dashboard-horizontal-bar-header .dashboard-drag-handle-title{
+  line-height: 1.25;
+}
+
+.dashboard-horizontal-bar-header .dashboard-drag-handle-subtitle{
+  margin-top: 0px;
+  line-height: 1;
+}
+
+.dashboard-horizontal-bar .apexcharts-canvas,
+  .dashboard-horizontal-bar .apexcharts-svg {
+  overflow: visible !important;
+}
+
+/* Viz type: stacked-bar — vertical + horizontal stacked bars */
+
+.dashboard-stacked-bar {
+  overflow: visible;
+  min-height: 0;
+}
+
+.dashboard-stacked-bar-body{
+  display: flex;
+  min-height: 0px;
+  flex: 1 1 0%;
+  flex-direction: column;
+  overflow: hidden;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  padding-top: 0px;
+  margin-top: -6px;
+  padding-bottom: 1.125rem;
+}
+
+.dashboard-stacked-bar-header{
+  border-bottom-width: 0px;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  padding-bottom: 0px;
+  padding-top: 0.375rem;
+}
+
+.dashboard-stacked-bar-header .dashboard-drag-handle-title{
+  line-height: 1.25;
+}
+
+.dashboard-stacked-bar-header .dashboard-drag-handle-subtitle{
+  margin-top: 0px;
+  line-height: 1;
+}
+
+.dashboard-stacked-bar .apexcharts-canvas,
+  .dashboard-stacked-bar .apexcharts-svg {
+  overflow: visible !important;
+}
+
+.dashboard-stacked-bar .apexcharts-gridlines-horizontal line,
+  .dashboard-stacked-bar .apexcharts-gridlines-vertical line {
+  display: none;
+}
+
+/* Viz type: line-chart — multi-series trends */
+
+.dashboard-line-chart {
+  overflow: visible;
+  min-height: 0;
+}
+
+.dashboard-line-chart-body{
+  display: flex;
+  min-height: 0px;
+  flex: 1 1 0%;
+  flex-direction: column;
+  overflow: hidden;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  padding-top: 0px;
+  margin-top: -6px;
+  padding-bottom: 1.125rem;
+}
+
+.dashboard-line-chart-header{
+  border-bottom-width: 0px;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  padding-bottom: 0px;
+  padding-top: 0.375rem;
+}
+
+.dashboard-line-chart-header .dashboard-drag-handle-title{
+  line-height: 1.25;
+}
+
+.dashboard-line-chart-header .dashboard-drag-handle-subtitle{
+  margin-top: 0px;
+  line-height: 1;
+}
+
+.dashboard-line-chart .apexcharts-canvas,
+  .dashboard-line-chart .apexcharts-svg {
+  overflow: visible !important;
+}
+
+.dashboard-line-chart .apexcharts-gridlines-vertical line {
+  display: none;
+}
+
+.dashboard-line-chart-animating .apexcharts-series-markers-wrap,
+  .dashboard-line-chart-animating .apexcharts-series-markers {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.dashboard-line-chart:not(.dashboard-line-chart-animating)
+    .apexcharts-series-markers
+    .apexcharts-marker:not(.dashboard-line-chart-marker-active) {
+  fill: var(--line-chart-marker-fill, var(--surface));
+}
+
+.dashboard-line-chart-tooltip {
+  padding: 6px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+}
+
+.dashboard-line-chart-tooltip-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--foreground);
+  margin-bottom: 4px;
+}
+
+.dashboard-line-chart-tooltip-row {
+  font-size: 11px;
+  line-height: 1.45;
+  font-weight: 500;
+}
+
+.dashboard-line-chart-header-bar{
+  flex-shrink: 0;
+  border-bottom-width: 0px;
+}
+
+.dashboard-line-chart-widget-body{
+  display: flex;
+  min-height: 0px;
+  flex: 1 1 0%;
+  flex-direction: column;
+  overflow: hidden;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  padding-top: 0px;
+  margin-top: -6px;
+  padding-bottom: 1.125rem;
+}
+
+/* Viz type: pie-chart — donut with in-slice values */
+
+.dashboard-pie-chart {
+  overflow: visible;
+  min-height: 0;
+}
+
+.dashboard-pie-chart-body{
+  display: flex;
+  min-height: 0px;
+  flex: 1 1 0%;
+  flex-direction: column;
+  overflow: hidden;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  padding-top: 0px;
+  margin-top: -10px;
+  padding-bottom: 1.125rem;
+}
+
+.dashboard-pie-chart-header{
+  border-bottom-width: 0px;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  padding-bottom: 0px;
+  padding-top: 0.375rem;
+}
+
+.dashboard-pie-chart-header .dashboard-drag-handle-title{
+  line-height: 1.25;
+}
+
+.dashboard-pie-chart-header .dashboard-drag-handle-subtitle{
+  margin-top: 0px;
+  line-height: 1;
+}
+
+.dashboard-pie-slice {
   cursor: pointer;
 }
 
-.channel-donut-tooltip {
+.dashboard-pie-tooltip {
   position: absolute;
   z-index: 2;
   transform: translate(-50%, -100%);
   border-radius: 4px;
-  border: 1px solid var(--dashboard-border, #e8e6e1);
-  background: var(--popover);
+  border: 1px solid var(--border);
+  background: var(--surface);
   box-shadow: 0 2px 8px rgb(0 0 0 / 0.08);
   padding: 4px 8px;
   font-size: 11px;
   line-height: 1.35;
-  color: var(--dashboard-foreground, #1b1b1b);
+  color: var(--foreground);
   white-space: nowrap;
   pointer-events: none;
-}
-
-.channel-donut-legend {
-  flex-shrink: 0;
 }
 
 .dashboard-chart-tooltip {
@@ -966,6 +1526,12 @@
 
 .dashboard-sla-link:hover {
   text-decoration: underline;
+}
+
+.dashboard-sla-link--button{
+  border-width: 0px;
+  background-color: transparent;
+  padding: 0px;
 }
 
 .dashboard-sla-breach-pill {
@@ -1103,14 +1669,6 @@
   height: 4rem;
 }
 
-.tw-h-2{
-  height: 0.5rem;
-}
-
-.tw-h-3{
-  height: 0.75rem;
-}
-
 .tw-h-3\.5{
   height: 0.875rem;
 }
@@ -1141,10 +1699,6 @@
 
 .tw-w-10{
   width: 2.5rem;
-}
-
-.tw-w-2{
-  width: 0.5rem;
 }
 
 .tw-w-3\.5{
@@ -1218,10 +1772,6 @@
   flex-wrap: wrap;
 }
 
-.tw-items-end{
-  align-items: flex-end;
-}
-
 .tw-items-center{
   align-items: center;
 }
@@ -1262,16 +1812,8 @@
   column-gap: 0.75rem;
 }
 
-.tw-gap-x-4{
-  column-gap: 1rem;
-}
-
 .tw-gap-y-0\.5{
   row-gap: 0.125rem;
-}
-
-.tw-gap-y-1{
-  row-gap: 0.25rem;
 }
 
 .tw-space-y-1 > :not([hidden]) ~ :not([hidden]){
@@ -1370,6 +1912,10 @@
 
 .tw-bg-background{
   background-color: var(--background);
+}
+
+.tw-bg-chart-1{
+  background-color: var(--chart-1);
 }
 
 .tw-bg-chrome{
@@ -1477,11 +2023,6 @@
   padding-bottom: 0.5rem;
 }
 
-.tw-py-2\.5{
-  padding-top: 0.625rem;
-  padding-bottom: 0.625rem;
-}
-
 .tw-py-3{
   padding-top: 0.75rem;
   padding-bottom: 0.75rem;
@@ -1497,8 +2038,8 @@
   padding-bottom: 1.25rem;
 }
 
-.tw-pb-1{
-  padding-bottom: 0.25rem;
+.tw-pb-0{
+  padding-bottom: 0px;
 }
 
 .tw-pl-1{
@@ -1515,6 +2056,10 @@
 
 .tw-pt-2{
   padding-top: 0.5rem;
+}
+
+.tw-pt-2\.5{
+  padding-top: 0.625rem;
 }
 
 .tw-pt-3{
@@ -1551,14 +2096,6 @@
 
 .tw-text-\[15px\]{
   font-size: 15px;
-}
-
-.tw-text-\[32px\]{
-  font-size: 32px;
-}
-
-.tw-text-\[36px\]{
-  font-size: 36px;
 }
 
 .tw-text-\[9px\]{
@@ -1599,10 +2136,6 @@
 .tw-tabular-nums{
   --tw-numeric-spacing: tabular-nums;
   font-variant-numeric: var(--tw-ordinal) var(--tw-slashed-zero) var(--tw-numeric-figure) var(--tw-numeric-spacing) var(--tw-numeric-fraction);
-}
-
-.tw-leading-none{
-  line-height: 1;
 }
 
 .tw-leading-relaxed{
@@ -1659,6 +2192,11 @@
 
 .tw-text-surface{
   color: var(--surface);
+}
+
+.tw-text-white{
+  --tw-text-opacity: 1;
+  color: rgb(255 255 255 / var(--tw-text-opacity, 1));
 }
 
 .tw-opacity-80{

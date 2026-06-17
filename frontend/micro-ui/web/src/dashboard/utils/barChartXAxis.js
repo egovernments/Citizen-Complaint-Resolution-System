@@ -1,4 +1,4 @@
-export const Y_AXIS_GUTTER_PX = 40;
+export const Y_AXIS_GUTTER_PX = 8;
 export const MIN_SLOT_WIDTH_FOR_X_LABELS_PX = 36;
 export const LABEL_CHAR_WIDTH_PX = 6;
 

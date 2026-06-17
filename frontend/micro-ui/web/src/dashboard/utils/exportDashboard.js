@@ -99,21 +99,6 @@ function buildExportCsv({ layout, kpiCardData, chartData, filters }) {
       sections.push(...chartBarSection(meta.metric, chartData.wards));
     } else if (item.i === "cl-chart-dow") {
       sections.push(...chartBarSection(meta.metric, chartData.dow));
-    } else if (item.i === "cl-map-complaints") {
-      const pins = chartData.mapPins || [];
-      sections.push(["## Complaint map pins", "Service code,Status,Count,Lat,Lng"]);
-      pins.forEach((pin) => {
-        sections.push(
-          [
-            escapeCsv(pin.serviceCode),
-            escapeCsv(pin.status),
-            escapeCsv(pin.count),
-            escapeCsv(pin.lat),
-            escapeCsv(pin.lng),
-          ].join(",")
-        );
-      });
-      sections.push("");
     }
   });
 

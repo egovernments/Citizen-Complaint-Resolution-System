@@ -1,12 +1,18 @@
 import React from "react";
+import {
+  DATA_TABLE_STYLES,
+  getDataTableTdClass,
+  getDataTableThClass,
+} from "../config/dataTablePresentation";
 
 const TrendCell = ({ value }) => {
+  const { muted, trendUp, trendDown } = DATA_TABLE_STYLES;
   if (value == null || !Number.isFinite(value)) {
-    return <span className="dashboard-table-muted">—</span>;
+    return <span className={muted}>—</span>;
   }
   const up = value >= 0;
   return (
-    <span className={up ? "dashboard-table-trend-up" : "dashboard-table-trend-down"}>
+    <span className={up ? trendUp : trendDown}>
       {up ? "↑" : "↓"} {Math.abs(value).toFixed(1)}%
     </span>
   );
@@ -42,17 +48,19 @@ const CELL_RENDERERS = {
 };
 
 const DashboardTable = ({ columns, rows }) => {
+  const styles = DATA_TABLE_STYLES;
+
   if (!rows?.length) {
-    return <p className="dashboard-table-empty">No data</p>;
+    return <p className={styles.empty}>No data</p>;
   }
 
   return (
-    <table className="dashboard-table">
+    <table className={styles.table}>
       <colgroup>
         {columns.map((col) => (
           <col
             key={col.id}
-            className={col.width ? "dashboard-table-col-fixed" : undefined}
+            className={col.width ? styles.colFixed : undefined}
             style={col.width ? { width: col.width } : undefined}
           />
         ))}
@@ -60,14 +68,7 @@ const DashboardTable = ({ columns, rows }) => {
       <thead>
         <tr>
           {columns.map((col) => (
-            <th
-              key={col.id}
-              className={
-                col.align === "right"
-                  ? "dashboard-table-th dashboard-table-th-right"
-                  : "dashboard-table-th"
-              }
-            >
+            <th key={col.id} className={getDataTableThClass(col.align)}>
               {col.label}
             </th>
           ))}
@@ -77,7 +78,7 @@ const DashboardTable = ({ columns, rows }) => {
         {rows.map((row, rowIndex) => (
           <tr
             key={row.id ?? rowIndex}
-            className={row.highlight ? "dashboard-table-row-highlight" : undefined}
+            className={row.highlight ? styles.rowHighlight : undefined}
           >
             {columns.map((col) => {
               const raw = row[col.id];
@@ -87,19 +88,12 @@ const DashboardTable = ({ columns, rows }) => {
               const labelText = typeof raw === "string" ? raw : String(raw ?? "");
 
               return (
-                <td
-                  key={col.id}
-                  className={
-                    col.align === "right"
-                      ? "dashboard-table-td dashboard-table-td-right"
-                      : "dashboard-table-td"
-                  }
-                >
+                <td key={col.id} className={getDataTableTdClass(col.align)}>
                   {isLabel ? (
-                    <span className="dashboard-table-primary" title={labelText}>
-                      <span className="dashboard-table-label">{content}</span>
+                    <span className={styles.primary} title={labelText}>
+                      <span className={styles.label}>{content}</span>
                       {row.badge ? (
-                        <span className="dashboard-table-badge">{row.badge}</span>
+                        <span className={styles.badge}>{row.badge}</span>
                       ) : null}
                     </span>
                   ) : (

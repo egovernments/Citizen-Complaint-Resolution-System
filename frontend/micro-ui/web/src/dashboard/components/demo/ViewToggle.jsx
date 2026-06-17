@@ -1,6 +1,6 @@
 import React from "react";
 
-const ViewToggle = ({ value, onChange, options }) => (
+const ViewToggle = ({ value, onChange, options, variant = "default" }) => (
   <div className="dashboard-view-toggle tw-inline-flex tw-overflow-hidden tw-rounded-sm tw-border tw-border-border">
     {options.map((opt) => {
       const active = value === opt.id;
@@ -12,7 +12,9 @@ const ViewToggle = ({ value, onChange, options }) => (
           onClick={() => onChange(opt.id)}
           className={
             active
-              ? "tw-border-0 tw-bg-muted tw-px-2.5 tw-py-1 tw-text-[11px] tw-font-semibold tw-text-foreground"
+              ? variant === "primary"
+                ? "tw-border-0 tw-bg-chart-1 tw-px-2.5 tw-py-1 tw-text-[11px] tw-font-semibold tw-text-white"
+                : "tw-border-0 tw-bg-muted tw-px-2.5 tw-py-1 tw-text-[11px] tw-font-semibold tw-text-foreground"
               : "tw-border-0 tw-bg-surface tw-px-2.5 tw-py-1 tw-text-[11px] tw-font-medium tw-text-muted-foreground hover:tw-text-foreground"
           }
         >

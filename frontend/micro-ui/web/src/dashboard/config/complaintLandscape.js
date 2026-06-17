@@ -78,6 +78,7 @@ export const LANDSCAPE_METRICS = [
     id: "cl-metric-total-registered",
     metric: "Total complaints registered",
     accent: "teal",
+    vizType: "number-tile-sparkline",
     filterGroup: "timeWindow",
     defaultSubMetricId: "weekly",
     subMetrics: countSubMetrics("cl_reg"),
@@ -86,6 +87,7 @@ export const LANDSCAPE_METRICS = [
     id: "cl-metric-total-open",
     metric: "Total complaints open",
     accent: "amber",
+    vizType: "number-tile-sparkline",
     filterGroup: "timeWindow",
     defaultSubMetricId: "weekly",
     subMetrics: countSubMetrics("cl_open"),
@@ -174,6 +176,7 @@ export const LANDSCAPE_METRICS = [
     id: "cl-metric-inflow-rate",
     metric: "Inflow rate",
     accent: "teal",
+    vizType: "number-tile-sparkline",
     defaultSubMetricId: "daily_avg",
     subMetrics: [
       {
@@ -266,6 +269,24 @@ export const LANDSCAPE_CHARTS = [
     queryKey: "cl_chart_dow",
   },
   {
+    id: "cl-chart-status-week",
+    type: "stacked-bar",
+    stackOrientation: "vertical",
+    metric: "Status mix per week",
+    subMetric: "Complaint composition by week",
+    outputFormat: "Stacked bar: status mix over time",
+    queryKey: "cl_chart_status_week",
+  },
+  {
+    id: "cl-chart-officer-sla",
+    type: "stacked-bar",
+    stackOrientation: "horizontal",
+    metric: "Team load by SLA",
+    subMetric: "Open complaints by SLA state per officer",
+    outputFormat: "Horizontal stacked bar: officer × SLA bucket",
+    queryKey: "cl_chart_officer_sla",
+  },
+  {
     id: "cl-list-categories",
     type: "data-table",
     metric: "Trending complaints (top 5)",
@@ -296,14 +317,6 @@ export const LANDSCAPE_CHARTS = [
     subMetric: null,
     outputFormat: "Stage dwell table",
     queryKey: "ev_table_stage_dwell",
-  },
-  {
-    id: "cl-map-complaints",
-    type: "map",
-    metric: "Complaint locations",
-    subMetric: null,
-    outputFormat: "Map (pins)",
-    queryKey: "cl_map_complaints",
   },
 ];
 

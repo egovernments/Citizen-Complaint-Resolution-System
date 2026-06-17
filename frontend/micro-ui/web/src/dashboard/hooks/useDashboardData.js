@@ -6,8 +6,9 @@ import {
   parseDowChart,
   parseFilterOptions,
   parseLocalityTable,
-  parseMapPins,
+  parseOfficerSlaStackedChart,
   parseResolutionByTypeTable,
+  parseStatusWeekStackedChart,
   parseTrendingComplaintsTable,
   parseWorkflowStageTable,
 } from "../config/kpiQueries";
@@ -27,11 +28,12 @@ const EMPTY_CHART_DATA = {
   categories: [],
   wards: [],
   dow: [],
+  statusWeekStacked: { categories: [], series: [], colors: [] },
+  officerSlaStacked: { categories: [], series: [], colors: [] },
   trendingComplaints: [],
   resolutionByType: [],
   locality: [],
   workflowStages: [],
-  mapPins: [],
 };
 
 function extractAsOf(results) {
@@ -48,6 +50,8 @@ function buildChartData(results, filters) {
     categories: parseBarChart(categoryResult, "service_code"),
     wards: parseBarChart(results?.cl_chart_wards, "ward_code"),
     dow: parseDowChart(results?.cl_chart_dow),
+    statusWeekStacked: parseStatusWeekStackedChart(results?.cl_chart_status_week),
+    officerSlaStacked: parseOfficerSlaStackedChart(results?.cl_chart_officer_sla),
     trendingComplaints: parseTrendingComplaintsTable(
       categoryResult,
       useWow ? results?.cl_chart_categories_pw : null
@@ -61,7 +65,6 @@ function buildChartData(results, filters) {
       results?.cl_ward_ontime
     ),
     workflowStages: parseWorkflowStageTable(results?.ev_table_stage_dwell),
-    mapPins: parseMapPins(results?.cl_map_complaints),
   };
 }
 

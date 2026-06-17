@@ -7,10 +7,22 @@ import {
 import {
   buildKpiContextText,
   getKpiDisplayTitle,
+  getSparklineDeltaClass,
+  getStatusValueClass,
   isKpiListMetric,
   parseKpiListItems,
   resolveThresholdStatus,
+  statusValueToCssColor,
 } from "./kpiDisplay";
+import {
+  getSparklineKpiQueryConfig,
+  getMetricVizType,
+} from "./kpiSparkline";
+import { VIZ_TYPE } from "./visualizationStyles";
+import {
+  SLA_STACKED_SERIES,
+  STATUS_STACKED_SERIES,
+} from "./stackedBarPresentation";
 
 export { KPI_METRICS, CHART_WIDGETS, getSubMetricDef, subMetricValueKey };
 
@@ -52,17 +64,21 @@ const officerTopCount = (filters, timeWindow) => ({
 });
 
 export const BATCH_QUERIES = {
-  // Complaint locations for the map widget: one row per pinned (lat,long) location.
-  cl_map_complaints: {
-    grain: "facts",
-    dimensions: ["latitude", "longitude", "service_code", "application_status"],
-    measures: [{ name: "n", agg: "count" }],
-    filters: { has_geo_pin: true },
-    limit: 1000,
-  },
   cl_reg_daily: filedWindow("last_1d"),
   cl_reg_weekly: filedWindow("wtd"),
   cl_reg_monthly: filedWindow("mtd"),
+  cl_reg_sparkline_7d: {
+    grain: "facts",
+    window: { name: "last_7d", timeRole: "filed_at" },
+    dimensions: ["created_date"],
+    measures: [{ name: "total", agg: "count" }],
+    sort: [{ by: "created_date", dir: "asc" }],
+    limit: 7,
+  },
+  cl_reg_prior_week: {
+    grain: "facts",
+    measures: [{ name: "total", agg: "count" }],
+  },
   cl_open_daily: {
     grain: "facts",
     filters: { is_open: true },
@@ -70,6 +86,20 @@ export const BATCH_QUERIES = {
   },
   cl_open_weekly: openWindow("wtd"),
   cl_open_monthly: openWindow("mtd"),
+  cl_open_sparkline_7d: {
+    grain: "facts",
+    window: { name: "last_7d", timeRole: "filed_at" },
+    filters: { is_open: true },
+    dimensions: ["created_date"],
+    measures: [{ name: "total", agg: "count" }],
+    sort: [{ by: "created_date", dir: "asc" }],
+    limit: 7,
+  },
+  cl_open_prior_week: {
+    grain: "facts",
+    filters: { is_open: true },
+    measures: [{ name: "total", agg: "count" }],
+  },
   cl_res_daily: resolvedWindow("last_1d"),
   cl_res_weekly: resolvedWindow("wtd"),
   cl_res_monthly: resolvedWindow("mtd"),
@@ -142,6 +172,21 @@ export const BATCH_QUERIES = {
     dimensions: ["created_dow"],
     measures: [{ name: "total", agg: "count" }],
     sort: [{ by: "created_dow", dir: "asc" }],
+  },
+  cl_chart_officer_sla: {
+    grain: "facts",
+    filters: { is_open: true },
+    dimensions: ["current_assignee_uuid", "sla_status_bucket"],
+    measures: [{ name: "total", agg: "count" }],
+    limit: 120,
+  },
+  cl_chart_status_week: {
+    grain: "facts",
+    window: { name: "last_28d", timeRole: "filed_at" },
+    dimensions: ["created_week_start", "application_status"],
+    measures: [{ name: "total", agg: "count" }],
+    sort: [{ by: "created_week_start", dir: "asc" }],
+    limit: 200,
   },
   cl_chart_categories_pw: {
     grain: "facts",
@@ -665,6 +710,18 @@ export function buildBatchQueries(dashboardFilters) {
     };
   }
 
+  if (!apiFilters.__dateRange) {
+    const priorWeekFilter = { created_at: priorWeekCreatedAtFilter() };
+    for (const key of ["cl_reg_prior_week", "cl_open_prior_week"]) {
+      if (queries[key]) {
+        queries[key] = {
+          ...queries[key],
+          filters: mergeQueryFilters(apiFilters, priorWeekFilter),
+        };
+      }
+    }
+  }
+
   return queries;
 }
 
@@ -872,6 +929,65 @@ export function getDisplayValue(metric, subMetricId, allValues, loading) {
   return allValues[key] ?? UNSUPPORTED_VALUE;
 }
 
+function readMetricCount(results, queryKey, measureKey = "total") {
+  const raw = results?.[queryKey]?.rows?.[0]?.[measureKey];
+  if (raw == null) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+export function parseSparkline7d(result) {
+  const rows = result?.rows;
+  if (!rows?.length) return [];
+
+  return [...rows]
+    .sort((a, b) => String(a.created_date ?? "").localeCompare(String(b.created_date ?? "")))
+    .map((row) => Math.round(Number(row.total) || 0));
+}
+
+function formatSparklineDeltaDisplay(deltaPercent) {
+  if (deltaPercent == null || !Number.isFinite(deltaPercent)) return null;
+  const arrow = deltaPercent >= 0 ? "▲" : "▼";
+  const abs = Math.abs(deltaPercent);
+  const rounded = Math.round(abs * 10) / 10;
+  const formatted = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+  return `${arrow} ${formatted}%`;
+}
+
+function buildSparklineKpiExtras(metricId, results, loading) {
+  const config = getSparklineKpiQueryConfig(metricId);
+  const empty = {
+    delta: null,
+    deltaLabel: config?.deltaLabel || "WoW",
+    deltaDisplay: null,
+    sparkline: [],
+  };
+
+  if (!config || loading) return empty;
+
+  let current;
+  let prior;
+
+  if (config.derived === "dailyAvgWow") {
+    const curTotal = readMetricCount(results, config.currentQueryKey);
+    const priorTotal = readMetricCount(results, config.priorQueryKey);
+    current = curTotal == null ? null : curTotal / daysElapsedThisWeek();
+    prior = priorTotal == null ? null : priorTotal / 7;
+  } else {
+    current = readMetricCount(results, config.currentQueryKey);
+    prior = readMetricCount(results, config.priorQueryKey);
+  }
+
+  const delta = computeWowPercent(current, prior);
+
+  return {
+    delta,
+    deltaLabel: config.deltaLabel,
+    deltaDisplay: formatSparklineDeltaDisplay(delta),
+    sparkline: parseSparkline7d(results?.[config.sparklineQueryKey]),
+  };
+}
+
 export function buildKpiCardData(metric, subMetricId, results, subMetricValues, loading) {
   const sub = getSubMetricDef(metric, subMetricId);
   const value = loading
@@ -880,14 +996,29 @@ export function buildKpiCardData(metric, subMetricId, results, subMetricValues, 
 
   const hasList = isKpiListMetric(metric.id);
   const listItems = hasList && !loading ? parseKpiListItems(results, metric.id, 5) : [];
+  const vizType = getMetricVizType(metric);
+  const isSparkline = vizType === VIZ_TYPE.NUMBER_TILE_SPARKLINE;
 
-  return {
+  const base = {
     title: getKpiDisplayTitle(metric),
     value,
-    context: buildKpiContextText(metric.id, results, sub.label),
+    context: isSparkline ? null : buildKpiContextText(metric.id, results, sub.label),
     status: resolveThresholdStatus(metric.id, value),
     listItems,
     hasList,
+    vizType,
+  };
+
+  if (!isSparkline) return base;
+
+  const sparklineExtras = buildSparklineKpiExtras(metric.id, results, loading);
+  return {
+    ...base,
+    ...sparklineExtras,
+    deltaClass: getSparklineDeltaClass(sparklineExtras.delta, metric.id),
+    seriesColor: statusValueToCssColor(
+      getStatusValueClass(resolveThresholdStatus(metric.id, value))
+    ),
   };
 }
 
@@ -922,17 +1053,98 @@ export function parseBarChart(result, labelKey) {
   }));
 }
 
-export function parseMapPins(result) {
-  if (!result?.rows?.length) return [];
-  return result.rows
-    .map((row) => ({
-      lat: Number(row.latitude),
-      lng: Number(row.longitude),
-      count: Number(row.n) || 1,
-      serviceCode: row.service_code,
-      status: row.application_status,
+function formatOfficerStackedLabel(uuid) {
+  const id = String(uuid ?? "Unknown");
+  if (!id || id === "null" || id === "undefined") return "Unassigned";
+  if (id.length <= 8) return id;
+  return `Officer …${id.slice(-6)}`;
+}
+
+function formatWeekStackedLabel(value) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value ?? "Unknown");
+  return `Wk ${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+}
+
+function parsePivotStackedChart(
+  result,
+  { categoryKey, segmentKey, segmentDefs, categoryLabel, maxCategories = 6, segmentFilter }
+) {
+  if (!result?.rows?.length) {
+    return { categories: [], series: [], colors: segmentDefs.map((def) => def.color) };
+  }
+
+  const categoryMap = new Map();
+
+  for (const row of result.rows) {
+    const segment = String(row[segmentKey] ?? "");
+    if (segmentFilter && !segmentFilter(segment)) continue;
+
+    const category = String(row[categoryKey] ?? "Unknown");
+    if (!categoryMap.has(category)) categoryMap.set(category, {});
+    const bucket = categoryMap.get(category);
+    bucket[segment] = (bucket[segment] ?? 0) + (Number(row.total) || 0);
+  }
+
+  const ranked = [...categoryMap.entries()]
+    .map(([key, segments]) => ({
+      key,
+      total: Object.values(segments).reduce((sum, value) => sum + value, 0),
+      segments,
     }))
-    .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+    .filter((entry) => entry.total > 0)
+    .sort((a, b) => b.total - a.total)
+    .slice(0, maxCategories);
+
+  return {
+    categories: ranked.map((entry) => categoryLabel(entry.key)),
+    series: segmentDefs.map((def) => ({
+      name: def.label,
+      data: ranked.map((entry) => entry.segments[def.key] ?? 0),
+    })),
+    colors: segmentDefs.map((def) => def.color),
+  };
+}
+
+export function parseOfficerSlaStackedChart(result, { maxCategories = 6 } = {}) {
+  return parsePivotStackedChart(result, {
+    categoryKey: "current_assignee_uuid",
+    segmentKey: "sla_status_bucket",
+    segmentDefs: SLA_STACKED_SERIES,
+    categoryLabel: formatOfficerStackedLabel,
+    maxCategories,
+    segmentFilter: (segment) =>
+      Boolean(segment) && segment !== "null" && segment !== "undefined",
+  });
+}
+
+export function parseStatusWeekStackedChart(result, { maxWeeks = 4 } = {}) {
+  if (!result?.rows?.length) {
+    return { categories: [], series: [], colors: STATUS_STACKED_SERIES.map((def) => def.color) };
+  }
+
+  const weekMap = new Map();
+  for (const row of result.rows) {
+    const week = String(row.created_week_start ?? "");
+    const status = String(row.application_status ?? "Unknown").toUpperCase();
+    if (!week) continue;
+    if (!weekMap.has(week)) weekMap.set(week, {});
+    const bucket = weekMap.get(week);
+    bucket[status] = (bucket[status] ?? 0) + (Number(row.total) || 0);
+  }
+
+  const weeks = [...weekMap.entries()]
+    .sort(([a], [b]) => String(a).localeCompare(String(b)))
+    .slice(-maxWeeks);
+
+  return {
+    categories: weeks.map(([week]) => formatWeekStackedLabel(week)),
+    series: STATUS_STACKED_SERIES.map((def) => ({
+      name: def.label,
+      data: weeks.map(([, segments]) => segments[def.key] ?? 0),
+    })),
+    colors: STATUS_STACKED_SERIES.map((def) => def.color),
+  };
 }
 
 export function parseDowChart(result) {

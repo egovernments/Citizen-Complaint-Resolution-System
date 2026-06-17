@@ -64,19 +64,6 @@ export function widgetMatchesSearch(widgetId, query, { kpiCardData = {}, chartDa
   if (widgetId === "cl-list-categories" && chartSeriesMatches(chartData.trendingComplaints, q)) {
     return true;
   }
-  if (widgetId === "cl-map-complaints") {
-    const pins = chartData.mapPins || [];
-    if (
-      pins.some(
-        (pin) =>
-          includesQuery(pin.serviceCode, q) ||
-          includesQuery(pin.status, q) ||
-          includesQuery(pin.count, q)
-      )
-    ) {
-      return true;
-    }
-  }
 
   return false;
 }

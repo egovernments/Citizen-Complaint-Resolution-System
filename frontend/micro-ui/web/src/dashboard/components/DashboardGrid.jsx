@@ -16,13 +16,16 @@ import {
 } from "../constants/layoutConfig";
 import { widgetMatchesSearch } from "../utils/dashboardSearch";
 import { isTableWidget, TABLE_WIDGET_CONFIG } from "../config/dashboardTables";
+import { VISUALIZATION_STYLES, VIZ_TYPE } from "../config/visualizationStyles";
 import { isDemoTableWidget, isDemoVizWidget, hasCustomChrome } from "../config/demoVisualizations";
 import KpiCard from "./KpiCard";
+import KpiSparklineCard from "./KpiSparklineCard";
 import DashboardTable from "./DashboardTable";
 import DemoVisualization from "./DemoVisualization";
 import DepartmentBarChart, { WEEKDAY_CHART_ORDER } from "./DepartmentBarChart";
-import ComplaintMap from "./ComplaintMap";
+import StackedBarChart from "./StackedBarChart";
 import ResizeGrip from "./ResizeGrip";
+import CardUpdatedStamp from "./CardUpdatedStamp";
 
 const GridLayoutWithWidth = WidthProvider(GridLayout);
 
@@ -64,8 +67,8 @@ const WidgetRemoveButton = ({ label, onClick }) => (
   </button>
 );
 
-const WidgetHeader = ({ metric, subMetric }) => (
-  <header className="dashboard-drag-handle tw-min-w-0">
+const WidgetHeader = ({ metric, subMetric, headerClassName = "dashboard-drag-handle" }) => (
+  <header className={`${headerClassName} tw-min-w-0`}>
     <div className="tw-min-w-0 tw-flex-1">
       <h2 className="dashboard-drag-handle-title">{metric}</h2>
       {subMetric ? (
@@ -75,14 +78,7 @@ const WidgetHeader = ({ metric, subMetric }) => (
   </header>
 );
 
-// Per-card "last updated" caption, pinned bottom-right (offset to clear the
-// resize grip). No backend freshness signal yet, so it uses the load time.
-const CardUpdatedStamp = ({ label }) => (
-  <span className="dashboard-card-updated tw-pointer-events-none tw-absolute tw-bottom-1 tw-right-5 tw-z-[2] tw-rounded tw-bg-surface tw-px-1 tw-text-[10px] tw-leading-tight tw-text-muted-foreground">
-    Updated {label}
-  </span>
-);
-
+// Per-card "last updated" caption — absolute bottom-right on every card.
 const GRID_MARGIN = [16, 16];
 const RESIZE_HANDLES = ["se"];
 
@@ -165,6 +161,22 @@ const DashboardGrid = ({
     const card = kpiCardData?.[metricId];
     if (!card) return null;
 
+    if (card.vizType === VIZ_TYPE.NUMBER_TILE_SPARKLINE) {
+      return (
+        <KpiSparklineCard
+          title={card.title}
+          value={card.value}
+          status={card.status}
+          deltaDisplay={card.deltaDisplay}
+          deltaClass={card.deltaClass}
+          seriesColor={card.seriesColor}
+          sparkline={card.sparkline}
+          loading={loading}
+          onRemove={onRemove}
+        />
+      );
+    }
+
     return (
       <KpiCard
         title={card.title}
@@ -210,6 +222,34 @@ const DashboardGrid = ({
     return null;
   };
 
+  const renderStackedBar = (widgetId) => {
+    const meta = WIDGETS[widgetId];
+    const horizontal = meta?.stackOrientation === "horizontal";
+    const dataset =
+      widgetId === "cl-chart-officer-sla"
+        ? chartData.officerSlaStacked
+        : chartData.statusWeekStacked;
+
+    const { categories = [], series = [], colors = [] } = dataset || {};
+    const hasData =
+      categories.length > 0 &&
+      series.some((entry) => entry.data?.some((value) => Number(value) > 0));
+
+    if (loading && !hasData) {
+      return <ChartPlaceholder message="Loading…" />;
+    }
+    if (!hasData) return <ChartPlaceholder message="No data" />;
+
+    return (
+      <StackedBarChart
+        categories={categories}
+        series={series}
+        colors={colors}
+        horizontal={horizontal}
+      />
+    );
+  };
+
   const renderTableWidget = (widgetId) => {
     const config = TABLE_WIDGET_CONFIG[widgetId];
     if (!config) return null;
@@ -221,19 +261,17 @@ const DashboardGrid = ({
     return <DashboardTable columns={config.columns} rows={rows} />;
   };
 
-  const renderMap = () => {
-    const pins = chartData.mapPins || [];
-    if (loading && !pins.length) return <ChartPlaceholder message="Loading…" />;
-    if (!pins.length) return <ChartPlaceholder message="No mapped complaints" />;
-    return <ComplaintMap pins={pins} />;
-  };
-
   const renderWidget = (widgetId) => {
     const meta = WIDGETS[widgetId];
     if (!meta) return null;
 
     if (isDemoVizWidget(widgetId)) {
-      return <DemoVisualization widgetId={widgetId} />;
+      return (
+        <DemoVisualization
+          widgetId={widgetId}
+          lastUpdatedLabel={lastUpdatedLabel}
+        />
+      );
     }
 
     if (meta.type === "kpi") {
@@ -248,8 +286,8 @@ const DashboardGrid = ({
       return renderBarChart(widgetId);
     }
 
-    if (meta.type === "map") {
-      return renderMap(widgetId);
+    if (meta.type === "stacked-bar") {
+      return renderStackedBar(widgetId);
     }
 
     return null;
@@ -324,7 +362,8 @@ const DashboardGrid = ({
           onDragStop={handleDragStop}
           onResizeStop={handleResizeStop}
           onLayoutChange={handleLayoutChange}
-          draggableHandle=".dashboard-drag-handle, .dashboard-kpi-widget"
+          draggableHandle=".dashboard-widget-surface"
+          draggableCancel=".dashboard-widget-remove-btn, .dashboard-view-toggle, .dashboard-gauge-target-marker, .dashboard-table-scroll, .dashboard-kpi-list-body, .leaflet-container, a, button, input, select, textarea"
           compactType={null}
           allowOverlap
           isResizable
@@ -337,6 +376,14 @@ const DashboardGrid = ({
             const isKpi = isKpiWidget(item.i);
             const meta = WIDGETS[item.i];
             const isTable = isTableWidget(item.i) || isDemoTableWidget(item.i);
+            const isBarChart = meta?.type === "bar-chart";
+            const isHorizontalBar = meta?.type === "horizontal-bar";
+            const isStackedBar = meta?.type === "stacked-bar";
+            const isLineChart = meta?.type === "line-chart";
+            const isPieChart = meta?.type === "pie-chart";
+            const isHistogram = meta?.type === "histogram";
+            const isGauge = meta?.type === "gauge";
+            const isDataTable = isTable || meta?.type === "data-table";
             const customChrome = meta?.customChrome || hasCustomChrome(item.i);
             const isSearchMatch =
               !isSearchActive ||
@@ -351,7 +398,7 @@ const DashboardGrid = ({
               return (
                 <div
                   key={item.i}
-                  className={`dashboard-kpi-widget tw-group tw-relative tw-flex tw-h-full tw-flex-col tw-transition-all${dimClass}`}
+                  className={`dashboard-kpi-widget dashboard-widget-surface tw-group tw-relative tw-flex tw-h-full tw-flex-col tw-transition-all${dimClass}`}
                 >
                   {renderKpi(item.i, (e) => handleRemove(e, item.i))}
                   <CardUpdatedStamp label={lastUpdatedLabel} />
@@ -362,7 +409,7 @@ const DashboardGrid = ({
             return (
               <section
                 key={item.i}
-                className={`tw-group tw-relative tw-flex tw-h-full tw-min-h-0 tw-flex-col tw-overflow-hidden tw-rounded tw-border tw-border-border tw-bg-surface${dimClass}`}
+                className={`dashboard-widget-surface tw-group tw-relative tw-flex tw-h-full tw-min-h-0 tw-flex-col tw-overflow-hidden tw-rounded tw-border tw-border-border tw-bg-surface${dimClass}`}
               >
                 <WidgetRemoveButton
                   label={`Remove ${meta?.metric ?? item.i}`}
@@ -375,17 +422,62 @@ const DashboardGrid = ({
                 ) : (
                   <>
                     {meta && (
-                      <WidgetHeader metric={meta.metric} subMetric={meta.subMetric} />
+                      <WidgetHeader
+                        metric={meta.metric}
+                        subMetric={meta.subMetric}
+                        headerClassName={
+                          isBarChart ||
+                          isHorizontalBar ||
+                          isStackedBar ||
+                          isLineChart ||
+                          isPieChart ||
+                          isHistogram ||
+                          isGauge ||
+                          isDataTable
+                            ? `dashboard-drag-handle ${
+                                isStackedBar
+                                  ? VISUALIZATION_STYLES[VIZ_TYPE.STACKED_BAR].header
+                                  : isHorizontalBar
+                                    ? VISUALIZATION_STYLES[VIZ_TYPE.HORIZONTAL_BAR].header
+                                    : isLineChart
+                                      ? VISUALIZATION_STYLES[VIZ_TYPE.LINE_CHART].header
+                                      : isPieChart
+                                        ? VISUALIZATION_STYLES[VIZ_TYPE.PIE_CHART].header
+                                        : isHistogram
+                                          ? VISUALIZATION_STYLES[VIZ_TYPE.HISTOGRAM].header
+                                          : isGauge
+                                            ? VISUALIZATION_STYLES[VIZ_TYPE.GAUGE].header
+                                        : isDataTable
+                                          ? VISUALIZATION_STYLES[VIZ_TYPE.DATA_TABLE].header
+                                  : VISUALIZATION_STYLES[VIZ_TYPE.BAR_CHART].header
+                              }`
+                            : "dashboard-drag-handle"
+                        }
+                      />
                     )}
                     <div
                       className={
                         isTable
-                          ? "dashboard-table-body tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-p-4"
-                          : "tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-hidden tw-p-4"
+                          ? VISUALIZATION_STYLES[VIZ_TYPE.DATA_TABLE].body
+                          : isBarChart
+                            ? VISUALIZATION_STYLES[VIZ_TYPE.BAR_CHART].body
+                            : isHorizontalBar
+                              ? VISUALIZATION_STYLES[VIZ_TYPE.HORIZONTAL_BAR].body
+                            : isStackedBar
+                              ? VISUALIZATION_STYLES[VIZ_TYPE.STACKED_BAR].body
+                              : isLineChart
+                                ? VISUALIZATION_STYLES[VIZ_TYPE.LINE_CHART].body
+                                : isPieChart
+                                  ? VISUALIZATION_STYLES[VIZ_TYPE.PIE_CHART].body
+                                  : isHistogram
+                                    ? VISUALIZATION_STYLES[VIZ_TYPE.HISTOGRAM].body
+                                    : isGauge
+                                      ? VISUALIZATION_STYLES[VIZ_TYPE.GAUGE].body
+                              : "tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-hidden tw-p-4"
                       }
                     >
                       {isTable ? (
-                        <div className="dashboard-table-scroll tw-min-h-0 tw-flex-1 tw-overflow-auto">
+                        <div className={VISUALIZATION_STYLES[VIZ_TYPE.DATA_TABLE].scroll}>
                           {renderWidget(item.i)}
                         </div>
                       ) : (

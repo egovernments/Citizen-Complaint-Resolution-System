@@ -4,8 +4,18 @@ import Chart from "react-apexcharts";
 import { DASHBOARD_FONT_FAMILY } from "../config/dashboardConfig";
 import { useChartContainerSize } from "../hooks/useChartContainerSize";
 import {
+  BAR_CHART_XAXIS_LABEL_HEIGHT_COMPACT_PX,
+  BAR_CHART_XAXIS_LABEL_HEIGHT_PX,
+  buildBarChartDataLabels,
+  buildBarChartGrid,
+  buildBarChartLegend,
+  buildBarChartPlotDataLabels,
+  buildBarChartYAxis,
+  getBarChartSeriesColor,
+} from "../config/barChartPresentation";
+import { VISUALIZATION_STYLES, VIZ_TYPE } from "../config/visualizationStyles";
+import {
   resolveLabelSlotWidth,
-  shouldShowXAxisLabels,
   truncateCategoryLabel,
   Y_AXIS_GUTTER_PX,
 } from "../utils/barChartXAxis";
@@ -13,10 +23,6 @@ import {
 const MAX_BAR_WIDTH_PX = 44;
 const SPARSE_CATEGORY_THRESHOLD = 4;
 const GROUP_SLOT_WIDTH_PX = 72;
-/** Reserved space below the plot for horizontal x-axis labels. */
-const XAXIS_LABEL_HEIGHT_PX = 48;
-const XAXIS_LABEL_HEIGHT_COMPACT_PX = 26;
-const XAXIS_LABEL_HEIGHT_HIDDEN_PX = 4;
 const TOOLTIP_OFFSET = 12;
 const TOOLTIP_EST_WIDTH = 280;
 const TOOLTIP_EST_HEIGHT = 56;
@@ -45,21 +51,30 @@ function resolveColumnWidth(slotWidthPx) {
   return `${Math.min(75, Math.max(pct, 40))}%`;
 }
 
-/** Center sparse bar groups by shrinking the plot area with symmetric grid padding. */
+/** Center sparse bar groups on narrow cards; scale slots when the card is wider. */
 function resolveBarGroupLayout(categoryCount, containerWidth, bottomPad) {
-  if (!categoryCount || !containerWidth || categoryCount > SPARSE_CATEGORY_THRESHOLD) {
+  if (!categoryCount || !containerWidth) {
     return {
-      gridPadding: { left: 8, right: 4, top: 4, bottom: bottomPad },
-      slotWidth: containerWidth / Math.max(categoryCount, 1),
+      gridPadding: { left: 2, right: 2, top: 0, bottom: bottomPad },
+      slotWidth: 0,
+    };
+  }
+
+  const evenSlotWidth = containerWidth / categoryCount;
+
+  if (categoryCount > SPARSE_CATEGORY_THRESHOLD || evenSlotWidth > GROUP_SLOT_WIDTH_PX) {
+    return {
+      gridPadding: { left: 2, right: 2, top: 0, bottom: bottomPad },
+      slotWidth: evenSlotWidth,
     };
   }
 
   const groupWidth = categoryCount * GROUP_SLOT_WIDTH_PX;
   const plotArea = Math.max(groupWidth, containerWidth - Y_AXIS_GUTTER_PX);
-  const sidePad = Math.max(8, Math.floor((plotArea - groupWidth) / 2));
+  const sidePad = Math.max(4, Math.floor((plotArea - groupWidth) / 2));
 
   return {
-    gridPadding: { left: sidePad, right: sidePad, top: 4, bottom: bottomPad },
+    gridPadding: { left: sidePad, right: sidePad, top: 0, bottom: bottomPad },
     slotWidth: GROUP_SLOT_WIDTH_PX,
   };
 }
@@ -108,9 +123,10 @@ function ChartTooltipPortal({ tooltip }) {
   );
 }
 
-const DepartmentBarChart = ({ data, categoryOrder, compact = false }) => {
+const DepartmentBarChart = ({ data, categoryOrder, compact = false, colors: colorsProp }) => {
   const { containerRef, containerSize } = useChartContainerSize();
   const [tooltip, setTooltip] = useState(null);
+  const distributed = Boolean(colorsProp?.length);
 
   const chartData = useMemo(
     () => normalizeChartData(data, categoryOrder),
@@ -123,6 +139,11 @@ const DepartmentBarChart = ({ data, categoryOrder, compact = false }) => {
     [chartData]
   );
 
+  const seriesMax = useMemo(
+    () => chartData.reduce((max, d) => Math.max(max, d.count), 0),
+    [chartData]
+  );
+
   const categoryCount = categories.length;
   const containerWidth = containerSize.width;
   const containerHeight = containerSize.height;
@@ -132,20 +153,13 @@ const DepartmentBarChart = ({ data, categoryOrder, compact = false }) => {
     [categoryCount, containerWidth]
   );
 
-  const showXAxisLabels = useMemo(
-    () => shouldShowXAxisLabels(categories, labelSlotWidth),
-    [categories, labelSlotWidth]
-  );
-
   // At small heights the fixed x-axis label reserve and tick count would crush
-  // the plot area (squished bars, overlapping y-axis labels). Scale them down so
-  // a short chart still renders cleanly — or drop labels entirely when they won't fit.
+  // the plot area (squished bars). Scale label reserve down; labels always show
+  // (truncated when slots are narrow).
   const isShort = containerHeight > 0 && containerHeight < 200;
-  const xAxisLabelHeight = showXAxisLabels
-    ? isShort
-      ? XAXIS_LABEL_HEIGHT_COMPACT_PX
-      : XAXIS_LABEL_HEIGHT_PX
-    : XAXIS_LABEL_HEIGHT_HIDDEN_PX;
+  const xAxisLabelHeight = isShort
+    ? BAR_CHART_XAXIS_LABEL_HEIGHT_COMPACT_PX
+    : BAR_CHART_XAXIS_LABEL_HEIGHT_PX;
   const yTickAmount = isShort ? 3 : compact ? 4 : 5;
 
   const { gridPadding, slotWidth } = useMemo(
@@ -156,6 +170,11 @@ const DepartmentBarChart = ({ data, categoryOrder, compact = false }) => {
   const columnWidth = useMemo(
     () => resolveColumnWidth(slotWidth),
     [slotWidth]
+  );
+
+  const colors = useMemo(
+    () => (distributed ? colorsProp : [getBarChartSeriesColor()]),
+    [colorsProp, distributed]
   );
 
   const handleDataPointEnter = useCallback(
@@ -182,6 +201,7 @@ const DepartmentBarChart = ({ data, categoryOrder, compact = false }) => {
         fontFamily: DASHBOARD_FONT_FAMILY,
         animations: { enabled: true, speed: 300 },
         height: containerHeight,
+        parentHeightOffset: 0,
         events: {
           dataPointMouseEnter: handleDataPointEnter,
           dataPointMouseLeave: handleDataPointLeave,
@@ -191,44 +211,33 @@ const DepartmentBarChart = ({ data, categoryOrder, compact = false }) => {
         bar: {
           borderRadius: 4,
           horizontal: false,
-          distributed: false,
+          distributed,
           columnWidth,
+          dataLabels: buildBarChartPlotDataLabels(),
         },
       },
-      dataLabels: { enabled: false },
+      dataLabels: buildBarChartDataLabels(),
+      legend: buildBarChartLegend(),
       xaxis: {
         categories,
         tickPlacement: "on",
         labels: {
-          show: showXAxisLabels,
+          show: true,
           rotate: 0,
           rotateAlways: false,
           trim: false,
-          hideOverlappingLabels: true,
+          hideOverlappingLabels: false,
           maxHeight: xAxisLabelHeight,
-          offsetY: 2,
+          offsetY: 0,
           style: { fontSize: "10px" },
           formatter: (value) => truncateCategoryLabel(value, labelSlotWidth),
         },
         axisBorder: { show: false },
         axisTicks: { show: false },
       },
-      yaxis: {
-        labels: {
-          minWidth: 28,
-          style: { fontSize: "10px" },
-          formatter: (val) => Math.round(val),
-        },
-        forceNiceScale: true,
-        min: 0,
-        tickAmount: yTickAmount,
-      },
-      colors: ["var(--chart-1)"],
-      grid: {
-        borderColor: "var(--border)",
-        strokeDashArray: 3,
-        padding: gridPadding,
-      },
+      yaxis: buildBarChartYAxis({ tickAmount: yTickAmount, seriesMax }),
+      colors,
+      grid: buildBarChartGrid(gridPadding),
       tooltip: { enabled: false },
       states: {
         hover: { filter: { type: "darken", value: 0.85 } },
@@ -237,14 +246,15 @@ const DepartmentBarChart = ({ data, categoryOrder, compact = false }) => {
     [
       categories,
       columnWidth,
+      colors,
       containerHeight,
       gridPadding,
       handleDataPointEnter,
       handleDataPointLeave,
-      showXAxisLabels,
       labelSlotWidth,
       xAxisLabelHeight,
       yTickAmount,
+      seriesMax,
     ]
   );
 
@@ -252,15 +262,17 @@ const DepartmentBarChart = ({ data, categoryOrder, compact = false }) => {
 
   if (!chartData.length) return null;
 
+  const barChartClass = VISUALIZATION_STYLES[VIZ_TYPE.BAR_CHART].container;
+
   return (
     <>
       <div
         ref={containerRef}
-        className="department-bar-chart tw-h-full tw-min-h-0 tw-w-full tw-flex-1 tw-overflow-visible"
+        className={`${barChartClass} tw-h-full tw-min-h-0 tw-w-full tw-flex-1 tw-overflow-visible`}
       >
         {containerHeight > 0 && containerWidth > 0 ? (
           <Chart
-            key={`${containerHeight}-${containerWidth}-${showXAxisLabels}-${categories.join("|")}`}
+            key={`${containerHeight}-${containerWidth}-${categories.join("|")}`}
             options={options}
             series={series}
             type="bar"
