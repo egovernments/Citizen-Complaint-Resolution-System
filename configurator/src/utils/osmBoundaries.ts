@@ -22,6 +22,13 @@ export interface OsmAdminLevel {
   examples: string[];
   /** Operator-provided hierarchy level name, e.g. "District" */
   mappedName: string;
+  /**
+   * Whether this level is included in the hierarchy. The operator picks a
+   * CONTIGUOUS subset of the discovered levels (trim the top/bottom, never a
+   * gap) — a boundary hierarchy is a strict parent→child chain, so skipping a
+   * middle level would silently collapse its children onto the level above.
+   */
+  selected: boolean;
 }
 
 export interface SkippedOsmFeature {
