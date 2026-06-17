@@ -1,15 +1,23 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 export function useChartContainerSize() {
-  const containerRef = useRef(null);
+  const [containerNode, setContainerNode] = useState(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
+  // Callback ref so ResizeObserver attaches when the container mounts later
+  // (e.g. table/bar toggle in ComplaintsBySlaWidget).
+  const containerRef = useCallback((node) => {
+    setContainerNode(node);
+  }, []);
+
   useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return undefined;
+    if (!containerNode) {
+      setContainerSize({ width: 0, height: 0 });
+      return undefined;
+    }
 
     const updateSize = () => {
-      const { width, height } = el.getBoundingClientRect();
+      const { width, height } = containerNode.getBoundingClientRect();
       setContainerSize({
         width: Math.floor(width),
         height: Math.floor(height),
@@ -18,9 +26,9 @@ export function useChartContainerSize() {
 
     updateSize();
     const observer = new ResizeObserver(updateSize);
-    observer.observe(el);
+    observer.observe(containerNode);
     return () => observer.disconnect();
-  }, []);
+  }, [containerNode]);
 
   return { containerRef, containerSize };
 }
