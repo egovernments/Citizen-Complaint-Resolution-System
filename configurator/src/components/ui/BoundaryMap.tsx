@@ -20,10 +20,42 @@ interface BoundaryMapProps {
   className?: string;
 }
 
+// Rough bounding-box area of a Polygon/MultiPolygon outer ring(s) — a cheap
+// proxy for "how big is this boundary" used only for draw ordering.
+function bboxArea(geometry: { type?: string; coordinates?: unknown } | undefined): number {
+  if (!geometry || !Array.isArray(geometry.coordinates)) return 0;
+  const rings: number[][][] =
+    geometry.type === 'MultiPolygon'
+      ? (geometry.coordinates as number[][][][]).map((poly) => poly[0])
+      : geometry.type === 'Polygon'
+        ? [(geometry.coordinates as number[][][])[0]]
+        : [];
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const ring of rings) {
+    if (!Array.isArray(ring)) continue;
+    for (const pt of ring) {
+      if (!Array.isArray(pt) || pt.length < 2) continue;
+      minX = Math.min(minX, pt[0]); maxX = Math.max(maxX, pt[0]);
+      minY = Math.min(minY, pt[1]); maxY = Math.max(maxY, pt[1]);
+    }
+  }
+  if (minX === Infinity) return 0;
+  return (maxX - minX) * (maxY - minY);
+}
+
 // Normalise whatever we're handed into a Feature/FeatureCollection L.geoJSON
-// accepts. A bare geometry is wrapped in a Feature.
+// accepts. A bare geometry is wrapped in a Feature. For a collection, features
+// are sorted largest-area-first so Leaflet draws big containers (e.g. a county)
+// BENEATH the smaller boundaries inside them — otherwise the county polygon
+// covers its children and every hover/tooltip resolves to the county.
 function toGeoJsonLayerInput(data: GeoJsonInput): GeoJSON.GeoJsonObject {
-  if (data.type === 'FeatureCollection' || data.type === 'Feature') {
+  if (data.type === 'FeatureCollection') {
+    const features = [...(data.features as Array<{ geometry?: { type?: string; coordinates?: unknown } }>)].sort(
+      (a, b) => bboxArea(b.geometry) - bboxArea(a.geometry),
+    );
+    return { type: 'FeatureCollection', features } as unknown as GeoJSON.GeoJsonObject;
+  }
+  if (data.type === 'Feature') {
     return data as unknown as GeoJSON.GeoJsonObject;
   }
   return { type: 'Feature', properties: {}, geometry: data } as unknown as GeoJSON.GeoJsonObject;
