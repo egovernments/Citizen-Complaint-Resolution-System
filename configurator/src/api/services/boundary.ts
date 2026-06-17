@@ -198,6 +198,37 @@ export const boundaryService = {
     }
   },
 
+  // Fetch geometry for a set of boundary codes. /boundary/_search binds its
+  // criteria from QUERY params only (tenantId + codes), returns rows of
+  // {code, geometry}. Chunked so the codes csv keeps the query string sane.
+  // Used by the management overview map to draw real outlines for an entire
+  // tenant (mirrors the digit-ui useTenantBoundaries two-step fetch).
+  async getGeometriesByCodes(
+    tenantId: string,
+    codes: string[],
+  ): Promise<Record<string, { type: string; coordinates: unknown }>> {
+    const CHUNK = 40;
+    const byCode: Record<string, { type: string; coordinates: unknown }> = {};
+    for (let i = 0; i < codes.length; i += CHUNK) {
+      const chunk = codes.slice(i, i + CHUNK);
+      const qs = `tenantId=${encodeURIComponent(tenantId)}&codes=${chunk
+        .map(encodeURIComponent)
+        .join(',')}&limit=100`;
+      try {
+        const response = await apiClient.post(`${ENDPOINTS.BOUNDARY_SEARCH}?${qs}`, {
+          RequestInfo: apiClient.buildRequestInfo(),
+        });
+        for (const row of (response.Boundary as { code: string; geometry?: { type: string; coordinates: unknown } }[] | undefined) ?? []) {
+          if (row?.code && row.geometry) byCode[row.code] = row.geometry;
+        }
+      } catch {
+        // best effort — a failed chunk just means those boundaries are absent
+        // from the overview; the rest still render.
+      }
+    }
+    return byCode;
+  },
+
   async boundaryEntityExists(tenantId: string, code: string): Promise<boolean> {
     try {
       const response = await apiClient.post(
