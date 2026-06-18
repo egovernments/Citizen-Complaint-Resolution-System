@@ -79,11 +79,16 @@ Deliberately stops short of submitting the form — ADMIN is a shared principal 
       .first();
     await mobileInput.waitFor({ state: 'visible', timeout: 20_000 });
 
-    // The prefix block sits to the left of the mobile input. The
-    // `.citizen-card-input--front` class is the DIGIT UI convention;
-    // if that class gets renamed we'd rather fail loudly than silently
-    // pick up the wrong element.
-    const prefix = page.locator('.citizen-card-input--front').first();
+    // The prefix block sits to the left of the mobile input. Different
+    // DIGIT UI builds use different CSS hooks for it (naipepea exposes
+    // `.citizen-card-input--front`, newer/bomet builds use class names
+    // like `phone-prefix` or a bare span). Match class-first, fall back
+    // to a text-shape match for "+digits" (a dial code, scoped tightly
+    // to 1–4 digits to avoid colliding with timer/badge strings).
+    const prefix = page
+      .locator('.citizen-card-input--front, [class*="prefix" i], [class*="dial-code" i]')
+      .or(page.getByText(/^\+\d{1,4}$/))
+      .first();
     await expect(prefix).toBeVisible({ timeout: 10_000 });
 
     const prefixText = (await prefix.innerText()).trim();
