@@ -73,5 +73,20 @@ export const OAUTH_CONFIG = {
   scope: 'read',
 };
 
+// Max boundary entities to pull in a single /boundary/_search.
+//
+// boundary-service limits to be aware of:
+//  - The endpoint DEFAULTS to ~50 results even when criteria are supplied,
+//    so you must pass an explicit `limit` to get more than a partial set.
+//  - It CAPS the page at ~300 — a larger `limit` is clamped server-side, so
+//    one request returns at most ~300 entities. A tenant with more boundaries
+//    than this needs offset pagination (not done today; the overview map only
+//    needs a representative set, and city/county hierarchies are well under).
+//
+// Configurable so a deployment whose boundary-service raises/lowers the cap
+// can match it without a code change: set VITE_BOUNDARY_SEARCH_LIMIT.
+export const BOUNDARY_SEARCH_LIMIT: number =
+  Number(import.meta.env.VITE_BOUNDARY_SEARCH_LIMIT) || 300;
+
 // Default employee password
 export const DEFAULT_PASSWORD = 'eGov@123';

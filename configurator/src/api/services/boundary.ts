@@ -1,6 +1,6 @@
 // Boundary Service
 import { apiClient } from '../client';
-import { ENDPOINTS } from '../config';
+import { ENDPOINTS, BOUNDARY_SEARCH_LIMIT } from '../config';
 import type { Boundary, BoundaryHierarchy, BoundaryLevel } from '../types';
 
 export const boundaryService = {
@@ -230,13 +230,17 @@ export const boundaryService = {
   },
 
   // Fetch ALL boundary entities for a tenant in one shot. /boundary/_search
-  // with only tenantId (no codes) returns every entity (capped ~300 by the
-  // service) with its geometry — the same call the MCP's boundary_entity_search
-  // makes. Used by the Management overview map so it renders whatever has real
-  // geometry, independent of the (sometimes inconsistent) relationship tree.
+  // with only tenantId (no codes) returns every entity with its geometry — the
+  // same call the MCP's boundary_entity_search makes. Used by the Management
+  // overview map so it renders whatever has real geometry, independent of the
+  // (sometimes inconsistent) relationship tree.
+  //
+  // `limit` defaults to BOUNDARY_SEARCH_LIMIT (see config.ts). boundary-service
+  // defaults to ~50 results and caps a single page at ~300, so this returns at
+  // most that cap; a tenant with more boundaries would need offset pagination.
   async getAllBoundaryEntities(
     tenantId: string,
-    limit = 300,
+    limit = BOUNDARY_SEARCH_LIMIT,
   ): Promise<Array<{ code: string; geometry?: { type: string; coordinates: unknown }; boundaryType?: string }>> {
     const qs = `tenantId=${encodeURIComponent(tenantId)}&limit=${limit}`;
     try {
