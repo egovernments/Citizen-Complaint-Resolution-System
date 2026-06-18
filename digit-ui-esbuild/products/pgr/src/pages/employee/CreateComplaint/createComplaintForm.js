@@ -67,6 +67,23 @@ const CreateComplaintForm = ({
     return [...set];
   }, [currentEmployeeData]);
 
+  // Admin-style roles aren't tied to a single department, so they should always
+  // see the full Type/Sub-Type list rather than be scoped to one (or none).
+  const PRIVILEGED_ROLES = ["SUPERUSER", "PGR_ADMIN", "PGR-ADMIN"];
+  const isPrivileged = (user?.info?.roles || []).some((r) => PRIVILEGED_ROLES.includes(r?.code));
+
+  // Department gating is a *refinement*, never a hard block: only scope the
+  // Type/Sub-Type dropdowns to the employee's department(s) when doing so still
+  // leaves something to pick. If the user has no department, a privileged role,
+  // or a department that matches no ServiceDef (HRMS dept codes can diverge from
+  // the ServiceDefs `department`), gating is disabled and every type is shown —
+  // otherwise the dropdowns went blank even though MDMS has the data (issue #810).
+  const departmentGate = useMemo(() => {
+    const scoped = (serviceDefs || []).filter((d) => loggedInUserDepartments.includes(d.department));
+    const enabled = !isPrivileged && loggedInUserDepartments.length > 0 && scoped.length > 0;
+    return { enabled, scoped };
+  }, [serviceDefs, loggedInUserDepartments, isPrivileged]);
+
   useEffect(() => {
     if (toast?.show) {
       const timer = setTimeout(() => {
@@ -147,12 +164,11 @@ const CreateComplaintForm = ({
       return [];
     }
 
-    // Strict gate by the logged-in employee's department(s): only show
-    // sub-types when the user is assigned to the selected Type's department.
-    // Supports multiple departments. If the user isn't assigned to it (or the
-    // assignment hasn't loaded), show nothing — never forward a department the
-    // user isn't assigned to.
-    if (!loggedInUserDepartments.includes(baseItem.department)) {
+    // Gate sub-types by the selected Type's department ONLY when department
+    // gating is active (see departmentGate / issue #810). When it's disabled —
+    // no/mismatched department or a privileged user — skip the gate so sub-types
+    // still appear for the chosen Type.
+    if (departmentGate.enabled && !loggedInUserDepartments.includes(baseItem.department)) {
       return [];
     }
 
@@ -179,14 +195,12 @@ const CreateComplaintForm = ({
 
   const updatedConfig = useMemo(() => {
 
-    // Scope the Complaint Type options strictly to the logged-in employee's
-    // assigned department(s) — a user only sees Types they can act on (e.g. an
-    // "ambiental" user doesn't see the "Water"/DEPT_36 Type). If the user has
-    // no assignment (or it hasn't loaded yet), the list is empty: we never
-    // forward Types for a department the user isn't assigned to.
-    const departmentScopedDefs = (serviceDefs || []).filter((d) =>
-      loggedInUserDepartments.includes(d.department)
-    );
+    // Complaint Type options: scoped to the employee's department(s) when
+    // departmentGate is active (e.g. an "ambiental" user doesn't see the
+    // "Water"/DEPT_36 Type), otherwise the full list. The gate is disabled
+    // rather than yielding an empty list when the user has no/mismatched
+    // department or is privileged (issue #810).
+    const departmentScopedDefs = departmentGate.enabled ? departmentGate.scoped : (serviceDefs || []);
 
     const baseConfig = Digit.Utils.preProcessMDMSConfig(
       t,
@@ -229,7 +243,7 @@ const CreateComplaintForm = ({
     });
 
     return { ...baseConfig, form: updatedForm };
-  }, [createComplaintConfig, serviceDefs, t, disabledFields, subType, loggedInUserDepartments]);
+  }, [createComplaintConfig, serviceDefs, t, disabledFields, subType, loggedInUserDepartments, departmentGate]);
 
 
 
