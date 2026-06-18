@@ -17,8 +17,9 @@
  */
 import { test, expect } from '@playwright/test';
 
-import { BASE_URL, TENANT } from '../utils/env';
+import { BASE_URL, TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
 import { getMobileValidationRule } from '../utils/mdms-mobile';
+import { loginViaApi } from '../utils/auth';
 
 // Country dial-code rendered in the Edit Profile mobile-number prefix
 // block. Sourced from MDMS (ValidationConfigs.mobileNumberValidation.prefix)
@@ -34,6 +35,8 @@ test.beforeAll(async () => {
 });
 
 test.describe('employee profile — country prefix #444', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
   test('mobile prefix renders +254 on Kenya tenant (not +91)', {
     annotation: {
       type: 'description',
@@ -54,6 +57,15 @@ Deliberately stops short of submitting the form — ADMIN is a shared principal 
       !expectedPrefix,
       `MDMS ValidationConfigs.mobileNumberValidation has no prefix for tenant=${TENANT} — seed it to enable this assertion`,
     );
+
+    // Self-auth into the employee app (configurator session from
+    // auth.setup.ts doesn't bridge to /digit-ui/employee/*).
+    await loginViaApi(page, {
+      baseURL: BASE_URL,
+      tenant: TENANT,
+      username: ADMIN_USER,
+      password: ADMIN_PASS,
+    });
 
     await page.goto(`${BASE_URL}/digit-ui/employee/user/profile`, {
       waitUntil: 'domcontentloaded',

@@ -18,36 +18,25 @@ import {
   TENANT,
   EMPLOYEE_USER,
   EMPLOYEE_PASS,
-  TENANT_LABEL,
   ASSIGNED_COMPLAINT_ID,
 } from '../utils/env';
-
-const LOGIN_URL = '/digit-ui/employee/user/login';
+import { loginViaApi } from '../utils/auth';
 
 test.describe('employee — manual Escalate action #521', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
   test('PENDINGATLME → Escalate → PENDINGATSUPERVISOR (workflow state moves)', async ({ page }) => {
-    // ============ digit-ui employee login ============
-    await page.goto(`${BASE_URL}${LOGIN_URL}?cb=${Date.now()}`);
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(2_500);
-
-    await page.locator('input[type="text"]').first().pressSequentially(EMPLOYEE_USER, { delay: 60 });
-    await page.locator('input[type="password"]').first().pressSequentially(EMPLOYEE_PASS, { delay: 60 });
-
-    const cityCombo = page.getByRole('combobox', { name: /City/i });
-    if (!(await cityCombo.textContent())?.includes(TENANT_LABEL)) {
-      await cityCombo.click();
-      await page.waitForTimeout(700);
-      await page.getByRole('option', { name: new RegExp(TENANT_LABEL, 'i') }).first().click();
-      await page.waitForTimeout(700);
-    }
-    await page.getByText(/I agree to the DIGIT/i).click();
-    await page.waitForTimeout(700);
-    await page.getByRole('button', { name: /^Login$/i }).click();
-    await page.waitForURL(/\/digit-ui\/employee(?!\/user\/login)/, { timeout: 30_000 });
-    await page.waitForTimeout(3_000);
+    // ============ API session injection (replaces UI form login) ============
+    // Test subject is the Take Action → Escalate flow on a complaint
+    // detail page, not the login form. Inject the employee session via
+    // API so the spec runs on deployments where the configurator-style
+    // login form doesn't bridge to /digit-ui/employee/* sessions.
+    await loginViaApi(page, {
+      baseURL: BASE_URL,
+      tenant: TENANT,
+      username: EMPLOYEE_USER,
+      password: EMPLOYEE_PASS,
+    });
 
     // ============ Open the assigned complaint detail ============
     await page.goto(

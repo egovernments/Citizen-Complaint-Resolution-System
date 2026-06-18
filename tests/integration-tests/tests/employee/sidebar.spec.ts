@@ -19,9 +19,12 @@
  */
 import { test, expect } from '@playwright/test';
 
-import { BASE_URL } from '../utils/env';
+import { BASE_URL, TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
+import { loginViaApi } from '../utils/auth';
 
 test.describe('employee sidebar — IM filter #446', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
   test('IM options hidden; HRMS + Complaint Registry visible', {
     annotation: {
       type: 'description',
@@ -36,6 +39,15 @@ Steps:
 Uses the ADMIN storageState — ADMIN has every role, so before the fix would have seen IM. The /complaint/i regex stays loose because the registry tile's exact label varies by localization.`,
     },
     tag: ['@area:pgr', '@ccrs:446', '@kind:regression', '@layer:ui', '@persona:employee'] }, async ({ page }) => {
+    // Self-auth: configurator session (from auth.setup.ts) doesn't bridge
+    // to /digit-ui/employee/*. Inject an employee-scoped session via API.
+    await loginViaApi(page, {
+      baseURL: BASE_URL,
+      tenant: TENANT,
+      username: ADMIN_USER,
+      password: ADMIN_PASS,
+    });
+
     await page.goto(`${BASE_URL}/digit-ui/employee`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
