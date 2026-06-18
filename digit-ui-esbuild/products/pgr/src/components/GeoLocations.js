@@ -7,7 +7,6 @@ import { useTranslation } from "react-i18next";
 import _ from "lodash";
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
-import keNairobiWardsFallback from "../assets/boundaries/ke_nairobi_wards.json";
 import useWardHighlightColor from "../hooks/pgr/useWardHighlightColor";
 import useTenantBoundaries from "../hooks/pgr/useTenantBoundaries";
 
@@ -178,8 +177,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   }, [formData, config.key]);
 
   const fetchAddress = async (lat, lng) => {
-    const wardCollection = tenantBoundaries || keNairobiWardsFallback;
-    const ward = resolveWard(lat, lng, wardCollection);
+    const ward = resolveWard(lat, lng, tenantBoundaries);
     setSelectedWard(ward?.code || null);
     try {
       const response = await fetch(

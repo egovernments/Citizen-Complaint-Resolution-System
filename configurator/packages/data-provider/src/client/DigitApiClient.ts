@@ -286,9 +286,18 @@ export class DigitApiClient {
   }
 
   async boundaryRelationshipSearch(tenantId: string, hierarchyType?: string): Promise<Record<string, unknown>[]> {
-    const data = await this.request<{ TenantBoundary?: Record<string, unknown>[] }>(this.endpoint('BOUNDARY_RELATIONSHIP_SEARCH'), {
-      RequestInfo: this.buildRequestInfo(), BoundaryRelationship: { tenantId, hierarchyType },
-    });
+    // boundary-relationships/_search binds its criteria from QUERY params ONLY
+    // (tenantId, hierarchyType, includeChildren) — the request body is just
+    // RequestInfo. Passing tenantId in the body silently returns EVERY
+    // tenant's relationships (the search runs unscoped), which surfaced as
+    // other tenants' boundaries (B1_ADMIN_BLOCK, CITY_001…) bleeding into a
+    // city's boundary list. Same QUERY-only binding boundary.ts relies on.
+    const qs = new URLSearchParams({ tenantId, includeChildren: 'true' });
+    if (hierarchyType) qs.set('hierarchyType', hierarchyType);
+    const data = await this.request<{ TenantBoundary?: Record<string, unknown>[] }>(
+      `${this.endpoint('BOUNDARY_RELATIONSHIP_SEARCH')}?${qs.toString()}`,
+      { RequestInfo: this.buildRequestInfo() },
+    );
     return data.TenantBoundary || [];
   }
 

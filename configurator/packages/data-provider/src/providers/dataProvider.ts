@@ -131,7 +131,13 @@ async function hrmsGetList(client: DigitApiClient, config: ResourceConfig, tenan
 }
 
 async function boundaryGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string): Promise<RaRecord[]> {
-  function flattenTrees(trees: Record<string, unknown>[]): RaRecord[] {
+  // The boundary-relationships endpoint repeats each child node under its
+  // parent in the payload, so a naive flatten emits the same code many times
+  // (a 22-boundary tree rendered as 300+ duplicate rows). Dedup by code as we
+  // walk — same fix boundary.ts's searchBoundaries already applies. The set is
+  // shared across every hierarchy/tenant tree so a code seeded under two
+  // hierarchies still shows once.
+  function flattenTrees(trees: Record<string, unknown>[], seen: Set<string>): RaRecord[] {
     const flat: RaRecord[] = [];
     function flatten(
       nodes: unknown[],
@@ -141,23 +147,27 @@ async function boundaryGetList(client: DigitApiClient, config: ResourceConfig, t
     ) {
       if (!Array.isArray(nodes)) return;
       for (const node of nodes as Record<string, unknown>[]) {
-        // Stamp tenantId + hierarchyType on every flattened node from its
-        // enclosing tree wrapper. Downstream editors (JurisdictionEditor)
-        // use these to scope jurisdiction rows to the boundary's home
-        // tenant, not the session tenant.
-        flat.push(
-          normalizeRecord(
-            {
-              ...node,
-              parentCode,
-              tenantId: (node.tenantId as string | undefined) ?? treeTenantId,
-              hierarchyType: (node.hierarchyType as string | undefined) ?? treeHierarchyType,
-            },
-            config,
-          ),
-        );
+        const code = typeof node.code === 'string' ? node.code : undefined;
+        if (code && !seen.has(code)) {
+          seen.add(code);
+          // Stamp tenantId + hierarchyType on every flattened node from its
+          // enclosing tree wrapper. Downstream editors (JurisdictionEditor)
+          // use these to scope jurisdiction rows to the boundary's home
+          // tenant, not the session tenant.
+          flat.push(
+            normalizeRecord(
+              {
+                ...node,
+                parentCode,
+                tenantId: (node.tenantId as string | undefined) ?? treeTenantId,
+                hierarchyType: (node.hierarchyType as string | undefined) ?? treeHierarchyType,
+              },
+              config,
+            ),
+          );
+        }
         if (Array.isArray(node.children)) {
-          flatten(node.children as unknown[], node.code as string, treeTenantId, treeHierarchyType);
+          flatten(node.children as unknown[], code, treeTenantId, treeHierarchyType);
         }
       }
     }
@@ -183,7 +193,8 @@ async function boundaryGetList(client: DigitApiClient, config: ResourceConfig, t
     const treeLists = await Promise.all(
       types.map((ht) => client.boundaryRelationshipSearch(t, ht).catch(() => [])),
     );
-    return treeLists.flatMap((trees) => flattenTrees(trees as Record<string, unknown>[]));
+    const seen = new Set<string>();
+    return treeLists.flatMap((trees) => flattenTrees(trees as Record<string, unknown>[], seen));
   }
 
   // Always fetch the session tenant's tree(s) first.
