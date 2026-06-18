@@ -123,7 +123,7 @@ class SessionManager {
 
         if (!result) {
           // Invalid email - provide registration link
-          const registrationUrl = `${config.sandboxHost || 'https://sandbox-demo.digit.org'}/sandbox-ui/user/login`;
+          const registrationUrl = `${config.sandboxHost || 'https://sandbox-demo.digit.org'}/sandbox-ui/user/sign-up`;
           const errorMessage = `Email '${email}' not found.\n\n` +
             `Please enter a registered email address or register at:\n` +
             `${registrationUrl}`;

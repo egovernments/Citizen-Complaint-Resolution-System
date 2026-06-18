@@ -130,8 +130,8 @@ class EmailTenantService {
     getSandboxRegistrationUrl(tenantEmail) {
         // Use sandbox host from config
         const sandboxHost = config.sandboxHost;
-        const emailQuery = tenantEmail ? `?email=${encodeURIComponent(tenantEmail)}` : '';
-        return `${sandboxHost}/sandbox-ui/user/login${emailQuery}`;
+        const timestamp = Date.now();
+        return `${sandboxHost}/sandbox-ui/user/sign-up?ts=${timestamp}`;
     }
 }
 
