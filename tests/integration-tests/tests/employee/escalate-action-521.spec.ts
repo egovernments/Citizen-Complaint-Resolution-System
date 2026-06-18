@@ -44,6 +44,9 @@ test.describe('employee — manual Escalate action #521', () => {
 
   let selfCreatedSrid: string | undefined;
   let setupFailure: string | undefined;
+  // Reused by the final workflow process-search verification — bomet's
+  // workflow service rejects calls with an empty RequestInfo.
+  let workflowAuthToken: string | undefined;
 
   test.beforeAll(async () => {
     try {
@@ -57,6 +60,7 @@ test.describe('employee — manual Escalate action #521', () => {
       });
       const adminToken = admin.access_token;
       const adminUserInfo = admin.UserRequest as Record<string, unknown>;
+      workflowAuthToken = adminToken;
       // adminUserInfo.uuid is the user-service uuid; we use the HRMS
       // employee uuid (resolved below) as the workflow's assignee.
 
@@ -82,14 +86,17 @@ test.describe('employee — manual Escalate action #521', () => {
         throw new Error(`ServiceDefs MDMS lookup failed: HTTP ${sdResp.status}`);
       }
       const sdJson = (await sdResp.json()) as {
-        MdmsRes?: { 'RAINMAKER-PGR'?: { ServiceDefs?: Array<{ serviceCode: string; active?: boolean }> } };
+        MdmsRes?: {
+          'RAINMAKER-PGR'?: {
+            ServiceDefs?: Array<{ serviceCode: string; active?: boolean; department?: string }>;
+          };
+        };
       };
       const allDefs = sdJson.MdmsRes?.['RAINMAKER-PGR']?.ServiceDefs ?? [];
       const activeDefs = allDefs.filter((d) => d.active !== false);
       if (activeDefs.length === 0) {
         throw new Error(`No active ServiceDefs on tenant ${TENANT}`);
       }
-      const serviceCode = activeDefs[Math.floor(Math.random() * activeDefs.length)].serviceCode;
 
       // 4. HRMS employee with PGR_LME role on the tenant — the workflow's
       //    ASSIGN action validates the assignee uuid against HRMS, so the
@@ -111,7 +118,10 @@ test.describe('employee — manual Escalate action #521', () => {
         throw new Error(`HRMS lookup failed: HTTP ${hrmsResp.status}`);
       }
       const hrmsJson = (await hrmsResp.json()) as {
-        Employees?: Array<{ user: { uuid: string; name?: string; roles?: Array<{ code: string }> } }>;
+        Employees?: Array<{
+          user: { uuid: string; name?: string; roles?: Array<{ code: string }> };
+          assignments?: Array<{ department?: string; isCurrentAssignment?: boolean }>;
+        }>;
       };
       const allEmps = hrmsJson.Employees ?? [];
       const lmeCandidates = allEmps.filter((e) =>
@@ -126,6 +136,25 @@ test.describe('employee — manual Escalate action #521', () => {
       const assignee = lmeCandidates[Math.floor(Math.random() * lmeCandidates.length)];
       const assigneeHrmsUuid = assignee.user.uuid;
       const assigneeName = assignee.user.name ?? '(unnamed)';
+      // Workflow's PGR rule: a complaint's serviceCode-mapped department
+      // must match the assignee's current-assignment department. Pick the
+      // serviceCode AFTER we know the assignee, constrained to that dept.
+      const assigneeDept = (assignee.assignments ?? []).find((a) => a.isCurrentAssignment)?.department
+        ?? assignee.assignments?.[0]?.department;
+      if (!assigneeDept) {
+        throw new Error(
+          `Assignee ${assigneeName} (${assigneeHrmsUuid}) on tenant=${TENANT} has no department in HRMS assignments — workflow ASSIGN would reject. Fix the HRMS record.`,
+        );
+      }
+      const matchingDefs = activeDefs.filter((d) => d.department === assigneeDept);
+      if (matchingDefs.length === 0) {
+        throw new Error(
+          `No active ServiceDef maps to department=${assigneeDept} on tenant=${TENANT} ` +
+            `(needed to match assignee ${assigneeName}'s current assignment). Either seed a ServiceDef ` +
+            `in that department or seed a PGR_LME employee in a department that has ServiceDefs.`,
+        );
+      }
+      const serviceCode = matchingDefs[Math.floor(Math.random() * matchingDefs.length)].serviceCode;
 
       // 5. Random leaf boundary (ward) from egov-location.
       const bResp = await fetch(
@@ -268,7 +297,7 @@ test.describe('employee — manual Escalate action #521', () => {
 
       selfCreatedSrid = srid;
       console.log(
-        `[escalate-self-create] srid=${srid} serviceCode=${serviceCode} ` +
+        `[escalate-self-create] srid=${srid} serviceCode=${serviceCode} dept=${assigneeDept} ` +
           `locality=${localityCode} assignee=${assigneeName} (${assigneeHrmsUuid}) tenant=${TENANT}`,
       );
     } catch (err) {
@@ -329,10 +358,12 @@ test.describe('employee — manual Escalate action #521', () => {
       `${BASE_URL}/egov-workflow-v2/egov-wf/process/_search?businessIds=${selfCreatedSrid}&tenantId=${TENANT}`,
       {
         headers: { 'Content-Type': 'application/json' },
-        data: { RequestInfo: {} },
+        data: {
+          RequestInfo: { apiId: 'Rainmaker', authToken: workflowAuthToken },
+        },
       },
     );
-    expect(wfResp.ok()).toBeTruthy();
+    expect(wfResp.ok(), `workflow process-search HTTP ${wfResp.status()}`).toBeTruthy();
     const body = await wfResp.text();
     expect(
       body,
