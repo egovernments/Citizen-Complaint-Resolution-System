@@ -6,6 +6,7 @@ import {
   buildLineChartAnimations,
   buildLineChartGrid,
   buildLineChartMarkers,
+  buildLineChartSeriesData,
   buildLineChartStroke,
   buildLineChartTooltip,
   buildLineChartXAxis,
@@ -74,12 +75,8 @@ const LineChart = ({
   );
 
   const chartSeries = useMemo(
-    () =>
-      normalizedSeries.map((entry) => ({
-        name: entry.name,
-        data: entry.data,
-      })),
-    [normalizedSeries]
+    () => buildLineChartSeriesData(normalizedSeries, categories.length),
+    [categories.length, normalizedSeries]
   );
 
   const colors = useMemo(
@@ -95,18 +92,24 @@ const LineChart = ({
     [activeYAxis, normalizedSeries]
   );
 
+  const revealMarkers = useCallback((chartContext) => {
+    setLineChartMarkersVisible(chartContext, true);
+    applyLineChartMarkerHoverState(
+      chartContext,
+      hoveredIndexRef.current,
+      colorsRef.current,
+      surfaceColorRef.current
+    );
+  }, []);
+
   const chartEvents = useMemo(
     () => ({
       animationEnd: (chartContext) => {
         isAnimatingRef.current = false;
         setIsAnimating(false);
-        setLineChartMarkersVisible(chartContext, true);
-        applyLineChartMarkerHoverState(
-          chartContext,
-          hoveredIndexRef.current,
-          colorsRef.current,
-          surfaceColorRef.current
-        );
+        revealMarkers(chartContext);
+        // Apex may paint markers after animationEnd; re-apply on next frame.
+        requestAnimationFrame(() => revealMarkers(chartContext));
       },
       mouseMove: (_event, chartContext, config) => {
         if (isAnimatingRef.current) return;
@@ -144,7 +147,7 @@ const LineChart = ({
         }
       },
     }),
-    []
+    [revealMarkers]
   );
 
   const options = useMemo(
@@ -160,18 +163,18 @@ const LineChart = ({
       },
       stroke: buildLineChartStroke(normalizedSeries),
       markers: buildLineChartMarkers(colors),
-      xaxis: buildLineChartXAxis(categories),
+      xaxis: buildLineChartXAxis(categories, containerWidth),
       yaxis: buildLineChartYAxis(yAxisBounds),
       colors,
       legend: LINE_CHART_LEGEND,
       grid: buildLineChartGrid(),
-      tooltip: buildLineChartTooltip(),
+      tooltip: buildLineChartTooltip(categories),
       states: {
         hover: { filter: { type: "none" } },
         active: { filter: { type: "none" } },
       },
     }),
-    [categories, chartEvents, colors, normalizedSeries, yAxisBounds]
+    [categories, chartEvents, colors, containerWidth, normalizedSeries, yAxisBounds]
   );
 
   const markerStyleVars = useMemo(

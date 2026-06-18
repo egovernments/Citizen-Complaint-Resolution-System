@@ -12,6 +12,9 @@ export const LINE_CHART_STROKE_WIDTH = 2.5;
 export const LINE_CHART_MARKER_SIZE = 3;
 export const LINE_CHART_MARKER_STROKE_WIDTH = 1.5;
 export const LINE_CHART_ANIMATION_SPEED = 450;
+/** Gap between y-axis border and first data point (px in plot space). */
+export const LINE_CHART_PLOT_INSET_PX = 18;
+export const LINE_CHART_Y_AXIS_LABEL_WIDTH = 48;
 
 export const LINE_CHART_LEGEND = {
   show: true,
@@ -58,7 +61,7 @@ export function resolveLineChartColors(series) {
 
 export function buildLineChartStroke(series) {
   return {
-    curve: "smooth",
+    curve: "monotoneCubic",
     width: series.map(() => LINE_CHART_STROKE_WIDTH),
     dashArray: series.map((entry) => entry.dashArray ?? 0),
   };
@@ -156,7 +159,7 @@ export function applyLineChartMarkerHoverState(
   });
 }
 
-export function buildLineChartTooltip() {
+export function buildLineChartTooltip(categories = []) {
   return {
     enabled: true,
     shared: true,
@@ -173,6 +176,7 @@ export function buildLineChartTooltip() {
       if (dataPointIndex < 0) return "";
 
       const label =
+        categories[dataPointIndex] ??
         w.globals.categoryLabels[dataPointIndex] ??
         w.globals.labels[dataPointIndex] ??
         "";
@@ -242,23 +246,68 @@ export function buildLineChartGrid() {
     show: true,
     borderColor,
     strokeDashArray: 4,
-    padding: { left: 4, right: 16, top: 8, bottom: 0 },
+    padding: { left: 0, right: 12, top: 8, bottom: 0 },
     xaxis: { lines: { show: false } },
     yaxis: { lines: { show: true } },
   };
 }
 
-export function buildLineChartXAxis(categories) {
+/** Map category series to numeric x/y pairs; x starts at 0 (inset applied via xaxis.min). */
+export function buildLineChartSeriesData(series, categoryCount) {
+  return series.map((entry) => ({
+    name: entry.name,
+    data: entry.data.slice(0, categoryCount).map((y, index) => ({
+      x: index,
+      y,
+    })),
+  }));
+}
+
+export function estimateLineChartGridWidth(containerWidth) {
+  return Math.max(100, (containerWidth || 280) - LINE_CHART_Y_AXIS_LABEL_WIDTH);
+}
+
+/** Negative min shifts the first point right, clear of y-axis labels. */
+export function resolveLineChartNumericXMin(maxX, gridWidth) {
+  if (!maxX || !gridWidth || gridWidth <= LINE_CHART_PLOT_INSET_PX) return 0;
+  const min = -(LINE_CHART_PLOT_INSET_PX * maxX) / (gridWidth - LINE_CHART_PLOT_INSET_PX);
+  return Math.round(min * 1000) / 1000;
+}
+
+export function resolveLineChartNumericXBounds(categoryCount, containerWidth) {
+  const max = Math.max(categoryCount - 1, 1);
+  const gridWidth = estimateLineChartGridWidth(containerWidth);
+  const min = resolveLineChartNumericXMin(max, gridWidth);
+
+  return { min, max, tickAmount: max };
+}
+
+export function buildLineChartXAxis(categories, containerWidth) {
   const borderColor = resolveDashboardCssColor("var(--border)");
+  const { min, max, tickAmount } = resolveLineChartNumericXBounds(
+    categories.length,
+    containerWidth
+  );
 
   return {
-    categories,
+    type: "numeric",
+    min,
+    max,
+    tickAmount,
+    decimalsInFloat: 0,
+    floating: false,
     labels: {
       style: { fontSize: "10px" },
       hideOverlappingLabels: true,
+      formatter: (value) => {
+        const index = Math.round(Number(value));
+        if (index < 0 || index >= categories.length) return "";
+        return categories[index] ?? "";
+      },
     },
     axisBorder: { show: true, color: borderColor, height: 1, offsetX: 0, offsetY: 0 },
     axisTicks: { show: true, height: 4, color: borderColor },
+    tooltip: { enabled: false },
     crosshairs: {
       show: true,
       position: "front",

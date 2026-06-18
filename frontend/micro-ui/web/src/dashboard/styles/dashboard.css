@@ -1324,7 +1324,7 @@
 
 .dashboard-line-chart .apexcharts-canvas,
   .dashboard-line-chart .apexcharts-svg {
-  overflow: visible !important;
+  overflow: hidden;
 }
 
 .dashboard-line-chart .apexcharts-gridlines-vertical line {
