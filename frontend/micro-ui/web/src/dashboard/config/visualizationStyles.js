@@ -29,10 +29,14 @@ export const SHARED_CHROME = {
   dragHandleSubtitle: "dashboard-drag-handle-subtitle",
   widgetSurface: "dashboard-widget-surface",
   widgetRemoveBtn: "dashboard-widget-remove-btn",
+  /** Scope palette CSS variables onto portaled nodes (e.g. body-mounted tooltips). */
+  dashboardRoot: "dashboard-root",
   defaultBody: "tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-hidden tw-p-4",
   chartTooltip: "dashboard-chart-tooltip",
+  chartTooltipFixed: "dashboard-chart-tooltip--fixed",
+  chartTooltipAnchored: "dashboard-chart-tooltip--anchored",
   chartTooltipTitle: "dashboard-chart-tooltip-title",
-  chartTooltipValue: "dashboard-chart-tooltip-value",
+  chartTooltipRow: "dashboard-chart-tooltip-row",
 };
 
 const BAR_CHART_STYLES = {
@@ -115,16 +119,12 @@ export const VISUALIZATION_STYLES = {
     widgetBody: "dashboard-line-chart-widget-body",
     animating: "dashboard-line-chart-animating",
     markerActive: "dashboard-line-chart-marker-active",
-    tooltip: "dashboard-line-chart-tooltip",
-    tooltipTitle: "dashboard-line-chart-tooltip-title",
-    tooltipRow: "dashboard-line-chart-tooltip-row",
   },
   [VIZ_TYPE.PIE_CHART]: {
     container: "dashboard-pie-chart",
     body: "dashboard-pie-chart-body",
     header: "dashboard-pie-chart-header",
     slice: "dashboard-pie-slice",
-    tooltip: "dashboard-pie-tooltip",
   },
   [VIZ_TYPE.DATA_TABLE]: DATA_TABLE_STYLES,
   [VIZ_TYPE.SLA_RISK_TABLE]: {

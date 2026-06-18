@@ -3,6 +3,7 @@
  */
 
 import { resolveDashboardCssColor } from "./chartColors";
+import { buildApexSeriesHoverTooltip } from "./chartTooltipPresentation";
 import { VISUALIZATION_STYLES, VIZ_TYPE } from "./visualizationStyles";
 
 const LINE_CHART_STYLES = VISUALIZATION_STYLES[VIZ_TYPE.LINE_CHART];
@@ -160,46 +161,7 @@ export function applyLineChartMarkerHoverState(
 }
 
 export function buildLineChartTooltip(categories = []) {
-  return {
-    enabled: true,
-    shared: true,
-    intersect: false,
-    followCursor: false,
-    theme: "light",
-    marker: { show: false },
-    x: { show: false },
-    y: {
-      formatter: (value) => Math.round(Number(value)),
-      title: { formatter: (name) => `${name} : ` },
-    },
-    custom: ({ series, dataPointIndex, w }) => {
-      if (dataPointIndex < 0) return "";
-
-      const label =
-        categories[dataPointIndex] ??
-        w.globals.categoryLabels[dataPointIndex] ??
-        w.globals.labels[dataPointIndex] ??
-        "";
-      const names = w.config.series.map((entry) => entry.name);
-      const palette = w.globals.colors;
-
-      const rows = series
-        .map((values, index) => {
-          const value = values[dataPointIndex];
-          if (value == null || Number.isNaN(Number(value))) return "";
-          const name = names[index] ?? `Series ${index + 1}`;
-          const color = palette[index] ?? palette[0];
-          return `<div class="${LINE_CHART_STYLES.tooltipRow}" style="color:${color}">${name} : ${Math.round(Number(value))}</div>`;
-        })
-        .join("");
-
-      return `<div class="${LINE_CHART_STYLES.tooltip}">${
-        label
-          ? `<div class="${LINE_CHART_STYLES.tooltipTitle}">${label}</div>`
-          : ""
-      }${rows}</div>`;
-    },
-  };
+  return buildApexSeriesHoverTooltip({ categories });
 }
 
 export function buildLineChartAnimations() {

@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 import Chart from "react-apexcharts";
 import { DASHBOARD_FONT_FAMILY } from "../config/dashboardConfig";
 import { useChartContainerSize } from "../hooks/useChartContainerSize";
@@ -19,13 +18,11 @@ import {
   truncateCategoryLabel,
   Y_AXIS_GUTTER_PX,
 } from "../utils/barChartXAxis";
+import ChartTooltipPortal from "./ChartTooltipPortal";
 
 const MAX_BAR_WIDTH_PX = 44;
 const SPARSE_CATEGORY_THRESHOLD = 4;
 const GROUP_SLOT_WIDTH_PX = 72;
-const TOOLTIP_OFFSET = 12;
-const TOOLTIP_EST_WIDTH = 280;
-const TOOLTIP_EST_HEIGHT = 56;
 
 function normalizeChartData(data, categoryOrder) {
   if (!categoryOrder?.length) {
@@ -77,50 +74,6 @@ function resolveBarGroupLayout(categoryCount, containerWidth, bottomPad) {
     gridPadding: { left: sidePad, right: sidePad, top: 0, bottom: bottomPad },
     slotWidth: GROUP_SLOT_WIDTH_PX,
   };
-}
-
-function resolveTooltipPosition(clientX, clientY) {
-  const margin = TOOLTIP_OFFSET;
-  const maxLeft = window.innerWidth - TOOLTIP_EST_WIDTH - margin;
-  const maxTop = window.innerHeight - TOOLTIP_EST_HEIGHT - margin;
-
-  let left = clientX + margin;
-  let top = clientY - TOOLTIP_EST_HEIGHT - margin;
-
-  if (left > maxLeft) {
-    left = clientX - TOOLTIP_EST_WIDTH - margin;
-  }
-  if (left < margin) {
-    left = margin;
-  }
-  if (top < margin) {
-    top = clientY + margin;
-  }
-  if (top > maxTop) {
-    top = maxTop;
-  }
-
-  return { left, top };
-}
-
-function ChartTooltipPortal({ tooltip }) {
-  if (!tooltip) return null;
-
-  const { left, top } = resolveTooltipPosition(tooltip.x, tooltip.y);
-
-  return createPortal(
-    <div
-      className={SHARED_CHROME.chartTooltip}
-      style={{ left: `${left}px`, top: `${top}px` }}
-      role="tooltip"
-    >
-      <p className={SHARED_CHROME.chartTooltipTitle}>{tooltip.label}</p>
-      <p className={SHARED_CHROME.chartTooltipValue}>
-        Count: <strong>{tooltip.value}</strong>
-      </p>
-    </div>,
-    document.body
-  );
 }
 
 const DepartmentBarChart = ({ data, categoryOrder, compact = false, colors: colorsProp }) => {
@@ -179,6 +132,8 @@ const DepartmentBarChart = ({ data, categoryOrder, compact = false, colors: colo
 
   const handleDataPointEnter = useCallback(
     (event, _chart, { dataPointIndex }) => {
+      if (dataPointIndex < 0) return;
+
       setTooltip({
         label: categories[dataPointIndex] ?? "Unknown",
         value: chartData[dataPointIndex]?.count ?? 0,
@@ -188,6 +143,13 @@ const DepartmentBarChart = ({ data, categoryOrder, compact = false, colors: colo
     },
     [categories, chartData]
   );
+
+  const handleChartMouseMove = useCallback((event) => {
+    setTooltip((prev) => {
+      if (!prev) return null;
+      return { ...prev, x: event.clientX, y: event.clientY };
+    });
+  }, []);
 
   const handleDataPointLeave = useCallback(() => {
     setTooltip(null);
@@ -204,6 +166,8 @@ const DepartmentBarChart = ({ data, categoryOrder, compact = false, colors: colo
         parentHeightOffset: 0,
         events: {
           dataPointMouseEnter: handleDataPointEnter,
+          mouseMove: handleChartMouseMove,
+          mouseLeave: handleDataPointLeave,
           dataPointMouseLeave: handleDataPointLeave,
         },
       },
@@ -249,6 +213,7 @@ const DepartmentBarChart = ({ data, categoryOrder, compact = false, colors: colo
       colors,
       containerHeight,
       gridPadding,
+      handleChartMouseMove,
       handleDataPointEnter,
       handleDataPointLeave,
       labelSlotWidth,
@@ -281,7 +246,10 @@ const DepartmentBarChart = ({ data, categoryOrder, compact = false, colors: colo
           />
         ) : null}
       </div>
-      <ChartTooltipPortal tooltip={tooltip} />
+      <ChartTooltipPortal tooltip={tooltip}>
+        <div className={SHARED_CHROME.chartTooltipTitle}>{tooltip?.label}</div>
+        <div className={SHARED_CHROME.chartTooltipRow}>Count : {tooltip?.value}</div>
+      </ChartTooltipPortal>
     </>
   );
 };

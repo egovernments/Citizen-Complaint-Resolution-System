@@ -4,7 +4,7 @@ import {
   normalizePieChartData,
   PIE_CHART_VIEWBOX,
 } from "../config/pieChartPresentation";
-import { VISUALIZATION_STYLES, VIZ_TYPE } from "../config/visualizationStyles";
+import { VISUALIZATION_STYLES, VIZ_TYPE, SHARED_CHROME } from "../config/visualizationStyles";
 
 const PieChart = ({ data = [] }) => {
   const [activeIndex, setActiveIndex] = useState(null);
@@ -67,13 +67,19 @@ const PieChart = ({ data = [] }) => {
         </svg>
         {active ? (
           <div
-            className={pieStyles.tooltip}
+            className={`${SHARED_CHROME.chartTooltip} ${SHARED_CHROME.chartTooltipAnchored}`}
             style={{
               left: `${(active.hoverX / PIE_CHART_VIEWBOX.width) * 100}%`,
               top: `${(active.hoverY / PIE_CHART_VIEWBOX.height) * 100}%`,
             }}
           >
-            {active.label} : {active.count} ({active.pct}%)
+            <div className={SHARED_CHROME.chartTooltipTitle}>{active.label}</div>
+            <div
+              className={SHARED_CHROME.chartTooltipRow}
+              style={{ color: active.color }}
+            >
+              Count : {active.count} ({active.pct}%)
+            </div>
           </div>
         ) : null}
       </div>

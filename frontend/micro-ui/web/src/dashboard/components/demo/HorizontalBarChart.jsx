@@ -2,6 +2,10 @@ import React, { useMemo } from "react";
 import Chart from "react-apexcharts";
 import { DASHBOARD_FONT_FAMILY } from "../../config/dashboardConfig";
 import { resolveDashboardCssColor } from "../../config/chartColors";
+import {
+  buildApexChartTooltipOptions,
+  buildChartTooltipMarkup,
+} from "../../config/chartTooltipPresentation";
 import { useChartContainerSize } from "../../hooks/useChartContainerSize";
 import { VISUALIZATION_STYLES, VIZ_TYPE } from "../../config/visualizationStyles";
 
@@ -148,9 +152,9 @@ const HorizontalBarChart = ({ data = [], breakEven = 1 }) => {
         xaxis: { lines: { show: true } },
         yaxis: { lines: { show: false } },
       },
-      tooltip: {
-        theme: "light",
+      tooltip: buildApexChartTooltipOptions({
         shared: false,
+        followCursor: true,
         custom: ({ dataPointIndex }) => {
           const row = rows[dataPointIndex];
           if (!row) return "";
@@ -160,17 +164,13 @@ const HorizontalBarChart = ({ data = [], breakEven = 1 }) => {
             row.created > 0
               ? `${row.resolved} resolved of ${row.created} created`
               : "";
-          return `<div class="apexcharts-tooltip-title">${row.label}</div>
-            <div class="apexcharts-tooltip-series-group apexcharts-active">
-              <span class="apexcharts-tooltip-text">
-                <span class="apexcharts-tooltip-y-group">
-                  <span class="apexcharts-tooltip-text-y-label"></span>
-                  <span class="apexcharts-tooltip-text-y-value">${formatRatio(row.value)}${detail ? ` — ${detail}` : ""}</span>
-                </span>
-              </span>
-            </div>`;
+          const value = `${formatRatio(row.value)}${detail ? ` — ${detail}` : ""}`;
+          return buildChartTooltipMarkup({
+            title: row.label,
+            rows: [{ value }],
+          });
         },
-      },
+      }),
     }),
     [
       axisMax,

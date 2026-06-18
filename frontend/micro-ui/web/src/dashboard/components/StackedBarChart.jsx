@@ -2,6 +2,9 @@ import React, { useMemo } from "react";
 import Chart from "react-apexcharts";
 import { DASHBOARD_FONT_FAMILY } from "../config/dashboardConfig";
 import {
+  buildApexSeriesHoverTooltip,
+} from "../config/chartTooltipPresentation";
+import {
   buildStackedBarAnnotations,
   buildStackedBarGrid,
   buildStackedBarPlotOptions,
@@ -46,7 +49,7 @@ const StackedBarChart = ({
       legend: STACKED_BAR_LEGEND,
       grid: buildStackedBarGrid({ horizontal }),
       annotations: buildStackedBarAnnotations({ horizontal, referenceLines }),
-      tooltip: { theme: "light" },
+      tooltip: buildApexSeriesHoverTooltip({ includeZero: false, followCursor: true }),
       states: {
         hover: { filter: { type: "darken", value: 0.9 } },
       },
