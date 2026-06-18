@@ -134,14 +134,33 @@ class PGRService {
 
           let complaintTypes = [];
           let messageBundle = {};
-
+          let localisationPrefix = "SERVICEDEFS_";
+          
+          // Collect all localization codes
+          let localizationCodes = [];
           for (let service of activeServices) {
             complaintTypes.push(service.serviceCode);
-            // Use the name from MDMS directly
-            messageBundle[service.serviceCode] = {
-              en_IN: service.name || service.serviceCode,
-              hi_IN: service.name || service.serviceCode
-            };
+            localizationCodes.push(localisationPrefix + service.serviceCode.toUpperCase());
+          }
+          
+          // Fetch all localizations at once from API
+          let localizedMessages = await localisationService.getMessagesForCodesAndTenantId(
+            localizationCodes,
+            tenantId
+          );
+          
+          // Build message bundle
+          for (let service of activeServices) {
+            let localizationKey = localisationPrefix + service.serviceCode.toUpperCase();
+            if (localizedMessages[localizationKey] && Object.keys(localizedMessages[localizationKey]).length > 0) {
+              messageBundle[service.serviceCode] = localizedMessages[localizationKey];
+            } else {
+              // Fallback to MDMS name if localization not found
+              messageBundle[service.serviceCode] = {
+                en_IN: service.name || service.serviceCode,
+                hi_IN: service.name || service.serviceCode
+              };
+            }
           }
 
           return { complaintTypes, messageBundle };
@@ -164,11 +183,32 @@ class PGRService {
 
       let complaintTypes = [];
       let messageBundle = {};
-
+      let localisationPrefix = "SERVICEDEFS_";
+      
+      // Collect unique service codes and localization codes
+      let localizationCodes = [];
       for (let data of sortedData) {
         if (!complaintTypes.includes(data.serviceCode)) {
           complaintTypes.push(data.serviceCode);
-          // Try to use name from data if available
+          localizationCodes.push(localisationPrefix + data.serviceCode.toUpperCase());
+        }
+      }
+      
+      // Fetch all localizations at once from API
+      let localizedMessages = await localisationService.getMessagesForCodesAndTenantId(
+        localizationCodes,
+        tenantId
+      );
+      
+      // Build message bundle
+      for (let data of sortedData) {
+        if (messageBundle[data.serviceCode]) continue; // Skip if already processed
+        
+        let localizationKey = localisationPrefix + data.serviceCode.toUpperCase();
+        if (localizedMessages[localizationKey] && Object.keys(localizedMessages[localizationKey]).length > 0) {
+          messageBundle[data.serviceCode] = localizedMessages[localizationKey];
+        } else {
+          // Fallback to MDMS name if localization not found
           messageBundle[data.serviceCode] = {
             en_IN: data.name || data.serviceCode,
             hi_IN: data.name || data.serviceCode
@@ -718,6 +758,23 @@ class PGRService {
     if (serviceWrappers.length < complaintLimit)
       complaintLimit = serviceWrappers.length;
     var count = 0;
+    
+    // Collect all localization codes needed
+    let localizationCodes = [];
+    let tenantId = serviceWrappers.length > 0 ? serviceWrappers[0].service.tenantId : config.rootTenantId;
+    
+    for (let i = 0; i < complaintLimit && i < serviceWrappers.length; i++) {
+      localizationCodes.push(localisationPrefix + serviceWrappers[i].service.serviceCode.toUpperCase());
+    }
+    
+    // Fetch all localizations at once from API
+    let localizedMessages = {};
+    if (localizationCodes.length > 0) {
+      localizedMessages = await localisationService.getMessagesForCodesAndTenantId(
+        localizationCodes,
+        tenantId
+      );
+    }
 
     for (let serviceWrapper of serviceWrappers) {
       if (count < complaintLimit) {
@@ -727,9 +784,10 @@ class PGRService {
           serviceRequestId,
           mobileNumber
         );
-        let serviceCode = localisationService.getMessageBundleForCode(
-          localisationPrefix + serviceWrapper.service.serviceCode.toUpperCase()
-        );
+        
+        let localizationKey = localisationPrefix + serviceWrapper.service.serviceCode.toUpperCase();
+        let serviceCode = localizedMessages[localizationKey] || {};
+        
         let filedDate = serviceWrapper.service.auditDetails.createdTime;
         filedDate = moment(filedDate)
           .tz(config.timeZone)
