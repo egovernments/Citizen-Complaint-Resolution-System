@@ -17,11 +17,21 @@
  */
 import { test, expect } from '@playwright/test';
 
-import { BASE_URL } from '../utils/env';
+import { BASE_URL, TENANT } from '../utils/env';
+import { getMobileValidationRule } from '../utils/mdms-mobile';
 
 // Country dial-code rendered in the Edit Profile mobile-number prefix
-// block. Defaults to Kenya (+254) for naipepea; override per deployment.
-const MOBILE_PREFIX = process.env.MOBILE_PREFIX || '+254';
+// block. Sourced from MDMS (ValidationConfigs.mobileNumberValidation.prefix)
+// at suite setup so the test stays tenant-agnostic — Rule 1: fetch from
+// MDMS rather than carry an env-default. If MDMS hasn't seeded a prefix
+// for this tenant, the test self-skips with the deployment gap as the
+// reason rather than asserting against an arbitrary fallback.
+let expectedPrefix: string | undefined;
+
+test.beforeAll(async () => {
+  const rule = await getMobileValidationRule(TENANT);
+  expectedPrefix = rule.prefix;
+});
 
 test.describe('employee profile — country prefix #444', () => {
   test('mobile prefix renders +254 on Kenya tenant (not +91)', {
@@ -40,6 +50,11 @@ Steps:
 Deliberately stops short of submitting the form — ADMIN is a shared principal and the test should not mutate their profile.`,
     },
     tag: ['@area:pgr', '@ccrs:444', '@kind:regression', '@layer:ui', '@persona:employee'] }, async ({ page }) => {
+    test.skip(
+      !expectedPrefix,
+      `MDMS ValidationConfigs.mobileNumberValidation has no prefix for tenant=${TENANT} — seed it to enable this assertion`,
+    );
+
     await page.goto(`${BASE_URL}/digit-ui/employee/user/profile`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
@@ -60,10 +75,10 @@ Deliberately stops short of submitting the form — ADMIN is a shared principal 
     await expect(prefix).toBeVisible({ timeout: 10_000 });
 
     const prefixText = (await prefix.innerText()).trim();
-    expect(prefixText).toBe(MOBILE_PREFIX);
+    expect(prefixText).toBe(expectedPrefix);
     // Guard against the historical +91 regression regardless of which
     // country the deployment is configured for.
-    if (MOBILE_PREFIX !== '+91') {
+    if (expectedPrefix !== '+91') {
       expect(prefixText).not.toBe('+91');
     }
   });

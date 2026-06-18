@@ -15,6 +15,7 @@
 import { test, expect } from '@playwright/test';
 import {
   BASE_URL,
+  TENANT,
   EMPLOYEE_USER,
   EMPLOYEE_PASS,
   TENANT_LABEL,
@@ -80,7 +81,7 @@ test.describe('employee — manual Escalate action #521', () => {
 
     // ============ Verify workflow state via process-search ============
     const wfResp = await page.request.post(
-      `${BASE_URL}/egov-workflow-v2/egov-wf/process/_search?businessIds=${ASSIGNED_COMPLAINT_ID}&tenantId=${process.env.DIGIT_TENANT || 'ke'}`,
+      `${BASE_URL}/egov-workflow-v2/egov-wf/process/_search?businessIds=${ASSIGNED_COMPLAINT_ID}&tenantId=${TENANT}`,
       {
         headers: { 'Content-Type': 'application/json' },
         data: { RequestInfo: {} },
