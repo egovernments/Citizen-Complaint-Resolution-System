@@ -135,3 +135,5 @@ charts/*.tgz
 *.bak
 *.tmp
 *.orig
+.gstack/
+.superpowers/
