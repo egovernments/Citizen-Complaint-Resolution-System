@@ -9,16 +9,23 @@ vi.mock('@/hooks/useAvailableLocales', () => ({
 vi.mock('@/api/services/localization', () => ({ localizationService: {} }));
 vi.mock('@/providers/bridge', () => ({ digitClient: { stateTenantId: 'pb' } }));
 
+// Capture the props passed to DigitCreate so we can assert on the transform fn.
+const captured = vi.hoisted(() => ({ props: null as any }));
+
 vi.mock('@/admin', () => ({
-  DigitCreate: ({ title, record, children }: any) => (
-    <div
-      data-testid="create"
-      data-title={title}
-      data-menupath={String(record?.menuPath)}
-    >
-      {children}
-    </div>
-  ),
+  DigitCreate: (props: any) => {
+    captured.props = props;
+    const { title, record, children } = props;
+    return (
+      <div
+        data-testid="create"
+        data-title={title}
+        data-menupath={String(record?.menuPath)}
+      >
+        {children}
+      </div>
+    );
+  },
   DigitFormInput: ({ source, disabled }: any) => (
     <div data-testid={`input-${source}`} data-disabled={String(!!disabled)} />
   ),
@@ -53,5 +60,21 @@ describe('ComplaintTypeCreate', () => {
     renderAt('');
     expect(screen.getByTestId('create').dataset.menupath).toBe('Complaint');
     expect(screen.getByTestId('input-menuPath').dataset.disabled).toBe('false');
+  });
+
+  it('stamps the preset menuPath onto the payload via transform (survives RHF dropping the disabled field)', () => {
+    renderAt('?menuPath=Sanitation');
+    // RHF omits the disabled menuPath field, so the submitted data would lack it;
+    // the transform must re-add it.
+    expect(captured.props.transform({ name: 'Garbage', serviceCode: 'GARB' })).toEqual({
+      name: 'Garbage',
+      serviceCode: 'GARB',
+      menuPath: 'Sanitation',
+    });
+  });
+
+  it('provides no transform when menuPath is not preset', () => {
+    renderAt('');
+    expect(captured.props.transform).toBeUndefined();
   });
 });
