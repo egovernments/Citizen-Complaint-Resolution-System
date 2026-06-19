@@ -75,16 +75,26 @@ export function ComplaintTypeList() {
             </Badge>
           )}
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => refetch()}
-          disabled={isFetching}
-          className="gap-1.5"
-        >
-          <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
-          {translate('app.list.refresh', { _: 'Refresh' })}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            onClick={() => navigate('/manage/complaint-types/create')}
+            className="gap-1.5"
+          >
+            <Plus className="w-4 h-4" />
+            {translate('app.complaintTypes.add_type', { _: 'Add Complaint Type' })}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="gap-1.5"
+          >
+            <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
+            {translate('app.list.refresh', { _: 'Refresh' })}
+          </Button>
+        </div>
       </div>
 
       <DigitCard className="max-w-none">

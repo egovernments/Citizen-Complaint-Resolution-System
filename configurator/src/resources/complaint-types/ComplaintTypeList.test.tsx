@@ -72,4 +72,11 @@ describe('ComplaintTypeList (accordion)', () => {
       '/manage/complaint-types/create?menuPath=Sanitation',
     );
   });
+
+  it('navigates to the create page (no menuPath) when adding a complaint type', () => {
+    navigate.mockClear();
+    render(<ComplaintTypeList />);
+    fireEvent.click(screen.getByText('Add Complaint Type'));
+    expect(navigate).toHaveBeenCalledWith('/manage/complaint-types/create');
+  });
 });
