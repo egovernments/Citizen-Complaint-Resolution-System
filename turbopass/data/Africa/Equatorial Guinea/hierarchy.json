@@ -1,0 +1,600 @@
+{
+  "code": "GQ",
+  "name": "Equatorial Guinea",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "GQ-C",
+      "parent_code": "GQ",
+      "name": "Región Continental",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-251608438",
+          "parent_code": "GQ-C",
+          "name": "Bata",
+          "type": "city",
+          "population": "230282",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-520140660",
+          "parent_code": "GQ-C",
+          "name": "Ebebiyín",
+          "type": "city",
+          "population": "36565",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-667646869",
+          "parent_code": "GQ-C",
+          "name": "Niefang",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-667649688",
+          "parent_code": "GQ-C",
+          "name": "Evinayong",
+          "type": "city",
+          "population": "36521",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-667651748",
+          "parent_code": "GQ-C",
+          "name": "Mongomo",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-667653836",
+          "parent_code": "GQ-C",
+          "name": "Nsork",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-667655303",
+          "parent_code": "GQ-C",
+          "name": "Acurenam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-667666022",
+          "parent_code": "GQ-C",
+          "name": "Aconibe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-667667198",
+          "parent_code": "GQ-C",
+          "name": "Micomeseng",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-667669560",
+          "parent_code": "GQ-C",
+          "name": "Añisoc",
+          "type": "city",
+          "population": "16626",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-667671405",
+          "parent_code": "GQ-C",
+          "name": "Mbini",
+          "type": "city",
+          "population": "14034",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-667673697",
+          "parent_code": "GQ-C",
+          "name": "Cogo",
+          "type": "city",
+          "population": "4607",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-667673698",
+          "parent_code": "GQ-C",
+          "name": "Acalayong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2889955838",
+          "parent_code": "GQ-C",
+          "name": "Bitica",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3346995825",
+          "parent_code": "GQ-C",
+          "name": "Ciudad de la Paz",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4872929422",
+          "parent_code": "GQ-C",
+          "name": "Bicurga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8736126116",
+          "parent_code": "GQ-C",
+          "name": "Nsok Nsomo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8736140402",
+          "parent_code": "GQ-C",
+          "name": "Nsang",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8736383658",
+          "parent_code": "GQ-C",
+          "name": "Nkimi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8736586763",
+          "parent_code": "GQ-C",
+          "name": "Ayene",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10661072158",
+          "parent_code": "GQ-C",
+          "name": "Esong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10819682405",
+          "parent_code": "GQ-C",
+          "name": "Acoacan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10870036169",
+          "parent_code": "GQ-C",
+          "name": "Elonasi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10870097717",
+          "parent_code": "GQ-C",
+          "name": "Banapa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "GQ-I",
+      "parent_code": "GQ",
+      "name": "Región Insular",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-292521364",
+          "parent_code": "GQ-I",
+          "name": "Malabo",
+          "type": "city",
+          "population": "297000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-292522535",
+          "parent_code": "GQ-I",
+          "name": "Luba",
+          "type": "city",
+          "population": "23870",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-292527388",
+          "parent_code": "GQ-I",
+          "name": "San Antonio de Palé",
+          "type": "city",
+          "population": "5008",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-366513007",
+          "parent_code": "GQ-I",
+          "name": "Rebola",
+          "type": "city",
+          "population": "8259",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2414597604",
+          "parent_code": "GQ-I",
+          "name": "Baney",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2771184355",
+          "parent_code": "GQ-I",
+          "name": "Sipopo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2805241502",
+          "parent_code": "GQ-I",
+          "name": "Malabo II",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4299020008",
+          "parent_code": "GQ-I",
+          "name": "Viviendas Sociales Malabo II",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        }
+      ]
+    },
+    {
+      "code": "GQ-AN",
+      "parent_code": "GQ",
+      "name": "Annobón",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-292527388",
+          "parent_code": "GQ-AN",
+          "name": "San Antonio de Palé",
+          "type": "city",
+          "population": "5008",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "GQ-BN",
+      "parent_code": "GQ",
+      "name": "Bioko Norte",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-292521364",
+          "parent_code": "GQ-BN",
+          "name": "Malabo",
+          "type": "city",
+          "population": "297000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-366513007",
+          "parent_code": "GQ-BN",
+          "name": "Rebola",
+          "type": "city",
+          "population": "8259",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2414597604",
+          "parent_code": "GQ-BN",
+          "name": "Baney",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2771184355",
+          "parent_code": "GQ-BN",
+          "name": "Sipopo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2805241502",
+          "parent_code": "GQ-BN",
+          "name": "Malabo II",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4299020008",
+          "parent_code": "GQ-BN",
+          "name": "Viviendas Sociales Malabo II",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        }
+      ]
+    },
+    {
+      "code": "GQ-BS",
+      "parent_code": "GQ",
+      "name": "Bioko Sur",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-292522535",
+          "parent_code": "GQ-BS",
+          "name": "Luba",
+          "type": "city",
+          "population": "23870",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "GQ-LI",
+      "parent_code": "GQ",
+      "name": "Litoral",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-251608438",
+          "parent_code": "GQ-LI",
+          "name": "Bata",
+          "type": "city",
+          "population": "230282",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-667671405",
+          "parent_code": "GQ-LI",
+          "name": "Mbini",
+          "type": "city",
+          "population": "14034",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-667673697",
+          "parent_code": "GQ-LI",
+          "name": "Cogo",
+          "type": "city",
+          "population": "4607",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-667673698",
+          "parent_code": "GQ-LI",
+          "name": "Acalayong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2889955838",
+          "parent_code": "GQ-LI",
+          "name": "Bitica",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10870036169",
+          "parent_code": "GQ-LI",
+          "name": "Elonasi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10870097717",
+          "parent_code": "GQ-LI",
+          "name": "Banapa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "GQ-KN",
+      "parent_code": "GQ",
+      "name": "Kié-Ntem",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-520140660",
+          "parent_code": "GQ-KN",
+          "name": "Ebebiyín",
+          "type": "city",
+          "population": "36565",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-667667198",
+          "parent_code": "GQ-KN",
+          "name": "Micomeseng",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8736126116",
+          "parent_code": "GQ-KN",
+          "name": "Nsok Nsomo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8736140402",
+          "parent_code": "GQ-KN",
+          "name": "Nsang",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10661072158",
+          "parent_code": "GQ-KN",
+          "name": "Esong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "GQ-CS",
+      "parent_code": "GQ",
+      "name": "Centro Sur",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-667646869",
+          "parent_code": "GQ-CS",
+          "name": "Niefang",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-667649688",
+          "parent_code": "GQ-CS",
+          "name": "Evinayong",
+          "type": "city",
+          "population": "36521",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-667655303",
+          "parent_code": "GQ-CS",
+          "name": "Acurenam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4872929422",
+          "parent_code": "GQ-CS",
+          "name": "Bicurga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8736383658",
+          "parent_code": "GQ-CS",
+          "name": "Nkimi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "GQ-WN",
+      "parent_code": "GQ",
+      "name": "Wele-Nzas",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-667651748",
+          "parent_code": "GQ-WN",
+          "name": "Mongomo",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-667653836",
+          "parent_code": "GQ-WN",
+          "name": "Nsork",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-667666022",
+          "parent_code": "GQ-WN",
+          "name": "Aconibe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-667669560",
+          "parent_code": "GQ-WN",
+          "name": "Añisoc",
+          "type": "city",
+          "population": "16626",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8736586763",
+          "parent_code": "GQ-WN",
+          "name": "Ayene",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10819682405",
+          "parent_code": "GQ-WN",
+          "name": "Acoacan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "GQ-DJ",
+      "parent_code": "GQ",
+      "name": "Djibloho",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-3346995825",
+          "parent_code": "GQ-DJ",
+          "name": "Ciudad de la Paz",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    }
+  ]
+}

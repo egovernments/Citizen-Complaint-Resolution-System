@@ -20,3 +20,37 @@ export const defaultImage =
   "Ue6ilunu8jF8pFwgv1FXp3mUt35OtRbr7eM4u4Gs6vUBXgeuHc5kfE/cbvWZtkROLm1DMtLCy80tzsu2PRj0hTI8fvrQuvsjlJkyutszq+m423wHaLTyniy/XuiGZ84LuT+m5ZfNfRxyGs7L" +
   "XZOvia7VujatUwVTrIt+Q/Csc7Tuhe+BOakT10b4TuoiiJjvgU9emTO42PwEfBa+cuodKkuf42DXr1D3JpXz73Hnn0j10evHKe+nufgfUm+7B84sX9FfdEzXux2DBpWuKokkCqN/5pa/8pmvn" +
   "L+RGKCddCGmatiPyPB/+ekO/M/q/7uvbt22kTt3zEnXPzCV13T3Gel4/6NduDu66xRvlPNkM1RjjxUdv+4WhGx6TftD19Q/dfzpwcHO+rE3fAAAAAElFTkSuQmCC";
+
+// Resolve a user `photo` value to a displayable image URL.
+//
+// `user.photo` arrives in two shapes (see UserProfile.js / CCRS#556):
+//   - a comma-separated list of pre-resolved URLs
+//     ("https://…/full,https://…/medium,https://…/small"), or
+//   - a bare fileStoreId ("07505a88-cae6-…") for fresh uploads persisted
+//     via /user/profile/_update.
+//
+// The avatar widgets (TopBar dropdown, citizen/employee sidebars) historically
+// fed this value straight into an <img src>. That worked for the URL shape but
+// broke for a bare fileStoreId (#445): the citizen avatar fell back to the
+// placeholder, and the employee Dropdown — unable to load the "src" — rendered
+// charAt(0) of the UUID, so the fallback initial appeared to change at random
+// on every upload. Mirror the edit-profile page and resolve the bare-id case
+// through Filefetch. Returns null on absence/failure so callers fall back to
+// their placeholder.
+export const resolveProfilePhoto = async (photo, stateId) => {
+  if (!photo) return null;
+  if (photo.startsWith("http") || photo.includes(",")) {
+    return photo.split(",").at(0);
+  }
+  try {
+    const res = await Digit.UploadServices.Filefetch([photo], stateId);
+    const entry = res?.data?.fileStoreIds?.[0];
+    if (entry?.url) {
+      const urls = entry.url.split(",");
+      return urls.find((u) => /small/i.test(u)) || urls[0];
+    }
+  } catch (e) {
+    // Silent: a stale id must not break the page chrome.
+  }
+  return null;
+};

@@ -1,0 +1,392 @@
+{
+  "code": "ER",
+  "name": "Eritrea",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "ER-AN",
+      "parent_code": "ER",
+      "name": "Anseba",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-317162067",
+          "parent_code": "ER-AN",
+          "name": "Keren",
+          "type": "city",
+          "population": "86438",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-321211793",
+          "parent_code": "ER-AN",
+          "name": "Adi Tekelezan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4311111471",
+          "parent_code": "ER-AN",
+          "name": "Hagaz",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4449365186",
+          "parent_code": "ER-AN",
+          "name": "Gheleb",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ER-GB",
+      "parent_code": "ER",
+      "name": "Gash-Barka",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-313795917",
+          "parent_code": "ER-GB",
+          "name": "Teseney",
+          "type": "city",
+          "population": "18000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-313799319",
+          "parent_code": "ER-GB",
+          "name": "Omhajer",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-317148383",
+          "parent_code": "ER-GB",
+          "name": "Barentu",
+          "type": "city",
+          "population": "18500",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-317151407",
+          "parent_code": "ER-GB",
+          "name": "Golij",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-321209318",
+          "parent_code": "ER-GB",
+          "name": "Agordat",
+          "type": "city",
+          "population": "30000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-321218257",
+          "parent_code": "ER-GB",
+          "name": "Shambiko",
+          "type": "city",
+          "population": "2600",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2304527878",
+          "parent_code": "ER-GB",
+          "name": "Badme",
+          "type": "city",
+          "population": "1600",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2304600111",
+          "parent_code": "ER-GB",
+          "name": "Tocombia",
+          "type": "city",
+          "population": "6689",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4230919498",
+          "parent_code": "ER-GB",
+          "name": "Jurna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4527256046",
+          "parent_code": "ER-GB",
+          "name": "Dedda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7340552237",
+          "parent_code": "ER-GB",
+          "name": "Gogne",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7721071276",
+          "parent_code": "ER-GB",
+          "name": "Mogolo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ER-DU",
+      "parent_code": "ER",
+      "name": "Debub Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-312691689",
+          "parent_code": "ER-DU",
+          "name": "Mendefera",
+          "type": "city",
+          "population": "30000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-321223133",
+          "parent_code": "ER-DU",
+          "name": "Senafe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-321258615",
+          "parent_code": "ER-DU",
+          "name": "Adi Quala",
+          "type": "city",
+          "population": "14000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-321262577",
+          "parent_code": "ER-DU",
+          "name": "Adi Keyh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1950935923",
+          "parent_code": "ER-DU",
+          "name": "Segeneiti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2304484690",
+          "parent_code": "ER-DU",
+          "name": "Maydima",
+          "type": "city",
+          "population": "20000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2330208432",
+          "parent_code": "ER-DU",
+          "name": "Tsorona",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4266676795",
+          "parent_code": "ER-DU",
+          "name": "Dekemhare",
+          "type": "city",
+          "population": "30000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4303551374",
+          "parent_code": "ER-DU",
+          "name": "Debarwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6083931157",
+          "parent_code": "ER-DU",
+          "name": "Metera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7094671310",
+          "parent_code": "ER-DU",
+          "name": "Mai Mine",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7229008596",
+          "parent_code": "ER-DU",
+          "name": "Teraemni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7230017947",
+          "parent_code": "ER-DU",
+          "name": "Enda Giorgis",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ER-MA",
+      "parent_code": "ER",
+      "name": "Maekel Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-321210711",
+          "parent_code": "ER-MA",
+          "name": "Tsazega",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-354475940",
+          "parent_code": "ER-MA",
+          "name": "Tzada Christian",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2828477178",
+          "parent_code": "ER-MA",
+          "name": "Emba Derho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5621920820",
+          "parent_code": "ER-MA",
+          "name": "Asmara",
+          "type": "city",
+          "population": "579000",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "ER-SK",
+      "parent_code": "ER",
+      "name": "Northern Red Sea Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-288517213",
+          "parent_code": "ER-SK",
+          "name": "Massawa",
+          "type": "city",
+          "population": "45975",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-312821690",
+          "parent_code": "ER-SK",
+          "name": "Gahtelay",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-315105529",
+          "parent_code": "ER-SK",
+          "name": "Ghinda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2050342291",
+          "parent_code": "ER-SK",
+          "name": "Nakfa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2050650183",
+          "parent_code": "ER-SK",
+          "name": "Emahmime",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3858638211",
+          "parent_code": "ER-SK",
+          "name": "Af'abet",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4266181303",
+          "parent_code": "ER-SK",
+          "name": "Zula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4266181449",
+          "parent_code": "ER-SK",
+          "name": "Foro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ER-DK",
+      "parent_code": "ER",
+      "name": "Southern Red Sea Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-321265083",
+          "parent_code": "ER-DK",
+          "name": "Tiyo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    }
+  ]
+}

@@ -87,6 +87,7 @@ export type EventName =
   | 'help_open'
   | 'docs_click'
   | 'mode_switch'
+  | 'target_tenant_set'
   // Audit
   | 'audit_run'
   | 'audit_complete';

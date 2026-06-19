@@ -1,0 +1,1984 @@
+{
+  "code": "BJ",
+  "name": "Benin",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "BJ-AL",
+      "parent_code": "BJ",
+      "name": "Alibori Department",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-459525150",
+          "parent_code": "BJ-AL",
+          "name": "Banikoara",
+          "type": "city",
+          "population": "250000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-496107708",
+          "parent_code": "BJ-AL",
+          "name": "Ségbana",
+          "type": "city",
+          "population": "90000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-496140932",
+          "parent_code": "BJ-AL",
+          "name": "Malanville",
+          "type": "city",
+          "population": "168000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2304828846",
+          "parent_code": "BJ-AL",
+          "name": "Kandi",
+          "type": "city",
+          "population": "180000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2306555809",
+          "parent_code": "BJ-AL",
+          "name": "Gogounou",
+          "type": "city",
+          "population": "14000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2306558779",
+          "parent_code": "BJ-AL",
+          "name": "Karimama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2325176239",
+          "parent_code": "BJ-AL",
+          "name": "Guéné",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2325176340",
+          "parent_code": "BJ-AL",
+          "name": "Birni-Lafia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2467049178",
+          "parent_code": "BJ-AL",
+          "name": "Madécali",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2467135921",
+          "parent_code": "BJ-AL",
+          "name": "Founougo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2467576665",
+          "parent_code": "BJ-AL",
+          "name": "Sompérekou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2472888513",
+          "parent_code": "BJ-AL",
+          "name": "Zoungou-Pantrossi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2794185058",
+          "parent_code": "BJ-AL",
+          "name": "Liboussou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3250444399",
+          "parent_code": "BJ-AL",
+          "name": "Bensékou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3250619773",
+          "parent_code": "BJ-AL",
+          "name": "Angaradébou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3789770993",
+          "parent_code": "BJ-AL",
+          "name": "Bagou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3789771380",
+          "parent_code": "BJ-AL",
+          "name": "Badou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3791058533",
+          "parent_code": "BJ-AL",
+          "name": "Goumori",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3791058553",
+          "parent_code": "BJ-AL",
+          "name": "Kokiborou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3791060083",
+          "parent_code": "BJ-AL",
+          "name": "Ounet",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3791060097",
+          "parent_code": "BJ-AL",
+          "name": "Toura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3796785982",
+          "parent_code": "BJ-AL",
+          "name": "Lougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3796845391",
+          "parent_code": "BJ-AL",
+          "name": "Sokotindji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3796972400",
+          "parent_code": "BJ-AL",
+          "name": "Libantè",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3796997940",
+          "parent_code": "BJ-AL",
+          "name": "Morou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3808483294",
+          "parent_code": "BJ-AL",
+          "name": "Wara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3809720612",
+          "parent_code": "BJ-AL",
+          "name": "Donwari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3812280068",
+          "parent_code": "BJ-AL",
+          "name": "Saah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5910147623",
+          "parent_code": "BJ-AL",
+          "name": "Tomboutou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6683944704",
+          "parent_code": "BJ-AL",
+          "name": "Garou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6698774494",
+          "parent_code": "BJ-AL",
+          "name": "Kompa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6724874654",
+          "parent_code": "BJ-AL",
+          "name": "Bogo-Bogo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6820203438",
+          "parent_code": "BJ-AL",
+          "name": "Soroko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6820649278",
+          "parent_code": "BJ-AL",
+          "name": "Gomparou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6820679250",
+          "parent_code": "BJ-AL",
+          "name": "Kokey",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BJ-BO",
+      "parent_code": "BJ",
+      "name": "Borgou Department",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-308813067",
+          "parent_code": "BJ-BO",
+          "name": "Parakou",
+          "type": "city",
+          "population": "250000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-313015849",
+          "parent_code": "BJ-BO",
+          "name": "Bembèrèkè",
+          "type": "city",
+          "population": "131300",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-313015851",
+          "parent_code": "BJ-BO",
+          "name": "Kalalé",
+          "type": "city",
+          "population": "25000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-313015871",
+          "parent_code": "BJ-BO",
+          "name": "Nikki",
+          "type": "city",
+          "population": "150000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-496121386",
+          "parent_code": "BJ-BO",
+          "name": "Bétérou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1303908409",
+          "parent_code": "BJ-BO",
+          "name": "Tchatchou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2071065504",
+          "parent_code": "BJ-BO",
+          "name": "N'Dali",
+          "type": "city",
+          "population": "110000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2091201506",
+          "parent_code": "BJ-BO",
+          "name": "Pèrèrè",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2157591661",
+          "parent_code": "BJ-BO",
+          "name": "Sanson",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2186982846",
+          "parent_code": "BJ-BO",
+          "name": "Ouénou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2192783661",
+          "parent_code": "BJ-BO",
+          "name": "Bori",
+          "type": "city",
+          "population": "15000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2192783667",
+          "parent_code": "BJ-BO",
+          "name": "Guessou-Banm Taka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2293747795",
+          "parent_code": "BJ-BO",
+          "name": "Biro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2311642139",
+          "parent_code": "BJ-BO",
+          "name": "Sinendé",
+          "type": "city",
+          "population": "30000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2325176063",
+          "parent_code": "BJ-BO",
+          "name": "Dérassi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2325176235",
+          "parent_code": "BJ-BO",
+          "name": "Péonga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2466409591",
+          "parent_code": "BJ-BO",
+          "name": "Alafiarou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2466409592",
+          "parent_code": "BJ-BO",
+          "name": "Goro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2466409594",
+          "parent_code": "BJ-BO",
+          "name": "Tchaourou",
+          "type": "city",
+          "population": "220000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2466998923",
+          "parent_code": "BJ-BO",
+          "name": "Dunkassa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2467065111",
+          "parent_code": "BJ-BO",
+          "name": "Bouanri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2467085476",
+          "parent_code": "BJ-BO",
+          "name": "Ina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3791058517",
+          "parent_code": "BJ-BO",
+          "name": "Sekere",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3797783910",
+          "parent_code": "BJ-BO",
+          "name": "Gamia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3797940004",
+          "parent_code": "BJ-BO",
+          "name": "Basso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3805469776",
+          "parent_code": "BJ-BO",
+          "name": "Gninsy",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3807874669",
+          "parent_code": "BJ-BO",
+          "name": "Teme",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3816784009",
+          "parent_code": "BJ-BO",
+          "name": "Guinagourou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3817321755",
+          "parent_code": "BJ-BO",
+          "name": "Gbégourou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3817471463",
+          "parent_code": "BJ-BO",
+          "name": "Kabo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3818487995",
+          "parent_code": "BJ-BO",
+          "name": "Kika",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3840846363",
+          "parent_code": "BJ-BO",
+          "name": "Kpakpanin",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5965831773",
+          "parent_code": "BJ-BO",
+          "name": "Gnanro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6799595177",
+          "parent_code": "BJ-BO",
+          "name": "Sontou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6886740611",
+          "parent_code": "BJ-BO",
+          "name": "Béroubouay",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BJ-AK",
+      "parent_code": "BJ",
+      "name": "Atakora Department",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-343622708",
+          "parent_code": "BJ-AK",
+          "name": "Boukombé",
+          "type": "city",
+          "population": "80000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-496108848",
+          "parent_code": "BJ-AK",
+          "name": "Péhunco",
+          "type": "city",
+          "population": "30000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-496133867",
+          "parent_code": "BJ-AK",
+          "name": "Kouandé",
+          "type": "city",
+          "population": "110000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2071888096",
+          "parent_code": "BJ-AK",
+          "name": "Natitingou",
+          "type": "city",
+          "population": "110000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2106812046",
+          "parent_code": "BJ-AK",
+          "name": "Tanguieta",
+          "type": "city",
+          "population": "70000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2260507142",
+          "parent_code": "BJ-AK",
+          "name": "Cobli",
+          "type": "city",
+          "population": "21000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2308654107",
+          "parent_code": "BJ-AK",
+          "name": "Kérou",
+          "type": "city",
+          "population": "98000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2312709884",
+          "parent_code": "BJ-AK",
+          "name": "Materi",
+          "type": "city",
+          "population": "21000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2312709885",
+          "parent_code": "BJ-AK",
+          "name": "Toucountouna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2466629600",
+          "parent_code": "BJ-AK",
+          "name": "Firou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2466946469",
+          "parent_code": "BJ-AK",
+          "name": "Kaobagou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2472357334",
+          "parent_code": "BJ-AK",
+          "name": "Dassari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2590113692",
+          "parent_code": "BJ-AK",
+          "name": "Chabi Kouma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3799897199",
+          "parent_code": "BJ-AK",
+          "name": "Tantéga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3875537760",
+          "parent_code": "BJ-AK",
+          "name": "Tapoga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BJ-DO",
+      "parent_code": "BJ",
+      "name": "Donga Department",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-313015848",
+          "parent_code": "BJ-DO",
+          "name": "Djougou",
+          "type": "city",
+          "population": "260000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-442134145",
+          "parent_code": "BJ-DO",
+          "name": "Bassila",
+          "type": "city",
+          "population": "130000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-442134341",
+          "parent_code": "BJ-DO",
+          "name": "Prékété",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-807261929",
+          "parent_code": "BJ-DO",
+          "name": "Ouaké",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-910855218",
+          "parent_code": "BJ-DO",
+          "name": "Copargo",
+          "type": "city",
+          "population": "22000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1177342283",
+          "parent_code": "BJ-DO",
+          "name": "Manigri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3813463089",
+          "parent_code": "BJ-DO",
+          "name": "Toko-Toko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3832394060",
+          "parent_code": "BJ-DO",
+          "name": "Kolokondé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3833396327",
+          "parent_code": "BJ-DO",
+          "name": "Tchalinga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3856376185",
+          "parent_code": "BJ-DO",
+          "name": "Sèmèrè II",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8267031365",
+          "parent_code": "BJ-DO",
+          "name": "Sèmèrè I",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BJ-CO",
+      "parent_code": "BJ",
+      "name": "Collines Department",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-442134154",
+          "parent_code": "BJ-CO",
+          "name": "Pira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2071888099",
+          "parent_code": "BJ-CO",
+          "name": "Savè",
+          "type": "city",
+          "population": "90000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2248036954",
+          "parent_code": "BJ-CO",
+          "name": "Dassa-Zoumé",
+          "type": "city",
+          "population": "110000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2282827069",
+          "parent_code": "BJ-CO",
+          "name": "Savalou",
+          "type": "city",
+          "population": "140000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2312747963",
+          "parent_code": "BJ-CO",
+          "name": "Glazoué",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2312747964",
+          "parent_code": "BJ-CO",
+          "name": "Ouèssè",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2472888085",
+          "parent_code": "BJ-CO",
+          "name": "Thio",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3589447793",
+          "parent_code": "BJ-CO",
+          "name": "Kilibo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3589500202",
+          "parent_code": "BJ-CO",
+          "name": "Gbanlin",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3781954884",
+          "parent_code": "BJ-CO",
+          "name": "Gobé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3840856933",
+          "parent_code": "BJ-CO",
+          "name": "Ikèmon",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3904444401",
+          "parent_code": "BJ-CO",
+          "name": "Atchakpa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7518321314",
+          "parent_code": "BJ-CO",
+          "name": "Toui",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7519123315",
+          "parent_code": "BJ-CO",
+          "name": "Laminou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7519123316",
+          "parent_code": "BJ-CO",
+          "name": "Oudougba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7556865155",
+          "parent_code": "BJ-CO",
+          "name": "Challa-Ogoï",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7558422449",
+          "parent_code": "BJ-CO",
+          "name": "Kokoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BJ-PL",
+      "parent_code": "BJ",
+      "name": "Plateau Department",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2304872572",
+          "parent_code": "BJ-PL",
+          "name": "Sakété",
+          "type": "city",
+          "population": "110000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2313302868",
+          "parent_code": "BJ-PL",
+          "name": "Adja-Ouèrè",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2313302869",
+          "parent_code": "BJ-PL",
+          "name": "Ifangni",
+          "type": "city",
+          "population": "23000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2313302870",
+          "parent_code": "BJ-PL",
+          "name": "Kétou",
+          "type": "city",
+          "population": "160000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2313302871",
+          "parent_code": "BJ-PL",
+          "name": "Pobè",
+          "type": "city",
+          "population": "120000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2331706011",
+          "parent_code": "BJ-PL",
+          "name": "Kpedekpo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2619415630",
+          "parent_code": "BJ-PL",
+          "name": "Onigbolo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3869283768",
+          "parent_code": "BJ-PL",
+          "name": "Adaplamè",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7644372420",
+          "parent_code": "BJ-PL",
+          "name": "Takon",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7644372460",
+          "parent_code": "BJ-PL",
+          "name": "Lagbé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7645500595",
+          "parent_code": "BJ-PL",
+          "name": "Yoko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7649496127",
+          "parent_code": "BJ-PL",
+          "name": "Daagbé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7649496133",
+          "parent_code": "BJ-PL",
+          "name": "Tchaada",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12950377685",
+          "parent_code": "BJ-PL",
+          "name": "Banigbé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BJ-ZO",
+      "parent_code": "BJ",
+      "name": "Zou Department",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-313015845",
+          "parent_code": "BJ-ZO",
+          "name": "Abomey",
+          "type": "city",
+          "population": "100000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-496262977",
+          "parent_code": "BJ-ZO",
+          "name": "Bohicon",
+          "type": "city",
+          "population": "170000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2312944481",
+          "parent_code": "BJ-ZO",
+          "name": "Ouinhi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2312944482",
+          "parent_code": "BJ-ZO",
+          "name": "Zangnanado",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2312944483",
+          "parent_code": "BJ-ZO",
+          "name": "Zogbodomey",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2312973701",
+          "parent_code": "BJ-ZO",
+          "name": "Agbangnizoun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2312973702",
+          "parent_code": "BJ-ZO",
+          "name": "Covè",
+          "type": "city",
+          "population": "50000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2312973703",
+          "parent_code": "BJ-ZO",
+          "name": "Djidja",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2312973704",
+          "parent_code": "BJ-ZO",
+          "name": "Za-Kpota",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2331967064",
+          "parent_code": "BJ-ZO",
+          "name": "Setto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2437643749",
+          "parent_code": "BJ-ZO",
+          "name": "Domè",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2474283614",
+          "parent_code": "BJ-ZO",
+          "name": "Kinta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3773846314",
+          "parent_code": "BJ-ZO",
+          "name": "Dan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3825543475",
+          "parent_code": "BJ-ZO",
+          "name": "Adanhondjigon",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7568495621",
+          "parent_code": "BJ-ZO",
+          "name": "Kpakpamè",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7568552051",
+          "parent_code": "BJ-ZO",
+          "name": "Za-Tanta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7569503876",
+          "parent_code": "BJ-ZO",
+          "name": "Tanwé-Hèssou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7569954430",
+          "parent_code": "BJ-ZO",
+          "name": "Avlamè",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7572035302",
+          "parent_code": "BJ-ZO",
+          "name": "Massi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BJ-KO",
+      "parent_code": "BJ",
+      "name": "Kouffo Department",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-496264781",
+          "parent_code": "BJ-KO",
+          "name": "Aplahoué",
+          "type": "city",
+          "population": "170000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-496265045",
+          "parent_code": "BJ-KO",
+          "name": "Dogbo-Tota",
+          "type": "city",
+          "population": "100000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1106919280",
+          "parent_code": "BJ-KO",
+          "name": "Lalo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2313262061",
+          "parent_code": "BJ-KO",
+          "name": "Djakotomey",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2313262067",
+          "parent_code": "BJ-KO",
+          "name": "Klouékanmè",
+          "type": "city",
+          "population": "20000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2313262068",
+          "parent_code": "BJ-KO",
+          "name": "Toviklin",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3886066150",
+          "parent_code": "BJ-KO",
+          "name": "Dévé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BJ-AQ",
+      "parent_code": "BJ",
+      "name": "Atlantique Department",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-313015821",
+          "parent_code": "BJ-AQ",
+          "name": "Ouidah",
+          "type": "city",
+          "population": "160000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1660451359",
+          "parent_code": "BJ-AQ",
+          "name": "Abomey-Calavi",
+          "type": "city",
+          "population": "650000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2313040349",
+          "parent_code": "BJ-AQ",
+          "name": "Sô-Ava",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2313207442",
+          "parent_code": "BJ-AQ",
+          "name": "Allada",
+          "type": "city",
+          "population": "130000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2313207445",
+          "parent_code": "BJ-AQ",
+          "name": "Kpomassè",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2313207453",
+          "parent_code": "BJ-AQ",
+          "name": "Toffo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2313207457",
+          "parent_code": "BJ-AQ",
+          "name": "Tori-Bossito",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2325176387",
+          "parent_code": "BJ-AQ",
+          "name": "Dékanmè",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2325176390",
+          "parent_code": "BJ-AQ",
+          "name": "Dédomè",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2348404091",
+          "parent_code": "BJ-AQ",
+          "name": "Godomey",
+          "type": "city",
+          "population": "150000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2473306972",
+          "parent_code": "BJ-AQ",
+          "name": "Zè",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2473308179",
+          "parent_code": "BJ-AQ",
+          "name": "Sékou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2473308184",
+          "parent_code": "BJ-AQ",
+          "name": "Sèhouè",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2473308188",
+          "parent_code": "BJ-AQ",
+          "name": "Tangbo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2508223246",
+          "parent_code": "BJ-AQ",
+          "name": "Ganvié",
+          "type": "city",
+          "population": "20000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2537544559",
+          "parent_code": "BJ-AQ",
+          "name": "Agbanto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3877463733",
+          "parent_code": "BJ-AQ",
+          "name": "Dèdo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4180956958",
+          "parent_code": "BJ-AQ",
+          "name": "Pahou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4208983188",
+          "parent_code": "BJ-AQ",
+          "name": "Togba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4258868311",
+          "parent_code": "BJ-AQ",
+          "name": "Sègbohouè",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4264120418",
+          "parent_code": "BJ-AQ",
+          "name": "Avlékété",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4313209400",
+          "parent_code": "BJ-AQ",
+          "name": "Vèkky",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5538676989",
+          "parent_code": "BJ-AQ",
+          "name": "Golo-Djigbé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7605528062",
+          "parent_code": "BJ-AQ",
+          "name": "Coussi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7605537600",
+          "parent_code": "BJ-AQ",
+          "name": "Damè-Centre",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7606063007",
+          "parent_code": "BJ-AQ",
+          "name": "Houègbo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7609097785",
+          "parent_code": "BJ-AQ",
+          "name": "Yokpo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7615581115",
+          "parent_code": "BJ-AQ",
+          "name": "Abomey-Calavi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7626073433",
+          "parent_code": "BJ-AQ",
+          "name": "Hêvié",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7953308172",
+          "parent_code": "BJ-AQ",
+          "name": "Agonkanmè",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12143020308",
+          "parent_code": "BJ-AQ",
+          "name": "Hinvi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BJ-LI",
+      "parent_code": "BJ",
+      "name": "Littoral Department",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1776467369",
+          "parent_code": "BJ-LI",
+          "name": "Cotonou",
+          "type": "city",
+          "population": "780000",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "BJ-MO",
+      "parent_code": "BJ",
+      "name": "Mono Department",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-895493787",
+          "parent_code": "BJ-MO",
+          "name": "Agatogbo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1590933142",
+          "parent_code": "BJ-MO",
+          "name": "Bopa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1590933146",
+          "parent_code": "BJ-MO",
+          "name": "Doutou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2161679329",
+          "parent_code": "BJ-MO",
+          "name": "Comè",
+          "type": "city",
+          "population": "80000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2304867251",
+          "parent_code": "BJ-MO",
+          "name": "Lokossa",
+          "type": "city",
+          "population": "110000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2313207444",
+          "parent_code": "BJ-MO",
+          "name": "Athiémé",
+          "type": "city",
+          "population": "60000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2313262066",
+          "parent_code": "BJ-MO",
+          "name": "Sè",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2474167724",
+          "parent_code": "BJ-MO",
+          "name": "Lobogo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2474284281",
+          "parent_code": "BJ-MO",
+          "name": "Zoungbonou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2938104304",
+          "parent_code": "BJ-MO",
+          "name": "Adjaha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3891485866",
+          "parent_code": "BJ-MO",
+          "name": "Djanglanmey",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3891485928",
+          "parent_code": "BJ-MO",
+          "name": "Oumako",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4259640391",
+          "parent_code": "BJ-MO",
+          "name": "Possotomè",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4264119143",
+          "parent_code": "BJ-MO",
+          "name": "Avlo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4986688844",
+          "parent_code": "BJ-MO",
+          "name": "Koudo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5168736518",
+          "parent_code": "BJ-MO",
+          "name": "Grand-Popo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6258023002",
+          "parent_code": "BJ-MO",
+          "name": "Dahè",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6265606150",
+          "parent_code": "BJ-MO",
+          "name": "Honhoué",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6265688770",
+          "parent_code": "BJ-MO",
+          "name": "Houéyogbé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7588121917",
+          "parent_code": "BJ-MO",
+          "name": "Sazué",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7588515658",
+          "parent_code": "BJ-MO",
+          "name": "Atchannou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7588561248",
+          "parent_code": "BJ-MO",
+          "name": "Kpinnou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7590422399",
+          "parent_code": "BJ-MO",
+          "name": "Gbéhoué",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7594990722",
+          "parent_code": "BJ-MO",
+          "name": "Agoué",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BJ-OU",
+      "parent_code": "BJ",
+      "name": "Ouémé Department",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1669842684",
+          "parent_code": "BJ-OU",
+          "name": "Porto-Novo",
+          "type": "city",
+          "population": "265500",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1671041800",
+          "parent_code": "BJ-OU",
+          "name": "Akpro-Missérété",
+          "type": "city",
+          "population": "25000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1671044835",
+          "parent_code": "BJ-OU",
+          "name": "Avrankou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1671046819",
+          "parent_code": "BJ-OU",
+          "name": "Adjarra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1671048819",
+          "parent_code": "BJ-OU",
+          "name": "Aguégués",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2312907989",
+          "parent_code": "BJ-OU",
+          "name": "Adjohoun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2312907990",
+          "parent_code": "BJ-OU",
+          "name": "Bonou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2312907991",
+          "parent_code": "BJ-OU",
+          "name": "Dangbo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2313302872",
+          "parent_code": "BJ-OU",
+          "name": "Sèmè-Kpodji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2331705997",
+          "parent_code": "BJ-OU",
+          "name": "Affamè",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2473306979",
+          "parent_code": "BJ-OU",
+          "name": "Tohouè",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2473306980",
+          "parent_code": "BJ-OU",
+          "name": "Djèrègbé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3919356773",
+          "parent_code": "BJ-OU",
+          "name": "Gangban",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3919356910",
+          "parent_code": "BJ-OU",
+          "name": "Démè",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3937284831",
+          "parent_code": "BJ-OU",
+          "name": "Ekpè",
+          "type": "city",
+          "population": "40000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7636044484",
+          "parent_code": "BJ-OU",
+          "name": "Aholouyèmè",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7636046265",
+          "parent_code": "BJ-OU",
+          "name": "Zoungamè",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7645720253",
+          "parent_code": "BJ-OU",
+          "name": "Awonou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7646990495",
+          "parent_code": "BJ-OU",
+          "name": "Kodé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7647265101",
+          "parent_code": "BJ-OU",
+          "name": "Késsounou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7647265131",
+          "parent_code": "BJ-OU",
+          "name": "Houédomey",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7647334519",
+          "parent_code": "BJ-OU",
+          "name": "Gomè-Sota",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7649496118",
+          "parent_code": "BJ-OU",
+          "name": "Sado",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7649496125",
+          "parent_code": "BJ-OU",
+          "name": "Gbozounmè",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7649905380",
+          "parent_code": "BJ-OU",
+          "name": "Aglogbè",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7733327741",
+          "parent_code": "BJ-OU",
+          "name": "Agbangandan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    }
+  ]
+}

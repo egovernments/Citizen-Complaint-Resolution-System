@@ -34,6 +34,8 @@ export interface DigitFormSelectProps extends InputProps {
   optionValue?: string;
   /** Field to use as the option label when using reference (default: 'name') */
   optionText?: string;
+  /** Optional helper text shown below the select (muted) */
+  help?: string;
 }
 
 export function DigitFormSelect({
@@ -45,6 +47,7 @@ export function DigitFormSelect({
   reference,
   optionValue = 'code',
   optionText = 'name',
+  help,
   ...inputProps
 }: DigitFormSelectProps) {
   const {
@@ -114,6 +117,9 @@ export function DigitFormSelect({
         >
           {errorMessage}
         </p>
+      )}
+      {!hasError && help && (
+        <p className="mt-1 text-xs text-muted-foreground">{help}</p>
       )}
     </div>
   );

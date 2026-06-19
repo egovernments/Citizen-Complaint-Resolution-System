@@ -1,0 +1,2248 @@
+{
+  "code": "MG",
+  "name": "Madagascar",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "MG-U",
+      "parent_code": "MG",
+      "name": "Province de Toliara",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-254609408",
+          "parent_code": "MG-U",
+          "name": "Toliara",
+          "type": "city",
+          "population": "168756",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-300218243",
+          "parent_code": "MG-U",
+          "name": "Sakaraha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-337945914",
+          "parent_code": "MG-U",
+          "name": "Ankilizato",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-710305755",
+          "parent_code": "MG-U",
+          "name": "Morondava",
+          "type": "city",
+          "population": "53510",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-725564687",
+          "parent_code": "MG-U",
+          "name": "Belo-Tsiribihina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-727284605",
+          "parent_code": "MG-U",
+          "name": "Tsihombe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-727284607",
+          "parent_code": "MG-U",
+          "name": "Beloha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-727284608",
+          "parent_code": "MG-U",
+          "name": "Ampanihy",
+          "type": "city",
+          "population": "38000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-727284617",
+          "parent_code": "MG-U",
+          "name": "Betioka",
+          "type": "city",
+          "population": "25612",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-727308348",
+          "parent_code": "MG-U",
+          "name": "Ambatolahy",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-727308363",
+          "parent_code": "MG-U",
+          "name": "Miandrivazo",
+          "type": "city",
+          "population": "20421",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-866601087",
+          "parent_code": "MG-U",
+          "name": "Ambovombe",
+          "type": "city",
+          "population": "65402",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-889874221",
+          "parent_code": "MG-U",
+          "name": "Betroka",
+          "type": "city",
+          "population": "17327",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1348423038",
+          "parent_code": "MG-U",
+          "name": "Manja",
+          "type": "city",
+          "population": "20556",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1811661203",
+          "parent_code": "MG-U",
+          "name": "Beroroha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1812785918",
+          "parent_code": "MG-U",
+          "name": "Ankazoabo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1842133048",
+          "parent_code": "MG-U",
+          "name": "Morombe",
+          "type": "city",
+          "population": "22625",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1905925256",
+          "parent_code": "MG-U",
+          "name": "Bezaha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1917609577",
+          "parent_code": "MG-U",
+          "name": "Mahabo",
+          "type": "city",
+          "population": "17731",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1976552330",
+          "parent_code": "MG-U",
+          "name": "Isoanala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1995273300",
+          "parent_code": "MG-U",
+          "name": "Amboasary",
+          "type": "city",
+          "population": "45989",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1995273321",
+          "parent_code": "MG-U",
+          "name": "Tsivory",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2028685667",
+          "parent_code": "MG-U",
+          "name": "Malaimbandy",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2272560314",
+          "parent_code": "MG-U",
+          "name": "Bekily",
+          "type": "city",
+          "population": "20915",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3355969555",
+          "parent_code": "MG-U",
+          "name": "Tolanaro",
+          "type": "city",
+          "population": "67284",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-8780453843",
+          "parent_code": "MG-U",
+          "name": "Antanimora",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9815306789",
+          "parent_code": "MG-U",
+          "name": "R+3",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        },
+        {
+          "code": "CTY-10737666768",
+          "parent_code": "MG-U",
+          "name": "Ejeda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MG-F",
+      "parent_code": "MG",
+      "name": "Province de Fianarantsoa",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-300217995",
+          "parent_code": "MG-F",
+          "name": "Ihosy",
+          "type": "city",
+          "population": "39556",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316841166",
+          "parent_code": "MG-F",
+          "name": "Ambositra",
+          "type": "city",
+          "population": "41078",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316842941",
+          "parent_code": "MG-F",
+          "name": "Ambohimahasoa",
+          "type": "city",
+          "population": "11606",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316843071",
+          "parent_code": "MG-F",
+          "name": "Fianarantsoa",
+          "type": "city",
+          "population": "191776",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-316844298",
+          "parent_code": "MG-F",
+          "name": "Ranohira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316844748",
+          "parent_code": "MG-F",
+          "name": "Andohanilakaka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-701529816",
+          "parent_code": "MG-F",
+          "name": "Ambalavao",
+          "type": "city",
+          "population": "43231",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-727292572",
+          "parent_code": "MG-F",
+          "name": "Farafangana",
+          "type": "city",
+          "population": "34676",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-727292575",
+          "parent_code": "MG-F",
+          "name": "Vohipeno",
+          "type": "city",
+          "population": "14751",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-727292577",
+          "parent_code": "MG-F",
+          "name": "Manakara",
+          "type": "city",
+          "population": "44237",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-972051892",
+          "parent_code": "MG-F",
+          "name": "Vangaindrano",
+          "type": "city",
+          "population": "38537",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1314355275",
+          "parent_code": "MG-F",
+          "name": "Ifanadiana",
+          "type": "city",
+          "population": "15681",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1811182562",
+          "parent_code": "MG-F",
+          "name": "Nosy Varika",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1811669671",
+          "parent_code": "MG-F",
+          "name": "Iakora",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1862490336",
+          "parent_code": "MG-F",
+          "name": "Ambatofinandrahana",
+          "type": "city",
+          "population": "37409",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1907304020",
+          "parent_code": "MG-F",
+          "name": "Ikalamavony",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1917844504",
+          "parent_code": "MG-F",
+          "name": "Fandriana",
+          "type": "city",
+          "population": "29232",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1920569280",
+          "parent_code": "MG-F",
+          "name": "Ikongo",
+          "type": "city",
+          "population": "36684",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1948690911",
+          "parent_code": "MG-F",
+          "name": "Ambovombe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1977886891",
+          "parent_code": "MG-F",
+          "name": "Ivohibe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2577165720",
+          "parent_code": "MG-F",
+          "name": "Mananjary",
+          "type": "city",
+          "population": "25222",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2927935134",
+          "parent_code": "MG-F",
+          "name": "Midongy Atsimo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2959103226",
+          "parent_code": "MG-F",
+          "name": "Vondrozo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3677866835",
+          "parent_code": "MG-F",
+          "name": "Ranomafana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MG-M",
+      "parent_code": "MG",
+      "name": "Province de Mahajanga",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-254618037",
+          "parent_code": "MG-M",
+          "name": "Mahajanga",
+          "type": "city",
+          "population": "246022",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-300378189",
+          "parent_code": "MG-M",
+          "name": "Mitsinjo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-300379949",
+          "parent_code": "MG-M",
+          "name": "Marovoay",
+          "type": "city",
+          "population": "39290",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-300382318",
+          "parent_code": "MG-M",
+          "name": "Maevatanàna",
+          "type": "city",
+          "population": "25928",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-300385305",
+          "parent_code": "MG-M",
+          "name": "Ambatomainty",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-300385953",
+          "parent_code": "MG-M",
+          "name": "Morafenobe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-300387736",
+          "parent_code": "MG-M",
+          "name": "Maintirano",
+          "type": "city",
+          "population": "22293",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-300388295",
+          "parent_code": "MG-M",
+          "name": "Besalampy",
+          "type": "city",
+          "population": "11331",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-300388620",
+          "parent_code": "MG-M",
+          "name": "Soalala",
+          "type": "city",
+          "population": "14328",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-340427004",
+          "parent_code": "MG-M",
+          "name": "Port-Bergé",
+          "type": "city",
+          "population": "22573",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-574302812",
+          "parent_code": "MG-M",
+          "name": "Ambondromamy",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-574455512",
+          "parent_code": "MG-M",
+          "name": "Namakia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-713524647",
+          "parent_code": "MG-M",
+          "name": "Antsohihy",
+          "type": "city",
+          "population": "38253",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-713527688",
+          "parent_code": "MG-M",
+          "name": "Analalava",
+          "type": "city",
+          "population": "12991",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-724521817",
+          "parent_code": "MG-M",
+          "name": "Antsalova",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-731246774",
+          "parent_code": "MG-M",
+          "name": "Mampikony",
+          "type": "city",
+          "population": "28593",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1814931788",
+          "parent_code": "MG-M",
+          "name": "Bealanana",
+          "type": "city",
+          "population": "30937",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1821666049",
+          "parent_code": "MG-M",
+          "name": "Tsaratanàna",
+          "type": "city",
+          "population": "24971",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1842130062",
+          "parent_code": "MG-M",
+          "name": "Mandritsara",
+          "type": "city",
+          "population": "31135",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1907078999",
+          "parent_code": "MG-M",
+          "name": "Ambato Boeny",
+          "type": "city",
+          "population": "33456",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1920684450",
+          "parent_code": "MG-M",
+          "name": "Andriamena",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1935660318",
+          "parent_code": "MG-M",
+          "name": "Befandriana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1964119200",
+          "parent_code": "MG-M",
+          "name": "Kandreho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MG-A",
+      "parent_code": "MG",
+      "name": "Toamasina Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-254615144",
+          "parent_code": "MG-A",
+          "name": "Maroantsetra",
+          "type": "city",
+          "population": "42529",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-335711690",
+          "parent_code": "MG-A",
+          "name": "Toamasina",
+          "type": "city",
+          "population": "325857",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-593976824",
+          "parent_code": "MG-A",
+          "name": "Brickaville",
+          "type": "city",
+          "population": "27865",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-664492742",
+          "parent_code": "MG-A",
+          "name": "Moramanga",
+          "type": "city",
+          "population": "57084",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-671507246",
+          "parent_code": "MG-A",
+          "name": "Fenoarivo Atsinanana",
+          "type": "city",
+          "population": "41734",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-671561243",
+          "parent_code": "MG-A",
+          "name": "Soanierana Ivongo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-678832056",
+          "parent_code": "MG-A",
+          "name": "Ambodifototra",
+          "type": "city",
+          "population": "26822",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-899232764",
+          "parent_code": "MG-A",
+          "name": "Marolambo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1492685514",
+          "parent_code": "MG-A",
+          "name": "Ambatondrazaka",
+          "type": "city",
+          "population": "47649",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1546156216",
+          "parent_code": "MG-A",
+          "name": "Tanambe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1818141766",
+          "parent_code": "MG-A",
+          "name": "Vatomandry",
+          "type": "city",
+          "population": "15836",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1842128749",
+          "parent_code": "MG-A",
+          "name": "Mananara Avaratra",
+          "type": "city",
+          "population": "35148",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1905989268",
+          "parent_code": "MG-A",
+          "name": "Anosibe an'ala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1912068799",
+          "parent_code": "MG-A",
+          "name": "Andilamena",
+          "type": "city",
+          "population": "37229",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1920645401",
+          "parent_code": "MG-A",
+          "name": "Antanambao Manampontsy",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1982961757",
+          "parent_code": "MG-A",
+          "name": "Sandrakatsy",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2121490022",
+          "parent_code": "MG-A",
+          "name": "Amparafaravola",
+          "type": "city",
+          "population": "33299",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2408636306",
+          "parent_code": "MG-A",
+          "name": "Mahavelona",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2959022915",
+          "parent_code": "MG-A",
+          "name": "Vavatenina",
+          "type": "city",
+          "population": "35750",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5488327466",
+          "parent_code": "MG-A",
+          "name": "Mahanoro",
+          "type": "city",
+          "population": "37800",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MG-T",
+      "parent_code": "MG",
+      "name": "Province d’Antananarivo",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27565116",
+          "parent_code": "MG-T",
+          "name": "Antananarivo",
+          "type": "city",
+          "population": "1391433",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-300272255",
+          "parent_code": "MG-T",
+          "name": "Antsirabe",
+          "type": "city",
+          "population": "246354",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-300385517",
+          "parent_code": "MG-T",
+          "name": "Ankazobe",
+          "type": "city",
+          "population": "26845",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-300385656",
+          "parent_code": "MG-T",
+          "name": "Fenoarivobe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-300388920",
+          "parent_code": "MG-T",
+          "name": "Faratsiho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-300388948",
+          "parent_code": "MG-T",
+          "name": "Soavinandriana",
+          "type": "city",
+          "population": "40045",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-300389431",
+          "parent_code": "MG-T",
+          "name": "Miarinarivo",
+          "type": "city",
+          "population": "13109",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-300389556",
+          "parent_code": "MG-T",
+          "name": "Tsiroanomandidy",
+          "type": "city",
+          "population": "44461",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-590835579",
+          "parent_code": "MG-T",
+          "name": "Manjakandriana",
+          "type": "city",
+          "population": "22188",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-637715770",
+          "parent_code": "MG-T",
+          "name": "Ambohidratrimo",
+          "type": "city",
+          "population": "23760",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-637715789",
+          "parent_code": "MG-T",
+          "name": "Mahitsy",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-711526109",
+          "parent_code": "MG-T",
+          "name": "Ambatolampy",
+          "type": "city",
+          "population": "32291",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-727308344",
+          "parent_code": "MG-T",
+          "name": "Betafo",
+          "type": "city",
+          "population": "34336",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1808577147",
+          "parent_code": "MG-T",
+          "name": "Analavory",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1809417673",
+          "parent_code": "MG-T",
+          "name": "Arivonimamo",
+          "type": "city",
+          "population": "28324",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1906027819",
+          "parent_code": "MG-T",
+          "name": "Antanifotsy",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1918891239",
+          "parent_code": "MG-T",
+          "name": "Anjozorobe",
+          "type": "city",
+          "population": "24117",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1963938854",
+          "parent_code": "MG-T",
+          "name": "Ankazomiriotra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2006266811",
+          "parent_code": "MG-T",
+          "name": "Ankadinondry Sakay",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2207189670",
+          "parent_code": "MG-T",
+          "name": "Mandoto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2265791133",
+          "parent_code": "MG-T",
+          "name": "Imerintsiatosika",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-3203755",
+      "parent_code": "MG",
+      "name": "Diana Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-254616067",
+          "parent_code": "ST-3203755",
+          "name": "Antsiranana",
+          "type": "city",
+          "population": "129320",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-254616909",
+          "parent_code": "ST-3203755",
+          "name": "Hell-Ville",
+          "type": "city",
+          "population": "50251",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-254617039",
+          "parent_code": "ST-3203755",
+          "name": "Dzamandzar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-715574491",
+          "parent_code": "ST-3203755",
+          "name": "Ambanja",
+          "type": "city",
+          "population": "60321",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-726665354",
+          "parent_code": "ST-3203755",
+          "name": "Ambilobe",
+          "type": "city",
+          "population": "62346",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-3203756",
+      "parent_code": "MG",
+      "name": "Sava",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-721308145",
+          "parent_code": "ST-3203756",
+          "name": "Andapa",
+          "type": "city",
+          "population": "34616",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-724157435",
+          "parent_code": "ST-3203756",
+          "name": "Sambava",
+          "type": "city",
+          "population": "84039",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-888302465",
+          "parent_code": "ST-3203756",
+          "name": "Antalaha",
+          "type": "city",
+          "population": "67888",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6411285142",
+          "parent_code": "ST-3203756",
+          "name": "Vohemar",
+          "type": "city",
+          "population": "22047",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-3204230",
+      "parent_code": "MG",
+      "name": "Analanjirofo",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-671507246",
+          "parent_code": "ST-3204230",
+          "name": "Fenoarivo Atsinanana",
+          "type": "city",
+          "population": "41734",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-671561243",
+          "parent_code": "ST-3204230",
+          "name": "Soanierana Ivongo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-678832056",
+          "parent_code": "ST-3204230",
+          "name": "Ambodifototra",
+          "type": "city",
+          "population": "26822",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2959022915",
+          "parent_code": "ST-3204230",
+          "name": "Vavatenina",
+          "type": "city",
+          "population": "35750",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-3204231",
+      "parent_code": "MG",
+      "name": "Amoron'i Mania",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-316841166",
+          "parent_code": "ST-3204231",
+          "name": "Ambositra",
+          "type": "city",
+          "population": "41078",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1862490336",
+          "parent_code": "ST-3204231",
+          "name": "Ambatofinandrahana",
+          "type": "city",
+          "population": "37409",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1917844504",
+          "parent_code": "ST-3204231",
+          "name": "Fandriana",
+          "type": "city",
+          "population": "29232",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1948690911",
+          "parent_code": "ST-3204231",
+          "name": "Ambovombe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-3204232",
+      "parent_code": "MG",
+      "name": "Ihorombe",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-300217995",
+          "parent_code": "ST-3204232",
+          "name": "Ihosy",
+          "type": "city",
+          "population": "39556",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316844298",
+          "parent_code": "ST-3204232",
+          "name": "Ranohira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316844748",
+          "parent_code": "ST-3204232",
+          "name": "Andohanilakaka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1811669671",
+          "parent_code": "ST-3204232",
+          "name": "Iakora",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1977886891",
+          "parent_code": "ST-3204232",
+          "name": "Ivohibe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-3204233",
+      "parent_code": "MG",
+      "name": "Melaky",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-300385305",
+          "parent_code": "ST-3204233",
+          "name": "Ambatomainty",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-300385953",
+          "parent_code": "ST-3204233",
+          "name": "Morafenobe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-300387736",
+          "parent_code": "ST-3204233",
+          "name": "Maintirano",
+          "type": "city",
+          "population": "22293",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-300388295",
+          "parent_code": "ST-3204233",
+          "name": "Besalampy",
+          "type": "city",
+          "population": "11331",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-724521817",
+          "parent_code": "ST-3204233",
+          "name": "Antsalova",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-3204234",
+      "parent_code": "MG",
+      "name": "Menabe",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-337945914",
+          "parent_code": "ST-3204234",
+          "name": "Ankilizato",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-710305755",
+          "parent_code": "ST-3204234",
+          "name": "Morondava",
+          "type": "city",
+          "population": "53510",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-725564687",
+          "parent_code": "ST-3204234",
+          "name": "Belo-Tsiribihina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-727308348",
+          "parent_code": "ST-3204234",
+          "name": "Ambatolahy",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-727308363",
+          "parent_code": "ST-3204234",
+          "name": "Miandrivazo",
+          "type": "city",
+          "population": "20421",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1348423038",
+          "parent_code": "ST-3204234",
+          "name": "Manja",
+          "type": "city",
+          "population": "20556",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1917609577",
+          "parent_code": "ST-3204234",
+          "name": "Mahabo",
+          "type": "city",
+          "population": "17731",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2028685667",
+          "parent_code": "ST-3204234",
+          "name": "Malaimbandy",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-3204236",
+      "parent_code": "MG",
+      "name": "Vakinankaratra",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-300272255",
+          "parent_code": "ST-3204236",
+          "name": "Antsirabe",
+          "type": "city",
+          "population": "246354",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-300388920",
+          "parent_code": "ST-3204236",
+          "name": "Faratsiho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-711526109",
+          "parent_code": "ST-3204236",
+          "name": "Ambatolampy",
+          "type": "city",
+          "population": "32291",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-727308344",
+          "parent_code": "ST-3204236",
+          "name": "Betafo",
+          "type": "city",
+          "population": "34336",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1906027819",
+          "parent_code": "ST-3204236",
+          "name": "Antanifotsy",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1963938854",
+          "parent_code": "ST-3204236",
+          "name": "Ankazomiriotra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2207189670",
+          "parent_code": "ST-3204236",
+          "name": "Mandoto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-3204237",
+      "parent_code": "MG",
+      "name": "Atsinanana",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-335711690",
+          "parent_code": "ST-3204237",
+          "name": "Toamasina",
+          "type": "city",
+          "population": "325857",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-593976824",
+          "parent_code": "ST-3204237",
+          "name": "Brickaville",
+          "type": "city",
+          "population": "27865",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-899232764",
+          "parent_code": "ST-3204237",
+          "name": "Marolambo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1818141766",
+          "parent_code": "ST-3204237",
+          "name": "Vatomandry",
+          "type": "city",
+          "population": "15836",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1920645401",
+          "parent_code": "ST-3204237",
+          "name": "Antanambao Manampontsy",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2408636306",
+          "parent_code": "ST-3204237",
+          "name": "Mahavelona",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5488327466",
+          "parent_code": "ST-3204237",
+          "name": "Mahanoro",
+          "type": "city",
+          "population": "37800",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-3204238",
+      "parent_code": "MG",
+      "name": "Alaotra-Mangoro",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-664492742",
+          "parent_code": "ST-3204238",
+          "name": "Moramanga",
+          "type": "city",
+          "population": "57084",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1492685514",
+          "parent_code": "ST-3204238",
+          "name": "Ambatondrazaka",
+          "type": "city",
+          "population": "47649",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1546156216",
+          "parent_code": "ST-3204238",
+          "name": "Tanambe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1905989268",
+          "parent_code": "ST-3204238",
+          "name": "Anosibe an'ala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1912068799",
+          "parent_code": "ST-3204238",
+          "name": "Andilamena",
+          "type": "city",
+          "population": "37229",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2121490022",
+          "parent_code": "ST-3204238",
+          "name": "Amparafaravola",
+          "type": "city",
+          "population": "33299",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-3247287",
+      "parent_code": "MG",
+      "name": "Sofia Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-340427004",
+          "parent_code": "ST-3247287",
+          "name": "Port-Bergé",
+          "type": "city",
+          "population": "22573",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-713524647",
+          "parent_code": "ST-3247287",
+          "name": "Antsohihy",
+          "type": "city",
+          "population": "38253",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-713527688",
+          "parent_code": "ST-3247287",
+          "name": "Analalava",
+          "type": "city",
+          "population": "12991",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-731246774",
+          "parent_code": "ST-3247287",
+          "name": "Mampikony",
+          "type": "city",
+          "population": "28593",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1814931788",
+          "parent_code": "ST-3247287",
+          "name": "Bealanana",
+          "type": "city",
+          "population": "30937",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1842130062",
+          "parent_code": "ST-3247287",
+          "name": "Mandritsara",
+          "type": "city",
+          "population": "31135",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1935660318",
+          "parent_code": "ST-3247287",
+          "name": "Befandriana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MG-D",
+      "parent_code": "MG",
+      "name": "Antsiranana Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-254616067",
+          "parent_code": "MG-D",
+          "name": "Antsiranana",
+          "type": "city",
+          "population": "129320",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-254616909",
+          "parent_code": "MG-D",
+          "name": "Hell-Ville",
+          "type": "city",
+          "population": "50251",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-254617039",
+          "parent_code": "MG-D",
+          "name": "Dzamandzar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-715574491",
+          "parent_code": "MG-D",
+          "name": "Ambanja",
+          "type": "city",
+          "population": "60321",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-721308145",
+          "parent_code": "MG-D",
+          "name": "Andapa",
+          "type": "city",
+          "population": "34616",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-724157435",
+          "parent_code": "MG-D",
+          "name": "Sambava",
+          "type": "city",
+          "population": "84039",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-726665354",
+          "parent_code": "MG-D",
+          "name": "Ambilobe",
+          "type": "city",
+          "population": "62346",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-888302465",
+          "parent_code": "MG-D",
+          "name": "Antalaha",
+          "type": "city",
+          "population": "67888",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6411285142",
+          "parent_code": "MG-D",
+          "name": "Vohemar",
+          "type": "city",
+          "population": "22047",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-5559852",
+      "parent_code": "MG",
+      "name": "Anosy",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-889874221",
+          "parent_code": "ST-5559852",
+          "name": "Betroka",
+          "type": "city",
+          "population": "17327",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1976552330",
+          "parent_code": "ST-5559852",
+          "name": "Isoanala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1995273300",
+          "parent_code": "ST-5559852",
+          "name": "Amboasary",
+          "type": "city",
+          "population": "45989",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1995273321",
+          "parent_code": "ST-5559852",
+          "name": "Tsivory",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3355969555",
+          "parent_code": "ST-5559852",
+          "name": "Tolanaro",
+          "type": "city",
+          "population": "67284",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "ST-6951070",
+      "parent_code": "MG",
+      "name": "Boeny",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-254618037",
+          "parent_code": "ST-6951070",
+          "name": "Mahajanga",
+          "type": "city",
+          "population": "246022",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-300378189",
+          "parent_code": "ST-6951070",
+          "name": "Mitsinjo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-300379949",
+          "parent_code": "ST-6951070",
+          "name": "Marovoay",
+          "type": "city",
+          "population": "39290",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-300388620",
+          "parent_code": "ST-6951070",
+          "name": "Soalala",
+          "type": "city",
+          "population": "14328",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-574302812",
+          "parent_code": "ST-6951070",
+          "name": "Ambondromamy",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-574455512",
+          "parent_code": "ST-6951070",
+          "name": "Namakia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1907078999",
+          "parent_code": "ST-6951070",
+          "name": "Ambato Boeny",
+          "type": "city",
+          "population": "33456",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-6951071",
+      "parent_code": "MG",
+      "name": "Betsiboka",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-300382318",
+          "parent_code": "ST-6951071",
+          "name": "Maevatanàna",
+          "type": "city",
+          "population": "25928",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1821666049",
+          "parent_code": "ST-6951071",
+          "name": "Tsaratanàna",
+          "type": "city",
+          "population": "24971",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1920684450",
+          "parent_code": "ST-6951071",
+          "name": "Andriamena",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1964119200",
+          "parent_code": "ST-6951071",
+          "name": "Kandreho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-6951165",
+      "parent_code": "MG",
+      "name": "Analamanga",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27565116",
+          "parent_code": "ST-6951165",
+          "name": "Antananarivo",
+          "type": "city",
+          "population": "1391433",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-300385517",
+          "parent_code": "ST-6951165",
+          "name": "Ankazobe",
+          "type": "city",
+          "population": "26845",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-590835579",
+          "parent_code": "ST-6951165",
+          "name": "Manjakandriana",
+          "type": "city",
+          "population": "22188",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-637715770",
+          "parent_code": "ST-6951165",
+          "name": "Ambohidratrimo",
+          "type": "city",
+          "population": "23760",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-637715789",
+          "parent_code": "ST-6951165",
+          "name": "Mahitsy",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1918891239",
+          "parent_code": "ST-6951165",
+          "name": "Anjozorobe",
+          "type": "city",
+          "population": "24117",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-6951166",
+      "parent_code": "MG",
+      "name": "Bongolava",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-300385656",
+          "parent_code": "ST-6951166",
+          "name": "Fenoarivobe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-300389556",
+          "parent_code": "ST-6951166",
+          "name": "Tsiroanomandidy",
+          "type": "city",
+          "population": "44461",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2006266811",
+          "parent_code": "ST-6951166",
+          "name": "Ankadinondry Sakay",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-6951167",
+      "parent_code": "MG",
+      "name": "Itasy Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-300388948",
+          "parent_code": "ST-6951167",
+          "name": "Soavinandriana",
+          "type": "city",
+          "population": "40045",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-300389431",
+          "parent_code": "ST-6951167",
+          "name": "Miarinarivo",
+          "type": "city",
+          "population": "13109",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1808577147",
+          "parent_code": "ST-6951167",
+          "name": "Analavory",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1809417673",
+          "parent_code": "ST-6951167",
+          "name": "Arivonimamo",
+          "type": "city",
+          "population": "28324",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2265791133",
+          "parent_code": "ST-6951167",
+          "name": "Imerintsiatosika",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-6951222",
+      "parent_code": "MG",
+      "name": "Atsimo-Andrefana",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-254609408",
+          "parent_code": "ST-6951222",
+          "name": "Toliara",
+          "type": "city",
+          "population": "168756",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-300218243",
+          "parent_code": "ST-6951222",
+          "name": "Sakaraha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-727284608",
+          "parent_code": "ST-6951222",
+          "name": "Ampanihy",
+          "type": "city",
+          "population": "38000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-727284617",
+          "parent_code": "ST-6951222",
+          "name": "Betioka",
+          "type": "city",
+          "population": "25612",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1811661203",
+          "parent_code": "ST-6951222",
+          "name": "Beroroha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1812785918",
+          "parent_code": "ST-6951222",
+          "name": "Ankazoabo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1842133048",
+          "parent_code": "ST-6951222",
+          "name": "Morombe",
+          "type": "city",
+          "population": "22625",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1905925256",
+          "parent_code": "ST-6951222",
+          "name": "Bezaha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9815306789",
+          "parent_code": "ST-6951222",
+          "name": "R+3",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        },
+        {
+          "code": "CTY-10737666768",
+          "parent_code": "ST-6951222",
+          "name": "Ejeda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-6951223",
+      "parent_code": "MG",
+      "name": "Androy",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-727284605",
+          "parent_code": "ST-6951223",
+          "name": "Tsihombe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-727284607",
+          "parent_code": "ST-6951223",
+          "name": "Beloha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-866601087",
+          "parent_code": "ST-6951223",
+          "name": "Ambovombe",
+          "type": "city",
+          "population": "65402",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2272560314",
+          "parent_code": "ST-6951223",
+          "name": "Bekily",
+          "type": "city",
+          "population": "20915",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8780453843",
+          "parent_code": "ST-6951223",
+          "name": "Antanimora",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-6951283",
+      "parent_code": "MG",
+      "name": "Atsimo-Atsinanana",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-727292572",
+          "parent_code": "ST-6951283",
+          "name": "Farafangana",
+          "type": "city",
+          "population": "34676",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-972051892",
+          "parent_code": "ST-6951283",
+          "name": "Vangaindrano",
+          "type": "city",
+          "population": "38537",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2927935134",
+          "parent_code": "ST-6951283",
+          "name": "Midongy Atsimo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2959103226",
+          "parent_code": "ST-6951283",
+          "name": "Vondrozo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-6951284",
+      "parent_code": "MG",
+      "name": "Haute Matsiatra",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-316842941",
+          "parent_code": "ST-6951284",
+          "name": "Ambohimahasoa",
+          "type": "city",
+          "population": "11606",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316843071",
+          "parent_code": "ST-6951284",
+          "name": "Fianarantsoa",
+          "type": "city",
+          "population": "191776",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-701529816",
+          "parent_code": "ST-6951284",
+          "name": "Ambalavao",
+          "type": "city",
+          "population": "43231",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1907304020",
+          "parent_code": "ST-6951284",
+          "name": "Ikalamavony",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-6951285",
+      "parent_code": "MG",
+      "name": "Vatovavy",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1314355275",
+          "parent_code": "ST-6951285",
+          "name": "Ifanadiana",
+          "type": "city",
+          "population": "15681",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1811182562",
+          "parent_code": "ST-6951285",
+          "name": "Nosy Varika",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2577165720",
+          "parent_code": "ST-6951285",
+          "name": "Mananjary",
+          "type": "city",
+          "population": "25222",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3677866835",
+          "parent_code": "ST-6951285",
+          "name": "Ranomafana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-17304873",
+      "parent_code": "MG",
+      "name": "Fitovinany",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-727292575",
+          "parent_code": "ST-17304873",
+          "name": "Vohipeno",
+          "type": "city",
+          "population": "14751",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-727292577",
+          "parent_code": "ST-17304873",
+          "name": "Manakara",
+          "type": "city",
+          "population": "44237",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1920569280",
+          "parent_code": "ST-17304873",
+          "name": "Ikongo",
+          "type": "city",
+          "population": "36684",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-18135279",
+      "parent_code": "MG",
+      "name": "Ambatosoa",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-254615144",
+          "parent_code": "ST-18135279",
+          "name": "Maroantsetra",
+          "type": "city",
+          "population": "42529",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1842128749",
+          "parent_code": "ST-18135279",
+          "name": "Mananara Avaratra",
+          "type": "city",
+          "population": "35148",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1982961757",
+          "parent_code": "ST-18135279",
+          "name": "Sandrakatsy",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    }
+  ]
+}

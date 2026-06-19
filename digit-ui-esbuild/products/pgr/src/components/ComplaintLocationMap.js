@@ -6,8 +6,8 @@ import { CardLabel } from "@egovernments/digit-ui-react-components";
 import { useTranslation } from "react-i18next";
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
-import keNairobiWards from "../assets/boundaries/ke_nairobi_wards.json";
-import useWardHighlightColor from "../hooks/pgr/useWardHighlightColor";
+import useMapConfig from "../hooks/pgr/useMapConfig";
+import useTenantBoundaries from "../hooks/pgr/useTenantBoundaries";
 
 // Fix default icon issue in React builds
 delete L.Icon.Default.prototype._getIconUrl;
@@ -27,9 +27,10 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
   const { t, i18n } = useTranslation();
   const [fetchedAddress, setFetchedAddress] = useState(null);
   const [isLoadingAddress, setIsLoadingAddress] = useState(false);
-  // Resolved from MDMS (RAINMAKER-PGR.MapConfig.wardHighlightColor),
-  // defaults to the legacy orange #FFA74F.
-  const WARD_COLOR = useWardHighlightColor();
+  // Map theming resolved per tenant from MDMS RAINMAKER-PGR.MapConfig:
+  // base tile theme (defaults to the light voyager basemap) + ward-highlight
+  // colour (defaults to the legacy orange #FFA74F).
+  const { tileUrl, tileAttribution, wardHighlightColor: WARD_COLOR } = useMapConfig();
 
   // Nominatim Accept-Language is ISO 639-1; derive from i18n locale (e.g.
   // `sw_KE` → `sw`). Falls back to English (closes egovernments/CCRS#520
@@ -38,13 +39,19 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
   // in Swahili).
   const nominatimLang = ((i18n?.language || Digit?.StoreData?.getCurrentLanguage?.() || "en") + "").split("_")[0] || "en";
 
+  // Tenant ward polygons from boundary-service for the configured MAP_TENANT.
+  // Null while the fetch is in flight; empty collection when the tenant has
+  // no usable geometry (no overlay — never another tenant's static wards).
+  const tenantBoundaries = useTenantBoundaries();
+
   const matchedWard = useMemo(() => {
-    if (!latitude || !longitude || !keNairobiWards?.features?.length) return null;
+    const wardCollection = tenantBoundaries;
+    if (!latitude || !longitude || !wardCollection?.features?.length) return null;
     const pt = turfPoint([longitude, latitude]);
-    return keNairobiWards.features.find((f) => {
+    return wardCollection.features.find((f) => {
       try { return booleanPointInPolygon(pt, f); } catch { return false; }
     }) || null;
-  }, [latitude, longitude]);
+  }, [latitude, longitude, tenantBoundaries]);
 
   const wardLayerStyle = (feature) => {
     const isMatch = matchedWard && feature?.properties?.code === matchedWard.properties.code;
@@ -164,14 +171,11 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
             doubleClickZoom={true}
             touchZoom={true}
           >
-            <TileLayer
-              attribution='&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-              url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-            />
-            {keNairobiWards?.features?.length > 0 && (
+            <TileLayer key={tileUrl} attribution={tileAttribution} url={tileUrl} />
+            {tenantBoundaries?.features?.length > 0 && (
               <GeoJSON
-                key={matchedWard?.properties?.code || "_"}
-                data={keNairobiWards}
+                key={`${matchedWard?.properties?.code || "_"}-${tenantBoundaries.features.length}`}
+                data={tenantBoundaries}
                 style={wardLayerStyle}
               />
             )}

@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useInput, useGetList } from 'ra-core';
 import type { InputProps } from 'ra-core';
 import {

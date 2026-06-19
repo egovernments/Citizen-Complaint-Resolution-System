@@ -7,8 +7,8 @@ import { useTranslation } from "react-i18next";
 import _ from "lodash";
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
-import keNairobiWards from "../assets/boundaries/ke_nairobi_wards.json";
-import useWardHighlightColor from "../hooks/pgr/useWardHighlightColor";
+import useMapConfig from "../hooks/pgr/useMapConfig";
+import useTenantBoundaries from "../hooks/pgr/useTenantBoundaries";
 
 // Fix default icon issue in React builds
 delete L.Icon.Default.prototype._getIconUrl;
@@ -71,7 +71,7 @@ const resolveWard = (lat, lng, wardCollection) => {
 };
 
 // Ward polygon style, lifted from wardwise-whispers-resolver.
-// WARD_COLOR is resolved at runtime from MDMS (useWardHighlightColor),
+// WARD_COLOR is resolved at runtime from MDMS (useMapConfig),
 // defaulting to the legacy orange — threaded in per render.
 const wardStyleFor = (WARD_COLOR, selectedCode, hoveredCode) => (feature) => {
   const code = feature?.properties?.code;
@@ -107,6 +107,9 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   const [polygonPoints, setPolygonPoints] = useState([]);
   const [hoveredWard, setHoveredWard] = useState(null);
   const [selectedWard, setSelectedWard] = useState(null);
+  // Tenant ward polygons (boundary-service when MAP_TENANT is set, else
+  // the bundled static Nairobi wards). Null while the fetch is in flight.
+  const tenantBoundaries = useTenantBoundaries();
   const mapRef = useRef(null);
   const searchInputRef = useRef(null);
   const hasInitialized = useRef(false);
@@ -120,7 +123,9 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     return v || "#F47738";
   }, []);
 
-  const wardColor = useWardHighlightColor();
+  // Map theming (base tile theme + ward highlight) resolved per tenant from
+  // MDMS RAINMAKER-PGR.MapConfig; defaults to the light voyager basemap.
+  const { tileUrl, tileAttribution, wardHighlightColor: wardColor } = useMapConfig();
   const wardStyle = useMemo(() => wardStyleFor(wardColor, selectedWard, hoveredWard), [wardColor, selectedWard, hoveredWard]);
   const onEachWard = useCallback((feature, layer) => {
     const code = feature?.properties?.code;
@@ -174,7 +179,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   }, [formData, config.key]);
 
   const fetchAddress = async (lat, lng) => {
-    const ward = resolveWard(lat, lng, keNairobiWards);
+    const ward = resolveWard(lat, lng, tenantBoundaries);
     setSelectedWard(ward?.code || null);
     try {
       const response = await fetch(
@@ -391,14 +396,11 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
           >
             <MapRefSetter mapRef={mapRef} />
             <MapClickHandler onClick={handleMapClick} />
-            <TileLayer
-              attribution='&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-              url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-            />
-            {keNairobiWards?.features?.length > 0 && (
+            <TileLayer key={tileUrl} attribution={tileAttribution} url={tileUrl} />
+            {tenantBoundaries?.features?.length > 0 && (
               <GeoJSON
-                key={`${selectedWard || "_"}-${hoveredWard || "_"}`}
-                data={keNairobiWards}
+                key={`${selectedWard || "_"}-${hoveredWard || "_"}-${tenantBoundaries.features.length}`}
+                data={tenantBoundaries}
                 style={wardStyle}
                 onEachFeature={onEachWard}
               />

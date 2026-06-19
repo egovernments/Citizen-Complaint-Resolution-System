@@ -1,0 +1,224 @@
+{
+  "code": "CV",
+  "name": "Cape Verde",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "CTY-28094912",
+      "parent_code": "CV",
+      "name": "Santa Maria",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-28094953",
+      "parent_code": "CV",
+      "name": "Espargos",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-28095099",
+      "parent_code": "CV",
+      "name": "Praia",
+      "type": "city",
+      "population": "127832",
+      "place_type": "city"
+    },
+    {
+      "code": "CTY-146154210",
+      "parent_code": "CV",
+      "name": "Mindelo",
+      "type": "city",
+      "population": "70000",
+      "place_type": "city"
+    },
+    {
+      "code": "CTY-248644871",
+      "parent_code": "CV",
+      "name": "Palmeira",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-253679019",
+      "parent_code": "CV",
+      "name": "Ribeira Grande",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-253790761",
+      "parent_code": "CV",
+      "name": "Ribeira Grande de Santiago (Cidade Velha)",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-254019858",
+      "parent_code": "CV",
+      "name": "Pedra Badejo",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-254262195",
+      "parent_code": "CV",
+      "name": "São Domingos",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-255095550",
+      "parent_code": "CV",
+      "name": "São Filipe",
+      "type": "city",
+      "population": "94000",
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-255856894",
+      "parent_code": "CV",
+      "name": "Mosteiros",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-335286329",
+      "parent_code": "CV",
+      "name": "João Teves",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-497353754",
+      "parent_code": "CV",
+      "name": "Assomada (Santa Catarina)",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-564967211",
+      "parent_code": "CV",
+      "name": "Tarrafal",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-576518525",
+      "parent_code": "CV",
+      "name": "Coculi",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-910651801",
+      "parent_code": "CV",
+      "name": "Calheta de São Miguel",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-992952233",
+      "parent_code": "CV",
+      "name": "Porto Novo",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-1207428485",
+      "parent_code": "CV",
+      "name": "Nova Sintra",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-1207814978",
+      "parent_code": "CV",
+      "name": "Furna",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-1960679163",
+      "parent_code": "CV",
+      "name": "Achada Monte",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-1960686899",
+      "parent_code": "CV",
+      "name": "Tarrafal",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-1981553763",
+      "parent_code": "CV",
+      "name": "Ponta do Sol",
+      "type": "city",
+      "population": "2143",
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-2444366506",
+      "parent_code": "CV",
+      "name": "Sal Rei",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-2505326925",
+      "parent_code": "CV",
+      "name": "Ribeira Brava",
+      "type": "city",
+      "population": "5550",
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-6216771022",
+      "parent_code": "CV",
+      "name": "Cidade das Pombas",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-7085257325",
+      "parent_code": "CV",
+      "name": "Calheta",
+      "type": "city",
+      "population": null,
+      "place_type": "town"
+    },
+    {
+      "code": "CTY-7085257602",
+      "parent_code": "CV",
+      "name": "Porto Inglês",
+      "type": "city",
+      "population": "3000",
+      "place_type": "town"
+    }
+  ]
+}

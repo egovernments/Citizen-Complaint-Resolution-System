@@ -1,0 +1,208 @@
+{
+  "code": "SZ",
+  "name": "Eswatini",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "SZ-MA",
+      "parent_code": "SZ",
+      "name": "Manzini Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-243838438",
+          "parent_code": "SZ-MA",
+          "name": "Manzini",
+          "type": "city",
+          "population": "110508",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2277192792",
+          "parent_code": "SZ-MA",
+          "name": "Malkerns",
+          "type": "city",
+          "population": "9724",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4415037936",
+          "parent_code": "SZ-MA",
+          "name": "Matsapha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4415045766",
+          "parent_code": "SZ-MA",
+          "name": "Bhunya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6528192624",
+          "parent_code": "SZ-MA",
+          "name": "Luve",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6615844880",
+          "parent_code": "SZ-MA",
+          "name": "Mankayane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SZ-LU",
+      "parent_code": "SZ",
+      "name": "Lubombo",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2277349166",
+          "parent_code": "SZ-LU",
+          "name": "Big Bend",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2330307546",
+          "parent_code": "SZ-LU",
+          "name": "Siteki",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4285889417",
+          "parent_code": "SZ-LU",
+          "name": "Mpaka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4415037935",
+          "parent_code": "SZ-LU",
+          "name": "Simunye",
+          "type": "city",
+          "population": "18350",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6615844882",
+          "parent_code": "SZ-LU",
+          "name": "Lomahasha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11013242957",
+          "parent_code": "SZ-LU",
+          "name": "Ngomane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SZ-SH",
+      "parent_code": "SZ",
+      "name": "Shiselweni",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-908534612",
+          "parent_code": "SZ-SH",
+          "name": "Hlatikulu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1469805713",
+          "parent_code": "SZ-SH",
+          "name": "Hluti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2276754230",
+          "parent_code": "SZ-SH",
+          "name": "Nhlangano",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9937239344",
+          "parent_code": "SZ-SH",
+          "name": "Gege",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SZ-HH",
+      "parent_code": "SZ",
+      "name": "Hhohho Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-59732385",
+          "parent_code": "SZ-HH",
+          "name": "Piggs Peak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-243837793",
+          "parent_code": "SZ-HH",
+          "name": "Mbabane",
+          "type": "city",
+          "population": "94874",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4415037937",
+          "parent_code": "SZ-HH",
+          "name": "Ezulwini",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4415037938",
+          "parent_code": "SZ-HH",
+          "name": "Lobamba",
+          "type": "city",
+          "population": "11000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6628631289",
+          "parent_code": "SZ-HH",
+          "name": "Buhleni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    }
+  ]
+}

@@ -565,11 +565,12 @@ function Step2Location({ data, patch, t }: StepBodyProps) {
 
   // Pincode is read-only if it came from the map (Nominatim). If the
   // map didn't return one, postalCode is empty / undefined and the
-  // user gets a normal editable field.
+  // user gets a normal editable field. Manual input must NOT feed back
+  // into this flag: gating on data.postalCode disabled the field after
+  // the first typed character.
   const pincodeFromMap = data?.GeoLocationsPoint?.pincode;
   const pincodeKnown =
-    !!(pincodeFromMap != null && String(pincodeFromMap).length > 0) ||
-    !!(data.postalCode && data.postalCode.length > 0);
+    !!(pincodeFromMap != null && String(pincodeFromMap).length > 0);
 
   return (
     <StepShell
@@ -791,7 +792,8 @@ const CreatePGRFlowV2: React.FC = () => {
   }, [stepIndex, formData, serviceDefs]);
 
   function pincodeAllowlistOk(): boolean {
-    const wardResolved = !!formData?.GeoLocationsPoint?.ward?.code;
+    const wardResolved =
+      !!formData?.GeoLocationsPoint?.ward?.code || !!formData?.SelectedBoundary?.code;
     if (wardResolved) return true; // ward routing supersedes pincode allowlist (CCRS#469)
     if (!formData.postalCode || String(formData.postalCode).length === 0) return true;
     const norm = (v: unknown) => String(v ?? "").trim().replace(/^0+/, "") || "0";

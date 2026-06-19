@@ -1,0 +1,936 @@
+{
+  "code": "MR",
+  "name": "Mauritania",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "MR-07",
+      "parent_code": "MR",
+      "name": "Adrar",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-330511654",
+          "parent_code": "MR-07",
+          "name": "Atar",
+          "type": "city",
+          "population": "32262",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-330513843",
+          "parent_code": "MR-07",
+          "name": "Ouadane",
+          "type": "city",
+          "population": "3695",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-330514595",
+          "parent_code": "MR-07",
+          "name": "Chinguetti",
+          "type": "city",
+          "population": "4711",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2583960715",
+          "parent_code": "MR-07",
+          "name": "Choum",
+          "type": "city",
+          "population": "5000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3794447023",
+          "parent_code": "MR-07",
+          "name": "Aoujeft",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4486500455",
+          "parent_code": "MR-07",
+          "name": "Maaden Alirvan",
+          "type": "city",
+          "population": "700",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13343273919",
+          "parent_code": "MR-07",
+          "name": "دار اهل الجدع",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        }
+      ]
+    },
+    {
+      "code": "MR-01",
+      "parent_code": "MR",
+      "name": "Hodh Ech Chargui",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1994976606",
+          "parent_code": "MR-01",
+          "name": "Timbedra",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1996697706",
+          "parent_code": "MR-01",
+          "name": "Adel Bagrou",
+          "type": "city",
+          "population": "58429",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2118834448",
+          "parent_code": "MR-01",
+          "name": "Fassala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2118834489",
+          "parent_code": "MR-01",
+          "name": "Bassiknou",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2134804674",
+          "parent_code": "MR-01",
+          "name": "Néma",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2140949174",
+          "parent_code": "MR-01",
+          "name": "Mbera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2382426683",
+          "parent_code": "MR-01",
+          "name": "Walatah",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4533495481",
+          "parent_code": "MR-01",
+          "name": "Bangou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4533708588",
+          "parent_code": "MR-01",
+          "name": "Djiguenni",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-7734401275",
+          "parent_code": "MR-01",
+          "name": "Amourj",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7734401294",
+          "parent_code": "MR-01",
+          "name": "Ḥâssi Touîl Jdîd",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7734401386",
+          "parent_code": "MR-01",
+          "name": "Bousteila",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9850964026",
+          "parent_code": "MR-01",
+          "name": "camp de réfugiés de Mbera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MR-09",
+      "parent_code": "MR",
+      "name": "Tagant",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-424954170",
+          "parent_code": "MR-09",
+          "name": "Moudjeria",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2382418992",
+          "parent_code": "MR-09",
+          "name": "Tichit",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2651917475",
+          "parent_code": "MR-09",
+          "name": "Tidjikja تجكجة",
+          "type": "city",
+          "population": "18586",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4452441450",
+          "parent_code": "MR-09",
+          "name": "Nbeika",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MR-11",
+      "parent_code": "MR",
+      "name": "Tiris Zemmour",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-354601576",
+          "parent_code": "MR-11",
+          "name": "Fderîck",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-354872619",
+          "parent_code": "MR-11",
+          "name": "Zouérat",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1934453786",
+          "parent_code": "MR-11",
+          "name": "Bir Moghrein",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MR-08",
+      "parent_code": "MR",
+      "name": "Dakhlet Nouadhibou",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-249165824",
+          "parent_code": "MR-08",
+          "name": "Nouadhibou",
+          "type": "city",
+          "population": "85953",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2575939244",
+          "parent_code": "MR-08",
+          "name": "Cansado",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2577187734",
+          "parent_code": "MR-08",
+          "name": "Boulenouar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2583576213",
+          "parent_code": "MR-08",
+          "name": "Inal إنال",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5338033976",
+          "parent_code": "MR-08",
+          "name": "Chami",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MR-02",
+      "parent_code": "MR",
+      "name": "Hodh El Gharbi",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-330418520",
+          "parent_code": "MR-02",
+          "name": "Ayoun el Atrous",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-803713989",
+          "parent_code": "MR-02",
+          "name": "Kubanni",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4478959562",
+          "parent_code": "MR-02",
+          "name": "Tintane",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4518971335",
+          "parent_code": "MR-02",
+          "name": "Tamchekett",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-7734401579",
+          "parent_code": "MR-02",
+          "name": "Kerfi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9087475123",
+          "parent_code": "MR-02",
+          "name": "Tindérik",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13001090420",
+          "parent_code": "MR-02",
+          "name": "Modibougou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MR-12",
+      "parent_code": "MR",
+      "name": "Inchiri",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1505634228",
+          "parent_code": "MR-12",
+          "name": "Akjoujt",
+          "type": "city",
+          "population": "11235",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-8060573687",
+          "parent_code": "MR-12",
+          "name": "Benichab",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MR-14",
+      "parent_code": "MR",
+      "name": "Nouakchott-Nord Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-4513826946",
+          "parent_code": "MR-14",
+          "name": "Dar an Na`im",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MR-03",
+      "parent_code": "MR",
+      "name": "Assaba",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-330423418",
+          "parent_code": "MR-03",
+          "name": "Kiffa",
+          "type": "city",
+          "population": "60005",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2135500602",
+          "parent_code": "MR-03",
+          "name": "Kankossa",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4478847682",
+          "parent_code": "MR-03",
+          "name": "Kamour",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4517568586",
+          "parent_code": "MR-03",
+          "name": "Guerou",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-7734401381",
+          "parent_code": "MR-03",
+          "name": "Boumdeid",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-7734401753",
+          "parent_code": "MR-03",
+          "name": "El Ghabra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7739915697",
+          "parent_code": "MR-03",
+          "name": "Le Bheyr",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MR-05",
+      "parent_code": "MR",
+      "name": "Brakna",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-330457384",
+          "parent_code": "MR-05",
+          "name": "Aleg",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-330463327",
+          "parent_code": "MR-05",
+          "name": "Bogué",
+          "type": "city",
+          "population": "49089",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-424960554",
+          "parent_code": "MR-05",
+          "name": "Sangrave",
+          "type": "city",
+          "population": "14303",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-803731300",
+          "parent_code": "MR-05",
+          "name": "أشرم",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1990547260",
+          "parent_code": "MR-05",
+          "name": "Mbagne",
+          "type": "city",
+          "population": "10383",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3648726686",
+          "parent_code": "MR-05",
+          "name": "Bababé بابابى",
+          "type": "city",
+          "population": "11802",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4456725743",
+          "parent_code": "MR-05",
+          "name": "Magta-Lahjar",
+          "type": "city",
+          "population": "12117",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5012545476",
+          "parent_code": "MR-05",
+          "name": "Sori Malé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13175272150",
+          "parent_code": "MR-05",
+          "name": "fondé Elimane",
+          "type": "city",
+          "population": "8500",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MR-04",
+      "parent_code": "MR",
+      "name": "Gorgol",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-277741361",
+          "parent_code": "MR-04",
+          "name": "Kaédi",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2418777546",
+          "parent_code": "MR-04",
+          "name": "Foum Gleita",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2418777547",
+          "parent_code": "MR-04",
+          "name": "Lekseiba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2418777548",
+          "parent_code": "MR-04",
+          "name": "Mbout",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3138762814",
+          "parent_code": "MR-04",
+          "name": "Maghama مغامة",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3650230301",
+          "parent_code": "MR-04",
+          "name": "Djeol",
+          "type": "city",
+          "population": "11532",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6558000333",
+          "parent_code": "MR-04",
+          "name": "Toufndé Civé توفوندي سيفي",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6609862527",
+          "parent_code": "MR-04",
+          "name": "Monguel Toulde",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7734401503",
+          "parent_code": "MR-04",
+          "name": "Ganki",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MR-10",
+      "parent_code": "MR",
+      "name": "Guidimaka",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1986296891",
+          "parent_code": "MR-10",
+          "name": "خبو",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1986707728",
+          "parent_code": "MR-10",
+          "name": "Diakhalel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1986708734",
+          "parent_code": "MR-10",
+          "name": "Gouraye غوري",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2247629298",
+          "parent_code": "MR-10",
+          "name": "Ould Yengé ولد يينكي",
+          "type": "city",
+          "population": "4935",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2651917474",
+          "parent_code": "MR-10",
+          "name": "Sélibabi سيليبابي",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4126579705",
+          "parent_code": "MR-10",
+          "name": "Wompou وامبو",
+          "type": "city",
+          "population": "9859",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4467884222",
+          "parent_code": "MR-10",
+          "name": "Boully بولي",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4618653284",
+          "parent_code": "MR-10",
+          "name": "Agouemit",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4625473295",
+          "parent_code": "MR-10",
+          "name": "Bouanzé بوانزي",
+          "type": "city",
+          "population": "6905",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4635210920",
+          "parent_code": "MR-10",
+          "name": "Lahraj",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4650988990",
+          "parent_code": "MR-10",
+          "name": "ديكوتورو",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7734401413",
+          "parent_code": "MR-10",
+          "name": "Dafort",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7734401656",
+          "parent_code": "MR-10",
+          "name": "Mbédia-Achar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MR-06",
+      "parent_code": "MR",
+      "name": "Trarza",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-277741100",
+          "parent_code": "MR-06",
+          "name": "Rosso",
+          "type": "city",
+          "population": "75617",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-560607680",
+          "parent_code": "MR-06",
+          "name": "Boutilimit",
+          "type": "city",
+          "population": "30000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2099646203",
+          "parent_code": "MR-06",
+          "name": "Tiguent",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2099646206",
+          "parent_code": "MR-06",
+          "name": "Mederdra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2099659530",
+          "parent_code": "MR-06",
+          "name": "R' Kiz",
+          "type": "city",
+          "population": "10688",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2099661448",
+          "parent_code": "MR-06",
+          "name": "Belghirbane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3186679625",
+          "parent_code": "MR-06",
+          "name": "Tekane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4013979924",
+          "parent_code": "MR-06",
+          "name": "N'Diago",
+          "type": "city",
+          "population": "8440",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4462901614",
+          "parent_code": "MR-06",
+          "name": "Keur-Macene",
+          "type": "city",
+          "population": "39441",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4514383551",
+          "parent_code": "MR-06",
+          "name": "Wadi an-Naqa",
+          "type": "city",
+          "population": "35735",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4514859389",
+          "parent_code": "MR-06",
+          "name": "Bareina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4978655778",
+          "parent_code": "MR-06",
+          "name": "Mbalal",
+          "type": "city",
+          "population": "14129",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MA-12",
+      "parent_code": "MR",
+      "name": "Dakhla-Oued Ed-Dahab",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-348237703",
+          "parent_code": "MA-12",
+          "name": "Dakhla",
+          "type": "city",
+          "population": "165463",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-469179926",
+          "parent_code": "MA-12",
+          "name": "La Güera",
+          "type": "city",
+          "population": "3127",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1623947997",
+          "parent_code": "MA-12",
+          "name": "Aousserd",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1929403710",
+          "parent_code": "MA-12",
+          "name": "Tichla",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4057098042",
+          "parent_code": "MA-12",
+          "name": "Aghwinit",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MR-15",
+      "parent_code": "MR",
+      "name": "Nouakchott-Sud Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-4506712358",
+          "parent_code": "MR-15",
+          "name": "Arafat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MR-13",
+      "parent_code": "MR",
+      "name": "Nouakchott-Ouest Region",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-249166495",
+          "parent_code": "MR-13",
+          "name": "Nouakchott",
+          "type": "city",
+          "population": "958399",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-4477062524",
+          "parent_code": "MR-13",
+          "name": "Tafragh Zaynah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    }
+  ]
+}
