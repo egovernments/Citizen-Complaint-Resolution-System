@@ -156,7 +156,7 @@ export function ComplaintTypeList() {
                       )}
                     </span>
                     <span
-                      className={`font-semibold ${
+                      className={`min-w-0 break-words font-semibold ${
                         g.isUncategorized ? 'text-muted-foreground' : ''
                       }`}
                     >
