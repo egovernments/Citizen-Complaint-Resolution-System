@@ -10,7 +10,7 @@ import { readLifecycleFixtures } from '../utils/lifecycle-fixtures';
 //   3. naipepea historical fallback
 const SR_ID =
   process.env.PINNED_COMPLAINT_SRID
-  || readLifecycleFixtures()?.complaints.terminal_rated
+  || readLifecycleFixtures()?.complaints?.terminal_rated
   || 'NCCG-PGR-2026-04-28-011862';
 
 test.describe('04-citizen-timeline (#473 follow-up)', () => {

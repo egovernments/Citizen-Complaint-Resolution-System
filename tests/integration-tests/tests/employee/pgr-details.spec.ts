@@ -46,12 +46,12 @@ const _fixtures = readLifecycleFixtures();
 const TERMINAL_COMPLAINT_ID =
   process.env.TERMINAL_COMPLAINT_SRID
   || process.env.FLOW5_TERMINAL_SRID
-  || _fixtures?.complaints.terminal_rated
+  || _fixtures?.complaints?.terminal_rated
   || 'PG-PGR-2026-04-23-004403';
 const NONTERMINAL_COMPLAINT_ID =
   process.env.NONTERMINAL_COMPLAINT_SRID
   || process.env.FLOW5_NONTERMINAL_SRID
-  || _fixtures?.complaints.non_terminal
+  || _fixtures?.complaints?.non_terminal
   || 'NCCG-PGR-2026-05-06-023467';
 
 async function openDetails(page: Page, srid: string): Promise<void> {
