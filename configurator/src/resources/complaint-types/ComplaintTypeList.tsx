@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useGetList, useTranslate } from 'ra-core';
-import { RefreshCw, ChevronRight, ChevronDown } from 'lucide-react';
+import { RefreshCw, ChevronRight, ChevronDown, Search } from 'lucide-react';
 import { DigitCard } from '@/components/digit/DigitCard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { groupComplaintTypes, type SubTypeRecord } from './groupComplaintTypes';
+import { filterComplaintTypeGroups } from './filterComplaintTypeGroups';
 import { SubTypeTable } from './SubTypeTable';
 
 const GRID = 'grid grid-cols-[28px_1fr_120px_120px] gap-2';
@@ -12,6 +14,7 @@ const GRID = 'grid grid-cols-[28px_1fr_120px_120px] gap-2';
 export function ComplaintTypeList() {
   const translate = useTranslate();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [query, setQuery] = useState('');
 
   const { data, isPending, isFetching, error, refetch } = useGetList(
     'complaint-types',
@@ -21,10 +24,12 @@ export function ComplaintTypeList() {
     },
   );
 
-  const groups = groupComplaintTypes(
+  const allGroups = groupComplaintTypes(
     (data ?? []) as unknown as SubTypeRecord[],
     translate,
   );
+  const searching = query.trim().length > 0;
+  const groups = filterComplaintTypeGroups(allGroups, query);
 
   const toggle = (key: string) => {
     setExpanded((prev) => {
@@ -48,7 +53,7 @@ export function ComplaintTypeList() {
           </h1>
           {data && (
             <Badge variant="secondary" className="text-xs">
-              {groups.length}
+              {allGroups.length}
             </Badge>
           )}
         </div>
@@ -65,6 +70,19 @@ export function ComplaintTypeList() {
       </div>
 
       <DigitCard className="max-w-none">
+        {/* Search */}
+        <div className="mb-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder={translate('app.list.search', { _: 'Search complaint types…' })}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="pl-9 max-w-sm"
+            />
+          </div>
+        </div>
+
         {isPending && (
           <div className="flex items-center justify-center py-12 text-muted-foreground">
             <RefreshCw className="w-5 h-5 animate-spin mr-2" />
@@ -98,7 +116,11 @@ export function ComplaintTypeList() {
         {!isPending && !error && groups.length === 0 && (
           <div className="text-center py-12 text-muted-foreground">
             <p className="font-medium">
-              {translate('app.list.no_records', { _: 'No complaint types yet' })}
+              {searching
+                ? translate('app.list.no_matches', {
+                    _: 'No complaint types match your search.',
+                  })
+                : translate('app.list.no_records', { _: 'No complaint types yet' })}
             </p>
           </div>
         )}
@@ -117,7 +139,7 @@ export function ComplaintTypeList() {
 
             {groups.map((g) => {
               const key = g.menuPath || '__uncategorized__';
-              const isOpen = expanded.has(g.menuPath);
+              const isOpen = searching || expanded.has(g.menuPath);
               return (
                 <div key={key}>
                   <div

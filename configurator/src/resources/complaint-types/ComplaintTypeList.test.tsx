@@ -51,4 +51,14 @@ describe('ComplaintTypeList (accordion)', () => {
     fireEvent.click(screen.getByText('Sanitation'));
     expect(screen.getByText('Garbage not collected')).toBeInTheDocument();
   });
+
+  it('filters and auto-expands matching sub-types when searching', () => {
+    render(<ComplaintTypeList />);
+    const input = screen.getByPlaceholderText('Search complaint types…');
+    fireEvent.change(input, { target: { value: 'garbage' } });
+    // matching type auto-expands and shows the matching sub-type
+    expect(screen.getByText('Garbage not collected')).toBeInTheDocument();
+    // non-matching type is hidden
+    expect(screen.queryByText('Roads')).not.toBeInTheDocument();
+  });
 });
