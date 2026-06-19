@@ -777,37 +777,16 @@ class PGRService {
     // Fetch status localizations from rainmaker-pgr module
     let statusLocalizedMessages = {};
     if (statusCodes.length > 0) {
-      // Fetch status localizations using the localization API directly for rainmaker-pgr module
-      const localizationUrl = `${config.egovServices.egovServicesHost}localization/messages/v1/_search?module=rainmaker-pgr&locale=${locale}&tenantId=${tenantId}`;
-      
-      const localizationRequest = {
-        RequestInfo: {
-          apiId: "Rainmaker",
-          msgId: Date.now() + "|" + locale,
-          plainAccessRequest: {}
-        }
-      };
-      
+      // Use the localization service to fetch messages for the rainmaker-pgr module
       try {
-        const response = await fetch(localizationUrl, {
-          method: "POST",
-          body: JSON.stringify(localizationRequest),
-          headers: { "Content-Type": "application/json" }
-        });
+        const pgrMessages = await localisationService.getMessagesForModule('rainmaker-pgr', locale, tenantId);
         
-        if (response.ok) {
-          const data = await response.json();
-          if (data.messages) {
-            // Create a map of status codes to messages
-            data.messages.forEach(msg => {
-              statusCodes.forEach(statusCode => {
-                if (msg.code === statusCode) {
-                  statusLocalizedMessages[statusCode] = msg.message;
-                }
-              });
-            });
+        // Map the status codes to their localized messages
+        statusCodes.forEach(statusCode => {
+          if (pgrMessages[statusCode]) {
+            statusLocalizedMessages[statusCode] = pgrMessages[statusCode];
           }
-        }
+        });
       } catch (error) {
         console.log("Error fetching status localizations:", error);
       }
