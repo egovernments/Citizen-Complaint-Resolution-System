@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useGetList, useTranslate, useDataProvider, useNotify } from 'ra-core';
+import { useGetList, useTranslate, useDataProvider, useNotify, type RaRecord } from 'ra-core';
 import { RefreshCw, ChevronRight, ChevronDown, Search, Plus } from 'lucide-react';
 import { DigitCard } from '@/components/digit/DigitCard';
 import { Badge } from '@/components/ui/badge';
@@ -36,7 +36,7 @@ export function ComplaintTypeList() {
     // propagates to DeleteConfirmDialog, which shows the message in-dialog.
     await dataProvider.delete('complaint-types', {
       id: record.id,
-      previousData: record as unknown as Record<string, unknown>,
+      previousData: record as unknown as RaRecord,
     });
     notify('Sub-type deleted', { type: 'info' });
     await refetch();
