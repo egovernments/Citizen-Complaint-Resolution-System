@@ -62,3 +62,12 @@ Object.assign(navigator, {
     readText: vi.fn().mockResolvedValue(''),
   },
 });
+
+// jsdom doesn't implement these DOM methods that Radix (AlertDialog/Dialog)
+// relies on when opening/focusing content. No-op them so portal dialogs render.
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = vi.fn();
+}
+Element.prototype.hasPointerCapture = vi.fn(() => false);
+Element.prototype.setPointerCapture = vi.fn();
+Element.prototype.releasePointerCapture = vi.fn();
