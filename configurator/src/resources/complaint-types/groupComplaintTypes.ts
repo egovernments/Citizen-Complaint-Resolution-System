@@ -5,6 +5,9 @@ export interface SubTypeRecord {
   id: RaRecord['id'];
   serviceCode: string;
   name?: string;
+  /** Some ServiceDefs rows carry the display name as `serviceName` instead of
+   *  `name` (see api/services/mdms.ts getComplaintTypes); used as a fallback. */
+  serviceName?: string;
   department?: string;
   slaHours?: number;
   menuPath?: string;

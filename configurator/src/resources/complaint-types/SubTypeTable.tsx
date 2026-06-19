@@ -31,7 +31,7 @@ export function SubTypeTable({ subTypes }: SubTypeTableProps) {
             }
             className="cursor-pointer border-t border-border hover:bg-muted/40"
           >
-            <td className="px-3 py-2">{s.name ?? '--'}</td>
+            <td className="px-3 py-2">{s.name ?? s.serviceName ?? '--'}</td>
             <td className="px-3 py-2 font-mono text-xs text-primary">
               {s.serviceCode}
             </td>
