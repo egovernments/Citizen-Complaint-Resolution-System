@@ -17,7 +17,11 @@ export function SubTypeTable({ subTypes, onDelete }: SubTypeTableProps) {
   const isLastSubType = subTypes.length === 1;
 
   return (
-    <table className="w-full text-sm">
+    // Long, unbreakable service codes can push the Status/Actions columns past
+    // the right edge — scroll horizontally instead of hiding them. The min-width
+    // keeps every column legible before the scroll kicks in.
+    <div className="overflow-x-auto">
+    <table className="w-full min-w-[680px] text-sm">
       <thead>
         <tr className="text-left text-xs uppercase text-muted-foreground">
           <th className="px-3 py-2 font-medium">Sub-Type</th>
@@ -39,13 +43,13 @@ export function SubTypeTable({ subTypes, onDelete }: SubTypeTableProps) {
               className="cursor-pointer border-t border-border hover:bg-muted/40"
             >
               <td className="px-3 py-2">{label}</td>
-              <td className="px-3 py-2 font-mono text-xs text-primary">{s.serviceCode}</td>
+              <td className="px-3 py-2 font-mono text-xs text-primary whitespace-nowrap">{s.serviceCode}</td>
               <td className="px-3 py-2">{s.department ?? '--'}</td>
               <td className="px-3 py-2">{s.slaHours != null ? `${s.slaHours}h` : '--'}</td>
               <td className="px-3 py-2">
                 <StatusChip value={s.active} labels={{ true: 'Active', false: 'Inactive' }} />
               </td>
-              <td className="px-3 py-2">
+              <td className="px-3 py-2 whitespace-nowrap">
                 <div className="flex items-center justify-end gap-1">
                   <Button
                     variant="ghost"
@@ -86,5 +90,6 @@ export function SubTypeTable({ subTypes, onDelete }: SubTypeTableProps) {
         })}
       </tbody>
     </table>
+    </div>
   );
 }

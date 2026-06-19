@@ -66,4 +66,11 @@ describe('SubTypeTable', () => {
     await screen.findByRole('button', { name: 'Delete' });
     expect(screen.queryByText(/remove the entire complaint type/i)).not.toBeInTheDocument();
   });
+
+  it('wraps the table in a horizontally scrollable container so wide rows are reachable', () => {
+    const { container } = render(<SubTypeTable subTypes={[sub]} onDelete={vi.fn()} />);
+    const scroller = container.querySelector('.overflow-x-auto');
+    expect(scroller).not.toBeNull();
+    expect(scroller!.querySelector('table')).not.toBeNull();
+  });
 });
