@@ -207,11 +207,20 @@ export function ComplaintTypeList() {
                       )}
                     </span>
                     <span
-                      className={`min-w-0 flex items-center gap-1 font-semibold ${
+                      className={`min-w-0 break-words font-semibold ${
                         g.isUncategorized ? 'text-muted-foreground' : ''
                       }`}
                     >
-                      <span className="truncate">{g.label}</span>
+                      {g.label}
+                    </span>
+                    <span className="tabular-nums">{g.count}</span>
+                    <span className="flex items-center justify-end gap-2">
+                      <Badge
+                        variant="outline"
+                        className="text-xs bg-green-100 text-green-800 border-green-200"
+                      >
+                        {g.activeCount} active
+                      </Badge>
                       {!g.isUncategorized && (
                         <RenameTypeDialog
                           currentName={g.label}
@@ -221,7 +230,7 @@ export function ComplaintTypeList() {
                               variant="ghost"
                               size="sm"
                               aria-label={`Rename ${g.label}`}
-                              className="h-6 w-6 p-0 flex-shrink-0"
+                              className="h-7 w-7 p-0 flex-shrink-0"
                               onClick={(e) => e.stopPropagation()}
                             >
                               <Pencil className="h-3.5 w-3.5" />
@@ -229,15 +238,6 @@ export function ComplaintTypeList() {
                           }
                         />
                       )}
-                    </span>
-                    <span className="tabular-nums">{g.count}</span>
-                    <span>
-                      <Badge
-                        variant="outline"
-                        className="text-xs bg-green-100 text-green-800 border-green-200"
-                      >
-                        {g.activeCount} active
-                      </Badge>
                     </span>
                   </div>
                   {isOpen && (
