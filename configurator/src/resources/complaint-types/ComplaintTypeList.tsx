@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useGetList, useTranslate } from 'ra-core';
+import { useGetList, useTranslate, useDataProvider, useNotify } from 'ra-core';
 import { RefreshCw, ChevronRight, ChevronDown, Search, Plus } from 'lucide-react';
 import { DigitCard } from '@/components/digit/DigitCard';
 import { Badge } from '@/components/ui/badge';
@@ -25,6 +25,22 @@ export function ComplaintTypeList() {
       sort: { field: 'serviceCode', order: 'ASC' },
     },
   );
+
+  const dataProvider = useDataProvider();
+  const notify = useNotify();
+
+  const handleDeleteSubType = async (record: SubTypeRecord) => {
+    // dataProvider.delete maps to an MDMS soft-delete (isActive:false). On
+    // success the active-only list no longer returns the row; refetch reflects
+    // it (and drops the whole type if that was its last sub-type). A rejection
+    // propagates to DeleteConfirmDialog, which shows the message in-dialog.
+    await dataProvider.delete('complaint-types', {
+      id: record.id,
+      previousData: record as unknown as Record<string, unknown>,
+    });
+    notify('Sub-type deleted', { type: 'info' });
+    await refetch();
+  };
 
   const allGroups = groupComplaintTypes(
     (data ?? []) as unknown as SubTypeRecord[],
@@ -176,7 +192,7 @@ export function ComplaintTypeList() {
                   </div>
                   {isOpen && (
                     <div className="bg-muted/20 border-b border-border px-3 py-2 pl-10">
-                      <SubTypeTable subTypes={g.subTypes} />
+                      <SubTypeTable subTypes={g.subTypes} onDelete={handleDeleteSubType} />
                       <button
                         type="button"
                         onClick={(e) => {

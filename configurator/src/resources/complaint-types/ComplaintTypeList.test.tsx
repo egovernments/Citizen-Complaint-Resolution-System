@@ -6,6 +6,8 @@ vi.mock('react-router-dom', () => ({ useNavigate: () => navigate }));
 
 vi.mock('ra-core', () => ({
   useTranslate: () => (key: string, opts?: { _?: string }) => opts?._ ?? key,
+  useDataProvider: () => ({ delete: vi.fn().mockResolvedValue({ data: {} }) }),
+  useNotify: () => vi.fn(),
   useGetList: () => ({
     data: [
       {
