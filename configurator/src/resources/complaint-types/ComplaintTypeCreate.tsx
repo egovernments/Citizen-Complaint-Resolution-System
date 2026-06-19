@@ -1,4 +1,5 @@
 import type { RaRecord } from 'ra-core';
+import { useSearchParams } from 'react-router-dom';
 import { DigitCreate, DigitFormCodeInput, DigitFormInput, DigitFormSelect, v } from '@/admin';
 import { useAvailableLocales } from '@/hooks/useAvailableLocales';
 import { localizationService } from '@/api/services/localization';
@@ -13,6 +14,18 @@ const defaultRecord = {
 
 export function ComplaintTypeCreate() {
   const { locales } = useAvailableLocales();
+  const [searchParams] = useSearchParams();
+  // When launched via "Add Sub-Type" from a Type, the menuPath is pre-filled
+  // and locked so the new sub-type lands under that Type.
+  const presetMenuPath = searchParams.get('menuPath') || undefined;
+  const record = presetMenuPath
+    ? { ...defaultRecord, menuPath: presetMenuPath }
+    : defaultRecord;
+  // react-hook-form omits disabled fields from the submission, so stamp the
+  // locked menuPath back onto the payload to guarantee the new record carries it.
+  const transform = presetMenuPath
+    ? (data: Record<string, unknown>) => ({ ...data, menuPath: presetMenuPath })
+    : undefined;
 
   // After the MDMS record is saved, seed `SERVICEDEFS.*` localization keys
   // for every locale the tenant declares. Without this a freshly-added
@@ -59,8 +72,18 @@ export function ComplaintTypeCreate() {
   };
 
   return (
-    <DigitCreate title="Create Complaint Type" record={defaultRecord} afterCreate={afterCreate}>
-      <DigitFormInput source="menuPath" label="Complaint Type (Menu Path)" validate={v.required} />
+    <DigitCreate
+      title={presetMenuPath ? 'Add Sub-Type' : 'Create Complaint Type'}
+      record={record}
+      transform={transform}
+      afterCreate={afterCreate}
+    >
+      <DigitFormInput
+        source="menuPath"
+        label="Complaint Type (Menu Path)"
+        validate={presetMenuPath ? undefined : v.required}
+        disabled={!!presetMenuPath}
+      />
       <DigitFormSelect
         source="department"
         label="Department"

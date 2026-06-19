@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useGetList, useTranslate } from 'ra-core';
-import { RefreshCw, ChevronRight, ChevronDown, Search } from 'lucide-react';
+import { RefreshCw, ChevronRight, ChevronDown, Search, Plus } from 'lucide-react';
 import { DigitCard } from '@/components/digit/DigitCard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,7 @@ const GRID = 'grid grid-cols-[28px_1fr_120px_120px] gap-2';
 
 export function ComplaintTypeList() {
   const translate = useTranslate();
+  const navigate = useNavigate();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState('');
 
@@ -175,6 +177,24 @@ export function ComplaintTypeList() {
                   {isOpen && (
                     <div className="bg-muted/20 border-b border-border px-3 py-2 pl-10">
                       <SubTypeTable subTypes={g.subTypes} />
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const raw = g.isUncategorized
+                            ? ''
+                            : g.subTypes[0]?.menuPath ?? '';
+                          navigate(
+                            raw
+                              ? `/manage/complaint-types/create?menuPath=${encodeURIComponent(raw)}`
+                              : '/manage/complaint-types/create',
+                          );
+                        }}
+                        className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        {translate('app.complaint_types.add_sub_type', { _: 'Add Sub-Type' })}
+                      </button>
                     </div>
                   )}
                 </div>

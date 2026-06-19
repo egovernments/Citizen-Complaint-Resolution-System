@@ -61,4 +61,13 @@ describe('ComplaintTypeList (accordion)', () => {
     // non-matching type is hidden
     expect(screen.queryByText('Roads')).not.toBeInTheDocument();
   });
+
+  it('navigates to the create page with the type menuPath when adding a sub-type', () => {
+    render(<ComplaintTypeList />);
+    fireEvent.click(screen.getByText('Sanitation')); // expand the group
+    fireEvent.click(screen.getByText('Add Sub-Type'));
+    expect(navigate).toHaveBeenCalledWith(
+      '/manage/complaint-types/create?menuPath=Sanitation',
+    );
+  });
 });
