@@ -744,7 +744,7 @@ class PGRService {
     var results = {};
     results["ServiceWrappers"] = [];
     let localisationPrefix = "SERVICEDEFS_";
-    let statusLocalisationPrefix = "CS_COMMON_COMPLAINT_";
+    let statusLocalisationPrefix = "CS_COMMON_";
 
     let complaintLimit = config.pgrUseCase.complaintSearchLimit;
 
