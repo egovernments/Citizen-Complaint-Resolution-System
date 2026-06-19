@@ -1,5 +1,6 @@
 import { DigitList, DigitDatagrid, SearchFilterInput } from '@/admin';
 import type { DigitColumn } from '@/admin';
+import { MigrateHierarchyAction } from './MigrateHierarchyAction';
 
 const filters = [<SearchFilterInput key="q" source="q" alwaysOn />];
 
@@ -34,6 +35,7 @@ export function ComplaintHierarchyList() {
       hasCreate
       sort={{ field: 'hierarchyType', order: 'ASC' }}
       filters={filters}
+      actions={<MigrateHierarchyAction />}
     >
       <DigitDatagrid columns={columns} rowClick="show" />
     </DigitList>
