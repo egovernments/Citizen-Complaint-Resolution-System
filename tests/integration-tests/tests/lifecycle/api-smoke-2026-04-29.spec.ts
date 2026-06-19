@@ -9,7 +9,7 @@ import { TENANT } from '../utils/env';
 // SRID and the tenant we search always come from the same source.
 const KNOWN_RESOLVED_SRID =
   process.env.KNOWN_RESOLVED_SRID
-  || readLifecycleFixtures()?.complaints.terminal_rated
+  || readLifecycleFixtures()?.complaints?.terminal_rated
   || 'NCCG-PGR-2026-04-28-011862';
 
 test.describe('00-smoke: API helpers reach the configured deployment', () => {
