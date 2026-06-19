@@ -738,20 +738,13 @@ class PGRService {
     }
   }
 
-  formatComplaintStatus(status) {
-    // Convert fully capitalized status to Title Case
-    // e.g., "PENDINGFORASSIGNMENT" -> "Pendingforassignment"
-    if (!status) return status;
-    
-    // Convert to title case: First letter uppercase, rest lowercase
-    return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
-  }
 
   async preparePGRResult(responseBody, locale) {
     let serviceWrappers = responseBody.ServiceWrappers;
     var results = {};
     results["ServiceWrappers"] = [];
     let localisationPrefix = "SERVICEDEFS_";
+    let statusLocalisationPrefix = "CS_COMMON_COMPLAINT_";
 
     let complaintLimit = config.pgrUseCase.complaintSearchLimit;
 
@@ -761,10 +754,15 @@ class PGRService {
     
     // Collect all localization codes needed
     let localizationCodes = [];
+    let statusCodes = [];
     let tenantId = serviceWrappers.length > 0 ? serviceWrappers[0].service.tenantId : config.rootTenantId;
     
     for (let i = 0; i < complaintLimit && i < serviceWrappers.length; i++) {
       localizationCodes.push(localisationPrefix + serviceWrappers[i].service.serviceCode.toUpperCase());
+      // Add status codes for localization
+      if (serviceWrappers[i].service.applicationStatus) {
+        statusCodes.push(statusLocalisationPrefix + serviceWrappers[i].service.applicationStatus.toUpperCase());
+      }
     }
     
     // Fetch all localizations at once from API
@@ -774,6 +772,45 @@ class PGRService {
         localizationCodes,
         tenantId
       );
+    }
+    
+    // Fetch status localizations from rainmaker-pgr module
+    let statusLocalizedMessages = {};
+    if (statusCodes.length > 0) {
+      // Fetch status localizations using the localization API directly for rainmaker-pgr module
+      const localizationUrl = `${config.egovServices.egovServicesHost}localization/messages/v1/_search?module=rainmaker-pgr&locale=${locale}&tenantId=${tenantId}`;
+      
+      const localizationRequest = {
+        RequestInfo: {
+          apiId: "Rainmaker",
+          msgId: Date.now() + "|" + locale,
+          plainAccessRequest: {}
+        }
+      };
+      
+      try {
+        const response = await fetch(localizationUrl, {
+          method: "POST",
+          body: JSON.stringify(localizationRequest),
+          headers: { "Content-Type": "application/json" }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.messages) {
+            // Create a map of status codes to messages
+            data.messages.forEach(msg => {
+              statusCodes.forEach(statusCode => {
+                if (msg.code === statusCode) {
+                  statusLocalizedMessages[statusCode] = msg.message;
+                }
+              });
+            });
+          }
+        }
+      } catch (error) {
+        console.log("Error fetching status localizations:", error);
+      }
     }
 
     for (let serviceWrapper of serviceWrappers) {
@@ -792,8 +829,14 @@ class PGRService {
         filedDate = moment(filedDate)
           .tz(config.timeZone)
           .format(config.dateFormat);
-        // Format the applicationStatus for better display
-        let applicationStatus = this.formatComplaintStatus(serviceWrapper.service.applicationStatus);
+        
+        // Get localized status or fallback to formatted status
+        let applicationStatus = serviceWrapper.service.applicationStatus;
+        if (applicationStatus) {
+          let statusKey = statusLocalisationPrefix + applicationStatus.toUpperCase();
+          applicationStatus = statusLocalizedMessages[statusKey] || applicationStatus;
+        }
+        
         var data = {
           complaintType: dialog.get_message(serviceCode, locale),
           complaintNumber: serviceRequestId,
