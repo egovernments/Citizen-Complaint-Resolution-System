@@ -23,7 +23,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { PgrInboxPage } from '../pages/pgr-inbox.page';
 import { HrmsCreatePage } from '../pages/hrms-create.page';
 import { getDigitToken, loginViaApi } from '../utils/auth';
-import { uniqueMobile } from '../../utils/mobile';
+import { getMobileValidationRule, generateValidMobile } from '../common/mdms-mobile';
 
 import * as path from 'path';
 import * as fs from 'fs';
@@ -66,9 +66,11 @@ async function assertLocalized(page: Page, context: string): Promise<string[]> {
   return rawKeys;
 }
 
-// Unique phones per run, shaped by the target tenant's mobile rules
-const CITIZEN_PHONE = uniqueMobile(0);
-const EMPLOYEE_PHONE = uniqueMobile(1);
+// Tenant-aware phones, sourced from MDMS at suite setup (see
+// common/mdms-mobile.ts). The init runs in test.beforeAll inside the
+// top-level describe.serial near the bottom of the file.
+let CITIZEN_PHONE: string;
+let EMPLOYEE_PHONE: string;
 const CITIZEN_NAME = 'E2E Lifecycle Citizen';
 const EMPLOYEE_NAME = 'E2E Test Employee';
 
@@ -193,6 +195,19 @@ test.describe.serial('Full PGR lifecycle — citizen, admin, employee', () => {
   let complaintAssigned = false;
   let complaintResolved = false;
   let complaintRated = false;
+
+  test.beforeAll(async () => {
+    const rule = await getMobileValidationRule(TENANT, {
+      baseURL: BASE_URL,
+      adminUser: ADMIN_USER,
+      adminPassword: ADMIN_PASS,
+    });
+    CITIZEN_PHONE = generateValidMobile(rule);
+    EMPLOYEE_PHONE = generateValidMobile(rule);
+    console.log(
+      `[full-lifecycle] citizen=${CITIZEN_PHONE} employee=${EMPLOYEE_PHONE} pattern=${rule.pattern} (tenant=${TENANT})`,
+    );
+  });
 
   // ─── 1. Acquire admin API token ───────────────────────────────────────
 

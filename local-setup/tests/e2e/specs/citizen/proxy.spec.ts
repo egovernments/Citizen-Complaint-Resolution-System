@@ -11,12 +11,18 @@
  * It must NOT use the ADMIN user — it must create a brand new CITIZEN.
  */
 import { test, expect } from '@playwright/test';
-import { fixedMobile } from '../../../utils/mobile';
+import { getMobileValidationRule, generateValidMobile } from '../../common/mdms-mobile';
 
 const BASE_URL = process.env.BASE_URL || 'https://keycloak-sandbox.live.digit.org';
 const KC_INTERNAL = 'http://localhost:18180';
 const REALM = 'digit-sandbox';
 const CLIENT_ID = 'digit-sandbox-ui';
+// Spec is pinned to pg.citya in the request bodies; use the same tenant
+// for the mobile-rule MDMS lookup so the generated phone passes the
+// server-side validator.
+const TENANT = process.env.DIGIT_TENANT || 'pg.citya';
+const ADMIN_USER = process.env.DIGIT_USERNAME || process.env.DIGIT_EMPLOYEE_USER || 'ADMIN';
+const ADMIN_PASS = process.env.DIGIT_PASSWORD || process.env.DIGIT_EMPLOYEE_PASSWORD || 'eGov@123';
 
 // Generate unique test user email to avoid collisions
 const TEST_EMAIL = `e2e-citizen-${Date.now()}@test.example.com`;
@@ -208,13 +214,23 @@ test.describe('New Citizen Proxy Flow (simulates Google SSO)', () => {
   });
 
   test('PGR complaint creation works for new citizen through proxy', async ({ page }) => {
+    // Compute the tenant-aware phone in Node (page.evaluate runs in the
+    // browser and can't reference the mdms-mobile helper there), then
+    // pass it through as a serialized arg to the evaluate callback.
+    const rule = await getMobileValidationRule(TENANT, {
+      baseURL: BASE_URL,
+      adminUser: ADMIN_USER,
+      adminPassword: ADMIN_PASS,
+    });
+    const citizenPhone = generateValidMobile(rule);
+
     await page.goto(`${BASE_URL}/digit-ui/citizen`, {
       waitUntil: 'domcontentloaded',
       timeout: 15_000,
     });
 
     const result = await page.evaluate(
-      async ({ baseUrl, token }) => {
+      async ({ baseUrl, token, citizenPhone }) => {
         const resp = await fetch(`${baseUrl}/pgr-services/v2/request/_create`, {
           method: 'POST',
           headers: {
@@ -234,7 +250,7 @@ test.describe('New Citizen Proxy Flow (simulates Google SSO)', () => {
               },
               citizen: {
                 name: 'E2E Test Citizen',
-                mobileNumber: fixedMobile(888888888),
+                mobileNumber: citizenPhone,
                 tenantId: 'pg.citya',
               },
             },
@@ -244,7 +260,7 @@ test.describe('New Citizen Proxy Flow (simulates Google SSO)', () => {
         const body = await resp.text();
         return { status: resp.status, body: body.substring(0, 500) };
       },
-      { baseUrl: BASE_URL, token: citizenJwt },
+      { baseUrl: BASE_URL, token: citizenJwt, citizenPhone },
     );
 
     // 200 = complaint created, 400 = missing data (acceptable)
